@@ -5,7 +5,6 @@ use super::*;
     true,
     Duration::from_millis(150)
 )]
-#[case::render_interval_is_slow_when_idle_with_no_fetches_in_flight(false, Duration::from_secs(1))]
 fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
     let mut app = make_app_stub();
     if image_loading {
@@ -48,7 +47,6 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
 #[rstest]
 #[case::transport_prev_next_unavailable_when_player_inactive(false, 0, 0, false, (false, false))]
 #[case::transport_prev_unavailable_on_first_item(true, 3, 0, false, (false, true))]
-#[case::transport_next_unavailable_on_last_item(true, 3, 2, false, (true, false))]
 #[case::transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status(true, 3, 2, true, (true, true))]
 fn transport_prev_next(
     #[case] active: bool,

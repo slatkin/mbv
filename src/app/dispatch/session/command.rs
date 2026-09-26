@@ -151,3 +151,21 @@ pub(in crate::app) fn remote_jump_target(
             .map_or(0, |i| i.playback_position_ticks),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_jump_target_moves_to_adjacent_queue_item() {
+        let player = crate::app::PlayerTab::from_emby_items(crate::app::tests::make_items(3), 0);
+        assert_eq!(
+            remote_jump_target(&player, Some("id1"), 1).map(|(index, _)| index),
+            Some(2)
+        );
+        assert_eq!(
+            remote_jump_target(&player, Some("id1"), -1).map(|(index, _)| index),
+            Some(0)
+        );
+    }
+}

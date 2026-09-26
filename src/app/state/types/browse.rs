@@ -326,3 +326,48 @@ where
         Ok(Some((restored, nav_stack)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restored_fetched_rows_prefers_persisted_count() {
+        let saved = crate::config::LibraryPositionLevel {
+            parent_id: String::new(),
+            title: String::new(),
+            focused_item_id: None,
+            fetched_rows: Some(7),
+            cursor_index: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: String::new(),
+            sort_order: String::new(),
+            letter_filter_index: None,
+            tv_content_mode: None,
+            library_total: None,
+        };
+        let level = BrowseLevel::from_position_level(&saved, Vec::new(), 8, 1);
+        assert_eq!(level.fetched_rows, 7);
+    }
+
+    #[test]
+    fn grouped_level_is_fully_loaded_when_all_server_rows_were_consumed() {
+        let saved = crate::config::LibraryPositionLevel {
+            parent_id: String::new(),
+            title: String::new(),
+            focused_item_id: None,
+            fetched_rows: Some(8),
+            cursor_index: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: String::new(),
+            sort_order: String::new(),
+            letter_filter_index: None,
+            tv_content_mode: None,
+            library_total: None,
+        };
+        let level = BrowseLevel::from_position_level(&saved, Vec::new(), 8, 1);
+        assert!(level.is_fully_loaded());
+    }
+}

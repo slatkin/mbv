@@ -647,3 +647,16 @@ fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
         );
     }
 }
+
+#[test]
+fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    harness.step();
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
+    assert!(harness.model().app.player_tab.queue.is_empty());
+}

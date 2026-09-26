@@ -9,9 +9,7 @@
 use super::podcast::add_emby_movie_library;
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{
-    ComponentId, ContextMenuComponent, Msg, OverlayId, TerminalObserverEvent,
-};
+use crate::app::components::{ComponentId, ContextMenuComponent, Msg, OverlayId};
 use ratatui::layout::Rect;
 
 fn library_app() -> App {
@@ -20,35 +18,6 @@ fn library_app() -> App {
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app
-}
-
-/// A wide-TV-eligible library (task 3.5): a "tvshows" collection whose
-/// nav-stack top level holds only `Series` items, matching `is_wide_tv_library`.
-fn add_emby_tv_library(app: &mut App) {
-    let mut library = make_item("Shows", "CollectionFolder");
-    library.id = "lib-shows".into();
-    library.collection_type = "tvshows".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-shows".into(),
-            title: "Shows".into(),
-            items: vec![make_item("The Series", "Series")],
-            total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
-            item_types: Some("Series".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
 }
 
 fn mounted_context_menu_rect(model: &Model) -> Rect {

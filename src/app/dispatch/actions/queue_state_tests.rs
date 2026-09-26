@@ -564,3 +564,19 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
     assert_eq!(restarted.player_tab.emby_items().len(), 2);
     assert_eq!(restarted.queue_source, state.source);
 }
+
+#[test]
+fn queue_restore_cursor_uses_unique_last_played_identity() {
+    let mut first = make_item("first", "Movie");
+    first.id = "first".into();
+    let mut second = make_item("second", "Movie");
+    second.id = "second".into();
+    let items = vec![
+        QueueItem::Emby(Box::new(first)),
+        QueueItem::Emby(Box::new(second)),
+    ];
+    assert_eq!(
+        queue_restore_cursor(&items, 0, None, Some("second"), false),
+        1
+    );
+}
