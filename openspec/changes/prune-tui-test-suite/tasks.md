@@ -23,7 +23,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 4. Components, part A (`app::components::{tests, library_panel, list}`, 312 → ≤ 110)
 
-- [ ] 4.1 Apply Decisions 1 and 3. Per the skill's layer matrix, component tests keep local state transitions, emitted `Msg`s, viewport and hit resolution. Delete placement, glyph and spacing assertions owned by arrangement or painter tests. Verify: combined count ≤ 110; group gate passes; commit.
+- [x] 4.1 Apply Decisions 1 and 3. Per the skill's layer matrix, component tests keep local state transitions, emitted `Msg`s, viewport and hit resolution. Delete placement, glyph and spacing assertions owned by arrangement or painter tests. Verify: combined count ≤ 110; group gate passes; commit.
 
 ## 5. Components, part B (all remaining `app::components::*`, 339 → ≤ 120)
 
