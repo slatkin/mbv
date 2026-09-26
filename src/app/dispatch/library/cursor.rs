@@ -244,10 +244,9 @@ impl App {
             let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
                 return false;
             };
-            let parent_id = level.parent_id.clone();
-            let unplayed_only = level.unplayed_only;
-            let sort_by = level.sort_by.clone();
-            let sort_order = level.sort_order.clone();
+            let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+            key.item_types = Some("Series".into());
+            key.letter_filter = None;
             level.tv_content_mode = Some(mbv_core::config::TvContentMode::All);
             level.letter_filter = None;
             level.all_items = None;
@@ -257,16 +256,7 @@ impl App {
             level.set_resting_cursor(0);
             level.set_resting_scroll(0);
             self.libs[lib_idx].tv_content_mode = Some(mbv_core::config::TvContentMode::All);
-            self.spawn_refresh(
-                lib_idx,
-                parent_id,
-                Some("Series".into()),
-                unplayed_only,
-                sort_by,
-                sort_order,
-                0,
-                None,
-            );
+            self.spawn_refresh(lib_idx, 0, key);
         }
         // The placeholder never plays: report handled even if the landing is
         // somehow already unsatisfiable, so no empty-id item reaches playback.

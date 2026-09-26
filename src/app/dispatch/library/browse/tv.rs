@@ -4,13 +4,8 @@ use mbv_core::api::{EmbyClient, EmbyItem};
 
 type BrowseRefresh = (
     usize,
-    String,
-    Option<String>,
-    bool,
-    String,
-    String,
+    crate::app::state::types::browse::LevelFetchKey,
     usize,
-    Option<crate::app::render::LetterFilter>,
     Option<mbv_core::config::TvContentMode>,
 );
 trait TvLatestSource {
@@ -122,13 +117,8 @@ impl App {
                 lib.nav_stack.last().map(|lvl| {
                     (
                         i,
-                        lvl.parent_id.clone(),
-                        lvl.item_types.clone(),
-                        lvl.unplayed_only,
-                        lvl.sort_by.clone(),
-                        lvl.sort_order.clone(),
+                        crate::app::state::types::browse::LevelFetchKey::from_level(lvl),
                         lvl.items.len(),
-                        lvl.letter_filter.clone(),
                         (lib.library.collection_type == "tvshows" && lib.nav_stack.len() == 1)
                             .then(|| {
                                 lvl.tv_content_mode
@@ -140,30 +130,19 @@ impl App {
                 })
             })
             .collect();
-        for (
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            loaded_count,
-            letter_filter,
-            tv_content_mode,
-        ) in fetches
-        {
+        for (lib_idx, key, loaded_count, tv_content_mode) in fetches {
             match tv_content_mode {
                 Some(mbv_core::config::TvContentMode::Latest) => {
                     self.spawn_tv_latest(
                         lib_idx,
-                        parent_id,
+                        key.parent_id.clone(),
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
                 Some(mbv_core::config::TvContentMode::Upcoming) => {
                     self.spawn_tv_upcoming(
                         lib_idx,
-                        parent_id,
+                        key.parent_id.clone(),
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
@@ -171,16 +150,7 @@ impl App {
                     mbv_core::config::TvContentMode::All
                     | mbv_core::config::TvContentMode::Range(_),
                 )
-                | None => self.spawn_refresh(
-                    lib_idx,
-                    parent_id,
-                    item_types,
-                    unplayed_only,
-                    sort_by,
-                    sort_order,
-                    loaded_count,
-                    letter_filter.as_ref(),
-                ),
+                | None => self.spawn_refresh(lib_idx, loaded_count, key),
             }
         }
     }

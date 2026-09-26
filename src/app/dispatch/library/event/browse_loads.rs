@@ -78,14 +78,13 @@ impl App {
         }
         let total = level.total_count;
         let parent_id = level.parent_id.clone();
-        let item_types = level.item_types.clone();
-        let unplayed_only = level.unplayed_only;
-        let sort_by = level.sort_by.clone();
-        let sort_order = level.sort_order.clone();
         let is_tv = lib.library.collection_type == "tvshows";
         let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             lib.library.collection_type.as_str(),
         );
+        // The key clones the level's fetch fields, so build it before the
+        // mutations below release the `level` borrow.
+        let key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
@@ -112,20 +111,13 @@ impl App {
             return;
         }
         let filter = crate::app::render::LetterFilter::default_filter_for_kind(filter_kind);
+        let mut key = key;
+        key.letter_filter = Some(filter.clone());
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
-            last.letter_filter = Some(filter.clone());
+            last.letter_filter = Some(filter);
         }
-        self.spawn_refresh(
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            0,
-            Some(&filter),
-        );
+        self.spawn_refresh(lib_idx, 0, key);
     }
 
     pub(super) fn handle_lib_page_appended(

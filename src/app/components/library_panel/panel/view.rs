@@ -1,6 +1,6 @@
 use super::{
     render_narrow_skeleton, render_wide_skeleton, wide_hero_fits, LeafKeyResult, LibraryKey,
-    LibraryPanel, SkeletonHits, SkeletonPillWindows,
+    LibraryPanel, SkeletonHits, SkeletonPillWindows, WideSkeletonPaintParams,
 };
 
 use ratatui::Frame;
@@ -55,15 +55,17 @@ fn paint_skeleton(
             frame,
             area,
             content,
-            state.focused,
-            state.list_pane_width,
-            overview_scroll,
-            state.hovered_selector,
-            state.hovered_link,
-            state.hit_regions,
-            state.windows,
-            state.terminal_height,
-            show_hero_pane,
+            WideSkeletonPaintParams {
+                browser_focused: state.focused,
+                override_width: state.list_pane_width,
+                overview_scroll,
+                hovered_selector: state.hovered_selector,
+                hovered_link: state.hovered_link,
+                hits: state.hit_regions,
+                windows: state.windows,
+                terminal_height: state.terminal_height,
+                show_hero_pane,
+            },
         ) {
             let gap = ratatui::layout::Rect {
                 x: geometry.hero.right(),

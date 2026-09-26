@@ -57,23 +57,9 @@ impl App {
         }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
-            let parent_id = lvl.parent_id.clone();
-            let item_types = lvl.item_types.clone();
-            let unplayed_only = lvl.unplayed_only;
-            let sort_by = lvl.sort_by.clone();
-            let sort_order = lvl.sort_order.clone();
+            let key = crate::app::state::types::browse::LevelFetchKey::from_level(lvl);
             let loaded_count = lvl.items.len();
-            let letter_filter = lvl.letter_filter.clone();
-            self.spawn_refresh(
-                lib_idx,
-                parent_id,
-                item_types,
-                unplayed_only,
-                sort_by,
-                sort_order,
-                loaded_count,
-                letter_filter.as_ref(),
-            );
+            self.spawn_refresh(lib_idx, loaded_count, key);
         }
     }
 
