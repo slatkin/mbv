@@ -3,6 +3,8 @@ use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
+mod progress;
+
 /// What `App::handle_player_event` asks its caller to do next.
 #[derive(Debug, PartialEq, Eq)]
 pub(in crate::app) enum PlayerEventFlow {
@@ -68,13 +70,7 @@ impl App {
     /// should `continue` (skip render for this tick).
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
         match ev {
-            PlayerEvent::Stopped { .. } => {
-                if self.handle_stopped_event(ev) {
-                    PlayerEventFlow::RestartLoop
-                } else {
-                    PlayerEventFlow::Proceed
-                }
-            }
+            PlayerEvent::Stopped { .. } => flow_after(self.handle_stopped_event(ev)),
             PlayerEvent::TrackCompleted { .. } => {
                 self.handle_track_completed_event(&ev);
                 PlayerEventFlow::Proceed
@@ -104,11 +100,7 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                if self.handle_unified_queue_updated(&unified) {
-                    PlayerEventFlow::RestartLoop
-                } else {
-                    PlayerEventFlow::Proceed
-                }
+                flow_after(self.handle_unified_queue_updated(&unified))
             }
             PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
                 self.handle_unified_queue_load_result(result);
@@ -140,19 +132,23 @@ impl App {
                 self.flash(reason, ToastSeverity::Error);
                 PlayerEventFlow::Proceed
             }
-            event @ (PlayerEvent::PlaybackIntent(_) | PlayerEvent::PipePlaybackStatus(_)) => {
-                self.handle_playback_notice(event);
+            PlayerEvent::PlaybackIntent(event) => {
+                self.handle_playback_intent(&event);
+                PlayerEventFlow::Proceed
+            }
+            PlayerEvent::PipePlaybackStatus(status) => {
+                self.handle_pipe_playback_status(&status);
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::RemoteDisconnected(reason) => {
-                if self.handle_remote_disconnected(&reason) {
-                    PlayerEventFlow::RestartLoop
-                } else {
-                    PlayerEventFlow::Proceed
-                }
+                flow_after(self.handle_remote_disconnected(&reason))
             }
-            event @ (PlayerEvent::EmbyAuthorityTaken(_) | PlayerEvent::QueueDesynced(_)) => {
-                self.handle_player_warning(event);
+            PlayerEvent::EmbyAuthorityTaken(reason) => {
+                self.handle_emby_authority_taken(reason);
+                PlayerEventFlow::Proceed
+            }
+            PlayerEvent::QueueDesynced(reason) => {
+                self.handle_queue_desynced(reason);
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::DaemonShutdownAnnounced => {
@@ -160,34 +156,34 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::AudiobookshelfProgress(ev) => {
-                self.handle_audiobookshelf_progress(ev);
+                self.handle_audiobookshelf_progress(&ev);
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::AudiobookshelfBookProgress(ev) => {
-                self.handle_audiobookshelf_book_progress(ev);
+                self.handle_audiobookshelf_book_progress(&ev);
                 PlayerEventFlow::Proceed
             }
         }
     }
 
-    fn handle_playback_notice(&mut self, ev: PlayerEvent) {
-        if let PlayerEvent::PlaybackIntent(event) = ev {
-            self.flash(
-                playback_intent_message(&event.outcome).to_string(),
-                ToastSeverity::Neutral,
-            );
-        } else if let PlayerEvent::PipePlaybackStatus(status) = ev {
-            self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
-        }
+    fn handle_playback_intent(&mut self, event: &mbv_core::ctrl::PlaybackIntentEvent) {
+        self.flash(
+            playback_intent_message(&event.outcome).to_string(),
+            ToastSeverity::Neutral,
+        );
     }
 
-    fn handle_player_warning(&mut self, ev: PlayerEvent) {
-        if let PlayerEvent::EmbyAuthorityTaken(reason) = ev {
-            // Authority notification leaves the connection open; do not restore local mode.
-            self.flash(reason, ToastSeverity::Warning);
-        } else if let PlayerEvent::QueueDesynced(reason) = ev {
-            self.flash(reason, ToastSeverity::Neutral);
-        }
+    fn handle_pipe_playback_status(&mut self, status: &mbv_core::ctrl::PipePlaybackStatus) {
+        self.flash(pipe_playback_message(status), ToastSeverity::Neutral);
+    }
+
+    fn handle_emby_authority_taken(&mut self, reason: String) {
+        // Authority notification leaves the connection open; do not restore local mode.
+        self.flash(reason, ToastSeverity::Warning);
+    }
+
+    fn handle_queue_desynced(&mut self, reason: String) {
+        self.flash(reason, ToastSeverity::Neutral);
     }
 
     fn handle_paused_changed(&mut self, paused: bool) {
@@ -246,35 +242,6 @@ impl App {
             self.restore_local_mode("Daemon disconnected — returned to local mode");
             self.refresh_after_stop();
         }
-    }
-
-    fn handle_audiobookshelf_progress(&mut self, ev: mbv_core::ctrl::AudiobookshelfProgressEvent) {
-        // No client-side generation gate: the daemon drops stale updates before emitting, and its
-        // generation counter is unrelated to this client's runtime generation.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let current_time_seconds =
-            ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-        self.reconcile_audiobookshelf_progress(
-            &ev.library_item_id,
-            &ev.episode_id,
-            ev.position_ticks,
-            current_time_seconds,
-            ev.is_finished,
-        );
-    }
-
-    fn handle_audiobookshelf_book_progress(
-        &mut self,
-        ev: mbv_core::ctrl::AudiobookshelfBookProgressEvent,
-    ) {
-        self.reconcile_audiobookshelf_book_progress(
-            &ev.library_item_id,
-            ev.position_ticks,
-            ev.is_finished,
-        );
     }
 
     /// Handle a `PlayerEvent::Stopped` (extracted from `handle_player_event`).
@@ -767,6 +734,14 @@ impl App {
                 }
             }
         }
+    }
+}
+
+fn flow_after(restart_loop: bool) -> PlayerEventFlow {
+    if restart_loop {
+        PlayerEventFlow::RestartLoop
+    } else {
+        PlayerEventFlow::Proceed
     }
 }
 
