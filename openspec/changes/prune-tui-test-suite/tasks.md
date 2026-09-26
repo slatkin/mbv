@@ -19,7 +19,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 3. Other app tests, part B (all remaining `app::tests::*` except tick_integration, 292 → ≤ 110)
 
-- [ ] 3.1 Apply Decisions 1, 3 and 4 to `library_navigate_reveal`, `library_position`, `lifecycle`, `feeds`, `podcast`, `services_settings_lifecycle`, `panel_focus`, `remote_commands` and the rest. Delete whole files that are left owning nothing. Verify: `app::tests::` count minus tick_integration ≤ 200 overall (with group 2); group gate passes; commit.
+- [x] 3.1 Apply Decisions 1, 3 and 4 to `library_navigate_reveal`, `library_position`, `lifecycle`, `feeds`, `podcast`, `services_settings_lifecycle`, `panel_focus`, `remote_commands` and the rest. Delete whole files that are left owning nothing. Verify: `app::tests::` count minus tick_integration ≤ 200 overall (with group 2); group gate passes; commit.
 
 ## 4. Components, part A (`app::components::{tests, library_panel, list}`, 312 → ≤ 110)
 
