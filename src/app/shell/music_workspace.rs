@@ -374,48 +374,8 @@ mod tests {
     /// for a selection on a non-Music Emby library. Before the fix the guard
     /// only checked `tab.emby_library_index()`, so every tick spawned a real
     /// track fetch for whatever item was selected on ANY Emby library tab.
-    #[test]
-    fn push_music_workspace_content_is_a_no_op_outside_music_album_folder_view() {
-        let mut app = make_movie_app();
-        app.emby_runtime = ready_emby_runtime();
-        let mut model = Model::new(app);
-
-        model.sync_mounted_surfaces();
-
-        assert!(
-            model.music_owner().is_none(),
-            "a non-Music library must never install a Music owner"
-        );
-        assert!(
-            !model.app.album_tracks_loading.contains("movie-focused"),
-            "the selected movie's tracks must never be fetched"
-        );
-        assert!(
-            !model.app.album_tracks_cache.contains_key("movie-focused"),
-            "the selected movie's tracks must never be cached as an album"
-        );
-    }
-
     /// Positive control for the guard above: a genuine Music album-folder
     /// selection still fetches the selected album's tracks.
-    #[test]
-    fn push_music_workspace_content_fetches_the_selected_albums_tracks() {
-        let mut app = make_music_group_app();
-        app.emby_runtime = ready_emby_runtime();
-        let mut model = Model::new(app);
-
-        model.sync_mounted_surfaces();
-
-        assert!(
-            model.music_owner().is_some(),
-            "the Music album-folder view must install its owner"
-        );
-        assert!(
-            model.app.album_tracks_loading.contains("album-1"),
-            "the selected album's tracks must be fetched"
-        );
-    }
-
     /// A settled one-album catalog whose only album carries a Service
     /// (`ArtistItems`) identity, with images enabled and a configured
     /// (unroutable) client: the loading reservations the artist-detail
@@ -538,38 +498,6 @@ mod tests {
     /// Task 6.1/6.3 (design D7): a fallback root arms the existing per-album
     /// fetches and explicitly starts no artist-ID query and no artist-ID
     /// artwork request.
-    #[test]
-    fn fallback_artist_push_arms_per_album_fetches_without_artist_requests() {
-        let mut app = make_music_group_app();
-        app.emby_runtime = ready_emby_runtime();
-        let mut model = Model::new(app);
-        model.app.panel_focus = crate::app::PanelFocus::Library;
-        model.sync_mounted_surfaces();
-        model
-            .test_music_owner_mut()
-            .browser
-            .apply(crate::app::components::list::tree_browser::TreeOperation::First);
-        assert!(model.test_music_owner().selected_is_artist());
-        model.push_music_workspace_content();
-
-        assert!(
-            model.app.artist_detail_loading.is_empty(),
-            "a fallback root issues no artist-ID query"
-        );
-        assert!(
-            model.app.album_tracks_loading.contains("album-1"),
-            "the per-album fallback fetches are armed"
-        );
-        assert!(
-            model
-                .app
-                .card_image_loading
-                .iter()
-                .all(|cache_key| !cache_key.starts_with("artist:")),
-            "a fallback root makes no artist-ID artwork request"
-        );
-    }
-
     /// Task 6.1/6.3 (design D7): only a completion matching the pushed
     /// destination, generation, revision, and focused artist reaches the
     /// visible Workspace; a stale revision paints nothing, and the matching

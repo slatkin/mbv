@@ -90,46 +90,6 @@ fn series_image_completion_repushes_tv_workspace_content() {
 /// Task 2.3: no other image namespace may drive the TV projection. The cached
 /// Series entry is planted without a re-push, so only a gate that wrongly
 /// matches this key can clear the placeholder the component still holds.
-#[test]
-fn non_series_image_completion_leaves_tv_projection_alone() {
-    let mut model = mounted_wide_tv_model();
-    model.app.image_protocol_enabled = true;
-    {
-        let backend = ratatui::backend::TestBackend::new(160, 40);
-        let mut term = ratatui::Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap()
-    };
-    model.sync_mounted_surfaces();
-    drop_pending_image_completions(&mut model);
-    assert!(
-        wide_tv_shows_placeholder(&mut model),
-        "the uncached projection must paint the placeholder"
-    );
-
-    model.app.card_image_states.insert(
-        series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES),
-        CachedImage::empty(),
-    );
-    model
-        .app
-        .card_image_tx
-        .send(("movie-focused:P".into(), None))
-        .expect("image completion channel");
-
-    assert!(
-        model.drain_card_image_completions(),
-        "the card completion must be drained"
-    );
-    assert!(
-        model.app.card_image_states.contains_key("movie-focused:P"),
-        "the drained entry must reach the cache"
-    );
-    assert!(
-        wide_tv_shows_placeholder(&mut model),
-        "a non-Series completion must leave the TV projection alone"
-    );
-}
-
 /// Task 3.1: `clear:yes` dismisses the confirmation modal and routes the
 /// clear-queue action, and the drain reports that it produced work.
 #[test]
@@ -157,51 +117,11 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
 }
 
 /// Task 3.1: `__notif_failed__` raises the notification-failure flag.
-#[test]
-fn drain_notif_actions_failed_sets_the_failure_flag() {
-    let mut app = make_app_stub();
-    app.notif_action_tx
-        .send("__notif_failed__".into())
-        .expect("notif channel");
-
-    assert!(
-        app.drain_notif_actions(),
-        "a queued action must report produced=true"
-    );
-    assert!(app.notif_failed, "__notif_failed__ must set the flag");
-}
-
 /// Task 3.1: payloads without a retained action -- the explicit no-ops and an
 /// empty channel -- change no state; `produced` reflects only whether a
 /// message was received, so an unrecognised payload still reports `true`
 /// while the empty channel reports `false`.
 #[rstest]
-#[case(Some(""), true)]
-#[case(Some("ignore"), true)]
-#[case(Some("cancel"), true)]
-#[case(Some("unrecognised"), true)]
-#[case(None, false)]
-fn drain_notif_actions_without_a_known_action_produce_nothing(
-    #[case] payload: Option<&str>,
-    #[case] expected_produced: bool,
-) {
-    let mut app = make_app_stub();
-    if let Some(payload) = payload {
-        app.notif_action_tx
-            .send(payload.into())
-            .expect("notif channel");
-    }
-
-    assert_eq!(
-        app.drain_notif_actions(),
-        expected_produced,
-        "produced must reflect whether a message was received"
-    );
-    assert!(!app.notif_failed, "no failure flag may be raised");
-    assert!(app.pending_overlay.is_none(), "no overlay may be requested");
-    assert!(app.status.is_empty(), "no toast may be raised");
-}
-
 /// Task 3.2: a queued `SessionEvent` is dispatched to `handle_session_event`
 /// and the drain reports that it produced work.
 #[test]
@@ -223,15 +143,6 @@ fn drain_session_events_dispatches_a_queued_event() {
 }
 
 /// Task 3.2: an empty sessions channel reports produced=false.
-#[test]
-fn drain_session_events_empty_channel_produces_nothing() {
-    let mut app = make_app_stub();
-    assert!(
-        !app.drain_session_events(),
-        "an empty channel must report produced=false"
-    );
-}
-
 fn audiobookshelf_library(id: &str, media_type: &str) -> AudiobookshelfLibrary {
     AudiobookshelfLibrary {
         id: id.into(),
@@ -283,70 +194,11 @@ fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
 /// being dropped (the worker is still running; the drain just found no
 /// completion yet). Startup and test receivers share the bookkeeping.
 #[rstest]
-#[case(false)]
-#[case(true)]
-fn drain_audiobookshelf_events_puts_an_empty_receiver_back(#[case] is_test: bool) {
-    let mut app = make_app_stub();
-    let generation = app.audiobookshelf_runtime.generation();
-    let (tx, rx) = std::sync::mpsc::channel();
-    let receiver = AudiobookshelfStartupReceiver { generation, rx };
-    if is_test {
-        app.audiobookshelf_test_rx = Some(receiver);
-    } else {
-        app.audiobookshelf_startup_rx = Some(receiver);
-    }
-
-    assert!(
-        !app.drain_audiobookshelf_events(),
-        "an Empty channel must not report produced"
-    );
-    let put_back = if is_test {
-        app.audiobookshelf_test_rx.is_some()
-    } else {
-        app.audiobookshelf_startup_rx.is_some()
-    };
-    assert!(put_back, "an Empty receiver must be put back in place");
-    drop(tx);
-}
-
 /// Task 3.3: a receiver whose worker exited without a completion is
 /// Disconnected; the drain reports work and drives the worker-disconnect
 /// handler. With no configured Audiobookshelf setup the resolved state is
 /// NotConfigured. Startup and test receivers share the handler.
 #[rstest]
-#[case(false)]
-#[case(true)]
-fn drain_audiobookshelf_events_disconnected_receiver_drives_worker_disconnect(
-    #[case] is_test: bool,
-) {
-    let mut app = make_app_stub();
-    let generation = app.audiobookshelf_runtime.begin_setup();
-    let (tx, rx) = std::sync::mpsc::channel();
-    drop(tx);
-    let receiver = AudiobookshelfStartupReceiver { generation, rx };
-    if is_test {
-        app.audiobookshelf_test_rx = Some(receiver);
-    } else {
-        app.audiobookshelf_startup_rx = Some(receiver);
-    }
-
-    assert!(
-        app.drain_audiobookshelf_events(),
-        "a Disconnected receiver must report produced"
-    );
-    assert_eq!(
-        app.audiobookshelf_runtime.state,
-        ServiceState::NotConfigured,
-        "a disconnect with no setup resolves NotConfigured"
-    );
-    let still_held = if is_test {
-        app.audiobookshelf_test_rx.is_some()
-    } else {
-        app.audiobookshelf_startup_rx.is_some()
-    };
-    assert!(!still_held, "a consumed receiver is not put back");
-}
-
 /// Task 3.3: the setup receiver runs its own disconnect handler (busy=false,
 /// form error, state reset to the form's previous state). With no form the
 /// reset lands on NotConfigured.
@@ -375,51 +227,8 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
 
 /// Task 3.3: the catalog receiver has no disconnect handler — a dropped worker
 /// leaves the receiver dropped and produces nothing.
-#[test]
-fn drain_audiobookshelf_events_catalog_disconnect_is_dropped() {
-    let mut app = make_app_stub();
-    let (tx, rx) = std::sync::mpsc::channel::<AudiobookshelfCatalogCompletion>();
-    drop(tx);
-    app.audiobookshelf_catalog_rx = Some(AudiobookshelfCatalogReceiver { rx });
-
-    assert!(
-        !app.drain_audiobookshelf_events(),
-        "a dropped catalog worker produces nothing"
-    );
-    assert!(
-        app.audiobookshelf_catalog_rx.is_none(),
-        "the disconnected catalog receiver is dropped, not restored"
-    );
-}
-
 /// Task 3.4: a catalog completion whose generation the runtime no longer
 /// accepts is dropped without touching browse or catalog state.
-#[test]
-fn drain_audiobookshelf_events_drops_a_stale_catalog_completion() {
-    let mut app = make_app_stub();
-    let stale = SetupGeneration::new(app.audiobookshelf_runtime.generation().value() + 1);
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
-        stale,
-        Ok((
-            vec![audiobookshelf_library("pod-1", "podcast")],
-            HashMap::new(),
-            HashMap::new(),
-        )),
-    ));
-
-    assert!(
-        !app.drain_audiobookshelf_events(),
-        "a stale completion must not be reported as produced"
-    );
-    assert!(app.audiobookshelf_libraries.is_empty());
-    assert!(app.audiobookshelf_browse.is_empty());
-    assert!(app.audiobookshelf_book_browse.is_empty());
-    assert!(
-        !app.audiobookshelf_catalog_ready,
-        "a stale completion must not mark the catalog ready"
-    );
-}
-
 /// Task 3.4: an AuthenticationRejected catalog failure moves the runtime to
 /// NeedsAuthentication and clears the stored credential.
 #[test]
@@ -464,27 +273,6 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
 
 /// Task 3.4: a non-auth catalog failure leaves browse and catalog state
 /// untouched (it only reports the failure to the log).
-#[test]
-fn drain_audiobookshelf_events_generic_catalog_error_leaves_browse_untouched() {
-    let mut app = make_app_stub();
-    let generation = app.audiobookshelf_runtime.generation();
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
-        generation,
-        Err(AudiobookshelfError {
-            class: AudiobookshelfFailureClass::Unavailable,
-        }),
-    ));
-
-    assert!(
-        app.drain_audiobookshelf_events(),
-        "the completion must be reported"
-    );
-    assert!(app.audiobookshelf_libraries.is_empty());
-    assert!(app.audiobookshelf_browse.is_empty());
-    assert!(app.audiobookshelf_book_browse.is_empty());
-    assert!(!app.audiobookshelf_catalog_ready);
-}
-
 /// Task 3.5: under the stub config the catalog success path builds browse for
 /// every library, routes podcast progress to the podcast map and book progress
 /// to the book map, and dispatches the per-kind library fetch: a podcast

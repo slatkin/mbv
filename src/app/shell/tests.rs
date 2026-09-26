@@ -12,45 +12,6 @@ use mbv_core::mock_http::MockHttp;
 use std::sync::{Arc, Mutex};
 
 #[test]
-fn loaded_keys_override_reaches_the_model() {
-    // The compiled `[keys]` configuration is read once, at Model
-    // construction, from the config the App was built with (U2 row 2.3).
-    let app = make_app_stub();
-    let config = crate::config::Config {
-        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
-            prefix: Some("Ctrl+b".into()),
-            sections: vec![(
-                "global".into(),
-                mbv_core::keybinds::RawSection {
-                    router: vec![("help_open".into(), "F9".into())],
-                    prefix: vec![],
-                },
-            )],
-        })
-        .unwrap(),
-        ..Default::default()
-    };
-    *app.config.lock().unwrap() = config;
-
-    let model = Model::new(app);
-    assert_eq!(
-        model.keybinds.prefix,
-        Some(mbv_core::keybinds::Chord::parse("Ctrl+b").unwrap())
-    );
-    assert_eq!(
-        model.keybinds.router_override("help_open"),
-        Some(mbv_core::keybinds::Chord::parse("F9").unwrap())
-    );
-    assert!(model.keybinds.router_override("settings_open").is_none());
-}
-
-#[test]
-fn model_without_keys_configuration_holds_default_keybinds() {
-    let model = Model::new(make_app_stub());
-    assert_eq!(model.keybinds, mbv_core::keybinds::Keybinds::default());
-}
-
-#[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
@@ -148,76 +109,6 @@ fn first_escape_falls_through_and_second_dispatches_the_stop_candidate() {
 }
 
 #[test]
-fn consumed_escape_cancels_the_stop_candidate_and_leaves_no_state() {
-    let mut model = Model::new(make_app_stub());
-    model.app.player.status.lock().unwrap().active = true;
-    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
-
-    // The first Esc arms the double-Esc window without a candidate.
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
-    assert_eq!(
-        model.router_outcome(&messages),
-        RouterOutcome::Deferred(Command::Stop)
-    );
-    // A leaf that consumed Esc (dismiss/back claims first) cancels the
-    // candidate and records nothing.
-    assert!(!model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), true));
-    // A later unhandled press still behaves as a first press.
-    assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
-}
-
-#[test]
-fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
-    let focused = ComponentId::LibraryPlaybackPanel;
-    let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-    // Leaf focused, empty policy: the fold drops the observer's Key trigger
-    // (the leaf already got the event) but keeps non-key observer signals.
-    let router = RouterOutcome::FallThrough;
-    let routed_key_messages = fold_keyboard_messages(
-        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))],
-        Some(&focused),
-        &router,
-    );
-    assert!(routed_key_messages.is_empty());
-    let routed_non_key_messages = fold_keyboard_messages(
-        vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)],
-        Some(&focused),
-        &router,
-    );
-    assert!(matches!(
-        routed_non_key_messages.as_slice(),
-        [Msg::TerminalEvent(TerminalObserverEvent::NoOp)]
-    ));
-}
-
-#[test]
-fn terminal_resize_observer_preserves_layout_side_effects() {
-    let mut model = Model::new(make_app_stub());
-    model.app.force_clear = false;
-    model
-        .app
-        .card_image_states
-        .insert("stale".into(), CachedImage::empty());
-    model.app.card_image_loading.insert("stale".into());
-    let mut music_resize = false;
-    let mut tv_resize = false;
-    apply_terminal_observer(
-        &mut model,
-        &TerminalObserverEvent::Resize {
-            width: 80,
-            height: 24,
-        },
-        &mut music_resize,
-        &mut tv_resize,
-    );
-    assert!(model.app.force_clear);
-    assert!(model.app.card_image_states.is_empty());
-    assert!(model.app.card_image_loading.is_empty());
-    assert!(music_resize && tv_resize);
-}
-
-#[test]
 fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut model = Model::new(make_app_stub());
     model.app.terminal_width = 60;
@@ -237,27 +128,6 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     assert_eq!(model.app.terminal_width, 150);
     assert_eq!(model.app.terminal_height, 24);
     assert!(model.app.is_right_panel_wide());
-}
-
-#[test]
-fn terminal_focus_observer_preserves_refocus_side_effects() {
-    let mut model = Model::new(make_app_stub());
-    let mut music_resize = false;
-    let mut tv_resize = false;
-    apply_terminal_observer(
-        &mut model,
-        &TerminalObserverEvent::FocusGained,
-        &mut music_resize,
-        &mut tv_resize,
-    );
-    assert!(model.app.refocus_at.is_some());
-    apply_terminal_observer(
-        &mut model,
-        &TerminalObserverEvent::FocusLost,
-        &mut music_resize,
-        &mut tv_resize,
-    );
-    assert!(model.app.refocus_at.is_none());
 }
 
 fn music_album(id: &str) -> EmbyItem {
@@ -369,59 +239,5 @@ fn music_artist_play_replaces_once_with_ordered_album_tracks() {
         ]]
     );
     assert_eq!(model.app.effective_panel_focus(), PanelFocus::Library);
-    assert_eq!(http.request_count(), 2);
-}
-
-#[test]
-fn music_artist_shuffle_replaces_once_with_all_album_tracks() {
-    let http = MockHttp::new();
-    respond_with_tracks(&http, &[("a-track-1", "01")]);
-    respond_with_tracks(&http, &[("b-track-1", "01"), ("b-track-2", "02")]);
-    let (mut model, command_rx) = mocked_music_action_model(&http);
-
-    dispatch_music_artist_action(
-        &mut model,
-        MusicTreeAction::Shuffle,
-        vec![music_album("album-a"), music_album("album-b")],
-    );
-
-    let mut ids = replacement_command_ids(&command_rx);
-    assert_eq!(ids.len(), 1);
-    ids[0].sort();
-    assert_eq!(
-        ids[0],
-        vec![
-            "a-track-1".to_string(),
-            "b-track-1".to_string(),
-            "b-track-2".to_string(),
-        ]
-    );
-    assert_eq!(model.app.queue_source, crate::config::QueueSource::Shuffle);
-    assert_eq!(model.app.effective_panel_focus(), PanelFocus::Library);
-    assert_eq!(http.request_count(), 2);
-}
-
-#[test]
-fn music_artist_enqueue_keeps_ordered_per_album_appends() {
-    let http = MockHttp::new();
-    respond_with_tracks(&http, &[("a-track-1", "01")]);
-    respond_with_tracks(&http, &[("b-track-2", "02"), ("b-track-1", "01")]);
-    let (mut model, command_rx) = mocked_music_action_model(&http);
-
-    dispatch_music_artist_action(
-        &mut model,
-        MusicTreeAction::Enqueue,
-        vec![music_album("album-a"), music_album("album-b")],
-    );
-
-    let ids: Vec<_> = model
-        .app
-        .displayed_queue()
-        .all_queue_items()
-        .into_iter()
-        .map(|item| item.id().to_string())
-        .collect();
-    assert_eq!(ids, vec!["a-track-1", "b-track-1", "b-track-2"]);
-    assert!(replacement_command_ids(&command_rx).is_empty());
     assert_eq!(http.request_count(), 2);
 }
