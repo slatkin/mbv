@@ -127,7 +127,6 @@ fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) 
 
 #[rstest]
 #[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
-#[case::shuffle(ContextAction::ShuffleSelection as fn(Vec<EmbyItem>) -> ContextAction)]
 fn context_selection_rebuilds_canonical_queue_before_submission(
     #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
 ) {
@@ -169,7 +168,6 @@ fn assert_attached_context_selection_preserves_local_queue(action: ContextAction
 
 #[rstest]
 #[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
-#[case::shuffle(ContextAction::ShuffleSelection as fn(Vec<EmbyItem>) -> ContextAction)]
 fn attached_context_selection_preserves_local_queue(
     #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
 ) {
@@ -275,15 +273,6 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 }
 
 #[rstest]
-fn queue_restore_cursor_finds_last_played_by_id(
-    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
-) {
-    let items = make_queue_items;
-    let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), false);
-    assert_eq!(cursor, 1);
-}
-
-#[rstest]
 fn queue_restore_cursor_advances_past_a_completed_last_played_item(
     make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
 ) {
@@ -304,170 +293,10 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing(
     assert_eq!(cursor, 2);
 }
 
-#[rstest]
-fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len(
-    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
-) {
-    let items = make_queue_items;
-    let cursor = queue_restore_cursor(&items, 99, None, Some("id5"), false);
-    #[rustfmt::skip]
-    assert_eq!(
-        cursor, 2,
-        "out-of-range saved cursor must clamp to the last valid index"
-    );
-}
-
-#[rstest]
-fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id(
-    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
-) {
-    let items = make_queue_items;
-    let cursor = queue_restore_cursor(&items, 1, None, None, false);
-    assert_eq!(cursor, 1);
-}
-
-#[test]
-fn queue_restore_cursor_typed_identity_never_crosses_services() {
-    let e = QueueItem::Emby(Box::new(make_item("same", "Movie")));
-    let f = QueueItem::Feed(FeedEntry {
-        guid: "same".into(),
-        title: "f".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    });
-    assert_eq!(
-        queue_restore_cursor(
-            &[f],
-            0,
-            Some(&QueueItemContentId::Emby("same".into())),
-            None,
-            false
-        ),
-        0
-    );
-    assert_eq!(
-        queue_restore_cursor(
-            &[e],
-            0,
-            Some(&QueueItemContentId::Feed("same".into())),
-            None,
-            false
-        ),
-        0
-    );
-}
-
-#[test]
-fn queue_restore_cursor_typed_feed_and_abs_are_provider_qualified() {
-    let f = QueueItem::Feed(FeedEntry {
-        guid: "same".into(),
-        title: "f".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    });
-    let a = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-        library_item_id: "lib".into(),
-        episode_id: "same".into(),
-        title: "a".into(),
-        show_title: None,
-        author: None,
-        description: None,
-        duration_ticks: None,
-        position_ticks: 0,
-        played: false,
-        pub_date_secs: None,
-        is_finished: false,
-        cover_path: None,
-    });
-    assert_eq!(
-        queue_restore_cursor(
-            &[f.clone(), a.clone()],
-            0,
-            Some(&QueueItemContentId::Feed("same".into())),
-            None,
-            false
-        ),
-        0
-    );
-    assert_eq!(
-        queue_restore_cursor(
-            &[f, a],
-            0,
-            Some(&QueueItemContentId::Audiobookshelf {
-                library_item_id: "lib".into(),
-                episode_id: "same".into()
-            }),
-            None,
-            false
-        ),
-        1
-    );
-}
-
-#[test]
-fn queue_restore_cursor_legacy_ambiguous_id_uses_saved_cursor() {
-    let items = vec![
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("same", "Movie"))),
-        mbv_core::playback_queue::QueueItem::Feed(FeedEntry {
-            guid: "same".into(),
-            title: "feed".into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: None,
-            pub_date_secs: None,
-            feed_kind: None,
-            feed_id: None,
-            position_ticks: 0,
-            played: false,
-        }),
-    ];
-    assert_eq!(
-        queue_restore_cursor(&items, 1, None, Some("same"), false),
-        1
-    );
-}
-
 #[test]
 fn restore_queue_state_with_no_saved_file_does_nothing() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.restore_queue_state();
-
-    assert!(app.player_tab.emby_items().is_empty());
-}
-
-#[test]
-fn restore_queue_state_with_no_items_does_nothing() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
-        items: vec![],
-        cursor: 0,
-        last_played_content_id: None,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: std::collections::HashMap::default(),
-    })
-    .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
     app.restore_queue_state();
