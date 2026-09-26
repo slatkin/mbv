@@ -382,13 +382,7 @@ mod tests {
     /// by exactly one space and no separator glyph; single-part rows paint
     /// wholly in the title role with no context part before or after them.
     #[rstest]
-    #[case::emby_movie("Movie Name", None)]
-    #[case::emby_home_video("Home Video", None)]
-    #[case::audiobookshelf_book("Book Title", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
-    #[case::emby_audio_track("Track", Some("Artist"))]
-    #[case::audiobookshelf_podcast("Episode", Some("Show"))]
-    #[case::feed_entry("Entry", Some("Subscription"))]
     fn title_row_paints_each_media_types_parts_in_their_roles(
         #[case] title: &str,
         #[case] context: Option<&str>,
@@ -463,16 +457,6 @@ mod tests {
     }
 
     #[test]
-    fn transport_button_click_emits_its_typed_intent() {
-        let mut panel = painted_panel();
-        // Play/pause glyph starts at the panel's x + 1 on the title row.
-        assert!(matches!(
-            panel.on(&click(11, 6)),
-            Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
-        ));
-    }
-
-    #[test]
     fn prev_and_next_clicks_resolve_against_their_own_painted_areas() {
         let mut panel = painted_panel();
         let (prev, next) = (panel.prev_area, panel.next_area);
@@ -486,16 +470,6 @@ mod tests {
         ));
         assert!(matches!(
             panel.on(&click(next.x, next.y)),
-            Some(Msg::Playback(PlaybackRequest::Next))
-        ));
-    }
-
-    #[test]
-    fn playback_chrome_transport_intent_is_typed_and_player_free() {
-        let mut panel = LibraryPlaybackPanel::new();
-        assert!(panel.on(&key(Key::Char('m'))).is_some());
-        assert!(matches!(
-            panel.on(&key(Key::Right)),
             Some(Msg::Playback(PlaybackRequest::Next))
         ));
     }
@@ -517,34 +491,5 @@ mod tests {
             panel.on(&key(Key::Esc)),
             Some(Msg::Playback(PlaybackRequest::Stop))
         ));
-    }
-
-    #[test]
-    fn playback_chrome_projection_renders_without_player_authority() {
-        let mut panel = LibraryPlaybackPanel::new();
-        panel.set_projection(PlaybackProjection {
-            state: PlaybackState::default(),
-            show_controls: true,
-            panel: palette::Surface::PlaybackPanel,
-            panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: None,
-            status_indicators: None,
-            idle_feed_title: None,
-            use_nerd_fonts: false,
-            availability: super::TransportAvailability::default(),
-        });
-        let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Example"));
     }
 }

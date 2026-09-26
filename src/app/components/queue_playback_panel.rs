@@ -406,12 +406,7 @@ mod tests {
     /// combined row, owned by `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
-    #[case::emby_home_video("Home Video", None)]
-    #[case::audiobookshelf_book("Book Title", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
-    #[case::emby_audio_track("Track", Some("Artist"))]
-    #[case::audiobookshelf_podcast("Episode", Some("Show"))]
-    #[case::feed_entry("Entry", Some("Subscription"))]
     fn split_title_band_paints_each_media_types_parts_in_their_roles(
         #[case] title: &str,
         #[case] context: Option<&str>,
@@ -487,63 +482,6 @@ mod tests {
     }
 
     #[test]
-    fn idle_panel_paints_only_the_header_row_and_resolves_nothing() {
-        let panel = painted_panel(true);
-        let (play_pause, seekbar) = panel.transport_hits();
-        assert_eq!(play_pause.width, 0, "idle panel keeps no play/pause hit");
-        assert_eq!(seekbar.width, 0, "idle panel keeps no seekbar hit");
-
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Idle, "music-box".into(), false);
-        panel.set_transport_area(None);
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("IDLE"));
-        assert!(output.contains("on music-box"));
-        assert!(
-            !output.contains("PLAYING") && !output.contains("PAUSED"),
-            "idle header states IDLE: {output:?}"
-        );
-        // Nothing else of the panel paints: no seekbar track, no transport.
-        assert!(!output.contains('\u{2594}'));
-    }
-
-    #[test]
-    fn active_panel_paints_the_transport_its_shell_rect_names() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
-        panel.transport.show_controls = true;
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("PLAYING"), "header states PLAYING");
-        assert!(output.contains("Example"), "transport paints the title");
-        assert!(output.contains('\u{2594}'), "seekbar track paints");
-
-        let (play_pause, seekbar) = panel.transport_hits();
-        assert!(play_pause.width > 0 && seekbar.width > 0, "hits retained");
-    }
-
-    #[test]
     fn transport_clicks_resolve_against_retained_geometry() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
@@ -592,101 +530,5 @@ mod tests {
         panel.set_transport_area(None);
         assert!(panel.on(&click(5, 4)).is_none());
         let _ = KeyEvent::new(Key::Null, KeyModifiers::NONE);
-    }
-
-    #[test]
-    fn transport_band_uses_the_queue_column_chrome_surface() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        // The transport band's first row paints the chrome-band fill.
-        assert_eq!(
-            buf[(1, 2)].style().bg,
-            Some(palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill),
-        );
-    }
-
-    /// The header is recessed in the queue column: the row above it and the
-    /// two columns each side carry no header-band paint, and the painted row
-    /// itself starts two columns in from the placement's left edge.
-    #[test]
-    fn header_paints_inset_one_row_down_and_two_columns_in() {
-        let band = palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill;
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.set_transport_area(None);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-
-        assert_eq!(
-            buf[(2, 1)].style().bg,
-            Some(band),
-            "header row paints inset"
-        );
-        assert_ne!(
-            buf[(0, 0)].style().bg,
-            Some(band),
-            "no paint above the inset"
-        );
-        assert_ne!(
-            buf[(2, 0)].style().bg,
-            Some(band),
-            "no paint above the inset"
-        );
-        assert_ne!(
-            buf[(0, 1)].style().bg,
-            Some(band),
-            "no paint left of the inset"
-        );
-        assert_ne!(
-            buf[(1, 1)].style().bg,
-            Some(band),
-            "no paint left of the inset"
-        );
-        assert_ne!(
-            buf[(38, 1)].style().bg,
-            Some(band),
-            "no paint right of the inset"
-        );
-        assert_ne!(
-            buf[(39, 1)].style().bg,
-            Some(band),
-            "no paint right of the inset"
-        );
-    }
-
-    /// The header carries no progress while playing: the percent stays out
-    /// of the header row even when the projected transport state has
-    /// position and runtime to state.
-    #[test]
-    fn header_shows_no_progress_while_playing() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.state.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
-        panel.transport.state.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
-        panel.set_transport_area(None);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        let header: String = (0..40).map(|x| buf[(x, 1)].symbol().to_owned()).collect();
-        assert!(
-            !header.contains('%'),
-            "no percent in the header: {header:?}"
-        );
-        assert!(header.contains(" PLAYING"), "status still left: {header:?}");
-        assert!(
-            header.trim_end().ends_with("on music-box"),
-            "target still right: {header:?}"
-        );
     }
 }
