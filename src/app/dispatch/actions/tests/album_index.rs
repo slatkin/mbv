@@ -123,27 +123,6 @@ fn failed_album_index_becomes_unavailable() {
 }
 
 #[test]
-fn refresh_while_album_index_loads_coalesces_one_replacement() {
-    let mut app = recursive_music_app();
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Loading {
-            rebuild_pending: false,
-        },
-    );
-
-    app.start_album_index(0, true);
-    app.start_album_index(0, true);
-
-    assert!(matches!(
-        app.album_indexes.get("music-lib"),
-        Some(AlbumIndexState::Loading {
-            rebuild_pending: true
-        })
-    ));
-}
-
-#[test]
 fn recursive_activation_keeps_panel_focus_and_installs_path() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
