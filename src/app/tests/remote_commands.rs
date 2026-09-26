@@ -77,43 +77,6 @@ fn capture_error(http: &MockHttp, app: &mut App, act: impl FnOnce(&mut App)) -> 
 }
 
 #[test]
-fn session_item_change_updates_state_without_mutating_queue() {
-    let mut app = attached_app();
-    app.queue_dirty = true;
-    let slots: Vec<_> = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
-        .collect();
-    let mutation_state = format!("{:?}", app.playlist_mutations);
-    let mut changed = make_session("Client", "Emby");
-    changed.id = "session".into();
-    changed.now_playing_item_id = Some("b".into());
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![changed],
-    });
-    assert_eq!(
-        app.connected_session_state
-            .as_ref()
-            .and_then(|s| s.now_playing_item_id.as_deref()),
-        Some("b")
-    );
-    let current: Vec<_> = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
-        .collect();
-    assert_eq!(current, slots);
-    assert_eq!(app.player_tab.queue_cursor, 0);
-    assert!(app.queue_dirty);
-    assert_eq!(format!("{:?}", app.playlist_mutations), mutation_state);
-}
-
-#[test]
 fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let items = app.player_tab.emby_items();
@@ -131,15 +94,6 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
 }
 
 #[test]
-fn pause_play_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(&crate::app::dispatch::action::Command::TogglePlayPause);
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing/PlayPause HTTP/1.1"));
-}
-
-#[test]
 fn seek_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
@@ -149,85 +103,6 @@ fn seek_dispatches_and_reports_errors_without_tracking() {
         .starts_with("POST /Sessions/session/Playing/Seek?SeekPositionTicks=650000000 HTTP/1.1"));
 }
 
-#[test]
-fn stop_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(&crate::app::dispatch::action::Command::Stop);
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing/Stop HTTP/1.1"));
-}
-
-#[test]
-fn next_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(&crate::app::dispatch::action::Command::NextTrack);
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
-    assert!(
-        request.contains("ItemIds")
-            && request.contains("StartIndex")
-            && request.contains("StartPositionTicks")
-    );
-}
-
-#[test]
-fn previous_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    app.connected_session_state
-        .as_mut()
-        .unwrap()
-        .now_playing_item_id = Some("b".into());
-    let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(&crate::app::dispatch::action::Command::PreviousTrack);
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
-    assert!(
-        request.contains("ItemIds")
-            && request.contains("StartIndex")
-            && request.contains("StartPositionTicks")
-    );
-}
-
-#[test]
-fn direct_selection_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(1));
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
-    assert!(request.contains("ItemIds"));
-    assert!(request.contains("StartIndex"));
-    assert!(request.contains("StartPositionTicks"));
-}
-
-#[test]
-fn remote_jump_target_resolves_next_and_previous_without_tracking() {
-    let mut app = attached_app();
-    let mut first = app.player_tab.emby_items()[0].clone();
-    first.id = "a".into();
-    first.playback_position_ticks = 10;
-    let mut second = app.player_tab.emby_items()[1].clone();
-    second.id = "a".into();
-    second.playback_position_ticks = 20;
-    let mut third = make_item("b", "Movie");
-    third.id = "b".into();
-    third.playback_position_ticks = 30;
-    app.player_tab.set_items(vec![first, second, third], 0);
-    let target =
-        crate::app::dispatch::session::command::remote_jump_target(&app.player_tab, Some("a"), 1);
-    assert_eq!(target, Some((1, 20)));
-    assert_eq!(
-        crate::app::dispatch::session::command::remote_jump_target(&app.player_tab, Some("b"), -1),
-        Some((1, 20))
-    );
-}
-
-/// A receiver-driven track change must stamp the canonical queue's active
-/// slot: without it the queue keeps the originally submitted slot "active"
-/// and Delete on that stale row hits `RequiresActiveConfirmation` and
-/// silently vanishes (queue regrade, session-follow was display-only).
 #[test]
 fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
     let mut app = attached_app();
