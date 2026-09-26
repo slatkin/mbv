@@ -1,6 +1,19 @@
 use super::*;
 use rstest::rstest;
 
+fn collect_targets<T: Clone + Eq + std::hash::Hash>(
+    browser: &TreeBrowser<T>,
+    target: &T,
+    output: &mut Vec<T>,
+) {
+    output.push(target.clone());
+    if let Some(children) = browser.children_of(target) {
+        for child in children {
+            collect_targets(browser, child, output);
+        }
+    }
+}
+
 #[test]
 fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
     use crate::app::components::list::tree_browser::TreeOperation;
@@ -82,21 +95,9 @@ fn duplicate_child_identities_are_scoped_to_their_parent(
         false,
     ));
 
-    fn collect<T: Clone + Eq + std::hash::Hash>(
-        browser: &TreeBrowser<T>,
-        target: &T,
-        output: &mut Vec<T>,
-    ) {
-        output.push(target.clone());
-        if let Some(children) = browser.children_of(target) {
-            for child in children {
-                collect(browser, child, output);
-            }
-        }
-    }
     let mut targets = Vec::new();
     for root in component.browser.roots() {
-        collect(&component.browser, root, &mut targets);
+        collect_targets(&component.browser, root, &mut targets);
     }
     let target_count = targets.len();
     targets.sort_by_key(|target| format!("{target:?}"));

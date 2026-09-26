@@ -12,15 +12,10 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     fn counting_connect(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
         CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
+        let (remote, events) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
 
     let _guard = crate::config::TestStateDirGuard::new();
@@ -69,14 +64,8 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     // must strip that claim so the final warning is accurate.
     fn always_fail(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            std::sync::mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
-        Err("connection refused".to_string())
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+        crate::app::test_seams::DaemonRouteConnectOutcome::Failed("connection refused".to_string())
     }
 
     let _guard = crate::config::TestStateDirGuard::new();

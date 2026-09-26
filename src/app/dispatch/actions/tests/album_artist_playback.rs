@@ -176,7 +176,7 @@ fn grouped_track_without_autoload_queues_only_the_selected_track() {
             track.id = id.into();
             track.album_id = "album-1".into();
             track.media_type = "Audio".into();
-            track.index_number = index as i64 + 1;
+            track.index_number = i64::try_from(index).unwrap() + 1;
             track
         })
         .collect::<Vec<_>>();

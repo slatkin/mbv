@@ -95,7 +95,7 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint);
+            return connect(endpoint).into_result();
         }
 
         log::info!(

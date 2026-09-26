@@ -29,7 +29,34 @@ pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlaye
 // eventually drive (`connected_session_id`/`direct_remote_label` vs. a
 // future #223 `active_route`) -- stay independently testable and are
 // never conflated, per #223's explicit "must not be conflated" rule.
-pub(in crate::app) static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> =
+pub(in crate::app) enum DaemonRouteConnectOutcome {
+    Connected(
+        mbv_core::remote_player::RemotePlayer,
+        mpsc::Receiver<mbv_core::player::PlayerEvent>,
+    ),
+    Failed(String),
+}
+
+impl DaemonRouteConnectOutcome {
+    pub(in crate::app) fn into_result(
+        self,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<mbv_core::player::PlayerEvent>,
+        ),
+        String,
+    > {
+        match self {
+            Self::Connected(remote, events) => Ok((remote, events)),
+            Self::Failed(error) => Err(error),
+        }
+    }
+}
+
+pub(in crate::app) type DaemonRouteConnectFn =
+    fn(&mbv_core::remote_player::DaemonEndpoint) -> DaemonRouteConnectOutcome;
+pub(in crate::app) static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DaemonRouteConnectFn>> =
     Mutex::new(None);
 pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 

@@ -9,8 +9,9 @@ use std::sync::mpsc;
 fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     fn reconnect_local_daemon(
         _endpoint: &DaemonEndpoint,
-    ) -> Result<(RemotePlayer, mpsc::Receiver<mbv_core::player::PlayerEvent>), String> {
-        Ok(RemotePlayer::stub(make_items(2), 0))
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+        let (remote, events) = RemotePlayer::stub(make_items(2), 0);
+        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
 
     let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();

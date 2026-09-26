@@ -366,13 +366,12 @@ mod tv_latest_tests {
 
         app.refresh_after_stop();
         let event = loop {
-            match app
+            let event = app
                 .lib_rx
                 .recv()
-                .expect("selected TV refresh must complete")
-            {
-                event @ (LibEvent::Loaded { .. } | LibEvent::Refreshed { .. }) => break event,
-                _ => {}
+                .expect("selected TV refresh must complete");
+            if let event @ (LibEvent::Loaded { .. } | LibEvent::Refreshed { .. }) = event {
+                break event;
             }
         };
         match event {

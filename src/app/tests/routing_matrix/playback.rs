@@ -14,7 +14,7 @@ fn playback_gating_space_falls_through_to_consumed_leaf() {
     let out = fold_tick(
         leaf,
         key(KeyCode::Char(' ')),
-        Some(ComponentId::Library),
+        Some(&ComponentId::Library),
         active_snapshot(),
     );
     assert_eq!(
@@ -29,7 +29,7 @@ fn playback_gating_esc_falls_through_to_consumed_leaf() {
     let out = fold_tick(
         leaf,
         key(KeyCode::Esc),
-        Some(ComponentId::Library),
+        Some(&ComponentId::Library),
         active_snapshot(),
     );
     assert_eq!(out.len(), 1);

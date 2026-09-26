@@ -191,8 +191,8 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     assert_eq!(model.music_track_focus_request, None, "request consumed");
 }
 
-/// A wide->narrow breakpoint flip forces inline track focus off (design.md
-/// D5: narrow never enters track focus), even if the wide side had it.
+// A wide->narrow breakpoint flip forces inline track focus off (design.md
+// D5: narrow never enters track focus), even if the wide side had it.
 // ── Owner retention (design D2): a drill and a tab change both keep the
 // inactive Music owner's cursor/scroll, since the panel retains an owner
 // while its library stays in the catalog. ─────────────────────────────────
