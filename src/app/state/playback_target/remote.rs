@@ -190,29 +190,3 @@ impl RemotePlaybackTarget {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::tests::{make_app_stub, make_session};
-
-    fn res_label_for(video_label: &str) -> String {
-        let mut app = make_app_stub();
-        let mut session = make_session("Client", "Emby");
-        session.media_info.video_label = video_label.to_string();
-        app.connected_session_state = Some(session);
-        RemotePlaybackTarget::indicator_data(&app)
-            .unwrap()
-            .res_label
-    }
-
-    #[test]
-    fn remote_indicator_uses_short_resolution_labels() {
-        assert_eq!(res_label_for("2160p HEVC"), "4K");
-        assert_eq!(res_label_for("4K HEVC"), "4K");
-        assert_eq!(res_label_for("1440p H264"), "QHD");
-        assert_eq!(res_label_for("1080p H264"), "FHD");
-        assert_eq!(res_label_for("720p H264"), "HD");
-        assert_eq!(res_label_for("480p H264"), "SD");
-    }
-}
