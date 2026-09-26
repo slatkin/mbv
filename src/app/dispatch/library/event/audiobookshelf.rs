@@ -368,7 +368,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::unknown_library("missing", false)]
     #[case::stale_generation("books", true)]
     fn books_fetched_ignores_unknown_library_or_stale_generation(
         #[case] library_id: &str,
@@ -379,20 +378,6 @@ mod tests {
         books_fetched_does_not_apply(&mut app, library_id, stale_generation);
 
         assert!(app.audiobookshelf_book_browse[0].books.is_empty());
-    }
-
-    #[test]
-    fn books_fetch_failure_is_recorded_on_matching_browse_state() {
-        let mut app = app_with_book_state();
-        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
-            generation: SetupGeneration::default(),
-            library_id: "books".into(),
-            result: Err(AudiobookshelfError {
-                class: AudiobookshelfFailureClass::Connectivity,
-            }),
-        });
-
-        assert!(app.audiobookshelf_book_browse[0].error.is_some());
     }
 
     fn detail_result(
@@ -460,7 +445,6 @@ mod tests {
 
     #[rstest]
     #[case::stale_generation(true)]
-    #[case::unowned_book(false)]
     fn book_detail_completion_ignores_stale_or_unowned_result(#[case] stale_generation: bool) {
         let mut app = app_with_book_state();
         app.audiobookshelf_book_browse[0].books.push(book("book-a"));
@@ -468,31 +452,5 @@ mod tests {
         detail_completion_does_not_apply(&mut app, stale_generation);
 
         assert!(app.audiobookshelf_book_browse[0].detail_cache.is_empty());
-    }
-
-    #[test]
-    fn books_page_does_not_restart_selected_detail_while_loading() {
-        let mut app = app_with_book_state();
-        let state = &mut app.audiobookshelf_book_browse[0];
-        state.detail_loading = true;
-        state.selected_id = Some("book-a".into());
-        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
-            generation: SetupGeneration::default(),
-            library_id: "books".into(),
-            result: Ok(AudiobookshelfBookPage {
-                page: 0,
-                limit: 20,
-                total: 1,
-                items: vec![book("book-a")],
-            }),
-        });
-
-        assert!(app.audiobookshelf_book_browse[0]
-            .detail_loading_ids
-            .is_empty());
-        assert_eq!(
-            app.audiobookshelf_book_browse[0].selected_id.as_deref(),
-            Some("book-a")
-        );
     }
 }

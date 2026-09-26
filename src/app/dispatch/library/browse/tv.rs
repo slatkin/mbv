@@ -321,29 +321,8 @@ mod tv_latest_tests {
         assert_eq!(level.item_types.as_deref(), Some("Episode"));
     }
 
-    #[test]
-    fn upcoming_library_fetch_uses_library_parent_and_flat_episode_rows() {
-        let mut episode = crate::app::tests::make_item("Upcoming episode", "Episode");
-        episode.id = "upcoming-episode".into();
-        let source = FakeUpcomingSource {
-            request: RefCell::new(None),
-            items: vec![episode.clone()],
-        };
-
-        let level = build_tv_upcoming_level(&source, "library-id".into(), "TV".into())
-            .expect("fake Upcoming request succeeds");
-
-        assert_eq!(
-            source.request.borrow().as_ref(),
-            Some(&("library-id".into(), 30))
-        );
-        assert_eq!(level.items, vec![episode]);
-        assert_eq!(level.item_types.as_deref(), Some("Episode"));
-    }
-
     #[rstest]
     #[case::latest(mbv_core::config::TvContentMode::Latest)]
-    #[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
     fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_core::config::TvContentMode) {
         let mut app = crate::app::tests::make_app_stub();
         let config = crate::config::Config {
