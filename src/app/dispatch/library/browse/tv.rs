@@ -179,7 +179,7 @@ impl App {
                     sort_by,
                     sort_order,
                     loaded_count,
-                    letter_filter,
+                    letter_filter.as_ref(),
                 ),
             }
         }

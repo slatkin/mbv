@@ -78,6 +78,13 @@ impl App {
                 .queue
                 .apply_progress(slot_id, position_ticks, is_finished);
         }
+        // `TICKS_PER_SECOND` (10^7) is exactly representable, and a tick count
+        // would only exceed `f64`'s exact integer range past 2^53 ticks
+        // (~28,500 years of playback), so this division is lossless in practice.
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "tick counts stay far below 2^53; f64 is exact for any real playback position"
+        )]
         let current_time_seconds = position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
         for state in &mut self.audiobookshelf_book_browse {
             state.progress.insert(

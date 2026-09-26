@@ -57,7 +57,7 @@ impl Model {
             }
             ShellRequest::PlaylistsOpen(index) => {
                 if let Some(playlist) = self.app.playlists.get(*index).cloned() {
-                    self.app.spawn_open_playlist(playlist);
+                    self.app.spawn_open_playlist(&playlist);
                 }
             }
             ShellRequest::PlaylistsActivate { open, index } => {
@@ -138,7 +138,7 @@ impl Model {
                 if let Some(playlist) = self.app.playlists_open.clone() {
                     self.app.playlists_open = None;
                     self.app.playlists_open_items.clear();
-                    self.app.spawn_open_playlist(playlist);
+                    self.app.spawn_open_playlist(&playlist);
                 } else {
                     self.app.spawn_load_playlists();
                 }

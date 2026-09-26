@@ -195,7 +195,10 @@ impl App {
     // `select_letter_pill` (moved to `music_actions.rs`) plus
     // `refresh_lib`/`maybe_capture_library_total_and_apply_default_pill`,
     // which stay behind in `actions.rs`.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "forwards a level's full refresh key to the spawned refresh fetch"
+    )]
     pub(in crate::app) fn spawn_refresh(
         &self,
         lib_idx: usize,
@@ -205,16 +208,14 @@ impl App {
         sort_by: String,
         sort_order: String,
         loaded_count: usize,
-        letter_filter: Option<crate::app::render::LetterFilter>,
+        letter_filter: Option<&crate::app::render::LetterFilter>,
     ) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
-        let (name_ge, name_lt) = letter_filter
-            .as_ref()
-            .map_or((None, None), |f| (f.name_ge, f.name_lt));
+        let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
             match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
                 parent_id: &parent_id,
@@ -339,7 +340,7 @@ impl App {
             unplayed_only,
             sort_by,
             sort_order,
-            letter_filter,
+            letter_filter.as_ref(),
             limit,
         );
     }

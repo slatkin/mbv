@@ -72,7 +72,7 @@ impl App {
                 sort_by,
                 sort_order,
                 loaded_count,
-                letter_filter,
+                letter_filter.as_ref(),
             );
         }
     }
@@ -216,7 +216,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_open_playlist(&mut self, playlist: EmbyItem) {
+    pub(in crate::app) fn spawn_open_playlist(&mut self, playlist: &EmbyItem) {
         if self.playlists_open_loading {
             return;
         }

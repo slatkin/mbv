@@ -316,7 +316,7 @@ impl App {
             sort_by,
             sort_order,
             0,
-            Some(filter),
+            Some(&filter),
         );
         self.save_default_library_position(lib_idx);
     }
@@ -406,7 +406,7 @@ impl App {
                     sort_by,
                     sort_order,
                     0,
-                    Some(filter),
+                    Some(&filter),
                 );
             }
         }
@@ -448,7 +448,7 @@ impl App {
             sort_by,
             sort_order,
             0,
-            Some(filter),
+            Some(&filter),
         );
         self.save_default_library_position(lib_idx);
     }

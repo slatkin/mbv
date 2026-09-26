@@ -50,7 +50,7 @@ impl App {
     /// on the owning browse state and cache the detail on success.
     fn handle_audiobookshelf_book_detail_fetched(
         &mut self,
-        library_item_id: String,
+        library_item_id: &str,
         result: Result<
             (
                 Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
@@ -67,12 +67,14 @@ impl App {
                         .iter()
                         .any(|book| book.library_item_id == library_item_id)
                 }) {
-                    state.detail_loading_ids.remove(&library_item_id);
+                    state.detail_loading_ids.remove(library_item_id);
                     state.detail_loading = state
                         .selected_id
                         .as_ref()
                         .is_some_and(|id| state.detail_loading_ids.contains(id));
-                    state.detail_cache.insert(library_item_id.clone(), detail);
+                    state
+                        .detail_cache
+                        .insert(library_item_id.to_string(), detail);
                 }
             }
             Err(_error) => {
@@ -82,7 +84,7 @@ impl App {
                         .iter()
                         .any(|book| book.library_item_id == library_item_id)
                 }) {
-                    state.detail_loading_ids.remove(&library_item_id);
+                    state.detail_loading_ids.remove(library_item_id);
                     state.detail_loading = state
                         .selected_id
                         .as_ref()
@@ -251,7 +253,7 @@ impl App {
                 result,
             } => {
                 if self.audiobookshelf_runtime.accepts(generation) {
-                    self.handle_audiobookshelf_book_detail_fetched(library_item_id, result);
+                    self.handle_audiobookshelf_book_detail_fetched(&library_item_id, result);
                 }
                 None
             }

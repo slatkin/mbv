@@ -13,7 +13,7 @@ impl App {
     pub(super) fn handle_lib_loaded(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         mut level: BrowseLevel,
     ) {
         // Filtering belongs at the event boundary so every level-row producer
@@ -22,7 +22,7 @@ impl App {
         self.retain_grouped_music_level_items(lib_idx, &mut level);
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
-        let loaded_parent_id = parent_id.clone();
+        let loaded_parent_id = parent_id.to_string();
         self.handle_loaded_level(lib_idx, parent_id, level);
         if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone() {
             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -125,14 +125,14 @@ impl App {
             sort_by,
             sort_order,
             0,
-            Some(filter),
+            Some(&filter),
         );
     }
 
     pub(super) fn handle_lib_page_appended(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
@@ -144,7 +144,7 @@ impl App {
                 self.is_grouped_music_library(lib_idx),
             );
         }
-        self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
+        self.update_current_browse_level(lib_idx, parent_id, true, |last| {
             last.items.extend(items.take().unwrap());
             last.fetched_rows += fetched_rows;
             last.total_count = total_count;
@@ -152,7 +152,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
+        self.maybe_aggregate_feed_after_page_append(lib_idx, parent_id);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -165,18 +165,18 @@ impl App {
     pub(super) fn handle_lib_refreshed(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
-        item_types: Option<String>,
+        parent_id: &str,
+        item_types: Option<&str>,
         unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
         let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
-            && item_types.as_deref() == Some("Video")
+            && item_types == Some("Video")
             && unplayed_only;
         if !is_feed_video_refresh {
             let mut items = Some(items);
-            let updated = self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
+            let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
                 last.items = items.take().unwrap();
                 last.fetched_rows = last.items.len();
                 last.total_count = total_count;
@@ -212,19 +212,19 @@ impl App {
     pub(super) fn handle_restored_library_position(
         &mut self,
         lib_idx: usize,
-        requested_position: crate::config::LibraryPosition,
+        requested_position: &crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
-        if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
+        if self.saved_library_position(lib_idx).as_ref() != Some(requested_position) {
             return;
         }
         let nav_stack =
-            self.restore_library_position_levels(lib_idx, &requested_position, nav_stack);
+            self.restore_library_position_levels(lib_idx, requested_position, nav_stack);
         let position = self.rebuild_restored_library_position(
             lib_idx,
             position,
-            &requested_position,
+            requested_position,
             &nav_stack,
         );
 

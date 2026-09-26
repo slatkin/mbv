@@ -50,7 +50,7 @@ impl Model {
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
             ShellRequest::EmbyLibraryShuffle { item } => {
-                self.app.shuffle_play_selected(lib_idx, item);
+                self.app.shuffle_play_selected(lib_idx, &item);
             }
             // Bare `r` refreshes the active Emby library (task 5.3d,
             // Emby browser refresh): the shell derives the active library
