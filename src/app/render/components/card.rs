@@ -381,8 +381,12 @@ impl App {
             queue.item_at(queue.queue_cursor).cloned()
         });
         let cover_id = match raw_item {
-            Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
-            Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
+            Some(QueueItem::Audiobookshelf(
+                mbv_core::playback_queue::AudiobookshelfItem::Episode(ep),
+            )) => Some((ep.library_item_id, false)),
+            Some(QueueItem::Audiobookshelf(
+                mbv_core::playback_queue::AudiobookshelfItem::Book(book),
+            )) => Some((book.library_item_id, true)),
             _ => None,
         };
         let Some((item_id, is_book)) = cover_id else {

@@ -43,8 +43,10 @@ pub(in crate::app) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
             crate::app::infra::feed_parse::parse_pub_date_secs(&item.date_added)
         }
         QueueItem::Feed(entry) => entry.pub_date_secs,
-        QueueItem::Audiobookshelf(episode) => episode.pub_date_secs,
-        QueueItem::AudiobookshelfBook(_) => None,
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
+            episode,
+        )) => episode.pub_date_secs,
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(_)) => None,
     }
 }
 
@@ -64,7 +66,7 @@ mod tests {
     use super::*;
     use mbv_core::api::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
     use mbv_core::config::FeedKind;
-    use mbv_core::playback_queue::{AudiobookshelfQueueItem, FeedEntry};
+    use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry};
     use rstest::rstest;
 
     fn emby(date_added: &str) -> QueueItem {
@@ -108,7 +110,7 @@ mod tests {
     }
 
     fn episode(pub_date_secs: Option<u64>) -> QueueItem {
-        QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
             library_item_id: "library".into(),
             episode_id: "episode".into(),
             title: "Episode".into(),
@@ -121,7 +123,7 @@ mod tests {
             pub_date_secs,
             is_finished: false,
             cover_path: None,
-        })
+        }))
     }
 
     fn feed(pub_date_secs: Option<u64>) -> QueueItem {

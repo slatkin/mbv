@@ -217,12 +217,16 @@ impl PlayerProxy {
                 if slots.is_empty() {
                     return false;
                 }
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.queue
                 {
                     return false;
                 }
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf_book().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;
@@ -326,12 +330,16 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(slots),
             PlayerProxyInner::Remote(r) => {
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.queue
                 {
                     return false;
                 }
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf_book().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;

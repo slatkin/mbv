@@ -5,7 +5,7 @@ use crate::playback_queue::AudiobookshelfQueueItem;
 use crate::remote_player::RemotePlayer;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
-    QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+    QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
         library_item_id: "show-1".into(),
         episode_id: "episode-1".into(),
         title: "Episode 1".into(),
@@ -18,7 +18,7 @@ fn proxy_audiobookshelf_item() -> QueueItem {
         pub_date_secs: None,
         is_finished: false,
         cover_path: None,
-    })
+    }))
 }
 
 fn capability_abs_disabled() -> CtrlCompatibility {

@@ -7,8 +7,8 @@ use crate::audiobookshelf::{
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
 use crate::config::AudiobookshelfSetup;
-use crate::playback_queue::QueueItem;
-use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem};
+use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
+use crate::playback_queue::{AudiobookshelfItem, QueueItem};
 use crate::service_runtime::SetupGeneration;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -117,9 +117,14 @@ pub(crate) struct PreparedSource {
 }
 
 impl PreparedSource {
-    fn plain(item: &QueueItem, server_url: &str, token: &str) -> Self {
+    fn plain(
+        item: &QueueItem,
+        source: crate::playback_queue::MpvUrlSource<'_>,
+        server_url: &str,
+        token: &str,
+    ) -> Self {
         Self {
-            url: mpv_url_for_queue_item(item, server_url, token),
+            url: mpv_url_for_queue_item(source, server_url, token),
             mpv_options: Vec::new(),
             start_seconds: resume_start_pos(item),
             book_extra_sources: Vec::new(),
@@ -176,9 +181,24 @@ pub(super) fn prepare_source(
     context: Option<&AudiobookshelfPlayerContext>,
 ) -> Result<PreparedSource, AudiobookshelfError> {
     match item {
-        QueueItem::Audiobookshelf(episode) => prepare_episode_source(episode, context),
-        QueueItem::AudiobookshelfBook(book) => prepare_book_source(book, context),
-        _ => Ok(PreparedSource::plain(item, server_url, token)),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
+            prepare_episode_source(episode, context)
+        }
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
+            prepare_book_source(book, context)
+        }
+        QueueItem::Emby(emby) => Ok(PreparedSource::plain(
+            item,
+            MpvUrlSource::Emby(emby),
+            server_url,
+            token,
+        )),
+        QueueItem::Feed(entry) => Ok(PreparedSource::plain(
+            item,
+            MpvUrlSource::Feed(entry),
+            server_url,
+            token,
+        )),
     }
 }
 

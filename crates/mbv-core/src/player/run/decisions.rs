@@ -1,5 +1,5 @@
 use super::{IntroState, NextUp};
-use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use mbv_ids::ItemId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
                 0
             };
         }
-        Some(QueueItem::Audiobookshelf(item)) => {
+        Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
@@ -53,7 +53,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
                 0
             };
         }
-        Some(QueueItem::AudiobookshelfBook(item)) => {
+        Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {

@@ -361,8 +361,12 @@ pub(in crate::app) fn hero_content_music_album(item: &EmbyItem) -> HeroContentDa
 pub(in crate::app) fn hero_content_queue(item: &QueueItem) -> HeroContentData {
     match item {
         QueueItem::Emby(item) => hero_content_emby(item),
-        QueueItem::Audiobookshelf(episode) => hero_content_abs_episode(episode),
-        QueueItem::AudiobookshelfBook(book) => hero_content_abs_book(book),
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
+            episode,
+        )) => hero_content_abs_episode(episode),
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => {
+            hero_content_abs_book(book)
+        }
         QueueItem::Feed(entry) => hero_content_feed(entry),
     }
 }

@@ -87,7 +87,7 @@ impl Player {
         initial_volume: u8,
     ) -> bool {
         if items.is_empty()
-            || (items.iter().any(|slot| slot.item.is_audiobookshelf_any())
+            || (items.iter().any(|slot| slot.item.is_audiobookshelf())
                 && !self.can_admit_audiobookshelf())
         {
             return false;
@@ -226,7 +226,7 @@ impl Player {
 
     pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
         if slots.is_empty()
-            || (slots.iter().any(|slot| slot.item.is_audiobookshelf_any())
+            || (slots.iter().any(|slot| slot.item.is_audiobookshelf())
                 && !self.can_admit_audiobookshelf())
         {
             return false;
@@ -341,10 +341,7 @@ fn run_player_thread(mut start: PlayerThreadStart) {
     };
     init_volume(&mpv, &start.status, start.initial_volume);
 
-    let active_file_projection = start
-        .items
-        .iter()
-        .any(|slot| slot.item.is_audiobookshelf_any());
+    let active_file_projection = start.items.iter().any(|slot| slot.item.is_audiobookshelf());
     let Some(active_prepared_source) = load_queue_sources(&mpv, &start, active_file_projection)
     else {
         return;

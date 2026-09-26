@@ -72,6 +72,33 @@ fn audiobookshelf_book(library_item_id: &str) -> AudiobookshelfBookQueueItem {
     }
 }
 
+#[test]
+fn mpv_url_source_covers_each_queue_item_shape() {
+    let emby = QueueItem::Emby(Box::new(item("emby1")));
+    let feed = QueueItem::Feed(FeedEntry {
+        guid: "feed1".into(),
+        title: "Feed entry".into(),
+        enclosure_url: Some("https://example.com/audio.mp3".into()),
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    });
+    let episode = QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+        "lib1", "ep1",
+    )));
+    let book = QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book("lib1")));
+
+    assert!(emby.mpv_url_source().is_some());
+    assert!(feed.mpv_url_source().is_some());
+    assert!(episode.mpv_url_source().is_none());
+    assert!(book.mpv_url_source().is_none());
+}
+
 fn item_with_progress(id: &str, position_seconds: i64, played: bool) -> EmbyItem {
     let mut item = item(id);
     item.playback_position_ticks = position_seconds * TICKS_PER_SECOND;
@@ -749,6 +776,14 @@ fn is_music_covers_emby_music_types(
 #[test]
 fn is_music_excludes_feeds_and_audiobookshelf_however_audio_they_are() {
     assert!(!QueueItem::Feed(feed("f1")).is_music());
-    assert!(!QueueItem::Audiobookshelf(audiobookshelf_episode("lib1", "ep1")).is_music());
-    assert!(!QueueItem::AudiobookshelfBook(audiobookshelf_book("lib1")).is_music());
+    assert!(
+        !QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+            "lib1", "ep1"
+        )))
+        .is_music()
+    );
+    assert!(
+        !QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book("lib1")))
+            .is_music()
+    );
 }

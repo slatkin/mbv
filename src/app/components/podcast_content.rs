@@ -156,7 +156,9 @@ impl PodcastContent {
         self.latest_items = latest
             .iter()
             .filter_map(|item| match item {
-                QueueItem::Audiobookshelf(item) => Some(item.clone()),
+                QueueItem::Audiobookshelf(
+                    mbv_core::playback_queue::AudiobookshelfItem::Episode(item),
+                ) => Some(item.clone()),
                 _ => None,
             })
             .collect();

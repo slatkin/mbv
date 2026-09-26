@@ -7,6 +7,7 @@ use super::{
     QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
     TICKS_PER_SECOND,
 };
+use crate::playback_queue::MpvUrlSource;
 use crate::player::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
 use std::sync::mpsc;
@@ -619,32 +620,16 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
                 past: false,
             }
         }
-        QueueItem::Audiobookshelf(ep) => {
-            let runtime = i64::try_from(ep.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
+        QueueItem::Audiobookshelf(item) => {
+            let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
+            let position_ticks = item.playback_position_ticks();
             InitialItemState {
-                position_ticks: if crate::api::should_resume(ep.position_ticks, runtime) {
-                    ep.position_ticks
+                position_ticks: if crate::api::should_resume(position_ticks, runtime) {
+                    position_ticks
                 } else {
                     0
                 },
-                osd_title: ep.title.clone(),
-                series_id: ItemId::empty(),
-                season: 0,
-                episode: 0,
-                intro_start: 0,
-                intro_end: 0,
-                past: false,
-            }
-        }
-        QueueItem::AudiobookshelfBook(book) => {
-            let runtime = i64::try_from(book.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            InitialItemState {
-                position_ticks: if crate::api::should_resume(book.position_ticks, runtime) {
-                    book.position_ticks
-                } else {
-                    0
-                },
-                osd_title: book.title.clone(),
+                osd_title: item.title().to_owned(),
                 series_id: ItemId::empty(),
                 season: 0,
                 episode: 0,
@@ -665,27 +650,21 @@ pub(in crate::player) fn reject_stale_jump(
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 
-/// Constructs the mpv loadfile URL for a queued item.
+/// Constructs the mpv loadfile URL for a direct mpv URL source.
 pub(in crate::player) fn mpv_url_for_queue_item(
-    item: &QueueItem,
+    source: MpvUrlSource<'_>,
     server_url: &str,
     token: &str,
 ) -> String {
-    match item {
-        QueueItem::Emby(emby) => {
+    match source {
+        MpvUrlSource::Emby(emby) => {
             let ep = if emby.is_audio() { "Audio" } else { "Videos" };
             format!(
                 "{}/{}/{}/stream?static=true&api_key={}",
                 server_url, ep, emby.id, token
             )
         }
-        QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
-        QueueItem::Audiobookshelf(_) => {
-            unreachable!("Audiobookshelf admission must precede URL resolution")
-        }
-        QueueItem::AudiobookshelfBook(_) => {
-            unreachable!("Audiobookshelf book admission must precede URL resolution")
-        }
+        MpvUrlSource::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
     }
 }
 

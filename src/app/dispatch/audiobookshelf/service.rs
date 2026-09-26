@@ -55,7 +55,7 @@ impl App {
             .playback_queue()
             .queue
             .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf_any());
+            .is_some_and(|slot| slot.item.is_audiobookshelf());
         if active_is_audiobookshelf {
             self.reset_bare_transitions();
             self.player.stop();
@@ -170,7 +170,7 @@ impl App {
             .playback_queue()
             .queue
             .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf_any());
+            .is_some_and(|slot| slot.item.is_audiobookshelf());
         if active_is_abs {
             self.player.stop();
         }
@@ -184,7 +184,7 @@ impl App {
             let kept = queue
                 .all_queue_items()
                 .into_iter()
-                .filter(|item| !item.is_audiobookshelf_any())
+                .filter(|item| !item.is_audiobookshelf())
                 .collect::<Vec<_>>();
             let new_cursor = cursor_before.min(kept.len().saturating_sub(1));
             queue.set_queue_items(kept, new_cursor);
