@@ -267,25 +267,6 @@ pub enum AudiobookshelfItem {
     Book(AudiobookshelfBookQueueItem),
 }
 
-impl PartialEq for AudiobookshelfItem {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Episode(left), Self::Episode(right)) => left == right,
-            (Self::Book(left), Self::Book(right)) => {
-                left.library_item_id == right.library_item_id
-                    && left.title == right.title
-                    && left.author == right.author
-                    && left.duration_ticks == right.duration_ticks
-                    && left.position_ticks == right.position_ticks
-                    && left.played == right.played
-                    && left.is_finished == right.is_finished
-                    && left.cover_path == right.cover_path
-            }
-            _ => false,
-        }
-    }
-}
-
 impl AudiobookshelfItem {
     #[must_use]
     pub fn title(&self) -> &str {
@@ -607,7 +588,8 @@ impl QueueItem {
         }
     }
 
-    /// Whether this is an Emby TV episode.
+    /// Whether this is an Emby TV episode. Next Up is only meaningful for
+    /// `TVShow` library items, not movies, music, or feed entries.
     #[must_use]
     pub fn is_tv_episode(&self) -> bool {
         matches!(self, Self::Emby(item) if item.item_type == "Episode")
@@ -713,6 +695,9 @@ impl QueueItem {
         }
     }
 
+    /// Returns the inner `EmbyItem` if this is an Emby variant.
+    /// Used at boundaries that only operate on Emby items (`send_ep_info`,
+    /// `set_current_item_metadata`, `start_item`, `mark_played`, etc.).
     #[must_use]
     pub fn as_emby(&self) -> Option<&EmbyItem> {
         match self {
@@ -769,7 +754,6 @@ impl QueueItem {
         }
     }
 
-    /// Typed Service-qualified content identity.
     /// Typed Service-qualified content identity. Use this for matching
     /// and reconciliation instead of formatted string matching.
     #[must_use]
@@ -786,8 +770,10 @@ impl QueueItem {
         self.content_id()
     }
 
-    /// The Remote Service required to play this item. Audiobookshelf admission
-    /// is decided by the owner capability supplied to `admissible_for_owner`.
+    /// The Remote Service required to play this item. Emby and Feed items
+    /// retain their existing local/source behavior; Audiobookshelf admission
+    /// is decided by the owner capability supplied to
+    /// `admissible_for_owner`.
     #[must_use]
     pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
         match self {

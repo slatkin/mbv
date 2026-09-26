@@ -7,7 +7,7 @@ use crate::audiobookshelf::{
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
 use crate::config::AudiobookshelfSetup;
-use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem};
+use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
 use crate::playback_queue::{AudiobookshelfItem, QueueItem};
 use crate::service_runtime::SetupGeneration;
 
@@ -187,12 +187,18 @@ pub(super) fn prepare_source(
         QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
             prepare_book_source(book, context)
         }
-        _ => {
-            let source = item.mpv_url_source().ok_or_else(|| {
-                AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable)
-            })?;
-            Ok(PreparedSource::plain(item, source, server_url, token))
-        }
+        QueueItem::Emby(emby) => Ok(PreparedSource::plain(
+            item,
+            MpvUrlSource::Emby(emby),
+            server_url,
+            token,
+        )),
+        QueueItem::Feed(entry) => Ok(PreparedSource::plain(
+            item,
+            MpvUrlSource::Feed(entry),
+            server_url,
+            token,
+        )),
     }
 }
 
