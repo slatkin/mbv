@@ -80,8 +80,6 @@ pub(in crate::app) struct WideSkeletonGeometry {
     /// The list box's inset row-flow rect.
     pub list_area: Rect,
     /// The Hero pane's inset content rect.
-    #[cfg(test)]
-    pub hero_area: Rect,
     /// The Workspace box's panel and the rect its list was viewed into
     /// (below the optional header rows), when one painted.
     pub workspace: Option<(Rect, Rect)>,
@@ -357,8 +355,6 @@ pub(in crate::app) fn render_wide_skeleton(
         selector_bar: browser.selector_bar,
         list_panel: browser.list_panel,
         list_area: browser.list_area,
-        #[cfg(test)]
-        hero_area,
         workspace: None,
         hero_image: None,
         overview_box: None,

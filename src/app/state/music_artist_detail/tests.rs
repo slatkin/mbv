@@ -359,7 +359,7 @@ fn artist_artwork_completion_requires_the_current_identity() {
         generation,
         &key.artist_id,
         key.revision,
-        "stale-cache-key".into(),
+        "stale-cache-key",
         false,
     );
     app.handle_artist_artwork_fetched(
@@ -383,7 +383,7 @@ fn stale_artist_completion_is_rejected_and_cache_hit_does_not_refetch() {
     app.handle_artist_tracks_fetched(
         &destination.clone(),
         generation,
-        "artist-alpha".into(),
+        "artist-alpha",
         6,
         Ok(Vec::new()),
     );
@@ -410,7 +410,7 @@ fn failed_artist_query_falls_back_to_per_album_fetches() {
     app.handle_artist_tracks_fetched(
         &destination.clone(),
         generation,
-        "artist-alpha".into(),
+        "artist-alpha",
         7,
         Err("unsupported".into()),
     );

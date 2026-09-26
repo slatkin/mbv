@@ -155,17 +155,6 @@ impl App {
     ///   can browse locally while a daemon elsewhere plays something else,
     ///   with the Local/Remote scope pill to switch between them.
     #[cfg(test)]
-    pub fn new_remote(
-        client: EmbyClient,
-        remote: mbv_core::remote_player::RemotePlayer,
-        player_rx: mpsc::Receiver<PlayerEvent>,
-        endpoint: &DaemonEndpoint,
-    ) -> Self {
-        let config = crate::config::load_config().unwrap_or_default();
-        Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
-    }
-
-    #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,
         remote: mbv_core::remote_player::RemotePlayer,

@@ -377,10 +377,6 @@ impl TvContent {
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
     }
-    #[cfg(test)]
-    pub(in crate::app) fn cursor(&self) -> usize {
-        self.carrier.cursor()
-    }
     /// The shared owner's selection as a position in `context.list.items`
     /// (raw, shell-projected order) rather than the active presentation's
     /// displayed (natural-sorted, grouped) row order. Used for the Narrow

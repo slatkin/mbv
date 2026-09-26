@@ -65,7 +65,6 @@ pub(crate) struct CardGeometry {
 #[cfg(test)]
 #[derive(Clone, Default)]
 pub(crate) struct PaintedRowGeometry {
-    pub left_area: Rect,
     pub selected_item_rect: Option<Rect>,
 }
 
