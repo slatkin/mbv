@@ -3,10 +3,6 @@ use self::tree_fixtures::{press, tree_owner};
 use super::*;
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;
-use ratatui::backend::TestBackend;
-use ratatui::layout::{Position, Rect};
-use ratatui::Terminal;
-use tuirealm::component::Component;
 
 #[test]
 fn filter_escape_closes_search_and_tree_navigation_returns_selection() {
