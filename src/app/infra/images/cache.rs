@@ -6,7 +6,7 @@ use std::sync::mpsc;
 pub(in crate::app) struct ImageCache {
     pub(in crate::app) card_image_states: std::collections::HashMap<String, CachedImage>,
     pub(in crate::app) image_lru: std::collections::VecDeque<String>,
-    pub(in crate::app) image_cache_size: usize,
+    pub(in crate::app) cache_size: usize,
     pub(in crate::app) card_image_loading: std::collections::HashSet<String>,
     pub(in crate::app) last_card_height: u16,
     pub(in crate::app) last_card_width: u16,
@@ -28,7 +28,7 @@ pub(in crate::app) struct ImageCache {
     pub(in crate::app) resize_response_rx: ResizeResponseRx,
     pub(in crate::app) image_picker: Option<Picker>,
     pub(in crate::app) halfblock_picker: Option<Picker>,
-    pub(in crate::app) image_cache_size_total: usize,
+    pub(in crate::app) cache_size_total: usize,
     pub(in crate::app) image_protocol: Option<String>,
     pub(in crate::app) image_protocol_enabled: bool,
     /// Test-only instrumentation: counts every reservation `queue_card_image_fetch`
@@ -46,7 +46,7 @@ pub(in crate::app) struct ImageCache {
 
 impl ImageCache {
     pub(in crate::app) fn new(
-        image_cache_size: usize,
+        cache_size: usize,
         image_protocol: Option<String>,
         image_protocol_enabled: bool,
         card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
@@ -57,7 +57,7 @@ impl ImageCache {
         Self {
             card_image_states: std::collections::HashMap::new(),
             image_lru: std::collections::VecDeque::new(),
-            image_cache_size,
+            cache_size,
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
             last_card_width: 0,
@@ -69,7 +69,7 @@ impl ImageCache {
             resize_response_rx,
             image_picker: None,
             halfblock_picker: None,
-            image_cache_size_total: image_cache_size.saturating_mul(2),
+            cache_size_total: cache_size.saturating_mul(2),
             image_protocol,
             image_protocol_enabled,
             #[cfg(test)]

@@ -164,7 +164,7 @@ impl Model {
     /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
     /// can drift from the key the painter builds.
     fn evict_excess_card_images(&mut self) {
-        while self.app.images.image_lru.len() > self.app.images.image_cache_size_total {
+        while self.app.images.image_lru.len() > self.app.images.cache_size_total {
             let Some(evict) = self.app.images.image_lru.pop_front() else {
                 break;
             };

@@ -21,7 +21,7 @@ impl App {
         };
         crate::config::UiConfig {
             image_protocol: self.images.image_protocol.clone(),
-            image_cache_size: self.images.image_cache_size,
+            image_cache_size: self.images.cache_size,
             use_nerd_fonts: self.use_nerd_fonts,
             indicator_style: indicator_style.to_string(),
             visualizer_glyph: self.visualizer_glyph.clone(),
