@@ -227,7 +227,7 @@ impl Player {
 
 fn make_reporter(
     client: Option<Arc<EmbyClient>>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     item: &QueueItem,
     status: Arc<Mutex<PlayerStatus>>,
 ) -> (SessionReporter, ProgressGuard) {
@@ -298,7 +298,7 @@ struct PlayerThreadStart {
     token: String,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     client: Option<Arc<EmbyClient>>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     origin: PlaybackOrigin,
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,

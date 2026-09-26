@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
-use mbv_core::ws::WsEvent;
+use mbv_ws::WsEvent;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

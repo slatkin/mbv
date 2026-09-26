@@ -14,7 +14,7 @@ use std::time::Duration;
 // the log line (`pos` is already the zeroed-for-audio value to send).
 pub(super) struct StoppedReportData {
     client: Arc<EmbyClient>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     id: ItemId,
     msid: MediaSourceId,
     sid: EmbySessionId,
@@ -136,7 +136,7 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
 #[derive(Clone)]
 pub(super) struct SessionReporter {
     pub(super) client: Arc<EmbyClient>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
     // observe a torn triple during item transitions.
     pub(super) ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
@@ -154,7 +154,7 @@ pub(super) struct SessionReporter {
 impl SessionReporter {
     pub(super) fn new(
         client: Arc<EmbyClient>,
-        ws_tx: Option<crate::ws::WsSender>,
+        ws_tx: Option<mbv_ws::WsSender>,
         item_id: ItemId,
         msid: MediaSourceId,
         sid: EmbySessionId,

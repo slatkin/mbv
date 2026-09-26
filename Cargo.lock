@@ -1711,6 +1711,7 @@ dependencies = [
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-ws",
  "mimalloc",
  "nix 0.31.3",
  "pipewire",
@@ -1743,6 +1744,7 @@ dependencies = [
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-ws",
  "mdns-sd",
  "rand 0.10.2",
  "rstest",
@@ -1775,6 +1777,17 @@ dependencies = [
  "percent-encoding",
  "rand 0.10.2",
  "ureq",
+]
+
+[[package]]
+name = "mbv-ws"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-net",
+ "rstest",
+ "serde_json",
+ "tungstenite",
 ]
 
 [[package]]

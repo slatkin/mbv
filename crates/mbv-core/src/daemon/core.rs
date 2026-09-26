@@ -14,7 +14,7 @@ use crate::ctrl::{
 use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
-use crate::ws::WsEvent;
+use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
     let path = crate::config::control_socket_path();

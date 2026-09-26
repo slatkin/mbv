@@ -20,6 +20,7 @@ workspace = true
 mbv-ids = { path = "../mbv-ids" }
 mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-net = { path = "../mbv-net" }
+mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -643,7 +643,7 @@ impl App {
         endpoint: &DaemonEndpoint,
         app_config: crate::config::Config,
     ) -> Self {
-        let (_, ws_rx) = mpsc::channel::<mbv_core::ws::WsEvent>();
+        let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) =

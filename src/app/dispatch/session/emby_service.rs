@@ -172,7 +172,7 @@ impl App {
         let ws_url = candidate.client.ws_url();
         let client = std::sync::Arc::new(std::sync::Mutex::new(candidate.client));
         let (ws_tx, ws_rx) = std::sync::mpsc::channel();
-        self.ws_send_tx = Some(mbv_core::ws::start(ws_url, ws_tx));
+        self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
         self.ws_rx = ws_rx;
         self.player
             .update_emby_credentials(replacement.server_url.clone(), token);

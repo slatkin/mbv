@@ -62,7 +62,7 @@ pub(crate) struct DaemonLoop {
     pub(super) emby_runtime: Option<EmbyOwnerContext>,
     pub(super) audiobookshelf_runtime: Option<AudiobookshelfOwnerContext>,
     pub(super) merged_tx: mpsc::Sender<DaemonEvent>,
-    pub(super) ws_send_tx: Option<crate::ws::WsSender>,
+    pub(super) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(super) direct_commands: Vec<String>,
     pub(super) stay_alive: bool,
     pub(super) role: DaemonRole,

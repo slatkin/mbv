@@ -17,4 +17,3 @@ pub mod player_owner_state {
 }
 pub mod remote_player;
 pub mod service_runtime;
-pub mod ws;

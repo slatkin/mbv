@@ -1,7 +1,7 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
-use mbv_core::ws::WsEvent;
+use mbv_ws::WsEvent;
 
 impl App {
     pub(in crate::app) fn handle_ws_event(&mut self, ev: WsEvent) {

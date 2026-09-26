@@ -16,9 +16,9 @@ use crate::player::{
     PlayerEvent, PlayerOwnerState, PlayerStatus, SubtitlePrefs,
 };
 use crate::service_runtime::SetupGeneration;
-use crate::ws::WsEvent;
 use mbv_net::mock_http::MockHttp;
 use mbv_net::stream::SocketStream;
+use mbv_ws::WsEvent;
 use rstest::rstest;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;

@@ -61,7 +61,7 @@ impl EmbyClient {
         }
     }
 
-    pub fn report_progress_ws(&self, report: &ProgressReport, ws_tx: &crate::ws::WsSender) {
+    pub fn report_progress_ws(&self, report: &ProgressReport, ws_tx: &mbv_ws::WsSender) {
         let ProgressReport {
             item_id,
             media_source_id,

@@ -142,7 +142,7 @@ struct DaemonStarted {
     player: Player,
     merged_tx: mpsc::Sender<DaemonEvent>,
     merged_rx: mpsc::Receiver<DaemonEvent>,
-    ws_send_tx: Option<crate::ws::WsSender>,
+    ws_send_tx: Option<mbv_ws::WsSender>,
     _tray: Option<Box<dyn Send>>,
 }
 
@@ -175,7 +175,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // — so it's cheap enough to keep here, ahead of Player/mpris/tray.
     let ws_send_tx = emby_runtime
         .as_ref()
-        .map(|_| crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan));
+        .map(|_| mbv_ws::start(client.lock().unwrap().ws_url(), ws_tx_chan));
 
     let mut client_locked = client.lock().unwrap().clone();
     // Daemon always runs headless — ignore user's show_audio_window setting.
