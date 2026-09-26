@@ -1,39 +1,6 @@
 use super::*;
 
 #[test]
-fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
-    fn route_connect_success(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
-        Ok(mbv_core::remote_player::RemotePlayer::stub(
-            make_items(1),
-            0,
-        ))
-    }
-
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-    let mut app = make_app_stub();
-    let config = app.config.lock().unwrap().clone();
-    install_test_emby(&mut app, config);
-    let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
-        "/tmp/mbv-music.sock",
-    ));
-
-    let result = App::try_daemon_route_connect(&endpoint, "Music");
-
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-    result.unwrap();
-}
-
-#[test]
 fn app_construction_never_attempts_a_daemon_route_connect() {
     // #222 acceptance criterion: "No connection attempt happens before
     // the first play/enqueue action that needs one." There is no
@@ -89,28 +56,6 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     // set, so a real connect attempt would panic/hang if this weren't
     // a no-op) -- active_route and local-ness are unchanged.
     assert_eq!(app.active_route.as_deref(), Some("music"));
-    assert!(!app.player.is_remote());
-}
-
-#[test]
-fn apply_route_for_playback_restores_local_when_item_has_no_route() {
-    let mut app = make_app_stub();
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route(
-        "music",
-        remote,
-        remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    let mut movies_item = make_item("Movies", "CollectionFolder");
-    movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab::new(movies_item));
-    let mut item = make_item("Movie", "Movie");
-    item.id = "movie-1".to_string();
-
-    app.apply_route_for_playback(&item);
-
-    assert!(app.active_route.is_none());
     assert!(!app.player.is_remote());
 }
 

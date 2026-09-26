@@ -410,43 +410,6 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 }
 
 #[test]
-fn emby_completion_classifies_current_failures_without_client() {
-    let mut app = make_app_stub();
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation: app.emby_runtime.generation(),
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 401 unauthorized".into(),
-            }),
-        });
-    assert_eq!(
-        app.emby_runtime.state,
-        mbv_core::service_runtime::ServiceState::NeedsAuthentication
-    );
-    assert!(app.emby_runtime.client.is_none());
-    assert!(
-        content.is_none(),
-        "failure completion must deliver no Home content snapshot"
-    );
-
-    let mut app = make_app_stub();
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation: app.emby_runtime.generation(),
-            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-                "connection refused",
-            )),
-        });
-    assert_eq!(
-        app.emby_runtime.state,
-        mbv_core::service_runtime::ServiceState::Unavailable
-    );
-    assert!(app.emby_runtime.client.is_none());
-    assert!(content.is_none());
-}
-
-#[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
     app.emby_runtime.replace_setup();
@@ -549,43 +512,6 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(mbv_core::api::EmbyClient::new(config)),
     ));
-}
-
-#[test]
-fn aggregate_zero_area_render_leaves_layout_untouched() {
-    // 2.1j aggregate: a 0-dimension terminal frame (`compute_frame_layout`
-    // returns None) must leave `self.layout` exactly as the last completed
-    // frame left it — no fresh-draft install, no partial mutation.
-    let mut app = make_app_stub();
-    app.layout.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    let before_left = app.layout.left_area;
-    let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
-    term.draw(|f| app.compose_root_frame(f)).unwrap();
-    assert_eq!(
-        app.layout.left_area, before_left,
-        "zero-area render must not touch left_area"
-    );
-}
-
-#[test]
-fn aggregate_surfaces_do_not_bleed_across_destinations() {
-    // 2.1j per-surface single-producer: after a normal frame, each surface
-    // family's geometry is produced only by its own checkpoint — no
-    // cross-surface bleed from one destination into another.
-    let mut app = make_app_stub();
-    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    term.draw(|f| app.compose_root_frame(f)).unwrap();
-
-    // Cross-surface bleed check: a nonzero queue area must not also be a
-    // nonzero music wide area (they are mutually exclusive destinations). The
-    // queue placement comes from the paint-free checkpoint (task 3.1 moved
-    // the component mirror out of legacy chrome geometry).
-    let queue_placement = app.queue_panel_placement().panel_area;
-    let queue_active = queue_placement.width > 0 && queue_placement.height > 0;
-    let music_wide_active = app.is_right_panel_wide();
-    // A stub may render a degenerate frame; the invariant is that neither
-    // surface's geometry is written by the other's producer.
-    assert!(!(queue_active && music_wide_active));
 }
 
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {

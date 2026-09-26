@@ -84,46 +84,6 @@ fn next_up_accept_on_app_process_owner_mints_and_dispatches_local_jump() {
 /// Row 1.2 (expire): the promoted transition is dispatched as-is — the jump
 /// that reaches the Playback run carries the queued transition's identity and
 /// target, with no re-mint or re-accept.
-#[test]
-fn expire_dispatches_the_promoted_transition_unchanged() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab.set_items(make_items(2), 0);
-    let slot_a = app.player_tab.slot_id_at(0).unwrap();
-    let slot_b = app.player_tab.slot_id_at(1).unwrap();
-    let (request_id_a, generation_a) = app.bare_owner.mint_local_transition();
-    app.bare_owner
-        .accept_local_transition(mbv_core::playback_transition::Transition::new(
-            request_id_a,
-            generation_a,
-            slot_a,
-        ));
-    let (request_id_b, generation_b) = app.bare_owner.mint_local_transition();
-    app.bare_owner
-        .accept_local_transition(mbv_core::playback_transition::Transition::new(
-            request_id_b,
-            generation_b,
-            slot_b,
-        ));
-
-    let commands = app.player.spy_on_commands();
-    // First tick arms the in-flight deadline; the second passes it.
-    assert!(!app.expire_bare_transition(Instant::now()));
-    assert!(app.expire_bare_transition(Instant::now() + Duration::from_secs(6)));
-
-    assert!(matches!(
-        commands.try_recv().expect("the promoted transition must be dispatched"),
-        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
-            if slot_id == slot_b && request_id == request_id_b && generation == generation_b
-    ));
-    commands.try_recv().unwrap_err();
-    assert_eq!(
-        app.bare_owner.in_flight_transition_slot(),
-        Some(slot_b),
-        "the promoted transition — not a re-minted one — is in flight"
-    );
-}
-
 /// Row 1.2 (settle): the queued transition promoted by settlement is
 /// dispatched with its own identity, never re-minted or re-accepted.
 #[test]

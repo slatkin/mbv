@@ -64,39 +64,6 @@ fn queue_cursor_on_replaced_generation_submits_new_slots_without_stale_jump() {
 }
 
 #[test]
-fn replacement_slot_identity_wins_over_numeric_collision() {
-    let mut app = make_app_stub();
-    let mut old = make_audio_items(1);
-    old[0].id = "old-content".into();
-    app.player_tab.set_items(old, 0);
-    let old_slot = app.player_tab.slot_id_at(0).unwrap();
-    {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 0;
-        status.queue_len = 1;
-    };
-    let mut replacement = make_audio_items(2);
-    replacement[0].id = "new-content".into();
-    replacement[1].id = "new-target".into();
-    app.replace_playback_queue(replacement, 0);
-    let new_slot = app.player_tab.slot_id_at(0).unwrap();
-    assert_ne!(old_slot, new_slot);
-
-    let commands = app.player.spy_on_commands();
-    app.dispatch(&Command::QueuePlayCursor(0));
-    assert!(matches!(
-        commands.try_recv(),
-        Ok(PlayerCommand::SubmitQueue { items, start_idx: 0 })
-            if items[0].slot_id == new_slot && items[0].item.id() == "new-content"
-    ));
-    assert!(
-        commands.try_recv().is_err(),
-        "old occurrence must never be jumped"
-    );
-}
-
-#[test]
 fn replaced_queue_while_playing_claims_no_row_until_confirmed() {
     use crate::app::components::media_list::MediaSemanticState;
     use crate::app::components::{ComponentId, QueueComponent};

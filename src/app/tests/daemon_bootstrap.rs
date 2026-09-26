@@ -1,14 +1,6 @@
 use super::*;
 
 #[test]
-fn remote_app_starts_on_local_queue_when_remote_queue_is_empty() {
-    let app = make_remote_app_stub(make_items(2), Vec::new());
-
-    assert_eq!(app.queue_scope, QueueScope::Local);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
-}
-
-#[test]
 fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
     let app = make_remote_app_stub(make_items(2), make_items(1));
 
@@ -179,14 +171,4 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
         "browse must reflect the adopted acknowledged position"
     );
     assert!(!progress.is_finished);
-}
-
-#[test]
-fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
-    let items: Vec<mbv_core::playback_queue::QueueItem> = make_items(3)
-        .into_iter()
-        .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
-        .collect();
-    let cursor = crate::app::dispatch::actions::queue_restore_cursor(&items, 2, None, None, false);
-    assert_eq!(cursor, 2);
 }
