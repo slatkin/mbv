@@ -15,7 +15,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 2. Other app tests, part A (`app::tests::{queue, music_grouping, route_state, routing_matrix}`, 242 → ≤ 90)
 
-- [ ] 2.1 Apply Decisions 1 and 3 to `queue`, `music_grouping`, `route_state` and `routing_matrix`. `routing_matrix` keeps one row per distinct routing precedence rule, not per key × surface. Verify: combined count ≤ 90; group gate passes; commit.
+- [x] 2.1 Apply Decisions 1 and 3 to `queue`, `music_grouping`, `route_state` and `routing_matrix`. `routing_matrix` keeps one row per distinct routing precedence rule, not per key × surface. Verify: combined count ≤ 90; group gate passes; commit.
 
 ## 3. Other app tests, part B (all remaining `app::tests::*` except tick_integration, 292 → ≤ 110)
 
