@@ -96,14 +96,14 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 3. `mbv-net`
 
-- [ ] 3.1 Create `crates/mbv-net/Cargo.toml`: `name = "mbv-net"`, `description`
+- [x] 3.1 Create `crates/mbv-net/Cargo.toml`: `name = "mbv-net"`, `description`
   ("Shared HTTP, TLS-agent, socket and retry primitives for mbv."), the seven
   `*.workspace = true` package fields, `[lints] workspace = true`,
   `[features] test = []`, and `ureq.workspace = true`,
   `percent-encoding.workspace = true`, `rand.workspace = true`,
   `log.workspace = true`. Register it in `members` and `default-members`.
   Verify: `cargo check -p mbv-net` succeeds on the empty crate.
-- [ ] 3.2 Move `crates/mbv-core/src/{bounded,stream,mock_http}.rs` to
+- [x] 3.2 Move `crates/mbv-core/src/{bounded,stream,mock_http}.rs` to
   `crates/mbv-net/src/`, declare them in `crates/mbv-net/src/lib.rs` as
   `pub mod bounded; pub mod stream;` and
   `#[cfg(any(test, feature = "test"))] pub mod mock_http;`, and widen
@@ -111,18 +111,18 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   `stream::SocketStream` (plus its `try_clone` / `shutdown` methods) from
   `pub(crate)` to `pub`. Verify: `cargo nextest run -p mbv-net` passes the
   moved `bounded` tests.
-- [ ] 3.3 Move `PATH_SEGMENT`, `encode_path_segment`, `reconnect_backoff_sleep`
+- [x] 3.3 Move `PATH_SEGMENT`, `encode_path_segment`, `reconnect_backoff_sleep`
   and `native_tls_agent` out of `crates/mbv-core/src/lib.rs` into
   `crates/mbv-net/src/lib.rs`, keeping every doc comment and the existing
   `#[expect(clippy::cast_precision_loss, …)]` on the backoff cast verbatim.
   `encode_path_segment` and `reconnect_backoff_sleep` become `pub`. Verify:
   `cargo check -p mbv-net` succeeds and `crates/mbv-core/src/lib.rs` contains no
   function definitions.
-- [ ] 3.4 Change `mbv-core`'s `[features]` to `test = ["mbv-net/test"]`, add
+- [x] 3.4 Change `mbv-core`'s `[features]` to `test = ["mbv-net/test"]`, add
   `mbv-net = { path = "../mbv-net" }` to its `[dependencies]`, and remove
   `percent-encoding.workspace = true` from it. Verify:
   `rg 'percent_encoding' crates/mbv-core/` returns nothing.
-- [ ] 3.5 Rewrite every `mbv-core` reference to the moved items:
+- [x] 3.5 Rewrite every `mbv-core` reference to the moved items:
   `crate::encode_path_segment` → `mbv_net::encode_path_segment` (~30 call sites
   across the Emby client library/auth/reporting modules and the Audiobookshelf
   catalog, catalog-books and playback modules), `crate::bounded::` →
@@ -134,7 +134,7 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   Audiobookshelf root and its playback/catalog tests, the player tests, the
   daemon ws and daemon tests). Verify: `cargo check -p mbv-core --all-targets`
   and `cargo check -p mbvd --all-targets` both succeed.
-- [ ] 3.6 Add `mbv-net = { path = "crates/mbv-net" }` to the `mbv` package's
+- [x] 3.6 Add `mbv-net = { path = "crates/mbv-net" }` to the `mbv` package's
   `[dependencies]` (for `native_tls_agent` in the feed-parse module) and
   `mbv-net = { path = "crates/mbv-net", features = ["test"] }` to its
   `[dev-dependencies]`, then rewrite the `mbv_core::native_tls_agent` and
@@ -143,7 +143,7 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   remote-commands / context-actions / library-navigate-reveal /
   tick-integration test modules. Verify:
   `rg 'mbv_core::(mock_http|native_tls_agent)' src/ crates/` returns nothing.
-- [ ] 3.7 Run the group gate for `mbv-net`, and additionally confirm the feature
+- [x] 3.7 Run the group gate for `mbv-net`, and additionally confirm the feature
   gate still holds: `cargo check -p mbv-core` (no `--all-targets`, no `test`
   feature) succeeds and `cargo tree -p mbv-core -i mock_http` is not needed
   because `mock_http` is a module, not a crate — instead verify
