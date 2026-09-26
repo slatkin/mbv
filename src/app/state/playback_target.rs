@@ -128,28 +128,6 @@ pub(in crate::app) enum NowPlayingStatus {
 }
 
 impl App {
-    /// Whether the connected transport is currently paused. For remote
-    /// sessions, returns true once a single API poll has observed
-    /// `IsPaused=true` without a position advance (typically within one
-    /// poll after the user pauses remotely). For pos-advancing clients that
-    /// always report `IsPaused=true` (some Emby Web builds), the
-    /// position-advance observation each poll keeps this returning false.
-    #[cfg(test)]
-    pub(in crate::app) fn playback_transport_paused(&self) -> bool {
-        // Same rule as `effective_playback_state`: an idle receiver's status
-        // says nothing about the media actually playing; only an engaged cast
-        // target owns the paused read.
-        if let Some(state) = self.cast_effective_playback_state() {
-            if state.active {
-                return state.paused;
-            }
-        }
-        if self.connected_session_state.is_some() {
-            return self.remote_stalled_while_paused;
-        }
-        self.player.status.lock().unwrap().paused
-    }
-
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> crate::app::PlaybackState {
         // The attached cast target wins only while it actually reports (or is

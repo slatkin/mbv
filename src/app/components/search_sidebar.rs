@@ -301,11 +301,6 @@ impl SearchSidebarComponent {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_chips(&self) -> &HitRegions<usize> {
-        &self.hit_chips
-    }
-
-    #[cfg(test)]
     pub(crate) fn test_frame(&self) -> Rect {
         self.frame
     }

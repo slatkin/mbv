@@ -70,11 +70,6 @@ impl TabPanel {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn test_markers(&self) -> &[bool] {
-        &self.markers
-    }
-
-    #[cfg(test)]
     pub(in crate::app) fn test_selected(&self) -> usize {
         self.selected
     }

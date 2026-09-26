@@ -88,15 +88,6 @@ impl LibraryPanel {
             .map(|geometry| (geometry.pane, geometry.frame))
     }
 
-    /// The Library Hero overlay's painted Workspace box (panel, content)
-    /// rects, for the overlay-pixel test path.
-    #[cfg(test)]
-    pub(in crate::app) fn test_overlay_workspace_box(
-        &self,
-    ) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
-        self.overlay_geometry.as_ref()?.hero.workspace
-    }
-
     fn can_open_hero_overlay(&mut self) -> bool {
         self.owners.active_mut().is_some_and(|owner| {
             !owner.inline_search_active()

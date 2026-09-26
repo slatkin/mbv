@@ -106,6 +106,3 @@ fn colored_width_window(
     }
     spans
 }
-
-#[cfg(test)]
-mod tests {}

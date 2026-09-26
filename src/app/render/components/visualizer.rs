@@ -103,8 +103,3 @@ fn point_color(sample: StereoSample) -> Color {
         _ => palette::STATUS_ERROR,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::rounded_coordinate;
-}
