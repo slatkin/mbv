@@ -134,37 +134,6 @@ fn switching_wide_library_tabs_keeps_the_session_split_width() {
     assert_eq!(app.list_pane_width, Some(64), "switch back to a library");
 }
 
-/// Two Emby libraries (each a two-item top browse level) so a stale index
-/// that wrongly fallbacked to library zero could corrupt real state.
-fn two_emby_libraries_app() -> App {
-    let mut app = make_app_stub();
-    for (id, title) in [("lib-movies", "Movies"), ("lib-music", "Music")] {
-        let mut library = make_item(title, "CollectionFolder");
-        library.id = id.into();
-        let level = BrowseLevel {
-            fetched_rows: 0,
-            parent_id: id.into(),
-            title: title.into(),
-            items: make_items(2),
-            total_count: 2,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        };
-        app.libs.push(LibraryTab {
-            nav_stack: vec![level],
-            ..LibraryTab::new(library)
-        });
-    }
-    app
-}
 /// A stale Service library index (removed or replaced while selected) must
 /// select Home and report that the triggering destination-specific
 /// operation must stop.

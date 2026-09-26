@@ -26,15 +26,6 @@ impl WatchedFilter {
         }
     }
 
-    #[cfg(test)]
-    pub fn position(self) -> usize {
-        match self {
-            Self::All => 0,
-            Self::Watched => 1,
-            Self::Unwatched => 2,
-        }
-    }
-
     pub fn from_position(position: usize) -> Option<Self> {
         match position {
             0 => Some(Self::All),

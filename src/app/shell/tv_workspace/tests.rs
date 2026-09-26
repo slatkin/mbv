@@ -3,7 +3,6 @@ use crate::app::components::{Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 use crate::app::state::types::browse::BrowseResting;
 use mbv_core::mock_http::MockHttp;
-use ratatui::layout::Rect;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 mod group;
