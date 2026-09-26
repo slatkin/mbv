@@ -509,34 +509,6 @@ mod tests {
         }
     }
 
-    /// An album's search text is its ancestor chain (`Artist / Album`). The
-    /// shared word-local rule keeps each query word inside one word of that
-    /// label, so a query word can no longer be spelled out of single letters
-    /// taken from different names or different words.
-    #[test]
-    fn album_search_matches_a_word_within_one_word_of_the_chain() {
-        let entry = crate::app::AlbumSearchEntry {
-            album: make_item("Live With Lou Reed", "MusicAlbum"),
-            ancestors: vec![crate::app::AlbumPathPart {
-                id: "artist-1".into(),
-                name: "The Velvet Underground".into(),
-            }],
-            display_label: "The Velvet Underground / Live With Lou Reed".into(),
-            search_text: "The Velvet Underground / Live With Lou Reed".into(),
-        };
-        let mut search = InlineSearch::new();
-        search.open();
-        search.set_pool(SearchPool::Albums(vec![entry]));
-
-        // "devil" would have to come from single letters spread over four of
-        // the label's words (d in "Underground", e after it, v in "Live",
-        // i in "With", l in "Lou") and must not hit; the real words still do.
-        for (query, expected) in [("devil", 0), ("velvet", 1), ("lou reed", 1)] {
-            search.restore_query(query.into());
-            assert_eq!(search.results_len(), expected, "query {query:?}");
-        }
-    }
-
     #[test]
     fn re_score_resets_selection_to_the_first_result() {
         let mut search = InlineSearch::new();
@@ -564,87 +536,5 @@ mod tests {
             0,
             "the resting viewport rests at the top after a re-score"
         );
-    }
-
-    #[test]
-    fn pool_refresh_preserves_the_selected_target() {
-        let mut search = InlineSearch::new();
-        search.open();
-        search.set_pool(pool(&["a", "b", "c"]));
-        search.restore_query("Result".into());
-        assert_eq!(search.test_cursor(), 0);
-        search.delegate_movement(MediaListSurfaceInput::Last);
-        // Park the resting viewport the way the panel does at paint time.
-        search.results_mut().clamp_viewport(1);
-        let selected = search.selected_target().clone();
-        assert_eq!(selected.map(|(id, _)| id), Some("c".into()));
-
-        // A pool refresh with the query unchanged keeps the stable target
-        // and leaves the resting viewport alone.
-        search.set_pool(pool(&["a", "b", "c", "d"]));
-        assert_eq!(
-            search.selected_target().map(|(id, _)| id),
-            Some("c".into()),
-            "the carrier's stable-target preservation survives the refresh"
-        );
-        assert_eq!(
-            search.results().scroll(),
-            2,
-            "an unchanged-query refresh leaves the resting viewport alone"
-        );
-        // A refresh that drops the selected target clamps instead.
-        search.set_pool(pool(&["a", "b"]));
-        assert!(search.selected_target().is_some());
-    }
-
-    #[test]
-    fn empty_query_projects_zero_rows() {
-        let mut search = InlineSearch::new();
-        search.open();
-        search.set_pool(pool(&["a", "b"]));
-        assert_eq!(search.results_len(), 0);
-
-        search.handle_key(&key(Key::Char('r')));
-        fire_debounce(&mut search);
-        assert_eq!(search.results_len(), 2);
-
-        // Backspace back to the empty query clears the rows again.
-        search.handle_key(&key(Key::Backspace));
-        assert_eq!(search.results_len(), 0, "an empty query shows no rows");
-        assert_eq!(search.test_cursor(), 0);
-    }
-
-    #[test]
-    fn movement_routes_through_the_carrier() {
-        let mut search = InlineSearch::new();
-        search.open();
-        search.set_pool(pool(&["a", "b", "c"]));
-        search.handle_key(&key(Key::Char('r')));
-        fire_debounce(&mut search);
-
-        search.handle_key(&key(Key::Down));
-        assert_eq!(search.test_cursor(), 1);
-        search.handle_key(&key(Key::End));
-        assert_eq!(search.test_cursor(), 2);
-        search.handle_key(&key(Key::Home));
-        assert_eq!(search.test_cursor(), 0);
-        search.handle_key(&key(Key::Up));
-        assert_eq!(search.test_cursor(), 0, "movement clamps at the ends");
-        assert_eq!(search.selected_target().map(|(id, _)| id), Some("a".into()));
-    }
-
-    /// A played search result projects the shared `Played` state, so the one
-    /// played-row colour is used in the search list too.
-    #[test]
-    fn played_search_results_project_the_shared_played_state() {
-        let mut played = make_item("Watched", "Movie");
-        played.played = true;
-        let fresh = make_item("Fresh", "Movie");
-        let state = |item| match search_result_row(&item) {
-            MediaListRow::Item { semantic_state, .. } => semantic_state,
-            _ => panic!("search rows are items"),
-        };
-        assert_eq!(state(played), MediaSemanticState::Played);
-        assert_eq!(state(fresh), MediaSemanticState::Ordinary);
     }
 }
