@@ -1,7 +1,5 @@
 use super::*;
-use mbv_core::audiobookshelf::{
-    AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfLibrary,
-};
+use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
 
 fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {

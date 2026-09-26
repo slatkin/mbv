@@ -51,7 +51,7 @@ pub fn letter_grouped_rows<Target>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use crate::app::components::media_list::{MediaKind, MediaSemanticState};
 
     fn item(target: &str, primary: &str) -> MediaListRow<String> {
         MediaListRow::Item {

@@ -19,7 +19,7 @@ use super::library_panel::{
     hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
-use super::list::tree_browser::{TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
+use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaListTrailing, MediaSemanticState, RowIntent,

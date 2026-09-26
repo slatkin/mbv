@@ -1,7 +1,7 @@
 use super::*;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{KeyModifiers, MouseButton};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

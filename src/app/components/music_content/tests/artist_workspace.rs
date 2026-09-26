@@ -1,7 +1,6 @@
 //! Grouped Music artist-Workspace tests: the mounted artist root's inline
 //! Wide pane, its track activation/context arms, and expansion/focus entry.
 
-use super::tree_fixtures::{press, tree_owner};
 use super::*;
 
 /// Task 6.3 correction: an artist root's Workspace rows come from the

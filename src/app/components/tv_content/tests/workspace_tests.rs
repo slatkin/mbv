@@ -1,7 +1,5 @@
 use super::*;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-use tuirealm::event::{KeyEvent, KeyModifiers};
+use tuirealm::event::KeyModifiers;
 
 /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
 /// old `Option<usize>` episode cursor. This exercises the same

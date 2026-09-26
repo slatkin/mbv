@@ -417,7 +417,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
     use ratatui::Terminal;
-    use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::{KeyModifiers, MouseButton};
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {
@@ -459,8 +459,6 @@ mod tests {
             ))))
         );
     }
-
-    use rstest::rstest;
 
     fn badge_component(
         use_nerd_fonts: bool,

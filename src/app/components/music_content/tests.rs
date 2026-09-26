@@ -1,5 +1,5 @@
 use self::artist_workspace::artist_workspace_owner;
-use self::tree_fixtures::{press, tree_owner, tree_owner_with_tracks};
+use self::tree_fixtures::{press, tree_owner};
 use super::*;
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;

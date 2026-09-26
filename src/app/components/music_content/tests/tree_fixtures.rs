@@ -3,7 +3,6 @@
 //! interaction test drives the owner through.
 
 use super::*;
-use crate::app::components::music_tree_target::MusicTreeTarget;
 
 /// The first projected target matching a predicate.
 pub(super) fn find(

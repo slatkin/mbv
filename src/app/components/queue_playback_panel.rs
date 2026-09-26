@@ -300,7 +300,6 @@ impl AppComponent<Msg, UserEvent> for QueuePlaybackPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::palette::Surface;
     use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;

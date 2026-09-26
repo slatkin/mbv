@@ -1,9 +1,7 @@
 //! Grouped Music tree-owner content and selection contracts: the projected
 //! row/label/hero content, and the selection-summary state the owner reports.
 
-use super::tree_fixtures::{find, paint_tree, tree_owner, tree_owner_with_tracks, tree_point};
 use super::*;
-use crate::app::components::music_content::workspace::build_track_rows;
 
 /// double-click/Right Hero entry while filtered Enter stays local.
 #[test]

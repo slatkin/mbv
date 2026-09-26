@@ -157,8 +157,6 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
-    use crate::app::palette;
-
     fn titles() -> Vec<String> {
         ["Continue", "Movies", "TV Shows", "Music", "Feeds"]
             .into_iter()

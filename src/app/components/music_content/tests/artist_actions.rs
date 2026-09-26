@@ -1,7 +1,6 @@
 //! Grouped Music artist-action tests: Play/Enqueue materialization over the
 //! settled leaves, filter interaction, and unresolved-target feedback.
 
-use super::tree_fixtures::{press, tree_owner};
 use super::*;
 
 fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicContent {

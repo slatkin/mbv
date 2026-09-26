@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
-use mbv_core::api::EmbyItem;
 
 mod episode_rows_tests;
 mod flat_latest_activation_tests;

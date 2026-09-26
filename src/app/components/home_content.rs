@@ -464,7 +464,6 @@ impl LibraryContentOwner for HomeContent {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
-    use mbv_core::playback_queue::QueueItem;
 
     fn owner_with_items(items: Vec<QueueItem>) -> HomeContent {
         let mut owner = HomeContent::new();

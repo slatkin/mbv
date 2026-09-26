@@ -101,7 +101,7 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
     #[test]
     fn root_observer_marks_none_returning_local_key_as_processed() {
