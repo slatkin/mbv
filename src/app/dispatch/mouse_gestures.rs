@@ -33,9 +33,9 @@ impl App {
                 reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
             )]
             let remote_pos_s = (fraction * runtime_s as f64) as i64;
-            self.remote_pos_s = remote_pos_s;
-            self.remote_pos_at = Instant::now();
-            self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
+            self.remote.remote_pos_s = remote_pos_s;
+            self.remote.remote_pos_at = Instant::now();
+            self.remote.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
             self.do_session_command(move |c| c.session_seek(&id, ticks));
             return;
         }

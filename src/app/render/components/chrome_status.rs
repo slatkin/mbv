@@ -64,7 +64,7 @@ impl App {
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
@@ -139,7 +139,7 @@ impl App {
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         };
         let label = match target {

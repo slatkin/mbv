@@ -106,7 +106,7 @@ impl App {
             .connected_session_state
             .as_ref()
             .map(|session| session.device_name.clone())
-            .or_else(|| self.direct_remote_label.clone())
+            .or_else(|| self.remote.direct_remote_label.clone())
             .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
             .unwrap_or_else(|| "this owner".into());
         self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {

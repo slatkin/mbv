@@ -68,7 +68,7 @@ impl App {
     fn handle_sessions_loaded(&mut self, sessions: Vec<mbv_core::api::SessionInfo>) {
         self.sessions = sessions;
         self.sessions_loading = false;
-        self.last_session_poll = Instant::now();
+        self.remote.last_session_poll = Instant::now();
         // Rebuilds the F3 panel's merged Emby+Cast list and
         // re-locates the panel cursor by identity (8.1); this
         // supersedes what used to be a `self.sessions`-only
@@ -212,54 +212,57 @@ impl App {
             .as_ref()
             .map_or(0, |p| p.position_s);
         if s.position_s > prev_api_pos {
-            self.remote_api_pos_advanced_at = now;
-            self.remote_stalled_while_paused = false;
+            self.remote.remote_api_pos_advanced_at = now;
+            self.remote.remote_stalled_while_paused = false;
         } else if s.is_paused {
             // Position not advancing AND the session says paused:
             // the transport is genuinely paused. Buggy clients
             // that report IsPaused=true while playing still
             // advance the position each poll, so this branch
             // won't latch on for them.
-            self.remote_stalled_while_paused = true;
+            self.remote.remote_stalled_while_paused = true;
         }
         // Extrapolate if API advanced recently (within 2× the ~11s report
         // interval). After that window lapses we treat it as paused/stopped.
-        let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
-        let seek_pending = now < self.remote_seek_pending_until;
+        let api_active = self.remote.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+        let seek_pending = now < self.remote.remote_seek_pending_until;
         if seek_pending && !item_changed {
             // A seek was just dispatched; hold the optimistic position until
             // the API catches up. Once the API reports the new position (or
             // the window expires) we fall through to normal reconciliation.
             log::debug!(target: "sessions",
                 "pos hold (seek pending): api={}s remote_pos_s={}s",
-                s.position_s, self.remote_pos_s);
+                s.position_s, self.remote.remote_pos_s);
         } else if item_changed {
             log::debug!(target: "sessions",
                 "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
-                s.position_s, self.remote_pos_s, s.position_s);
-            self.remote_pos_s = s.position_s;
-            self.remote_api_pos_advanced_at = now;
-            self.remote_seek_pending_until = now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
+                s.position_s, self.remote.remote_pos_s, s.position_s);
+            self.remote.remote_pos_s = s.position_s;
+            self.remote.remote_api_pos_advanced_at = now;
+            self.remote.remote_seek_pending_until =
+                now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
         } else if api_active {
-            let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
-            let extrapolated =
-                Self::extrapolated_remote_position(self.remote_pos_s, self.remote_pos_at.elapsed());
+            let elapsed = self.remote.remote_pos_at.elapsed().as_secs_f64();
+            let extrapolated = Self::extrapolated_remote_position(
+                self.remote.remote_pos_s,
+                self.remote.remote_pos_at.elapsed(),
+            );
             let new_pos = s.position_s.max(extrapolated);
             log::debug!(target: "sessions",
                 "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
-                s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos);
-            self.remote_pos_s = new_pos;
+                s.position_s, s.is_paused, elapsed, self.remote.remote_pos_s, new_pos);
+            self.remote.remote_pos_s = new_pos;
         } else {
             log::debug!(target: "sessions",
                 "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
-                s.position_s, self.remote_pos_s, s.position_s);
-            self.remote_pos_s = s.position_s;
+                s.position_s, self.remote.remote_pos_s, s.position_s);
+            self.remote.remote_pos_s = s.position_s;
         }
         if !seek_pending || item_changed {
-            self.remote_pos_at = now;
+            self.remote.remote_pos_at = now;
         }
         if item_changed {
-            self.runtime_zero_since = None;
+            self.remote.runtime_zero_since = None;
         }
         self.connected_session_state = Some(s.clone());
         // Stamp the canonical queue's active slot from the
@@ -281,30 +284,33 @@ impl App {
                 let _ = self.player_tab.queue.set_active_slot(slot_id);
             }
         }
-        self.session_miss_count = 0;
+        self.remote.session_miss_count = 0;
         // Remote hasn't started playing yet — repoll sooner.
         // Cap fast-poll at 30 s: if runtime stays 0 that long the
         // remote client likely won't report it and we stop hammering.
         if s.runtime_s == 0 {
-            let since = self.runtime_zero_since.get_or_insert_with(Instant::now);
+            let since = self
+                .remote
+                .runtime_zero_since
+                .get_or_insert_with(Instant::now);
             if since.elapsed() < Duration::from_secs(30) {
-                self.last_session_poll = Instant::now()
+                self.remote.last_session_poll = Instant::now()
                     .checked_sub(Duration::from_millis(500))
                     .unwrap_or_else(Instant::now);
             }
         } else {
-            self.runtime_zero_since = None;
+            self.remote.runtime_zero_since = None;
         }
     }
 
     /// The missing-connected-session half of `SessionEvent::Loaded`: count
     /// the poll gap and auto-disconnect after three consecutive misses.
     fn handle_connected_session_miss(&mut self) {
-        self.session_miss_count += 1;
+        self.remote.session_miss_count += 1;
         // A poll gap means the connected session is not
         // currently observable, but the logical attachment is
         // still held (capable of observing a return).
-        if self.session_miss_count >= 3 {
+        if self.remote.session_miss_count >= 3 {
             log::warn!(target: "sessions", "connected session gone; disconnecting");
             self.flash(
                 "Remote session ended; disconnected".to_string(),
@@ -312,13 +318,13 @@ impl App {
             );
             self.connected_session_id = None;
             self.connected_session_state = None;
-            self.session_miss_count = 0;
-            self.remote_pos_s = 0;
+            self.remote.session_miss_count = 0;
+            self.remote.remote_pos_s = 0;
         } else {
             log::warn!(
                 target: "sessions",
                 "connected session not in poll ({}/3); holding",
-                self.session_miss_count
+                self.remote.session_miss_count
             );
         }
     }

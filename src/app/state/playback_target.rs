@@ -167,9 +167,10 @@ impl App {
                 let elapsed_s = if remote.is_paused {
                     0.0
                 } else {
-                    self.remote_pos_at.elapsed().as_secs_f64()
+                    self.remote.remote_pos_at.elapsed().as_secs_f64()
                 };
-                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+                let pos_s =
+                    (self.remote.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
                 (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
             };
             crate::app::PlaybackState {

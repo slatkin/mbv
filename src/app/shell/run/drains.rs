@@ -293,7 +293,7 @@ impl Model {
 
         // Periodic session poll when connected to a remote session
         if self.app.connected_session_id.is_some()
-            && self.app.last_session_poll.elapsed() >= Duration::from_secs(1)
+            && self.app.remote.last_session_poll.elapsed() >= Duration::from_secs(1)
             && !self.app.sessions_loading
         {
             self.app.spawn_sessions_load();

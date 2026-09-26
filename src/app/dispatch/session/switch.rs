@@ -81,25 +81,25 @@ impl App {
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.advance_queue_epoch();
-        self.direct_remote_connected = true;
-        self.direct_remote_label = {
+        self.remote.direct_remote_connected = true;
+        self.remote.direct_remote_label = {
             let name = sess.device_name.trim();
             (!name.is_empty()).then(|| name.to_string())
         };
         // The control socket replaces Session watch, but the device the user
         // connected to stays the Sessions-sidebar row. The Stay-alive process
         // (Local endpoint) is not a remote session and is never marked.
-        self.direct_remote_session_id = (!endpoint.is_local()).then(|| sess.id.clone());
-        self.session_miss_count = 0;
-        self.remote_pos_s = 0;
-        self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now()
+        self.remote.direct_remote_session_id = (!endpoint.is_local()).then(|| sess.id.clone());
+        self.remote.session_miss_count = 0;
+        self.remote.remote_pos_s = 0;
+        self.remote.remote_pos_at = Instant::now();
+        self.remote.remote_api_pos_advanced_at = Instant::now()
             .checked_sub(Duration::from_secs(60))
             .unwrap_or_else(Instant::now);
-        self.remote_seek_pending_until = Instant::now()
+        self.remote.remote_seek_pending_until = Instant::now()
             .checked_sub(Duration::from_secs(1))
             .unwrap_or_else(Instant::now);
-        self.runtime_zero_since = None;
+        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
@@ -199,18 +199,18 @@ impl App {
             PlayerTab::from_unified_state,
         ));
         self.advance_queue_epoch();
-        self.direct_remote_connected = false;
-        self.direct_remote_session_id = None;
+        self.remote.direct_remote_connected = false;
+        self.remote.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());
-        self.remote_pos_s = 0;
-        self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now()
+        self.remote.remote_pos_s = 0;
+        self.remote.remote_pos_at = Instant::now();
+        self.remote.remote_api_pos_advanced_at = Instant::now()
             .checked_sub(Duration::from_secs(60))
             .unwrap_or_else(Instant::now);
-        self.remote_seek_pending_until = Instant::now()
+        self.remote.remote_seek_pending_until = Instant::now()
             .checked_sub(Duration::from_secs(1))
             .unwrap_or_else(Instant::now);
-        self.runtime_zero_since = None;
+        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
@@ -298,12 +298,12 @@ impl App {
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.advance_queue_epoch();
-        self.direct_remote_connected = false;
-        self.direct_remote_label = None;
-        self.direct_remote_session_id = None;
+        self.remote.direct_remote_connected = false;
+        self.remote.direct_remote_label = None;
+        self.remote.direct_remote_session_id = None;
         self.active_route = None;
-        self.session_miss_count = 0;
-        self.remote_pos_s = 0;
+        self.remote.session_miss_count = 0;
+        self.remote.remote_pos_s = 0;
         self.next_up_item = None;
         self.rebind_mpris_to_current_player();
         self.flash(status, ToastSeverity::Warning);
@@ -507,10 +507,10 @@ impl App {
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
         self.advance_queue_epoch();
-        self.session_miss_count = 0;
-        self.remote_pos_s = sess.position_s;
-        self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now();
+        self.remote.session_miss_count = 0;
+        self.remote.remote_pos_s = sess.position_s;
+        self.remote.remote_pos_at = Instant::now();
+        self.remote.remote_api_pos_advanced_at = Instant::now();
         self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         if let Some(error) = direct_upgrade_error {
             self.flash(

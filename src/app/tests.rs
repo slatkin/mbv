@@ -145,7 +145,7 @@ pub(crate) fn make_app_stub() -> App {
     // original (undoubled) budget so eviction behaviour is unchanged.
     app.images.cache_size_total = 50;
     // Never start with a session poll already due.
-    app.last_session_poll = Instant::now();
+    app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_core::feed_entry_state::FeedEntryStore::default();
     // Default to "focused, past grace window" so existing mouse tests dispatch

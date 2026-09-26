@@ -291,23 +291,7 @@ impl App {
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,
-            direct_remote_connected: false,
-            direct_remote_label: None,
-            direct_remote_session_id: None,
-            last_session_poll: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            session_miss_count: 0,
-            remote_pos_s: 0,
-            remote_pos_at: Instant::now(),
-            remote_api_pos_advanced_at: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            remote_stalled_while_paused: false,
-            remote_seek_pending_until: Instant::now()
-                .checked_sub(Duration::from_secs(1))
-                .unwrap_or_else(Instant::now),
-            runtime_zero_since: None,
+            remote: crate::app::state::remote_tracking::RemoteTracking::new(),
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
