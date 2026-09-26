@@ -9,13 +9,13 @@ pub(in crate::app) struct RemoteTracking {
     /// a remote session.
     pub(in crate::app) direct_remote_session_id: Option<String>,
     pub(in crate::app) last_session_poll: Instant,
-    pub(in crate::app) session_miss_count: u8,
-    pub(in crate::app) remote_pos_s: i64,
-    pub(in crate::app) remote_pos_at: Instant,
-    pub(in crate::app) remote_api_pos_advanced_at: Instant,
-    pub(in crate::app) remote_stalled_while_paused: bool,
-    pub(in crate::app) remote_seek_pending_until: Instant,
-    pub(in crate::app) runtime_zero_since: Option<Instant>,
+    pub(in crate::app) session_miss_count: u8, // consecutive polls that didn't find the connected session
+    pub(in crate::app) remote_pos_s: i64, // monotonic position estimate for the connected remote
+    pub(in crate::app) remote_pos_at: Instant, // when remote_pos_s was last anchored
+    pub(in crate::app) remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
+    pub(in crate::app) remote_stalled_while_paused: bool, // last API poll observed IsPaused=true with no position advance
+    pub(in crate::app) remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
+    pub(in crate::app) runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
 }
 
 impl RemoteTracking {
