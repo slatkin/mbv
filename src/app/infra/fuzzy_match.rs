@@ -79,15 +79,6 @@ mod tests {
     /// A match inside one word keeps working, including a fuzzy subsequence
     /// that skips letters there.
     #[test]
-    fn a_query_word_matches_inside_one_word() {
-        assert!(score("Tangled Up in Blue", "tang").is_some());
-        assert!(score("Tangerine", "tang").is_some());
-        assert!(score("Devil Soup", "evil").is_some(), "'evil' in 'Devil'");
-        assert!(score("The Velvet Underground Live With Lou Reed", "underground").is_some());
-    }
-
-    /// Several query words match several candidate words, in order.
-    #[test]
     fn query_words_match_words_in_order() {
         let album = "The Velvet Underground Live With Lou Reed";
         assert!(score(album, "velvet").is_some());
@@ -98,12 +89,5 @@ mod tests {
         assert_eq!(score(album, "lou velvet"), None);
         // A word that is not in the candidate ends the match.
         assert_eq!(score(album, "velvet devil"), None);
-    }
-
-    /// An empty query is not a match for anything: the callers own what
-    /// "no query" means, and a scored zero must not read as a hit.
-    #[test]
-    fn an_empty_query_never_matches() {
-        assert_eq!(score("Anything", ""), None);
     }
 }

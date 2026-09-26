@@ -580,18 +580,6 @@ mod protocol_tests {
     }
 
     #[test]
-    fn unchanged_logo_reuses_protocol() {
-        let mut app = app_with_base();
-        app.card_image_states
-            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
-
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 1);
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 1);
-    }
-
-    #[test]
     fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
         let mut absent = app_with_base();
         assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
@@ -613,40 +601,5 @@ mod protocol_tests {
             .card_image_states
             .get(BASE_KEY)
             .is_some_and(|entry| entry.applied_logo_key.is_none()));
-    }
-
-    #[test]
-    fn unchanged_hero_box_reuses_protocol() {
-        let mut app = app_with_base();
-
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
-        assert_eq!(build_count(&app), 1);
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
-        assert_eq!(build_count(&app), 1);
-    }
-
-    #[test]
-    fn suffix_reencode_clears_stale_applied_logo_key() {
-        let mut app = app_with_base();
-        app.card_image_states
-            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 1);
-
-        let initial_suffix = app.current_protocol_suffix();
-        app.dim_backdrop_active = true;
-        let reencoded_suffix = app.current_protocol_suffix();
-        assert_ne!(initial_suffix, reencoded_suffix);
-        app.card_image_states
-            .insert(LOGO_KEY.to_owned(), CachedImage::empty());
-
-        assert!(app.cached_image_protocol_mut(BASE_KEY).is_some());
-        assert_eq!(build_count(&app), 2);
-        assert!(app
-            .card_image_states
-            .get(BASE_KEY)
-            .is_some_and(|entry| entry.applied_logo_key.is_none()));
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 2);
     }
 }

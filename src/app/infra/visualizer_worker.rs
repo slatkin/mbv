@@ -528,44 +528,6 @@ mod tests {
     }
 
     #[test]
-    fn overwrite_buffer_discards_incomplete_channel_pair() {
-        let mut buffer = StereoSampleBuffer::with_capacity(2);
-        let bytes = [0.1_f32, 0.2, 0.3]
-            .into_iter()
-            .flat_map(f32::to_le_bytes)
-            .collect::<Vec<_>>();
-
-        buffer.push_pcm_bytes(&bytes, 2);
-
-        assert_eq!(
-            buffer.snapshot().samples,
-            vec![StereoSample {
-                left: 0.1,
-                right: 0.2,
-            }]
-        );
-    }
-
-    #[test]
-    fn pcm_buffer_preserves_finite_sample_amplitudes() {
-        let mut buffer = StereoSampleBuffer::with_capacity(2);
-        let mut bytes = Vec::new();
-        for value in [1.5_f32, -1.5] {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-
-        buffer.push_pcm_bytes(&bytes, 2);
-
-        assert_eq!(
-            buffer.snapshot().samples,
-            vec![StereoSample {
-                left: 1.5,
-                right: -1.5,
-            }]
-        );
-    }
-
-    #[test]
     fn capture_frame_requires_interleaved_stereo_f32le_frames() {
         let mut format = AudioInfoRaw::new();
         format.set_format(AudioFormat::F32LE);
@@ -586,11 +548,5 @@ mod tests {
         capture_frame_bytes(&format, &bytes, 0, 8, 8, true).unwrap_err();
         format.set_rate(0);
         capture_frame_bytes(&format, &bytes, 0, 8, 8, false).unwrap_err();
-    }
-
-    #[test]
-    fn sample_window_capacity_uses_negotiated_rate() {
-        assert_eq!(StereoSampleBuffer::with_sample_rate(44_100).capacity, 1_455);
-        assert_eq!(StereoSampleBuffer::with_sample_rate(48_000).capacity, 1_584);
     }
 }

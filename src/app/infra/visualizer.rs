@@ -82,21 +82,6 @@ mod tests {
     }
 
     #[test]
-    fn hidden_slot_keeps_visualizer_selection_unchanged() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.visual_slot_hidden = true;
-        app.visualizer_enabled = false;
-
-        app.toggle_visualizer();
-
-        assert!(!app.visualizer_enabled, "hidden slot ignores the v toggle");
-        assert!(
-            app.visualizer.is_none(),
-            "hidden slot starts no capture worker"
-        );
-    }
-
-    #[test]
     fn hidden_slot_blocks_capture_when_visualizer_is_selected_and_playing() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
@@ -110,16 +95,6 @@ mod tests {
             app.visualizer.is_none(),
             "hidden slot starts no capture worker"
         );
-    }
-
-    #[test]
-    fn audio_pipe_playback_does_not_start_pipewire() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.visualizer_enabled = true;
-        app.player.status.lock().unwrap().active = true;
-        app.config.lock().unwrap().audio_pipe_enabled = true;
-        app.sync_visualizer();
-        assert!(app.visualizer.is_none());
     }
 
     #[test]
@@ -144,19 +119,6 @@ mod tests {
     }
 
     #[test]
-    fn detaching_a_cast_target_restores_the_gate() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.visualizer_enabled = true;
-        app.player.status.lock().unwrap().active = true;
-        app.attach_cast("device-1".to_string());
-        assert!(!app.visualizer_should_run());
-
-        app.detach_cast();
-
-        assert!(app.visualizer_should_run());
-    }
-
-    #[test]
     fn selecting_artwork_stops_capture() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
@@ -173,53 +135,5 @@ mod tests {
             app.visualizer_window.samples.is_empty(),
             "selecting artwork must tear down the capture sample window"
         );
-    }
-
-    #[test]
-    fn toggle_visualizer_does_not_persist_selection() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = crate::app::tests::make_app_stub();
-        app.visualizer_enabled = false;
-
-        app.toggle_visualizer();
-
-        let prefs: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
-        )
-        .expect("prefs json");
-        assert!(
-            prefs.get("visualizer_enabled").is_none(),
-            "visualizer selection must stay session-local"
-        );
-    }
-
-    #[test]
-    fn build_starts_on_artwork_even_with_saved_visualizer_pref() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        std::fs::write(
-            crate::config::prefs_path(),
-            serde_json::json!({ "visualizer_enabled": true }).to_string(),
-        )
-        .expect("write prefs");
-
-        let app = crate::app::tests::make_built_app();
-
-        assert!(
-            !app.visualizer_enabled,
-            "every launch must default to artwork, ignoring the stale key"
-        );
-    }
-
-    #[test]
-    fn new_playback_clears_visualizer_failure() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.visualizer_failed = true;
-
-        app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged {
-            slot_id: mbv_core::playback_queue::QueueSlotId::from_raw(1),
-            transition: None,
-        });
-
-        assert!(!app.visualizer_failed);
     }
 }

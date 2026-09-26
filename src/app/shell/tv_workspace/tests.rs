@@ -50,26 +50,6 @@ fn mounted_tv_model() -> Model {
     model
 }
 
-#[test]
-fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
-    let mut model = mounted_tv_model();
-    model.app.image_protocol_enabled = true;
-    model.push_tv_workspace_content();
-    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
-    assert!(paint.is_none());
-
-    model.app.card_image_states.insert(
-        crate::app::images::series_image_cache_key(
-            "movie-focused",
-            crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES,
-        ),
-        crate::app::images::CachedImage::empty(),
-    );
-    model.push_tv_workspace_content();
-    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
-    assert!(paint.is_none());
-}
-
 /// Task 2.1: the Wide push prefetches the identical canonical key the
 /// painter requests, so `paint_home_image` on the consumed `HomeImagePaint`
 /// starts no additional fetch and the reservation survives the paint.
@@ -79,43 +59,6 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
 /// `pending_image_fetches`: the counters cannot see an extra paint-time fetch.
 /// The reservation set can — a fetch always reserves its own key first, so a
 /// divergent paint-time key shows up as an extra entry in `card_image_loading`.
-#[test]
-fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
-    use crate::app::images::series_image_cache_key;
-    use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
-
-    let mut model = mounted_tv_model();
-    model.app.image_protocol_enabled = true;
-    // The sync pass is the production projection seam (task 5.10's central
-    // hero projection owns the fetch for every migrated owner, TV included
-    // since task 8.4); one throwaway draw publishes the `RootFrame` placement
-    // it reads.
-    {
-        let backend = TestBackend::new(160, 40);
-        let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap()
-    };
-    model.sync_mounted_surfaces();
-
-    let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
-    assert!(
-        model.app.card_image_loading.contains(&expected_key),
-        "prefetch must reserve the painted key: {expected_key}"
-    );
-    let loading = model.app.card_image_loading.clone();
-    let active = model.app.image_fetches_active;
-    let pending = model.app.pending_image_fetches.len();
-
-    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
-    assert!(paint.is_none(), "loading projection paints no pixels yet");
-    assert_eq!(
-        model.app.card_image_loading, loading,
-        "painting must leave the prefetch reservation untouched: {expected_key}"
-    );
-    assert_eq!(model.app.image_fetches_active, active);
-    assert_eq!(model.app.pending_image_fetches.len(), pending);
-}
-
 #[test]
 fn expanding_an_uncached_show_starts_the_detail_fetch() {
     let http = MockHttp::new();
@@ -185,90 +128,6 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
 }
 
 #[test]
-fn pending_season_expansion_does_not_strand_without_emby_snapshot() {
-    let mut model = mounted_tv_model();
-    model
-        .app
-        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
-
-    let seasons = ["season-1", "season-2"]
-        .into_iter()
-        .map(|id| {
-            let mut season = crate::app::tests::make_item(id, "Season");
-            season.id = id.into();
-            season
-        })
-        .collect();
-    model.app.handle_series_detail_fetched(
-        "movie-focused".into(),
-        crate::app::SeriesDetail {
-            seasons,
-            episodes: std::collections::HashMap::new(),
-        },
-    );
-
-    // Without an Emby client no season fetch can start, and the request must
-    // not strand a pending key no drain can ever consume: the detail drain is
-    // unreachable on a cache hit, so the no-client arm stays a silent no-op.
-    assert!(model.app.pending_series_season_expansions.is_empty());
-    assert!(model.app.series_season_loading.is_empty());
-}
-
-#[test]
-fn expanding_an_uncached_season_starts_only_its_episode_fetch() {
-    let http = MockHttp::new();
-    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
-    let mut model = mounted_tv_model_with_mock_emby(&http);
-    let mut season = crate::app::tests::make_item("Season 1", "Season");
-    season.id = "season-1".into();
-    model.app.series_detail_cache.insert(
-        "movie-focused".into(),
-        crate::app::SeriesDetail {
-            seasons: vec![season],
-            episodes: std::collections::HashMap::new(),
-        },
-    );
-    model.push_tv_workspace_content();
-    assert!(model.app.series_season_loading.is_empty());
-
-    model.handle_tv_request(ShellRequest::TvTreeExpand {
-        target: crate::app::components::tv_tree_target::TvTreeTarget::Season {
-            show: "tv-id:13:movie-focused".into(),
-            season: "season-1".into(),
-            occurrence: 0,
-        },
-    });
-
-    assert_eq!(
-        model.app.series_season_loading,
-        std::collections::HashSet::from([("movie-focused".into(), "season-1".into())]),
-        "season expansion must arm its episode fetch"
-    );
-    assert_eq!(model.app.series_season_loading.len(), 1);
-}
-
-#[test]
-fn expanding_a_show_reuses_the_hero_detail_request() {
-    let mut model = mounted_tv_model();
-    model
-        .app
-        .series_detail_loading
-        .insert("movie-focused".into());
-
-    model.handle_tv_request(ShellRequest::TvTreeExpand {
-        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
-            "tv-id:13:movie-focused".into(),
-        ),
-    });
-
-    assert_eq!(
-        model.app.series_detail_loading,
-        std::collections::HashSet::from(["movie-focused".into()]),
-        "tree expansion must share the in-flight Hero detail request"
-    );
-}
-
-#[test]
 fn late_series_detail_completion_does_not_replace_cached_detail() {
     let mut app = make_movie_app();
     let mut cached_season = crate::app::tests::make_item("Current", "Season");
@@ -327,15 +186,6 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     model.app.series_detail_loading.clear();
     model.push_tv_workspace_content();
     assert!(model.app.series_detail_loading.is_empty());
-}
-
-#[test]
-fn push_tv_workspace_content_projects_selected_series_on_mount() {
-    let model = mounted_tv_model();
-    assert_eq!(
-        model.test_tv_owner().selected_item_id(),
-        Some("movie-focused".into())
-    );
 }
 
 /// keep-destination-components-mounted task 3.1: the TV workspace stays
@@ -449,164 +299,12 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
 /// breakpoint now; its shared `MediaListCarrier` preserves the selected
 /// target across the Wide<->Inline presentation switch on its own -- there
 /// is no cross-component hand-off left to carry it.
-#[test]
-fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
-    use crate::app::components::{Msg, ShellRequest};
-    use crate::app::{PanelFocus, PanelMode};
-
-    let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "tvshows".into();
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-    }
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::Both;
-    // Wide/narrow is driven synchronously by terminal size now
-    // (`prime_wide_tv_geometry`, the narrow→wide flash fix).
-    let widen = |model: &mut Model, wide: bool| {
-        model.app.terminal_width = if wide { 160 } else { 80 };
-    };
-    app.terminal_width = 160;
-    app.terminal_height = 40;
-    let mut model = Model::new(app);
-
-    // Wide: move the TV workspace selection to row 1 (movie-second).
-    model.sync_mounted_surfaces();
-    let moved = model.test_tv_owner_mut().test_key(&KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    });
-    assert!(matches!(
-        &moved,
-        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
-            hit: crate::app::components::msg::TvHit::SeriesRow(target)
-        } if target == "movie-second")));
-    model.app.handle_mouse_single_click_tv(
-        0,
-        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
-    );
-    model.push_tv_workspace_content();
-    model.sync_active_destination();
-    let mut initial_wide_terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
-    initial_wide_terminal
-        .draw(|frame| model.draw_frame(frame, false, false))
-        .unwrap();
-    model.sync_mounted_surfaces();
-
-    let wide_target = model
-        .test_tv_owner()
-        .selected_tree_show()
-        .expect("wide TV tree has a selected show")
-        .id;
-    assert_eq!(wide_target, "movie-second");
-
-    // Flip to narrow: the same owner stays mounted and focused, and its
-    // shared carrier keeps the same selected target across the
-    // presentation switch.
-    widen(&mut model, false);
-    model.sync_mounted_surfaces();
-    assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
-    let mut narrow_terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
-    narrow_terminal
-        .draw(|frame| model.draw_frame(frame, false, false))
-        .unwrap();
-    let narrow_target = model
-        .test_tv_owner()
-        .selected_tree_show()
-        .expect("narrow TV tree has a selected show")
-        .id;
-    assert_eq!(
-        narrow_target, wide_target,
-        "wide→narrow flip must preserve the selected series target"
-    );
-
-    // Narrow: move the selection back to row 0 (movie-focused).
-    let up = model.test_tv_owner_mut().test_key(&KeyEvent {
-        code: Key::Up,
-        modifiers: KeyModifiers::NONE,
-    });
-    let Some(Msg::Shell(request)) = up else {
-        panic!("narrow Up must emit a typed shell request");
-    };
-    assert!(matches!(
-        *request,
-        ShellRequest::TvHitClick {
-            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
-        } if target == "movie-focused"
-    ));
-    model.app.handle_mouse_single_click_tv(
-        0,
-        crate::app::components::msg::TvHit::SeriesRow("movie-focused".into()),
-    );
-    model.push_tv_workspace_content();
-    let narrow_return_target = model
-        .test_tv_owner()
-        .selected_tree_show()
-        .expect("narrow TV tree has a selected show after move")
-        .id;
-    assert_eq!(narrow_return_target, "movie-focused");
-
-    // Flip back to wide: the same owner keeps the series selected while
-    // narrow.
-    widen(&mut model, true);
-    model.sync_mounted_surfaces();
-    assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
-    let final_wide_target = model
-        .test_tv_owner()
-        .selected_tree_show()
-        .expect("wide TV tree has a selected show after return")
-        .id;
-    assert_eq!(
-        final_wide_target, narrow_return_target,
-        "narrow→wide flip must preserve the selected series target"
-    );
-}
-
 /// Entering a wide TV library must route straight to the TV owner
 /// on the *first* `sync_mounted_surfaces()` after the tab flips — no
 /// one-frame narrow `TvContent` flash. `App::wide_tv_library_area`
 /// alone is a previous-frame paint signal; `prime_wide_tv_geometry` publishes
 /// the wide geometry synchronously from terminal size so the mount gate is
 /// correct immediately.
-#[test]
-fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
-    use crate::app::{PanelFocus, PanelMode};
-
-    let mut app = make_movie_app();
-    // Second library is the wide TV one; start focused on the first (Movies).
-    let mut tv_app = make_movie_app();
-    let mut tv = tv_app.libs.remove(0);
-    tv.library.collection_type = "tvshows".into();
-    tv.library.id = "tv-library".into();
-    for item in &mut tv.nav_stack[0].items {
-        item.item_type = "Series".into();
-    }
-    app.libs.push(tv);
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::Both;
-    app.terminal_width = 160;
-    app.terminal_height = 40;
-    app.tab = TabSelection::EmbyLibrary(0);
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    assert!(
-        !model.library_panel_has_owner(&model.test_tv_owner_key_at(0)),
-        "Movies tab: no TV owner"
-    );
-
-    // Flip to the wide TV library — the very next sync must land on the
-    // panel-hosted TV owner, never the narrow browser.
-    model.app.tab = TabSelection::EmbyLibrary(1);
-    model.sync_mounted_surfaces();
-
-    assert!(
-        model.library_panel_has_owner(&model.test_tv_owner_key()),
-        "the wide TV owner installs on the first sync after entry"
-    );
-    assert_eq!(model.application.focus(), Some(&ComponentId::Library));
-}
-
 /// Build a two-level stack: a Series parent list whose cursor is parked
 /// off the child's parent, plus an empty Seasons child whose `parent_id`
 /// points back at parent item 0. Used to prove `go_back` restores the

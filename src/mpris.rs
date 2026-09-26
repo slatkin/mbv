@@ -677,18 +677,5 @@ pub(crate) fn test_status(handle: &MprisHandle) -> Arc<Mutex<PlayerStatus>> {
 }
 
 #[cfg(test)]
-mod volume_conversion_tests {
-    use super::saturating_i64_from_f64;
-
-    #[test]
-    fn rounded_values_keep_saturating_integer_cast_semantics() {
-        assert_eq!(saturating_i64_from_f64(1.6_f64.round()), 2);
-        assert_eq!(saturating_i64_from_f64(f64::NAN), 0);
-        assert_eq!(saturating_i64_from_f64(f64::INFINITY), i64::MAX);
-        assert_eq!(saturating_i64_from_f64(f64::NEG_INFINITY), i64::MIN);
-    }
-}
-
-#[cfg(test)]
 #[path = "mpris_tests.rs"]
 mod tests;

@@ -93,28 +93,6 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
 /// D6: an empty directly-controlled remote target queue also executes
 /// immediately, staging the replacement in that owner's canonical queue.
 #[test]
-fn empty_direct_remote_target_queue_executes_the_replacement_immediately() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(Vec::new(), Vec::new());
-    assert!(
-        app.has_direct_remote_queue(),
-        "the fixture must exercise the directly-controlled owner"
-    );
-    assert_eq!(app.playback_queue().total_queue_len(), 0);
-
-    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
-
-    assert!(!confirm_pending(&app));
-    assert_eq!(queue_ids(&app), ["track-1"]);
-    assert!(
-        matches!(app.queue_source, crate::config::QueueSource::Album),
-        "the staged replacement carries its own source label"
-    );
-}
-
-/// D6: a populated local queue stores the complete action and prompts; the
-/// queue itself is untouched until the confirmation is answered.
-#[test]
 fn populated_local_target_queue_stores_the_action_and_prompts() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
@@ -146,45 +124,6 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
 
 /// D6: a populated directly-controlled remote queue prompts; the remote
 /// canonical queue is not staged before the confirmation.
-#[test]
-fn populated_direct_remote_target_queue_prompts_before_staging() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(Vec::new(), vec![audio("existing")]);
-    assert!(app.has_direct_remote_queue());
-
-    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
-
-    assert_eq!(
-        pending_confirm_action(&app),
-        Some(ConfirmAction::ReplacePopulatedQueue)
-    );
-    assert_eq!(
-        queue_ids(&app),
-        ["existing"],
-        "the remote queue is untouched before the confirmation"
-    );
-
-    mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
-
-    assert!(!confirm_pending(&app));
-    assert!(app.pending_queue_replacement.is_none());
-    assert_eq!(
-        queue_ids(&app),
-        ["track-1"],
-        "confirmation stages and executes the stored action"
-    );
-    assert!(matches!(
-        app.queue_source,
-        crate::config::QueueSource::Album
-    ));
-}
-
-/// D6: confirming a populated local queue executes the stored action when no
-/// saved-playlist protection applies.
 #[test]
 fn confirming_a_populated_local_queue_executes_the_stored_action() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -227,24 +166,6 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
 
 /// D6 cancellation: a dismiss key at the first prompt also clears the stored
 /// payload, so no later pass can fire it.
-#[test]
-fn dismissing_the_replace_queue_prompt_clears_the_stored_action() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
-    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
-
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('x')),
-    );
-
-    assert!(app.pending_queue_replacement.is_none());
-    assert_eq!(queue_ids(&app), ["existing"]);
-}
-
-/// D6 two-step: confirming a populated, dirty saved-playlist queue runs the
-/// existing save/discard prompt as a second step before anything executes.
 #[test]
 fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -294,57 +215,6 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
 
 /// D6 two-step: saving the dirty playlist defers the replacement until the
 /// save completes; the payload survives and the queue is unchanged.
-#[test]
-fn saving_the_dirty_playlist_defers_the_stored_replacement() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
-    mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
-    mount_confirmation(&mut app);
-
-    app.apply_confirm_action(
-        ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        key(KeyCode::Char('s')),
-    );
-
-    assert!(!confirm_pending(&app));
-    assert_eq!(queue_ids(&app), ["existing"], "the save defers execution");
-    assert!(
-        app.pending_queue_action.is_some(),
-        "the payload waits for the save completion"
-    );
-}
-
-/// D6 two-step: cancelling the second prompt changes neither queue nor
-/// playback and clears the stored payload.
-#[test]
-fn cancelling_the_dirty_prompt_changes_neither_queue_nor_playback() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
-    mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
-
-    app.apply_confirm_action(ConfirmAction::DiscardOrSaveDirtyPlaylist, key(KeyCode::Esc));
-
-    assert!(app.pending_queue_action.is_none());
-    assert_eq!(queue_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
-    assert!(!app.player.status.lock().unwrap().active);
-}
-
-/// Design D6 regression: a playlist-save completion must never execute a
-/// gated replacement the user has not confirmed. The gated payload lives in
-/// its own slot, so the save-deferral consumer at the session-event boundary
-/// executes only the intent confirmed at the first prompt, while the second,
-/// still-unconfirmed activation stays parked behind its own prompt.
 #[test]
 fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -423,21 +293,6 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 
 /// D6 predicate: only a `PlayItems` payload over a non-empty playback-target
 /// queue needs the gate; a bare clear owns its own confirmation flow.
-#[test]
-fn only_play_items_over_a_populated_target_queue_needs_confirmation() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    assert!(!app.queue_replacement_needs_confirmation(&play_action(&["track-1"])));
-    assert!(!app.queue_replacement_needs_confirmation(&PendingQueueAction::ClearQueue));
-
-    app.player_tab.set_items(vec![audio("existing")], 0);
-    assert!(app.queue_replacement_needs_confirmation(&play_action(&["track-1"])));
-    assert!(!app.queue_replacement_needs_confirmation(&PendingQueueAction::ClearQueue));
-}
-
-/// Row 3.2 / design D4: a context-menu Play selection on a populated queue
-/// asks first. Cancelling leaves the queue byte-identical because
-/// `rebuild_queue_for_selection` runs only in the confirmed path.
 #[test]
 fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();

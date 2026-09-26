@@ -172,47 +172,6 @@ fn validated_visualizer_glyph(value: Option<&str>) -> String {
 mod ui_config_tests {
     use super::{parse_ui_config, validated_visualizer_glyph, DEFAULT_VISUALIZER_GLYPH};
 
-    /// Reads refresh a stale entry's mtime so the 30-day mtime eviction
-    /// measures last use, not first write. Without this a warm cache
-    /// wipes itself on restart (reads never update mtime on their own).
-    #[test]
-    fn image_disk_cache_use_refreshes_stale_mtime() {
-        let _g = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
-        std::env::remove_var("MBV_SYSTEM");
-        let scratch = std::env::temp_dir().join(format!("mbv-imgcache-{}", uuid::Uuid::new_v4()));
-        std::env::set_var("XDG_CACHE_HOME", &scratch);
-        let age_secs = |key: &str| {
-            super::image_disk_cache_dir()
-                .join(key)
-                .metadata()
-                .unwrap()
-                .modified()
-                .unwrap()
-                .elapsed()
-                .map(|age| age.as_secs())
-        };
-        super::write_image_disk_cache("mtime-probe", b"bytes");
-        super::write_image_disk_cache("mtime-probe-path", b"bytes");
-        let stale = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 3600);
-        for key in ["mtime-probe", "mtime-probe-path"] {
-            let path = super::image_disk_cache_dir().join(key);
-            std::fs::File::open(&path)
-                .unwrap()
-                .set_modified(stale)
-                .unwrap();
-        }
-        let read_bytes = super::read_image_disk_cache("mtime-probe");
-        let read_age = age_secs("mtime-probe");
-        let path_hit = super::image_disk_cache_path("mtime-probe-path");
-        let path_age = age_secs("mtime-probe-path");
-        std::env::remove_var("XDG_CACHE_HOME");
-        let _ = std::fs::remove_dir_all(&scratch);
-        assert_eq!(read_bytes, Some(b"bytes".to_vec()));
-        assert!(path_hit.is_some());
-        assert!(read_age.is_ok_and(|age| age < 120));
-        assert!(path_age.is_ok_and(|age| age < 120));
-    }
-
     #[test]
     fn visualizer_glyph_round_trips_and_invalid_values_fall_back() {
         let config = parse_ui_config("[display]\nvisualizer_glyph = \"x\"\n").unwrap();

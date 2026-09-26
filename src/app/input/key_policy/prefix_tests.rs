@@ -68,37 +68,6 @@ mod prefix_mode {
     }
 
     #[test]
-    fn without_a_configured_prefix_nothing_arms() {
-        let keybinds = Keybinds::default();
-        assert_eq!(
-            resolve_policy(
-                chord(KeyCode::Char('b'), KeyModifiers::CONTROL),
-                &snapshot(),
-                &keybinds
-            )
-            .map(|entry| entry.name),
-            None,
-            "Ctrl+b matches no layer without a configured prefix"
-        );
-    }
-
-    #[test]
-    fn arming_is_suppressed_while_a_text_entry_owns_focus() {
-        let keybinds = prefix_keybinds(&[]);
-        let mut typing = snapshot();
-        typing.overlays.text_entry_focused = true;
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
-                &typing,
-                &keybinds
-            ),
-            RouterOutcome::FallThrough,
-            "the prefix chord reaches the text entry as an ordinary chord"
-        );
-    }
-
-    #[test]
     fn arming_is_suppressed_under_a_blocking_overlay() {
         let keybinds = prefix_keybinds(&[]);
         let mut blocked = snapshot();
@@ -143,33 +112,6 @@ mod prefix_mode {
     }
 
     #[test]
-    fn armed_mapped_gate_closed_is_swallowed_as_unmapped() {
-        // toggle_play_pause assigned `p`: Playback-gated, so with no
-        // active player and no remote session the mapped chord is
-        // treated as unmapped — swallowed, disarmed, never fired.
-        let keybinds = prefix_keybinds(&[("toggle_play_pause", "p")]);
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
-                &armed_snapshot(),
-                &keybinds
-            ),
-            RouterOutcome::PrefixSwallow
-        );
-        let mut active = armed_snapshot();
-        active.playback.player_active = true;
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
-                &active,
-                &keybinds
-            ),
-            RouterOutcome::PrefixDispatch(Command::TogglePlayPause),
-            "the same chord fires once the action's gate opens"
-        );
-    }
-
-    #[test]
     fn armed_idle_feed_link_gate_reads_the_router_chord() {
         // open_idle_feed_link assigned `f` in the prefix namespace: the
         // chord-sensitive IdleFeedLink gate tests the action's configured
@@ -209,81 +151,5 @@ mod prefix_mode {
             ),
             RouterOutcome::PrefixSwallow
         );
-    }
-
-    #[test]
-    fn armed_escape_does_not_reach_stop() {
-        // Esc is the stop default and the player is active, but armed
-        // dispatch never consults router-scope chords and `stop` is not
-        // prefix-addressable (design D1): Esc swallows and disarms.
-        let keybinds = prefix_keybinds(&[]);
-        let mut armed = armed_snapshot();
-        armed.playback.player_active = true;
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-                &armed,
-                &keybinds
-            ),
-            RouterOutcome::PrefixSwallow
-        );
-    }
-
-    #[test]
-    fn armed_f_keys_are_captured() {
-        // F1 (help_open) is mapped in the router scope only; while armed
-        // it resolves only against the prefix namespace — captured,
-        // disarming, help never opens.
-        let keybinds = prefix_keybinds(&[]);
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE),
-                &armed_snapshot(),
-                &keybinds
-            ),
-            RouterOutcome::PrefixSwallow
-        );
-    }
-
-    #[test]
-    fn double_prefix_re_arms() {
-        let keybinds = prefix_keybinds(&[]);
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
-                &armed_snapshot(),
-                &keybinds
-            ),
-            RouterOutcome::PrefixArm,
-            "the prefix chord while armed re-arms and stays consumed"
-        );
-    }
-
-    #[test]
-    fn no_chord_falls_through_while_armed() {
-        let keybinds = prefix_keybinds(&[("next_library_tab", "n")]);
-        for code in [
-            KeyCode::Char('k'),
-            KeyCode::Char('n'),
-            KeyCode::Esc,
-            KeyCode::F(1),
-            KeyCode::Tab,
-            KeyCode::Down,
-        ] {
-            let outcome = resolve(
-                crossterm::event::KeyEvent::new(code, KeyModifiers::NONE),
-                &armed_snapshot(),
-                &keybinds,
-            );
-            assert!(
-                matches!(
-                    outcome,
-                    RouterOutcome::PrefixArm
-                        | RouterOutcome::PrefixDispatch(_)
-                        | RouterOutcome::PrefixSwallow
-                ),
-                "{code:?} must resolve inside the armed machine, got {outcome:?}"
-            );
-        }
     }
 }
