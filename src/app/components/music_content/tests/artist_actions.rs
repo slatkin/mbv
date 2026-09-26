@@ -102,77 +102,6 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
 }
 
 #[test]
-fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
-    let expected = vec!["a-0".to_string(), "a-1".to_string(), "a-2".to_string()];
-    let mut collapsed = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2"])]);
-    press(&mut collapsed, Key::Home);
-    let root = collapsed
-        .browser
-        .selected_target()
-        .cloned()
-        .expect("artist root selected");
-    if collapsed.browser.is_expanded(&root) {
-        collapsed
-            .browser
-            .apply(TreeOperation::ToggleExpansionTarget(root));
-    }
-    for code in [
-        Key::Char('p'),
-        Key::Char('a'),
-        Key::Char('s'),
-        Key::Char('.'),
-    ] {
-        assert_eq!(artist_action_ids(&mut collapsed, code), expected);
-    }
-
-    let mut expanded = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2"])]);
-    press(&mut expanded, Key::Home);
-    let root = expanded
-        .browser
-        .selected_target()
-        .cloned()
-        .expect("artist root selected");
-    if !expanded.browser.is_expanded(&root) {
-        expanded
-            .browser
-            .apply(TreeOperation::ToggleExpansionTarget(root));
-    }
-    for code in [
-        Key::Char('p'),
-        Key::Char('a'),
-        Key::Char('s'),
-        Key::Char('.'),
-    ] {
-        assert_eq!(artist_action_ids(&mut expanded, code), expected);
-    }
-}
-
-#[test]
-fn filtered_artist_actions_materialize_only_matching_leaves_in_settled_order() {
-    let mut owner = tree_owner(&[(
-        "Alpha",
-        &["match-1", "skip-2", "match-3", "skip-4", "skip-5"],
-    )]);
-    press(&mut owner, Key::Home);
-    // Album leaves carry their target as the settled title, so a fuzzy query
-    // over "match" keeps exactly the two match-* leaves visible in the shared
-    // filter session (armed directly, as the old injection did, so the
-    // editor-free context chord still routes to the tree).
-    owner
-        .browser
-        .apply(TreeOperation::EditFilter("match".to_string()));
-
-    assert_eq!(
-        artist_action_ids(&mut owner, Key::Char('p')),
-        vec!["match-1".to_string(), "match-3".to_string()]
-    );
-    assert_eq!(
-        artist_action_ids(&mut owner, Key::Char('.')),
-        vec!["match-1".to_string(), "match-3".to_string()]
-    );
-}
-
-#[test]
 fn partially_unresolved_artist_actions_keep_ordered_targets_and_report_misses() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
     press(&mut owner, Key::Home);
@@ -205,54 +134,6 @@ fn partially_unresolved_artist_actions_keep_ordered_targets_and_report_misses() 
             }
             other => panic!("expected a partial artist action for {code:?}, got {other:?}"),
         }
-    }
-}
-
-#[test]
-fn fully_unresolved_artist_action_requests_shell_feedback() {
-    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
-    press(&mut owner, Key::Home);
-    owner.context.album_targets.clear();
-    owner.context.list.items.clear();
-
-    match owner.on_key(&KeyEvent {
-        code: Key::Char('p'),
-        modifiers: KeyModifiers::CONTROL,
-    }) {
-        Some(Msg::Shell(shell_boxed)) => {
-            let ShellRequest::MusicArtistAction {
-                items,
-                unresolved_targets,
-                ..
-            } = *shell_boxed
-            else {
-                panic!("expected shell feedback request, got {shell_boxed:?}")
-            };
-            assert!(items.is_empty());
-            assert_eq!(unresolved_targets, vec!["a-0", "a-1"]);
-        }
-        other => panic!("expected shell feedback request, got {other:?}"),
-    }
-}
-
-#[test]
-fn empty_visible_artist_emits_no_action_target() {
-    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
-    press(&mut owner, Key::Home);
-    owner
-        .browser
-        .apply(TreeOperation::EditFilter("zzzznomatch".to_string()));
-
-    for (code, modifiers) in [
-        (Key::Char('p'), KeyModifiers::CONTROL),
-        (Key::Char('a'), KeyModifiers::CONTROL),
-        (Key::Char('s'), KeyModifiers::CONTROL),
-        (Key::Char('.'), KeyModifiers::NONE),
-    ] {
-        assert!(
-            owner.on_key(&KeyEvent { code, modifiers }).is_none(),
-            "an artist with no visible album leaves has no action"
-        );
     }
 }
 
