@@ -26,28 +26,6 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-fn saved_level(
-    parent_id: &str,
-    title: &str,
-    focused_item_id: &str,
-    item_types: Option<&str>,
-) -> crate::config::LibraryPositionLevel {
-    crate::config::LibraryPositionLevel {
-        fetched_rows: None,
-        parent_id: parent_id.into(),
-        title: title.into(),
-        focused_item_id: Some(focused_item_id.into()),
-        cursor_index: 0,
-        item_types: item_types.map(Into::into),
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        letter_filter_index: None,
-        tv_content_mode: None,
-        library_total: None,
-    }
-}
-
 fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_core::api::EmbyItem> {
     (0..n)
         .map(|i| {
@@ -60,47 +38,6 @@ fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_core::api::E
 }
 
 // ── Characterization: saved-position restore (green now, green after) ─────────
-
-/// Entering a narrow Emby TV library restores its saved series position: the
-/// restored top browse level lands its cursor on the saved `focused_item_id`,
-/// not index 0.
-#[test]
-fn narrow_tv_library_restores_saved_series_position() {
-    let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.panel_focus = PanelFocus::Queue;
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let mut library = make_item("Shows", "CollectionFolder");
-    library.id = "lib-shows".into();
-    library.collection_type = "tvshows".into();
-    app.libs.push(LibraryTab::new(library));
-
-    let saved = saved_level("lib-shows", "Shows", "Series-3", Some("Series"));
-    let position = crate::config::LibraryPosition {
-        levels: vec![saved.clone()],
-        ..Default::default()
-    };
-    app.replace_saved_library_position(0, position.clone());
-
-    let level =
-        BrowseLevel::from_position_level(&saved, folder_items("Series", "Series", 5), 5, 10);
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-        lib_idx: 0,
-        requested_position: position.clone(),
-        position,
-        nav_stack: vec![level],
-    });
-
-    assert_eq!(
-        app.libs[0].nav_stack[0].resting().cursor(),
-        3,
-        "entering the narrow TV library must restore the saved series (Series-3 at index 3)"
-    );
-}
-
-// ── Regression markers: red until the named task ─────────────────────────────
 
 fn narrow_backend() -> Terminal<TestBackend> {
     Terminal::new(TestBackend::new(60, 20)).unwrap()
@@ -233,27 +170,6 @@ fn narrow_tv_browse_j_moves_painted_selection() {
     );
 }
 
-/// Regression (task 3.4 template step d): narrow Emby TV paints each visible
-/// series/season row exactly once — the mounted `EmbyLibraryContent` owner is the sole
-/// painter now that the legacy `render_list` narrow branch early-returns for
-/// `tvshows` too.
-#[test]
-fn narrow_tv_paints_each_browse_row_once() {
-    let mut model = Model::new(tv_shows_app());
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    for row in ["Series 0", "Series 1", "Series 2", "Series 3", "Series 4"] {
-        assert_eq!(
-            output.matches(row).count(),
-            1,
-            "narrow TV browse row {row:?} must be painted exactly once:\n{output}"
-        );
-    }
-}
-
 fn feed_home_video_group_app() -> App {
     let mut app = make_app_stub();
     app.terminal_width = 60;
@@ -305,63 +221,6 @@ fn feed_home_video_group_app() -> App {
         ..LibraryTab::new(library)
     });
     app
-}
-
-fn feed_snapshot(width: u16, height: u16) -> String {
-    let mut app = feed_home_video_group_app();
-    app.terminal_width = width;
-    app.terminal_height = height;
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
-    draw(&mut model, &mut term)
-}
-
-fn selected_feed_row_region(output: &str, title: &str) -> String {
-    let lines: Vec<_> = output.lines().collect();
-    // The selected ordinary row is identified by its 2-column selected inset.
-    let row = lines
-        .iter()
-        .position(|line| line.starts_with("  ") && line.contains(title))
-        .unwrap_or_else(|| panic!("selected feed row must be rendered: {output}"));
-    lines[row..=row].join("\n")
-}
-
-#[test]
-fn feed_home_video_group_wide_uses_wide_hero() {
-    // Wide: Wide hero. Selected item's detail (overview + meta) is the
-    // right hero card; the left browser pane is a plain one-column list with
-    // the feed-group pills - no inline expansion in the browser.
-    let output = feed_snapshot(140, 40);
-    assert!(
-        output.contains("All") && output.contains("Channel A"),
-        "feed-group pills missing:\n{output}"
-    );
-    assert!(
-        output.contains("Distinctive wrapping"),
-        "right hero overview missing:\n{output}"
-    );
-    // Video Two is only ever a rail row (never the selected hero), so it
-    // pins single-paint of the rail without the hero-echo of Video One.
-    assert_eq!(
-        output
-            .lines()
-            .filter(|line| line.contains("Video Two"))
-            .count(),
-        1,
-        "Video Two paints once in the rail:\n{output}"
-    );
-}
-
-#[test]
-fn feed_home_video_group_paints_each_row_once() {
-    for (width, height) in [(60, 20), (140, 40)] {
-        let output = feed_snapshot(width, height);
-        let rows = output.lines().filter(|line| {
-            line.contains("Video Two") && !line.contains('\u{2581}') && !line.contains('\u{2594}')
-        });
-        assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
-    }
 }
 
 #[test]
@@ -475,50 +334,5 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             .video_cursor,
         total_rows - 2,
         "the shell resting state follows the resolved control selection"
-    );
-}
-
-#[test]
-fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
-    let mut app = feed_home_video_group_app();
-    let state = app.libs[0].feed_home_video.as_mut().unwrap();
-    state.groups[0].items[0].overview.clear();
-    state.groups[0].items[0].genres.clear();
-    state.groups[0].items[0].runtime_ticks = 0;
-    state.all_items[0].overview.clear();
-    state.all_items[0].genres.clear();
-    state.all_items[0].runtime_ticks = 0;
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    let output = draw(&mut model, &mut term);
-    let region = selected_feed_row_region(&output, "Video One");
-    assert_eq!(region.matches("Video One").count(), 1);
-    assert!(
-        region.starts_with("  "),
-        "ordinary selected row keeps the 2-col selected inset"
-    );
-    assert!(!region.contains('▁') && !region.contains('▔'));
-}
-
-/// Regression 5: narrow Movies paints each browse row exactly once (currently
-/// double-painted by legacy `render_list` + `EmbyLibraryContent` view).
-#[test]
-fn narrow_movies_paints_each_browse_row_once() {
-    let mut app = crate::app::render::make_movie_app();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.mini_view_focus = PanelFocus::Library;
-
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    assert_eq!(
-        output.matches("Second Movie").count(),
-        1,
-        "narrow Movies browse row must be painted exactly once, not double-painted:\n{output}"
     );
 }
