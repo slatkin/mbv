@@ -21,8 +21,8 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
-        if self.card_image_loading.contains(&cache_key)
-            || self.card_image_states.contains_key(&cache_key)
+        if self.images.card_image_loading.contains(&cache_key)
+            || self.images.card_image_states.contains_key(&cache_key)
         {
             return;
         }
@@ -36,10 +36,10 @@ impl App {
         // past this guard) would also increment on every legitimate repaint.
         #[cfg(test)]
         {
-            self.card_image_fetch_calls += 1;
+            self.images.card_image_fetch_calls += 1;
         };
         // Reserve the key immediately so duplicate (and queued) requests dedupe.
-        self.card_image_loading.insert(cache_key.clone());
+        self.images.card_image_loading.insert(cache_key.clone());
         let req = ImageFetchReq {
             cache_key,
             item_id,
@@ -47,9 +47,9 @@ impl App {
             types: types.iter().map(ToString::to_string).collect(),
             source: ImageSource::Emby,
         };
-        if self.image_fetches_active >= MAX_IMAGE_FETCHES {
+        if self.images.image_fetches_active >= MAX_IMAGE_FETCHES {
             // Queue instead of dropping: a slot will pick it up on completion.
-            self.pending_image_fetches.push_back(req);
+            self.images.pending_image_fetches.push_back(req);
             return;
         }
         self.spawn_image_fetch(req);
@@ -90,11 +90,11 @@ impl App {
         server_url: String,
         item_id: String,
     ) {
-        if !self.image_protocol_enabled {
+        if !self.images.image_protocol_enabled {
             return;
         }
-        if self.card_image_loading.contains(&cache_key)
-            || self.card_image_states.contains_key(&cache_key)
+        if self.images.card_image_loading.contains(&cache_key)
+            || self.images.card_image_states.contains_key(&cache_key)
         {
             return;
         }
@@ -113,9 +113,9 @@ impl App {
                 api_key,
             },
         };
-        self.card_image_loading.insert(cache_key);
-        if self.image_fetches_active >= MAX_IMAGE_FETCHES {
-            self.pending_image_fetches.push_back(req);
+        self.images.card_image_loading.insert(cache_key);
+        if self.images.image_fetches_active >= MAX_IMAGE_FETCHES {
+            self.images.pending_image_fetches.push_back(req);
         } else {
             self.spawn_image_fetch(req);
         }

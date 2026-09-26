@@ -91,7 +91,7 @@ impl App {
     }
 
     fn cycle_image_protocol(&mut self) {
-        self.image_protocol = match self.image_protocol.as_deref() {
+        self.images.image_protocol = match self.images.image_protocol.as_deref() {
             None => Some("halfblocks".into()),
             Some("halfblocks") => Some("sixel".into()),
             Some("sixel") => Some("kitty".into()),
@@ -99,7 +99,7 @@ impl App {
             Some("iterm2") => Some("auto".into()),
             _ => None,
         };
-        self.image_protocol_enabled = self.image_protocol.is_some();
+        self.images.image_protocol_enabled = self.images.image_protocol.is_some();
     }
 
     fn apply_subtitle_mode(&mut self) {

@@ -365,6 +365,7 @@ impl App {
             // cache miss as un-cached and re-arm, matching the album card
             // path, whose `card_image_states` membership is its fetch dedup.
             let bitmap_cached = self
+                .images
                 .card_image_states
                 .get(&cache_key)
                 .is_some_and(|entry| entry.img.is_some());
@@ -373,7 +374,7 @@ impl App {
             }
             self.artist_artwork_status.remove(&key);
         }
-        if let Some(entry) = self.card_image_states.get(&cache_key) {
+        if let Some(entry) = self.images.card_image_states.get(&cache_key) {
             self.artist_artwork_status.insert(
                 key,
                 if entry.img.is_some() {

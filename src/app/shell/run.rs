@@ -95,8 +95,8 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= crate::app::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        self.app.card_image_states.clear();
-        self.app.card_image_loading.clear();
+        self.app.images.card_image_states.clear();
+        self.app.images.card_image_loading.clear();
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < crate::app::MINI_VIEW_THRESHOLD {
@@ -164,22 +164,23 @@ impl Model {
     /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
     /// can drift from the key the painter builds.
     fn evict_excess_card_images(&mut self) {
-        while self.app.image_lru.len() > self.app.image_cache_size_total {
-            let Some(evict) = self.app.image_lru.pop_front() else {
+        while self.app.images.image_lru.len() > self.app.images.image_cache_size_total {
+            let Some(evict) = self.app.images.image_lru.pop_front() else {
                 break;
             };
-            self.app.card_image_states.remove(&evict);
+            self.app.images.card_image_states.remove(&evict);
         }
     }
 
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let mut series_image_changed = false;
         let mut drained = false;
-        while let Ok((cache_key, img_opt)) = self.app.card_image_rx.try_recv() {
+        while let Ok((cache_key, img_opt)) = self.app.images.card_image_rx.try_recv() {
             drained = true;
             series_image_changed |= cache_key.contains(SERIES_IMAGE_CACHE_KEY_INFIX);
-            self.app.card_image_loading.remove(&cache_key);
-            self.app.image_fetches_active = self.app.image_fetches_active.saturating_sub(1);
+            self.app.images.card_image_loading.remove(&cache_key);
+            self.app.images.image_fetches_active =
+                self.app.images.image_fetches_active.saturating_sub(1);
             let entry = self.app.build_cached_image(&cache_key, img_opt);
             // Artist artwork (task 6.2, design D7): a fetch reserved through
             // the typed artist request identity completes as its own typed
@@ -199,11 +200,11 @@ impl Model {
                         available: entry.img.is_some(),
                     });
             if entry.img.is_some() {
-                self.app.image_lru.retain(|k| k != &cache_key);
-                self.app.image_lru.push_back(cache_key.clone());
+                self.app.images.image_lru.retain(|k| k != &cache_key);
+                self.app.images.image_lru.push_back(cache_key.clone());
                 self.evict_excess_card_images();
             }
-            self.app.card_image_states.insert(cache_key, entry);
+            self.app.images.card_image_states.insert(cache_key, entry);
             if let Some(event) = artist_completion {
                 let _ = self.app.lib_tx.send(event);
             }

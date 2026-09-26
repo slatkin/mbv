@@ -513,7 +513,7 @@ mod tests {
             0,
         );
         app.panel_focus = PanelFocus::Queue;
-        app.image_protocol_enabled = true;
+        app.images.image_protocol_enabled = true;
         {
             let mut status = app.player.status.lock().unwrap();
             status.active = true;
@@ -523,30 +523,30 @@ mod tests {
 
         model.sync_queue();
         assert!(
-            model.app.card_image_loading.contains("id0:P"),
+            model.app.images.card_image_loading.contains("id0:P"),
             "the now-playing key must be reserved by the projection push"
         );
-        let loading = model.app.card_image_loading.clone();
-        let active = model.app.image_fetches_active;
-        let pending = model.app.pending_image_fetches.len();
+        let loading = model.app.images.card_image_loading.clone();
+        let active = model.app.images.image_fetches_active;
+        let pending = model.app.images.pending_image_fetches.len();
 
         // Repaint tick: nothing changed, so the push starts no new fetch.
         model.sync_queue();
-        assert_eq!(model.app.card_image_loading, loading);
-        assert_eq!(model.app.image_fetches_active, active);
-        assert_eq!(model.app.pending_image_fetches.len(), pending);
+        assert_eq!(model.app.images.card_image_loading, loading);
+        assert_eq!(model.app.images.image_fetches_active, active);
+        assert_eq!(model.app.images.pending_image_fetches.len(), pending);
 
         // A new now-playing key reserves exactly one new key.
         model.app.player.status.lock().unwrap().current_idx = 1;
         model.sync_queue();
-        assert!(model.app.card_image_loading.contains("id1:P"));
+        assert!(model.app.images.card_image_loading.contains("id1:P"));
     }
 
     #[test]
     fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
         let mut app = make_app_stub();
         app.player_tab.set_items(make_items(2), 0);
-        app.image_protocol_enabled = true;
+        app.images.image_protocol_enabled = true;
         app.visual_slot_hidden = true;
         {
             let mut status = app.player.status.lock().unwrap();
@@ -556,13 +556,13 @@ mod tests {
         let mut model = Model::new(app);
 
         model.sync_queue();
-        assert_eq!(model.app.card_image_fetch_calls, 0);
-        assert!(!model.app.card_image_loading.contains("id0:P"));
+        assert_eq!(model.app.images.card_image_fetch_calls, 0);
+        assert!(!model.app.images.card_image_loading.contains("id0:P"));
 
         model.app.visual_slot_hidden = false;
         model.sync_queue();
-        assert!(model.app.card_image_fetch_calls > 0);
-        assert!(model.app.card_image_loading.contains("id0:P"));
+        assert!(model.app.images.card_image_fetch_calls > 0);
+        assert!(model.app.images.card_image_loading.contains("id0:P"));
     }
 
     #[test]

@@ -11,13 +11,13 @@ fn image_protocol_activation_cycles_through_supported_values(
     #[case] expected: Option<&str>,
 ) {
     let mut app = make_app_stub();
-    app.image_protocol = current.map(str::to_owned);
-    app.image_protocol_enabled = current.is_some();
+    app.images.image_protocol = current.map(str::to_owned);
+    app.images.image_protocol_enabled = current.is_some();
 
     app.handle_settings_activate(SettingKey::ImageProtocol);
 
-    assert_eq!(app.image_protocol.as_deref(), expected);
-    assert_eq!(app.image_protocol_enabled, expected.is_some());
+    assert_eq!(app.images.image_protocol.as_deref(), expected);
+    assert_eq!(app.images.image_protocol_enabled, expected.is_some());
 }
 
 #[test]

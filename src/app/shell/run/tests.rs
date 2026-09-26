@@ -47,7 +47,7 @@ fn wide_tv_shows_placeholder(model: &mut Model) -> bool {
 #[test]
 fn series_image_completion_repushes_tv_workspace_content() {
     let mut model = mounted_wide_tv_model();
-    model.app.image_protocol_enabled = true;
+    model.app.images.image_protocol_enabled = true;
     // The sync pass is the production projection seam (task 5.10's central
     // hero projection owns the fetch for every migrated owner, TV included
     // since task 8.4). One throwaway draw publishes `root_frame` first — the
@@ -70,13 +70,21 @@ fn series_image_completion_repushes_tv_workspace_content() {
         "the Series prefetch must resolve into the cache"
     );
     assert!(
-        model.app.card_image_states.contains_key(&painted_key),
+        model
+            .app
+            .images
+            .card_image_states
+            .contains_key(&painted_key),
         "the painted Series key must be cached"
     );
     // The fixture's fetch resolves to an empty cache entry (no pixel
     // protocol is available), so the shared producer now treats the
     // placeholder as final while the shell still re-projects the cached key.
-    assert!(model.app.card_image_states.contains_key(&painted_key));
+    assert!(model
+        .app
+        .images
+        .card_image_states
+        .contains_key(&painted_key));
 }
 
 /// Task 2.3: no other image namespace may drive the TV projection. The cached

@@ -230,7 +230,7 @@ impl Model {
     /// resize request for the same (still-present) key is a no-op too.
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok((key, response)) = self.app.resize_response_rx.try_recv() {
+        while let Ok((key, response)) = self.app.images.resize_response_rx.try_recv() {
             had_events = true;
             // Responses are tagged with the per-suffix mem-key
             // ("bare@suffix"); route them into the matching protocol of
@@ -238,7 +238,7 @@ impl Model {
             let Some((bare_key, suffix)) = key.rsplit_once('@') else {
                 continue;
             };
-            let Some(entry) = self.app.card_image_states.get_mut(bare_key) else {
+            let Some(entry) = self.app.images.card_image_states.get_mut(bare_key) else {
                 continue;
             };
             if let Some(state) = entry.protocols.get_mut(suffix) {

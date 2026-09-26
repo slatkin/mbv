@@ -164,8 +164,15 @@ impl App {
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
             system_notifications: init.system_notifications,
-            image_protocol: init.image_protocol,
-            image_protocol_enabled: init.image_protocol_enabled,
+            images: crate::app::infra::images::cache::ImageCache::new(
+                init.image_cache_size,
+                init.image_protocol,
+                init.image_protocol_enabled,
+                init.card_image_tx,
+                init.card_image_rx,
+                resize_register_tx,
+                resize_response_rx,
+            ),
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
@@ -177,17 +184,12 @@ impl App {
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
-            image_cache_size: init.image_cache_size,
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             search_tx: init.search_tx,
             search_rx: init.search_rx,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
-            card_image_tx: init.card_image_tx,
-            card_image_rx: init.card_image_rx,
-            resize_register_tx,
-            resize_response_rx,
             notif_action_tx: init.notif_action_tx,
             notif_action_rx: init.notif_action_rx,
             libs: Vec::new(),
@@ -258,16 +260,9 @@ impl App {
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
-            card_image_states: std::collections::HashMap::new(),
-            card_image_loading: std::collections::HashSet::new(),
-            last_card_height: 0,
-            last_card_width: 0,
             queue_card_projection:
                 crate::app::render::components::card::QueueCardProjection::default(),
-            image_picker: None,
-            halfblock_picker: None,
             dim_backdrop_active: false,
-            image_cache_size_total: init.image_cache_size.saturating_mul(2),
             settings_destination: crate::app::state::types::settings::SettingsDestination::Main,
             settings_save_at: None,
             mouse_capture_pending: None,
@@ -353,9 +348,6 @@ impl App {
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
             pending_series_season_expansions: std::collections::HashSet::new(),
-            image_lru: std::collections::VecDeque::new(),
-            pending_image_fetches: std::collections::VecDeque::new(),
-            image_fetches_active: 0,
             queue_scope: init.initial_queue_scope,
             launched_as_remote: false,
             player_endpoint: None,
@@ -364,10 +356,6 @@ impl App {
             feed_seek_pending_slot: None,
             feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
-            #[cfg(test)]
-            card_image_fetch_calls: 0,
-            #[cfg(test)]
-            image_protocol_builds: std::cell::Cell::new(0),
         };
         app.sync_feed_subscriptions();
         app
@@ -478,7 +466,7 @@ impl App {
     /// protocols. Called once at startup by `run`.
     pub(in crate::app) fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.image_protocol.clone();
+        let protocol_override = self.images.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
         let proto = protocol_override
             .as_deref()
@@ -513,7 +501,7 @@ impl App {
             picker.protocol_type(),
             picker.font_size()
         );
-        self.image_picker = Some(picker);
-        self.halfblock_picker = Some(Picker::halfblocks());
+        self.images.image_picker = Some(picker);
+        self.images.halfblock_picker = Some(Picker::halfblocks());
     }
 }

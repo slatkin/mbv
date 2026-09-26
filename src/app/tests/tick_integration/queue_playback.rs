@@ -163,8 +163,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         let mut app = active_app(PanelMode::QueueOnly);
         app.terminal_width = width;
         app.terminal_height = 40;
-        app.last_card_height = 8;
-        app.last_card_width = 16;
+        app.images.last_card_height = 8;
+        app.images.last_card_width = 16;
         let mut harness = TickHarness::new(app);
 
         harness.model_mut().sync_queue_card_geometry();
@@ -175,8 +175,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         assert!(shown_card.0 > 0, "slot has a reservation at width {width}");
         assert!(shown_card.1 > 0, "slot has a width at width {width}");
         let checkpoint = (
-            harness.model().app.last_card_height,
-            harness.model().app.last_card_width,
+            harness.model().app.images.last_card_height,
+            harness.model().app.images.last_card_width,
         );
 
         harness.model_mut().app.visual_slot_hidden = true;
@@ -190,8 +190,8 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         );
         assert_eq!(
             (
-                harness.model().app.last_card_height,
-                harness.model().app.last_card_width,
+                harness.model().app.images.last_card_height,
+                harness.model().app.images.last_card_width,
             ),
             checkpoint,
             "hiding preserves the paint checkpoint"

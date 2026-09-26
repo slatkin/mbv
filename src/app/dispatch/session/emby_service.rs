@@ -94,11 +94,11 @@ impl App {
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();
-        self.card_image_states.clear();
-        self.card_image_loading.clear();
-        self.image_lru.clear();
-        self.pending_image_fetches.clear();
-        self.image_fetches_active = 0;
+        self.images.card_image_states.clear();
+        self.images.card_image_loading.clear();
+        self.images.image_lru.clear();
+        self.images.pending_image_fetches.clear();
+        self.images.image_fetches_active = 0;
         self.library_position_state = crate::config::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;

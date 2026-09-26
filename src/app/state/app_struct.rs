@@ -1,5 +1,4 @@
-use crate::app::infra::resize::{ResizeRegisterTx, ResizeResponseRx};
-use crate::app::infra::{images, layout};
+use crate::app::infra::layout;
 use crate::app::render;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::queue_owner::QueueEpoch;
@@ -27,7 +26,6 @@ use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
-use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -285,38 +283,13 @@ pub struct App {
     pub(in crate::app) pending_track_selection: Option<(usize, String)>,
     pub(in crate::app) last_played_item_id: Option<String>,
     pub(in crate::app) last_played_completed: bool,
-    pub(in crate::app) card_image_states: std::collections::HashMap<String, images::CachedImage>,
-    pub(in crate::app) image_lru: std::collections::VecDeque<String>,
-    pub(in crate::app) image_cache_size: usize,
-    pub(in crate::app) card_image_loading: std::collections::HashSet<String>,
-    pub(in crate::app) last_card_height: u16,
-    pub(in crate::app) last_card_width: u16,
     /// The queue visual slot's image projection (task 3.4, D9): the queue
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection:
         crate::app::render::components::card::QueueCardProjection,
-    pub(in crate::app) pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
-    pub(in crate::app) image_fetches_active: usize,
-    pub(in crate::app) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    pub(in crate::app) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    /// Registers a freshly created per-cache-key `ResizeRequest` receiver
-    /// with the resize worker thread (see `spawn_resize_worker`), so the
-    /// worker can service many concurrently-alive `ThreadProtocol`s off the
-    /// render thread while still routing each `ResizeResponse` back to the
-    /// right `card_image_states` entry (#164). `ResizeRequest`/`ResizeResponse`
-    /// carry no key of their own — that's why each cache key gets its own
-    /// dedicated channel instead of sharing one globally.
-    pub(in crate::app) resize_register_tx: ResizeRegisterTx,
-    /// Completed off-thread resize+encode results, tagged with the
-    /// `card_image_states` cache key they belong to. Drained once per
-    /// event-loop tick alongside `card_image_rx` (#164).
-    pub(in crate::app) resize_response_rx: ResizeResponseRx,
-    pub(in crate::app) image_picker: Option<Picker>,
-    pub(in crate::app) halfblock_picker: Option<Picker>,
     pub(in crate::app) dim_backdrop_active: bool,
-    pub(in crate::app) image_cache_size_total: usize,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
     /// Live mouse-capture flip requested by the Settings toggle arm (ADR
@@ -521,8 +494,7 @@ pub struct App {
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
-    pub(in crate::app) image_protocol: Option<String>,
-    pub(in crate::app) image_protocol_enabled: bool,
+    pub(in crate::app) images: crate::app::infra::images::cache::ImageCache,
     pub(in crate::app) library_position_state: crate::config::LibraryPositionState,
     pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
@@ -538,17 +510,6 @@ pub struct App {
     pub(in crate::app) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
-    /// Test-only instrumentation: counts every reservation `queue_card_image_fetch`
-    /// makes past its dedup guard, so a broken guard is visible even when the
-    /// fixture has no Emby client (`spawn_image_fetch` balances
-    /// `image_fetches_active` back to its prior value synchronously in that
-    /// case, hiding a redundant reservation from the other counters).
-    #[cfg(test)]
-    pub(in crate::app) card_image_fetch_calls: u32,
-    /// Test-only instrumentation: counts protocol construction so hero cache
-    /// validity tests can distinguish reuse from a rebuild.
-    #[cfg(test)]
-    pub(in crate::app) image_protocol_builds: std::cell::Cell<u32>,
 }
 
 impl App {

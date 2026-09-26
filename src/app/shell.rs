@@ -362,8 +362,8 @@ fn apply_terminal_observer(
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
             model.app.force_clear = true;
-            model.app.card_image_states.clear();
-            model.app.card_image_loading.clear();
+            model.app.images.card_image_states.clear();
+            model.app.images.card_image_loading.clear();
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;

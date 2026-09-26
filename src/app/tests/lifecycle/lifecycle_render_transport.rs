@@ -8,7 +8,9 @@ use super::*;
 fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
     let mut app = make_app_stub();
     if image_loading {
-        app.card_image_loading.insert("movie-1:cmp_primary".into());
+        app.images
+            .card_image_loading
+            .insert("movie-1:cmp_primary".into());
     }
     assert_eq!(app.render_interval(), expected);
 }

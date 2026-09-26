@@ -241,7 +241,7 @@ impl App {
         left_align: bool,
     ) -> (u16, u16, bool) {
         let rect = queue_card_reserved_rect(
-            (self.last_card_height, self.last_card_width),
+            (self.images.last_card_height, self.images.last_card_width),
             self.terminal_height,
             area,
             left_align,
@@ -271,7 +271,7 @@ impl App {
         }
         if !projection.images_enabled {
             let rect = queue_card_reserved_rect(
-                (self.last_card_height, self.last_card_width),
+                (self.images.last_card_height, self.images.last_card_width),
                 self.terminal_height,
                 area,
                 left_align,
@@ -283,7 +283,8 @@ impl App {
         // placeholder itself. Resolved from the image cache's authority —
         // a read, never a fetch.
         let artwork_key = projection.cache_key.clone().filter(|key| {
-            self.card_image_states
+            self.images
+                .card_image_states
                 .get(key)
                 .is_none_or(|entry| entry.img.is_some())
         });
@@ -298,8 +299,8 @@ impl App {
             projection.cache_key = None;
         }
         let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
-        let loading = !placeholder_slot && self.card_image_loading.contains(key);
-        let last_card = (self.last_card_height, self.last_card_width);
+        let loading = !placeholder_slot && self.images.card_image_loading.contains(key);
+        let last_card = (self.images.last_card_height, self.images.last_card_width);
         let terminal_height = self.terminal_height;
         let image = self.cached_image_protocol_mut(key);
         let (height, width, loading) = render_card_painting(
@@ -312,8 +313,8 @@ impl App {
             last_card,
             terminal_height,
         );
-        self.last_card_height = height;
-        self.last_card_width = width;
+        self.images.last_card_height = height;
+        self.images.last_card_width = width;
         (height, width, loading)
     }
 

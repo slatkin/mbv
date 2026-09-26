@@ -27,13 +27,13 @@ impl App {
     }
 
     pub(in crate::app) fn clear_audiobookshelf_images(&mut self) {
-        self.card_image_states.retain(|key, _| {
+        self.images.card_image_states.retain(|key, _| {
             !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
         });
-        self.card_image_loading.retain(|key| {
+        self.images.card_image_loading.retain(|key| {
             !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
         });
-        self.pending_image_fetches.retain(|request| {
+        self.images.pending_image_fetches.retain(|request| {
             !matches!(
                 request.source,
                 crate::app::infra::images::ImageSource::Audiobookshelf { .. }
