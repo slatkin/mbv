@@ -240,7 +240,7 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 7. Wrap-up
 
-- [ ] 7.1 Update the `AGENTS.md` "Repository map" section: add the six leaf
+- [x] 7.1 Update the `AGENTS.md` "Repository map" section: add the six leaf
   crates with a one-line role each, under the existing `crates/` entries.
   Verify: `AGENTS.md` names all six of `mbv-ids`, `mbv-keybinds`, `mbv-net`,
   `mbv-ws`, `mbv-visualizer`, `mbv-text`.
