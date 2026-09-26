@@ -67,89 +67,66 @@ impl App {
     /// Returns [`PlayerEventFlow::RestartLoop`] if the caller's event loop
     /// should `continue` (skip render for this tick).
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
-        let ev = match self.handle_player_event_playback(ev) {
-            Ok(true) => return PlayerEventFlow::RestartLoop,
-            Ok(false) => return PlayerEventFlow::Proceed,
-            Err(ev) => ev,
-        };
-        let ev = match self.handle_player_event_notices(ev) {
-            Ok(true) => return PlayerEventFlow::RestartLoop,
-            Ok(false) => return PlayerEventFlow::Proceed,
-            Err(ev) => ev,
-        };
-        match self.handle_player_event_queue_state(ev) {
-            Ok(true) => PlayerEventFlow::RestartLoop,
-            Ok(false) => PlayerEventFlow::Proceed,
-            Err(ev) => {
-                if self.handle_player_event_progress(ev) {
+        match ev {
+            PlayerEvent::Stopped { .. } => {
+                if self.handle_stopped_event(ev) {
                     PlayerEventFlow::RestartLoop
                 } else {
                     PlayerEventFlow::Proceed
                 }
             }
-        }
-    }
-
-    fn handle_player_event_playback(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
-        match ev {
-            PlayerEvent::Stopped { .. } => Ok(self.handle_stopped_event(ev)),
             PlayerEvent::TrackCompleted { .. } => {
                 self.handle_track_completed_event(&ev);
-                Ok(false)
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::TrackChanged { .. } => {
                 self.handle_track_changed_event(&ev);
-                Ok(false)
+                PlayerEventFlow::Proceed
             }
-            PlayerEvent::QueueNextUp { next_idx } => {
-                self.handle_queue_next_up(next_idx);
-                Ok(false)
+            PlayerEvent::PausedChanged(paused) => {
+                self.handle_paused_changed(paused);
+                PlayerEventFlow::Proceed
             }
-            PlayerEvent::NextUpThreshold { .. } => {
-                // Series episodes now use play_queue; this only fires for movies
-                // (always_play_next=false or non-series content). No action needed.
-                Ok(false)
+            PlayerEvent::OutputStarted => {
+                self.handle_output_started();
+                PlayerEventFlow::Proceed
+            }
+            PlayerEvent::NextUpThreshold { .. } | PlayerEvent::IntroEnded => {
+                // No action: next-up thresholds are presentation-only; intro completion needs no handling.
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::NextUpPlay => {
                 self.handle_next_up_play();
-                Ok(false)
+                PlayerEventFlow::Proceed
+            }
+            PlayerEvent::QueueNextUp { next_idx } => {
+                self.handle_queue_next_up(next_idx);
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                Ok(self.handle_unified_queue_updated(&unified))
-            }
-            PlayerEvent::RemoteDisconnected(reason) => Ok(self.handle_remote_disconnected(&reason)),
-            ev => Err(ev),
-        }
-    }
-
-    fn handle_player_event_notices(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
-        match ev {
-            PlayerEvent::IntroStarted { intro_end_ticks } => {
-                // mbvd never auto-seeks on this event itself — it always
-                // reports the boundary neutrally, regardless of daemon-host
-                // config, so this client's own `always_skip_intro` is the
-                // only thing that decides whether to skip.
-                if self.config.lock().unwrap().always_skip_intro {
-                    #[expect(
-                        clippy::cast_precision_loss,
-                        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-                    )]
-                    let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                    self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                    self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                if self.handle_unified_queue_updated(&unified) {
+                    PlayerEventFlow::RestartLoop
+                } else {
+                    PlayerEventFlow::Proceed
                 }
-                Ok(false)
             }
-            PlayerEvent::IntroEnded => Ok(false),
+            PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
+                self.handle_unified_queue_load_result(result);
+                PlayerEventFlow::Proceed
+            }
+            PlayerEvent::IntroStarted { intro_end_ticks } => {
+                self.handle_intro_started(intro_end_ticks);
+                PlayerEventFlow::Proceed
+            }
             PlayerEvent::SkipIntroPlay => {
                 self.status.clear();
-                Ok(false)
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::MpvQuit => {
                 self.next_up_item = None;
                 self.status.clear();
                 self.refresh_after_stop();
-                Ok(false)
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
@@ -161,117 +138,143 @@ impl App {
                     self.bare_owner.clear_unconfirmable_transition();
                 }
                 self.flash(reason, ToastSeverity::Error);
-                Ok(false)
+                PlayerEventFlow::Proceed
             }
-            PlayerEvent::PlaybackIntent(event) => {
-                self.flash(
-                    playback_intent_message(&event.outcome).to_string(),
-                    ToastSeverity::Neutral,
-                );
-                Ok(false)
+            event @ (PlayerEvent::PlaybackIntent(_) | PlayerEvent::PipePlaybackStatus(_)) => {
+                self.handle_playback_notice(event);
+                PlayerEventFlow::Proceed
             }
-            PlayerEvent::PipePlaybackStatus(status) => {
-                self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
-                Ok(false)
-            }
-            ev => Err(ev),
-        }
-    }
-
-    fn handle_player_event_queue_state(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
-        match ev {
-            PlayerEvent::PausedChanged(paused) => {
-                // Persist Feed position on pause (one write per pause event).
-                if paused {
-                    if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
-                        self.persist_feed_slot_position(slot_id);
-                    }
-                }
-                Ok(false)
-            }
-            PlayerEvent::OutputStarted => {
-                // If a seek was pending for a Feed slot, persist the
-                // resulting position now (confirmed seek completion).
-                if let Some(slot_id) = self.feed_seek_pending_slot.take() {
-                    self.persist_feed_slot_position(slot_id);
-                }
-                Ok(false)
-            }
-            PlayerEvent::EmbyAuthorityTaken(reason) => {
-                // Authority-change notification: Emby remote has taken authority.
-                // The connection stays open — do NOT call restore_local_mode().
-                // Just flash the status so the user knows commands are temporarily rejected.
-                self.flash(reason, ToastSeverity::Warning);
-                Ok(false)
-            }
-            PlayerEvent::QueueDesynced(reason) => {
-                self.flash(reason, ToastSeverity::Neutral);
-                Ok(false)
-            }
-            // The announced-shutdown counterpart to the unannounced-loss
-            // modal raised from PlayerEvent::Stopped above (task 7.2): a
-            // local-daemon client prints one line and exits cleanly; a
-            // client of a genuinely remote daemon keeps today's behavior.
-            PlayerEvent::DaemonShutdownAnnounced => {
-                if self.is_local_daemon() {
-                    self.pending_exit_message =
-                        Some("mbv: the local daemon was stopped — exiting.".to_string());
-                    QUIT_REQUESTED.store(true, Ordering::Relaxed);
+            PlayerEvent::RemoteDisconnected(reason) => {
+                if self.handle_remote_disconnected(&reason) {
+                    PlayerEventFlow::RestartLoop
                 } else {
-                    self.restore_local_mode("Daemon disconnected — returned to local mode");
-                    self.refresh_after_stop();
+                    PlayerEventFlow::Proceed
                 }
-                Ok(false)
             }
-            PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
-                match result {
-                    mbv_core::ctrl::QueueLoadResult::Accepted => {
-                        self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
-                    }
-                    mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
-                        self.flash(
-                            format!("Queue load rejected: {reason}"),
-                            ToastSeverity::Error,
-                        );
-                    }
-                }
-                Ok(false)
+            event @ (PlayerEvent::EmbyAuthorityTaken(_) | PlayerEvent::QueueDesynced(_)) => {
+                self.handle_player_warning(event);
+                PlayerEventFlow::Proceed
             }
-            ev => Err(ev),
-        }
-    }
-
-    fn handle_player_event_progress(&mut self, ev: PlayerEvent) -> bool {
-        match ev {
+            PlayerEvent::DaemonShutdownAnnounced => {
+                self.handle_daemon_shutdown_announced();
+                PlayerEventFlow::Proceed
+            }
             PlayerEvent::AudiobookshelfProgress(ev) => {
-                // No client-side generation gate: the daemon already drops
-                // stale-generation updates before emitting, and the daemon's
-                // generation counter is unrelated to this client's own runtime
-                // generation, so comparing them would reject every live event.
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-                )]
-                let current_time_seconds =
-                    ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                self.reconcile_audiobookshelf_progress(
-                    &ev.library_item_id,
-                    &ev.episode_id,
-                    ev.position_ticks,
-                    current_time_seconds,
-                    ev.is_finished,
-                );
+                self.handle_audiobookshelf_progress(ev);
+                PlayerEventFlow::Proceed
             }
             PlayerEvent::AudiobookshelfBookProgress(ev) => {
-                self.reconcile_audiobookshelf_book_progress(
-                    &ev.library_item_id,
-                    ev.position_ticks,
-                    ev.is_finished,
+                self.handle_audiobookshelf_book_progress(ev);
+                PlayerEventFlow::Proceed
+            }
+        }
+    }
+
+    fn handle_playback_notice(&mut self, ev: PlayerEvent) {
+        if let PlayerEvent::PlaybackIntent(event) = ev {
+            self.flash(
+                playback_intent_message(&event.outcome).to_string(),
+                ToastSeverity::Neutral,
+            );
+        } else if let PlayerEvent::PipePlaybackStatus(status) = ev {
+            self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
+        }
+    }
+
+    fn handle_player_warning(&mut self, ev: PlayerEvent) {
+        if let PlayerEvent::EmbyAuthorityTaken(reason) = ev {
+            // Authority notification leaves the connection open; do not restore local mode.
+            self.flash(reason, ToastSeverity::Warning);
+        } else if let PlayerEvent::QueueDesynced(reason) = ev {
+            self.flash(reason, ToastSeverity::Neutral);
+        }
+    }
+
+    fn handle_paused_changed(&mut self, paused: bool) {
+        // Persist Feed position on pause (one write per pause event).
+        if paused {
+            if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
+                self.persist_feed_slot_position(slot_id);
+            }
+        }
+    }
+
+    fn handle_output_started(&mut self) {
+        // If a seek was pending for a Feed slot, persist the resulting position now.
+        if let Some(slot_id) = self.feed_seek_pending_slot.take() {
+            self.persist_feed_slot_position(slot_id);
+        }
+    }
+
+    fn handle_unified_queue_load_result(&mut self, result: mbv_core::ctrl::QueueLoadResult) {
+        match result {
+            mbv_core::ctrl::QueueLoadResult::Accepted => {
+                self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
+            }
+            mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
+                self.flash(
+                    format!("Queue load rejected: {reason}"),
+                    ToastSeverity::Error,
                 );
             }
-            _ => {}
         }
-        false
+    }
+
+    fn handle_intro_started(&mut self, intro_end_ticks: i64) {
+        // mbvd never auto-seeks on this event itself — it always
+        // reports the boundary neutrally, regardless of daemon-host
+        // config, so this client's own `always_skip_intro` is the
+        // only thing that decides whether to skip.
+        if self.config.lock().unwrap().always_skip_intro {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
+            let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+            self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+        }
+    }
+
+    fn handle_daemon_shutdown_announced(&mut self) {
+        // The local-daemon client exits cleanly; a remote-daemon client keeps today's fallback.
+        if self.is_local_daemon() {
+            self.pending_exit_message =
+                Some("mbv: the local daemon was stopped — exiting.".to_string());
+            QUIT_REQUESTED.store(true, Ordering::Relaxed);
+        } else {
+            self.restore_local_mode("Daemon disconnected — returned to local mode");
+            self.refresh_after_stop();
+        }
+    }
+
+    fn handle_audiobookshelf_progress(&mut self, ev: mbv_core::ctrl::AudiobookshelfProgressEvent) {
+        // No client-side generation gate: the daemon drops stale updates before emitting, and its
+        // generation counter is unrelated to this client's runtime generation.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
+        let current_time_seconds =
+            ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+        self.reconcile_audiobookshelf_progress(
+            &ev.library_item_id,
+            &ev.episode_id,
+            ev.position_ticks,
+            current_time_seconds,
+            ev.is_finished,
+        );
+    }
+
+    fn handle_audiobookshelf_book_progress(
+        &mut self,
+        ev: mbv_core::ctrl::AudiobookshelfBookProgressEvent,
+    ) {
+        self.reconcile_audiobookshelf_book_progress(
+            &ev.library_item_id,
+            ev.position_ticks,
+            ev.is_finished,
+        );
     }
 
     /// Handle a `PlayerEvent::Stopped` (extracted from `handle_player_event`).
