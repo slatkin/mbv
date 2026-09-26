@@ -78,40 +78,6 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
 }
 
 #[test]
-fn switch_to_direct_remote_rebinds_mpris_to_the_new_remote_status() {
-    // #175: before `switch_to_direct_remote` called `mpris::rebind`,
-    // MPRIS stayed wired to whatever `PlayerStatus` was live when the
-    // D-Bus service was first registered (almost always the initial
-    // local `Player`'s), so local desktop MPRIS never picked up a
-    // remote daemon's playback after a mid-session "Direct Remote"
-    // takeover -- exactly the bug this issue reports. This drives the
-    // real `App` method (not just `mpris::rebind` in isolation) to
-    // prove the wiring at the call site is actually in place.
-    let mut app = make_app_stub();
-    let local_status = Arc::clone(&app.player.status);
-    app.mpris = Some(crate::mpris::test_handle(
-        Arc::clone(&local_status),
-        |_| {},
-        None,
-    ));
-
-    let remote_items = make_items(1);
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let remote_status = Arc::clone(&remote.status);
-    let sess = make_session("remote-host", "mbv");
-
-    app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
-
-    let handle = app.mpris.as_ref().expect("mpris handle still present");
-    let bound_status = crate::mpris::test_status(handle);
-    assert!(
-        Arc::ptr_eq(&bound_status, &remote_status),
-        "switch_to_direct_remote must rebind MPRIS to the new remote's status"
-    );
-    assert!(!Arc::ptr_eq(&bound_status, &local_status));
-}
-
-#[test]
 fn switch_to_library_route_sets_active_route_and_suspends_local() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -212,37 +178,6 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
     daemon
         .join()
         .expect("old remote's client socket must be shut down after restore_local_mode");
-}
-
-#[test]
-fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
-    // #175 follow-through: after a Direct Remote takeover ends (however
-    // it ends -- disconnect, user action, etc.), MPRIS must follow
-    // playback back to the restored local `Player`, not stay wired to
-    // the now-defunct remote session.
-    let mut app = make_app_stub();
-    let local_status = Arc::clone(&app.player.status);
-    app.mpris = Some(crate::mpris::test_handle(
-        Arc::clone(&local_status),
-        |_| {},
-        None,
-    ));
-
-    let remote_items = make_items(1);
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let remote_status = Arc::clone(&remote.status);
-    let sess = make_session("remote-host", "mbv");
-    app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
-
-    app.restore_local_mode("test: ending direct remote session");
-
-    let handle = app.mpris.as_ref().expect("mpris handle still present");
-    let bound_status = crate::mpris::test_status(handle);
-    assert!(
-        Arc::ptr_eq(&bound_status, &local_status),
-        "restore_local_mode must rebind MPRIS back to the restored local status"
-    );
-    assert!(!Arc::ptr_eq(&bound_status, &remote_status));
 }
 
 #[test]

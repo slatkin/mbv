@@ -67,8 +67,7 @@ fn detached_socket_rx() -> mpsc::Receiver<mbv_core::audiobookshelf::socket::Sock
 /// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
 /// session bus from a thread with no shutdown path -- leaked into every test
 /// process that constructs a remote App, where process teardown races it
-/// (issue #757). Tests that exercise rebind inject `mpris::test_handle`
-/// themselves.
+/// (issue #757).
 #[cfg(not(test))]
 fn start_mpris(remote: &mbv_core::remote_player::RemotePlayer) -> crate::mpris::MprisHandle {
     let mpris_remote = remote.clone();

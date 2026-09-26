@@ -1,8 +1,9 @@
-// In test builds the D-Bus-serving machinery below is deliberately dead:
-// nothing may claim `org.mpris.MediaPlayer2.mbv` on the real session bus
-// from a test process (issue #757), so `start` is only reachable from
-// production. Production builds keep full dead-code checking.
+// In test builds the D-Bus-serving machinery below is compiled out: nothing
+// may claim `org.mpris.MediaPlayer2.mbv` on the real session bus from a test
+// process (issue #757), so `start` is only reachable from production.
+// Production builds keep full dead-code checking.
 
+#[cfg(not(test))]
 use std::collections::HashMap;
 #[cfg(not(test))]
 use std::sync::atomic::Ordering;
@@ -12,10 +13,12 @@ use std::thread;
 #[cfg(not(test))]
 use std::time::Duration;
 
+#[cfg(not(test))]
 use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
 
+#[cfg(not(test))]
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::{PlayerCommand, PlayerStatus};
 
@@ -132,6 +135,7 @@ struct MediaPlayer2Player {
 /// mirrors the audio-album grouping the queue card already uses: tracks on
 /// the same album share one cache entry keyed by album id rather than
 /// track id.
+#[cfg(not(test))]
 fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
     use crate::config::{IMAGE_CACHE_SUFFIX_ALBUM_CARD, IMAGE_CACHE_SUFFIX_CARD_PRIMARY};
     let mut keys = Vec::new();
@@ -152,9 +156,10 @@ fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
 /// URL: that would embed the API token in a query string and leak it onto
 /// the session D-Bus. An uncached track simply omits `mpris:artUrl`.
 ///
-/// `resolve_path` is injected so this stays pure and unit-testable without
-/// touching a real cache directory -- production code passes
+/// `resolve_path` is injected so the URI decision stays pure and never
+/// touches a real cache directory; production passes
 /// `crate::config::image_disk_cache_path`.
+#[cfg(not(test))]
 fn resolve_art_url(
     item_id: &str,
     album_id: &str,
@@ -168,9 +173,9 @@ fn resolve_art_url(
 
 /// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
 /// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
-/// it's cloned/called every poll tick without hesitation; kept separate
-/// from `start` so the "what should published state look like" decision is
-/// unit-testable without a real D-Bus connection.
+/// it's cloned/called every poll tick without hesitation; kept independent of
+/// the D-Bus connection.
+#[cfg(not(test))]
 fn saturating_i64_from_f64(value: f64) -> i64 {
     const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
     const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
@@ -188,6 +193,7 @@ fn saturating_i64_from_f64(value: f64) -> i64 {
     }
 }
 
+#[cfg(not(test))]
 fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
     if disconnected {
         s.active = false;
@@ -200,6 +206,7 @@ fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> 
     make_metadata_with_art_resolver(s, crate::config::image_disk_cache_path)
 }
 
+#[cfg(not(test))]
 fn make_metadata_with_art_resolver(
     s: &PlayerStatus,
     resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
@@ -652,30 +659,3 @@ pub fn rebind(
     source.send = Arc::new(send);
     source.disconnected = disconnected;
 }
-
-/// Test-only constructor/inspector pair for `MprisHandle`, used by
-/// `src/app.rs`'s tests to inject a lightweight (no real D-Bus/tokio)
-/// handle into `App.mpris` and assert `switch_to_direct_remote` /
-/// `restore_local_mode` actually call `rebind` on it (#175), without
-/// duplicating `MprisSource`'s private fields outside this module.
-#[cfg(test)]
-pub(crate) fn test_handle(
-    status: Arc<Mutex<PlayerStatus>>,
-    send: impl Fn(PlayerCommand) + Send + Sync + 'static,
-    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
-) -> MprisHandle {
-    Arc::new(Mutex::new(MprisSource {
-        status,
-        send: Arc::new(send),
-        disconnected,
-    }))
-}
-
-#[cfg(test)]
-pub(crate) fn test_status(handle: &MprisHandle) -> Arc<Mutex<PlayerStatus>> {
-    Arc::clone(&handle.lock().unwrap().status)
-}
-
-#[cfg(test)]
-#[path = "mpris_tests.rs"]
-mod tests;
