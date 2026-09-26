@@ -5,7 +5,6 @@ use super::{
     end_file_stop_report_context, ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence,
     IntroState, LoadState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
     QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
-    TICKS_PER_SECOND,
 };
 use crate::playback_queue::MpvUrlSource;
 use crate::player::{divergent_entry, prepare_source};
@@ -418,11 +417,7 @@ impl PlaybackRun {
         self.active_lifecycle.close(position_ticks);
         self.active_lifecycle = ActiveItemLifecycle::None;
         if let Some(mut prepared) = self.prepared_source.take() {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            prepared.close(position_ticks as f64 / TICKS_PER_SECOND as f64);
+            prepared.close(crate::api::ticks_to_seconds(position_ticks));
         }
     }
 

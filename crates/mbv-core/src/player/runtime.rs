@@ -1,6 +1,6 @@
 use super::{
     fs, mpv_err_str, Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus,
-    SessionReporter, TICKS_PER_SECOND,
+    SessionReporter,
 };
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -467,7 +467,7 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
         clippy::cast_precision_loss,
         reason = "player volume (i64) → f64 for the mpv cube-root volume curve; the curve has no integer path (approved, issue #804)"
     )]
-    let raw = super::saturating_i64_from_f64((10.0 * (v as f64).sqrt()).round());
+    let raw = crate::api::i64_ticks_saturating((10.0 * (v as f64).sqrt()).round());
     #[expect(
         clippy::cast_precision_loss,
         reason = "computed volume (i64) → f64 for the mpv volume property; mpv stores volume as a float (approved, issue #804)"
@@ -526,11 +526,7 @@ pub(super) fn handle_intro(
     if intro_state.is_pending() && ticks >= start {
         intro_state.shown();
         if ticks < end {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "intro end ticks → mpv time-pos seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            let end_secs = end as f64 / TICKS_PER_SECOND as f64;
+            let end_secs = crate::api::ticks_to_seconds(end);
             if always_skip {
                 let _ = mpv.set_property("time-pos", end_secs);
             } else {

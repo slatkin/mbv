@@ -4,11 +4,7 @@ use crate::playback_queue::AudiobookshelfItem;
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn seconds_from_ticks(ticks: i64) -> f64 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let seconds = ticks.max(0) as f64 / crate::api::TICKS_PER_SECOND as f64;
+    let seconds = crate::api::ticks_to_seconds(ticks.max(0));
     (seconds * 1_000_000.0).round() / 1_000_000.0
 }
 
@@ -220,12 +216,8 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
 
 impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     fn drop(&mut self) {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "current position seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        self.close(super::saturating_i64_from_f64(
-            (self.current_position * crate::api::TICKS_PER_SECOND as f64).round(),
+        self.close(crate::api::i64_ticks_saturating(
+            (self.current_position * crate::api::TICKS_PER_SECOND_F64).round(),
         ));
     }
 }

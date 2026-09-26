@@ -1,6 +1,6 @@
 use super::{
-    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos, saturating_i64_from_f64,
-    AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
+    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos, AudiobookshelfBookPlaybackLifecycle,
+    AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
 };
 use crate::audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
@@ -154,12 +154,8 @@ impl PreparedSource {
 
     pub(super) fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "mpv current time seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            lifecycle.close(saturating_i64_from_f64(
-                current_time.max(0.0) * crate::api::TICKS_PER_SECOND as f64,
+            lifecycle.close(crate::api::i64_ticks_saturating(
+                current_time.max(0.0) * crate::api::TICKS_PER_SECOND_F64,
             ));
         }
         self.lifecycle = None;

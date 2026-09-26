@@ -87,7 +87,7 @@ pub(in crate::player) fn volume_decision(requested: i64, maximum: i64) -> (i64, 
         clippy::cast_precision_loss,
         reason = "player volume (i64) → f64 for the mpv cube-root volume curve; the curve has no integer path (approved, issue #804)"
     )]
-    let raw = super::super::saturating_i64_from_f64((10.0 * (volume as f64).sqrt()).round());
+    let raw = crate::api::i64_ticks_saturating((10.0 * (volume as f64).sqrt()).round());
     (volume, raw)
 }
 

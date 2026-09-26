@@ -50,16 +50,12 @@ impl AudiobookshelfQueueItem {
     }
 
     #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "Audiobookshelf episode position ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub fn resume_seconds(&self) -> f64 {
         if crate::api::should_resume(
             self.position_ticks,
             duration_ticks_as_i64(self.duration_ticks.unwrap_or(0)),
         ) {
-            self.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+            crate::api::ticks_to_seconds(self.position_ticks)
         } else {
             0.0
         }
@@ -104,16 +100,12 @@ impl AudiobookshelfBookQueueItem {
     }
 
     #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "Audiobookshelf book position ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub fn resume_seconds(&self) -> f64 {
         if crate::api::should_resume(
             self.position_ticks,
             duration_ticks_as_i64(self.duration_ticks.unwrap_or(0)),
         ) {
-            self.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+            crate::api::ticks_to_seconds(self.position_ticks)
         } else {
             0.0
         }

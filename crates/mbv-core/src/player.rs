@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use crate::api::{seconds_to_ticks, ticks_to_seconds, EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 #[cfg(test)]
 use crate::playback_queue::QueueMutationResult;
@@ -39,10 +39,6 @@ fn mpv_title_opt(title: &str) -> String {
 /// Reused by the daemon's slot-jump dispatch to re-seek a re-visited entry —
 /// `loadfile`'s baked `start=` only applies the first time an entry loads, so
 /// a later `playlist-pos` jump back to it needs this recomputed explicitly.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "feed/Audiobookshelf position ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-)]
 pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
     match item {
         QueueItem::Emby(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
@@ -50,7 +46,7 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
         QueueItem::Feed(entry) => {
             let runtime = i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             if crate::api::should_resume(entry.position_ticks, runtime) {
-                entry.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+                ticks_to_seconds(entry.position_ticks)
             } else {
                 0.0
             }
@@ -63,13 +59,9 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
 /// `resume_start_pos`, in ticks rather than seconds, gated on being positive.
 /// `None` when the item should not resume.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "resume seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
-)]
 pub fn resume_ticks_for_item(item: &QueueItem) -> Option<i64> {
     let seconds = resume_start_pos(item);
-    (seconds > 0.0).then_some(saturating_i64_from_f64(seconds * TICKS_PER_SECOND as f64))
+    (seconds > 0.0).then_some(seconds_to_ticks(seconds))
 }
 
 /// The resume position, in ticks, for a slot-jump target — evaluated against
@@ -79,37 +71,6 @@ pub fn resume_ticks_for_item(item: &QueueItem) -> Option<i64> {
 #[must_use]
 pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
     resume_ticks_for_item(&queue.slot(slot_id)?.item)
-}
-
-fn saturating_i64_from_f64(value: f64) -> i64 {
-    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
-    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
-
-    if value.is_nan() {
-        0
-    } else if value >= I64_MAX_EXCLUSIVE_AS_F64 {
-        i64::MAX
-    } else if value <= I64_MIN_AS_F64 {
-        i64::MIN
-    } else {
-        format!("{:.0}", value.trunc())
-            .parse()
-            .expect("truncated bounded float fits i64")
-    }
-}
-
-#[cfg(test)]
-mod float_tick_conversion_tests {
-    use super::saturating_i64_from_f64;
-
-    #[test]
-    fn truncates_and_saturates_float_ticks() {
-        assert_eq!(saturating_i64_from_f64(12.9), 12);
-        assert_eq!(saturating_i64_from_f64(-12.9), -12);
-        assert_eq!(saturating_i64_from_f64(f64::INFINITY), i64::MAX);
-        assert_eq!(saturating_i64_from_f64(f64::NEG_INFINITY), i64::MIN);
-        assert_eq!(saturating_i64_from_f64(f64::NAN), 0);
-    }
 }
 
 fn mpv_load_opts(item: &QueueItem) -> String {
@@ -230,14 +191,8 @@ fn divergent_entry(pos: i64, current_idx: usize, queue_len: usize) -> Option<usi
 }
 
 /// mpv's position inside the entry it is playing, in ticks.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "mpv time-pos seconds → ticks through f64; mpv exposes the position as f64 (approved, issue #804)"
-)]
 fn mpv_position_ticks(mpv: &Mpv) -> i64 {
-    saturating_i64_from_f64(
-        mpv.get_property::<f64>("time-pos").unwrap_or(0.0) * TICKS_PER_SECOND as f64,
-    )
+    seconds_to_ticks(mpv.get_property::<f64>("time-pos").unwrap_or(0.0))
 }
 
 /// Verify — and if needed reassert — the playlist projection the load

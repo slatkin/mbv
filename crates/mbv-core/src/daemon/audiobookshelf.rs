@@ -6,27 +6,6 @@ use crate::playback_queue::PlaybackQueue;
 use crate::player::Player;
 use std::sync::mpsc;
 
-fn ticks_from_seconds(seconds: f64) -> i64 {
-    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
-    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let ticks = seconds * crate::api::TICKS_PER_SECOND as f64;
-    if ticks.is_nan() {
-        0
-    } else if ticks >= I64_MAX_EXCLUSIVE_AS_F64 {
-        i64::MAX
-    } else if ticks <= I64_MIN_AS_F64 {
-        i64::MIN
-    } else {
-        format!("{:.0}", ticks.trunc())
-            .parse()
-            .expect("truncated bounded float fits i64")
-    }
-}
-
 /// Install (or clear) the daemon player's Audiobookshelf context from the
 /// owner runtime, wiring the player's acknowledged-progress sender into the
 /// daemon event loop. Mirrors the bare-mode install in the TUI app.
@@ -101,7 +80,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = ticks_from_seconds(update.current_time_seconds);
+    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
@@ -150,7 +129,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = ticks_from_seconds(update.current_time_seconds);
+    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
