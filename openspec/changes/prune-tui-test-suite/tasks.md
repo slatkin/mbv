@@ -27,7 +27,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 5. Components, part B (all remaining `app::components::*`, 339 → ≤ 120)
 
-- [ ] 5.1 Apply the same rules to `music_content`, `tv_content`, `podcast_content`, `media_list`, `help`, `sessions`, `search_sidebar`, `settings`, `mouse`, playback panels, `confirm` and the rest. Content owners that share a canonical list keep list behaviour tests only in `list`/`media_list` (break everywhere or nowhere). Verify: `app::components::` total ≤ 230; group gate passes; commit.
+- [x] 5.1 Apply the same rules to `music_content`, `tv_content`, `podcast_content`, `media_list`, `help`, `sessions`, `search_sidebar`, `settings`, `mouse`, playback panels, `confirm` and the rest. Content owners that share a canonical list keep list behaviour tests only in `list`/`media_list` (break everywhere or nowhere). Verify: `app::components::` total ≤ 230; group gate passes; commit.
 
 ## 6. Dispatch and state (`app::dispatch::*` 208 → ≤ 110, `app::state::*` 110 → ≤ 60)
 
