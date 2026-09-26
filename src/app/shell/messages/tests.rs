@@ -1,9 +1,4 @@
-use crate::app::components::{Msg, ShellRequest};
-use crate::app::render::make_movie_app;
-use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::{PanelFocus, PanelMode};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
+use crate::app::components::ShellRequest;
 
 #[test]
 fn quit_request_sets_shell_quit_and_unknown_navigation_is_forwarded() {

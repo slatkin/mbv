@@ -1,9 +1,8 @@
 use super::*;
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
-    AudiobookshelfStartupReceiver,
 };
-use crate::app::images::{series_image_cache_key, CachedImage};
+use crate::app::images::series_image_cache_key;
 use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use crate::app::render::make_movie_app;
 use crate::app::state::types::events::LibEvent;

@@ -2,9 +2,8 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    arbitrate_key, fold_mouse_messages, init_terminal, install_signal_handlers, restore_terminal,
-    service_startup, start_quit_watchdog, IdleFeed, Model, Msg, MusicTrackFocusRequest, PanelFocus,
-    PollStrategy, RouterOutcome, QUIT_REQUESTED,
+    init_terminal, install_signal_handlers, restore_terminal, service_startup, start_quit_watchdog,
+    IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED,
 };
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
