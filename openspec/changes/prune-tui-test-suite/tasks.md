@@ -35,7 +35,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 7. Shell, infra, input and the rest of the binary (145 + ~158 → ≤ 140)
 
-- [ ] 7.1 Apply Decisions 1 and 3 to `app::shell::*` (≤ 70) and `app::infra::*`, `app::input::*`, `mpris`, `tray`, `local_daemon`, `single_instance`, `config` (≤ 70 combined). `app::input` keeps one test per precedence rule in `router.rs`/`key_policy.rs` and per chord behaviour in `resolver.rs`. Verify: counts within budget; group gate passes; commit.
+- [x] 7.1 Apply Decisions 1 and 3 to `app::shell::*` (≤ 70) and `app::infra::*`, `app::input::*`, `mpris`, `tray`, `local_daemon`, `single_instance`, `config` (≤ 70 combined). `app::input` keeps one test per precedence rule in `router.rs`/`key_policy.rs` and per chord behaviour in `resolver.rs`. Verify: counts within budget; group gate passes; commit.
 
 ## 8. Cleanup and docs
 
