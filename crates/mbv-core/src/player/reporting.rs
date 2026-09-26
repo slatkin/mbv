@@ -216,7 +216,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
 
 impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     fn drop(&mut self) {
-        self.close(crate::api::i64_ticks_saturating(
+        self.close(crate::api::saturating_i64_from_f64(
             (self.current_position * crate::api::TICKS_PER_SECOND_F64).round(),
         ));
     }

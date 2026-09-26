@@ -3,7 +3,7 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::api::{seconds_to_ticks, EmbyItem};
+use mbv_core::api::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use mbv_core::player::PlayerCommand;
 use std::time::{Duration, Instant};
 
@@ -20,17 +20,14 @@ impl App {
             if runtime_s == 0 {
                 return;
             }
-            let ticks = seconds_to_ticks(
-                fraction
-                    * mbv_core::api::ticks_to_seconds(runtime_s * mbv_core::api::TICKS_PER_SECOND),
-            );
+            let runtime_s_f64 = i64_to_f64_saturating(runtime_s);
+            let ticks = seconds_to_ticks(fraction * runtime_s_f64);
             let id = conn_id.clone();
             #[expect(
                 clippy::cast_possible_truncation,
                 reason = "fractional remote seek is truncated to integer seconds"
             )]
-            let remote_pos_s =
-                (fraction * f64::from(u32::try_from(runtime_s).unwrap_or(u32::MAX))) as i64;
+            let remote_pos_s = (fraction * runtime_s_f64) as i64;
             self.remote_pos_s = remote_pos_s;
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);

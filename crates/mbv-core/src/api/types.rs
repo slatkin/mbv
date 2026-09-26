@@ -16,33 +16,32 @@ pub fn ticks_to_seconds(ticks: i64) -> f64 {
     ticks as f64 / TICKS_PER_SECOND_F64
 }
 
-/// Convert an f64 tick value to i64, mapping NaN to zero and saturating at i64 bounds.
+/// Convert an f64 to i64, mapping NaN to zero and saturating at i64 bounds.
 ///
-/// # Panics
-///
-/// Never panics: the finite value is truncated and range-checked before parsing as `i64`.
+/// Rust's `as` cast from float to int has been saturating (and NaN-mapping-to-zero)
+/// since 1.45, so this is exactly that cast, exposed under its own name so call
+/// sites document intent instead of re-deriving the cast's behavior.
 #[must_use]
-pub fn i64_ticks_saturating(value: f64) -> i64 {
-    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
-    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
-
-    if value.is_nan() {
-        0
-    } else if value >= I64_MAX_EXCLUSIVE_AS_F64 {
-        i64::MAX
-    } else if value <= I64_MIN_AS_F64 {
-        i64::MIN
-    } else {
-        format!("{:.0}", value.trunc())
-            .parse()
-            .expect("truncated bounded float fits i64")
-    }
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the `as` cast saturates/truncates by design; that is this function's contract"
+)]
+pub fn saturating_i64_from_f64(value: f64) -> i64 {
+    value as i64
 }
 
 /// Convert seconds to ticks, truncating fractional ticks and saturating at i64 bounds.
 #[must_use]
 pub fn seconds_to_ticks(seconds: f64) -> i64 {
-    i64_ticks_saturating(seconds * TICKS_PER_SECOND_F64)
+    saturating_i64_from_f64(seconds * TICKS_PER_SECOND_F64)
+}
+
+/// Convert a non-negative `i64` magnitude (a volume, a seconds count, a pixel
+/// dimension) to `f64`, saturating at `u32::MAX` for values that don't fit.
+/// mbv's magnitudes here never approach that bound, so this is effectively exact.
+#[must_use]
+pub fn i64_to_f64_saturating(value: i64) -> f64 {
+    f64::from(u32::try_from(value).unwrap_or(u32::MAX))
 }
 
 /// Inclusive lower-bound percentage of known runtime at which a saved
@@ -673,10 +672,10 @@ mod tests {
         assert_eq!(seconds_to_ticks(f64::NAN), 0);
         assert_eq!(seconds_to_ticks(f64::MAX), i64::MAX);
         assert_eq!(seconds_to_ticks(-f64::MAX), i64::MIN);
-        assert_eq!(i64_ticks_saturating(f64::INFINITY), i64::MAX);
-        assert_eq!(i64_ticks_saturating(f64::NEG_INFINITY), i64::MIN);
-        assert_eq!(i64_ticks_saturating(f64::MAX), i64::MAX);
-        assert_eq!(i64_ticks_saturating(-f64::MAX), i64::MIN);
+        assert_eq!(saturating_i64_from_f64(f64::INFINITY), i64::MAX);
+        assert_eq!(saturating_i64_from_f64(f64::NEG_INFINITY), i64::MIN);
+        assert_eq!(saturating_i64_from_f64(f64::MAX), i64::MAX);
+        assert_eq!(saturating_i64_from_f64(-f64::MAX), i64::MIN);
     }
 
     #[test]

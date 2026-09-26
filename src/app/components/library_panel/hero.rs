@@ -416,10 +416,16 @@ fn abs_book_meta_rows(
         if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
             let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
             let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
-            let percent = crate::app::render::components::math::int_ratio(numerator, denominator)
-                .floor()
-                .clamp(1.0, 99.0);
-            let pct = format!("{percent:.0}").parse::<u8>().unwrap_or(u8::MAX);
+            let percent = (mbv_core::api::ticks_to_seconds(numerator)
+                / mbv_core::api::ticks_to_seconds(denominator))
+            .floor()
+            .clamp(1.0, 99.0);
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "percent is clamped to [1.0, 99.0] just above; the cast is exact"
+            )]
+            let pct = percent as u8;
             progress_row = Some(rows.len());
             rows.push(format!("{pct}%"));
         }

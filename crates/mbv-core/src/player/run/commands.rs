@@ -135,8 +135,7 @@ impl PlaybackRun {
             PlayerCommand::SetVolume(volume) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
                 let (volume, raw) = volume_decision(volume, vol_max);
-                let _ =
-                    mpv.set_property("volume", f64::from(u32::try_from(raw).unwrap_or(u32::MAX)));
+                let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
                 self.status.lock().unwrap().volume = volume;
                 let _ = mpv.command("show-text", &[&format!("Volume: {volume}%"), "1500"]);
             }

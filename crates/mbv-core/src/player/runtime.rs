@@ -463,10 +463,10 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
-    let raw = crate::api::i64_ticks_saturating(
-        (10.0 * f64::from(u32::try_from(v).unwrap_or(u32::MAX)).sqrt()).round(),
+    let raw = crate::api::saturating_i64_from_f64(
+        (10.0 * crate::api::i64_to_f64_saturating(v).sqrt()).round(),
     );
-    let _ = mpv.set_property("volume", f64::from(u32::try_from(raw).unwrap_or(u32::MAX)));
+    let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
     st.volume = v;
 }
 

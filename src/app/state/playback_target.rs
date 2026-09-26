@@ -164,12 +164,9 @@ impl App {
                 } else {
                     self.remote_pos_at.elapsed().as_secs_f64()
                 };
-                let pos_s = (mbv_core::api::ticks_to_seconds(
-                    self.remote_pos_s * mbv_core::api::TICKS_PER_SECOND,
-                ) + elapsed_s)
-                    .min(mbv_core::api::ticks_to_seconds(
-                        remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
-                    ));
+                let remote_pos_s = mbv_core::api::i64_to_f64_saturating(self.remote_pos_s);
+                let runtime_s = mbv_core::api::i64_to_f64_saturating(remote.runtime_s);
+                let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
                 mbv_core::api::seconds_to_ticks(pos_s)
             };
             crate::app::PlaybackState {

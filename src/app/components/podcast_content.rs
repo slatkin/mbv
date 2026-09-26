@@ -7,7 +7,7 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
-use mbv_core::api::{i64_ticks_saturating, ticks_to_seconds, TICKS_PER_SECOND_F64};
+use mbv_core::api::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
 use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
@@ -483,7 +483,7 @@ impl PodcastContent {
             author: show.and_then(|show| show.author.clone()),
             description: episode.description.clone(),
             duration_ticks: episode.duration_seconds.map(|seconds| {
-                let ticks = i64_ticks_saturating((seconds * TICKS_PER_SECOND_F64).trunc());
+                let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).trunc());
                 u64::try_from(ticks).unwrap_or(0)
             }),
             position_ticks: 0,

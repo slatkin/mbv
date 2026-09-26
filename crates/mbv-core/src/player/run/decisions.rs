@@ -83,8 +83,8 @@ pub(in crate::player) fn seek_decision(seconds: f64, absolute: bool) -> (&'stati
 
 pub(in crate::player) fn volume_decision(requested: i64, maximum: i64) -> (i64, i64) {
     let volume = requested.clamp(0, maximum);
-    let raw = crate::api::i64_ticks_saturating(
-        (10.0 * f64::from(u32::try_from(volume).unwrap_or(u32::MAX)).sqrt()).round(),
+    let raw = crate::api::saturating_i64_from_f64(
+        (10.0 * crate::api::i64_to_f64_saturating(volume).sqrt()).round(),
     );
     (volume, raw)
 }

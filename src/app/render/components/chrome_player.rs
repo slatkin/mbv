@@ -177,7 +177,8 @@ fn render_seekbar(
         return;
     }
     let ratio = if runtime > 0 {
-        crate::app::render::components::math::int_ratio(position, runtime).clamp(0.0, 1.0)
+        (mbv_core::api::ticks_to_seconds(position) / mbv_core::api::ticks_to_seconds(runtime))
+            .clamp(0.0, 1.0)
     } else {
         0.0
     };
