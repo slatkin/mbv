@@ -19,7 +19,7 @@
 
 ## 4. Full verification
 
-- [ ] 4.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and confirm it exits 0. Run `cargo fmt --all -- --check` and confirm no diff. Run `cargo nextest run --workspace` and confirm all tests pass.
+- [x] 4.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and confirm it exits 0. Run `cargo fmt --all -- --check` and confirm no diff. Run `cargo nextest run --workspace` and confirm all tests pass.
 
 ## 5. Remaining pedantic findings (scope added 2026-09-26 by user decision)
 
