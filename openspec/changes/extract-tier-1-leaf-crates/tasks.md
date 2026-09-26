@@ -30,11 +30,11 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 0. Groundwork
 
-- [ ] 0.1 Confirm no other in-flight change is mid-edit in `crates/mbv-core/src/`:
+- [x] 0.1 Confirm no other in-flight change is mid-edit in `crates/mbv-core/src/`:
   run `openspec list` and check `decompose-app-god-type` and
   `prune-tui-test-suite` are still confined to `src/app/`. Verify: neither
   change's `tasks.md` lists a `crates/mbv-core/` path with an unchecked box.
-- [ ] 0.2 Move `fuzzy-matcher = "0.3"` from `[dependencies]` in the root
+- [x] 0.2 Move `fuzzy-matcher = "0.3"` from `[dependencies]` in the root
   `Cargo.toml` to `[workspace.dependencies]`, leaving `fuzzy-matcher.workspace =
   true` in the `mbv` package. Verify: `cargo check -p mbv` succeeds.
 
