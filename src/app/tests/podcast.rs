@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn audiobookshelf_app() -> App {
     let mut app = make_app_stub();
-    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
@@ -14,7 +14,7 @@ pub(crate) fn audiobookshelf_app() -> App {
         0,
         20,
         1,
-        vec![mbv_core::audiobookshelf::AudiobookshelfShow {
+        vec![mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: "show-a".into(),
             title: "Show A".into(),
             author: None,
@@ -24,7 +24,7 @@ pub(crate) fn audiobookshelf_app() -> App {
     );
     state.detail_cache.insert(
         "show-a".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),

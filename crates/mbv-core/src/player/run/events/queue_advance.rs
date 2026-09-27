@@ -1,4 +1,4 @@
-use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
+use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
     advance_decision, is_near_end, mpv_end_file_reason, mpv_position_ticks, retry_mark_played,

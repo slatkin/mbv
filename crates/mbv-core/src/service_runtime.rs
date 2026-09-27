@@ -1,5 +1,5 @@
 use crate::api::EmbyClient;
-use crate::audiobookshelf::AudiobookshelfUser;
+use mbv_audiobookshelf::AudiobookshelfUser;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-only availability of a configured Remote Service.

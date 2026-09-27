@@ -42,7 +42,7 @@ impl App {
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
             let (_dummy_abs_tx, dummy_abs_rx) =
-                mpsc::channel::<mbv_core::audiobookshelf::socket::SocketEvent>();
+                mpsc::channel::<mbv_audiobookshelf::socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -162,7 +162,7 @@ impl App {
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
             let (_dummy_abs_tx, dummy_abs_rx) =
-                mpsc::channel::<mbv_core::audiobookshelf::socket::SocketEvent>();
+                mpsc::channel::<mbv_audiobookshelf::socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,

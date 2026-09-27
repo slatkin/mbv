@@ -2,11 +2,11 @@ use super::{
     mpv_title_opt, mpv_url_for_queue_item, resume_start_pos, AudiobookshelfBookPlaybackLifecycle,
     AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
 };
-use crate::audiobookshelf::{
+use crate::service_runtime::SetupGeneration;
+use mbv_audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
-use crate::service_runtime::SetupGeneration;
 use mbv_config::AudiobookshelfSetup;
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
 use mbv_queue::{AudiobookshelfItem, QueueItem};

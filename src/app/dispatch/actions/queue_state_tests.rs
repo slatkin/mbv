@@ -248,7 +248,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
                     setup: mbv_config::AudiobookshelfSetup::new(
                         "https://replacement-books.example",
                     ),
-                    user: mbv_core::audiobookshelf::AudiobookshelfUser {
+                    user: mbv_audiobookshelf::AudiobookshelfUser {
                         id: "reader-id".into(),
                         username: "reader".into(),
                     },

@@ -1,6 +1,5 @@
 pub mod api;
 pub mod applog;
-pub mod audiobookshelf;
 pub mod cast;
 pub mod daemon;
 pub mod player;

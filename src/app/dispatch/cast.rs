@@ -11,8 +11,8 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
 use crate::app::App;
+use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_core::api::EmbyClient;
-use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::cast::client::CastMediaItem;
 use mbv_core::cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
 use mbv_emby_model::EmbyItem;

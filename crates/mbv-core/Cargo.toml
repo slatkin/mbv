@@ -24,6 +24,7 @@ mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true

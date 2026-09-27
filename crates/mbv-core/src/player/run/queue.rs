@@ -1,4 +1,4 @@
-use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
+use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::active_item_state;
 use super::{

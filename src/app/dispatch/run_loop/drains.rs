@@ -91,7 +91,7 @@ impl App {
             Err(error)
                 if matches!(
                     error.class,
-                    mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected
+                    mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected
                 ) =>
             {
                 self.audiobookshelf_runtime.complete(
@@ -107,14 +107,14 @@ impl App {
     fn apply_audiobookshelf_catalog(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
-        libraries: Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+        libraries: Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
         progress: &std::collections::HashMap<
             (String, String),
-            mbv_core::audiobookshelf::AudiobookshelfProgress,
+            mbv_audiobookshelf::AudiobookshelfProgress,
         >,
         book_progress: &std::collections::HashMap<
             String,
-            mbv_core::audiobookshelf::AudiobookshelfBookProgress,
+            mbv_audiobookshelf::AudiobookshelfBookProgress,
         >,
     ) {
         // This completion is the live Audiobookshelf catalog boundary for stable tab restoration.
@@ -146,11 +146,11 @@ impl App {
         &mut self,
         progress: &std::collections::HashMap<
             (String, String),
-            mbv_core::audiobookshelf::AudiobookshelfProgress,
+            mbv_audiobookshelf::AudiobookshelfProgress,
         >,
         book_progress: &std::collections::HashMap<
             String,
-            mbv_core::audiobookshelf::AudiobookshelfBookProgress,
+            mbv_audiobookshelf::AudiobookshelfBookProgress,
         >,
     ) {
         for index in 0..self.audiobookshelf_browse.len() {

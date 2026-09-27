@@ -4,8 +4,8 @@ use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::tests::make_app_stub;
 use mbv_queue::AudiobookshelfBookQueueItem;
 
-fn library() -> mbv_core::audiobookshelf::AudiobookshelfLibrary {
-    mbv_core::audiobookshelf::AudiobookshelfLibrary {
+fn library() -> mbv_audiobookshelf::AudiobookshelfLibrary {
+    mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "lib".into(),
         name: "Books".into(),
         media_type: "book".into(),
@@ -42,13 +42,13 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
         "book-1".into(),
         (
             vec![
-                mbv_core::audiobookshelf::AudiobookshelfChapter {
+                mbv_audiobookshelf::AudiobookshelfChapter {
                     id: 0,
                     start: 0.0,
                     end: 60.0,
                     title: "Intro".into(),
                 },
-                mbv_core::audiobookshelf::AudiobookshelfChapter {
+                mbv_audiobookshelf::AudiobookshelfChapter {
                     id: 1,
                     start: 120.0,
                     end: 300.0,

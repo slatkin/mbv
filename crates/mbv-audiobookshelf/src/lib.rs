@@ -144,7 +144,8 @@ impl From<String> for AudiobookshelfError {
 }
 
 impl AudiobookshelfError {
-    pub(crate) const fn from_class(class: AudiobookshelfFailureClass) -> Self {
+    #[must_use]
+    pub const fn from_class(class: AudiobookshelfFailureClass) -> Self {
         Self::new(class)
     }
 

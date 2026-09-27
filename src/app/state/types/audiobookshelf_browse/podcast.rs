@@ -2,7 +2,7 @@
 //! cache with its lazy fan-out bookkeeping, and the flat episode views.
 
 use crate::app::render::{feed_age_group, FeedAgeGroup};
-use mbv_core::audiobookshelf::{
+use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShow,
 };

@@ -66,14 +66,15 @@ impl App {
         let generation = self.audiobookshelf_runtime.generation();
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
-            let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
-                .and_then(|client| {
+            let result = mbv_audiobookshelf::AudiobookshelfClient::new(&setup.server_url).and_then(
+                |client| {
                     client.podcast_detail_bounded(
                         &key,
                         &library_item_id,
-                        mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
                     )
-                });
+                },
+            );
             let _ = tx.send(
                 crate::app::state::types::events::LibEvent::AudiobookshelfDetailFetched {
                     generation,
@@ -116,14 +117,15 @@ impl App {
         let generation = self.audiobookshelf_runtime.generation();
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
-            let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
-                .and_then(|client| {
+            let result = mbv_audiobookshelf::AudiobookshelfClient::new(&setup.server_url).and_then(
+                |client| {
                     client.book_detail_bounded(
                         &key,
                         &library_item_id,
-                        mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
                     )
-                });
+                },
+            );
             let _ = tx.send(
                 crate::app::state::types::events::LibEvent::AudiobookshelfBookDetailFetched {
                     generation,

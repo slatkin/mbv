@@ -3,11 +3,11 @@ use mbv_net::mock_http::MockHttp;
 fn audiobookshelf_response(
     status: u16,
     body: &'static str,
-) -> (MockHttp, crate::audiobookshelf::AudiobookshelfClient) {
+) -> (MockHttp, crate::AudiobookshelfClient) {
     let http = MockHttp::new();
     let agent = http.agent();
     http.respond(status, body);
-    let client = crate::audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1")
+    let client = crate::AudiobookshelfClient::new("http://127.0.0.1:1")
         .unwrap()
         .with_test_agent(agent);
     (http, client)
@@ -15,7 +15,7 @@ fn audiobookshelf_response(
 
 #[test]
 fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
-    use crate::audiobookshelf::AudiobookshelfFailureClass as Class;
+    use crate::AudiobookshelfFailureClass as Class;
 
     let cases = [
         (
@@ -34,7 +34,7 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
         match expected_class {
             None => assert_eq!(
                 result.unwrap(),
-                crate::audiobookshelf::AudiobookshelfUser {
+                crate::AudiobookshelfUser {
                     id: "user-1".into(),
                     username: "reader".into(),
                 }
@@ -59,12 +59,12 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
 
 #[test]
 fn dead_audiobookshelf_endpoint_is_connectivity() {
-    use crate::audiobookshelf::AudiobookshelfFailureClass as Class;
+    use crate::AudiobookshelfFailureClass as Class;
 
     let http = MockHttp::new();
     let agent = http.agent();
     http.fail(std::io::ErrorKind::ConnectionRefused);
-    let client = crate::audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1")
+    let client = crate::AudiobookshelfClient::new("http://127.0.0.1:1")
         .unwrap()
         .with_test_agent(agent);
     assert_eq!(

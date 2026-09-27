@@ -93,7 +93,7 @@ impl SessionProgressUpdate for AudiobookshelfBookProgressUpdate {
 /// never be matched against (or emit progress for) an episode.
 pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
     pub(crate) generation: crate::service_runtime::SetupGeneration,
-    client: crate::audiobookshelf::AudiobookshelfClient,
+    client: mbv_audiobookshelf::AudiobookshelfClient,
     credential: String,
     pub(crate) session_id: String,
     library_item_id: String,
@@ -101,7 +101,7 @@ pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
     progress_sender: Option<std::sync::mpsc::Sender<U>>,
     pub(crate) current_position: f64,
     pub(crate) duration: f64,
-    pub(crate) last_acknowledgement: Option<crate::audiobookshelf::AudiobookshelfPlaybackProgress>,
+    pub(crate) last_acknowledgement: Option<mbv_audiobookshelf::AudiobookshelfPlaybackProgress>,
     listening_time: ListeningTime,
     in_flight: bool,
     last_sync: std::time::Instant,
@@ -111,7 +111,7 @@ pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
 impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
     pub(crate) fn new(
         generation: crate::service_runtime::SetupGeneration,
-        client: crate::audiobookshelf::AudiobookshelfClient,
+        client: mbv_audiobookshelf::AudiobookshelfClient,
         credential: String,
         session_id: String,
         library_item_id: String,
@@ -158,7 +158,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
             return;
         }
         self.current_position = seconds_from_ticks(position_ticks);
-        let progress = crate::audiobookshelf::AudiobookshelfPlaybackProgress {
+        let progress = mbv_audiobookshelf::AudiobookshelfPlaybackProgress {
             current_time: self.current_position,
             time_listened: self.listening_time.take(),
             duration: self.duration,
@@ -170,7 +170,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
             &self.credential,
             &self.session_id,
             progress,
-            crate::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
         );
         self.in_flight = false;
         self.last_sync = now;
@@ -200,7 +200,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
         let now = std::time::Instant::now();
         self.observe(now, false);
         self.sync_final(position_ticks, now);
-        let progress = crate::audiobookshelf::AudiobookshelfPlaybackProgress {
+        let progress = mbv_audiobookshelf::AudiobookshelfPlaybackProgress {
             current_time: seconds_from_ticks(position_ticks),
             time_listened: 0.0,
             duration: self.duration,
@@ -209,7 +209,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
             &self.credential,
             &self.session_id,
             progress,
-            crate::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
         );
     }
 }
@@ -380,7 +380,7 @@ mod reporting_tests {
     fn episode_lifecycle(position: f64, duration: f64) -> super::AudiobookshelfPlaybackLifecycle {
         super::AudiobookshelfPlaybackLifecycle::new(
             crate::service_runtime::SetupGeneration::new(4),
-            crate::audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1").unwrap(),
+            mbv_audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1").unwrap(),
             "secret".into(),
             "session".into(),
             "library".into(),

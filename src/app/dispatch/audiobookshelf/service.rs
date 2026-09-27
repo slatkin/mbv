@@ -99,8 +99,8 @@ impl App {
                 }
                 let user = candidate.user.clone();
                 let setup = candidate.setup.clone();
-                let result = mbv_core::audiobookshelf::commit_audiobookshelf_candidate(
-                    mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
+                let result = mbv_audiobookshelf::commit_audiobookshelf_candidate(
+                    mbv_audiobookshelf::AudiobookshelfValidatedSetup::new(
                         candidate.setup,
                         candidate.user,
                         candidate.api_key,
@@ -271,8 +271,8 @@ impl App {
             .as_ref()
             .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
 
-        let result = mbv_core::audiobookshelf::replace_audiobookshelf_candidate(
-            mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
+        let result = mbv_audiobookshelf::replace_audiobookshelf_candidate(
+            mbv_audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
                 candidate.user,
                 candidate.api_key,
@@ -383,12 +383,11 @@ impl App {
         else {
             return;
         };
-        let Some(url) = mbv_core::audiobookshelf::socket::socket_url(&setup.server_url) else {
+        let Some(url) = mbv_audiobookshelf::socket::socket_url(&setup.server_url) else {
             return;
         };
         let (event_tx, rx) = std::sync::mpsc::channel();
-        self.audiobookshelf_socket_tx =
-            Some(mbv_core::audiobookshelf::socket::start(url, key, event_tx));
+        self.audiobookshelf_socket_tx = Some(mbv_audiobookshelf::socket::start(url, key, event_tx));
         self.audiobookshelf_socket_rx = rx;
         self.audiobookshelf_socket_generation = Some(generation);
     }
@@ -408,16 +407,16 @@ impl App {
     /// is delegated to `apply_audiobookshelf_socket_progress`.
     pub(in crate::app) fn handle_audiobookshelf_socket_event(
         &mut self,
-        ev: mbv_core::audiobookshelf::socket::SocketEvent,
+        ev: mbv_audiobookshelf::socket::SocketEvent,
     ) {
         match ev {
             // Authenticated is a deliberate no-op here; Open, ConnectAck are
             // consumed by the background thread and never forwarded to the
             // app.
-            mbv_core::audiobookshelf::socket::SocketEvent::Authenticated
-            | mbv_core::audiobookshelf::socket::SocketEvent::Open { .. }
-            | mbv_core::audiobookshelf::socket::SocketEvent::ConnectAck => {}
-            mbv_core::audiobookshelf::socket::SocketEvent::InvalidToken => {
+            mbv_audiobookshelf::socket::SocketEvent::Authenticated
+            | mbv_audiobookshelf::socket::SocketEvent::Open { .. }
+            | mbv_audiobookshelf::socket::SocketEvent::ConnectAck => {}
+            mbv_audiobookshelf::socket::SocketEvent::InvalidToken => {
                 // Task 2.3: surface the same ABS authentication failure
                 // classification used elsewhere; do NOT clear the installed
                 // API key alone from this.
@@ -427,7 +426,7 @@ impl App {
                     ToastSeverity::Warning,
                 );
             }
-            mbv_core::audiobookshelf::socket::SocketEvent::ProgressUpdated(progress) => {
+            mbv_audiobookshelf::socket::SocketEvent::ProgressUpdated(progress) => {
                 self.apply_audiobookshelf_socket_progress(&progress);
             }
         }
@@ -439,7 +438,7 @@ impl App {
     /// via reconcile (no REST call). Task 3.4 covers test cases.
     fn apply_audiobookshelf_socket_progress(
         &mut self,
-        progress: &mbv_core::audiobookshelf::socket::AudiobookshelfProgress,
+        progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) {
         // Task 3.3: drop events from a superseded connection generation.
         let Some(gen) = self.audiobookshelf_socket_generation else {
@@ -498,7 +497,7 @@ impl App {
     /// matches the given progress event's identity.
     fn player_owns_active_match(
         &self,
-        progress: &mbv_core::audiobookshelf::socket::AudiobookshelfProgress,
+        progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) -> bool {
         self.playback_queue()
             .queue

@@ -409,7 +409,7 @@ impl App {
     /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
     /// list when the shelf is absent (only that shelf feeds Home).
     pub(in crate::app) fn newest_episodes_items(
-        shelves: Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
+        shelves: Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
     ) -> Vec<QueueItem> {
         shelves
             .into_iter()
@@ -419,10 +419,10 @@ impl App {
                     .entries
                     .into_iter()
                     .filter_map(|entry| match entry {
-                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => Some(
+                        mbv_audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => Some(
                             QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(item)),
                         ),
-                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
+                        mbv_audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
                     })
                     .collect()
             })

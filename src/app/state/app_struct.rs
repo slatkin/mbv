@@ -83,8 +83,7 @@ pub struct App {
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
-    pub(in crate::app) audiobookshelf_libraries:
-        Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+    pub(in crate::app) audiobookshelf_libraries: Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
     /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
     /// fetch, Task 6.2), keyed by library id. `fetch_home()` rebuilds Home's
     /// Audiobookshelf Latest pills from this cache — never a blocking network
@@ -114,7 +113,7 @@ pub struct App {
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
+        mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,

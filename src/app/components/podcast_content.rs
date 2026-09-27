@@ -7,10 +7,10 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
+use mbv_audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
-use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_emby_model::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 
@@ -80,13 +80,11 @@ pub(in crate::app) struct PodcastContent {
 impl PodcastContent {
     pub(in crate::app) fn new() -> Self {
         Self {
-            state: AudiobookshelfBrowseState::new(
-                mbv_core::audiobookshelf::AudiobookshelfLibrary {
-                    id: String::new(),
-                    name: String::new(),
-                    media_type: "podcast".into(),
-                },
-            ),
+            state: AudiobookshelfBrowseState::new(mbv_audiobookshelf::AudiobookshelfLibrary {
+                id: String::new(),
+                name: String::new(),
+                media_type: "podcast".into(),
+            }),
             latest_items: Vec::new(),
             latest_marker: false,
             // The remembered pill starts at `All` and survives tab switches

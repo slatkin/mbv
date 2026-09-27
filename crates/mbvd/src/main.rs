@@ -273,8 +273,8 @@ fn connect_emby() -> Result<(), String> {
     Ok(())
 }
 
-fn classified_abs_error(error: mbv_core::audiobookshelf::AudiobookshelfError) -> String {
-    use mbv_core::audiobookshelf::AudiobookshelfFailureClass;
+fn classified_abs_error(error: mbv_audiobookshelf::AudiobookshelfError) -> String {
+    use mbv_audiobookshelf::AudiobookshelfFailureClass;
     match error.class {
         AudiobookshelfFailureClass::AuthenticationRejected => {
             "mbvd: Audiobookshelf authentication rejected".into()
@@ -305,7 +305,7 @@ fn connect_abs() -> Result<(), String> {
         .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.audiobookshelf_setup.clone();
     let old_queue = config::load_queue_state();
-    let validated = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+    let validated = mbv_audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
         &server_url,
         &api_key,
         Duration::from_secs(10),

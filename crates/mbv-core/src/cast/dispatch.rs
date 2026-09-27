@@ -3,8 +3,8 @@
 // and which items cannot be cast at all. See
 // openspec/changes/add-chromecast-target/specs/cast-media-dispatch/spec.md.
 
-use crate::audiobookshelf::{AudiobookshelfAudioSource, AudiobookshelfSourceMethod};
 use crate::cast::client::CastMediaItem;
+use mbv_audiobookshelf::{AudiobookshelfAudioSource, AudiobookshelfSourceMethod};
 use mbv_queue::{AudiobookshelfBookQueueItem, FeedEntry};
 
 /// Which subtitle rendition, if any, a dispatched Emby item needs. Sidecar

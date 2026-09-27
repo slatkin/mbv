@@ -211,7 +211,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         }],
         ..LibraryTab::new(library)
     });
-    let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+    let abs_library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
@@ -224,7 +224,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         0,
         20,
         1,
-        vec![mbv_core::audiobookshelf::AudiobookshelfShow {
+        vec![mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: "show-a".into(),
             title: "Show A".into(),
             author: None,

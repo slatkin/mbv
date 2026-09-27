@@ -1,5 +1,5 @@
 use super::*;
-use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
 
 fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
@@ -84,7 +84,7 @@ fn enter_focuses_chapters_when_the_selected_book_has_chapters() {
     state.detail_cache.insert(
         "book-a".into(),
         (
-            vec![mbv_core::audiobookshelf::AudiobookshelfChapter {
+            vec![mbv_audiobookshelf::AudiobookshelfChapter {
                 id: 0,
                 start: 0.0,
                 end: 30.0,

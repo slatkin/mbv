@@ -50,7 +50,7 @@ fn independent_audiobookshelf_runtime(
 
 /// A detached Audiobookshelf socket receiver: sessions that do not host the
 /// ABS socket loop still need the channel `App` carries.
-fn detached_socket_rx() -> mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent> {
+fn detached_socket_rx() -> mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent> {
     let (_, rx) = mpsc::channel();
     rx
 }

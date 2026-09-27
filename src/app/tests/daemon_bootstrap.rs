@@ -73,7 +73,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     let mut app = make_local_daemon_app_stub(Vec::new());
 
     // Set up ABS browse state (mirrors audiobookshelf_app() setup).
-    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
@@ -84,7 +84,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
         );
     browse.detail_cache.insert(
         "show-a".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),

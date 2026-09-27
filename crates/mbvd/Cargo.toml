@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 mbv-core = { path = "../mbv-core" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }

@@ -128,9 +128,9 @@ pub struct BookMediaWire {
     #[serde(default)]
     pub metadata: Option<BookMetadataWire>,
     #[serde(default)]
-    pub(in crate::audiobookshelf) chapters: Option<Vec<ChapterWire>>,
+    pub(crate) chapters: Option<Vec<ChapterWire>>,
     #[serde(rename = "audioFiles", default)]
-    pub(in crate::audiobookshelf) audio_files: Option<Vec<AudioFileWire>>,
+    pub(crate) audio_files: Option<Vec<AudioFileWire>>,
 }
 #[derive(Debug, Deserialize)]
 pub struct BookMetadataWire {
@@ -158,17 +158,17 @@ pub struct AuthorWire {
     pub name: String,
 }
 #[derive(Debug, Deserialize)]
-pub(in crate::audiobookshelf) struct ChapterWire {
-    pub(in crate::audiobookshelf) id: usize,
-    pub(in crate::audiobookshelf) start: f64,
-    pub(in crate::audiobookshelf) end: f64,
-    pub(in crate::audiobookshelf) title: String,
+pub(crate) struct ChapterWire {
+    pub(crate) id: usize,
+    pub(crate) start: f64,
+    pub(crate) end: f64,
+    pub(crate) title: String,
 }
 #[derive(Debug, Deserialize)]
-pub(in crate::audiobookshelf) struct AudioFileWire {
-    pub(in crate::audiobookshelf) index: usize,
-    pub(in crate::audiobookshelf) ino: String,
-    pub(in crate::audiobookshelf) duration: f64,
+pub(crate) struct AudioFileWire {
+    pub(crate) index: usize,
+    pub(crate) ino: String,
+    pub(crate) duration: f64,
 }
 #[derive(Debug, Deserialize)]
 struct BookDetailWire {

@@ -1,7 +1,7 @@
 //! Book-tab browse state: the author-surname-grouped book list, the
 //! selected book's chapter/audio-file detail, and book progress.
 
-use mbv_core::audiobookshelf::{
+use mbv_audiobookshelf::{
     AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfChapter,
     AudiobookshelfLibrary,
 };

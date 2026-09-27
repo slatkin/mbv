@@ -28,7 +28,7 @@ fn mixed_services_app() -> App {
         }],
         ..LibraryTab::new(library)
     });
-    let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+    let abs_library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
@@ -41,7 +41,7 @@ fn mixed_services_app() -> App {
         0,
         20,
         1,
-        vec![mbv_core::audiobookshelf::AudiobookshelfShow {
+        vec![mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: "show-a".into(),
             title: "Show A".into(),
             author: None,
@@ -51,7 +51,7 @@ fn mixed_services_app() -> App {
     );
     abs_state.detail_cache.insert(
         "show-a".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),

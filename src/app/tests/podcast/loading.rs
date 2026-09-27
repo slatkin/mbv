@@ -17,7 +17,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
     let mut app = make_app_stub();
     app.config.lock().unwrap().audiobookshelf_setup = Some(AudiobookshelfSetup::new(String::new()));
     mbv_config::save_service_secret(ServiceKind::Audiobookshelf, "test-token").unwrap();
-    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+    let library = mbv_audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
@@ -25,8 +25,8 @@ fn unfetched_podcast_app(shows: usize) -> App {
     let mut state = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
         library.clone(),
     );
-    let shows: Vec<mbv_core::audiobookshelf::AudiobookshelfShow> = (0..shows)
-        .map(|i| mbv_core::audiobookshelf::AudiobookshelfShow {
+    let shows: Vec<mbv_audiobookshelf::AudiobookshelfShow> = (0..shows)
+        .map(|i| mbv_audiobookshelf::AudiobookshelfShow {
             library_item_id: format!("show-{i}"),
             title: format!("Show {i}"),
             author: None,
@@ -50,8 +50,8 @@ fn loading(
     ids
 }
 
-fn episode(show: &str, id: &str) -> mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-    mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+fn episode(show: &str, id: &str) -> mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
+    mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
         library_item_id: show.into(),
         episode_id: id.into(),
         title: id.into(),
@@ -87,12 +87,10 @@ fn failed_fetch_consumes_the_session_request_instead_of_looping() {
         generation: app.audiobookshelf_runtime.generation(),
         request: app.audiobookshelf_browse[0].detail_loading_ids["show-0"],
         library_item_id: "show-0".into(),
-        result: Err(
-            match mbv_core::audiobookshelf::AudiobookshelfClient::new("") {
-                Err(error) => error,
-                Ok(_) => unreachable!("an empty server URL cannot build a client"),
-            },
-        ),
+        result: Err(match mbv_audiobookshelf::AudiobookshelfClient::new("") {
+            Err(error) => error,
+            Ok(_) => unreachable!("an empty server URL cannot build a client"),
+        }),
     });
 
     let state = &app.audiobookshelf_browse[0];

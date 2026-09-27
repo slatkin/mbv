@@ -3,8 +3,8 @@ use crate::config::TestStateDirGuard;
 use mbv_config::AudiobookshelfSetup;
 use mbv_core::service_runtime::ServiceState;
 
-fn user() -> mbv_core::audiobookshelf::AudiobookshelfUser {
-    mbv_core::audiobookshelf::AudiobookshelfUser {
+fn user() -> mbv_audiobookshelf::AudiobookshelfUser {
+    mbv_audiobookshelf::AudiobookshelfUser {
         id: "user-id".into(),
         username: "reader".into(),
     }
@@ -13,10 +13,7 @@ fn user() -> mbv_core::audiobookshelf::AudiobookshelfUser {
 fn completion(
     generation: mbv_core::service_runtime::SetupGeneration,
     kind: crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind,
-    result: Result<
-        mbv_core::audiobookshelf::AudiobookshelfUser,
-        mbv_core::audiobookshelf::AudiobookshelfError,
-    >,
+    result: Result<mbv_audiobookshelf::AudiobookshelfUser, mbv_audiobookshelf::AudiobookshelfError>,
 ) -> crate::app::dispatch::session::service_startup::AudiobookshelfCompletion {
     crate::app::dispatch::session::service_startup::AudiobookshelfCompletion {
         generation,
@@ -58,8 +55,8 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     app.apply_audiobookshelf_completion(completion(
         generation,
         crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Startup,
-        Err(mbv_core::audiobookshelf::AudiobookshelfError {
-            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
+        Err(mbv_audiobookshelf::AudiobookshelfError {
+            class: mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
         }),
     ));
     assert_eq!(
@@ -75,8 +72,8 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     app.apply_audiobookshelf_completion(completion(
         generation,
         crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Startup,
-        Err(mbv_core::audiobookshelf::AudiobookshelfError {
-            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Connectivity,
+        Err(mbv_audiobookshelf::AudiobookshelfError {
+            class: mbv_audiobookshelf::AudiobookshelfFailureClass::Connectivity,
         }),
     ));
     assert_eq!(app.audiobookshelf_runtime.state, ServiceState::Unavailable);

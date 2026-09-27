@@ -196,32 +196,32 @@ pub(in crate::app) enum LibEvent {
         request: u64,
         library_item_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfShowsFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfShowPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfShowPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfBooksFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfBookPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfBookPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfShelfFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfBookDetailFetched {
@@ -229,10 +229,10 @@ pub(in crate::app) enum LibEvent {
         library_item_id: String,
         result: Result<
             (
-                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
-                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
+                Vec<mbv_audiobookshelf::AudiobookshelfChapter>,
+                Vec<mbv_audiobookshelf::AudiobookshelfAudioFile>,
             ),
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),

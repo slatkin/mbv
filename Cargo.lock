@@ -1706,6 +1706,7 @@ dependencies = [
  "ksni",
  "libc",
  "log",
+ "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
@@ -1738,6 +1739,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-audiobookshelf"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "rstest",
+ "serde",
+ "serde_json",
+ "time",
+ "tungstenite",
+ "ureq",
+]
+
+[[package]]
 name = "mbv-config"
 version = "0.21.2"
 dependencies = [
@@ -1760,6 +1779,7 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-audiobookshelf",
  "mbv-config",
  "mbv-ctrl",
  "mbv-emby-model",
@@ -1880,6 +1900,7 @@ version = "0.21.2"
 dependencies = [
  "libc",
  "log",
+ "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
