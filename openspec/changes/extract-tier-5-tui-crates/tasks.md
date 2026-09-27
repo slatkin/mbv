@@ -258,7 +258,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 6. `mbv-ui-msg`
 
-- [ ] 6.1 Create `crates/mbv-ui-msg`. Deps: `mbv-ui-model`, `mbv-render` (only
+- [x] 6.1 Create `crates/mbv-ui-msg`. Deps: `mbv-ui-model`, `mbv-render` (only
   if the compiler asks), `mbv-emby-model`, `mbv-queue`, `mbv-feed` (as the
   compiler asks), and `tuirealm`. `git mv` the following:
   - `src/app/ui_msg.rs` → `src/lib.rs`;
@@ -267,7 +267,7 @@ Each task below is its own commit, and the full gate passes after each.
   Rewrite `crate::app::ui_msg::` → `crate::`. Verify:
   `cargo nextest run -p mbv-ui-msg` passes, and `rg 'crate::app' crates/mbv-ui-msg`
   is empty.
-- [ ] 6.2 Delete `mod ui_msg;` from `src/app.rs`. Add `mbv-ui-msg` to the root
+- [x] 6.2 Delete `mod ui_msg;` from `src/app.rs`. Add `mbv-ui-msg` to the root
   `[dependencies]`. Rewrite `crate::app::ui_msg::` → `mbv_ui_msg::`. Verify:
   gate passes, and `rg 'app::ui_msg' src` is empty.
 
