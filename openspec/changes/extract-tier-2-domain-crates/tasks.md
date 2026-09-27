@@ -246,7 +246,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   so it no longer claims config/protocols/canonical queue. Verify: `rg
   'mbv-queue|mbv-ctrl|mbv-config|mbv-feed|mbv-emby-model' AGENTS.md` shows all
   five.
-- [ ] 8.2 Run `make check-code-file-lines` before pushing; split any file it
+- [x] 8.2 Run `make check-code-file-lines` before pushing; split any file it
   flags (e.g. `mbv-ctrl/src/lib.rs`, from the 837-line `ctrl.rs`) along a
   responsibility seam per the `splitting-files` skill. Verify: the check passes.
 - [ ] 8.3 Comment on issue #814 summarising the Tier 2 crates and the final
