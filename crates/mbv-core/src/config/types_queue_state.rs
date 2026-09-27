@@ -54,8 +54,7 @@ impl QueueState {
             .filter_map(|qi| match qi {
                 crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
                 crate::playback_queue::QueueItem::Feed(_)
-                | crate::playback_queue::QueueItem::Audiobookshelf(_)
-                | crate::playback_queue::QueueItem::AudiobookshelfBook(_) => None,
+                | crate::playback_queue::QueueItem::Audiobookshelf(_) => None,
             })
             .collect()
     }

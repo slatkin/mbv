@@ -214,11 +214,7 @@ impl App {
         // config, so this client's own `always_skip_intro` is the
         // only thing that decides whether to skip.
         if self.config.lock().unwrap().always_skip_intro {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+            let secs = mbv_core::api::ticks_to_seconds(intro_end_ticks);
             self.player.send_command(PlayerCommand::SeekAbsolute(secs));
             self.player.send_command(PlayerCommand::SkipIntroDismiss);
         }

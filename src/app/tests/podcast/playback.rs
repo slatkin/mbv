@@ -244,20 +244,22 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
     );
 
     // Activate a different slot so episode-a is inactive.
-    let other = QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfQueueItem {
-        library_item_id: "show-b".into(),
-        episode_id: "ep-b".into(),
-        title: "Other".into(),
-        show_title: None,
-        author: None,
-        description: None,
-        duration_ticks: None,
-        position_ticks: 0,
-        played: false,
-        pub_date_secs: None,
-        is_finished: false,
-        cover_path: None,
-    });
+    let other = QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
+        mbv_core::playback_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-b".into(),
+            episode_id: "ep-b".into(),
+            title: "Other".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ));
     app.player_tab.queue.append(other);
     let other_slot = app.player_tab.queue.slots()[1].slot_id;
     let _ = app.player_tab.queue.set_active_slot(other_slot);

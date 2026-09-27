@@ -100,20 +100,22 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     // queue to the newly attached client via PlayerEvent::UnifiedQueueUpdated).
     let acknowledged_position_ticks = 30 * mbv_core::api::TICKS_PER_SECOND;
     let abs_item = mbv_core::playback_queue::QueueItem::Audiobookshelf(
-        mbv_core::playback_queue::AudiobookshelfQueueItem {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            title: "Episode A".into(),
-            show_title: None,
-            author: None,
-            description: None,
-            duration_ticks: None,
-            position_ticks: acknowledged_position_ticks,
-            played: false,
-            pub_date_secs: None,
-            is_finished: false,
-            cover_path: None,
-        },
+        mbv_core::playback_queue::AudiobookshelfItem::Episode(
+            mbv_core::playback_queue::AudiobookshelfQueueItem {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                show_title: None,
+                author: None,
+                description: None,
+                duration_ticks: None,
+                position_ticks: acknowledged_position_ticks,
+                played: false,
+                pub_date_secs: None,
+                is_finished: false,
+                cover_path: None,
+            },
+        ),
     );
     app.player_tab.set_queue_items(vec![abs_item], 0);
     assert_eq!(app.player_tab.total_queue_len(), 1);

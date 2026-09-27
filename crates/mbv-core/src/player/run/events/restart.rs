@@ -1,6 +1,6 @@
 use super::super::{
     auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, Instant, Ordering,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, StopReport, TICKS_PER_SECOND,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, StopReport,
 };
 use libmpv2::Mpv;
 
@@ -78,11 +78,7 @@ impl PlaybackRun {
         let Some(ticks) = self.forced_resume_ticks.take() else {
             return;
         };
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "forced-resume ticks → mpv seek seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
+        let seconds = crate::api::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
             log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
             return;

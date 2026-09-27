@@ -1,13 +1,10 @@
 use super::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, QueueItem};
+use crate::playback_queue::AudiobookshelfItem;
 
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn seconds_from_ticks(ticks: i64) -> f64 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let seconds = ticks.max(0) as f64 / crate::api::TICKS_PER_SECOND as f64;
+    let seconds = crate::api::ticks_to_seconds(ticks.max(0));
     (seconds * 1_000_000.0).round() / 1_000_000.0
 }
 
@@ -219,12 +216,8 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
 
 impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     fn drop(&mut self) {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "current position seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        self.close(super::saturating_i64_from_f64(
-            (self.current_position * crate::api::TICKS_PER_SECOND as f64).round(),
+        self.close(crate::api::saturating_i64_from_f64(
+            (self.current_position * crate::api::TICKS_PER_SECOND_F64).round(),
         ));
     }
 }
@@ -262,13 +255,13 @@ impl ActiveItemLifecycle {
     pub(super) fn for_item(item: &QueueItem, lifecycle: Option<PreparedLifecycle>) -> Self {
         match item {
             QueueItem::Emby(_) => Self::Emby,
-            QueueItem::Audiobookshelf(_) => match lifecycle {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => match lifecycle {
                 Some(PreparedLifecycle::Episode(lifecycle)) => {
                     Self::Audiobookshelf(Box::new(lifecycle))
                 }
                 _ => Self::None,
             },
-            QueueItem::AudiobookshelfBook(_) => match lifecycle {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => match lifecycle {
                 Some(PreparedLifecycle::Book(lifecycle)) => {
                     Self::AudiobookshelfBook(Box::new(lifecycle))
                 }
@@ -308,7 +301,9 @@ impl ActiveItemLifecycle {
 mod reporting_tests {
     use super::{ActiveItemLifecycle, ListeningTime};
     use crate::api::EmbyItem;
-    use crate::playback_queue::{AudiobookshelfQueueItem, FeedEntry, QueueItem};
+    use crate::playback_queue::{
+        AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
+    };
     use std::time::{Duration, Instant};
 
     fn emby() -> QueueItem {
@@ -368,7 +363,7 @@ mod reporting_tests {
     }
 
     fn audiobook() -> QueueItem {
-        QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
             library_item_id: "library".into(),
             episode_id: "episode".into(),
             title: "ABS".into(),
@@ -381,7 +376,7 @@ mod reporting_tests {
             pub_date_secs: None,
             is_finished: false,
             cover_path: None,
-        })
+        }))
     }
 
     fn episode_lifecycle(position: f64, duration: f64) -> super::AudiobookshelfPlaybackLifecycle {

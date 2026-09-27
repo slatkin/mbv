@@ -19,7 +19,7 @@ mirror (`crates/mbv-core/src/daemon/control.rs`,
    constructors and every removal path re-anchor or clear it).
 4. `QueueRevision` advances on **every structural change** (membership or
    order) and on **no non-structural change**, so a revision comparison can
-   answer "did the queue shape change?" (see also Invariant 4 for why the
+   answer "did the queue shape change?" (see also Invariant 5 for why the
    second half of this contract currently has no reader).
 
 ## Why it matters
@@ -103,7 +103,7 @@ returns `None` and the player advances from a stale `current_idx`.
 3. **`purge_queue` (`daemon_reconciliation.rs:29`) rebuilds via
    `from_slot_items` with the *same* revision.** Membership changed, revision
    didn't. This is the one structural path that breaks rule 4 outright; it
-   is masked today only because nothing compares revisions (Invariant 4).
+   is masked today only because nothing compares revisions (Invariant 5).
 4. **`slots_mut()` (`playback_queue.rs:269`) escapes the discipline
    entirely.** The doc comment says "prefer the explicit mutation methods",
    but the accessor hands out `&mut [QueueSlot]`, so any caller can reorder,

@@ -88,9 +88,7 @@ impl ExecutionSequence {
     /// predicate that selects the active-file projection branch.
     #[must_use]
     pub fn has_audiobookshelf_entries(&self) -> bool {
-        self.slots
-            .iter()
-            .any(|slot| slot.item.is_audiobookshelf_any())
+        self.slots.iter().any(|slot| slot.item.is_audiobookshelf())
     }
 
     /// Record a completed/stopped occurrence's resolved position on this

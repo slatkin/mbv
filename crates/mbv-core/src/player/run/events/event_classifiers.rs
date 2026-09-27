@@ -41,7 +41,7 @@ pub(in crate::player) fn provider_lifecycle_close_pos(
     runtime: i64,
     last_valid_pos: i64,
 ) -> i64 {
-    if item.is_audiobookshelf_any() && natural_end {
+    if item.is_audiobookshelf() && natural_end {
         runtime.max(0)
     } else {
         last_valid_pos

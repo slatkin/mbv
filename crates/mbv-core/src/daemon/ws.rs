@@ -143,10 +143,6 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
     start_remote_playback(playback, client, &fetched, start_idx, start_position_ticks);
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "seek target ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-)]
 fn handle_ws_control(
     ev: &WsEvent,
     player: &Player,
@@ -162,12 +158,9 @@ fn handle_ws_control(
         WsEvent::Unpause => player.set_paused(false),
         WsEvent::NextTrack => player.next(),
         WsEvent::PreviousTrack => player.previous(),
-        WsEvent::Seek(ticks) => {
-            use crate::api::TICKS_PER_SECOND;
-            player.send_command(PlayerCommand::SeekAbsolute(
-                ticks as f64 / TICKS_PER_SECOND as f64,
-            ))
-        }
+        WsEvent::Seek(ticks) => player.send_command(PlayerCommand::SeekAbsolute(
+            crate::api::ticks_to_seconds(ticks),
+        )),
         WsEvent::TogglePause => player.send_command(PlayerCommand::TogglePause),
         WsEvent::SeekRelative(secs) => player.send_command(PlayerCommand::Seek(secs)),
         WsEvent::SetVolume(volume) => {

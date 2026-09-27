@@ -1,5 +1,5 @@
 use super::{IntroState, NextUp};
-use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use mbv_ids::ItemId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
                 0
             };
         }
-        Some(QueueItem::Audiobookshelf(item)) => {
+        Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
@@ -53,7 +53,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
                 0
             };
         }
-        Some(QueueItem::AudiobookshelfBook(item)) => {
+        Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
@@ -83,11 +83,9 @@ pub(in crate::player) fn seek_decision(seconds: f64, absolute: bool) -> (&'stati
 
 pub(in crate::player) fn volume_decision(requested: i64, maximum: i64) -> (i64, i64) {
     let volume = requested.clamp(0, maximum);
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "player volume (i64) → f64 for the mpv cube-root volume curve; the curve has no integer path (approved, issue #804)"
-    )]
-    let raw = super::super::saturating_i64_from_f64((10.0 * (volume as f64).sqrt()).round());
+    let raw = crate::api::saturating_i64_from_f64(
+        (10.0 * crate::api::i64_to_f64_saturating(volume).sqrt()).round(),
+    );
     (volume, raw)
 }
 

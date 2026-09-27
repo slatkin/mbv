@@ -350,7 +350,7 @@ fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
         queue
             .slots()
             .iter()
-            .all(|slot| !slot.item.is_audiobookshelf_any()),
+            .all(|slot| !slot.item.is_audiobookshelf()),
         "no Audiobookshelf episode or book slot may survive a disconnect"
     );
 }

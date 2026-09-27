@@ -2,7 +2,9 @@ use super::*;
 use crate::app::tests::{confirm_replace_queue, make_item};
 use crate::app::ContextAction;
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry};
+use mbv_core::playback_queue::{
+    AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
+};
 use rstest::{fixture, rstest};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
@@ -59,7 +61,7 @@ fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
             position_ticks: 0,
             played: false,
         }),
-        QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
             library_item_id: "show-1".into(),
             episode_id: "episode-1".into(),
             title: "Episode 1".into(),
@@ -72,8 +74,8 @@ fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
             pub_date_secs: None,
             is_finished: false,
             cover_path: None,
-        }),
-        QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
+        })),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
             library_item_id: "book-1".into(),
             title: "Book 1".into(),
             author: None,
@@ -82,7 +84,7 @@ fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
             played: false,
             is_finished: false,
             cover_path: None,
-        }),
+        })),
     ]
 }
 
@@ -90,7 +92,7 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
     assert_eq!(items.len(), 2);
     assert!(matches!(&items[0], QueueItem::Emby(item) if item.name == "Emby"));
     assert!(matches!(&items[1], QueueItem::Feed(item) if item.guid == "feed-entry"));
-    assert!(items.iter().all(|item| !item.is_audiobookshelf_any()));
+    assert!(items.iter().all(|item| !item.is_audiobookshelf()));
 }
 
 fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {

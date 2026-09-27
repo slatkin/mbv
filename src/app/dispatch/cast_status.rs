@@ -6,7 +6,7 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
 use crate::app::App;
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::seconds_to_ticks;
 use mbv_core::audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_core::cast::client::{CastPlaybackState, CastStatus};
 use std::time::{Duration, Instant};
@@ -97,11 +97,6 @@ impl App {
 
     /// `None` when no cast target is attached; the caller falls back to
     /// local/remote-session playback state.
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub(in crate::app) fn cast_effective_playback_state(
         &self,
     ) -> Option<crate::app::PlaybackState> {
@@ -120,12 +115,11 @@ impl App {
         };
         let active = status.state != CastPlaybackState::Idle;
         let position_seconds = cast_extrapolate(status, cast.status_at).unwrap_or(0.0);
-        let runtime_ticks =
-            (f64::from(status.duration_seconds.unwrap_or(0.0)) * TICKS_PER_SECOND as f64) as i64;
+        let runtime_ticks = seconds_to_ticks(f64::from(status.duration_seconds.unwrap_or(0.0)));
         Some(crate::app::PlaybackState {
             active,
             active_idx: self.cast_active_queue_index(cast),
-            position_ticks: (f64::from(position_seconds) * TICKS_PER_SECOND as f64) as i64,
+            position_ticks: seconds_to_ticks(f64::from(position_seconds)),
             runtime_ticks,
             paused: status.state == CastPlaybackState::Paused,
         })
@@ -167,11 +161,6 @@ impl App {
     /// Reports progress to the matched item's provider (6.6). No-op when
     /// nothing is attached, no status has been reported yet, or the
     /// receiver's playing entry can't be matched back to a dispatched item.
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub(in crate::app) fn report_cast_progress(&mut self) {
         let Some(cast) = self.cast_attachment.as_ref() else {
             return;
@@ -182,7 +171,7 @@ impl App {
         let Some((item, report)) = cast_progress_for_status(cast, status) else {
             return;
         };
-        let position_ticks = (f64::from(report.position_seconds) * TICKS_PER_SECOND as f64) as i64;
+        let position_ticks = seconds_to_ticks(f64::from(report.position_seconds));
         match &item.report {
             CastProgressTarget::Emby {
                 item_id,

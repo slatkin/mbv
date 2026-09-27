@@ -76,15 +76,11 @@ impl CastPlaybackTarget {
             .cast_attachment
             .as_ref()
             .map_or(50, |a| i64::from(a.volume));
-        let new_volume = (current + delta).clamp(0, 100);
+        let new_volume = u8::try_from((current + delta).clamp(0, 100)).unwrap_or(u8::MAX);
         if let Some(attachment) = app.cast_attachment.as_mut() {
-            attachment.volume = u8::try_from(new_volume).unwrap_or(u8::MAX);
+            attachment.volume = new_volume;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "volume percentage through f32; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let volume_ratio = new_volume as f32 / 100.0;
+        let volume_ratio = f32::from(new_volume) / 100.0;
         app.send_cast_command(move |t| t.set_volume(volume_ratio));
     }
 

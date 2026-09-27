@@ -378,11 +378,15 @@ fn resolve_cast_dispatch_item(
                 },
             )
         }),
-        QueueItem::Audiobookshelf(episode) => resolve_abs_episode_cast_item(episode, abs),
-        QueueItem::AudiobookshelfBook(book) => Err(format!(
-            "\"{}\" is a multi-file audiobook and can't be cast",
-            book.title
-        )),
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
+            episode,
+        )) => resolve_abs_episode_cast_item(episode, abs),
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => {
+            Err(format!(
+                "\"{}\" is a multi-file audiobook and can't be cast",
+                book.title
+            ))
+        }
     };
     ResolvedCastItem {
         name,

@@ -113,7 +113,7 @@ fn queue_row_fields(
             },
             i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
-        QueueItem::Audiobookshelf(ep) => (
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(ep)) => (
             ep.title.clone(),
             if is_active {
                 playback.position_ticks
@@ -122,7 +122,7 @@ fn queue_row_fields(
             },
             i64::try_from(ep.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
-        QueueItem::AudiobookshelfBook(book) => (
+        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => (
             book.title.clone(),
             if is_active {
                 playback.position_ticks
