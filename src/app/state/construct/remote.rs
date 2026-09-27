@@ -153,7 +153,7 @@ impl App {
     ///   daemon owns mpv instead of an in-process `Player`.
     /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
     ///   can browse locally while a daemon elsewhere plays something else,
-    ///   with the Local/Remote scope pill to switch between them.
+    ///   with the Local/Remote scope split (`[`/`]`) to switch between them.
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,

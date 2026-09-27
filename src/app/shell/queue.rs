@@ -235,8 +235,8 @@ impl Model {
                 queue.set_cursor(&update.cursor);
                 queue.set_scope(update.scope);
                 // The footer pills are all queue concern (playlist source,
-                // autosave, Local/Remote scope while on an mbv-based
-                // session) — never the library column's status bar.
+                // autosave, the remote-attachment indicator) — never the
+                // library column's status bar.
                 let remote_pill = self.app.queue_title_model().remote_pill;
                 queue.set_status_pills(
                     self.app.playlist_status_spans(),

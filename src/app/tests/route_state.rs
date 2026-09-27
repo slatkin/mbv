@@ -219,7 +219,7 @@ fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
 }
 
 #[test]
-fn local_daemon_route_attach_adopts_the_owner_queue_and_restores_local_after_detach() {
+fn local_daemon_route_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     let mut app = make_app_stub();
     app.player_tab
         .set_items(make_items(2), app.player_tab.queue_cursor);
@@ -230,6 +230,16 @@ fn local_daemon_route_attach_adopts_the_owner_queue_and_restores_local_after_det
 
     assert!(app.remote_player_tab.is_none());
     assert_eq!(app.player_tab.emby_items()[0].id, daemon_items[0].id);
+}
+
+#[test]
+fn local_daemon_attach_restore_brings_back_the_suspended_local_queue() {
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+    let daemon_items = make_items(1);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(daemon_items, 0);
+    app.switch_to_library_route("music", remote, remote_rx, &DaemonEndpoint::Local);
 
     app.restore_local_mode("Local playback restored");
 

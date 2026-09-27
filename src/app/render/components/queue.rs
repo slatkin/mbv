@@ -40,8 +40,7 @@ pub(in crate::app) fn render_queue_body(
 
 /// The remote-attachment indicator the queue footer paints: `Some` names
 /// the playback target while a remote owner (daemon or session) owns
-/// playback, `None` for a bare local player. One queue, one indicator —
-/// the former Local/Remote scope pill pair is gone.
+/// playback, `None` for a bare local player.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct QueueTitleModel {
     pub remote_pill: Option<String>,
@@ -86,7 +85,7 @@ pub(in crate::app) fn render_queue_status(
     let pill_w = pill
         .as_ref()
         .map_or(0, |s| u16::try_from(s.content.width()).unwrap_or(u16::MAX));
-    if let (Some(pill), false) = (pill, pill_w == 0 || pill_w >= area.width) {
+    if let Some(pill) = pill.filter(|_| pill_w > 0 && pill_w < area.width) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![pill])),
             Rect {

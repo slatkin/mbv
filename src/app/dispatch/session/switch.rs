@@ -78,23 +78,14 @@ impl App {
             );
         }
 
+        let daemon_tab = initial_unified_state.as_ref().map_or_else(
+            || PlayerTab::from_emby_items(initial_items, initial_cursor),
+            PlayerTab::from_unified_state,
+        );
         if endpoint.is_local() {
-            // Local daemon attach: one unified queue owned by the daemon
-            // (local-daemon-thin-client spec). Adopt the owner's Bound queue
-            // as the displayed Local queue, mirroring the App-construction
-            // attach path — parking it in `remote_player_tab` leaves it
-            // unreachable, because the unified view never reads that tab.
-            self.player_tab = initial_unified_state.as_ref().map_or_else(
-                || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                PlayerTab::from_unified_state,
-            );
-            self.queue_source = initial_queue_source;
-            self.remote_player_tab = None;
+            self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
-            self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
-                || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                PlayerTab::from_unified_state,
-            ));
+            self.remote_player_tab = Some(daemon_tab);
         }
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -215,23 +206,14 @@ impl App {
             );
         }
 
+        let daemon_tab = initial_unified_state.as_ref().map_or_else(
+            || PlayerTab::from_emby_items(initial_items, initial_cursor),
+            PlayerTab::from_unified_state,
+        );
         if endpoint.is_local() {
-            // Local daemon attach: one unified queue owned by the daemon
-            // (local-daemon-thin-client spec). Adopt the owner's Bound queue
-            // as the displayed Local queue, mirroring the App-construction
-            // attach path — parking it in `remote_player_tab` leaves it
-            // unreachable, because the unified view never reads that tab.
-            self.player_tab = initial_unified_state.as_ref().map_or_else(
-                || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                PlayerTab::from_unified_state,
-            );
-            self.queue_source = initial_queue_source;
-            self.remote_player_tab = None;
+            self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
-            self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
-                || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                PlayerTab::from_unified_state,
-            ));
+            self.remote_player_tab = Some(daemon_tab);
         }
         self.advance_queue_epoch();
         self.remote.direct_remote_connected = false;
@@ -292,6 +274,21 @@ impl App {
     /// the player and its channel plumbing back in and drop the remote
     /// endpoint baseline. Shared by the confirmed fall-through and ordinary
     /// restoration so no path can half-install a suspended local Player.
+    /// Local daemon attach: one unified queue owned by the daemon
+    /// (local-daemon-thin-client spec). Adopt the owner's Bound queue as the
+    /// displayed Local queue, mirroring the App-construction attach path —
+    /// parking it in `remote_player_tab` leaves it unreachable, because the
+    /// unified view never reads that tab.
+    fn adopt_local_daemon_queue(
+        &mut self,
+        daemon_tab: PlayerTab,
+        queue_source: mbv_queue::QueueSource,
+    ) {
+        self.player_tab = daemon_tab;
+        self.queue_source = queue_source;
+        self.remote_player_tab = None;
+    }
+
     fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
         self.player = suspended.player;
         self.player_rx = suspended.player_rx;
