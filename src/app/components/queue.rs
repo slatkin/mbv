@@ -21,7 +21,7 @@ use crate::app::palette;
 use crate::app::render::arrangements::queue::{
     queue_footer_row, queue_list_box, queue_panel_subareas,
 };
-use crate::app::render::components::queue::{render_queue_status, QueueTitleModel};
+use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::state::types::playback::{PlaybackState, QueueScope};
@@ -66,12 +66,9 @@ pub struct QueueComponent {
     /// the queue projection and painted at the panel's own status row.
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
-    /// The Local/Remote scope pills (queue concern, painted at the far right
-    /// of the same footer row while connected to an mbv-based session).
-    status_scope: Option<QueueTitleModel>,
-    /// Scope-pill rects retained from the last footer paint.
-    scope_local: Option<Rect>,
-    scope_remote: Option<Rect>,
+    /// The remote-attachment indicator pill (queue concern, painted at the
+    /// far right of the same footer row while a remote owner owns playback).
+    status_scope: Option<String>,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -100,8 +97,6 @@ impl QueueComponent {
             status_playlist: Vec::new(),
             status_autosave: None,
             status_scope: None,
-            scope_local: None,
-            scope_remote: None,
             pending_slot: None,
             drag_grab: None,
             mouse_gestures: MouseGestureState::new(),
@@ -181,16 +176,17 @@ impl QueueComponent {
     }
 
     /// Project the status pill row (playlist source + autosave) and the
-    /// scope pills, painted at the `QueueColumn` footer below the recessed box.
+    /// remote-attachment indicator, painted at the `QueueColumn` footer below
+    /// the recessed box.
     pub(in crate::app) fn set_status_pills(
         &mut self,
         playlist: Vec<Span<'static>>,
         autosave: Option<Vec<Span<'static>>>,
-        scope: Option<QueueTitleModel>,
+        remote_pill: Option<String>,
     ) {
         self.status_playlist = playlist;
         self.status_autosave = autosave;
-        self.status_scope = scope;
+        self.status_scope = remote_pill;
     }
 
     /// The framed list content area the panel retained from its last paint:
@@ -282,12 +278,12 @@ impl Component for QueueComponent {
         // The status pill row the projection pushed, painted at the
         // QueueColumn footer (moved out of the recessed panel).
         if let Some(footer_row) = footer_row {
-            (self.scope_local, self.scope_remote) = render_queue_status(
+            render_queue_status(
                 frame,
                 footer_row,
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
-                self.status_scope.as_ref(),
+                self.status_scope.as_deref(),
             );
         }
         self.ensure_carrier();
