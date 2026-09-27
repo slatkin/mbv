@@ -1,6 +1,6 @@
 # Invariant 7 — A shared colour value is a deliberate split; an alias is a deliberate bond
 
-**Scope:** `src/app/render/theme/` — the value tier (the `Palette` enum in
+**Scope:** `crates/mbv-theme/src/` — the value tier (the `Palette` enum in
 `palette.rs`, landed by `palette-enum`), the role tier (`theme.rs`, 51 role
 consts), and the surface tier (`surface.rs` level fills, `surface_table.rs`
 rows, `surface_resolve.rs`) — plus the re-export bridge in `src/app.rs` (`use self::infra::{… palette …}`)
@@ -65,7 +65,7 @@ Regenerate the table rather than trusting it:
 
 ```bash
 rg -o 'Palette::(\w+) => Color::Rgb\(\s*0x(..),\s*0x(..),\s*0x(..)' \
-   src/app/render/theme/palette.rs
+   crates/mbv-theme/src/palette.rs
 ```
 
 ## Why it matters
@@ -136,7 +136,7 @@ background and the three pill-selector symbols are independent or bonded.
 ## For an agent touching theme colours
 
 - Read this file and `openspec/specs/ui-design-language/spec.md` before changing
-  any symbol under `src/app/render/theme/`.
+  any symbol under `crates/mbv-theme/src/`.
 - A shared-variant pair's comment is load-bearing. Verify the comment against
   the change it cites before treating the share as cleanup.
 - Line numbers in colour plans go stale fast — every migration inserts or
