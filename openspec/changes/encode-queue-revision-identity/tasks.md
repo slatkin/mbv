@@ -23,7 +23,7 @@ touches `control/queue_setup.rs` and `control/queue_load.rs`.
 
 ## 4. Docs
 
-- [ ] 4.1 Delete `docs/invariants/05-queue-revision-unread.md`. Rewrite `docs/invariants/01-slot-identity-active-revision.md` to hold only what types don't enforce (design Non-Goals):
+- [x] 4.1 Delete `docs/invariants/05-queue-revision-unread.md`. Rewrite `docs/invariants/01-slot-identity-active-revision.md` to hold only what types don't enforce (design Non-Goals):
   - slot ids are unique per `PlaybackQueue` value, owner replacement accepts Client-assigned ids, and `UnifiedQueue*Slot` commands carry no lineage;
   - the two active-removal semantics;
   - Clients apply snapshots in arrival order and rely on one connection being ordered.
