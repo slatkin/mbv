@@ -42,9 +42,24 @@ impl PlayerTab {
         }
     }
 
+    /// Creates a tab with a fresh revision mint. Use only when starting a
+    /// projection chain with no remembered revision (startup/construction);
+    /// replacement sites must use `adopt_revision_mint`.
     pub fn from_unified_state(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
         let revision_mint = Arc::new(QueueRevisionMint::default());
         Self::from_unified_state_with_mint(state, revision_mint)
+    }
+
+    /// Continue this tab's revision sequence from an existing projection chain.
+    pub fn adopt_revision_mint(&mut self, mint: Arc<QueueRevisionMint>) {
+        self.queue.rebase_revision_mint(Arc::clone(&mint));
+        self.revision_mint = mint;
+    }
+
+    /// Revision mint for preserving this tab's projection sequence across replacement.
+    #[must_use]
+    pub fn revision_mint(&self) -> Arc<QueueRevisionMint> {
+        Arc::clone(&self.revision_mint)
     }
 
     fn from_unified_state_with_mint(
@@ -288,5 +303,27 @@ impl PlayerTab {
         if let Some(slot_id) = self.queue.slots().get(index).map(|slot| slot.slot_id) {
             let _ = self.queue.update_slot_item(slot_id, item);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PlayerTab;
+    use crate::app::tests::make_items;
+
+    #[test]
+    fn replaced_tab_chain_never_repeats_a_revision_issue_836() {
+        let mut old_tab = PlayerTab::from_emby_items(make_items(1), 0);
+        let first_revision = old_tab.revision();
+        old_tab.set_items(make_items(2), 0);
+        let latest_old_revision = old_tab.revision();
+
+        let mut replacement_items = make_items(1);
+        replacement_items[0].id = "replacement".into();
+        let mut replacement_tab = PlayerTab::from_emby_items(replacement_items, 0);
+        replacement_tab.adopt_revision_mint(old_tab.revision_mint());
+
+        assert!(latest_old_revision > first_revision);
+        assert!(replacement_tab.revision() > latest_old_revision);
     }
 }

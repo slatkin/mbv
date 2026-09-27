@@ -297,6 +297,13 @@ impl PlaybackQueue {
         self.revision
     }
 
+    /// Continue this queue's revision sequence from another owner-local mint.
+    /// Queue contents, slot identities, active slot, and slot allocator are unchanged.
+    pub fn rebase_revision_mint(&mut self, mint: std::sync::Arc<QueueRevisionMint>) {
+        self.revision = mint.mint();
+        self.mint = mint;
+    }
+
     #[must_use]
     pub fn revision_mint(&self) -> std::sync::Arc<QueueRevisionMint> {
         std::sync::Arc::clone(&self.mint)
