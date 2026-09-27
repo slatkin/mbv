@@ -81,7 +81,7 @@ unreachable from another crate's tests, change it to
 
 Each task below is its own commit, and the full gate passes after each.
 
-- [ ] 1.1 Move the `impl App` blocks out of `src/app/render/` (design D3).
+- [x] 1.1 Move the `impl App` blocks out of `src/app/render/` (design D3).
   For each file below, move the `impl App { … }` block, together with the
   private free functions and tests that only that block uses, to the target
   named here:
@@ -102,7 +102,7 @@ Each task below is its own commit, and the full gate passes after each.
   its subject moved to. Verify: gate passes, and
   `rg '\bimpl App\b|crate::app::App\b|super::super::\{?[^}]*\bApp\b|make_(movie|music_group|queue)_app' src/app/render`
   is empty.
-- [ ] 1.2 Split `src/app/infra/images` at the `impl App` line (design D6).
+- [x] 1.2 Split `src/app/infra/images` at the `impl App` line (design D6).
   Create `src/app/infra/image_fetch.rs` + `image_fetch/`. Move into it both
   `impl App` blocks of `images.rs` with their private helpers, the
   `impl App` half of `images/protocol.rs`, `images/fetch.rs`, and
@@ -111,7 +111,7 @@ Each task below is its own commit, and the full gate passes after each.
   `infra/resize.rs` to `infra/images/resize.rs`. Verify: gate passes, and
   `rg 'crate::app::(state|dispatch|shell|components|render|input|tests)|\bApp\b|LibEvent|PAGE_SIZE' src/app/infra/images src/app/infra/images.rs`
   shows only `#[cfg(test)]` hits, or none.
-- [ ] 1.3 Small leftovers (design D7):
+- [x] 1.3 Small leftovers (design D7):
   - move `ui_util::service_state_color` into `render/components/widgets.rs`;
   - move `PAGE_SIZE` and `PREFETCH_AHEAD` from `infra/layout.rs` into a new
     `src/app/infra/paging.rs`;
@@ -124,7 +124,7 @@ Each task below is its own commit, and the full gate passes after each.
 
   Verify: gate passes; `rg 'palette' src/app/infra/ui_util.rs` is empty; and
   `rg 'fn make_(item|session)\b' src` is empty.
-- [ ] 1.4 Stage `src/app/ui_model/` (design D2, D5). Create
+- [x] 1.4 Stage `src/app/ui_model/` (design D2, D5). Create
   `src/app/ui_model.rs` and move into it:
   - the `state/types/*` files that `components/` or `render/` name (at least
     `playback`, `context_menu`, `confirm`, `audiobookshelf_browse`,
@@ -152,7 +152,7 @@ Each task below is its own commit, and the full gate passes after each.
   Callers name `crate::app::ui_model::…` instead. Verify: gate passes, and
   `rg 'crate::app::(state|dispatch|shell|input|infra|components|render|tests)\b|\bApp\b|super::super' src/app/ui_model src/app/ui_model.rs`
   shows no production hits.
-- [ ] 1.5 Cut `render → components` (design D4). Move the paint-content
+- [x] 1.5 Cut `render → components` (design D4). Move the paint-content
   types listed in design Context (`media_list` row/paint types,
   `tree_browser` paint types, `ThreeLineRole`,
   `ServiceRow`/`SettingsRow`/`SetupDraft`, `TransportAvailability`,
@@ -166,7 +166,7 @@ Each task below is its own commit, and the full gate passes after each.
   `rg 'crate::app::(components|state|dispatch|shell|input|tests)\b|\bApp\b' src/app/render src/app/render.rs`
   shows no production hits. The only `crate::app::` paths left in render are
   `ui_model`, `infra::images`, and `render` itself.
-- [ ] 1.6 Stage `src/app/ui_msg/` (design D2). Create `src/app/ui_msg.rs` and
+- [x] 1.6 Stage `src/app/ui_msg/` (design D2). Create `src/app/ui_msg.rs` and
   move into it `components/msg.rs` + `components/msg/`,
   `components/component_id.rs`, `components/user_event.rs`, and the
   identity payloads `Msg` names: `SelectionSummary` (from
@@ -175,7 +175,7 @@ Each task below is its own commit, and the full gate passes after each.
   `components/tv_tree_target.rs`). Verify: gate passes, and
   `rg 'crate::app::(components|state|dispatch|shell|input|infra|tests)\b|\bApp\b' src/app/ui_msg src/app/ui_msg.rs`
   shows no production hits.
-- [ ] 1.7 Check that `components/` names nothing above it. Fix any remaining
+- [x] 1.7 Check that `components/` names nothing above it. Fix any remaining
   hit by applying the design D5 rule. Verify: gate passes, and
   `rg 'crate::app::(state|dispatch|shell|input|tests|test_seams)\b|\bApp\b|crate::app::infra::(?!images)' --pcre2 src/app/components src/app/components.rs`
   shows no production hits.
