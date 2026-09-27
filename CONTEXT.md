@@ -345,6 +345,14 @@ round-trips tagged QueueItem values; legacy untagged Emby-only payloads remain
 readable.
 _Avoid_: queue entry, playable, mixed item
 
+**Transport command**:
+A command addressed to the Player owner for transport control. `Step(Direction)` requests an owner-resolved relative queue move; `Player(PlayerCommand)` carries a playback command such as pause, seek, or stop. A step is not a `PlayerCommand` and is resolved against the owner's canonical queue.
+_Avoid_: playback command, navigation command, transport action
+
+**Relative step**:
+A request to move to the next or previous Queue slot, resolved by the Player owner from its latest requested or observed target using `relative_step_target`. Unlike a jump naming a specific slot, a relative step derives its target at handling time; same-direction requests may coalesce while a step transition is unsettled.
+_Avoid_: next command, previous command, relative navigation
+
 **Playback resume**:
 The rule deciding whether a previously watched entry should resume or start over.
 When position exceeds the 6% threshold of runtime (or runtime is unknown and
