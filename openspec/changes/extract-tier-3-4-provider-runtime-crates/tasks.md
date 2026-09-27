@@ -63,7 +63,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 0. Groundwork
 
-- [ ] 0.1 Confirm Tier 2 has merged. Run `openspec list` and
+- [x] 0.1 Confirm Tier 2 has merged. Run `openspec list` and
   `git log --oneline -20`. Verify with all of:
   - `ls crates` shows `mbv-emby-model`, `mbv-queue`, `mbv-ctrl`, `mbv-config`,
     and `mbv-feed`;
@@ -75,7 +75,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
     in `remote_player.rs`.
 
   If any check fails, stop and report which one.
-- [ ] 0.2 Re-run `openspec list`. If `decompose-app-god-type` or
+- [x] 0.2 Re-run `openspec list`. If `decompose-app-god-type` or
   `prune-tui-test-suite` is still in progress, rebase onto the latest `main`
   before each group (their `src/app/` edits collide only with path
   rewrites). Verify: `git status` is clean and the branch is based on the
