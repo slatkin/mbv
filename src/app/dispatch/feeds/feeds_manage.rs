@@ -31,7 +31,7 @@ impl App {
             c.feeds = feeds;
             c.clone()
         };
-        if let Err(e) = crate::config::save_config_settings(&cfg) {
+        if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Feeds) {
             log::warn!(target: "config", "config save failed: {e}");
             self.flash(
                 format!("Feed change saved but config save failed ({e})"),

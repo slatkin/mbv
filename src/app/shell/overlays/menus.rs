@@ -294,7 +294,9 @@ impl Model {
             p.subtitle_lang.clone_from(&cfg.subtitle_lang);
             p.audio_lang.clone_from(&cfg.audio_lang);
         };
-        if let Err(e) = crate::config::save_config_settings(&cfg) {
+        if let Err(e) =
+            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+        {
             log::warn!(target: "config", "config save failed: {e}");
         }
     }
@@ -327,7 +329,8 @@ impl Model {
             MultiSelectKind::MyLanguages => unreachable!(),
         }
         let cfg = self.app.config.lock().unwrap().clone();
-        if let Err(e) = crate::config::save_config_settings(&cfg) {
+        if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
+        {
             log::warn!(target: "config", "config save failed: {e}");
         }
         if let Ok(content) = self.app.fetch_home() {
