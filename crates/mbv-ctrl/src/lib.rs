@@ -3,7 +3,8 @@ mod events;
 mod protocol;
 
 pub use commands::{
-    CtrlCmd, OwnerGate, OwnerGateRejection, PlaybackIntent, PlaybackIntentAction, WireCommand,
+    CtrlCmd, Direction, OwnerGate, OwnerGateRejection, PlaybackIntent, PlaybackIntentAction,
+    WireCommand,
 };
 pub use events::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlEvent, DisconnectReason,

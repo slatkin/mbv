@@ -7,7 +7,16 @@
 //! observation, never from accepting a command.
 
 use crate::transition::OwnerTransitionState;
+use crate::transition::TransitionCause;
+use mbv_ctrl::Direction;
 use mbv_queue::{PlaybackQueue, QueueSlotId};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepTarget {
+    Jump(QueueSlotId),
+    Coalesced,
+    AtEdge,
+}
 
 #[derive(Debug, Default)]
 pub struct PlayerOwnerState {
@@ -103,6 +112,37 @@ impl PlayerOwnerState {
                 self.queue.consume_slot(slot_id),
                 mbv_queue::QueueMutationResult::Applied(_)
             )
+    }
+
+    /// Resolve a relative step from the latest desired/observed queue position (design D3).
+    #[must_use]
+    pub fn relative_step_target(&self, direction: Direction) -> StepTarget {
+        let latest = self
+            .transitions
+            .queued_latest()
+            .or_else(|| self.transitions.in_flight());
+        if latest.is_some_and(|t| t.cause == TransitionCause::Step(direction)) {
+            return StepTarget::Coalesced;
+        }
+        let base = latest
+            .map(|t| t.target)
+            .or(self.observed_active_slot)
+            .or_else(|| self.queue.active_slot_id());
+        let Some(index) = base.and_then(|slot| self.queue.slot_index(slot)) else {
+            return StepTarget::AtEdge;
+        };
+        let neighbor = match direction {
+            Direction::Next => index.checked_add(1).filter(|&i| i < self.queue.len()),
+            Direction::Previous => index.checked_sub(1),
+        };
+        neighbor
+            .and_then(|i| {
+                self.queue
+                    .slots()
+                    .get(i)
+                    .map(|s| StepTarget::Jump(s.slot_id))
+            })
+            .unwrap_or(StepTarget::AtEdge)
     }
 
     /// The last Playback-run-observed active slot (design D3).
@@ -237,6 +277,34 @@ mod tests {
     // played state on the floor instead of applying it to the canonical
     // queue, so the very next broadcast reverted a stopped item's progress
     // back to its submission-time position (0, for a freshly queued item).
+    #[test]
+    fn relative_steps_use_desired_target_edges_and_coalesce_matching_direction() {
+        use crate::transition::{Transition, TransitionCause};
+        let queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(0));
+        let slots: Vec<_> = queue.slots().iter().map(|slot| slot.slot_id).collect();
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        owner.accept_local_transition(Transition::with_cause(
+            1,
+            1,
+            slots[1],
+            TransitionCause::Step(Direction::Next),
+        ));
+        assert_eq!(
+            owner.relative_step_target(Direction::Next),
+            StepTarget::Coalesced
+        );
+        assert_eq!(
+            owner.relative_step_target(Direction::Previous),
+            StepTarget::Jump(slots[0])
+        );
+        owner.reset_local_transitions();
+        owner.note_observed_active_slot(Some(slots[2]));
+        assert_eq!(
+            owner.relative_step_target(Direction::Next),
+            StepTarget::AtEdge
+        );
+    }
+
     #[test]
     fn apply_completion_progress_advances_canonical_queue_and_revision() {
         let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));

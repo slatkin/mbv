@@ -187,33 +187,23 @@ fn step_to_neighbor_slot(
     request_id: mbv_ctrl::PlaybackRequestId,
     generation: mbv_ctrl::PlaybackGeneration,
 ) {
+    let direction = Option::<mbv_ctrl::Direction>::from(action).expect("relative action");
     let queue = &ctx.owner.core.queue;
     let transitions = &ctx.owner.core.transitions;
-    let observed_active_slot = *ctx.shared_queue.observed_active_slot.lock().unwrap();
-    let base_idx = transitions
-        .queued_latest()
-        .or_else(|| transitions.in_flight())
-        .map(|t| t.target)
-        .or(observed_active_slot)
-        .or_else(|| queue.active_slot_id())
-        .and_then(|slot| queue.slot_index(slot));
-    let neighbor_idx = base_idx.and_then(|idx| match *action {
-        mbv_ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
-        _ => Some(idx + 1).filter(|&next| next < queue.len()),
-    });
+    let observed_active_slot = ctx.owner.core.observed_active_slot();
+    let target = ctx.owner.core.relative_step_target(direction);
     log::info!(
         target: "transition",
-        "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} base_idx={:?} neighbor_idx={:?} queue_len={}",
+        "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} target={:?} queue_len={}",
         action,
         transitions.queued_latest().map(|t| t.target),
         transitions.in_flight().map(|t| t.target),
         observed_active_slot,
         queue.active_slot_id(),
-        base_idx,
-        neighbor_idx,
+        target,
         queue.len(),
     );
-    if let Some(slot_id) = neighbor_idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id)) {
+    if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {
         dispatch_slot_jump(
             &mut DaemonOwnerContext {
                 player: ctx.player,
@@ -223,7 +213,26 @@ fn step_to_neighbor_slot(
                 ctrl_clients: ctx.ctrl_clients,
             },
             ctx.client_id,
-            mbv_player::transition::Transition::new(request_id, generation, slot_id),
+            mbv_player::transition::Transition::with_cause(
+                request_id,
+                generation,
+                slot_id,
+                mbv_player::transition::TransitionCause::Step(direction),
+            ),
+        );
+    } else if target == mbv_player::owner_state::StepTarget::Coalesced {
+        send_to(
+            ctx.reply_tx,
+            &CtrlEvent::PlaybackIntent(mbv_ctrl::PlaybackIntentEvent {
+                request_id,
+                generation,
+                outcome: mbv_ctrl::PlaybackIntentOutcome::Coalesced {
+                    canonical_request_id: transitions
+                        .queued_latest()
+                        .or_else(|| transitions.in_flight())
+                        .map_or(request_id, |t| t.request_id),
+                },
+            }),
         );
     }
 }

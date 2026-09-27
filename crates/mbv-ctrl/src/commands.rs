@@ -200,6 +200,22 @@ pub struct PlaybackIntent {
     pub action: PlaybackIntentAction,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    Next,
+    Previous,
+}
+
+impl From<&PlaybackIntentAction> for Option<Direction> {
+    fn from(action: &PlaybackIntentAction) -> Self {
+        match action {
+            PlaybackIntentAction::Next => Some(Direction::Next),
+            PlaybackIntentAction::Previous => Some(Direction::Previous),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PlaybackIntentAction {
     Play {
