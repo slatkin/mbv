@@ -200,7 +200,7 @@ impl PlaybackRun {
 
     /// Emit the final `Stopped` after the quit timeout elapsed.
     fn finalize_quit(&mut self, progress: &mut ProgressGuard) {
-        if !self.stop_report.is_sent() {
+        if !self.stop_report_sent() {
             self.report_stop_now_or_background(progress);
         }
         let runtime = self
@@ -222,7 +222,7 @@ impl PlaybackRun {
             position_ticks: self.last_valid_pos,
             played,
             consume,
-            progress_report_accepted: self.stop_report.is_accepted(),
+            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
     }
@@ -368,7 +368,7 @@ impl PlaybackRun {
             ("playlist-pos", PropertyData::Int64(pos)) => {
                 self.on_playlist_pos_changed(pos, mpv_position_ticks(mpv));
             }
-            ("playlist-count", PropertyData::Int64(count)) if self.load_state.is_ready() => {
+            ("playlist-count", PropertyData::Int64(count)) if self.load_is_ready() => {
                 self.on_playlist_count_changed(usize::try_from(count).unwrap_or(usize::MAX));
             }
             _ => {}

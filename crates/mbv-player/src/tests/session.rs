@@ -1,4 +1,5 @@
 use super::*;
+use crate::run::{ForcedJump, StopAction};
 
 #[test]
 fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
@@ -44,7 +45,7 @@ fn playlist_pos_does_not_clobber_pending_initial_playlist_layout() {
 fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
     let (mut session, status) = make_queue_session_for_pos_tests(1);
     session.pending_initial_playlist_layout = false;
-    session.load_state = LoadState::begin_single();
+    session.begin_item_lifecycle(StopAction::NothingPlaying);
 
     session.on_playlist_pos_changed(0, 0);
 
@@ -57,18 +58,26 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     let (mut session, status) = make_queue_session_for_pos_tests(0);
     session.pending_initial_playlist_layout = false;
     let target = session.slot_id_at(1).unwrap();
-    session.forced_slot_id = Some(target);
     // Rapid Enter on two rows: the in-flight jump also carries its request
     // identity; an intermediate playlist-pos event must not clobber either.
-    session.forced_transition = Some(crate::transition::Transition::new(42, 1, target));
+    let transition = crate::transition::Transition::new(42, 1, target);
+    session.forced_jump = Some(ForcedJump {
+        slot_id: target,
+        transition: Some(transition),
+        resume_ticks: None,
+        from_idle: false,
+    });
 
     session.on_playlist_pos_changed(1, 0);
 
     assert_eq!(session.current_idx, 0);
     assert_eq!(status.lock().unwrap().current_idx, 0);
-    assert_eq!(session.forced_slot_id, Some(target));
+    assert_eq!(session.forced_jump.map(|jump| jump.slot_id), Some(target));
     assert_eq!(
-        session.forced_transition.map(|t| (t.request_id, t.target)),
+        session
+            .forced_jump
+            .and_then(|jump| jump.transition)
+            .map(|t| (t.request_id, t.target)),
         Some((42, target)),
         "the in-flight jump's request identity survives an intermediate playlist-pos event"
     );
@@ -78,11 +87,14 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation() {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
     session.pending_initial_playlist_layout = false;
-    session.forced_jump_from_idle = true;
     let slot_id = session.slot_id_at(1).unwrap();
     let transition = crate::transition::Transition::new(42, 7, slot_id);
-    session.forced_slot_id = Some(slot_id);
-    session.forced_transition = Some(transition);
+    session.forced_jump = Some(ForcedJump {
+        slot_id,
+        transition: Some(transition),
+        resume_ticks: None,
+        from_idle: true,
+    });
     status.lock().unwrap().active = false;
     // `report_active_item` uses the same mocked Emby transport; supply the
     // expected successful responses so the test stays synchronous and hermetic.
@@ -97,8 +109,7 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
 
     assert_eq!(session.current_idx, 1);
     assert!(status.lock().unwrap().active);
-    assert_eq!(session.forced_slot_id, None);
-    assert!(!session.forced_jump_from_idle);
+    assert_eq!(session.forced_jump, None);
     assert!(matches!(
         events.try_recv(),
         Ok(PlayerEvent::TrackChanged {
@@ -113,15 +124,16 @@ fn idle_jump_to_removed_slot_clears_the_pending_transition() {
     let (mut session, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
     let missing = QueueSlotId::from_raw(u64::MAX);
     let transition = crate::transition::Transition::new(42, 7, missing);
-    session.forced_jump_from_idle = true;
-    session.forced_slot_id = Some(missing);
-    session.forced_transition = Some(transition);
+    session.forced_jump = Some(ForcedJump {
+        slot_id: missing,
+        transition: Some(transition),
+        resume_ticks: None,
+        from_idle: true,
+    });
 
     assert_eq!(session.settle_idle_jump_on_restart(0), None);
 
-    assert!(!session.forced_jump_from_idle);
-    assert_eq!(session.forced_slot_id, None);
-    assert_eq!(session.forced_transition, None);
+    assert_eq!(session.forced_jump, None);
 }
 
 #[test]
@@ -198,7 +210,7 @@ fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_ind
     let observed = session.active_slot_id().expect("active slot at end-file");
     let displaced = session.slot_id_at(2).expect("slot at index 2");
     session.stop_slot = Some(observed); // captured in on_end_file's Queue+Quit path
-    session.stop_report = StopReport::Sent; // skip the reporter side effects
+    session.mark_reported(StopReport::Sent); // skip the reporter side effects
     let mut progress = noop_progress();
 
     // QueueMove drained between the end-file and the Shutdown event.
@@ -276,7 +288,7 @@ fn end_file_quit_uses_shutdown_aware_stop_report_context() {
 #[test]
 fn superseded_jump_end_file_is_dropped_only_without_a_forced_slot() {
     // Rapid Enter on two queue rows: the second JumpTo's slot is the live
-    // `forced_slot_id`; the first target's stray `Stop` EndFile arrives with
+    // the pending jump; the first target's stray `Stop` EndFile arrives with
     // none. Only that stray one must be dropped — a `Stop` while a forced
     // jump is still pending is the real target landing and must advance.
     assert!(is_superseded_jump_end_file(
@@ -412,8 +424,8 @@ fn ordinary_stop_marks_stop_report_accepted_not_sent() {
 
     session.report_stop_now_or_background(&mut guard);
 
-    assert_eq!(session.stop_report, StopReport::Accepted);
-    assert!(session.stop_report.is_accepted());
+    assert_eq!(session.stop_report(), StopReport::Accepted);
+    assert!(session.stop_report_accepted());
 }
 
 // ── queue_completed_pos / is_near_end ─────────────────────────────────

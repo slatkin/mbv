@@ -22,10 +22,8 @@ impl PlaybackRun {
             self.queue.remove_slot(slot_id);
         }
         self.sync_status_position();
-        if self.forced_slot_id == Some(slot_id) {
-            self.forced_slot_id = None;
-            self.forced_transition = None;
-            self.forced_resume_ticks = None;
+        if self.forced_jump.is_some_and(|jump| jump.slot_id == slot_id) {
+            self.forced_jump = None;
         }
         if active_slot_id != Some(slot_id) {
             return;

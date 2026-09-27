@@ -3,8 +3,9 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 use super::active_item_state;
 use super::{
     end_file_stop_report_context, ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence,
-    IntroState, LoadState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
-    QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
+    IntroState, ItemLifecycleState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource,
+    ProgressGuard, QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport,
+    StopReportContext,
 };
 use crate::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
@@ -71,7 +72,9 @@ impl PlaybackRun {
     pub(crate) fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
         let _ = progress.stop_tx.send(());
         if self.is_quit_shutdown() {
-            self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+            self.mark_reported(StopReport::mark_sent(
+                self.report_stopped_for_current_context(),
+            ));
         } else {
             let handle = progress.handle.take();
             let budget = Self::progress_join_budget();
@@ -90,7 +93,7 @@ impl PlaybackRun {
             // by a queue refresh that lands before the background call completes.
             // If the call *does* fail, the slot's pending_sync just never gets
             // confirmed and stays protected — the safe failure mode.
-            self.stop_report = StopReport::Accepted;
+            self.mark_reported(StopReport::Accepted);
         }
     }
 
@@ -184,11 +187,13 @@ impl PlaybackRun {
         index: usize,
         mpv_pos_ticks: i64,
     ) -> bool {
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(abandoned_pos));
+        self.mark_reported(StopReport::mark_sent(
+            self.reporter.report_stopped(abandoned_pos),
+        ));
         if !self.adopt_mpv_entry(index, mpv_pos_ticks) {
             return false;
         }
-        let stop_accepted = self.stop_report.is_accepted();
+        let stop_accepted = self.stop_report_accepted();
         self.announce_adopted_entry(abandoned_slot, abandoned_pos, stop_accepted);
         true
     }
@@ -230,7 +235,7 @@ impl PlaybackRun {
         // for; mpv adopted a *different* entry here (that's what this path is
         // for), so the armed value belongs to nothing about to restart and
         // must not be misapplied to this one.
-        self.forced_resume_ticks = None;
+        self.forced_jump = None;
         self.queue_next_up.reset();
         true
     }
@@ -367,7 +372,7 @@ impl PlaybackRun {
         self.prepared_source = Some(prepared);
         self.active_lifecycle = ActiveItemLifecycle::for_item(item, prepared_lifecycle);
         self.active_file_starting = true;
-        self.load_state = LoadState::begin_single();
+        self.accept_replacement();
         self.pending_initial_playlist_layout = false;
         Ok(())
     }
@@ -425,26 +430,10 @@ impl PlaybackRun {
         }
     }
 
-    fn reset_next_up_state(&mut self) {
+    pub(super) fn reset_next_up_state(&mut self) {
         self.next_up.reset();
         self.queue_next_up.reset();
         self.next_up_jump = false;
-    }
-
-    /// Reset per-item lifecycle flags shared by all three reset sites in
-    /// `crates/mbv-player/src/run/commands.rs` (`cmd_submit_queue` empty, non-empty,
-    /// and `cmd_load_new`). The caller must set `stop_report` and
-    /// `load_state` itself because those differ per call site.
-    pub(crate) fn begin_item_lifecycle(&mut self) {
-        self.tracks_initialized = false;
-        self.forced_slot_id = None;
-        self.forced_jump_from_idle = false;
-        self.forced_transition = None;
-        self.forced_resume_ticks = None;
-        self.reset_next_up_state();
-        self.stopped_event_sent = false;
-        self.mark_played_id = None;
-        self.stopped_near_end = false;
     }
 
     pub(crate) fn load_active_item_state(&mut self) {
@@ -542,19 +531,15 @@ impl PlaybackRun {
             active_file_starting,
             ext_sub_urls,
             current_idx: start_idx,
-            forced_slot_id: None,
-            forced_jump_from_idle: false,
-            forced_transition: None,
-            forced_resume_ticks: None,
+            forced_jump: None,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,
             last_seek_at: None,
             last_valid_pos: initial_pos,
             tracks_initialized: false,
-            load_state: LoadState::Ready,
+            item_lifecycle: ItemLifecycleState::new(),
             pending_initial_playlist_layout: start_idx > 0,
-            stop_report: StopReport::NotSent,
             stopped_event_sent: false,
             mark_played_id: None,
             last_mouse_osd: None,

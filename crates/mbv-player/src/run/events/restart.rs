@@ -1,6 +1,7 @@
 use super::super::{
-    auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, Instant, Ordering,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, StopReport,
+    auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, ForcedJump,
+    Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
+    StopReport,
 };
 use libmpv2::Mpv;
 
@@ -9,28 +10,26 @@ impl PlaybackRun {
         &mut self,
         position_ticks: i64,
     ) -> Option<(QueueSlotId, Option<crate::transition::Transition>)> {
-        if !self.forced_jump_from_idle {
-            return None;
-        }
-        let Some(slot_id) = self.forced_slot_id.take() else {
-            self.forced_jump_from_idle = false;
-            self.forced_transition = None;
-            return None;
-        };
+        let jump = self.forced_jump.filter(|jump| jump.from_idle)?;
+        self.forced_jump = jump.resume_ticks.map(|resume_ticks| ForcedJump {
+            transition: None,
+            from_idle: false,
+            resume_ticks: Some(resume_ticks),
+            ..jump
+        });
+        let slot_id = jump.slot_id;
         let Some(index) = self.queue.slot_index(slot_id) else {
-            self.forced_jump_from_idle = false;
-            self.forced_transition = None;
+            self.forced_jump = None;
             return None;
         };
-        let transition = self.forced_transition.take();
-        self.forced_jump_from_idle = false;
+        let transition = jump.transition;
         if !self.set_active_index(index) {
             return None;
         }
         self.load_active_item_state();
         self.last_valid_pos = position_ticks;
         self.report_active_item();
-        self.stop_report = StopReport::NotSent;
+        self.mark_reported(StopReport::NotSent);
         {
             let item = self.active_item();
             let mut status = self.status.lock().unwrap();
@@ -71,13 +70,17 @@ impl PlaybackRun {
     /// A re-visited playlist entry only honors its baked `start=` option the
     /// first time it ever loads; mpv reopens it from scratch on a later
     /// `playlist-pos` jump, discarding whatever was watched in this session.
-    /// `forced_resume_ticks` (armed by the `JumpTo` handler from the canonical
+    /// `ForcedJump::resume_ticks` (armed by the `JumpTo` handler from the canonical
     /// queue's current position) repairs that with an explicit seek now that
     /// the entry is actually loaded and seekable.
     fn apply_forced_resume(&mut self, mpv: &Mpv) {
-        let Some(ticks) = self.forced_resume_ticks.take() else {
+        let Some(jump) = self.forced_jump else {
             return;
         };
+        let Some(ticks) = jump.resume_ticks else {
+            return;
+        };
+        self.forced_jump = None;
         let seconds = mbv_emby_model::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
             log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));

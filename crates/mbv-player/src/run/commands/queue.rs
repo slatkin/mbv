@@ -29,9 +29,13 @@ impl PlaybackRun {
             reject_stale_jump(&self.event_tx, slot_id);
             return;
         };
-        self.forced_transition = Some(crate::transition::Transition::new(
-            request_id, generation, slot_id,
-        ));
+        let transition = crate::transition::Transition::new(request_id, generation, slot_id);
+        self.forced_jump = Some(super::super::ForcedJump {
+            slot_id,
+            transition: Some(transition),
+            resume_ticks: if self.active_file { None } else { resume_ticks },
+            from_idle: false,
+        });
         if self.active_file {
             self.cmd_jump_to_active_file(slot_id, resume_ticks, mpv);
         } else {
@@ -51,10 +55,10 @@ impl PlaybackRun {
                 // Active-file projection has no mpv playlist move to
                 // observe, so the JumpTo emits its TrackChanged
                 // observation here, shaped like the on_end_file settle
-                // (design D1). The tag stays on `forced_transition` so
+                // (design D1). The tag stays on the forced jump so
                 // a duplicate settle path still carries it; the
                 // pipeline treats the second attempt as Ignored.
-                self.emit_track_changed(slot_id, self.forced_transition);
+                self.emit_track_changed(slot_id, self.forced_jump.and_then(|jump| jump.transition));
             }
             Err(error) => {
                 log::warn!(target: "player", "active-file selection failed: {error}");
@@ -72,17 +76,19 @@ impl PlaybackRun {
         // mpv playlist indices are adapter coordinates; pin the
         // target slot identity before asking mpv to move. Idle jumps
         // settle on PlaybackRestart because no outgoing EndFile exists.
-        self.forced_jump_from_idle = !self.status.lock().unwrap().active;
-        if self.forced_jump_from_idle {
+        let from_idle = !self.status.lock().unwrap().active;
+        if from_idle {
             self.tracks_initialized = false;
         }
-        self.forced_slot_id = Some(slot_id);
-        self.forced_resume_ticks = resume_ticks;
+        let transition = self.forced_jump.and_then(|jump| jump.transition);
+        self.forced_jump = Some(super::super::ForcedJump {
+            slot_id,
+            transition,
+            resume_ticks,
+            from_idle,
+        });
         if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
-            self.forced_slot_id = None;
-            self.forced_jump_from_idle = false;
-            self.forced_transition = None;
-            self.forced_resume_ticks = None;
+            self.forced_jump = None;
             log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
             return;
         }
@@ -94,7 +100,7 @@ impl PlaybackRun {
             self.current_idx,
             self.queue_len(),
         );
-        if self.forced_jump_from_idle {
+        if from_idle {
             Self::play_from_idle_playlist(idx, mpv);
         }
         // Selecting a track should always start it playing, even if

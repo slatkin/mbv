@@ -2,9 +2,9 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
     advance_decision, is_near_end, mpv_end_file_reason, mpv_position_ticks, retry_mark_played,
-    send_ep_info, spawn_progress_reporter, AdvanceDecisionInput, CompletedMedia, Drained,
-    EndFileReason, FinishReason, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard,
-    QueueItem, QueueSlotId, StopReport,
+    send_ep_info, spawn_progress_reporter, AdvanceDecisionInput, CompletedMedia, EndFileReason,
+    FinishReason, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem,
+    QueueSlotId, StopReport,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 use mbv_ids::ItemId;
@@ -35,10 +35,8 @@ impl PlaybackRun {
         if self.swallow_pending_load() {
             return true;
         }
-        // The completed occurrence's owner-assigned identity, resolved from the
-        // observed active slot at the moment the end-file is seen and carried to
-        // every emit/defer site below — never re-resolved against a sequence a
-        // later QueueMove/QueueRemove may have mutated (design D2).
+        // Pin the completed occurrence's identity before QueueMove/QueueRemove
+        // can mutate the sequence (design D2).
         let completed_slot_id = self.active_slot_id();
         if let Some(done) = self.fail_active_file_start(reason, progress, completed_slot_id) {
             return done;
@@ -97,38 +95,21 @@ impl PlaybackRun {
                 },
                 last_valid_pos: self.last_valid_pos,
             });
-        if is_superseded_jump_end_file(reason, self.forced_slot_id.is_some(), track_finished) {
+        if is_superseded_jump_end_file(
+            reason,
+            !self.active_file && self.forced_jump.is_some(),
+            track_finished,
+        ) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }
-        // played_out drives mark-played/Emby watched-status and stays video-only;
-        // consume_track drives queue auto-removal and is type-agnostic — the app layer
-        // gates it per-type against consume_videos/consume_audio.
+        // Played stays video-only; consume is type-agnostic and gated per type
+        // by the app layer.
         log::info!(target: "consume", "on_end_file decision: idx={completed_idx:?} reason={reason:?} \
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
             self.last_valid_pos, completed_runtime);
-        // Consume the in-flight jump's identity alongside `forced_slot_id`
-        // (same lifetime, design D4); it tags the `TrackChanged` emit below
-        // only if this observation actually lands on its target slot.
-        let settling_transition = self.forced_transition.take();
-        let logged_forced_slot_id = self.forced_slot_id;
-        self.forced_jump_from_idle = false;
-        let next_idx = self
-            .forced_slot_id
-            .take()
-            .and_then(|slot_id| self.queue.slot_index(slot_id))
-            .unwrap_or(self.current_idx + 1);
-        log::info!(
-            target: "transition",
-            "on_end_file settle: forced_slot_id={:?} next_idx={} current_idx={} queue_len={} settling_transition={}",
-            logged_forced_slot_id,
-            next_idx,
-            self.current_idx,
-            self.queue_len(),
-            settling_transition.is_some(),
-        );
-
+        let (next_idx, settling_transition) = self.settle_forced_jump();
         let end = QueueEndStop {
             completed_slot_id,
             completed_item: &completed_item,
@@ -143,6 +124,32 @@ impl PlaybackRun {
         }
 
         self.advance_to_next_track(mpv, progress, &end, next_idx, settling_transition)
+    }
+
+    fn settle_forced_jump(&mut self) -> (usize, Option<crate::transition::Transition>) {
+        let jump = self.forced_jump.take();
+        let transition = jump.and_then(|jump| jump.transition);
+        let slot_id = jump.map(|jump| jump.slot_id);
+        let next_idx = slot_id
+            .and_then(|slot_id| self.queue.slot_index(slot_id))
+            .unwrap_or(self.current_idx + 1);
+        log::info!(
+            target: "transition",
+            "on_end_file settle: forced_jump_slot={slot_id:?} next_idx={next_idx} current_idx={} queue_len={} settling_transition={}",
+            self.current_idx,
+            self.queue_len(),
+            transition.is_some(),
+        );
+        if next_idx < self.queue_len() {
+            self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {
+                crate::run::ForcedJump {
+                    transition: None,
+                    from_idle: false,
+                    ..jump
+                }
+            });
+        }
+        (next_idx, transition)
     }
 
     /// Advance to the already-bounds-checked next track: select it, emit the
@@ -224,14 +231,10 @@ impl PlaybackRun {
     /// Swallow `EndFiles` displaced by a queue submission while its drain is
     /// pending. Returns true when the caller must `continue`.
     fn swallow_pending_load(&mut self) -> bool {
-        if self.load_state.is_ready() {
+        if self.load_is_ready() {
             return false;
         }
-        if self.load_state.drain() == Drained::HitZero {
-            // Once all pending EndFiles from a queue submission are drained, the new item's
-            // lifecycle begins — reset stop_report so on_end_file/on_shutdown can report it.
-            self.stop_report.reset();
-        }
+        let _ = self.on_drained();
         true
     }
 
@@ -288,8 +291,8 @@ impl PlaybackRun {
             completed_runtime,
         );
         log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} stop_report={:?}",
-            self.last_valid_pos, completed_runtime, self.stop_report);
-        if self.stop_report == StopReport::NotSent {
+            self.last_valid_pos, completed_runtime, self.stop_report());
+        if self.is_unreported() {
             // mpv-initiated quits (for example a compositor close request)
             // must not wait on Emby before mpv can finish its own shutdown.
             self.report_stop_now_or_background(progress);
@@ -315,14 +318,16 @@ impl PlaybackRun {
             self.queue_len());
         progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+        self.mark_reported(StopReport::mark_sent(
+            self.reporter.report_stopped(self.last_valid_pos),
+        ));
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: completed_slot_id,
             run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: false,
             consume: false,
-            progress_report_accepted: self.stop_report.is_accepted(),
+            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
         false
@@ -377,7 +382,9 @@ impl PlaybackRun {
     fn stop_at_queue_end(&mut self, stop: &QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
         progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(stop.completed_pos));
+        self.mark_reported(StopReport::mark_sent(
+            self.reporter.report_stopped(stop.completed_pos),
+        ));
         self.close_prepared_source_at(provider_lifecycle_close_pos(
             stop.completed_item,
             stop.natural,
@@ -391,7 +398,7 @@ impl PlaybackRun {
             position_ticks: stop.completed_pos,
             played: stop.played_out,
             consume: stop.consume_track,
-            progress_report_accepted: self.stop_report.is_accepted(),
+            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
         false // signals run() to return

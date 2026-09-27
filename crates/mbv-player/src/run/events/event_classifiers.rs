@@ -16,10 +16,10 @@ pub(crate) fn is_clocked_audio_error(
 ///
 /// Pressing Enter on two queue rows in quick succession sends two
 /// `PlayerCommand::JumpTo`s; both are drained before any mpv event, so
-/// `forced_slot_id` holds the *second* target. mpv, meanwhile, may have
+/// The forced-jump state holds the *second* target. mpv, meanwhile, may have
 /// briefly started the first target before the second `playlist-pos` write
 /// landed, and emits a `Stop` `EndFile` for it. The real target's own
-/// `EndFile` already consumed `forced_slot_id` and advanced the queue, so
+/// `EndFile` already consumed the forced-jump state and advanced the queue, so
 /// this stray one has no forced marker. Falling through to the
 /// `current_idx + 1` advance would step the active index one past the row
 /// the user actually selected, desyncing the UI from what mpv is playing.

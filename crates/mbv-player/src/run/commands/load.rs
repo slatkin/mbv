@@ -1,9 +1,10 @@
 use super::{
     mpv_err_str, mpv_load_opts, mpv_title_opt, mpv_url_for_queue_item, queue_load_indices,
     queue_load_location, reassert_queue_layout, send_ep_info, spawn_progress_reporter,
-    start_queue_playback, EmbyItem, ExecSlot, ExecutionSequence, LoadState, Mpv, PlaybackOrigin,
-    PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
+    start_queue_playback, EmbyItem, ExecSlot, ExecutionSequence, Mpv, PlaybackOrigin, PlaybackRun,
+    PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
 };
+use crate::run::StopAction;
 
 impl PlaybackRun {
     pub(super) fn cmd_load_new(
@@ -42,10 +43,8 @@ impl PlaybackRun {
         );
         self.current_idx = 0;
         self.load_active_item_state();
-        self.stop_report = StopReport::NotSent;
-        self.load_state = LoadState::begin_single();
         self.pending_initial_playlist_layout = false;
-        self.begin_item_lifecycle();
+        self.begin_item_lifecycle(StopAction::Deferred);
         {
             let mut st = self.status.lock().unwrap();
             st.runtime_ticks = item.runtime_ticks;
@@ -161,7 +160,6 @@ impl PlaybackRun {
         );
         self.current_idx = start_idx;
         self.load_active_item_state();
-        self.begin_item_lifecycle();
         self.initialize_queue_start(
             had_previous_queue,
             active_as_emby.as_ref(),
@@ -189,16 +187,18 @@ impl PlaybackRun {
         active_title: String,
         active_guid: String,
         progress: &mut ProgressGuard,
-        initialize_load_state: bool,
+        join_progress: bool,
     ) {
-        self.stop_report = if had_previous_queue {
-            StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos))
+        let action = if had_previous_queue {
+            StopAction::ReportedNow(StopReport::mark_sent(
+                self.reporter.report_stopped(self.last_valid_pos),
+            ))
         } else {
-            StopReport::NotSent
+            StopAction::NothingPlaying
         };
-        if initialize_load_state {
-            self.load_state = LoadState::begin_single();
-            self.pending_initial_playlist_layout = false;
+        self.begin_item_lifecycle(action);
+        self.pending_initial_playlist_layout = false;
+        if join_progress {
             progress.stop_and_join(Self::progress_join_budget());
         }
         if let Some(emby) = active_as_emby {
@@ -293,7 +293,6 @@ impl PlaybackRun {
             PlaybackOrigin::Queue
         };
         self.load_active_item_state();
-        self.begin_item_lifecycle();
         self.initialize_queue_start(
             had_previous_queue,
             active_item.as_emby(),
@@ -318,8 +317,8 @@ impl PlaybackRun {
     ) {
         let old_pos = self.last_valid_pos;
         progress.stop_and_join(Self::progress_join_budget());
-        if self.stop_report == StopReport::NotSent {
-            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(old_pos));
+        if self.is_unreported() {
+            self.mark_reported(StopReport::mark_sent(self.reporter.report_stopped(old_pos)));
         }
         self.close_prepared_source_at(old_pos);
         let _ = mpv.command("stop", &[]);
@@ -343,9 +342,8 @@ impl PlaybackRun {
             PlaybackOrigin::Queue
         };
         self.load_active_item_state();
-        self.begin_item_lifecycle();
+        self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
         self.active_file_starting = false;
-        self.load_state = LoadState::begin_single();
         self.pending_initial_playlist_layout = false;
         self.ext_sub_urls.clear();
         self.reporter.clear_session();
