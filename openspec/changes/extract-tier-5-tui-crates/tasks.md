@@ -182,14 +182,14 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 2. `mbv-theme`
 
-- [ ] 2.1 Create `crates/mbv-theme`. Deps: `ratatui`. `git mv` the
+- [x] 2.1 Create `crates/mbv-theme`. Deps: `ratatui`. `git mv` the
   following:
   - `src/app/render/theme.rs` → `src/lib.rs`;
   - `src/app/render/theme/*` → `src/`.
 
   Rewrite `crate::app::render::theme::` → `crate::`. Verify:
   `cargo nextest run -p mbv-theme` passes.
-- [ ] 2.2 Delete `mod theme;` and the `pub(crate) use theme::{…}` re-export
+- [x] 2.2 Delete `mod theme;` and the `pub(crate) use theme::{…}` re-export
   block from `render.rs`. Delete `src/app/infra/palette.rs` and its `mod`
   line, and remove `palette` from the `pub(crate) use self::infra::{…}` line
   in `src/app.rs`. Add `mbv-theme` to the root `[dependencies]`. Rewrite
