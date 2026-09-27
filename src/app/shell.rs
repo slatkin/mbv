@@ -160,7 +160,7 @@ pub struct Model {
     /// One authoritative TV Latest section snapshot per Emby library view.
     pub(in crate::app) tv_latest_snapshots:
         std::collections::HashMap<String, DestinationLatestSnapshot>,
-    pub(in crate::app) home_context_item: Option<mbv_core::api::EmbyItem>,
+    pub(in crate::app) home_context_item: Option<mbv_emby_model::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
     /// size never spuriously resize; the draw path's size normalization is

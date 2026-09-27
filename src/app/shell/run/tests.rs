@@ -246,11 +246,8 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         id: "user-1".into(),
         username: "listener".into(),
     });
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "saved-token",
-    )
-    .expect("secret is written under the test state dir");
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "saved-token")
+        .expect("secret is written under the test state dir");
     app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
         Err(AudiobookshelfError {
@@ -271,8 +268,7 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         "a rejection clears the runtime user"
     );
     assert!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-            .is_none(),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_none(),
         "a rejection clears the saved credential"
     );
 }

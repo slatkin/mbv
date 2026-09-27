@@ -1,7 +1,7 @@
 use crate::app::components::library_playback_panel::TransportAvailability;
 use crate::app::palette;
 use crate::app::render::arrangements::playback_transport::transport_rows;
-use mbv_core::playback_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
+use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -177,7 +177,7 @@ fn render_seekbar(
         return;
     }
     let ratio = if runtime > 0 {
-        (mbv_core::api::ticks_to_seconds(position) / mbv_core::api::ticks_to_seconds(runtime))
+        (mbv_emby_model::ticks_to_seconds(position) / mbv_emby_model::ticks_to_seconds(runtime))
             .clamp(0.0, 1.0)
     } else {
         0.0

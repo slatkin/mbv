@@ -6,9 +6,9 @@ use super::{
     IntroState, LoadState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
     QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
 };
-use crate::playback_queue::MpvUrlSource;
 use crate::player::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
+use mbv_queue::MpvUrlSource;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -417,7 +417,7 @@ impl PlaybackRun {
         self.active_lifecycle.close(position_ticks);
         self.active_lifecycle = ActiveItemLifecycle::None;
         if let Some(mut prepared) = self.prepared_source.take() {
-            prepared.close(crate::api::ticks_to_seconds(position_ticks));
+            prepared.close(mbv_emby_model::ticks_to_seconds(position_ticks));
         }
     }
 
@@ -508,7 +508,7 @@ impl PlaybackRun {
         log::info!(
             target: "player",
             "playback init origin={origin:?} idx={start_idx} item_pos={}s",
-            initial_pos / crate::api::TICKS_PER_SECOND
+            initial_pos / mbv_emby_model::TICKS_PER_SECOND
         );
         let run_identity = status.lock().unwrap().sequence_generation;
         let active_file = queue.has_audiobookshelf_entries();
@@ -601,7 +601,7 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
         QueueItem::Feed(entry) => {
             let runtime = i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             InitialItemState {
-                position_ticks: if crate::api::should_resume(entry.position_ticks, runtime) {
+                position_ticks: if mbv_emby_model::should_resume(entry.position_ticks, runtime) {
                     entry.position_ticks
                 } else {
                     0
@@ -619,7 +619,7 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
             let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
             let position_ticks = item.playback_position_ticks();
             InitialItemState {
-                position_ticks: if crate::api::should_resume(position_ticks, runtime) {
+                position_ticks: if mbv_emby_model::should_resume(position_ticks, runtime) {
                     position_ticks
                 } else {
                     0

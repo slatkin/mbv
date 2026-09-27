@@ -20,6 +20,44 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 const LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
 const LOCAL_DAEMON_CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Resolves the configured endpoint for a library name (#256). Matches
+/// case-insensitively (the query is lowercased before lookup; `routes`'
+/// keys are already lowercased by `parse_config`). No wildcard fallback --
+/// returns `None` if the library has no route, and the caller stays local.
+///
+/// Parses the stored string via `DaemonEndpoint::parse` and requires it to
+/// be `Tcp(_)` -- library routing is a remote-only feature (#239 addendum:
+/// "#222 and #223 are remote-connection features only"), so anything else
+/// is malformed: a bare pre-#256 device-name string (which `parse` would
+/// otherwise silently accept as a bogus `Unix(PathBuf)` socket path), a
+/// `unix://` value, or a bare `local`/empty value are all logged and
+/// skipped rather than routed. This is a pure, synchronous, no-network
+/// lookup -- the entire point of #256 is that route resolution on the
+/// play/enqueue path never touches `/Sessions` again.
+#[must_use]
+pub fn resolve_library_route(
+    routes: &std::collections::BTreeMap<String, String>,
+    library_name: &str,
+) -> Option<DaemonEndpoint> {
+    let raw = routes.get(&library_name.to_lowercase())?;
+    match DaemonEndpoint::parse(raw) {
+        Ok(endpoint @ DaemonEndpoint::Tcp(_)) => Some(endpoint),
+        Ok(other) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
+            );
+            None
+        }
+        Err(e) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
+            );
+            None
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DaemonEndpoint {
     Local,
@@ -78,7 +116,7 @@ impl DaemonEndpoint {
     pub(crate) fn connect_stream(&self) -> Result<SocketStream, String> {
         match self {
             Self::Local => {
-                let path = PathBuf::from(crate::config::control_socket_path());
+                let path = PathBuf::from(mbv_config::control_socket_path());
                 let start = std::time::Instant::now();
                 loop {
                     match UnixStream::connect(&path) {
@@ -112,7 +150,7 @@ impl DaemonEndpoint {
 impl std::fmt::Display for DaemonEndpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Local => write!(f, "local ({})", crate::config::control_socket_path()),
+            Self::Local => write!(f, "local ({})", mbv_config::control_socket_path()),
             Self::Unix(path) => write!(f, "unix://{}", path.display()),
             Self::Tcp(addr) => write!(f, "tcp://{addr}"),
         }

@@ -7,13 +7,13 @@ use super::super::{
     complete_pending_idle_queue_load, settle_and_redispatch, DaemonLoop,
 };
 use super::EventOutcome;
-use crate::ctrl::{
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::{
     CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::playback_queue::QueueSlotId;
-use crate::player::{PlayerCommand, PlayerEvent};
 use mbv_ids::ItemId;
+use mbv_queue::QueueSlotId;
 use std::time::Duration;
 
 impl DaemonLoop {

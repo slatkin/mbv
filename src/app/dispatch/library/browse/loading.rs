@@ -1,12 +1,12 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent, PAGE_SIZE};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 fn restored_tv_content_mode(
     is_tv_library: bool,
     library_total: Option<usize>,
-    saved_mode: Option<&mbv_core::config::TvContentMode>,
-) -> Option<mbv_core::config::TvContentMode> {
+    saved_mode: Option<&mbv_queue::TvContentMode>,
+) -> Option<mbv_queue::TvContentMode> {
     is_tv_library.then(|| {
         crate::app::render::resolve_tv_content_mode(library_total.unwrap_or_default(), saved_mode)
     })
@@ -140,7 +140,7 @@ impl App {
     pub(in crate::app) fn spawn_restore_library_position(
         &self,
         lib_idx: usize,
-        saved: crate::config::LibraryPosition,
+        saved: mbv_queue::LibraryPosition,
     ) {
         let visible_rows = self.lib_page_size();
         let Some(client) = self.emby_snapshot() else {
@@ -163,18 +163,18 @@ impl App {
                                 saved_level.tv_content_mode.as_ref(),
                             )
                         });
-                    if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Latest)) {
+                    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Latest)) {
                         let items = client.get_latest_episodes(&saved_level.parent_id, 30)?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
-                    if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Upcoming)) {
+                    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
                         let items = client.get_upcoming(&saved_level.parent_id, 30)?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
                     let letter_filter = match tv_mode {
-                        Some(mbv_core::config::TvContentMode::Range(index)) => {
+                        Some(mbv_queue::TvContentMode::Range(index)) => {
                             crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
                         }
                         _ => saved_level.letter_filter_index.and_then(|index| {

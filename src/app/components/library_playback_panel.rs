@@ -29,7 +29,7 @@ use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::state::types::playback::PlaybackState;
-use mbv_core::playback_queue::PlaybackTitleParts;
+use mbv_queue::PlaybackTitleParts;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::app) struct TransportAvailability {
@@ -260,7 +260,7 @@ impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
+    use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use rstest::rstest;

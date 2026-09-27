@@ -10,9 +10,9 @@ fn packaged_startup_context_is_service_independent() {
 
 #[test]
 fn audiobookshelf_reconciliation_installs_context_and_enables_admission() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "owner-secret",
     )
     .unwrap();
@@ -38,14 +38,15 @@ fn audiobookshelf_reconciliation_installs_context_and_enables_admission() {
 
 #[test]
 fn packaged_context_loads_unreachable_emby_without_authenticating() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut config = Config::default();
-    config.emby_setup = Some(crate::config::EmbySetup::new(
-        "http://127.0.0.1:1",
-        "owner-user",
-    ));
-    crate::config::save_service_secret(crate::config::ServiceKind::Emby, "unreachable-token")
-        .unwrap();
+    let _guard = mbv_config::TestStateDirGuard::new();
+    let config = Config {
+        emby_setup: Some(mbv_config::EmbySetup::new(
+            "http://127.0.0.1:1",
+            "owner-user",
+        )),
+        ..Config::default()
+    };
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "unreachable-token").unwrap();
     let owner =
         EmbyOwnerContext::from_packaged_storage_result(&config).expect("owner context loads");
     assert_eq!(owner.revision, 1);
@@ -65,7 +66,7 @@ fn emby_absence_keeps_feed_admission_and_rejects_emby_admission() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -89,7 +90,7 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
-    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
+    let mut transitions = crate::player::transition::OwnerTransitionState::default();
     handle_ws(
         WsEvent::TogglePause,
         None,
@@ -110,37 +111,37 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
 fn owner_administration_is_local_transport_only() {
     assert!(owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Local)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Tcp)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         None
     ));
     // The user-owned Local daemon may reconcile Audiobookshelf but not Emby.
     assert!(owner_admin_transport_allowed(
         DaemonRole::Local,
-        crate::config::ServiceKind::Audiobookshelf,
+        mbv_queue::ServiceKind::Audiobookshelf,
         Some(CtrlTransport::Local)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Local,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Local)
     ));
 }
 
 #[test]
 fn audiobookshelf_reconciliation_rejects_revision_mismatch_without_state_change() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "owner-secret",
     )
     .unwrap();
@@ -164,9 +165,9 @@ fn audiobookshelf_reconciliation_rejects_revision_mismatch_without_state_change(
 
 #[test]
 fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_change() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "owner-secret",
     )
     .unwrap();
@@ -177,7 +178,7 @@ fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_chang
     let pre = current.as_ref().unwrap().generation;
 
     // Drop the Service secret so the owner context can no longer be loaded.
-    crate::config::clear_service_secret(crate::config::ServiceKind::Audiobookshelf);
+    mbv_config::clear_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
 
     let result = reconcile_abs(1, &mut current);
     assert!(
@@ -193,9 +194,9 @@ fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_chang
 
 #[test]
 fn audiobookshelf_reconciliation_drops_context_when_setup_is_absent() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "owner-secret",
     )
     .unwrap();
@@ -207,7 +208,7 @@ fn audiobookshelf_reconciliation_drops_context_when_setup_is_absent() {
         "setup must install context before removal"
     );
 
-    crate::config::remove_audiobookshelf_setup_and_secret().unwrap();
+    mbv_config::remove_audiobookshelf_setup_and_secret().unwrap();
     reconcile_abs(1, &mut current).unwrap();
     assert!(
         current.is_none(),
@@ -248,9 +249,9 @@ fn reconcile_abs_with_queue(
 
 #[test]
 fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://a.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://a.example"),
         "secret-a",
     )
     .unwrap();
@@ -266,8 +267,8 @@ fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
     assert!(current.is_some(), "initial setup installs context");
 
     // Replace with a different server.
-    crate::config::replace_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://b.example"),
+    mbv_config::replace_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://b.example"),
         "secret-b",
         || Ok(()),
         || {},
@@ -298,9 +299,9 @@ fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
 
 #[test]
 fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://a.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://a.example"),
         "secret-a",
     )
     .unwrap();
@@ -318,7 +319,7 @@ fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
                 mime_type: Some("audio/mpeg".into()),
                 duration_ticks: None,
                 pub_date_secs: None,
-                feed_kind: Some(crate::config::FeedKind::Audio),
+                feed_kind: Some(mbv_queue::FeedKind::Audio),
                 feed_id: None,
                 position_ticks: 0,
                 played: false,
@@ -333,7 +334,7 @@ fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
     assert!(current.is_some());
 
     // Removal (the daemon-side effect of `mbvd --disconnect abs`).
-    crate::config::remove_audiobookshelf_setup_and_secret().unwrap();
+    mbv_config::remove_audiobookshelf_setup_and_secret().unwrap();
     reconcile_abs_with_queue(0, &mut current, &mut queue, &mut source).unwrap();
 
     assert!(current.is_none(), "removal drops the owner context");
@@ -364,7 +365,7 @@ fn every_setup_rejection_reason_is_wire_representable() {
         ServiceSetupRejection::TransitionRejected,
     ] {
         let event = CtrlEvent::ServiceSetupRejected {
-            kind: crate::config::ServiceKind::Emby,
+            kind: mbv_queue::ServiceKind::Emby,
             revision: 4,
             reason,
         };
@@ -375,18 +376,18 @@ fn every_setup_rejection_reason_is_wire_representable() {
         );
     }
 }
-use crate::ctrl::ServiceSetupRejection;
+use mbv_ctrl::ServiceSetupRejection;
 
 #[test]
 fn daemon_install_audiobookshelf_context_enables_player_admission() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "owner-secret",
     )
     .unwrap();
     let runtime = super::AudiobookshelfOwnerContext::from_packaged_storage_result(
-        &crate::config::load_config().unwrap(),
+        &mbv_config::load_config().unwrap(),
     )
     .unwrap();
 

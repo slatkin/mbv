@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::{confirm_replace_queue, make_item};
 use crate::app::ContextAction;
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{
+use mbv_emby_model::EmbyItem;
+use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
 use rstest::{fixture, rstest};
@@ -38,10 +38,10 @@ impl Drop for XdgHomeGuard {
     }
 }
 #[fixture]
-fn make_queue_items() -> Vec<mbv_core::playback_queue::QueueItem> {
+fn make_queue_items() -> Vec<mbv_queue::QueueItem> {
     crate::app::tests::make_items(3)
         .into_iter()
-        .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
+        .map(|i| mbv_queue::QueueItem::Emby(Box::new(i)))
         .collect()
 }
 
@@ -98,11 +98,11 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
 fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {
     let mut app = crate::app::tests::make_app_stub();
     app.player_tab.queue.append_with_id(
-        mbv_core::playback_queue::QueueSlotId::from_raw(700),
+        mbv_queue::QueueSlotId::from_raw(700),
         QueueItem::Emby(Box::new(make_item("stale", "Movie"))),
     );
     app.player_tab.queue.append_with_id(
-        mbv_core::playback_queue::QueueSlotId::from_raw(900),
+        mbv_queue::QueueSlotId::from_raw(900),
         QueueItem::Emby(Box::new(make_item("stale-2", "Movie"))),
     );
     app.execute_context_action(Some(action), None);
@@ -184,21 +184,17 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     let _xdg = XdgHomeGuard::new();
     let mixed = mixed_audiobookshelf_queue();
     let mut app = crate::app::tests::make_app_stub();
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://old-books.example"),
-    );
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "old-secret",
-    )
-    .unwrap();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://old-books.example",
+    ));
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
     app.remote_player_tab = Some(crate::app::state::types::player_tab::PlayerTab::new(
         mixed.clone(),
         3,
     ));
-    mbv_core::config::save_queue_state(&mbv_core::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    mbv_config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: mixed.clone(),
         cursor: 3,
         last_played_content_id: None,
@@ -213,32 +209,29 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_core::config::load_queue_state().unwrap().items);
+    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
 
     // Refill the projections and make the local slot active: this is the
     // local Bound replacement path, while remote_player_tab remains remote Bound.
     let mixed = mixed_audiobookshelf_queue();
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://replacement-books.example"),
-    );
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "replacement-secret",
-    )
-    .unwrap();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://replacement-books.example",
+    ));
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "replacement-secret")
+        .unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
     let active_slot = app.player_tab.slot_id_at(2).unwrap();
     assert!(matches!(
         app.player_tab.queue.set_active_slot(active_slot),
-        mbv_core::playback_queue::QueueMutationResult::Applied(())
+        mbv_queue::QueueMutationResult::Applied(())
     ));
     app.player.status.lock().unwrap().active = true;
     app.remote_player_tab = Some(crate::app::state::types::player_tab::PlayerTab::new(
         mixed.clone(),
         3,
     ));
-    mbv_core::config::save_queue_state(&mbv_core::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    mbv_config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: mixed,
         cursor: 3,
         last_played_content_id: None,
@@ -252,7 +245,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
             candidate:
                 crate::app::dispatch::session::service_startup::AudiobookshelfValidatedCandidate {
-                    setup: mbv_core::config::AudiobookshelfSetup::new(
+                    setup: mbv_config::AudiobookshelfSetup::new(
                         "https://replacement-books.example",
                     ),
                     user: mbv_core::audiobookshelf::AudiobookshelfUser {
@@ -269,12 +262,12 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_core::config::load_queue_state().unwrap().items);
+    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
 }
 
 #[rstest]
 fn queue_restore_cursor_advances_past_a_completed_last_played_item(
-    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+    make_queue_items: Vec<mbv_queue::QueueItem>,
 ) {
     let items = make_queue_items;
     let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), true);
@@ -283,7 +276,7 @@ fn queue_restore_cursor_advances_past_a_completed_last_played_item(
 
 #[rstest]
 fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing(
-    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+    make_queue_items: Vec<mbv_queue::QueueItem>,
 ) {
     let items = make_queue_items;
     // "id5" isn't in the restored list (e.g. it was removed from the
@@ -310,10 +303,10 @@ fn restore_queue_state_populates_queue_synchronously_from_disk() {
     let _xdg = XdgHomeGuard::new();
 
     let items = crate::app::tests::make_items(3);
-    crate::config::save_queue_state(&crate::config::QueueState::from_emby_items(
+    crate::config::save_queue_state(&mbv_queue::QueueState::from_emby_items(
         items,
         1,
-        crate::config::QueueSource::Unknown,
+        mbv_queue::QueueSource::Unknown,
     ))
     .expect("save queue state");
 
@@ -331,11 +324,11 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();
 
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    crate::config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_content_id: None,
@@ -367,7 +360,7 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
         crate::app::tests::make_items(2),
         app.player_tab.queue_cursor,
     );
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("playlist-id".into()),
         name: "Saved Queue".into(),
     };
@@ -380,7 +373,7 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
     let state = crate::config::load_queue_state().expect("queue state should be saved");
     assert_eq!(
         state.source,
-        crate::config::QueueSource::Playlist {
+        mbv_queue::QueueSource::Playlist {
             id: Some("playlist-id".into()),
             name: "Saved Queue".into(),
         },

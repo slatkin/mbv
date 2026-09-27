@@ -11,7 +11,7 @@ mod tests;
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use mbv_core::config::{
+use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 
@@ -470,7 +470,7 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if !self.state.loading_pages.is_empty() && self.state.books.is_empty() {
             return false;
         }

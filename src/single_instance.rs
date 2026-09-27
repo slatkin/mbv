@@ -25,7 +25,7 @@ pub fn lock_path() -> PathBuf {
 }
 
 pub fn socket_path() -> PathBuf {
-    PathBuf::from(mbv_core::config::control_socket_path())
+    PathBuf::from(mbv_config::control_socket_path())
 }
 
 /// Held for the process lifetime of the Player-owning app. Dropping it

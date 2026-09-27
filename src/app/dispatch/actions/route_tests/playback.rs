@@ -29,7 +29,7 @@ fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, commands) =
         crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("old-playlist".into()),
         name: "Old playlist".into(),
     };
@@ -43,7 +43,7 @@ fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
             .try_iter()
             .find(|command| matches!(command, CtrlCmd::UnifiedQueueReplace { .. })),
         Some(CtrlCmd::UnifiedQueueReplace {
-            source: crate::config::QueueSource::Unknown,
+            source: mbv_queue::QueueSource::Unknown,
             ..
         })
     ));
@@ -111,13 +111,13 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
     assert!(commands.iter().any(|command| {
         matches!(
             command,
-            mbv_core::ctrl::CtrlCmd::PlaybackIntent(intent)
-                if intent.action == mbv_core::ctrl::PlaybackIntentAction::Stop
+            mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
+                if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
         )
     }));
     assert!(!commands
         .iter()
-        .any(|command| { matches!(command, mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { .. }) }));
+        .any(|command| { matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueReplace { .. }) }));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn wholly_playable_play_keeps_the_existing_play_path() {
     let slots = command_rx
         .try_iter()
         .find_map(|command| match command {
-            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
+            mbv_ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
             _ => None,
         })
         .expect("playable play should submit a queue replacement");
@@ -169,7 +169,7 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     assert!(command_rx.try_iter().any(|command| {
         matches!(
             command,
-            mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items }
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items }
                 if items.len() == 1 && items[0].id() == item.id
         )
     }));

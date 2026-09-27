@@ -10,7 +10,7 @@
 /// session and the canonical media-list painters drive row painting.
 #[derive(Clone)]
 pub(in crate::app) struct LibraryListRenderCtx {
-    pub(in crate::app) items: Vec<mbv_core::api::EmbyItem>,
+    pub(in crate::app) items: Vec<mbv_emby_model::EmbyItem>,
     pub(in crate::app::render) cursor: usize,
     pub(in crate::app) total_count: usize,
     pub(in crate::app) library_total: Option<usize>,
@@ -26,7 +26,7 @@ pub(in crate::app) struct LibraryListRenderCtx {
 }
 
 impl LibraryListRenderCtx {
-    pub(in crate::app) fn from_items(items: Vec<mbv_core::api::EmbyItem>, cursor: usize) -> Self {
+    pub(in crate::app) fn from_items(items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) -> Self {
         let total_count = items.len();
         Self {
             items,
@@ -43,7 +43,7 @@ impl LibraryListRenderCtx {
         self.cursor
     }
 
-    pub(in crate::app) fn selected_item(&self) -> Option<&mbv_core::api::EmbyItem> {
+    pub(in crate::app) fn selected_item(&self) -> Option<&mbv_emby_model::EmbyItem> {
         self.items.get(self.cursor)
     }
 

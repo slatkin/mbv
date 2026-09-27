@@ -11,11 +11,12 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
 use crate::app::App;
-use mbv_core::api::{EmbyClient, EmbyItem};
+use mbv_core::api::EmbyClient;
 use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::cast::client::CastMediaItem;
 use mbv_core::cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
-use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
+use mbv_emby_model::EmbyItem;
+use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
@@ -46,7 +47,7 @@ pub(in crate::app) struct AbsCastContext {
 /// should begin.
 struct ResolvedCastItem {
     name: String,
-    content_id: mbv_core::playback_queue::QueueItemContentId,
+    content_id: mbv_queue::QueueItemContentId,
     result: Result<(CastMediaItem, CastProgressTarget), String>,
 }
 
@@ -378,15 +379,13 @@ fn resolve_cast_dispatch_item(
                 },
             )
         }),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-            episode,
-        )) => resolve_abs_episode_cast_item(episode, abs),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => {
-            Err(format!(
-                "\"{}\" is a multi-file audiobook and can't be cast",
-                book.title
-            ))
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
+            resolve_abs_episode_cast_item(episode, abs)
         }
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => Err(format!(
+            "\"{}\" is a multi-file audiobook and can't be cast",
+            book.title
+        )),
     };
     ResolvedCastItem {
         name,
@@ -496,7 +495,7 @@ fn partition_dispatch_with_start(
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
-    use mbv_core::playback_queue::FeedEntry;
+    use mbv_queue::FeedEntry;
 
     fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
         Err("not reached by this test".to_string())
@@ -546,7 +545,7 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
-        app.player_tab.queue = mbv_core::playback_queue::PlaybackQueue::from_queue_items(
+        app.player_tab.queue = mbv_queue::PlaybackQueue::from_queue_items(
             vec![feed_item("a", Some("https://feed/a.mp3"))],
             Some(0),
         );
@@ -645,12 +644,12 @@ mod tests {
         let resolved = vec![
             ResolvedCastItem {
                 name: "Uncastable".into(),
-                content_id: mbv_core::playback_queue::QueueItemContentId::Feed("a".into()),
+                content_id: mbv_queue::QueueItemContentId::Feed("a".into()),
                 result: Err("no url".into()),
             },
             ResolvedCastItem {
                 name: "Castable".into(),
-                content_id: mbv_core::playback_queue::QueueItemContentId::Feed("b".into()),
+                content_id: mbv_queue::QueueItemContentId::Feed("b".into()),
                 result: Ok((
                     CastMediaItem {
                         url: "https://b".into(),

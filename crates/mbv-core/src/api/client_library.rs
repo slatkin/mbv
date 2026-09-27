@@ -1,4 +1,5 @@
-use super::{parse_item, EmbyClient, EmbyItem};
+use super::{parse_item, EmbyClient};
+use mbv_emby_model::EmbyItem;
 use serde_json::Value;
 
 /// `Fields` for `get_latest`. Must include every field its parser

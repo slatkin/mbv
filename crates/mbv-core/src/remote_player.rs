@@ -3,10 +3,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::{EmbyClient, EmbyItem};
-use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
-use crate::playback_queue::QueueItem;
-use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+use crate::api::EmbyClient;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,10 +27,10 @@ pub enum ShutdownResponse {
 #[derive(Clone, Debug)]
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
-    pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
+    pub subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<EmbyItem>>>,
-    pub unified_queue: Arc<Mutex<Option<crate::ctrl::UnifiedQueueStateData>>>,
-    pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
+    pub unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
+    pub queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
@@ -53,10 +54,13 @@ pub struct RemotePlayer {
 
 pub(crate) mod connect;
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(any(test, feature = "test"))]
 pub use connect::connect_stub_daemon_pair;
 pub use connect::signal_local_daemon_service_setup;
-pub use connect::DaemonEndpoint;
+pub use connect::{resolve_library_route, DaemonEndpoint};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {
@@ -178,7 +182,7 @@ impl RemotePlayer {
     }
 
     #[must_use]
-    pub fn new_playback_intent(&self, action: crate::ctrl::PlaybackIntentAction) -> PlaybackIntent {
+    pub fn new_playback_intent(&self, action: mbv_ctrl::PlaybackIntentAction) -> PlaybackIntent {
         let id = self.next_playback_id.fetch_add(1, Ordering::Relaxed);
         PlaybackIntent {
             request_id: id,
@@ -227,7 +231,7 @@ impl RemotePlayer {
         &self,
         items: Vec<QueueItem>,
         cursor: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) -> bool {
         let cursor = cursor.min(items.len().saturating_sub(1));
         {
@@ -260,13 +264,13 @@ impl RemotePlayer {
     pub fn play(
         &self,
         item: &EmbyItem,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
         let queue_item = QueueItem::Emby(Box::new(item.clone()));
         let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
-            vec![crate::ctrl::UnifiedQueueSlot {
+            vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,
                 item: queue_item,
             }],
@@ -290,7 +294,7 @@ impl RemotePlayer {
         &self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
@@ -299,7 +303,7 @@ impl RemotePlayer {
             .cloned()
             .map(|i| QueueItem::Emby(Box::new(i)))
             .enumerate()
-            .map(|(index, item)| crate::ctrl::UnifiedQueueSlot {
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
                 slot_id: (index + 1) as u64,
                 item,
             })
@@ -317,9 +321,8 @@ impl RemotePlayer {
     }
 
     pub fn stop(&self) {
-        let _ = self.send_playback_intent(
-            self.new_playback_intent(crate::ctrl::PlaybackIntentAction::Stop),
-        );
+        let _ = self
+            .send_playback_intent(self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop));
     }
 
     /// Actively tears down the control-socket connection (#233): shuts
@@ -366,8 +369,8 @@ impl RemotePlayer {
     /// projection. A peer without the additive capability is refused locally.
     pub fn update_queue_source(
         &self,
-        source: crate::config::QueueSource,
-        lineage: crate::ctrl::QueueLineage,
+        source: mbv_queue::QueueSource,
+        lineage: mbv_queue::QueueLineage,
     ) -> Result<(), String> {
         if !self.supports_owner_queue_load() {
             return Err("daemon does not support owner queue source updates".to_string());
@@ -380,10 +383,10 @@ impl RemotePlayer {
 
     pub fn load_queue_idle(
         &self,
-        request_id: crate::ctrl::QueueLoadRequestId,
-        slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+        request_id: mbv_ctrl::QueueLoadRequestId,
+        slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
         cursor: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) -> Result<(), String> {
         if !self.supports_owner_queue_load() {
             return Err("daemon does not support owner-authoritative idle queue loads".to_string());
@@ -404,7 +407,7 @@ impl RemotePlayer {
     /// Panics if the `unified_queue` mutex is poisoned: a previous owner
     /// panicked while holding it.
     #[must_use]
-    pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
+    pub fn unified_queue_state(&self) -> Option<mbv_ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }
 
@@ -469,9 +472,9 @@ impl RemotePlayer {
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let queue_len = items.len();
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
-        let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
+        let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
-        let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
+        let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));

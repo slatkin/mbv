@@ -1,7 +1,7 @@
 use crate::app::components::library_panel::LibraryContentOwner;
 use crate::app::shell::Model;
 use crate::app::tests::make_app_stub;
-use mbv_core::config::{HomeSelectorKey, SelectorIdentity};
+use mbv_config::{HomeSelectorKey, SelectorIdentity};
 
 #[test]
 fn legacy_home_section_preference_falls_back_to_continue_watching() {

@@ -46,14 +46,14 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 19,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("only by the Stay-alive owner"))
     );
 
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Album,
-            lineage: crate::ctrl::QueueLineage(3),
+            lineage: mbv_queue::QueueLineage(3),
         },
         CtrlContext {
             reply_tx: &reply_tx,
@@ -88,7 +88,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
     let client_id = registry.lock().unwrap().connect(
         reply_tx.clone(),
         CtrlTransport::Local,
-        crate::ctrl::CtrlAudiobookshelfCapabilities {
+        mbv_ctrl::CtrlAudiobookshelfCapabilities {
             queue: true,
             progress: true,
             book_queue: true,
@@ -136,7 +136,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 21,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("did not negotiate"))
     );
 }
@@ -195,7 +195,7 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 51,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
 }
@@ -218,8 +218,8 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 52,
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
-                slot_id: crate::ctrl::slot_id_to_u64(old_slot),
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
+                slot_id: mbv_ctrl::slot_id_to_u64(old_slot),
                 item: emby_qi("new", "Video", "Movie"),
             }],
             cursor: 0,
@@ -315,7 +315,7 @@ fn assert_idle_load_committed(
 /// same item, the reused slot id, position reset, and not played.
 fn assert_replacement_untouched_by_late_observation(
     owner: &crate::daemon::DaemonPlayerOwner,
-    old_slot: crate::playback_queue::QueueSlotId,
+    old_slot: mbv_queue::QueueSlotId,
 ) {
     assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
     assert_eq!(
@@ -351,7 +351,7 @@ fn assert_idle_load_accepted(
         recv_event(rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: actual,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         } if actual == request_id
     ));
 }
@@ -368,7 +368,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
     let slots = |id: &str| {
-        vec![crate::ctrl::UnifiedQueueSlot {
+        vec![mbv_ctrl::UnifiedQueueSlot {
             slot_id: 901,
             item: emby_qi(id, "Video", "Movie"),
         }]
@@ -425,7 +425,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 54,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("another idle queue load is pending"))
     );
     assert!(
@@ -477,7 +477,7 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 56,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("timed out"))
     );
 }
@@ -536,7 +536,7 @@ fn pending_idle_load_does_not_block_request_shutdown() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 57,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("run changed"))
     );
     assert!(owner.pending_idle_load.is_none());
@@ -562,7 +562,7 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 55,
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 902,
                 item: emby_qi("new", "Video", "Movie"),
             }],
@@ -599,7 +599,7 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
     assert!(
         matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 55,
-        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        result: mbv_ctrl::QueueLoadResult::Rejected { reason },
     } if reason == "stop finalization failed")
     );
 }

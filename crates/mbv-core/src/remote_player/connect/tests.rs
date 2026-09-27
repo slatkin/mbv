@@ -1,7 +1,7 @@
 use super::*;
-use crate::api::EmbyImageTags;
-use crate::config::QueueSource;
-use crate::playback_queue::{FeedEntry, QueueItem};
+use mbv_emby_model::EmbyImageTags;
+use mbv_queue::QueueSource;
+use mbv_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
 
 fn make_media_item(id: &str) -> EmbyItem {
@@ -84,7 +84,7 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -141,7 +141,7 @@ fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(!remote.send_ctrl_cmd(CtrlCmd::Stop));
@@ -159,7 +159,7 @@ fn failed_writer_write_emits_connection_lost_once() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
@@ -176,7 +176,7 @@ fn reader_eof_emits_connection_lost_instead_of_stopped() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
@@ -195,7 +195,7 @@ fn writer_and_reader_loss_emit_only_one_disconnect_event() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(
@@ -255,6 +255,41 @@ fn daemon_endpoint_parses_local_and_unix_paths() {
 }
 
 #[test]
+fn resolve_library_route_has_no_wildcard_fallback() {
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "tcp://192.168.0.104:47788".to_string());
+    assert_eq!(
+        resolve_library_route(&routes, "Music"),
+        Some(DaemonEndpoint::Tcp("192.168.0.104:47788".parse().unwrap()))
+    );
+    assert_eq!(resolve_library_route(&routes, "movies"), None);
+}
+
+#[test]
+fn resolve_library_route_rejects_a_bare_device_name_as_malformed() {
+    // A stale pre-#256 config entry (device name, no scheme) must
+    // NOT silently resolve -- DaemonEndpoint::parse would otherwise
+    // accept it as a bogus Unix(PathBuf) socket path. Library routing
+    // is tcp://-only (#239 addendum), so anything that doesn't parse
+    // to Tcp(_) is treated as malformed: logged and skipped.
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "living-room-pc".to_string());
+    assert_eq!(resolve_library_route(&routes, "music"), None);
+}
+
+#[test]
+fn resolve_library_route_rejects_unix_and_local_endpoints() {
+    // Library routing is remote-only -- a unix:// or bare "local"
+    // value is well-formed as a DaemonEndpoint but not a valid
+    // library route, so it must still resolve to None.
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "unix:///run/mbvd.sock".to_string());
+    routes.insert("movies".to_string(), "local".to_string());
+    assert_eq!(resolve_library_route(&routes, "music"), None);
+    assert_eq!(resolve_library_route(&routes, "movies"), None);
+}
+
+#[test]
 fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
@@ -266,7 +301,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         let mut hello = CtrlHello::current();
         hello
             .capabilities
-            .push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+            .push(mbv_ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
         hello.capabilities.push("future-capability".to_string());
         writeln!(
             writer,
@@ -282,7 +317,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -314,7 +349,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -398,7 +433,7 @@ fn track_changed_leaves_status_mirror_for_app_to_rederive() {
 
     apply_ctrl_event(
         CtrlEvent::Player(PlayerEvent::TrackChanged {
-            slot_id: crate::playback_queue::QueueSlotId::from_raw(2),
+            slot_id: mbv_queue::QueueSlotId::from_raw(2),
             transition: None,
         }),
         &status,
@@ -444,7 +479,7 @@ fn command_rejected_forwards_reason_as_player_event() {
 
 #[test]
 fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
-    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
     let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
@@ -468,7 +503,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
         active_slot: Some(22),
         revision: 9,
         source: QueueSource::Remote,
-        lineage: crate::ctrl::QueueLineage::default(),
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     };
@@ -521,7 +556,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
 
 #[test]
 fn unified_queue_state_preserves_canonical_coordinates_and_source() {
-    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
@@ -563,7 +598,7 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
             id: Some("pl-1".into()),
             name: "My Playlist".into(),
         },
-        lineage: crate::ctrl::QueueLineage::default(),
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     };

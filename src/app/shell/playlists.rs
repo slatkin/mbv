@@ -23,9 +23,7 @@ impl Model {
                     open_scroll: self.app.playlists_open_scroll,
                     open_loading: self.app.playlists_open_loading,
                     loaded_id: match &self.app.queue_source {
-                        crate::config::QueueSource::Playlist { id: Some(id), .. } => {
-                            Some(id.clone())
-                        }
+                        mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
                         _ => None,
                     },
                 });
@@ -91,7 +89,7 @@ impl Model {
                         crate::app::state::types::playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
-                            source: crate::config::QueueSource::Playlist {
+                            source: mbv_queue::QueueSource::Playlist {
                                 id: Some(playlist.id.clone()),
                                 name: playlist.name.clone(),
                             },

@@ -5,19 +5,21 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
-use crate::api::{EmbyClient, EmbyItem};
-use crate::ctrl::{
+use crate::api::EmbyClient;
+use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
+use crate::player::Player;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
-use crate::player::{Player, PlayerCommand, PlayerEvent};
+use mbv_emby_model::EmbyItem;
+use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
-    let path = crate::config::control_socket_path();
+    let path = mbv_config::control_socket_path();
     let _ = std::fs::remove_file(&path);
     match UnixListener::bind(&path) {
         Ok(listener) => {
@@ -61,7 +63,7 @@ pub(super) enum DaemonEvent {
     PlaybackResolved {
         start_idx: usize,
         start_ticks: i64,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         client_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
@@ -205,8 +207,8 @@ impl PlaybackIntentState {
         }
     }
 
-    pub(super) fn pipe_status(&self) -> Option<crate::ctrl::PipePlaybackStatus> {
-        use crate::ctrl::PipePlaybackPhase;
+    pub(super) fn pipe_status(&self) -> Option<mbv_ctrl::PipePlaybackStatus> {
+        use mbv_ctrl::PipePlaybackPhase;
         let current = self.current.as_ref()?;
         if !current.pipe_output {
             return None;
@@ -226,7 +228,7 @@ impl PlaybackIntentState {
             ),
             PlaybackIntentPhase::Accepted | PlaybackIntentPhase::Applied => return None,
         };
-        Some(crate::ctrl::PipePlaybackStatus {
+        Some(mbv_ctrl::PipePlaybackStatus {
             request_id: current.request_id,
             generation: current.generation,
             phase,
@@ -237,7 +239,7 @@ impl PlaybackIntentState {
     pub(super) fn output_started_if_current(
         &mut self,
         delay: Option<Duration>,
-    ) -> Option<(CtrlClientId, crate::ctrl::PipePlaybackStatus)> {
+    ) -> Option<(CtrlClientId, mbv_ctrl::PipePlaybackStatus)> {
         let current = self.current.as_mut()?;
         if !current.pipe_output || !matches!(current.action, PlaybackIntentAction::Play { .. }) {
             return None;
@@ -246,16 +248,16 @@ impl PlaybackIntentState {
             current.phase = PlaybackIntentPhase::OutputBuffering;
             current.buffering_deadline = Some(Instant::now() + delay);
             (
-                crate::ctrl::PipePlaybackPhase::OutputBuffering,
+                mbv_ctrl::PipePlaybackPhase::OutputBuffering,
                 Some(delay.as_millis().try_into().unwrap_or(u64::MAX)),
             )
         } else {
             current.phase = PlaybackIntentPhase::Applied;
-            (crate::ctrl::PipePlaybackPhase::OutputStarted, None)
+            (mbv_ctrl::PipePlaybackPhase::OutputStarted, None)
         };
         Some((
             current.connection_id,
-            crate::ctrl::PipePlaybackStatus {
+            mbv_ctrl::PipePlaybackStatus {
                 request_id: current.request_id,
                 generation: current.generation,
                 phase,
@@ -313,7 +315,7 @@ impl PlaybackIntentState {
         connection_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
-        reason: crate::ctrl::PlaybackIntentRejection,
+        reason: mbv_ctrl::PlaybackIntentRejection,
     ) -> Option<PlaybackIntentEvent> {
         let current = self.current.as_ref()?;
         if current.connection_id != connection_id
@@ -363,12 +365,12 @@ pub(super) struct DaemonPlayerOwner {
 }
 
 pub(crate) struct PendingIdleQueueLoad {
-    pub(super) request_id: crate::ctrl::QueueLoadRequestId,
+    pub(super) request_id: mbv_ctrl::QueueLoadRequestId,
     pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
     pub(super) cursor: usize,
-    pub(super) source: crate::config::QueueSource,
+    pub(super) source: mbv_queue::QueueSource,
     pub(super) reply_tx: CtrlSender,
-    pub(super) stopped_run: crate::ctrl::PlaybackGeneration,
+    pub(super) stopped_run: mbv_ctrl::PlaybackGeneration,
     pub(super) started_at: Instant,
 }
 
@@ -394,7 +396,7 @@ pub(super) struct DaemonOwnerContext<'a> {
 pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
     client_id: CtrlClientId,
-    transition: crate::playback_transition::Transition,
+    transition: crate::player::transition::Transition,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -411,7 +413,7 @@ pub(super) fn dispatch_slot_jump(
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
     match transitions.accept(transition) {
-        crate::playback_transition::DispatchDecision::DispatchNow(t) => {
+        crate::player::transition::DispatchDecision::DispatchNow(t) => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=DispatchNow target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
@@ -419,7 +421,7 @@ pub(super) fn dispatch_slot_jump(
             let resume_ticks = crate::player::resume_ticks_for_slot(queue, transition_target);
             ctx.player.send_command(t.into_jump(resume_ticks));
         }
-        crate::playback_transition::DispatchDecision::Queued { superseded } => {
+        crate::player::transition::DispatchDecision::Queued { superseded } => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
@@ -457,7 +459,7 @@ pub(super) fn dispatch_slot_jump(
 /// Drop any in-flight/queued transition: the caller is issuing a
 /// queue-replacing playback command, which deliberately interrupts them.
 pub(super) fn reset_slot_jumps(
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    transitions: &mut crate::player::transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
 ) {
     transitions.reset();
@@ -472,7 +474,7 @@ pub(super) fn settle_and_redispatch(
     observed_request_id: PlaybackRequestId,
     observed_slot: QueueSlotId,
 ) {
-    let crate::playback_transition::SettleOutcome::Settled { dispatch_next } = owner
+    let crate::player::transition::SettleOutcome::Settled { dispatch_next } = owner
         .core
         .transitions
         .settle(observed_request_id, observed_slot)
@@ -508,7 +510,7 @@ pub(super) fn expire_and_redispatch(
     ctrl_clients: &ClientRegistry,
     shared_queue: &SharedQueueState,
 ) {
-    let crate::playback_transition::ExpireOutcome::Expired {
+    let crate::player::transition::ExpireOutcome::Expired {
         expired,
         dispatch_next,
     } = owner.core.transitions.expire(Instant::now())
@@ -536,7 +538,7 @@ pub(super) fn expire_and_redispatch(
             connection_id,
             request_id,
             generation,
-            crate::ctrl::PlaybackIntentRejection::Unavailable,
+            mbv_ctrl::PlaybackIntentRejection::Unavailable,
         ) {
             ctrl_clients
                 .lock()
@@ -565,14 +567,14 @@ pub(super) fn expire_and_redispatch(
 #[derive(Clone, Debug)]
 pub(crate) struct SharedQueueState {
     pub(super) queue: Arc<Mutex<PlaybackQueue>>,
-    pub(super) source: Arc<Mutex<crate::config::QueueSource>>,
-    pub(super) lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,
+    pub(super) source: Arc<Mutex<mbv_queue::QueueSource>>,
+    pub(super) lineage: Arc<Mutex<mbv_queue::QueueLineage>>,
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
 #[derive(Debug)]
 pub struct DaemonPlayerHandle {
-    pub status: Arc<Mutex<crate::player::PlayerStatus>>,
+    pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
 }
 
@@ -596,7 +598,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
 
 #[must_use]
 pub fn pid_file() -> std::path::PathBuf {
-    let dir = crate::config::data_dir_system_or_local();
+    let dir = mbv_config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
     dir.join("mbv.pid")
 }

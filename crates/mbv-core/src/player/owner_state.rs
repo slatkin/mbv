@@ -6,13 +6,13 @@
 //! only via [`PlayerOwnerState::note_observed_active_slot`] from a Playback-run
 //! observation, never from accepting a command.
 
-use crate::playback_queue::{PlaybackQueue, QueueSlotId};
-use crate::playback_transition::OwnerTransitionState;
+use crate::player::transition::OwnerTransitionState;
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 #[derive(Debug, Default)]
 pub struct PlayerOwnerState {
     pub(crate) queue: PlaybackQueue,
-    pub(crate) source: crate::config::QueueSource,
+    pub(crate) source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
     pub(crate) transitions: OwnerTransitionState,
 }
@@ -21,7 +21,7 @@ impl PlayerOwnerState {
     /// Seed an owner core with an existing canonical queue and its source
     /// (queue adoption on startup / handoff).
     #[must_use]
-    pub fn new(queue: PlaybackQueue, source: crate::config::QueueSource) -> Self {
+    pub fn new(queue: PlaybackQueue, source: mbv_queue::QueueSource) -> Self {
         Self {
             queue,
             source,
@@ -101,7 +101,7 @@ impl PlayerOwnerState {
         allowed
             && matches!(
                 self.queue.consume_slot(slot_id),
-                crate::playback_queue::QueueMutationResult::Applied(_)
+                mbv_queue::QueueMutationResult::Applied(_)
             )
     }
 
@@ -114,32 +114,29 @@ impl PlayerOwnerState {
     /// Mint an owner-local transition identity for Bare-mode playback.
     pub fn mint_local_transition(
         &mut self,
-    ) -> (
-        crate::ctrl::PlaybackRequestId,
-        crate::ctrl::PlaybackGeneration,
-    ) {
+    ) -> (mbv_ctrl::PlaybackRequestId, mbv_ctrl::PlaybackGeneration) {
         self.transitions.mint_local_id()
     }
 
     pub fn accept_local_transition(
         &mut self,
-        transition: crate::playback_transition::Transition,
-    ) -> crate::playback_transition::DispatchDecision {
+        transition: crate::player::transition::Transition,
+    ) -> crate::player::transition::DispatchDecision {
         self.transitions.accept(transition)
     }
 
     pub fn settle_local_transition(
         &mut self,
-        request_id: crate::ctrl::PlaybackRequestId,
+        request_id: mbv_ctrl::PlaybackRequestId,
         slot_id: QueueSlotId,
-    ) -> crate::playback_transition::SettleOutcome {
+    ) -> crate::player::transition::SettleOutcome {
         self.transitions.settle(request_id, slot_id)
     }
 
     pub fn expire_local_transition(
         &mut self,
         now: std::time::Instant,
-    ) -> crate::playback_transition::ExpireOutcome {
+    ) -> crate::player::transition::ExpireOutcome {
         self.transitions.expire(now)
     }
 
@@ -166,7 +163,7 @@ impl PlayerOwnerState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::playback_transition::{DispatchDecision, ExpireOutcome, Transition};
+    use crate::player::transition::{DispatchDecision, ExpireOutcome, Transition};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -196,8 +193,8 @@ mod tests {
         );
     }
 
-    fn item(id: &str) -> crate::api::EmbyItem {
-        crate::api::EmbyItem {
+    fn item(id: &str) -> mbv_emby_model::EmbyItem {
+        mbv_emby_model::EmbyItem {
             id: id.to_string(),
             name: format!("Item {id}"),
             item_type: "Episode".to_string(),
@@ -205,7 +202,7 @@ mod tests {
             child_count: None,
             media_type: "Video".to_string(),
             collection_type: String::new(),
-            runtime_ticks: 100 * crate::api::TICKS_PER_SECOND,
+            runtime_ticks: 100 * mbv_emby_model::TICKS_PER_SECOND,
             played: false,
             playback_position_ticks: 0,
             series_id: String::new(),
@@ -232,7 +229,7 @@ mod tests {
             people: Vec::new(),
             external_urls: Vec::new(),
             playlist_item_id: String::new(),
-            image_tags: crate::api::EmbyImageTags::default(),
+            image_tags: mbv_emby_model::EmbyImageTags::default(),
         }
     }
 
@@ -245,9 +242,9 @@ mod tests {
         let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
         let slot_id = queue.slots()[0].slot_id;
         let before_revision = queue.revision();
-        let mut owner = PlayerOwnerState::new(queue, crate::config::QueueSource::default());
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
 
-        let watched_ticks = 86 * crate::api::TICKS_PER_SECOND;
+        let watched_ticks = 86 * mbv_emby_model::TICKS_PER_SECOND;
         owner.apply_completion_progress(slot_id, watched_ticks, false);
 
         let slot = owner.queue.slot(slot_id).expect("slot still present");

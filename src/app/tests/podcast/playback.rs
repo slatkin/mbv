@@ -1,14 +1,14 @@
 use super::*;
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::socket::SocketEvent;
-use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_queue::QueueItem;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
     let context = mbv_core::player::AudiobookshelfPlayerContext::new(
         mbv_core::service_runtime::SetupGeneration::new(1),
-        mbv_core::config::AudiobookshelfSetup::new("https://books.example"),
+        mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
         "device".into(),
     )
@@ -33,7 +33,7 @@ fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
     assert_eq!(app.player_tab.queue_cursor, 0);
     assert!(app.player_tab.queue.active_slot_id().is_some());
     match commands.recv().unwrap() {
-        mbv_core::player::PlayerCommand::SubmitQueue { items, start_idx } => {
+        mbv_ctrl::player::PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(start_idx, 0);
             assert!(items[0].item.is_audiobookshelf());
         }
@@ -158,11 +158,11 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     );
 
     let generation = app.audiobookshelf_runtime.generation();
-    let position_ticks = 120 * mbv_core::api::TICKS_PER_SECOND;
+    let position_ticks = 120 * mbv_emby_model::TICKS_PER_SECOND;
 
     // (a)(b)(c): completion via daemon route.
     app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
-        mbv_core::ctrl::AudiobookshelfProgressEvent {
+        mbv_ctrl::AudiobookshelfProgressEvent {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             position_ticks,
@@ -244,8 +244,8 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
     );
 
     // Activate a different slot so episode-a is inactive.
-    let other = QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-        mbv_core::playback_queue::AudiobookshelfQueueItem {
+    let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-b".into(),
             episode_id: "ep-b".into(),
             title: "Other".into(),

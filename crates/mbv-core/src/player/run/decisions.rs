@@ -1,6 +1,6 @@
 use super::{IntroState, NextUp};
-use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use mbv_ids::ItemId;
+use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::player) struct ActiveItemState {
@@ -38,7 +38,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         Some(QueueItem::Feed(item)) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
+            state.last_valid_pos = if mbv_emby_model::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
                 0
@@ -47,7 +47,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
+            state.last_valid_pos = if mbv_emby_model::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
                 0
@@ -56,7 +56,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item))) => {
             state.osd_title.clone_from(&item.title);
             let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
+            state.last_valid_pos = if mbv_emby_model::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
                 0
@@ -83,8 +83,8 @@ pub(in crate::player) fn seek_decision(seconds: f64, absolute: bool) -> (&'stati
 
 pub(in crate::player) fn volume_decision(requested: i64, maximum: i64) -> (i64, i64) {
     let volume = requested.clamp(0, maximum);
-    let raw = crate::api::saturating_i64_from_f64(
-        (10.0 * crate::api::i64_to_f64_saturating(volume).sqrt()).round(),
+    let raw = mbv_emby_model::saturating_i64_from_f64(
+        (10.0 * mbv_emby_model::i64_to_f64_saturating(volume).sqrt()).round(),
     );
     (volume, raw)
 }
@@ -111,10 +111,10 @@ pub(in crate::player) fn queue_next_up_decision(
     runtime: i64,
     ticks: i64,
 ) -> NextUpDecision {
-    const MIN_RUNTIME: i64 = 600 * crate::api::TICKS_PER_SECOND;
-    const MIN_REMAIN: i64 = 20 * crate::api::TICKS_PER_SECOND;
-    const WINDOW: i64 = 60 * crate::api::TICKS_PER_SECOND;
-    const ARM_WINDOW: i64 = 5 * crate::api::TICKS_PER_SECOND;
+    const MIN_RUNTIME: i64 = 600 * mbv_emby_model::TICKS_PER_SECOND;
+    const MIN_REMAIN: i64 = 20 * mbv_emby_model::TICKS_PER_SECOND;
+    const WINDOW: i64 = 60 * mbv_emby_model::TICKS_PER_SECOND;
+    const ARM_WINDOW: i64 = 5 * mbv_emby_model::TICKS_PER_SECOND;
     if current_idx + 1 >= queue_len || !current_is_episode || !next_is_episode || runtime <= 0 {
         return NextUpDecision::default();
     }
@@ -148,8 +148,8 @@ pub(in crate::player) fn standalone_next_up_decision(
     runtime: i64,
     ticks: i64,
 ) -> NextUpDecision {
-    const WINDOW: i64 = 60 * crate::api::TICKS_PER_SECOND;
-    const ARM_WINDOW: i64 = 5 * crate::api::TICKS_PER_SECOND;
+    const WINDOW: i64 = 60 * mbv_emby_model::TICKS_PER_SECOND;
+    const ARM_WINDOW: i64 = 5 * mbv_emby_model::TICKS_PER_SECOND;
     if state.is_fired() {
         return NextUpDecision::default();
     }

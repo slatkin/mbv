@@ -3,7 +3,7 @@ use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::events::LibEvent;
 use crate::app::tests::{make_app_stub, make_item};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::time::{Duration, Instant};
 
 fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {

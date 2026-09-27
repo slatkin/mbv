@@ -208,7 +208,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        items: Vec<mbv_core::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
     ) {
         if let Some(last) = self
             .libs
@@ -227,7 +227,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        all_items: Vec<mbv_core::api::EmbyItem>,
+        all_items: Vec<mbv_emby_model::EmbyItem>,
         groups: Vec<crate::app::state::types::feed::FeedHomeVideoGroup>,
     ) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -297,7 +297,7 @@ impl App {
     fn handle_music_group_warmup_listed(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
-        groups: Vec<mbv_core::api::EmbyItem>,
+        groups: Vec<mbv_emby_model::EmbyItem>,
     ) {
         // One level fill per group-level child (design D5), deduped through
         // the same `LevelFillState::action_for` decision candidate creation
@@ -319,7 +319,7 @@ impl App {
     fn handle_album_tracks_fetched(
         &mut self,
         album_id: String,
-        mut tracks: Vec<mbv_core::api::EmbyItem>,
+        mut tracks: Vec<mbv_emby_model::EmbyItem>,
     ) {
         // A fallback artist fetch frees its bounded slot here, and the drain
         // arms the next in-scope album so rows keep appearing progressively;
@@ -336,7 +336,7 @@ impl App {
         }
     }
 
-    fn handle_playlists_loaded(&mut self, items: Vec<mbv_core::api::EmbyItem>) {
+    fn handle_playlists_loaded(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
         self.playlists = items;
         self.playlists_loading = false;
         self.playlists_cursor = self
@@ -352,7 +352,7 @@ impl App {
     fn handle_playlist_items_loaded(
         &mut self,
         playlist_id: &str,
-        items: Vec<mbv_core::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
     ) {
         if self
             .playlists_open
@@ -386,7 +386,7 @@ impl App {
         self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
     }
 
-    fn handle_queue_enriched(&mut self, items: Vec<mbv_core::api::EmbyItem>) {
+    fn handle_queue_enriched(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
         let _ = self.merge_refreshed_queue(QueueScope::Local, items);
     }
 
@@ -533,7 +533,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        items: Vec<mbv_core::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
     ) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             if let Some(last) = lib.nav_stack.last_mut() {

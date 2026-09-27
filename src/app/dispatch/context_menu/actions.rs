@@ -4,7 +4,7 @@ use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
 };
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {
@@ -35,7 +35,7 @@ impl App {
                     PendingQueueAction::PlayItems {
                         items,
                         start_idx: 0,
-                        source: crate::config::QueueSource::Unknown,
+                        source: mbv_queue::QueueSource::Unknown,
                         autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
@@ -48,7 +48,7 @@ impl App {
                     PendingQueueAction::PlayItems {
                         items,
                         start_idx: 0,
-                        source: crate::config::QueueSource::Shuffle,
+                        source: mbv_queue::QueueSource::Shuffle,
                         autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
@@ -65,10 +65,7 @@ impl App {
                         .into_iter()
                         .filter(|item| !item.is_folder && crate::app::ui_util::is_playable(item))
                     {
-                        self.submit_queue_item(
-                            mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
-                            false,
-                        );
+                        self.submit_queue_item(mbv_queue::QueueItem::Emby(Box::new(item)), false);
                     }
                 }
                 None
@@ -287,7 +284,7 @@ impl App {
     pub(in crate::app) fn rebuild_queue_for_selection(
         &mut self,
         items: &[EmbyItem],
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) {
         let rebuild_local_queue =
             !self.has_direct_remote_queue() && self.connected_session_id.is_none();
@@ -495,11 +492,7 @@ impl App {
         }
     }
 
-    fn set_feed_entries_played(
-        &mut self,
-        entries: &[mbv_core::playback_queue::FeedEntry],
-        played: bool,
-    ) {
+    fn set_feed_entries_played(&mut self, entries: &[mbv_queue::FeedEntry], played: bool) {
         let user_id = self
             .config
             .lock()

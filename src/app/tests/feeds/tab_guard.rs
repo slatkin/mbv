@@ -1,5 +1,5 @@
 use crate::app::tests::*;
-use mbv_core::playback_queue::FeedEntry;
+use mbv_queue::FeedEntry;
 
 fn playable_feed_entry(guid: &str) -> FeedEntry {
     FeedEntry {
@@ -10,7 +10,7 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -51,10 +51,10 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     });
 
     // Configure a feed subscription and select the Feeds tab.
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
-        kind: mbv_core::config::FeedKind::Audio,
+        kind: mbv_queue::FeedKind::Audio,
     }];
     app.feed_tab
         .entries
@@ -112,7 +112,7 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -142,13 +142,13 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
     app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
     match cmd_rx.try_recv().unwrap() {
-        mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
+        mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
             items,
             start_idx: Some(1),
             ..
         } => assert!(matches!(
             &items[1],
-            mbv_core::playback_queue::QueueItem::Feed(entry)
+            mbv_queue::QueueItem::Feed(entry)
                 if entry.guid == "feed-play"
         )),
         _ => panic!("expected unified Feed submission"),
@@ -170,7 +170,7 @@ fn feed_selection_enqueue_preserves_supplied_order() {
         .slots()
         .iter()
         .filter_map(|slot| match &slot.item {
-            mbv_core::playback_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+            mbv_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
             _ => None,
         })
         .collect();
@@ -234,10 +234,10 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     );
     app.audiobookshelf_libraries.push(abs_library);
     app.audiobookshelf_browse.push(abs_state);
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
-        kind: mbv_core::config::FeedKind::Audio,
+        kind: mbv_queue::FeedKind::Audio,
     }];
     app.feed_tab.entries.resize_with(1, Vec::new);
     app.tab = TabSelection::Feeds;

@@ -2,7 +2,7 @@ use super::*;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::tests::make_app_stub;
-use mbv_core::playback_queue::AudiobookshelfBookQueueItem;
+use mbv_queue::AudiobookshelfBookQueueItem;
 
 fn library() -> mbv_core::audiobookshelf::AudiobookshelfLibrary {
     mbv_core::audiobookshelf::AudiobookshelfLibrary {
@@ -13,7 +13,7 @@ fn library() -> mbv_core::audiobookshelf::AudiobookshelfLibrary {
 }
 
 fn book_queue_item(id: &str) -> QueueItem {
-    QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(
         AudiobookshelfBookQueueItem {
             library_item_id: id.into(),
             title: "Book".into(),
@@ -59,10 +59,8 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
         ),
     );
     app.audiobookshelf_book_browse.push(state);
-    app.player_tab.queue = mbv_core::playback_queue::PlaybackQueue::from_queue_items(
-        vec![book_queue_item("book-1")],
-        Some(0),
-    );
+    app.player_tab.queue =
+        mbv_queue::PlaybackQueue::from_queue_items(vec![book_queue_item("book-1")], Some(0));
 
     app.activate_audiobookshelf_book_row_target(Some(
         crate::app::components::msg::BookChapterTarget::new("book-1".into(), 1),
@@ -71,7 +69,7 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
     assert!(
         matches!(
             rx.try_recv(),
-            Ok(mbv_core::player::PlayerCommand::SeekAbsolute(120.0))
+            Ok(mbv_ctrl::player::PlayerCommand::SeekAbsolute(120.0))
         ),
         "the stable book-qualified target must resolve the chapter's own start"
     );

@@ -1,4 +1,5 @@
-use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_config::FeedSubscription;
+use mbv_queue::FeedKind;
 use std::sync::mpsc;
 
 /// Which field of the add/edit form currently has keyboard focus.

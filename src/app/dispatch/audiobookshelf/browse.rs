@@ -2,8 +2,8 @@ use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
-use mbv_core::api::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
-use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
+use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
+use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 
 mod books;
 pub(in crate::app) use books::audiobookshelf_book_queue_item;

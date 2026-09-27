@@ -1,4 +1,5 @@
-use super::{gen_session_id, parse_item, EmbyClient, EmbyItem, PlaybackInfo};
+use super::{gen_session_id, parse_item, EmbyClient, PlaybackInfo};
+use mbv_emby_model::EmbyItem;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 use serde_json::Value;
 

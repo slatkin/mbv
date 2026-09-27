@@ -266,9 +266,7 @@ impl TvContent {
     pub(super) fn flat_episode_mode(&self) -> bool {
         matches!(
             self.context.tv_content_mode,
-            Some(
-                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
-            )
+            Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         )
     }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {

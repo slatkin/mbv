@@ -174,7 +174,7 @@ fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
 use crate::app::tests::make_item;
 use crate::app::tests::make_items;
 
-fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem>, cursor: usize) {
+fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
     app.player_tab.set_items(items, cursor);
 }
 

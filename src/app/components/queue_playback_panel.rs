@@ -155,7 +155,7 @@ impl QueuePlaybackPanel {
     #[cfg(test)]
     pub(in crate::app) fn transport_title_parts_for_test(
         &self,
-    ) -> Option<mbv_core::playback_queue::PlaybackTitleParts> {
+    ) -> Option<mbv_queue::PlaybackTitleParts> {
         self.transport.title_parts.clone()
     }
 
@@ -300,7 +300,7 @@ impl AppComponent<Msg, UserEvent> for QueuePlaybackPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
+    use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
     use ratatui::Terminal;

@@ -10,8 +10,8 @@ impl PlaybackRun {
     pub(super) fn cmd_jump_to(
         &mut self,
         slot_id: QueueSlotId,
-        request_id: crate::ctrl::PlaybackRequestId,
-        generation: crate::ctrl::PlaybackGeneration,
+        request_id: mbv_ctrl::PlaybackRequestId,
+        generation: mbv_ctrl::PlaybackGeneration,
         resume_ticks: Option<i64>,
         mpv: &Mpv,
     ) {
@@ -29,7 +29,7 @@ impl PlaybackRun {
             reject_stale_jump(&self.event_tx, slot_id);
             return;
         };
-        self.forced_transition = Some(crate::playback_transition::Transition::new(
+        self.forced_transition = Some(crate::player::transition::Transition::new(
             request_id, generation, slot_id,
         ));
         if self.active_file {

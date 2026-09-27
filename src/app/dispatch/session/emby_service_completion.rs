@@ -21,7 +21,7 @@ impl App {
         self.transition_emby_failure(
             Some(completion.generation),
             completion.result,
-            mbv_core::config::clear_service_secret_result,
+            mbv_config::clear_service_secret_result,
         )
     }
 
@@ -29,7 +29,7 @@ impl App {
     pub(in crate::app) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
-        delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(Some(completion.generation), completion.result, delete)
     }
@@ -41,7 +41,7 @@ impl App {
             crate::app::dispatch::session::service_startup::Startup,
             mbv_core::service_runtime::EmbyFailure,
         >,
-        delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
+        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
@@ -101,7 +101,7 @@ impl App {
                     self.ws_send_tx = None;
                     self.player
                         .update_emby_credentials(String::new(), String::new());
-                    let deletion = delete_secret(mbv_core::config::ServiceKind::Emby);
+                    let deletion = delete_secret(mbv_queue::ServiceKind::Emby);
                     let message = match deletion {
                         Ok(()) => format!("Emby rejected its saved credential: {error}; set up Emby again"),
                         Err(delete_error) => format!(
@@ -125,7 +125,7 @@ impl App {
         error: mbv_core::service_runtime::EmbyFailure,
     ) {
         self.transition_emby_failure(None, Err(error), |kind| {
-            mbv_core::config::clear_service_secret_result(kind)
+            mbv_config::clear_service_secret_result(kind)
         });
     }
 
@@ -133,7 +133,7 @@ impl App {
     pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
         &mut self,
         error: mbv_core::service_runtime::EmbyFailure,
-        delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
     ) {
         self.transition_emby_failure(None, Err(error), delete);
     }
@@ -147,7 +147,7 @@ impl App {
         }
         let config = self.config.lock().unwrap().clone();
         self.emby_runtime.state = if config.emby_setup.is_some()
-            && mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some()
+            && mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
         {
             mbv_core::service_runtime::ServiceState::Unavailable
         } else if config.emby_setup.is_some() {
@@ -214,7 +214,7 @@ impl App {
                 }
                 let token = startup.client.token.clone();
                 if let Err(error) =
-                    mbv_core::config::persist_emby_setup_and_secret(&startup.setup, &token)
+                    mbv_config::persist_emby_setup_and_secret(&startup.setup, &token)
                 {
                     self.emby_runtime.state = completion.previous_state;
                     if let Some(form) = self.setup.emby_setup_form.as_mut() {

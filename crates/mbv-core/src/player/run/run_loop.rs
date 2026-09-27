@@ -3,8 +3,8 @@ use super::super::{
     Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
 };
 use super::{PlaybackRun, ProgressGuard};
-use crate::playback_queue::QueueItem;
 use libmpv2::Mpv;
+use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
 
 fn command_quit_async(mpv: &Mpv) {
@@ -323,7 +323,7 @@ impl PlaybackRun {
         match (name, change) {
             ("volume", PropertyData::Double(vol)) => {
                 self.status.lock().unwrap().volume =
-                    crate::api::saturating_i64_from_f64(vol * vol / 100.0);
+                    mbv_emby_model::saturating_i64_from_f64(vol * vol / 100.0);
             }
             (_, PropertyData::Double(pos_secs)) => {
                 self.on_time_pos(pos_secs, mpv);

@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
-use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
+use mbv_queue::QueueState;
 
 fn forward_audiobookshelf_updates<T, F>(
     receiver: &std::sync::mpsc::Receiver<T>,
@@ -31,7 +31,7 @@ impl App {
 
     fn signal_running_local_daemon(&mut self, revision: u64) {
         if let Err(error) = mbv_core::remote_player::signal_local_daemon_service_setup(
-            mbv_core::config::ServiceKind::Audiobookshelf,
+            mbv_queue::ServiceKind::Audiobookshelf,
             revision,
         ) {
             self.flash(error, ToastSeverity::Warning);
@@ -47,7 +47,7 @@ impl App {
         self.stop_active_audiobookshelf_playback();
         self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
-        mbv_core::config::clear_service_secret_result(mbv_core::config::ServiceKind::Audiobookshelf)
+        mbv_config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
@@ -99,7 +99,7 @@ impl App {
                 }
                 let user = candidate.user.clone();
                 let setup = candidate.setup.clone();
-                let result = mbv_core::config::commit_audiobookshelf_candidate(
+                let result = mbv_core::audiobookshelf::commit_audiobookshelf_candidate(
                     mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                         candidate.setup,
                         candidate.user,
@@ -160,8 +160,8 @@ impl App {
     /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
     fn persist_filtered_queue_abs(state: Option<&QueueState>) -> Result<(), String> {
         match state {
-            Some(state) if !state.items.is_empty() => mbv_core::config::save_queue_state(state),
-            _ => mbv_core::config::clear_queue_state(),
+            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
+            _ => mbv_config::clear_queue_state(),
         }
     }
 
@@ -195,7 +195,7 @@ impl App {
         // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
         // but future-proof: if items empty, reset source).
         if self.player_tab.total_queue_len() == 0 {
-            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
+            self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         }
         self.queue_dirty = false;
     }
@@ -204,16 +204,15 @@ impl App {
         self.stop_audiobookshelf_socket();
         self.stop_active_audiobookshelf_playback();
         // Snapshot for rollback if persistence fails, mirroring Emby removal.
-        let old_queue = mbv_core::config::load_queue_state();
+        let old_queue = mbv_config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
         // Use the transactional boundary that accepts a clear_owned_state closure.
         // Queue filtering (persisted + in-memory) is performed inside that closure
         // so setup/secret removal and queue purge are atomic from the caller's view.
-        let persist_result =
-            mbv_core::config::remove_audiobookshelf_setup_and_secret_with_owned_state(
-                || Self::persist_filtered_queue_abs(filtered.as_ref()),
-                || {},
-            );
+        let persist_result = mbv_config::remove_audiobookshelf_setup_and_secret_with_owned_state(
+            || Self::persist_filtered_queue_abs(filtered.as_ref()),
+            || {},
+        );
 
         if let Err(error) = persist_result {
             // Rollback: restore setup/secret handled inside transaction rollback;
@@ -263,7 +262,7 @@ impl App {
         // Snapshot old queue for rollback explanation (persisted state rollback
         // itself is handled inside the transaction's restore hook, but we also
         // need to restore in-memory queue on failure).
-        let old_queue = mbv_core::config::load_queue_state();
+        let old_queue = mbv_config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
         let old_player_items = self.player_tab.all_queue_items();
         let old_player_cursor = self.player_tab.queue_cursor;
@@ -272,7 +271,7 @@ impl App {
             .as_ref()
             .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
 
-        let result = mbv_core::config::replace_audiobookshelf_candidate(
+        let result = mbv_core::audiobookshelf::replace_audiobookshelf_candidate(
             mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
                 candidate.user,
@@ -289,7 +288,7 @@ impl App {
                     }
                 }
                 if let Some(q) = old_queue.as_ref() {
-                    let _ = mbv_core::config::save_queue_state(q);
+                    let _ = mbv_config::save_queue_state(q);
                 }
             },
         );
@@ -331,8 +330,7 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
-        let credential =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf);
+        let credential = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
         let context = setup.zip(credential).and_then(|(setup, credential)| {
             mbv_core::player::AudiobookshelfPlayerContext::new(
                 generation,

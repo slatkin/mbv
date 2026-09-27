@@ -1,5 +1,5 @@
 use super::{seconds_to_ticks, seconds_to_ticks_u64, App, QueueItem, ToastSeverity};
-pub(in crate::app) use mbv_core::playback_queue::AudiobookshelfBookQueueItem;
+pub(in crate::app) use mbv_queue::AudiobookshelfBookQueueItem;
 
 // ---- Book browsing actions -----------------------------------------
 
@@ -151,7 +151,7 @@ impl App {
             .is_some_and(|book| book.library_item_id == target.book_library_item_id());
         if active_book {
             self.player
-                .send_command(mbv_core::player::PlayerCommand::SeekAbsolute(
+                .send_command(mbv_ctrl::player::PlayerCommand::SeekAbsolute(
                     target_seconds,
                 ));
         }
@@ -284,7 +284,7 @@ pub(in crate::app) fn audiobookshelf_book_queue_item(
     let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
     Some(QueueItem::Audiobookshelf(
-        mbv_core::playback_queue::AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
+        mbv_queue::AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
             library_item_id: book.library_item_id.clone(),
             title: book.title.clone(),
             author: book.author_display.clone(),

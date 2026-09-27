@@ -77,7 +77,7 @@ fn test_loop_with_queue(
     }
 }
 
-fn current_run(event_loop: &DaemonLoop) -> crate::ctrl::PlaybackGeneration {
+fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
     event_loop.player.status.lock().unwrap().sequence_generation
 }
 
@@ -270,7 +270,7 @@ fn stopped_matching_pending_idle_load_commits_and_persists_once() {
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 7,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
 }
@@ -320,7 +320,7 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 8,
-            result: crate::ctrl::QueueLoadResult::Rejected { .. },
+            result: mbv_ctrl::QueueLoadResult::Rejected { .. },
         }
     ));
 }
@@ -459,7 +459,7 @@ fn role_gate_non_local_dirty_event_persists_nothing() {
     let flow = t
         .event_loop
         .handle_event(DaemonEvent::Player(PlayerEvent::TrackCompleted {
-            slot_id: crate::playback_queue::QueueSlotId::from_raw(1),
+            slot_id: mbv_queue::QueueSlotId::from_raw(1),
             run_identity: current_run(&t.event_loop),
             position_ticks: 0,
             played: true,
@@ -480,7 +480,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     );
     // A real state dir would receive the install path's removed production
     // write; point it at a tempdir and assert that file never appears.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = mbv_config::TestStateDirGuard::new();
     t.event_loop.client.lock().unwrap().token = "test-token".to_string();
     let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -488,7 +488,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 5,
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,
                 item: emby_qi("new", "Video", "Movie"),
             }],
@@ -507,14 +507,14 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     assert_eq!(t.persisted.borrow().len(), 1);
     assert_eq!(t.persisted.borrow()[0].item_ids, vec!["new".to_string()]);
     assert!(
-        !crate::config::stay_alive_queue_state_path().exists(),
+        !mbv_config::stay_alive_queue_state_path().exists(),
         "install path must not write the production store directly"
     );
     assert!(matches!(
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 5,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
 }

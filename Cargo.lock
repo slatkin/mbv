@@ -1706,10 +1706,15 @@ dependencies = [
  "ksni",
  "libc",
  "log",
+ "mbv-config",
  "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby-model",
+ "mbv-feed",
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-queue",
  "mbv-text",
  "mbv-visualizer",
  "mbv-ws",
@@ -1733,6 +1738,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-config"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-keybinds",
+ "mbv-queue",
+ "rstest",
+ "serde",
+ "serde_json",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "mbv-core"
 version = "0.21.2"
 dependencies = [
@@ -1741,9 +1760,13 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-config",
+ "mbv-ctrl",
+ "mbv-emby-model",
  "mbv-ids",
- "mbv-keybinds",
  "mbv-net",
+ "mbv-queue",
+ "mbv-text",
  "mbv-ws",
  "mdns-sd",
  "rand 0.10.2",
@@ -1752,10 +1775,46 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
- "toml",
  "tungstenite",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "mbv-ctrl"
+version = "0.21.2"
+dependencies = [
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-queue",
+ "rstest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mbv-emby-model"
+version = "0.21.2"
+dependencies = [
+ "rstest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mbv-feed"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "serde",
+ "serde_json",
+ "time",
+ "ureq",
 ]
 
 [[package]]
@@ -1777,6 +1836,16 @@ dependencies = [
  "percent-encoding",
  "rand 0.10.2",
  "ureq",
+]
+
+[[package]]
+name = "mbv-queue"
+version = "0.21.2"
+dependencies = [
+ "mbv-emby-model",
+ "rstest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1811,7 +1880,10 @@ version = "0.21.2"
 dependencies = [
  "libc",
  "log",
+ "mbv-config",
  "mbv-core",
+ "mbv-ctrl",
+ "mbv-queue",
  "mimalloc",
  "nix 0.31.3",
  "serde_json",

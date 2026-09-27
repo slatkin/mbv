@@ -3,8 +3,8 @@ use crate::app::{
     dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 use std::collections::HashMap;
 
 impl App {
@@ -35,12 +35,12 @@ impl App {
         }
         if self.libs[lib_idx].library.collection_type == "tvshows"
             && self.libs[lib_idx].nav_stack.len() == 1
-            && (self.libs[lib_idx].tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+            && (self.libs[lib_idx].tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
                 || self.libs[lib_idx]
                     .nav_stack
                     .last()
                     .and_then(|level| level.tv_content_mode.as_ref())
-                    == Some(&mbv_core::config::TvContentMode::Latest))
+                    == Some(&mbv_queue::TvContentMode::Latest))
         {
             let parent_id = self.libs[lib_idx]
                 .nav_stack
@@ -270,7 +270,7 @@ impl App {
         let action = PendingQueueAction::PlayItems {
             items: playable,
             start_idx: 0,
-            source: crate::config::QueueSource::Playlist {
+            source: mbv_queue::QueueSource::Playlist {
                 id: Some(playlist_id),
                 name: playlist_name,
             },
@@ -291,7 +291,7 @@ impl App {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
             library_total: Option<usize>,
-            tv_content_mode: Option<mbv_core::config::TvContentMode>,
+            tv_content_mode: Option<mbv_queue::TvContentMode>,
         }
         let old_libs: HashMap<String, SavedLibState> = self
             .libs
@@ -419,11 +419,9 @@ impl App {
                     .entries
                     .into_iter()
                     .filter_map(|entry| match entry {
-                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => {
-                            Some(QueueItem::Audiobookshelf(
-                                mbv_core::playback_queue::AudiobookshelfItem::Episode(item),
-                            ))
-                        }
+                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => Some(
+                            QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(item)),
+                        ),
                         mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
                     })
                     .collect()

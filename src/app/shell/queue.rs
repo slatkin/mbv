@@ -5,7 +5,7 @@ use super::components::{
 use super::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_queue::QueueSlotId;
 
 /// The row projection inputs that can change queue rows. Chrome and pause
 /// state are delivered independently; pause only affects the paint-time
@@ -57,7 +57,7 @@ struct QueueProjectionUpdate {
     rows_changed: bool,
     bucket_only: bool,
     cursor: QueueCursorUpdate,
-    slots: Option<Vec<mbv_core::playback_queue::QueueSlot>>,
+    slots: Option<Vec<mbv_queue::QueueSlot>>,
     patch: Option<(
         QueueSlotId,
         crate::app::components::media_list::MediaListRow<QueueSlotId>,
@@ -464,7 +464,7 @@ impl Model {
     fn select_queue_slot(
         &mut self,
         scope: QueueScope,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
     ) -> Option<usize> {
         if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
             return None;
@@ -481,7 +481,7 @@ impl Model {
     pub(crate) fn slot_index(
         &self,
         scope: QueueScope,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
     ) -> Option<usize> {
         self.app.slot_index(scope, slot_id)
     }
@@ -508,7 +508,7 @@ mod tests {
         app.player_tab.set_queue_items(
             items
                 .into_iter()
-                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
                 .collect::<Vec<_>>(),
             0,
         );
@@ -574,8 +574,8 @@ mod tests {
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(
             vec![
-                mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
-                mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
+                mbv_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
+                mbv_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
             ],
             0,
         );
@@ -622,14 +622,9 @@ mod tests {
         );
     }
 
-    fn emby_items(n: usize) -> Vec<mbv_core::playback_queue::QueueItem> {
+    fn emby_items(n: usize) -> Vec<mbv_queue::QueueItem> {
         (0..n)
-            .map(|i| {
-                mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-                    &format!("row-{i}"),
-                    "Movie",
-                )))
-            })
+            .map(|i| mbv_queue::QueueItem::Emby(Box::new(make_item(&format!("row-{i}"), "Movie"))))
             .collect()
     }
 
@@ -718,7 +713,7 @@ mod tests {
         app.player_tab.set_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove(
             0,
-            mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
+            mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
         ));
         let mut model = Model::new(app);
         assert!(!model.app.has_direct_remote_queue());

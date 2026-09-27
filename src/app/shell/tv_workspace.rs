@@ -19,8 +19,8 @@ use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
-use mbv_core::api::EmbyItem;
-use mbv_core::config::ServiceKind;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ServiceKind;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
@@ -266,7 +266,7 @@ impl Model {
             return;
         };
         if library.library.collection_type == "tvshows"
-            && library.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+            && library.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
         {
             self.acknowledge_home_latest(
                 crate::app::state::types::playback::DestinationLatestSource::Emby(
@@ -454,9 +454,7 @@ impl Model {
             });
         let selected_series = if matches!(
             tv_content_mode,
-            Some(
-                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
-            )
+            Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         ) {
             None
         } else {
@@ -499,7 +497,7 @@ impl Model {
         context.set_series_details(series_details);
         let latest_source =
             crate::app::state::types::playback::DestinationLatestSource::Emby(library_id.clone());
-        if tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+        if tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
             && !self
                 .acknowledged_home_latest_sources
                 .contains(&latest_source)

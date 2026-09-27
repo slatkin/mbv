@@ -16,9 +16,9 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::input::resolver::KeyChord;
 use crate::app::App;
 use crossterm::event::KeyCode;
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueSlotId;
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueSlotId;
 use std::sync::Arc;
 
 /// The volume step the `-`/`+` keys dispatch and the `StatusBarPanel`
@@ -155,7 +155,7 @@ impl App {
         if !self.player.is_remote_disconnected() {
             return false;
         }
-        self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+        self.handle_player_event(mbv_ctrl::player::PlayerEvent::CommandRejected(
             crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
         ));
         true
@@ -167,7 +167,7 @@ impl App {
         }
         let sent = self
             .player
-            .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+            .queue_play_slot(mbv_ctrl::slot_id_to_u64(slot_id));
         if !sent {
             self.reject_disconnected_remote_jump();
         }
@@ -176,7 +176,7 @@ impl App {
 
     pub(in crate::app) fn dispatch_jump(
         &mut self,
-        transition: mbv_core::playback_transition::Transition,
+        transition: mbv_core::player::transition::Transition,
     ) -> bool {
         if self.player.is_remote() {
             return self.request_remote_slot_jump(transition.target);
@@ -203,12 +203,10 @@ impl App {
             .sync_canonical_queue(self.playback_queue().queue.clone());
         let (request_id, generation) = self.bare_owner.mint_local_transition();
         let transition =
-            mbv_core::playback_transition::Transition::new(request_id, generation, slot_id);
+            mbv_core::player::transition::Transition::new(request_id, generation, slot_id);
         match self.bare_owner.accept_local_transition(transition) {
-            mbv_core::playback_transition::DispatchDecision::DispatchNow(t) => {
-                self.dispatch_jump(t)
-            }
-            mbv_core::playback_transition::DispatchDecision::Queued { .. } => true,
+            mbv_core::player::transition::DispatchDecision::DispatchNow(t) => self.dispatch_jump(t),
+            mbv_core::player::transition::DispatchDecision::Queued { .. } => true,
         }
     }
 
@@ -390,7 +388,7 @@ impl App {
         self.play_queue_cursor_locally(t, &item, slot_id, all_slots);
     }
 
-    fn queue_play_cursor_item(&mut self, t: usize) -> Option<mbv_core::playback_queue::QueueItem> {
+    fn queue_play_cursor_item(&mut self, t: usize) -> Option<mbv_queue::QueueItem> {
         let queue = self.displayed_queue();
         if t >= queue.total_queue_len() {
             return None;
@@ -401,8 +399,7 @@ impl App {
         if !item.admissible_for_owner_with_audiobookshelf(
             false,
             |service| {
-                service != mbv_core::config::ServiceKind::Audiobookshelf
-                    || owner_can_admit_audiobookshelf
+                service != mbv_queue::ServiceKind::Audiobookshelf || owner_can_admit_audiobookshelf
             },
             owner_can_admit_audiobookshelf,
         ) {
@@ -430,7 +427,7 @@ impl App {
             if let Some(slot_id) = queue.slot_id_at(t) {
                 let _ = self.request_slot_jump(slot_id);
             } else {
-                self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+                self.handle_player_event(mbv_ctrl::player::PlayerEvent::CommandRejected(
                     crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
                 ));
             }
@@ -443,9 +440,9 @@ impl App {
         true
     }
 
-    fn validate_queue_play_feed(&mut self, item: &mbv_core::playback_queue::QueueItem) -> bool {
+    fn validate_queue_play_feed(&mut self, item: &mbv_queue::QueueItem) -> bool {
         // Validate source for Feed entries early.
-        if let mbv_core::playback_queue::QueueItem::Feed(entry) = item {
+        if let mbv_queue::QueueItem::Feed(entry) = item {
             if entry.primary_source().is_none() {
                 self.flash(
                     "Feed entry has no playable source".into(),
@@ -457,10 +454,10 @@ impl App {
         true
     }
 
-    fn hydrate_queue_play_feed(&mut self, t: usize, item: &mbv_core::playback_queue::QueueItem) {
+    fn hydrate_queue_play_feed(&mut self, t: usize, item: &mbv_queue::QueueItem) {
         // Hydrate stored feed-entry state before building the
         // playback snapshot so resume uses the latest position.
-        if let mbv_core::playback_queue::QueueItem::Feed(entry) = item {
+        if let mbv_queue::QueueItem::Feed(entry) = item {
             let hydrated = self.hydrate_feed_entry_state(entry.clone());
             let sid = self.playback_queue().slot_id_at(t);
             if let Some(sid) = sid {
@@ -478,7 +475,7 @@ impl App {
         t: usize,
     ) -> (
         Vec<EmbyItem>,
-        Vec<mbv_core::playback_execution_sequence::ExecSlot>,
+        Vec<mbv_queue::ExecSlot>,
         Option<QueueSlotId>,
         usize,
     ) {
@@ -506,14 +503,14 @@ impl App {
 
     fn handoff_queue_play_to_session(
         &mut self,
-        item: &mbv_core::playback_queue::QueueItem,
+        item: &mbv_queue::QueueItem,
         emby_items: &[EmbyItem],
         emby_start: usize,
     ) -> bool {
         // Connected remote session: hand off Emby items to the
         // session; Feed entries cannot cross the Emby session API
         // so they fall through to the local/direct-remote path.
-        if let mbv_core::playback_queue::QueueItem::Emby(_) = item {
+        if let mbv_queue::QueueItem::Emby(_) = item {
             if let Some(conn_id) = self.connected_session_id.clone() {
                 let label = item.display_name();
                 self.flash(
@@ -531,9 +528,9 @@ impl App {
     fn play_queue_cursor_locally(
         &mut self,
         t: usize,
-        item: &mbv_core::playback_queue::QueueItem,
+        item: &mbv_queue::QueueItem,
         slot_id: Option<QueueSlotId>,
-        all_slots: Vec<mbv_core::playback_execution_sequence::ExecSlot>,
+        all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
         // Local / direct-remote playback. The same path handles
         // both Feed and Emby items: jump to an active slot or
@@ -567,9 +564,9 @@ impl App {
     fn cold_start_queue_play(
         &mut self,
         t: usize,
-        item: &mbv_core::playback_queue::QueueItem,
+        item: &mbv_queue::QueueItem,
         scope: crate::app::QueueScope,
-        all_slots: Vec<mbv_core::playback_execution_sequence::ExecSlot>,
+        all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
         // Cold start: submit the full canonical queue (all
         // variants) so the player's internal playlist matches
@@ -581,7 +578,7 @@ impl App {
                 slot.item.admissible_for_owner_with_audiobookshelf(
                     false,
                     |service| {
-                        service != mbv_core::config::ServiceKind::Audiobookshelf
+                        service != mbv_queue::ServiceKind::Audiobookshelf
                             || owner_can_admit_audiobookshelf
                     },
                     owner_can_admit_audiobookshelf,

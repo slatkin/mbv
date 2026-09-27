@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::library_panel::content::{ArtworkShape, ListSlot};
 use crate::app::components::library_panel::owner::LibraryContentOwner;
-use mbv_core::config::FeedKind;
+use mbv_queue::FeedKind;
 
 fn subscription(name: &str) -> FeedSubscription {
     FeedSubscription {

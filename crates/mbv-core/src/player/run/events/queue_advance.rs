@@ -165,7 +165,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
         end: &QueueEndStop<'_>,
         next_idx: usize,
-        settling_transition: Option<crate::playback_transition::Transition>,
+        settling_transition: Option<crate::player::transition::Transition>,
     ) -> bool {
         // Update UI to the next track immediately, before slow network calls.
         // next_idx < queue_len() was already checked above, so set_active_index

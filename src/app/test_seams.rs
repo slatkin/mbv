@@ -6,7 +6,7 @@ pub(in crate::app) type DirectConnectFn = fn(
 ) -> Result<
     (
         mbv_core::remote_player::RemotePlayer,
-        mpsc::Receiver<mbv_core::player::PlayerEvent>,
+        mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
     String,
 >;
@@ -32,7 +32,7 @@ pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlaye
 pub(in crate::app) enum DaemonRouteConnectOutcome {
     Connected(
         mbv_core::remote_player::RemotePlayer,
-        mpsc::Receiver<mbv_core::player::PlayerEvent>,
+        mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
     Failed(String),
 }
@@ -43,7 +43,7 @@ impl DaemonRouteConnectOutcome {
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<mbv_core::player::PlayerEvent>,
+            mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
         ),
         String,
     > {

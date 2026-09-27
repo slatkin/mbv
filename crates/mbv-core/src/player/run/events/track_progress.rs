@@ -11,7 +11,7 @@ impl PlaybackRun {
     pub(in crate::player) fn emit_track_changed(
         &mut self,
         slot_id: QueueSlotId,
-        transition: Option<crate::playback_transition::Transition>,
+        transition: Option<crate::player::transition::Transition>,
     ) {
         let tag = transition
             .filter(|t| t.target == slot_id)
@@ -77,7 +77,7 @@ impl PlaybackRun {
     }
 
     pub(in crate::player) fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
-        let ticks = crate::api::seconds_to_ticks(pos_secs);
+        let ticks = mbv_emby_model::seconds_to_ticks(pos_secs);
         {
             let mut st = self.status.lock().unwrap();
             st.position_ticks = ticks;

@@ -13,7 +13,7 @@ use crate::app::state::types::playback::PlaybackState;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
-use mbv_core::player::PlayerEvent;
+use mbv_ctrl::player::PlayerEvent;
 
 fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {
@@ -38,8 +38,8 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
         status.active = true;
         status.queue_len = 3;
         status.current_idx = 0;
-        status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
-        status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
+        status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
     };
     app
 }
@@ -449,7 +449,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     let confirmed = app.player_tab.slot_id_at(0).unwrap();
     assert!(matches!(
         app.player_tab.queue.set_active_slot(confirmed),
-        mbv_core::playback_queue::QueueMutationResult::Applied(())
+        mbv_queue::QueueMutationResult::Applied(())
     ));
     {
         let mut status = app.player.status.lock().unwrap();
@@ -481,7 +481,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
 
     let confirmed_transition = {
         let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-        mbv_core::playback_transition::Transition::new(request_id, generation, confirmed)
+        mbv_core::player::transition::Transition::new(request_id, generation, confirmed)
     };
     harness
         .model_mut()
@@ -490,7 +490,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
         .accept_local_transition(confirmed_transition);
     let target = harness.model().app.player_tab.slot_id_at(1).unwrap();
     let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-    let transition = mbv_core::playback_transition::Transition::new(request_id, generation, target);
+    let transition = mbv_core::player::transition::Transition::new(request_id, generation, target);
     harness
         .model_mut()
         .app

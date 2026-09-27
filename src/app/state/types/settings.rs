@@ -391,7 +391,7 @@ pub fn fmt_feed_view_list(list: &[String]) -> String {
     }
 }
 
-pub fn fmt_feeds_list(list: &[mbv_core::config::FeedSubscription]) -> String {
+pub fn fmt_feeds_list(list: &[mbv_config::FeedSubscription]) -> String {
     match list.len() {
         0 => "none".into(),
         1 => list[0].name.clone(),

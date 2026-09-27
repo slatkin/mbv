@@ -4,8 +4,9 @@ use super::{
     ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole, EmbyOwnerContext, SharedQueueState,
 };
 use crate::api::EmbyClient;
-use crate::ctrl::CtrlEvent;
-use crate::player::{Player, PlayerEvent};
+use crate::player::Player;
+use mbv_ctrl::player::PlayerEvent;
+use mbv_ctrl::CtrlEvent;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -49,7 +50,7 @@ impl EventOutcome {
 
 /// Injected owner-queue persistence hook.
 pub(crate) type OwnerQueueStore =
-    Box<dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>>;
+    Box<dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), String>>;
 
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).

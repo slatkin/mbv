@@ -9,7 +9,7 @@ fn feed_entry(guid: &str) -> FeedEntry {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -46,7 +46,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &shared_queue,
         &owner.queue,
         &owner.source,
-        &crate::playback_transition::OwnerTransitionState::default(),
+        &crate::player::transition::OwnerTransitionState::default(),
     );
 
     // A later Client receives the shortened owner snapshot.
@@ -60,7 +60,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &shared_queue,
         &owner.queue,
         &owner.source,
-        &crate::playback_transition::OwnerTransitionState::default(),
+        &crate::player::transition::OwnerTransitionState::default(),
     );
     assert_eq!(owner.queue.len(), 1);
     assert_eq!(owner.queue.slots()[0].item.id(), "feed-2");
@@ -104,7 +104,7 @@ fn replace_queue_succeeds_unconditionally() {
                 "Video",
                 "Movie",
             )))],
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 44,
                 item: QueueItem::Emby(Box::new(item("replacement", "Video", "Movie"))),
             }],

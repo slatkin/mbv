@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::ui_util::is_playable;
 use crate::app::App;
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 impl App {
     // ── Home flat list ───────────────────────────────────────────────────────

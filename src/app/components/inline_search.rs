@@ -26,14 +26,14 @@ const SEARCH_DEBOUNCE_MS: u64 = 300;
 
 #[derive(Clone)]
 pub(in crate::app) enum SearchPool {
-    Items(Vec<mbv_core::api::EmbyItem>),
+    Items(Vec<mbv_emby_model::EmbyItem>),
     Albums(Vec<crate::app::AlbumSearchEntry>),
 }
 
 impl SearchPool {
     /// The item at a corpus index, with an album's indexed display label
     /// substituted for its bare name (design.md D2).
-    fn resolved_item_at(&self, index: usize) -> Option<mbv_core::api::EmbyItem> {
+    fn resolved_item_at(&self, index: usize) -> Option<mbv_emby_model::EmbyItem> {
         match self {
             Self::Items(items) => items.get(index).cloned(),
             Self::Albums(entries) => entries.get(index).map(|entry| {
@@ -96,7 +96,7 @@ pub(in crate::app) enum InlineSearchAction {
 /// The composed row label the search previously rendered (design.md D2:
 /// content parity with the legacy plain-rows path). Folders carry their
 /// item-count / unplayed suffixes; everything else the display label.
-fn search_row_label(item: &mbv_core::api::EmbyItem) -> String {
+fn search_row_label(item: &mbv_emby_model::EmbyItem) -> String {
     if item.is_folder {
         if item.item_type == "Folder" && item.total_count > 0 {
             format!("{} \u{b7} {} items", item.display_name(), item.total_count)
@@ -113,7 +113,7 @@ fn search_row_label(item: &mbv_core::api::EmbyItem) -> String {
 /// One canonical row for a scored result (design.md D2): stable item-id
 /// target, legacy label parity, a trailing year on playable leaves, no
 /// secondary/duration. A played result paints the one played-row colour.
-fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
+fn search_result_row(item: &mbv_emby_model::EmbyItem) -> MediaListRow<String> {
     MediaListRow::Item {
         target: item.id.clone(),
         primary: search_row_label(item),
@@ -251,7 +251,7 @@ impl InlineSearch {
     /// The pool item for a resolved row target — the row a delegated
     /// double-click or context gesture resolved (design.md D4) — independent
     /// of the carrier's current selection.
-    pub(in crate::app) fn item_for_target(&self, target: &str) -> Option<mbv_core::api::EmbyItem> {
+    pub(in crate::app) fn item_for_target(&self, target: &str) -> Option<mbv_emby_model::EmbyItem> {
         self.order
             .iter()
             .filter_map(|&(idx, _)| self.pool.resolved_item_at(idx))
@@ -260,7 +260,7 @@ impl InlineSearch {
 
     /// The item under the carrier's selection, resolved from the stored order
     /// (design.md D2).
-    pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
+    pub(in crate::app) fn selected_item(&self) -> Option<mbv_emby_model::EmbyItem> {
         let target = self.results.selected_target()?;
         self.order
             .iter()
@@ -430,7 +430,7 @@ pub(in crate::app) trait InlineSearchHost {
     /// Apply a query after the shared debounce fires. The host owns only its
     /// destination-specific projection; the query editor remains this type.
     fn inline_search_debounced(&mut self) {}
-    fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
+    fn selected_inline_search_item(&self) -> Option<mbv_emby_model::EmbyItem> {
         self.inline_search().selected_item()
     }
 

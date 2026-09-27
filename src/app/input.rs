@@ -17,7 +17,7 @@ mod music_track_scope_tests;
 mod music_track_test_support;
 
 use super::{App, PanelFocus, TabSelection};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 impl App {
     pub(in crate::app) fn context_menu_play_state(item: &EmbyItem) -> bool {
         if item.is_folder {

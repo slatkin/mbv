@@ -1,5 +1,5 @@
 use super::super::{divergent_entry, PlaybackRun};
-use crate::player::PlayerEvent;
+use mbv_ctrl::player::PlayerEvent;
 
 impl PlaybackRun {
     pub(in crate::player) fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {

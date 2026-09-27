@@ -60,7 +60,7 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     session.forced_slot_id = Some(target);
     // Rapid Enter on two rows: the in-flight jump also carries its request
     // identity; an intermediate playlist-pos event must not clobber either.
-    session.forced_transition = Some(crate::playback_transition::Transition::new(42, 1, target));
+    session.forced_transition = Some(crate::player::transition::Transition::new(42, 1, target));
 
     session.on_playlist_pos_changed(1, 0);
 
@@ -80,7 +80,7 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
     session.pending_initial_playlist_layout = false;
     session.forced_jump_from_idle = true;
     let slot_id = session.slot_id_at(1).unwrap();
-    let transition = crate::playback_transition::Transition::new(42, 7, slot_id);
+    let transition = crate::player::transition::Transition::new(42, 7, slot_id);
     session.forced_slot_id = Some(slot_id);
     session.forced_transition = Some(transition);
     status.lock().unwrap().active = false;
@@ -112,7 +112,7 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
 fn idle_jump_to_removed_slot_clears_the_pending_transition() {
     let (mut session, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
     let missing = QueueSlotId::from_raw(u64::MAX);
-    let transition = crate::playback_transition::Transition::new(42, 7, missing);
+    let transition = crate::player::transition::Transition::new(42, 7, missing);
     session.forced_jump_from_idle = true;
     session.forced_slot_id = Some(missing);
     session.forced_transition = Some(transition);

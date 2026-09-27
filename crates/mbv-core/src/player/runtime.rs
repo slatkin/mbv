@@ -144,7 +144,7 @@ fn reset_private_mpv_config_dir(private_dir: &Path) -> Result<(), String> {
 }
 
 fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBuf, String> {
-    let private_dir = crate::config::mpv_config_dir();
+    let private_dir = mbv_config::mpv_config_dir();
     reset_private_mpv_config_dir(&private_dir)?;
 
     let user_dir = use_mpv_config.then(user_mpv_config_dir).flatten();
@@ -211,7 +211,7 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
 /// installer copy. `None` means no script is handed to mpv (the chosen one
 /// is missing), so the fonts are not resolved either.
 fn resolve_overlay_scripts() -> Option<PathBuf> {
-    let source = crate::config::osc_script_source();
+    let source = mbv_config::osc_script_source();
     let script = source.chosen;
     if !script.exists() {
         log::warn!(
@@ -236,7 +236,7 @@ fn resolve_overlay_scripts() -> Option<PathBuf> {
 /// Resolve the chosen mpv overlay fonts directory and warn about an ignored
 /// leftover installer copy.
 fn resolve_overlay_fonts() -> PathBuf {
-    let source = crate::config::osc_fonts_source();
+    let source = mbv_config::osc_fonts_source();
     let fonts = source.chosen;
     log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
     if let Some(legacy) = source.unused_legacy {
@@ -373,7 +373,7 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
 }
 
 pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
-    let ipc_path = crate::config::mpv_ipc_path();
+    let ipc_path = mbv_config::mpv_ipc_path();
     let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
     let ipc_existed = Path::new(&ipc_path).exists();
     if ipc_existed {
@@ -388,7 +388,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         log::warn!(
             target: "player",
             "init: mpv overlay scripts disabled by config (no_scripts); resolved source {} will not be handed to mpv",
-            crate::config::osc_script_source().chosen.display()
+            mbv_config::osc_script_source().chosen.display()
         );
     } else if use_mpv_config {
         log::warn!(
@@ -463,10 +463,10 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
-    let raw = crate::api::saturating_i64_from_f64(
-        (10.0 * crate::api::i64_to_f64_saturating(v).sqrt()).round(),
+    let raw = mbv_emby_model::saturating_i64_from_f64(
+        (10.0 * mbv_emby_model::i64_to_f64_saturating(v).sqrt()).round(),
     );
-    let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
+    let _ = mpv.set_property("volume", mbv_emby_model::i64_to_f64_saturating(raw));
     st.volume = v;
 }
 
@@ -520,7 +520,7 @@ pub(super) fn handle_intro(
     if intro_state.is_pending() && ticks >= start {
         intro_state.shown();
         if ticks < end {
-            let end_secs = crate::api::ticks_to_seconds(end);
+            let end_secs = mbv_emby_model::ticks_to_seconds(end);
             if always_skip {
                 let _ = mpv.set_property("time-pos", end_secs);
             } else {

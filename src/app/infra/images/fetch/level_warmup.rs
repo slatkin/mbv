@@ -135,7 +135,7 @@ impl App {
     pub(in crate::app) fn spawn_level_artist_fetch(
         &mut self,
         level_id: String,
-        albums: Vec<mbv_core::api::EmbyItem>,
+        albums: Vec<mbv_emby_model::EmbyItem>,
     ) {
         // Each group child gets one `Recursive=true` request (about 15 on the
         // reference library); the queue permits at most
@@ -183,7 +183,7 @@ impl App {
             let url = format!(
                 "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
-            let items: Vec<serde_json::Value> = crate::app::infra::feed_parse::tls_agent(None)
+            let items: Vec<serde_json::Value> = mbv_net::native_tls_agent(None, None)
                 .get(&url)
                 .call()
                 .ok()

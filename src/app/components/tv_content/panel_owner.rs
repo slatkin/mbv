@@ -94,10 +94,10 @@ impl TvContent {
             pills.push("All".to_string());
         }
         let active = match self.context.tv_content_mode.as_ref() {
-            Some(mbv_core::config::TvContentMode::Latest) => 0,
-            Some(mbv_core::config::TvContentMode::Upcoming) => 1,
-            Some(mbv_core::config::TvContentMode::All) => 2,
-            Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+            Some(mbv_queue::TvContentMode::Latest) => 0,
+            Some(mbv_queue::TvContentMode::Upcoming) => 1,
+            Some(mbv_queue::TvContentMode::All) => 2,
+            Some(mbv_queue::TvContentMode::Range(index)) => index + 2,
             None => {
                 if large {
                     0
@@ -210,7 +210,7 @@ impl LibraryContentOwner for TvContent {
 
     fn launch_selector(
         &self,
-        state: &mbv_core::config::TuiLaunchState,
+        state: &mbv_config::TuiLaunchState,
     ) -> Option<super::super::library_panel::owner::LaunchSelector> {
         if !self.context.show_letter_pills {
             return None;
@@ -239,7 +239,7 @@ impl LibraryContentOwner for TvContent {
         }
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }

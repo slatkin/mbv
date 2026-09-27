@@ -1,4 +1,3 @@
-pub(in crate::app) mod feed_parse;
 pub(crate) mod images;
 pub(crate) mod layout;
 pub(crate) mod palette;

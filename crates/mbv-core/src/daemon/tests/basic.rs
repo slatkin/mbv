@@ -1,6 +1,6 @@
 use super::*;
-use crate::api::EmbyImageTags;
 use crate::player::PlayerOwnerState;
+use mbv_emby_model::EmbyImageTags;
 
 pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
     EmbyItem {
@@ -55,7 +55,7 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
         mime_type: Some("video/mp4".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Video),
+        feed_kind: Some(mbv_queue::FeedKind::Video),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -67,7 +67,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
     let id = clients.connect(
         tx,
         CtrlTransport::Local,
-        crate::ctrl::CtrlAudiobookshelfCapabilities {
+        mbv_ctrl::CtrlAudiobookshelfCapabilities {
             queue: true,
             progress: true,
             book_queue: true,
@@ -82,7 +82,7 @@ pub fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
-        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
+        lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
     }
 }

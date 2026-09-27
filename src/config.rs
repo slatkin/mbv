@@ -1,12 +1,11 @@
-pub use mbv_core::config::{
+pub use mbv_config::{
     clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
-    migrate_legacy_emby_token, prefs_path, save_queue_state, Config, LibraryPosition,
-    LibraryPositionLevel, LibraryPositionState, QueueSource, QueueState,
+    migrate_legacy_emby_token, prefs_path, save_queue_state, Config,
 };
 #[cfg(test)]
-pub use mbv_core::config::{load_last_remote_connection, save_last_remote_connection};
+pub use mbv_config::{load_last_remote_connection, save_last_remote_connection};
 #[cfg(test)]
-pub use mbv_core::config::{LastRemoteConnection, TestStateDirGuard};
+pub use mbv_config::{LastRemoteConnection, TestStateDirGuard};
 
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
@@ -15,7 +14,7 @@ pub const DEFAULT_VISUALIZER_GLYPH: &str = "●";
 
 #[cfg(test)]
 pub mod tests {
-    pub use mbv_core::config::tests::SYS_ENV_LOCK;
+    pub use mbv_config::tests::SYS_ENV_LOCK;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,11 +39,11 @@ impl Default for UiConfig {
 }
 
 pub fn load_config() -> Result<Config, String> {
-    mbv_core::config::load_config()
+    mbv_config::load_config()
 }
 
 pub fn load_ui_config() -> Result<UiConfig, String> {
-    let path = mbv_core::config::config_path();
+    let path = mbv_config::config_path();
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(UiConfig::default());
     };
@@ -91,18 +90,18 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
 }
 
 pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
-    mbv_core::config::save_config_settings(cfg)
+    mbv_config::save_config_settings(cfg)
 }
 
 pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
-    if let Err(e) = mbv_core::config::save_config_settings(cfg) {
+    if let Err(e) = mbv_config::save_config_settings(cfg) {
         log::warn!(target: "config", "config save failed: {e}");
     }
     save_ui_config(ui);
 }
 
 pub fn save_ui_config(ui: &UiConfig) {
-    let path = mbv_core::config::config_path();
+    let path = mbv_config::config_path();
     let mut doc: toml::Value = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| toml::from_str(&s).ok())
@@ -196,7 +195,7 @@ mod ui_config_tests {
 }
 
 pub fn image_disk_cache_dir() -> PathBuf {
-    mbv_core::config::cache_dir().join("images")
+    mbv_config::cache_dir().join("images")
 }
 
 pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {

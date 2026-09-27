@@ -9,7 +9,7 @@ use super::components::LibraryKind;
 use super::BrowseLevel;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
-use mbv_core::config::ServiceKind;
+use mbv_queue::ServiceKind;
 
 impl Model {
     pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {
@@ -387,7 +387,7 @@ mod tests {
         {
             let level = app.libs[0].nav_stack.last_mut().unwrap();
             for item in &mut level.items {
-                item.artist_items = vec![mbv_core::api::EmbyArtistRef {
+                item.artist_items = vec![mbv_emby_model::EmbyArtistRef {
                     name: "Alpha".into(),
                     id: "artist-alpha".into(),
                 }];
@@ -409,7 +409,7 @@ mod tests {
 
     fn music_destination() -> crate::app::components::library_panel::LibraryKey {
         crate::app::components::library_panel::LibraryKey::Service {
-            service: mbv_core::config::ServiceKind::Emby,
+            service: mbv_queue::ServiceKind::Emby,
             library_id: "lib-music".into(),
             kind: crate::app::components::LibraryKind::Music,
         }

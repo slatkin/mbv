@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
-    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
+    let _scratch = mbv_config::TestTempDir::new().as_xdg_home();
     let player = cold_player();
     let client = queue_op_client("test-token");
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -32,20 +32,20 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
         },
     );
 
-    let saved = crate::config::load_queue_state().unwrap();
+    let saved = mbv_config::load_queue_state().unwrap();
     assert_eq!(saved.items[0].id(), "packaged");
     assert_eq!(saved.source, QueueSource::Album);
-    assert!(!crate::config::stay_alive_queue_state_path().exists());
+    assert!(!mbv_config::stay_alive_queue_state_path().exists());
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
     assert!(matches!(merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
 }
 
 #[test]
 fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
-    let temp = crate::config::TestTempDir::new();
+    let temp = mbv_config::TestTempDir::new();
     let path = temp.join("stay_alive_queue_state.json");
-    let state = crate::config::StayAliveQueueState {
-        queue: crate::config::QueueState {
+    let state = mbv_config::StayAliveQueueState {
+        queue: mbv_queue::QueueState {
             // Duplicate content still occupies two distinct queue slots.
             items: vec![
                 emby_qi("persisted", "Video", "Movie"),
@@ -58,26 +58,26 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
             last_played_completed: false,
             positions: std::collections::HashMap::default(),
         },
-        lineage: crate::ctrl::QueueLineage(42),
+        lineage: mbv_queue::QueueLineage(42),
     };
-    crate::config::save_stay_alive_queue_state_at(&path, &state).unwrap();
+    mbv_config::save_stay_alive_queue_state_at(&path, &state).unwrap();
 
     // A daemon restart loads a fresh owner state from the state file.
-    let restored = crate::config::load_stay_alive_queue_state_at(&path).unwrap();
+    let restored = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
     let queue = PlaybackQueue::from_queue_items(restored.queue.items, Some(restored.queue.cursor));
     assert_eq!(queue.len(), 2);
     assert_eq!(queue.slots()[0].item.id(), "persisted");
     assert_eq!(queue.slots()[1].item.id(), "persisted");
     assert_eq!(queue.active_index(), Some(1));
     assert_eq!(restored.queue.source, QueueSource::Album);
-    assert_eq!(restored.lineage, crate::ctrl::QueueLineage(42));
+    assert_eq!(restored.lineage, mbv_queue::QueueLineage(42));
 }
 
 #[test]
 fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
     let path =
         std::env::temp_dir().join(format!("mbv-takeover-owner-{}.json", uuid::Uuid::new_v4()));
-    let legacy = crate::config::QueueState {
+    let legacy = mbv_queue::QueueState {
         items: vec![emby_qi("legacy", "Video", "Movie")],
         cursor: 0,
         source: QueueSource::Series,
@@ -86,12 +86,12 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
         last_played_completed: false,
         positions: std::collections::HashMap::default(),
     };
-    let takeover = crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).unwrap();
-    assert_eq!(takeover.lineage, crate::ctrl::QueueLineage::default());
-    crate::config::save_stay_alive_queue_state_at(&path, &takeover).unwrap();
-    assert!(crate::config::legacy_queue_for_owner_if_absent(
+    let takeover = mbv_config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).unwrap();
+    assert_eq!(takeover.lineage, mbv_queue::QueueLineage::default());
+    mbv_config::save_stay_alive_queue_state_at(&path, &takeover).unwrap();
+    assert!(mbv_config::legacy_queue_for_owner_if_absent(
         &path,
-        Some(crate::config::QueueState {
+        Some(mbv_queue::QueueState {
             items: vec![emby_qi("stale", "Video", "Movie")],
             cursor: 0,
             source: QueueSource::Unknown,
@@ -103,7 +103,7 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
     )
     .is_none());
     assert_eq!(
-        crate::config::load_stay_alive_queue_state_at(&path)
+        mbv_config::load_stay_alive_queue_state_at(&path)
             .unwrap()
             .queue
             .items[0]
@@ -115,10 +115,10 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
 
 #[test]
 fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
-    let temp = crate::config::TestTempDir::new();
+    let temp = mbv_config::TestTempDir::new();
     let path = temp.join("stay_alive_queue_state.json");
-    let state = crate::config::StayAliveQueueState {
-        queue: crate::config::QueueState {
+    let state = mbv_config::StayAliveQueueState {
+        queue: mbv_queue::QueueState {
             items: vec![],
             cursor: 0,
             source: QueueSource::Unknown,
@@ -127,10 +127,10 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
             last_played_completed: false,
             positions: std::collections::HashMap::default(),
         },
-        lineage: crate::ctrl::QueueLineage(7),
+        lineage: mbv_queue::QueueLineage(7),
     };
-    crate::config::save_stay_alive_queue_state_at(&path, &state).unwrap();
-    let legacy = crate::config::QueueState {
+    mbv_config::save_stay_alive_queue_state_at(&path, &state).unwrap();
+    let legacy = mbv_queue::QueueState {
         items: vec![emby_qi("stale", "Video", "Movie")],
         cursor: 0,
         source: QueueSource::Playlist {
@@ -142,15 +142,15 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
         last_played_completed: false,
         positions: std::collections::HashMap::default(),
     };
-    assert!(crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).is_none());
+    assert!(mbv_config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).is_none());
 
     // Restart still loads the explicitly saved empty queue, not the stale
     // per-user snapshot; repeated startup cannot turn empty into populated.
     for _restart in 0..2 {
-        let restored = crate::config::load_stay_alive_queue_state_at(&path).unwrap();
+        let restored = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
         assert!(restored.queue.items.is_empty());
-        assert_eq!(restored.lineage, crate::ctrl::QueueLineage(7));
-        assert!(crate::config::legacy_queue_for_owner_if_absent(&path, None).is_none());
+        assert_eq!(restored.lineage, mbv_queue::QueueLineage(7));
+        assert!(mbv_config::legacy_queue_for_owner_if_absent(&path, None).is_none());
     }
 }
 

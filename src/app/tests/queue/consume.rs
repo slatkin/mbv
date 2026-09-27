@@ -291,7 +291,7 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
 
     // a slot id that was never allocated in this queue
     app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: mbv_core::playback_queue::QueueSlotId::from_raw(9999),
+        slot_id: mbv_queue::QueueSlotId::from_raw(9999),
         run_identity: 0,
         position_ticks: 600_000_000,
         played: true,
@@ -363,7 +363,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     let items = make_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
@@ -420,7 +420,7 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
     assert!(
         matches!(
             cmd_rx.try_recv(),
-            Ok(crate::player::PlayerCommand::QueueRemove(s)) if s == consumed_slot
+            Ok(mbv_ctrl::player::PlayerCommand::QueueRemove(s)) if s == consumed_slot
         ),
         "consuming the active slot must tell the player to remove that same \
              slot from its own internal queue, keeping it in sync"
@@ -433,7 +433,7 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     let items = make_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
@@ -472,7 +472,7 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
     // the trap scenario: before the scope gate, consuming on the *remote* queue would
     // still fire save_playlist_to_emby() and push the unrelated, unmodified local
     // playlist to Emby.
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
@@ -510,7 +510,7 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
     let items = make_audio_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
@@ -545,7 +545,7 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
     let items = make_audio_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };

@@ -1,6 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
-use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::player::PlayerProxy;
+use mbv_ctrl::player::PlayerEvent;
 use mbv_ws::WsEvent;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -287,7 +288,7 @@ impl App {
     fn finish_local_mode(
         &mut self,
         status: String,
-        reconnected_local_daemon: Option<(PlayerTab, crate::config::QueueSource)>,
+        reconnected_local_daemon: Option<(PlayerTab, mbv_queue::QueueSource)>,
     ) {
         if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
             self.player_tab = initial_tab;
@@ -427,7 +428,7 @@ impl App {
     /// `restore_local_mode` when we were already on a *different* route
     /// and must actually swap the player back to local, not just show a
     /// warning while silently staying connected to the old route.
-    pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_emby_model::EmbyItem) {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
             (Some((name, _)), Some(current)) if name == current => {

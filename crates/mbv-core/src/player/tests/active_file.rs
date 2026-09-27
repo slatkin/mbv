@@ -9,8 +9,8 @@ pub(in crate::player) fn noop_progress() -> ProgressGuard {
 }
 
 pub(in crate::player) fn abs_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
-        crate::playback_queue::AudiobookshelfQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show".into(),
             episode_id: "episode".into(),
             title: "Episode".into(),
@@ -28,8 +28,8 @@ pub(in crate::player) fn abs_item() -> QueueItem {
 }
 
 pub(in crate::player) fn abs_book_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
-        crate::playback_queue::AudiobookshelfBookQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(
+        mbv_queue::AudiobookshelfBookQueueItem {
             library_item_id: "book".into(),
             title: "Book".into(),
             author: None,

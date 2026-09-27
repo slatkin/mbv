@@ -9,11 +9,12 @@ use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
 use crate::app::state::types::feed_tab::WatchedFilter;
-use mbv_core::config::{
-    FeedGroupKey, FeedKind, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
+use mbv_config::{
+    FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
 };
-use mbv_core::playback_queue::FeedEntry;
+use mbv_queue::FeedEntry;
+use mbv_queue::FeedKind;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
@@ -164,11 +165,11 @@ fn launch_snapshot_uses_feed_filter_and_selected_entry_identity() {
 
 #[test]
 fn feeds_owner_reanchors_missing_group_and_item_to_first_choices() {
-    use mbv_core::config::{LaunchPanelFocus, TabIdentity, TuiLaunchState};
+    use mbv_config::{LaunchPanelFocus, TabIdentity, TuiLaunchState};
 
     let mut owner = grouped_component();
     let state = TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: TabIdentity::Feeds,
         panel_focus: LaunchPanelFocus::Library,
         selector: Some(SelectorIdentity::Feeds {

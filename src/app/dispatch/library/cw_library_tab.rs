@@ -1,10 +1,11 @@
 use crate::app::{App, PanelFocus, TabSelection};
-use mbv_core::api::EmbyItem;
-use mbv_core::config::{
+use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
-    LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity,
-    TuiLaunchState, TUI_LAUNCH_STATE_VERSION,
+    LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, TabIdentity, TuiLaunchState,
+    TUI_LAUNCH_STATE_VERSION,
 };
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ServiceKind;
 
 impl App {
     /// Resolve the one startup launch intent against the current live
@@ -152,12 +153,12 @@ impl App {
         })
     }
 
-    fn legacy_position_for_key(&self, key: &str) -> Option<crate::config::LibraryPosition> {
+    fn legacy_position_for_key(&self, key: &str) -> Option<mbv_queue::LibraryPosition> {
         self.library_position_state.libraries.get(key).cloned()
     }
 
     fn legacy_identities(
-        position: &crate::config::LibraryPosition,
+        position: &mbv_queue::LibraryPosition,
         audiobookshelf: bool,
     ) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let root = position.levels.first();

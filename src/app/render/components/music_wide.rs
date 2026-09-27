@@ -3,7 +3,7 @@
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::state::music_grouping::ArtistKey;
 use crate::app::App;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::collections::HashMap;
 
 #[derive(Clone)]

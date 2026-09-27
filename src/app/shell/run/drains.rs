@@ -108,7 +108,7 @@ impl Model {
                         title,
                         items
                             .into_iter()
-                            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
                             .collect(),
                     );
                 }
@@ -123,10 +123,9 @@ impl Model {
                         .get(lib_idx)
                         .filter(|lib| {
                             lib.library.collection_type == "tvshows"
-                                && (lib.tv_content_mode
-                                    == Some(mbv_core::config::TvContentMode::Latest)
+                                && (lib.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
                                     || level.tv_content_mode
-                                        == Some(mbv_core::config::TvContentMode::Latest))
+                                        == Some(mbv_queue::TvContentMode::Latest))
                         })
                         .map(|lib| {
                             (
@@ -137,7 +136,7 @@ impl Model {
                                     .iter()
                                     .cloned()
                                     .map(Box::new)
-                                    .map(mbv_core::playback_queue::QueueItem::Emby)
+                                    .map(mbv_queue::QueueItem::Emby)
                                     .collect(),
                             )
                         });

@@ -1,9 +1,9 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::feed_parse::fetch_and_parse_entries;
 use crate::app::state::types::feed_tab::FeedTabRefreshResult;
 use crate::app::App;
-use mbv_core::feed_entry_state::FeedEntryState;
-use mbv_core::playback_queue::{FeedEntry, QueueItem};
+use mbv_feed::fetch_and_parse_entries;
+use mbv_feed::FeedEntryState;
+use mbv_queue::{FeedEntry, QueueItem};
 use std::collections::HashMap;
 
 impl App {
@@ -224,7 +224,7 @@ impl App {
                 "hydrated feed entry guid={} feed_id={} pos={}s played={}",
                 entry.guid,
                 feed_id,
-                state.position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                state.position_ticks / mbv_emby_model::TICKS_PER_SECOND,
                 state.played,
             );
         }
@@ -290,7 +290,7 @@ impl App {
                 "wrote feed entry state guid={} feed_id={} pos={}s played={}",
                 entry_guid,
                 feed_id,
-                position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                position_ticks / mbv_emby_model::TICKS_PER_SECOND,
                 played,
             ),
             Err(error) => log::warn!(
@@ -307,7 +307,7 @@ impl App {
     /// Unknown-runtime EOF keeps `played` false.
     pub(in crate::app) fn persist_feed_slot_lifecycle(
         &mut self,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,
         completed: bool,
     ) {

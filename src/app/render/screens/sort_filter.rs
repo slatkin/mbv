@@ -59,7 +59,7 @@ pub(crate) fn strip_article(s: &str) -> &str {
 /// has settled. Mirrors `derive_album_artist`'s synchronous fallback chain
 /// (Emby tag → folder-name-parsed artist → literal "Unknown Artist"), minus
 /// the cache/fetch steps, since nothing is cached yet at initial load.
-pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::EmbyItem) -> String {
+pub(crate) fn initial_group_artist_sort_key(item: &mbv_emby_model::EmbyItem) -> String {
     let artist = if !item.artist.is_empty() {
         item.artist.clone()
     } else if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
@@ -72,7 +72,7 @@ pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::EmbyItem) -> S
 
 /// Returns the effective sort key for an item: `sort_name` when Emby provides it,
 /// otherwise the item's display name with any leading article stripped.
-pub(crate) fn effective_sort_str(item: &mbv_core::api::EmbyItem) -> &str {
+pub(crate) fn effective_sort_str(item: &mbv_emby_model::EmbyItem) -> &str {
     if item.sort_name.is_empty() {
         strip_article(&item.name)
     } else {
@@ -84,7 +84,7 @@ pub(crate) fn effective_sort_str(item: &mbv_core::api::EmbyItem) -> &str {
 /// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
 /// individual letters for 250+ items.
-pub(crate) fn letter_bucket(item: &mbv_core::api::EmbyItem, total: usize) -> String {
+pub(crate) fn letter_bucket(item: &mbv_emby_model::EmbyItem, total: usize) -> String {
     crate::app::ui_util::letter_bucket_label(effective_sort_str(item), total)
 }
 
@@ -96,19 +96,14 @@ pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
 
 pub(crate) fn resolve_tv_content_mode(
     total: usize,
-    restored: Option<&mbv_core::config::TvContentMode>,
-) -> mbv_core::config::TvContentMode {
+    restored: Option<&mbv_queue::TvContentMode>,
+) -> mbv_queue::TvContentMode {
     let large = total > LIBRARY_PILL_THRESHOLD;
     match restored {
-        Some(mbv_core::config::TvContentMode::All) if large => {
-            mbv_core::config::TvContentMode::Latest
-        }
-        Some(mbv_core::config::TvContentMode::Range(_)) if !large => {
-            mbv_core::config::TvContentMode::All
-        }
+        Some(mbv_queue::TvContentMode::All) | None if large => mbv_queue::TvContentMode::Latest,
+        Some(mbv_queue::TvContentMode::Range(_)) if !large => mbv_queue::TvContentMode::All,
         Some(mode) => mode.clone(),
-        None if large => mbv_core::config::TvContentMode::Latest,
-        None => mbv_core::config::TvContentMode::All,
+        None => mbv_queue::TvContentMode::All,
     }
 }
 

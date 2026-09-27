@@ -11,7 +11,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
-    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
+    let mut transitions = crate::player::transition::OwnerTransitionState::default();
 
     handle_ws(
         WsEvent::TogglePause,
@@ -169,7 +169,7 @@ fn stale_stopped_run_observation_is_rejected() {
 fn assert_stale_completion_unchanged(
     owner: &DaemonPlayerOwner,
     shared_queue: &SharedQueueState,
-    slot: crate::playback_queue::QueueSlotId,
+    slot: mbv_queue::QueueSlotId,
     original_len: usize,
     original_position: i64,
 ) {
@@ -230,7 +230,7 @@ fn stale_completed_run_observation_is_rejected() {
         &shared_queue,
         old_run,
         completed_slot,
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         true,
         true,
         ConsumePolicy {
@@ -252,7 +252,7 @@ fn stale_completed_run_observation_is_rejected() {
         &shared_queue,
         current_run,
         completed_slot,
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         false,
         false,
         ConsumePolicy {
@@ -268,7 +268,7 @@ fn stale_completed_run_observation_is_rejected() {
             .unwrap()
             .item
             .playback_position_ticks(),
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
     );
     assert!(apply_track_completed_observation(
         &mut completed_owner,
@@ -313,7 +313,7 @@ fn stale_track_changed_report_leaves_queue_and_observed_slot_unchanged() {
     // caller (daemon_run's TrackChanged arm) emits nothing and canonical
     // queue + observed active slot are untouched (design D6, no clamp, no
     // neighbour fallback).
-    let stale = crate::playback_queue::QueueSlotId::from_raw(9_999_999);
+    let stale = mbv_queue::QueueSlotId::from_raw(9_999_999);
     assert!(owner.core.observe_track_change(stale).is_none());
     assert_eq!(owner.core.queue.active_slot_id(), Some(real));
     assert_eq!(owner.core.observed_active_slot(), Some(real));

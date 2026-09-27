@@ -3,7 +3,7 @@ use crate::app::state::types::context_menu::BulkRemoveTarget;
 use crate::app::state::types::context_menu::ContextMenu;
 use crate::app::state::types::overlay::OverlayRequest;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     // --- Context menu framing (formerly `input_context_menu.rs`) -----------
@@ -234,7 +234,7 @@ impl App {
 
     pub(in crate::app) fn open_feeds_context_menu(
         &mut self,
-        entries: Vec<mbv_core::playback_queue::FeedEntry>,
+        entries: Vec<mbv_queue::FeedEntry>,
         anchor: Option<(u16, u16)>,
     ) {
         if entries.is_empty() {

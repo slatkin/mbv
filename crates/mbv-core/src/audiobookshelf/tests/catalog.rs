@@ -178,7 +178,7 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
     assert_eq!(
         first.duration_ticks,
         Some(
-            u64::try_from(1_800 * crate::api::TICKS_PER_SECOND)
+            u64::try_from(1_800 * mbv_emby_model::TICKS_PER_SECOND)
                 .expect("1800 seconds in ticks fits u64"),
         ),
         "audioFile.duration is carried as duration ticks"

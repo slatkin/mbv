@@ -108,7 +108,7 @@ fn unified_queue_move_slot_reorders_canonically_and_forwards_to_player() {
     let c_slot = owner.core.queue.slots()[2].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueMoveSlot {
-            slot_id: crate::ctrl::slot_id_to_u64(c_slot),
+            slot_id: mbv_ctrl::slot_id_to_u64(c_slot),
             to_index: 0,
         },
         client_id,
@@ -221,7 +221,7 @@ fn unified_queue_remove_non_active_slot_keeps_active_and_forwards_removal() {
     let b_slot = owner.core.queue.slots()[1].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
-            slot_id: crate::ctrl::slot_id_to_u64(b_slot),
+            slot_id: mbv_ctrl::slot_id_to_u64(b_slot),
         },
         client_id,
         &reply_tx,
@@ -275,8 +275,8 @@ fn unified_queue_remove_slots_applies_the_range_and_publishes_one_snapshot() {
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
             slot_ids: vec![
-                crate::ctrl::slot_id_to_u64(b_slot),
-                crate::ctrl::slot_id_to_u64(c_slot),
+                mbv_ctrl::slot_id_to_u64(b_slot),
+                mbv_ctrl::slot_id_to_u64(c_slot),
             ],
         },
         client_id,
@@ -351,7 +351,7 @@ fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
     // An active slot in the batch is removed with the rest.
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
-            slot_ids: vec![crate::ctrl::slot_id_to_u64(a_slot), 999_999],
+            slot_ids: vec![mbv_ctrl::slot_id_to_u64(a_slot), 999_999],
         },
         client_id,
         &reply_tx,
@@ -390,7 +390,7 @@ fn unified_queue_remove_active_slot_keeps_queue_when_others_remain() {
     let a_slot = owner.core.queue.slots()[0].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
-            slot_id: crate::ctrl::slot_id_to_u64(a_slot),
+            slot_id: mbv_ctrl::slot_id_to_u64(a_slot),
         },
         client_id,
         &reply_tx,
@@ -429,7 +429,7 @@ fn unified_queue_remove_last_slot_clears_the_player_queue() {
     let a_slot = owner.core.queue.slots()[0].slot_id;
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlot {
-            slot_id: crate::ctrl::slot_id_to_u64(a_slot),
+            slot_id: mbv_ctrl::slot_id_to_u64(a_slot),
         },
         client_id,
         &reply_tx,
@@ -481,7 +481,7 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
     assert_eq!(owner.core.source, QueueSource::Unknown);
     assert_eq!(
         *shared_queue.lineage.lock().unwrap(),
-        crate::ctrl::QueueLineage(1)
+        mbv_queue::QueueLineage(1)
     );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {

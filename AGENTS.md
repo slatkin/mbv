@@ -42,8 +42,13 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `src/app/input/` — the only keyboard routing site (`router.rs` precedence,
   `key_policy.rs` order, `resolver.rs` chords); never add another.
 * `src/local_daemon.rs` — Local-daemon bootstrap; rest of `src/` = TUI binary.
-* `crates/mbv-core/` — runtime, Services, providers, config, protocols, canonical
-  queue, source prep, mpv projection; no UI/feed fetch.
+* `crates/mbv-core/` — runtime, Services, providers, source prep, mpv
+  projection, Player owner; no UI/feed fetch.
+* `crates/mbv-emby-model/` — Emby DTOs and tick units.
+* `crates/mbv-queue/` — canonical queue, kinds, state, and lineage.
+* `crates/mbv-ctrl/` — Player-owner protocol vocabulary.
+* `crates/mbv-config/` — app configuration.
+* `crates/mbv-feed/` — feed parsing and entry state.
 * `crates/mbvd/` — packaged daemon, persistence, sockets.
 * `crates/mbv-ids/` — type-safe media identifier newtypes (`ItemId`, `MediaSourceId`, `EmbySessionId`).
 * `crates/mbv-keybinds/` — configurable keybinding registry, chord grammar, validation.

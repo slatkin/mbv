@@ -6,7 +6,7 @@ use super::episode_rows::upcoming_episode_target;
 use super::TvContent;
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::natural_sort_key;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.

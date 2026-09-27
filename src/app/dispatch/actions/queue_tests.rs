@@ -14,7 +14,7 @@ fn remote_seek(#[case] position: i64, #[case] delta: f64, #[case] expected: i64)
 #[test]
 fn queue_double_click_plays_clicked_index_not_follow_cursor() {
     use crate::app::tests::make_item;
-    use crate::player::PlayerCommand;
+    use mbv_ctrl::player::PlayerCommand;
 
     // The queue-row double-click must play the index resolved from the
     // clicked slot, passed straight through (D2), not recovered from
@@ -48,7 +48,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     use crate::app::dispatch::action::Command;
     use crate::app::tests::make_item;
     use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
-    use crate::player::PlayerCommand;
+    use mbv_ctrl::player::PlayerCommand;
 
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;

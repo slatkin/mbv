@@ -70,7 +70,7 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: mbv_core::api::EmbyImageTags::default(),
+        image_tags: mbv_emby_model::EmbyImageTags::default(),
     }
 }
 
@@ -122,8 +122,8 @@ pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
-pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> crate::config::QueueState {
-    crate::config::QueueState::from_emby_items(items, 0, crate::config::QueueSource::Unknown)
+pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> mbv_queue::QueueState {
+    mbv_queue::QueueState::from_emby_items(items, 0, mbv_queue::QueueSource::Unknown)
 }
 
 pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
@@ -147,7 +147,7 @@ pub(crate) fn make_app_stub() -> App {
     // Never start with a session poll already due.
     app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.
-    app.feed_entry_state = mbv_core::feed_entry_state::FeedEntryStore::default();
+    app.feed_entry_state = mbv_feed::FeedEntryStore::default();
     // Default to "focused, past grace window" so existing mouse tests dispatch
     // without arming focus explicitly. The refocus guard itself is tested
     // directly in input_music_track_focus_tests.
@@ -170,7 +170,7 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
                     continue_items: vec![item],
                     views: Vec::new(),
                 },
-                setup: mbv_core::config::EmbySetup::default(),
+                setup: mbv_config::EmbySetup::default(),
             }),
         })
         .expect("Ok startup must bootstrap the Returned Home content");
@@ -197,7 +197,7 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
                 bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
-                setup: mbv_core::config::EmbySetup::default(),
+                setup: mbv_config::EmbySetup::default(),
             }),
         });
     assert_eq!(
@@ -212,7 +212,8 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn make_built_app() -> App {
-    use mbv_core::player::{PlayerProxy, PlayerStatus};
+    use mbv_core::player::PlayerProxy;
+    use mbv_ctrl::player::PlayerStatus;
     use std::sync::Mutex;
 
     let status = Arc::new(Mutex::new(PlayerStatus {
@@ -293,7 +294,7 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
 pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -318,7 +319,7 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
 pub(crate) fn make_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -350,7 +351,7 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
 
 pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -380,22 +381,22 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
 pub(crate) fn emby_unified_state(
     items: &[EmbyItem],
     active_index: usize,
-) -> mbv_core::ctrl::UnifiedQueueStateData {
-    let slots: Vec<mbv_core::ctrl::UnifiedQueueSlot> = items
+) -> mbv_ctrl::UnifiedQueueStateData {
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
         .iter()
         .enumerate()
-        .map(|(i, item)| mbv_core::ctrl::UnifiedQueueSlot {
+        .map(|(i, item)| mbv_ctrl::UnifiedQueueSlot {
             slot_id: (100 + i) as u64,
-            item: mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone())),
+            item: mbv_queue::QueueItem::Emby(Box::new(item.clone())),
         })
         .collect();
-    mbv_core::ctrl::UnifiedQueueStateData {
-        status: mbv_core::player::PlayerStatus::default(),
+    mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,
         revision: 1,
-        source: crate::config::QueueSource::Remote,
-        lineage: mbv_core::ctrl::QueueLineage::default(),
+        source: mbv_queue::QueueSource::Remote,
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     }

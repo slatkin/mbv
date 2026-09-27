@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn episode_rows_project_runtime_in_the_green_gutter() {
     let mut episode = make_item("Episode", "Episode");
-    episode.runtime_ticks = 3_661 * mbv_core::api::TICKS_PER_SECOND;
+    episode.runtime_ticks = 3_661 * mbv_emby_model::TICKS_PER_SECOND;
     let rows = build_episode_rows(&[episode]);
     let MediaListRow::Item {
         trailing, duration, ..
@@ -110,7 +110,7 @@ fn idless_upcoming_rows_have_stable_distinct_targets_and_resolve_selection() {
         None,
         false,
     );
-    context.set_tv_content_mode(Some(mbv_core::config::TvContentMode::Upcoming));
+    context.set_tv_content_mode(Some(mbv_queue::TvContentMode::Upcoming));
     let mut component = TvContent::new();
     component.set_content(context);
     component.carrier.select_index(1);

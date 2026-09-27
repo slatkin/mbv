@@ -8,7 +8,7 @@ use super::{
 /// `slot_id`, handing off playback when it was the active slot.
 pub(super) fn handle_queue_remove_slot(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     slot_id: u64,
 ) {
     let DaemonPlayerOwner {
@@ -149,7 +149,7 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
 /// `to_index`.
 pub(super) fn handle_queue_move_slot(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     slot_id: u64,
     to_index: usize,
 ) {
@@ -196,7 +196,7 @@ pub(super) fn handle_queue_move_slot(
 /// identified by `slot_id`.
 pub(super) fn handle_queue_play_slot(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     slot_id: u64,
 ) {
     let sid = QueueSlotId::from_raw(slot_id);
@@ -221,7 +221,7 @@ pub(super) fn handle_queue_play_slot(
             ctrl_clients: ctx.ctrl_clients,
         },
         ctx.client_id,
-        crate::playback_transition::Transition::new(request_id, generation, sid),
+        crate::player::transition::Transition::new(request_id, generation, sid),
     );
 }
 
@@ -239,7 +239,7 @@ pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
         ..
     } = &mut *ctx.owner;
     queue.clear();
-    *source = crate::config::QueueSource::Unknown;
+    *source = mbv_queue::QueueSource::Unknown;
     mint_queue_lineage(ctx.shared_queue);
     ctx.player.advance_sequence_generation();
     ctx.player.send_command(PlayerCommand::SubmitQueue {

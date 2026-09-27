@@ -3,8 +3,9 @@ use super::{
     SharedQueueState,
 };
 use crate::api::EmbyClient;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
-use crate::player::{Player, PlayerCommand};
+use crate::player::Player;
+use mbv_ctrl::player::PlayerCommand;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex};
 
@@ -12,23 +13,23 @@ use std::sync::{Arc, Mutex};
 /// through `play`, several through `play_queue` at the requested index, with
 /// `start_position_ticks` overriding the item's own position when set.
 trait RemotePlayback {
-    fn play(&self, item: &crate::api::EmbyItem, client: Arc<EmbyClient>);
+    fn play(&self, item: &mbv_emby_model::EmbyItem, client: Arc<EmbyClient>);
     fn play_queue(
         &self,
-        items: Vec<crate::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
         start_idx: usize,
         client: Arc<EmbyClient>,
     );
 }
 
 impl RemotePlayback for Player {
-    fn play(&self, item: &crate::api::EmbyItem, client: Arc<EmbyClient>) {
+    fn play(&self, item: &mbv_emby_model::EmbyItem, client: Arc<EmbyClient>) {
         Player::play(self, item, client, 100);
     }
 
     fn play_queue(
         &self,
-        items: Vec<crate::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
         start_idx: usize,
         client: Arc<EmbyClient>,
     ) {
@@ -39,7 +40,7 @@ impl RemotePlayback for Player {
 fn start_remote_playback(
     player: &dyn RemotePlayback,
     client: &Arc<Mutex<EmbyClient>>,
-    fetched: &[crate::api::EmbyItem],
+    fetched: &[mbv_emby_model::EmbyItem],
     start_idx: usize,
     start_position_ticks: i64,
 ) {
@@ -75,8 +76,8 @@ struct WsPlayContext<'a> {
     player: &'a Player,
     audio_only: bool,
     queue: &'a mut PlaybackQueue,
-    source: &'a mut crate::config::QueueSource,
-    transitions: &'a mut crate::playback_transition::OwnerTransitionState,
+    source: &'a mut mbv_queue::QueueSource,
+    transitions: &'a mut crate::player::transition::OwnerTransitionState,
     shared_queue: &'a SharedQueueState,
     ctrl_clients: &'a ClientRegistry,
     playback: &'a dyn RemotePlayback,
@@ -129,7 +130,7 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         return;
     }
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
-    *source = crate::config::QueueSource::Remote;
+    *source = mbv_queue::QueueSource::Remote;
     take_authority_for_emby_remote(ctrl_clients);
     transitions.reset();
     broadcast_queue_state(
@@ -159,7 +160,7 @@ fn handle_ws_control(
         WsEvent::NextTrack => player.next(),
         WsEvent::PreviousTrack => player.previous(),
         WsEvent::Seek(ticks) => player.send_command(PlayerCommand::SeekAbsolute(
-            crate::api::ticks_to_seconds(ticks),
+            mbv_emby_model::ticks_to_seconds(ticks),
         )),
         WsEvent::TogglePause => player.send_command(PlayerCommand::TogglePause),
         WsEvent::SeekRelative(secs) => player.send_command(PlayerCommand::Seek(secs)),
@@ -210,8 +211,8 @@ pub(crate) fn handle_ws(
     player: &Player,
     audio_only: bool,
     queue: &mut PlaybackQueue,
-    source: &mut crate::config::QueueSource,
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    source: &mut mbv_queue::QueueSource,
+    transitions: &mut crate::player::transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
@@ -244,13 +245,15 @@ pub(crate) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> b
 #[cfg(test)]
 mod tests {
     use super::{handle_ws_play, websocket_play_start_index, RemotePlayback, WsPlayContext};
-    use crate::api::{EmbyClient, EmbyItem};
-    use crate::config::{Config, QueueSource};
+    use crate::api::EmbyClient;
     use crate::daemon::{CtrlClients, SharedQueueState};
-    use crate::playback_queue::{PlaybackQueue, QueueItem};
-    use crate::playback_transition::OwnerTransitionState;
+    use crate::player::transition::OwnerTransitionState;
     use crate::player::Player;
+    use mbv_config::Config;
+    use mbv_emby_model::EmbyItem;
     use mbv_net::mock_http::MockHttp;
+    use mbv_queue::QueueSource;
+    use mbv_queue::{PlaybackQueue, QueueItem};
     use mbv_ws::WsEvent;
     use rstest::rstest;
     use std::sync::{Arc, Mutex};

@@ -1,24 +1,24 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, LibEvent};
-use mbv_core::config::{QueueState, ServiceKind};
-use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_queue::QueueItem;
+use mbv_queue::{QueueState, ServiceKind};
 
 impl App {
     fn persist_filtered_queue(state: Option<&QueueState>) -> Result<(), String> {
         match state {
-            Some(state) if !state.items.is_empty() => mbv_core::config::save_queue_state(state),
-            _ => mbv_core::config::clear_queue_state(),
+            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
+            _ => mbv_config::clear_queue_state(),
         }
     }
 
-    fn restore_emby_setup(setup: Option<&mbv_core::config::EmbySetup>, token: Option<&str>) {
+    fn restore_emby_setup(setup: Option<&mbv_config::EmbySetup>, token: Option<&str>) {
         match (setup, token) {
             (Some(setup), Some(token)) => {
-                let _ = mbv_core::config::persist_emby_setup_and_secret(setup, token);
+                let _ = mbv_config::persist_emby_setup_and_secret(setup, token);
             }
             (Some(setup), None) => {
-                let _ = mbv_core::config::save_emby_setup(setup);
+                let _ = mbv_config::save_emby_setup(setup);
             }
             _ => {}
         }
@@ -27,10 +27,10 @@ impl App {
     fn restore_persisted_queue(state: Option<&QueueState>) {
         match state {
             Some(state) => {
-                let _ = mbv_core::config::save_queue_state(state);
+                let _ = mbv_config::save_queue_state(state);
             }
             None => {
-                let _ = mbv_core::config::clear_queue_state();
+                let _ = mbv_config::clear_queue_state();
             }
         }
     }
@@ -57,7 +57,7 @@ impl App {
                 .collect::<Vec<_>>();
             queue.set_queue_items(non_emby_items, 0);
         }
-        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
+        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
@@ -99,7 +99,7 @@ impl App {
         self.images.image_lru.clear();
         self.images.pending_image_fetches.clear();
         self.images.image_fetches_active = 0;
-        self.library_position_state = crate::config::LibraryPositionState::default();
+        self.library_position_state = mbv_queue::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -121,10 +121,10 @@ impl App {
 
     pub(in crate::app) fn remove_emby_confirmed(&mut self) {
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
-        let old_token = mbv_core::config::load_service_secret(ServiceKind::Emby);
-        let old_queue = mbv_core::config::load_queue_state();
+        let old_token = mbv_config::load_service_secret(ServiceKind::Emby);
+        let old_queue = mbv_config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
-        if let Err(error) = mbv_core::config::remove_emby_setup_and_secret()
+        if let Err(error) = mbv_config::remove_emby_setup_and_secret()
             .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
         {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
@@ -151,14 +151,14 @@ impl App {
             return;
         };
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
-        let old_token = mbv_core::config::load_service_secret(ServiceKind::Emby);
-        let old_queue = mbv_core::config::load_queue_state();
+        let old_token = mbv_config::load_service_secret(ServiceKind::Emby);
+        let old_queue = mbv_config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
         let replacement = candidate.setup.clone();
         let token = candidate.client.token.clone();
-        let result = mbv_core::config::remove_emby_setup_and_secret()
+        let result = mbv_config::remove_emby_setup_and_secret()
             .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
-            .and_then(|()| mbv_core::config::persist_emby_setup_and_secret(&replacement, &token));
+            .and_then(|()| mbv_config::persist_emby_setup_and_secret(&replacement, &token));
         if let Err(error) = result {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());

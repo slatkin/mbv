@@ -69,7 +69,7 @@ impl App {
             config.use_mpv_config,
             config.no_scripts,
             config.always_skip_intro,
-            mbv_core::player::SubtitlePrefs {
+            mbv_ctrl::player::SubtitlePrefs {
                 mode: config.subtitle_mode.clone(),
                 subtitle_lang: config.subtitle_lang.clone(),
                 audio_lang: config.audio_lang.clone(),
@@ -110,7 +110,7 @@ impl App {
         #[cfg(test)]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
-        let pending_launch_state = mbv_core::config::load_tui_launch_state();
+        let pending_launch_state = mbv_config::load_tui_launch_state();
         // The legacy selected-tab preference is only a migration input. Never
         // let it compete with a versioned launch snapshot that already exists.
         let legacy_launch_tab = pending_launch_state
@@ -124,7 +124,7 @@ impl App {
             .flatten();
         let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
-            crate::config::QueueSource::Unknown,
+            mbv_queue::QueueSource::Unknown,
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
@@ -261,7 +261,7 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_source: crate::config::QueueSource::Unknown,
+            queue_source: mbv_queue::QueueSource::Unknown,
             queue_dirty: false,
             pending_owner_source_update: None,
             pending_queue_action: None,
@@ -317,7 +317,7 @@ impl App {
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
             feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
-            feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
+            feed_entry_state: mbv_feed::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();
         app
@@ -336,12 +336,11 @@ impl App {
         let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
         let configured = app_config.emby_setup.is_some();
         let credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+            mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
         let generation = mbv_core::service_runtime::SetupGeneration::default();
         let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
         let audiobookshelf_credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-                .is_some();
+            mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
         let raw_player = Player::new(
             String::new(),
             String::new(),
@@ -349,7 +348,7 @@ impl App {
             app_config.use_mpv_config,
             app_config.no_scripts,
             app_config.always_skip_intro,
-            mbv_core::player::SubtitlePrefs {
+            mbv_ctrl::player::SubtitlePrefs {
                 mode: app_config.subtitle_mode.clone(),
                 subtitle_lang: app_config.subtitle_lang.clone(),
                 audio_lang: app_config.audio_lang.clone(),

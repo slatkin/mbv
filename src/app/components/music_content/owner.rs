@@ -107,7 +107,7 @@ impl LibraryContentOwner for MusicContent {
 
     fn launch_selector(
         &self,
-        state: &mbv_core::config::TuiLaunchState,
+        state: &mbv_config::TuiLaunchState,
     ) -> Option<crate::app::components::library_panel::owner::LaunchSelector> {
         let target = self.group_cursor_for_launch_state(state);
         (self.context.group_cursor != target).then_some(
@@ -115,7 +115,7 @@ impl LibraryContentOwner for MusicContent {
         )
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
@@ -323,7 +323,7 @@ impl KeyOutcome {
 }
 
 impl MusicContent {
-    fn group_cursor_for_launch_state(&self, state: &mbv_core::config::TuiLaunchState) -> usize {
+    fn group_cursor_for_launch_state(&self, state: &mbv_config::TuiLaunchState) -> usize {
         match state.selector.as_ref() {
             Some(SelectorIdentity::Emby {
                 key: EmbySelectorKey::Group(id),

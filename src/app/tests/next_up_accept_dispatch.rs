@@ -25,8 +25,8 @@ fn next_up_accept_on_out_of_process_owner_requests_unified_queue_play_slot() {
             cmd_rx
                 .recv_timeout(Duration::from_secs(1))
                 .expect("accept must request the jump from the out-of-process owner"),
-            mbv_core::ctrl::CtrlCmd::UnifiedQueuePlaySlot { slot_id }
-                if slot_id == mbv_core::ctrl::slot_id_to_u64(expected_slot)
+            mbv_ctrl::CtrlCmd::UnifiedQueuePlaySlot { slot_id }
+                if slot_id == mbv_ctrl::slot_id_to_u64(expected_slot)
         ),
         "accept must request UnifiedQueuePlaySlot for the next-up slot"
     );
@@ -68,7 +68,7 @@ fn next_up_accept_on_app_process_owner_mints_and_dispatches_local_jump() {
     assert!(
         matches!(
             commands.try_recv().expect("local owner must dispatch the jump"),
-            mbv_core::player::PlayerCommand::JumpTo { slot_id, .. } if slot_id == target
+            mbv_ctrl::player::PlayerCommand::JumpTo { slot_id, .. } if slot_id == target
         ),
         "the accept must jump to the next-up slot by identity"
     );
@@ -95,14 +95,14 @@ fn settle_dispatches_the_promoted_transition_unchanged() {
     let slot_b = app.player_tab.slot_id_at(1).unwrap();
     let (request_id_a, generation_a) = app.bare_owner.mint_local_transition();
     app.bare_owner
-        .accept_local_transition(mbv_core::playback_transition::Transition::new(
+        .accept_local_transition(mbv_core::player::transition::Transition::new(
             request_id_a,
             generation_a,
             slot_a,
         ));
     let (request_id_b, generation_b) = app.bare_owner.mint_local_transition();
     app.bare_owner
-        .accept_local_transition(mbv_core::playback_transition::Transition::new(
+        .accept_local_transition(mbv_core::player::transition::Transition::new(
             request_id_b,
             generation_b,
             slot_b,
@@ -116,7 +116,7 @@ fn settle_dispatches_the_promoted_transition_unchanged() {
 
     assert!(matches!(
         commands.try_recv().expect("the promoted transition must be dispatched"),
-        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
+        mbv_ctrl::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
             if slot_id == slot_b && request_id == request_id_b && generation == generation_b
     ));
     commands.try_recv().unwrap_err();

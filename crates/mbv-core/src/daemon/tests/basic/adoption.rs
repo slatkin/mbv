@@ -230,7 +230,7 @@ fn adopted_refresh_merges_positions_with_played_reset_authority(
     assert_eq!(emby.played, expected_played);
     assert_eq!(
         slot.progress_state.local,
-        crate::playback_queue::SlotProgress {
+        mbv_queue::SlotProgress {
             position_ticks: expected_position,
             played: expected_played,
         }

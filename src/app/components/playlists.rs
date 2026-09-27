@@ -11,7 +11,7 @@ use super::mouse::hit::HitRegions;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub struct PlaylistsComponent {
     playlists: Vec<EmbyItem>,

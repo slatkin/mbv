@@ -3,15 +3,15 @@ use super::{
     mint_queue_lineage, reset_slot_jumps, send_to, ClientRegistry, CtrlContext, CtrlSender,
     DaemonPlayerOwner, PendingIdleQueueLoad, Player, QueueItem, QueueSlotId, SharedQueueState,
 };
-use crate::ctrl::CtrlEvent;
-use crate::playback_queue::PlaybackQueue;
+use mbv_ctrl::CtrlEvent;
+use mbv_queue::PlaybackQueue;
 use std::time::{Duration, Instant};
 
 fn install_idle_queue_load(
-    request_id: crate::ctrl::QueueLoadRequestId,
+    request_id: mbv_ctrl::QueueLoadRequestId,
     slots: Vec<(QueueSlotId, QueueItem)>,
     cursor: usize,
-    source: crate::config::QueueSource,
+    source: mbv_queue::QueueSource,
     reply_tx: &CtrlSender,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
@@ -31,11 +31,8 @@ fn install_idle_queue_load(
         &mut owner.core.transitions,
         &mut owner.queued_transition_origin,
     );
-    owner.core.queue = PlaybackQueue::from_slot_items(
-        slots,
-        active_slot,
-        crate::playback_queue::QueueRevision::default(),
-    );
+    owner.core.queue =
+        PlaybackQueue::from_slot_items(slots, active_slot, mbv_queue::QueueRevision::default());
     owner.core.source = source;
     mint_queue_lineage(shared_queue);
     owner.core.note_observed_active_slot(None);
@@ -56,21 +53,21 @@ fn install_idle_queue_load(
         reply_tx,
         &CtrlEvent::UnifiedQueueLoadResult {
             request_id,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         },
     );
 }
 
 pub(super) fn reject_queue_load(
     reply_tx: &CtrlSender,
-    request_id: crate::ctrl::QueueLoadRequestId,
+    request_id: mbv_ctrl::QueueLoadRequestId,
     reason: String,
 ) {
     send_to(
         reply_tx,
         &CtrlEvent::UnifiedQueueLoadResult {
             request_id,
-            result: crate::ctrl::QueueLoadResult::Rejected { reason },
+            result: mbv_ctrl::QueueLoadResult::Rejected { reason },
         },
     );
 }
@@ -119,7 +116,7 @@ pub(in crate::daemon) fn expire_pending_idle_queue_load(
 }
 
 pub(in crate::daemon) fn complete_pending_idle_queue_load(
-    run_identity: crate::ctrl::PlaybackGeneration,
+    run_identity: mbv_ctrl::PlaybackGeneration,
     failure: Option<String>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
@@ -156,10 +153,10 @@ pub(in crate::daemon) fn complete_pending_idle_queue_load(
 /// `PendingIdleQueueLoad` until the stop finalizes.
 pub(super) fn handle_queue_load_idle(
     ctx: &mut CtrlContext<'_>,
-    request_id: crate::ctrl::QueueLoadRequestId,
-    slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+    request_id: mbv_ctrl::QueueLoadRequestId,
+    slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
     cursor: usize,
-    new_source: crate::config::QueueSource,
+    new_source: mbv_queue::QueueSource,
 ) {
     let (supports_operation, supports_abs_queue, supports_abs_book_queue) = {
         let clients = ctx.ctrl_clients.lock().unwrap();

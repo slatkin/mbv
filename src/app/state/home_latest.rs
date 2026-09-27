@@ -1,4 +1,4 @@
-use mbv_core::playback_queue::QueueItem;
+use mbv_queue::QueueItem;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The launch-relative interval used by destination Latest markers.
@@ -25,8 +25,8 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
         };
     }
 
-    let previous = mbv_core::config::load_home_latest_launch();
-    if let Err(error) = mbv_core::config::save_home_latest_launch(current) {
+    let previous = mbv_config::load_home_latest_launch();
+    if let Err(error) = mbv_config::save_home_latest_launch(current) {
         log::warn!(target: "home_latest", "could not save launch cutoff: {error}");
         return HomeLatestLaunchWindow {
             previous: None,
@@ -39,14 +39,12 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
 /// Normalize the provider timestamp carried by a destination Latest item.
 pub(in crate::app) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
-        QueueItem::Emby(item) => {
-            crate::app::infra::feed_parse::parse_pub_date_secs(&item.date_added)
-        }
+        QueueItem::Emby(item) => mbv_feed::parse_pub_date_secs(&item.date_added),
         QueueItem::Feed(entry) => entry.pub_date_secs,
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-            episode,
-        )) => episode.pub_date_secs,
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(_)) => None,
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
+            episode.pub_date_secs
+        }
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => None,
     }
 }
 
@@ -64,9 +62,9 @@ pub(in crate::app) fn is_new_in_launch_window(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::api::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
-    use mbv_core::config::FeedKind;
-    use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry};
+    use mbv_emby_model::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
+    use mbv_queue::FeedKind;
+    use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry};
     use rstest::rstest;
 
     fn emby(date_added: &str) -> QueueItem {

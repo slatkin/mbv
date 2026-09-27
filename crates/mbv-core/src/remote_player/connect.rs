@@ -9,12 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::EmbyItem;
-use crate::ctrl::{
+use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
+use mbv_ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
     UnifiedQueueStateData,
 };
-use crate::player::{PlayerEvent, PlayerStatus};
+use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 
 use crate::remote_player::RemotePlayer;
@@ -30,7 +30,7 @@ const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 mod endpoint;
 
-pub use endpoint::DaemonEndpoint;
+pub use endpoint::{resolve_library_route, DaemonEndpoint};
 
 /// Performs the daemon control-protocol handshake (hello exchange, then the
 /// initial state) on `stream`, returning a reader ready for the long-running
@@ -128,10 +128,10 @@ fn read_initial_state(reader: &mut BufReader<SocketStream>) -> Result<CtrlEvent,
 /// applied/rejected acknowledgement is awaited. Any failure after the connect
 /// reports a restart requirement; the caller's durable commit is untouched.
 pub fn signal_local_daemon_service_setup(
-    kind: crate::config::ServiceKind,
+    kind: mbv_queue::ServiceKind,
     revision: u64,
 ) -> Result<(), String> {
-    let path = PathBuf::from(crate::config::control_socket_path());
+    let path = PathBuf::from(mbv_config::control_socket_path());
     let Ok(stream) = UnixStream::connect(&path) else {
         return Ok(());
     };
@@ -140,7 +140,7 @@ pub fn signal_local_daemon_service_setup(
         .map_err(|error| format!("restart required (cannot read local daemon ctrl): {error}"))?;
     let (mut reader, _state, _compatibility) =
         perform_handshake(SocketStream::Unix(stream), || {
-            crate::config::load_or_create_control_credential()
+            mbv_config::load_or_create_control_credential()
         })
         .map_err(|error| format!("restart required (local daemon handshake failed): {error}"))?;
     let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
@@ -175,7 +175,7 @@ fn apply_ctrl_event(
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     notify: bool,
@@ -312,7 +312,7 @@ fn apply_unified_queue_state(
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
@@ -366,7 +366,7 @@ struct ReaderThreadState {
     status: Arc<Mutex<PlayerStatus>>,
     items: Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     disconnected: Arc<AtomicBool>,
     disconnect_notified: Arc<AtomicBool>,
@@ -388,10 +388,10 @@ fn connect_stream(
     let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
+    let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
+    let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let disconnect_notified = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -414,7 +414,7 @@ fn connect_stream(
     let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound(
         move || {
             perform_handshake(handshake_stream, || {
-                crate::config::load_or_create_control_credential()
+                mbv_config::load_or_create_control_credential()
             })
         },
         DAEMON_HANDSHAKE_HARD_BOUND,
@@ -573,7 +573,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
         let _ = event_tx.send(PlayerEvent::DaemonShutdownAnnounced);
     } else if !disconnect_notified.swap(true, Ordering::SeqCst) {
         let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-            crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+            mbv_ctrl::player::CONNECTION_LOST_MESSAGE.to_string(),
         ));
     }
 }
@@ -594,7 +594,7 @@ fn write_remote_commands(
             disconnected.store(true, Ordering::SeqCst);
             if !disconnect_notified.swap(true, Ordering::SeqCst) {
                 let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-                    crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+                    mbv_ctrl::player::CONNECTION_LOST_MESSAGE.to_string(),
                 ));
             }
             break;
@@ -638,8 +638,8 @@ pub fn connect_stub_daemon_pair() -> Result<
             slots: Vec::new(),
             active_slot: None,
             revision: 0,
-            source: crate::config::QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            source: mbv_queue::QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         }))

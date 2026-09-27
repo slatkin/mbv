@@ -4,7 +4,7 @@ use crate::app::{
     SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent};
-use mbv_core::playback_queue::RemoveSlotResult;
+use mbv_queue::RemoveSlotResult;
 
 impl App {
     /// Shared dispatcher for the confirmation-modal component (see

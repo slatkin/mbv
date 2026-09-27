@@ -6,9 +6,10 @@ use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::{bootstrap_unified_queue, AppInit};
 use mbv_core::api::EmbyClient;
-use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::DaemonEndpoint;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
+use mbv_ctrl::player::PlayerEvent;
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
@@ -38,9 +39,9 @@ fn start_mpris(remote: &mbv_core::remote_player::RemotePlayer) -> crate::mpris::
 /// The daemon-side queue snapshot an attaching session seeds its queue
 /// scope, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
-    items: Vec<mbv_core::api::EmbyItem>,
+    items: Vec<mbv_emby_model::EmbyItem>,
     cursor: usize,
-    unified_state: Option<mbv_core::ctrl::UnifiedQueueStateData>,
+    unified_state: Option<mbv_ctrl::UnifiedQueueStateData>,
 }
 
 impl RemoteSnapshot {
@@ -71,7 +72,7 @@ impl RemoteSnapshot {
 
     /// The legacy/unified bootstrap a local-daemon attach replays through
     /// `App::build`.
-    fn local_bootstrap(&self, source: &crate::config::QueueSource) -> LocalDaemonBootstrap {
+    fn local_bootstrap(&self, source: &mbv_queue::QueueSource) -> LocalDaemonBootstrap {
         self.unified_state.as_ref().map_or_else(
             || bootstrap_legacy_queue(self.items.clone(), self.cursor, source.clone()),
             bootstrap_unified_queue,
@@ -123,11 +124,10 @@ fn remote_services(
 ) -> RemoteServices {
     let emby_configured = app_config.emby_setup.is_some();
     let emby_credential_present =
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
     let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
     let audiobookshelf_credential_present =
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-            .is_some();
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
     let emby_runtime = client_arc.map_or_else(
         || independent_emby_runtime(emby_configured, emby_credential_present),
         |client| EmbyRuntime::ready(std::sync::Arc::clone(client)),

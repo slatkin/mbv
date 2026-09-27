@@ -1,4 +1,5 @@
-use mbv_core::{applog, config, daemon};
+use mbv_config as config;
+use mbv_core::{applog, daemon};
 use mimalloc::MiMalloc;
 use std::io::{self, BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
@@ -258,7 +259,7 @@ fn connect_emby() -> Result<(), String> {
     let exchange = exchange_emby_credentials(&client, &server_url, &username, &password)?;
     let setup = commit_emby_setup(existing.as_ref(), exchange)?;
     if daemon_running() {
-        reconcile_running_owner(config::ServiceKind::Emby, setup.revision)?;
+        reconcile_running_owner(mbv_queue::ServiceKind::Emby, setup.revision)?;
         println!(
             "mbvd: Emby setup committed and active for {}",
             setup.server_url
@@ -331,7 +332,7 @@ fn connect_abs() -> Result<(), String> {
         .map_err(|error| format!("mbvd: could not replace Audiobookshelf setup: {error}"))?
     };
     if daemon_running() {
-        reconcile_running_owner(config::ServiceKind::Audiobookshelf, revision)?;
+        reconcile_running_owner(mbv_queue::ServiceKind::Audiobookshelf, revision)?;
         println!(
             "mbvd: Audiobookshelf setup committed and active for {}",
             setup.server_url
@@ -367,7 +368,7 @@ fn disconnect_abs() -> Result<(), String> {
     if daemon_running() {
         // A revision of 0 signals removal: the running owner rereads its own
         // storage, sees no setup, and drops its context.
-        if let Err(error) = reconcile_running_owner(config::ServiceKind::Audiobookshelf, 0) {
+        if let Err(error) = reconcile_running_owner(mbv_queue::ServiceKind::Audiobookshelf, 0) {
             return Err(format!(
                 "{error}; the running process may retain the deleted key in memory"
             ));
@@ -379,10 +380,10 @@ fn disconnect_abs() -> Result<(), String> {
     Ok(())
 }
 
-fn reconcile_event_outcome(event: &mbv_core::ctrl::CtrlEvent) -> Option<Result<(), String>> {
+fn reconcile_event_outcome(event: &mbv_ctrl::CtrlEvent) -> Option<Result<(), String>> {
     match event {
-        mbv_core::ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
-        mbv_core::ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
+        mbv_ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
+        mbv_ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
             "mbvd: restart required (live setup rejected: {reason:?})"
         ))),
         _ => None,
@@ -394,7 +395,7 @@ fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
         let line = next.map_err(|error| {
             format!("mbvd: restart required (setup acknowledgement unavailable): {error}")
         })?;
-        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line).map_err(|error| {
+        let event = serde_json::from_str::<mbv_ctrl::CtrlEvent>(&line).map_err(|error| {
             format!("mbvd: restart required (invalid setup acknowledgement): {error}")
         })?;
         if let Some(outcome) = reconcile_event_outcome(&event) {
@@ -421,8 +422,8 @@ fn connect_running_owner() -> Result<(UnixStream, BufReader<UnixStream>), String
     reader.read_line(&mut line).map_err(|error| {
         format!("mbvd: restart required (packaged daemon did not acknowledge): {error}")
     })?;
-    match serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line) {
-        Ok(mbv_core::ctrl::CtrlEvent::Hello(hello)) => hello
+    match serde_json::from_str::<mbv_ctrl::CtrlEvent>(&line) {
+        Ok(mbv_ctrl::CtrlEvent::Hello(hello)) => hello
             .validate_peer()
             .map_err(|error| format!("mbvd: restart required (ctrl protocol mismatch): {error}"))?,
         _ => return Err("mbvd: restart required (invalid packaged daemon ctrl hello)".into()),
@@ -432,16 +433,16 @@ fn connect_running_owner() -> Result<(UnixStream, BufReader<UnixStream>), String
 
 fn send_reconcile_request(
     writer: &mut UnixStream,
-    kind: config::ServiceKind,
+    kind: mbv_queue::ServiceKind,
     revision: u64,
 ) -> Result<(), String> {
-    let hello = serde_json::to_string(&mbv_core::ctrl::CtrlCmd::Hello(
-        mbv_core::ctrl::CtrlHello::current(),
-    ))
-    .map_err(|error| format!("mbvd: restart required (cannot serialize ctrl hello): {error}"))?;
+    let hello = serde_json::to_string(&mbv_ctrl::CtrlCmd::Hello(mbv_ctrl::CtrlHello::current()))
+        .map_err(|error| {
+            format!("mbvd: restart required (cannot serialize ctrl hello): {error}")
+        })?;
     writeln!(writer, "{hello}")
         .and_then(|()| {
-            serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
+            serde_json::to_string(&mbv_ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
                 .map_err(|error| {
                     io::Error::other(format!("cannot serialize setup request: {error}"))
                 })
@@ -453,7 +454,7 @@ fn send_reconcile_request(
         .map_err(|error| format!("mbvd: restart required (cannot flush setup request): {error}"))
 }
 
-fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
+fn reconcile_running_owner(kind: mbv_queue::ServiceKind, revision: u64) -> Result<(), String> {
     let (mut writer, reader) = connect_running_owner()?;
     send_reconcile_request(&mut writer, kind, revision)?;
     wait_for_reconcile_outcome(reader)

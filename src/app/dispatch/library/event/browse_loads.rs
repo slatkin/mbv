@@ -1,6 +1,6 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(super) fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
@@ -203,8 +203,8 @@ impl App {
     pub(super) fn handle_restored_library_position(
         &mut self,
         lib_idx: usize,
-        requested_position: &crate::config::LibraryPosition,
-        position: crate::config::LibraryPosition,
+        requested_position: &mbv_queue::LibraryPosition,
+        position: mbv_queue::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
         if self.saved_library_position(lib_idx).as_ref() != Some(requested_position) {
@@ -253,7 +253,7 @@ impl App {
     fn restore_library_position_levels(
         &self,
         lib_idx: usize,
-        requested_position: &crate::config::LibraryPosition,
+        requested_position: &mbv_queue::LibraryPosition,
         mut nav_stack: Vec<BrowseLevel>,
     ) -> Vec<BrowseLevel> {
         for (index, level) in nav_stack.iter_mut().enumerate() {
@@ -297,10 +297,10 @@ impl App {
     fn rebuild_restored_library_position(
         &self,
         lib_idx: usize,
-        mut position: crate::config::LibraryPosition,
-        requested_position: &crate::config::LibraryPosition,
+        mut position: mbv_queue::LibraryPosition,
+        requested_position: &mbv_queue::LibraryPosition,
         nav_stack: &[BrowseLevel],
-    ) -> crate::config::LibraryPosition {
+    ) -> mbv_queue::LibraryPosition {
         // Rebuild the saved position from the filtered levels so a dropped
         // empty folder cannot leave a stale focused id or server-row count.
         let library_total = position
@@ -323,7 +323,7 @@ impl App {
                             .and_then(|level| level.tv_content_mode.as_ref()),
                     )
                 });
-            if let Some(mbv_core::config::TvContentMode::Range(index)) = &root.tv_content_mode {
+            if let Some(mbv_queue::TvContentMode::Range(index)) = &root.tv_content_mode {
                 root.letter_filter_index = Some(*index);
             } else if root.tv_content_mode.is_some() {
                 root.letter_filter_index = None;

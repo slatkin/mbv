@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
-use mbv_core::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
 mod progress;
@@ -19,7 +19,7 @@ impl App {
         if self.player.is_remote() {
             return false;
         }
-        let mbv_core::playback_transition::ExpireOutcome::Expired {
+        let mbv_core::player::transition::ExpireOutcome::Expired {
             dispatch_next: Some(next),
             ..
         } = self.bare_owner.expire_local_transition(now)
@@ -194,12 +194,12 @@ impl App {
         }
     }
 
-    fn handle_unified_queue_load_result(&mut self, result: mbv_core::ctrl::QueueLoadResult) {
+    fn handle_unified_queue_load_result(&mut self, result: mbv_ctrl::QueueLoadResult) {
         match result {
-            mbv_core::ctrl::QueueLoadResult::Accepted => {
+            mbv_ctrl::QueueLoadResult::Accepted => {
                 self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
             }
-            mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
+            mbv_ctrl::QueueLoadResult::Rejected { reason } => {
                 self.flash(
                     format!("Queue load rejected: {reason}"),
                     ToastSeverity::Error,
@@ -214,7 +214,7 @@ impl App {
         // config, so this client's own `always_skip_intro` is the
         // only thing that decides whether to skip.
         if self.config.lock().unwrap().always_skip_intro {
-            let secs = mbv_core::api::ticks_to_seconds(intro_end_ticks);
+            let secs = mbv_emby_model::ticks_to_seconds(intro_end_ticks);
             self.player.send_command(PlayerCommand::SeekAbsolute(secs));
             self.player.send_command(PlayerCommand::SkipIntroDismiss);
         }
@@ -248,7 +248,7 @@ impl App {
             return false;
         };
         log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
-            position_ticks / mbv_core::api::TICKS_PER_SECOND);
+            position_ticks / mbv_emby_model::TICKS_PER_SECOND);
         if self.player.is_remote_disconnected() {
             return self.handle_stopped_remote_disconnected();
         }
@@ -322,7 +322,7 @@ impl App {
     /// retained position, apply it, persist Feed lifecycle state.
     fn apply_stopped_slot_progress(
         &mut self,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,
         played: bool,
         progress_report_accepted: bool,
@@ -347,7 +347,7 @@ impl App {
         // Persist Feed lifecycle state before any
         // consume/removal changes the queue.
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_)) {
+            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
                 let runtime = slot.item.runtime_ticks();
                 let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
                 self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
@@ -356,7 +356,7 @@ impl App {
         if played {
             log::info!(target: "player", "Stopped: marked played, position reset to 0");
         } else if position_ticks > 0 {
-            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_core::api::TICKS_PER_SECOND);
+            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_emby_model::TICKS_PER_SECOND);
         } else {
             log::info!(target: "player", "Stopped: position not saved (position_ticks={position_ticks})");
         }
@@ -366,8 +366,8 @@ impl App {
     /// to drop a deleted slot, or run the consume reaction.
     fn finish_stopped_consumption(
         &mut self,
-        deleted_slot: Option<mbv_core::playback_queue::QueueSlotId>,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        deleted_slot: Option<mbv_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
         consume: bool,
     ) {
         if deleted_slot.is_some() {
@@ -381,7 +381,7 @@ impl App {
             if let Some(deleted_slot) = deleted_slot {
                 if !self
                     .player
-                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(deleted_slot))
+                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot))
                 {
                     self.player
                         .send_command(PlayerCommand::QueueRemove(deleted_slot));
@@ -434,7 +434,7 @@ impl App {
         } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
             // Only record meaningful progress for video; audio and
             // startup noise keep the prior value.
-            if position_ticks >= mbv_core::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+            if position_ticks >= mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
                 && !slot.item.is_audio()
             {
                 position_ticks
@@ -455,7 +455,7 @@ impl App {
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_)) {
+            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
                 let runtime = slot.item.runtime_ticks();
                 let feed_completed = played && runtime > 0;
                 self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
@@ -507,7 +507,7 @@ impl App {
                 .sync_canonical_queue(self.playback_queue().queue.clone());
             let _ = self.bare_owner.observe_track_change(target_slot_id);
             if let Some((request_id, _generation)) = transition {
-                if let mbv_core::playback_transition::SettleOutcome::Settled {
+                if let mbv_core::player::transition::SettleOutcome::Settled {
                     dispatch_next: Some(next),
                 } = self
                     .bare_owner
@@ -562,11 +562,10 @@ impl App {
         log::warn!(target: "app", "next-up: play triggered");
         if let Some(item) = self.next_up_item.take() {
             let label = item.playback_label();
-            if let Some(idx) = self
-                .playback_queue()
-                .slots()
-                .iter()
-                .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
+            if let Some(idx) =
+                self.playback_queue().slots().iter().position(
+                    |s| matches!(&s.item, mbv_queue::QueueItem::Emby(e) if e.id == item.id),
+                )
             {
                 let slot_id = self.playback_queue().slots()[idx].slot_id;
                 let accepted = self.request_slot_jump(slot_id);
@@ -596,10 +595,7 @@ impl App {
     /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
     /// `handle_player_event`). Returns true when the local generation fence
     /// ends the tick early.
-    fn handle_unified_queue_updated(
-        &mut self,
-        unified: &mbv_core::ctrl::UnifiedQueueStateData,
-    ) -> bool {
+    fn handle_unified_queue_updated(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) -> bool {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         *self.player.status.lock().unwrap() = unified.status.clone();
@@ -713,9 +709,9 @@ impl App {
     /// Persist a Feed slot's current player position, when the slot still
     /// exists and carries a feed identity. Shared by the pause and
     /// seek-completion paths (extracted from `handle_player_event`).
-    fn persist_feed_slot_position(&mut self, slot_id: mbv_core::playback_queue::QueueSlotId) {
+    fn persist_feed_slot_position(&mut self, slot_id: mbv_queue::QueueSlotId) {
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item {
+            if let mbv_queue::QueueItem::Feed(ref entry) = slot.item {
                 if entry.feed_id.is_some() {
                     let pos_ticks = self.player.status.lock().unwrap().position_ticks;
                     self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
@@ -735,8 +731,8 @@ fn flow_after(restart_loop: bool) -> PlayerEventFlow {
 
 /// The one message for a correlated direct-daemon playback-intent outcome
 /// (extracted from `handle_player_event`).
-fn playback_intent_message(outcome: &mbv_core::ctrl::PlaybackIntentOutcome) -> &'static str {
-    use mbv_core::ctrl::{PlaybackIntentOutcome, PlaybackIntentRejection};
+fn playback_intent_message(outcome: &mbv_ctrl::PlaybackIntentOutcome) -> &'static str {
+    use mbv_ctrl::{PlaybackIntentOutcome, PlaybackIntentRejection};
     match outcome {
         PlaybackIntentOutcome::Accepted => "Playback request accepted",
         PlaybackIntentOutcome::Applied => "Playback request applied",
@@ -756,8 +752,8 @@ fn playback_intent_message(outcome: &mbv_core::ctrl::PlaybackIntentOutcome) -> &
 /// `handle_player_event`). These statuses only originate from a direct
 /// pipe-output daemon. Local, attached-Emby, and ordinary daemon routes
 /// never receive the event, so their presentation is unchanged.
-fn pipe_playback_message(status: &mbv_core::ctrl::PipePlaybackStatus) -> String {
-    use mbv_core::ctrl::PipePlaybackPhase;
+fn pipe_playback_message(status: &mbv_ctrl::PipePlaybackStatus) -> String {
+    use mbv_ctrl::PipePlaybackPhase;
     match status.phase {
         PipePlaybackPhase::Resolving => "Resolving pipe playback target".to_string(),
         PipePlaybackPhase::PlayerOpening => "Opening player output".to_string(),

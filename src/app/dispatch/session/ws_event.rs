@@ -1,7 +1,7 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
+use mbv_ctrl::player::PlayerCommand;
 #[cfg(test)]
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerCommand;
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;
 
 impl App {
@@ -34,7 +34,7 @@ impl App {
             }
             WsEvent::Seek(ticks) => {
                 self.player.send_command(PlayerCommand::SeekAbsolute(
-                    mbv_core::api::ticks_to_seconds(ticks),
+                    mbv_emby_model::ticks_to_seconds(ticks),
                 ));
             }
             WsEvent::SeekRelative(secs) => {
@@ -128,7 +128,7 @@ impl App {
         }
         let start_idx = start_index.min(items.len().saturating_sub(1));
         self.set_panel_focus(PanelFocus::Queue);
-        self.queue_source = crate::config::QueueSource::Remote;
+        self.queue_source = mbv_queue::QueueSource::Remote;
         if items.len() == 1 {
             let mut item = items[0].clone();
             if start_position_ticks > 0 {
@@ -139,7 +139,7 @@ impl App {
             self.submit_tab_queue(
                 self.playing_queue_scope(),
                 0,
-                crate::config::QueueSource::Remote,
+                mbv_queue::QueueSource::Remote,
             );
         } else {
             log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
@@ -157,7 +157,7 @@ impl App {
             self.submit_tab_queue(
                 self.playing_queue_scope(),
                 start_idx,
-                crate::config::QueueSource::Remote,
+                mbv_queue::QueueSource::Remote,
             );
         }
         self.save_queue_state();
@@ -168,7 +168,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
-    use mbv_core::player::{PlayerCommand, PlayerStatus};
+    use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
     use rstest::rstest;
     use std::sync::mpsc::Receiver;
 
@@ -218,8 +218,8 @@ mod tests {
 
     #[test]
     fn stop_resets_bare_transitions_and_sends_no_transport_command() {
-        use mbv_core::playback_queue::QueueSlotId;
-        use mbv_core::playback_transition::Transition;
+        use mbv_core::player::transition::Transition;
+        use mbv_queue::QueueSlotId;
 
         let mut app = make_app_stub();
         let (request_id, generation) = app.bare_owner.mint_local_transition();
@@ -361,7 +361,7 @@ mod tests {
         );
         let cursor = start_index.min(items.len() - 1);
         assert_eq!(app.player_tab.queue_cursor, cursor);
-        assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
+        assert_eq!(app.queue_source, mbv_queue::QueueSource::Remote);
 
         let state = crate::config::load_queue_state().expect("Play persists the replaced queue");
         let persisted_items = state.emby_items();
@@ -371,7 +371,7 @@ mod tests {
             .collect();
         assert_eq!(persisted, expected_positions);
         assert_eq!(state.cursor, cursor);
-        assert_eq!(state.source, crate::config::QueueSource::Remote);
+        assert_eq!(state.source, mbv_queue::QueueSource::Remote);
     }
 
     #[test]

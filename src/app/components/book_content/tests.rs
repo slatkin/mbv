@@ -144,10 +144,10 @@ fn reanchor_launch_state_falls_back_to_first_bucket_and_book() {
         &state_with_books(vec![book("book-a", "Adams"), book("book-d", "Dover")]),
         false,
     );
-    let state = mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::Home,
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+    let state = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: Some(SelectorIdentity::Audiobookshelf {
             key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::VToZ),
         }),

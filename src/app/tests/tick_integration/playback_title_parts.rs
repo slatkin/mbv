@@ -10,7 +10,7 @@ use crate::app::components::{ComponentId, LibraryPlaybackPanel, QueuePlaybackPan
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{App, PanelFocus, PanelMode};
-use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
+use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 
 /// An unbound chord: no policy arm claims it and the focused component
 /// ignores it, so the tick is real while mutating nothing.

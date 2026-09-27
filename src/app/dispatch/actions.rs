@@ -3,11 +3,11 @@ use crate::app::infra::ui_util::natural_sort_key;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
-use mbv_core::player::PlayerCommand;
-pub(in crate::app) use mbv_core::player::CONNECTION_LOST_MESSAGE;
+use mbv_ctrl::player::PlayerCommand;
+pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
+use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
+use mbv_queue::{QueueItem, QueueItemContentId};
 use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.
@@ -89,7 +89,7 @@ impl App {
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) {
         let label = items
             .get(start_idx)
@@ -185,7 +185,7 @@ impl App {
         &mut self,
         scope: crate::app::QueueScope,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) -> bool {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -308,7 +308,7 @@ impl App {
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        queue_source: crate::config::QueueSource,
+        queue_source: mbv_queue::QueueSource,
     ) {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -346,7 +346,7 @@ impl App {
             let id = conn_id.clone();
             let label = items
                 .get(start_idx)
-                .map(mbv_core::api::EmbyItem::playback_label)
+                .map(mbv_emby_model::EmbyItem::playback_label)
                 .unwrap_or_default();
             self.flash(
                 playback_request_message(&label, mixed_unplayable),
@@ -399,7 +399,7 @@ impl App {
                     .series_episodes_from(&item)
                     .filter(|episodes| episodes.len() > 1)
                 {
-                    self.defer_local_play(episodes, 0, crate::config::QueueSource::Series);
+                    self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
                     return;
                 }
             }
@@ -443,7 +443,7 @@ impl App {
                     self.on_queue_replace_silent();
                 }
                 self.replace_playback_queue(episodes.clone(), 0);
-                let source = crate::config::QueueSource::Series;
+                let source = mbv_queue::QueueSource::Series;
                 self.set_queue_source_if_not_local_daemon(source.clone());
                 self.submit_tab_queue(self.playing_queue_scope(), 0, source);
                 self.player
@@ -464,13 +464,13 @@ impl App {
         self.submit_tab_queue(
             self.playing_queue_scope(),
             0,
-            crate::config::QueueSource::Unknown,
+            mbv_queue::QueueSource::Unknown,
         );
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
         let resolved = self.resolve_route_for_enqueue_folder(item);
         if self.enqueue_route_conflict(resolved.as_ref()) {

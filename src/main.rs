@@ -27,7 +27,8 @@ mod tray;
 use app::{capture_launch_window, current_launch_secs, App, Model};
 use config::load_config;
 use mbv_core::api::EmbyClient;
-use mbv_core::{applog, player, remote_player};
+use mbv_core::{applog, remote_player};
+use mbv_ctrl::player::PlayerEvent;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
 /// with the launch window available to the model.
@@ -57,7 +58,7 @@ fn run_tui(mut app: App) {
 fn run_remote_app(
     client: Option<EmbyClient>,
     remote: remote_player::RemotePlayer,
-    player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
+    player_rx: std::sync::mpsc::Receiver<PlayerEvent>,
     endpoint: &remote_player::DaemonEndpoint,
     config: config::Config,
 ) {
@@ -105,7 +106,7 @@ fn has_flag(args: &[String], flag: &str) -> bool {
 }
 
 fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
-    let token = mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby)?;
+    let token = mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby)?;
     let setup = config.emby_setup.as_ref()?;
     let mut client = EmbyClient::new(config.clone());
     client.config.server_url.clone_from(&setup.server_url);
@@ -518,10 +519,10 @@ mod tests {
     /// re-authenticating, so a blank `user_id` here reaches real requests.
     #[test]
     fn cached_emby_client_carries_user_id_from_setup() {
-        let _state_dir = mbv_core::config::TestStateDirGuard::new();
-        mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "tok").unwrap();
+        let _state_dir = mbv_config::TestStateDirGuard::new();
+        mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "tok").unwrap();
         let config = config::Config {
-            emby_setup: Some(mbv_core::config::EmbySetup::new(
+            emby_setup: Some(mbv_config::EmbySetup::new(
                 "http://emby.example:8096",
                 "the-user-id",
             )),

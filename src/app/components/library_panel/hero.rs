@@ -6,10 +6,8 @@
 //! plain `meta_rows` (no `Span`/`Style`/width — the header painter colours,
 //! truncates and wraps).
 
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-use mbv_core::playback_queue::{
-    AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
-};
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
 
 use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
@@ -144,7 +142,7 @@ pub(in crate::app) fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueIt
 /// video (and unknown-kind legacy) feeds fall back to Landscape — both with
 /// the shared placeholder.
 pub(in crate::app) fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
-    let podcast = matches!(entry.feed_kind, Some(mbv_core::config::FeedKind::Audio));
+    let podcast = matches!(entry.feed_kind, Some(mbv_queue::FeedKind::Audio));
     HeroArtwork {
         shape: if podcast {
             ArtworkShape::Square
@@ -361,10 +359,10 @@ pub(in crate::app) fn hero_content_music_album(item: &EmbyItem) -> HeroContentDa
 pub(in crate::app) fn hero_content_queue(item: &QueueItem) -> HeroContentData {
     match item {
         QueueItem::Emby(item) => hero_content_emby(item),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-            episode,
-        )) => hero_content_abs_episode(episode),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => {
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
+            hero_content_abs_episode(episode)
+        }
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => {
             hero_content_abs_book(book)
         }
         QueueItem::Feed(entry) => hero_content_feed(entry),
@@ -416,8 +414,8 @@ fn abs_book_meta_rows(
         if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
             let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
             let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
-            let percent = (mbv_core::api::ticks_to_seconds(numerator)
-                / mbv_core::api::ticks_to_seconds(denominator))
+            let percent = (mbv_emby_model::ticks_to_seconds(numerator)
+                / mbv_emby_model::ticks_to_seconds(denominator))
             .floor()
             .clamp(1.0, 99.0);
             #[expect(

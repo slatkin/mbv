@@ -5,7 +5,7 @@
 use super::*;
 
 pub fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
         AudiobookshelfQueueItem {
             library_item_id: library_item_id.into(),
             episode_id: episode_id.into(),
@@ -29,13 +29,13 @@ fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<C
     let id = clients.connect(
         tx,
         CtrlTransport::Local,
-        crate::ctrl::CtrlAudiobookshelfCapabilities::default(),
+        mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
         false,
     );
     (id, rx)
 }
 
-fn recv_unified_queue(rx: &mpsc::Receiver<CtrlOutbound>) -> crate::ctrl::UnifiedQueueStateData {
+fn recv_unified_queue(rx: &mpsc::Receiver<CtrlOutbound>) -> mbv_ctrl::UnifiedQueueStateData {
     match recv_event(rx) {
         CtrlEvent::UnifiedQueueState(data) => data,
         _ => panic!("expected UnifiedQueueState"),

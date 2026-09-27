@@ -2,7 +2,7 @@ use super::*;
 use crate::app::state::types::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;
 use crossterm::event::KeyModifiers;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path
@@ -11,7 +11,7 @@ fn play_action(ids: &[&str]) -> PendingQueueAction {
     PendingQueueAction::PlayItems {
         items: ids.iter().map(|id| audio(id)).collect(),
         start_idx: 0,
-        source: crate::config::QueueSource::Album,
+        source: mbv_queue::QueueSource::Album,
         autostart: true,
     }
 }
@@ -67,7 +67,7 @@ fn mount_confirmation(app: &mut App) {
 fn dirty_saved_playlist_app() -> App {
     let mut app = make_app_stub();
     app.player_tab.set_items(vec![audio("existing")], 0);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("playlist-1".into()),
         name: "Saved".into(),
     };
@@ -348,7 +348,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
         PendingQueueAction::PlayItems {
             items: vec![audio("shuffle-1")],
             start_idx: 0,
-            source: crate::config::QueueSource::Shuffle,
+            source: mbv_queue::QueueSource::Shuffle,
             autostart: true,
         },
         ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),
@@ -362,7 +362,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
         PendingQueueAction::PlayItems {
             items: vec![audio("playlist-1")],
             start_idx: 0,
-            source: crate::config::QueueSource::Playlist {
+            source: mbv_queue::QueueSource::Playlist {
                 id: Some("playlist-1".into()),
                 name: "Playlist".into(),
             },
@@ -394,7 +394,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
         PendingQueueAction::PlayItems {
             items: vec![video],
             start_idx: 0,
-            source: crate::config::QueueSource::Album,
+            source: mbv_queue::QueueSource::Album,
             autostart: true,
         },
         ReplacementExecutor::Routed(RoutedReplacementPrep::Album),

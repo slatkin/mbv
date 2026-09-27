@@ -18,10 +18,11 @@ use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode, SettingsDestination};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::SidebarId;
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueSlotId;
-use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
+use mbv_ctrl::player::PlayerEvent;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueSlotId;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
 use std::sync::mpsc;
@@ -89,7 +90,7 @@ pub struct App {
     /// Audiobookshelf Latest pills from this cache — never a blocking network
     /// call — and the shelf-fetch handler refreshes it (Task 6.3).
     pub(in crate::app) audiobookshelf_shelf_cache:
-        std::collections::HashMap<String, Vec<mbv_core::playback_queue::QueueItem>>,
+        std::collections::HashMap<String, Vec<mbv_queue::QueueItem>>,
     pub(in crate::app) audiobookshelf_browse:
         Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:
@@ -155,7 +156,7 @@ pub struct App {
         crate::app::state::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
-    /// lookup -- see `mbv_core::config::resolve_library_route`.
+    /// lookup -- see `mbv_core::remote_player::resolve_library_route`.
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
@@ -206,7 +207,7 @@ pub struct App {
     /// the sole source for tab restoration; `pending_launch_tab_resolved`
     /// consumes only that level while selector/item identities remain pending
     /// for the selected destination's discrete re-anchor.
-    pub(in crate::app) pending_launch_state: Option<mbv_core::config::TuiLaunchState>,
+    pub(in crate::app) pending_launch_state: Option<mbv_config::TuiLaunchState>,
     pub(in crate::app) pending_launch_tab_resolved: bool,
     /// Legacy selected-tab preference retained only until its stable identity
     /// can be recovered from the current catalogs. It is never used as a
@@ -289,10 +290,10 @@ pub struct App {
     pub(in crate::app) playlists_open_cursor: usize,
     pub(in crate::app) playlists_open_scroll: usize,
     pub(in crate::app) playlists_open_loading: bool,
-    pub(in crate::app) queue_source: crate::config::QueueSource,
+    pub(in crate::app) queue_source: mbv_queue::QueueSource,
     pub(in crate::app) queue_dirty: bool,
     pub(in crate::app) pending_owner_source_update:
-        Option<(crate::config::QueueSource, mbv_core::ctrl::QueueLineage)>,
+        Option<(mbv_queue::QueueSource, mbv_queue::QueueLineage)>,
     /// Deferred queue replacement awaiting the save/discard answer, then the
     /// `PlaylistMutationComplete` boundary. Owned by `replace_queue_or_prompt`
     /// and its existing callers (`ClearQueue`, the album/artist track paths,
@@ -440,19 +441,19 @@ pub struct App {
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: crate::app::infra::images::cache::ImageCache,
-    pub(in crate::app) library_position_state: crate::config::LibraryPositionState,
+    pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
     pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
     pub(in crate::app) feed_tab: FeedTabState,
     /// Local, machine-scoped feed-entry playback state (resume position and
     /// watched flag) for every configured subscription's entries. Loaded once
     /// at startup; rewritten on each playback lifecycle write. Replaces the
-    pub(in crate::app) feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore,
+    pub(in crate::app) feed_entry_state: mbv_feed::FeedEntryStore,
     /// When a seek was issued during Feed playback, the `slot_id` is stored
     /// here. The next `OutputStarted` clears it and persists the resulting
     /// position. This prevents ordinary output restarts (buffering,
     /// startup) from becoming state writes.
-    pub(in crate::app) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
+    pub(in crate::app) feed_seek_pending_slot: Option<mbv_queue::QueueSlotId>,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }

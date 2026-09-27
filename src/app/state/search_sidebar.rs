@@ -1,4 +1,4 @@
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub(crate) struct SearchSidebar {
     pub(in crate::app) query: String,

@@ -5,13 +5,13 @@ use crate::app::components::LibraryKey;
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
     let mut app = crate::app::render::make_movie_app();
     app.tab = TabSelection::Home;
-    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
             library_id: "lib-movies".into(),
         },
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: None,
         item: None,
     });
@@ -50,7 +50,7 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     second_library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(second_library));
 
-    let views: Vec<mbv_core::api::EmbyItem> =
+    let views: Vec<mbv_emby_model::EmbyItem> =
         app.libs.iter().map(|lib| lib.library.clone()).collect();
     app.rebuild_library_tabs_from_views(&views);
     assert!(
@@ -59,13 +59,13 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     );
 
     app.tab = TabSelection::Home;
-    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
             library_id: "lib-shows".into(),
         },
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: None,
         item: None,
     });
@@ -89,13 +89,13 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
 #[test]
 fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
     let mut app = crate::app::render::make_movie_app();
-    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
             library_id: "lib-movies".into(),
         },
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: None,
         item: None,
     });
@@ -120,12 +120,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
         &LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
-            owner.set_content(
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                    selected,
-                ))],
-                false,
-            );
+            owner.set_content(vec![mbv_queue::QueueItem::Emby(Box::new(selected))], false);
         },
     );
 
@@ -163,23 +158,23 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
 
     model.teardown(Duration::from_secs(1));
 
-    let state = mbv_core::config::load_tui_launch_state().expect("launch snapshot after teardown");
-    assert_eq!(state.tab, mbv_core::config::TabIdentity::Home);
-    assert_eq!(state.panel_focus, mbv_core::config::LaunchPanelFocus::Queue);
+    let state = mbv_config::load_tui_launch_state().expect("launch snapshot after teardown");
+    assert_eq!(state.tab, mbv_config::TabIdentity::Home);
+    assert_eq!(state.panel_focus, mbv_config::LaunchPanelFocus::Queue);
     assert_eq!(
         state.selector,
-        Some(mbv_core::config::SelectorIdentity::Home {
-            key: mbv_core::config::HomeSelectorKey::Continue,
+        Some(mbv_config::SelectorIdentity::Home {
+            key: mbv_config::HomeSelectorKey::Continue,
         })
     );
     assert_eq!(
         state.item,
-        Some(mbv_core::config::LibraryItemIdentity::Home {
+        Some(mbv_config::LibraryItemIdentity::Home {
             id: "selected-home-item".into(),
         })
     );
 
-    let serialized = std::fs::read_to_string(mbv_core::config::tui_launch_state_path())
+    let serialized = std::fs::read_to_string(mbv_config::tui_launch_state_path())
         .expect("serialized launch snapshot");
     assert!(!serialized.contains("queue_cursor"));
     assert!(!serialized.contains("queue_slot"));

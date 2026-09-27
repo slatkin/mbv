@@ -11,7 +11,7 @@ impl App {
     /// surrounding prefetch.
     pub(in crate::app) fn fetch_nearby_movie_posters(
         &mut self,
-        items: &[mbv_core::api::EmbyItem],
+        items: &[mbv_emby_model::EmbyItem],
         cursor: usize,
     ) {
         const PREFETCH_AHEAD: usize = 3;
@@ -561,7 +561,7 @@ fn fetch_emby_image_type(
 }
 
 fn fetch_url(url: &str) -> Option<Vec<u8>> {
-    let agent = crate::app::infra::feed_parse::tls_agent(Some(std::time::Duration::from_secs(10)));
+    let agent = mbv_net::native_tls_agent(None, Some(std::time::Duration::from_secs(10)));
     agent.get(url).call().ok().and_then(|response| {
         let mut bytes = Vec::new();
         response

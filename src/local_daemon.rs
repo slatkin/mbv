@@ -196,7 +196,7 @@ pub fn run_local_daemon_main() -> ! {
     if let Err(e) = guard.write_pid() {
         log::warn!(target: "local_daemon", "failed to write pid into lock file: {e}");
     }
-    if let Err(e) = mbv_core::config::load_or_create_control_credential() {
+    if let Err(e) = mbv_config::load_or_create_control_credential() {
         eprintln!("mbv: local daemon: cannot load Control credential: {e}");
         std::process::exit(1);
     }

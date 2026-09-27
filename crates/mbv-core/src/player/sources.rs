@@ -6,10 +6,10 @@ use crate::audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
-use crate::config::AudiobookshelfSetup;
-use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
-use crate::playback_queue::{AudiobookshelfItem, QueueItem};
 use crate::service_runtime::SetupGeneration;
+use mbv_config::AudiobookshelfSetup;
+use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
+use mbv_queue::{AudiobookshelfItem, QueueItem};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AudiobookshelfProgressUpdate {
@@ -119,7 +119,7 @@ pub(crate) struct PreparedSource {
 impl PreparedSource {
     fn plain(
         item: &QueueItem,
-        source: crate::playback_queue::MpvUrlSource<'_>,
+        source: mbv_queue::MpvUrlSource<'_>,
         server_url: &str,
         token: &str,
     ) -> Self {
@@ -154,8 +154,8 @@ impl PreparedSource {
 
     pub(super) fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
-            lifecycle.close(crate::api::saturating_i64_from_f64(
-                current_time.max(0.0) * crate::api::TICKS_PER_SECOND_F64,
+            lifecycle.close(mbv_emby_model::saturating_i64_from_f64(
+                current_time.max(0.0) * mbv_emby_model::TICKS_PER_SECOND_F64,
             ));
         }
         self.lifecycle = None;

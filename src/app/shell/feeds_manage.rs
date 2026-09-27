@@ -12,7 +12,7 @@ use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use crate::app::state::types::feeds_manage::{
     FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
 };
-use mbv_core::config::FeedSubscription;
+use mbv_config::FeedSubscription;
 
 fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {
     result.and_then(|entries| {
@@ -254,20 +254,17 @@ impl super::Model {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let (resolved_url, result) =
-                match crate::app::infra::feed_parse::normalize_feed_url(&url) {
-                    Ok(resolved_url) => {
-                        let result = require_feed_entries(
-                            crate::app::infra::feed_parse::fetch_and_parse_entries(
-                                &resolved_url,
-                                kind,
-                                &resolved_url,
-                            ),
-                        );
-                        (resolved_url, result)
-                    }
-                    Err(error) => (url, Err(error)),
-                };
+            let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url) {
+                Ok(resolved_url) => {
+                    let result = require_feed_entries(mbv_feed::fetch_and_parse_entries(
+                        &resolved_url,
+                        kind,
+                        &resolved_url,
+                    ));
+                    (resolved_url, result)
+                }
+                Err(error) => (url, Err(error)),
+            };
             let _ = tx.send(FeedAddResult {
                 id,
                 name,

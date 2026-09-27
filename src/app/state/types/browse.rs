@@ -1,4 +1,4 @@
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -124,7 +124,7 @@ pub(in crate::app) struct BrowseLevel {
     pub(in crate::app) letter_filter: Option<crate::app::render::LetterFilter>,
     /// Selected top-level TV content mode; absent means resolve the size
     /// default after the unfiltered capture load.
-    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_queue::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
     pub(in crate::app) music_grouping:
@@ -166,7 +166,7 @@ impl BrowseLevel {
 
     #[cfg(test)]
     pub(in crate::app) fn from_position_level(
-        saved: &crate::config::LibraryPositionLevel,
+        saved: &mbv_queue::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
@@ -182,7 +182,7 @@ impl BrowseLevel {
     }
 
     pub(in crate::app) fn from_position_level_with_fetched_rows_for_kind(
-        saved: &crate::config::LibraryPositionLevel,
+        saved: &mbv_queue::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
@@ -211,7 +211,7 @@ impl BrowseLevel {
             letter_filter: match (filter_kind, saved.tv_content_mode.as_ref()) {
                 (
                     crate::app::render::LetterFilterKind::Tv,
-                    Some(mbv_core::config::TvContentMode::Range(index)),
+                    Some(mbv_queue::TvContentMode::Range(index)),
                 ) => crate::app::render::LetterFilter::for_index_for_kind(*index, filter_kind),
                 (crate::app::render::LetterFilterKind::Tv, Some(_)) => None,
                 _ => saved.letter_filter_index.and_then(|index| {
@@ -242,9 +242,9 @@ impl BrowseLevel {
         self.resting.scroll = scroll;
     }
 
-    pub(in crate::app) fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
+    pub(in crate::app) fn to_position_level(&self) -> mbv_queue::LibraryPositionLevel {
         let resting = self.resting();
-        crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPositionLevel {
             parent_id: self.parent_id.clone(),
             title: self.title.clone(),
             focused_item_id: self.items.get(resting.cursor()).map(|item| item.id.clone()),
@@ -278,12 +278,12 @@ impl BrowseLevel {
 
 #[cfg(test)]
 pub(in crate::app) fn restore_library_position<F>(
-    saved: &crate::config::LibraryPosition,
+    saved: &mbv_queue::LibraryPosition,
     visible_rows: usize,
     mut fetch_level: F,
-) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
+) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
-    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
+    F: FnMut(&mbv_queue::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
 {
     restore_library_position_with_fetched_rows_for_kind(
         saved,
@@ -299,19 +299,19 @@ where
 }
 
 pub(in crate::app) fn restore_library_position_with_fetched_rows_for_kind<F>(
-    saved: &crate::config::LibraryPosition,
+    saved: &mbv_queue::LibraryPosition,
     visible_rows: usize,
     filter_kind: crate::app::render::LetterFilterKind,
     mut fetch_level: F,
-) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
+) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
-    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
+    F: FnMut(&mbv_queue::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
 {
     if saved.levels.is_empty() {
         return Ok(None);
     }
 
-    let mut restored = crate::config::LibraryPosition {
+    let mut restored = mbv_queue::LibraryPosition {
         feed_selected_group: saved.feed_selected_group,
         feed_video_cursor: saved.feed_video_cursor,
         feed_video_scroll: saved.feed_video_scroll,
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn restored_fetched_rows_prefers_persisted_count() {
-        let saved = crate::config::LibraryPositionLevel {
+        let saved = mbv_queue::LibraryPositionLevel {
             parent_id: String::new(),
             title: String::new(),
             focused_item_id: None,
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn grouped_level_is_fully_loaded_when_all_server_rows_were_consumed() {
-        let saved = crate::config::LibraryPositionLevel {
+        let saved = mbv_queue::LibraryPositionLevel {
             parent_id: String::new(),
             title: String::new(),
             focused_item_id: None,

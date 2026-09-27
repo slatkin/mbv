@@ -1,8 +1,9 @@
 use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use crate::app::state::queue_owner::QueueOrigin;
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{QueueItem, QueueSlotId};
-use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::player::PlayerProxy;
+use mbv_ctrl::player::PlayerEvent;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -206,7 +207,7 @@ pub(in crate::app) enum PendingQueueAction {
     PlayItems {
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         /// False replaces the queue without starting playback (playlist
         /// Enter populates the queue; Space/Enter on the queue starts it).
         autostart: bool,

@@ -14,7 +14,8 @@ use super::msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::state::types::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
-use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_config::FeedSubscription;
+use mbv_queue::FeedKind;
 
 pub struct FeedsManageComponent {
     feeds: Vec<FeedSubscription>,

@@ -5,8 +5,8 @@ use super::{
     init_mpv, AudiobookshelfPlayerContext, EmbyClient, MpvRunConfig, PlayerCommand, PlayerEvent,
     PlayerStatus, SubtitlePrefs,
 };
-use crate::playback_queue::QueueItem;
 use libmpv2::Mpv;
+use mbv_queue::QueueItem;
 use std::sync::{atomic::AtomicBool, mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -167,8 +167,8 @@ impl Player {
             audiobookshelf_context: Arc::new(Mutex::new(None)),
             show_audio_window,
             use_mpv_config,
-            video_cache_forward_mb: crate::config::DEFAULT_VIDEO_CACHE_FORWARD_MB,
-            video_cache_back_mb: crate::config::DEFAULT_VIDEO_CACHE_BACK_MB,
+            video_cache_forward_mb: mbv_config::DEFAULT_VIDEO_CACHE_FORWARD_MB,
+            video_cache_back_mb: mbv_config::DEFAULT_VIDEO_CACHE_BACK_MB,
             no_scripts,
             audio_device: None,
             always_skip_intro,

@@ -1,66 +1,7 @@
 use super::*;
+use mbv_emby_model::{EmbyArtistRef, EmbyImageTags, EmbyPerson};
 use rstest::rstest;
 use serde_json::json;
-
-fn make_item(name: &str, item_type: &str) -> EmbyItem {
-    EmbyItem {
-        id: "id".into(),
-        name: name.into(),
-        item_type: item_type.into(),
-        is_folder: false,
-        child_count: None,
-        media_type: "Video".into(),
-        collection_type: String::new(),
-        runtime_ticks: 0,
-        played: false,
-        playback_position_ticks: 0,
-        series_id: String::new(),
-        series_name: String::new(),
-        album_id: String::new(),
-        album: String::new(),
-        index_number: 0,
-        parent_index_number: 0,
-        unplayed_item_count: 0,
-        path: String::new(),
-        artist: String::new(),
-        artist_items: Vec::new(),
-        sort_name: String::new(),
-        production_year: 0,
-        end_year: 0,
-        overview: String::new(),
-        premiere_date: String::new(),
-        date_added: String::new(),
-        total_count: 0,
-        container: String::new(),
-        video_info: String::new(),
-        audio_info: String::new(),
-        genres: Vec::new(),
-        people: Vec::new(),
-        external_urls: Vec::new(),
-        playlist_item_id: String::new(),
-        image_tags: EmbyImageTags::default(),
-    }
-}
-
-// ── EmbyItem::display_name ──────────────────────────────────────────────
-
-#[test]
-fn display_name_episode_without_series_falls_back_to_name() {
-    let item = make_item("Standalone", "Episode");
-    assert_eq!(item.display_name(), "Standalone");
-}
-
-#[test]
-fn display_name_parts_splits_episode_from_series_title() {
-    let mut item = make_item("Episode Title", "Episode");
-    item.series_name = "Severance".into();
-    assert_eq!(
-        item.display_name_parts(),
-        ("Severance".into(), Some("Episode Title".into()))
-    );
-    let standalone = make_item("Movie", "Movie");
-    assert_eq!(standalone.display_name_parts(), ("Movie".into(), None));
-}
 
 // ── parse_item ───────────────────────────────────────────────────────────
 
@@ -150,15 +91,6 @@ fn parse_item_missing_fields_use_defaults() {
 // ── parse_item: declared image availability (task 5.3) ─────────────────
 
 #[test]
-fn image_tags_serde_defaults_logo_for_legacy_items() {
-    let tags: EmbyImageTags = serde_json::from_value(json!({"thumb": "thumb-tag"})).unwrap();
-    assert_eq!(tags.logo, "");
-    let serialized = serde_json::to_value(tags).unwrap();
-    assert_eq!(serialized["thumb"], "thumb-tag");
-    assert_eq!(serialized["logo"], "");
-}
-
-#[test]
 fn parse_item_image_tags_when_present() {
     let raw = json!({
         "Type": "Movie",
@@ -243,52 +175,6 @@ fn parse_item_episode_fields() {
     assert_eq!(item.parent_index_number, 2);
 }
 
-// ── EmbyItem::playback_label ────────────────────────────────────────────
-
-#[rstest]
-#[case::playback_label_audio_without_artist_falls_back_to_display_name("Song", "Audio", "Song")]
-#[case::playback_label_video_uses_display_name("Inception", "Movie", "Inception")]
-fn playback_label_cases(#[case] name: &str, #[case] item_type: &str, #[case] expected: &str) {
-    let item = make_item(name, item_type);
-    assert_eq!(item.playback_label(), expected);
-}
-
-// ── EmbyItem::file_name / sort_key ──────────────────────────────────────
-
-#[test]
-fn file_name_extracts_from_path() {
-    let mut item = make_item("Movie", "Movie");
-    item.path = "/media/movies/Inception (2010).mkv".into();
-    assert_eq!(item.file_name(), "Inception (2010).mkv");
-}
-
-#[test]
-fn file_name_falls_back_to_name_when_path_empty() {
-    let item = make_item("Inception", "Movie");
-    assert_eq!(item.file_name(), "Inception");
-}
-
-#[test]
-fn sort_key_prefers_path_filename() {
-    let mut item = make_item("Movie", "Movie");
-    item.path = "/media/A.mkv".into();
-    item.sort_name = "sort".into();
-    assert_eq!(item.sort_key(), "A.mkv");
-}
-
-#[test]
-fn sort_key_falls_back_to_sort_name() {
-    let mut item = make_item("Movie", "Movie");
-    item.sort_name = "inception the".into();
-    assert_eq!(item.sort_key(), "inception the");
-}
-
-#[test]
-fn sort_key_falls_back_to_name() {
-    let item = make_item("Movie", "Movie");
-    assert_eq!(item.sort_key(), "Movie");
-}
-
 // ── parse_item: audio and music folder types ─────────────────────────────
 
 #[test]
@@ -339,130 +225,6 @@ fn parse_item_artist_items_absent_default_empty() {
     assert!(parse_item(&json!({"Type": "MusicAlbum"}))
         .artist_items
         .is_empty());
-}
-
-#[rstest]
-#[case::single_matching_pair_resolves(
-    "Alpha",
-    json!([{"Name": "Alpha", "Id": "artist-1"}]),
-    Some("artist-1")
-)]
-#[case::trimmed_and_case_insensitive_match_resolves(
-    "  alpha  ",
-    json!([{"Name": "Alpha", "Id": "artist-1"}]),
-    Some("artist-1")
-)]
-#[case::missing_field_stays_unresolved(
-    "Alpha",
-    json!(null),
-    None
-)]
-#[case::multiple_unmatched_pairs_stay_unresolved(
-    "Alpha",
-    json!([{"Name": "Beta", "Id": "artist-2"}, {"Name": "Gamma", "Id": "artist-3"}]),
-    None
-)]
-#[case::equal_name_distinct_ids_stay_unresolved_no_arbitrary_pick(
-    "Alpha",
-    json!([{"Name": "Alpha", "Id": "artist-1"}, {"Name": "Alpha", "Id": "artist-2"}]),
-    None
-)]
-#[case::empty_id_pair_is_ignored(
-    "Alpha",
-    json!([{"Name": "Alpha", "Id": ""}]),
-    None
-)]
-#[case::empty_display_artist_never_resolves(
-    "",
-    json!([{"Name": "", "Id": "artist-1"}]),
-    None
-)]
-fn artist_item_id_resolution_cases(
-    #[case] display_artist: &str,
-    #[case] pairs: serde_json::Value,
-    #[case] expected: Option<&str>,
-) {
-    let raw = json!({"Type": "MusicAlbum", "ArtistItems": pairs});
-    let item = parse_item(&raw);
-    assert_eq!(item.matched_artist_item_id(display_artist), expected);
-}
-
-// ── decode_entities ─────────────────────────────────────────────────────
-
-#[test]
-fn decode_entities_known_entities() {
-    assert_eq!(decode_entities("&quot;hi&quot;"), "\"hi\"");
-    assert_eq!(decode_entities("it&apos;s"), "it's");
-    assert_eq!(decode_entities("a &lt; b &gt; c"), "a < b > c");
-    assert_eq!(decode_entities("a &amp; b"), "a & b");
-}
-
-#[test]
-fn decode_entities_passthrough() {
-    assert_eq!(decode_entities("plain text"), "plain text");
-    assert_eq!(decode_entities(""), "");
-}
-
-#[test]
-fn decode_entities_numeric_refs() {
-    assert_eq!(decode_entities("&#38;"), "&");
-    assert_eq!(decode_entities("&#x27;"), "'");
-    assert_eq!(decode_entities("&#x27A1;"), "➡");
-    // Unknown named/numeric refs and stray '&' are left untouched.
-    assert_eq!(decode_entities("&unknown;"), "&unknown;");
-    assert_eq!(decode_entities("a & b"), "a & b");
-    assert_eq!(decode_entities("50% &amp;amp; chance"), "50% &amp; chance");
-}
-
-// ── html_to_text ─────────────────────────────────────────────────────────
-
-#[test]
-fn html_to_text_paragraph_breaks_and_entities() {
-    assert_eq!(
-        html_to_text("<p>First paragraph</p><p>Second &amp; final</p>"),
-        "First paragraph\nSecond & final"
-    );
-    // `<br/>` (self-closing and bare) makes a single line break.
-    assert_eq!(html_to_text("Line one<br/>Line two"), "Line one\nLine two");
-    // Adjacent block tags collapse to one newline, not blank lines.
-    assert_eq!(html_to_text("<p>One</p><br/><p>Two</p>"), "One\nTwo");
-}
-
-#[test]
-fn html_to_text_keeps_link_text_and_url() {
-    assert_eq!(
-        html_to_text(r#"<p>See <a href="https://example.test/a&amp;b">the article</a>.</p>"#),
-        "See the article (https://example.test/a&b)."
-    );
-}
-
-#[test]
-fn html_to_text_drops_inline_formatting_and_images() {
-    // Inline spans/strong keep their text; the whole `<img.../>` tag (with its
-    // many attributes) is dropped entirely.
-    assert_eq!(
-        html_to_text(
-            r#"<p><span style="font-weight: 400;">Rightwing &amp; left</span><img width="534" src="https://example.test/x.png" alt="" /></p>"#
-        ),
-        "Rightwing & left"
-    );
-}
-
-#[test]
-fn html_to_text_numeric_entities() {
-    // Curly quotes and ellipses from the Novara feed decode via numeric refs.
-    assert_eq!(
-        html_to_text("&#8220;quoted&#8221; and &#8230;"),
-        "\u{201c}quoted\u{201d} and \u{2026}"
-    );
-}
-
-#[test]
-fn html_to_text_plain_passthrough() {
-    assert_eq!(html_to_text("plain text"), "plain text");
-    assert_eq!(html_to_text(""), "");
-    // A stray unknown tag is dropped from the text (it is markup).
-    assert_eq!(html_to_text("no <tags> here"), "no here");
 }
 
 // ── parse_video_info ─────────────────────────────────────────────────────
@@ -603,47 +365,4 @@ fn parse_session_media_info_handles_audio_only_sessions() {
     assert_eq!(media.video_label, "English FLAC Stereo");
     assert_eq!(media.audio_streams.len(), 1);
     assert_eq!(media.audio_streams[0].index, 0);
-}
-
-// ── should_resume ────────────────────────────────────────────────────────
-
-#[rstest]
-#[case::should_resume_zero_position_returns_false(0, 0, false)]
-#[case::should_resume_negative_position_returns_false(0, -1, false)]
-#[case::should_resume_mid_way_returns_true(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 3600, true)]
-#[case::should_resume_under_six_percent_returns_false(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 60, false)]
-#[case::should_resume_exactly_six_percent_returns_true(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6, true)]
-#[case::should_resume_just_below_six_percent_returns_false(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6 - 1, false)]
-#[case::should_resume_with_unknown_runtime_returns_true(0, TICKS_PER_SECOND * 60, true)]
-fn should_resume_cases(
-    #[case] runtime_ticks: i64,
-    #[case] playback_position_ticks: i64,
-    #[case] expected: bool,
-) {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = runtime_ticks;
-    item.playback_position_ticks = playback_position_ticks;
-    assert_eq!(item.should_resume(), expected);
-}
-
-// ── is_music ─────────────────────────────────────────────────────────────
-
-#[rstest]
-#[case::track("Audio", true)]
-#[case::album("MusicAlbum", true)]
-#[case::artist("MusicArtist", true)]
-#[case::movie("Movie", false)]
-#[case::episode("Episode", false)]
-#[case::series("Series", false)]
-fn is_music_covers_music_item_types(#[case] item_type: &str, #[case] expected: bool) {
-    // `make_item` gives every fixture the `Video` media type, so the case
-    // table isolates the item type.
-    assert_eq!(make_item("X", item_type).is_music(), expected);
-}
-
-#[test]
-fn is_music_follows_the_media_type_of_a_non_audio_item_type() {
-    let mut item = make_item("X", "Movie");
-    item.media_type = "Audio".into();
-    assert!(item.is_music());
 }

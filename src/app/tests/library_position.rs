@@ -2,12 +2,12 @@ use super::*;
 use rstest::rstest;
 
 #[rstest]
-#[case::latest(mbv_core::config::TvContentMode::Latest, 301)]
+#[case::latest(mbv_queue::TvContentMode::Latest, 301)]
 fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
-    #[case] mode: mbv_core::config::TvContentMode,
+    #[case] mode: mbv_queue::TvContentMode,
     #[case] library_total: usize,
 ) {
-    let mut saved = crate::config::LibraryPositionLevel {
+    let mut saved = mbv_queue::LibraryPositionLevel {
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         item_types: Some("Episode".into()),
@@ -45,14 +45,14 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
 
 #[test]
 fn restoring_upcoming_position_loads_upcoming_episode_content() {
-    let saved = crate::config::LibraryPosition {
-        levels: vec![crate::config::LibraryPositionLevel {
+    let saved = mbv_queue::LibraryPosition {
+        levels: vec![mbv_queue::LibraryPositionLevel {
             parent_id: "lib-tv".into(),
             title: "TV".into(),
             item_types: Some("Episode".into()),
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
-            tv_content_mode: Some(mbv_core::config::TvContentMode::Upcoming),
+            tv_content_mode: Some(mbv_queue::TvContentMode::Upcoming),
             library_total: Some(301),
             ..Default::default()
         }],
@@ -70,7 +70,7 @@ fn restoring_upcoming_position_loads_upcoming_episode_content() {
     .expect("restored position");
     assert_eq!(
         restored.1[0].tv_content_mode,
-        Some(mbv_core::config::TvContentMode::Upcoming)
+        Some(mbv_queue::TvContentMode::Upcoming)
     );
     assert_eq!(restored.1[0].items, vec![episode]);
 }
@@ -119,7 +119,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
 
 #[test]
 fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
-    let mut saved = crate::config::LibraryPositionLevel {
+    let mut saved = mbv_queue::LibraryPositionLevel {
         fetched_rows: None,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
@@ -159,9 +159,9 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
     let mut leaf1 = make_item("Leaf 1", "Movie");
     leaf1.id = "leaf-1".into();
 
-    let saved = crate::config::LibraryPosition {
+    let saved = mbv_queue::LibraryPosition {
         levels: vec![
-            crate::config::LibraryPositionLevel {
+            mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
@@ -175,7 +175,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 tv_content_mode: None,
                 library_total: None,
             },
-            crate::config::LibraryPositionLevel {
+            mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "folder-b".into(),
                 title: "B".into(),
@@ -217,9 +217,9 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
     root_c.id = "folder-c".into();
     root_c.is_folder = true;
 
-    let saved = crate::config::LibraryPosition {
+    let saved = mbv_queue::LibraryPosition {
         levels: vec![
-            crate::config::LibraryPositionLevel {
+            mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
@@ -233,7 +233,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 tv_content_mode: None,
                 library_total: None,
             },
-            crate::config::LibraryPositionLevel {
+            mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "missing-folder".into(),
                 title: "Gone".into(),
@@ -337,8 +337,8 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.replace_saved_library_position(
         0,
-        crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Saved".into(),

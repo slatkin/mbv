@@ -4,12 +4,14 @@ use super::{
     ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext, DaemonPlayerOwner,
     PendingIdleQueueLoad, SharedQueueState,
 };
-use crate::api::{EmbyClient, EmbyItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent};
-use crate::playback::QueueSlotId;
-use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
-use crate::player::{Player, PlayerCommand, PlayerOwnerState};
+use crate::api::EmbyClient;
+use crate::player::{Player, PlayerOwnerState};
+use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::{CtrlCmd, CtrlEvent};
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ExecSlot;
+use mbv_queue::QueueSlotId;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};
 
 use super::control_queue::{
@@ -31,7 +33,7 @@ pub(in crate::daemon) use queue_load::{
 /// Mints the next queue lineage into `SharedQueueState.lineage`, the single
 /// source of truth for queue lineage (needed by other threads that seed
 /// newly-connecting ctrl clients off `SharedQueueState`), and returns it.
-fn mint_queue_lineage(shared_queue: &SharedQueueState) -> crate::ctrl::QueueLineage {
+fn mint_queue_lineage(shared_queue: &SharedQueueState) -> mbv_queue::QueueLineage {
     let mut lineage = shared_queue.lineage.lock().unwrap();
     lineage.0 = lineage
         .0
@@ -72,7 +74,7 @@ impl CtrlContext<'_> {
     /// that reject mid-arm build a `RejectContext` literal instead, because
     /// their outstanding mutable borrows of the owner's queue would conflict
     /// with a whole-context shared borrow here.
-    fn rejection_context(&self, lineage: crate::ctrl::QueueLineage) -> RejectContext<'_> {
+    fn rejection_context(&self, lineage: mbv_queue::QueueLineage) -> RejectContext<'_> {
         RejectContext {
             reply_tx: self.reply_tx,
             ctrl_clients: self.ctrl_clients,
@@ -95,8 +97,8 @@ struct RejectContext<'a> {
     client_id: CtrlClientId,
     player: &'a Player,
     queue: &'a PlaybackQueue,
-    source: &'a crate::config::QueueSource,
-    lineage: crate::ctrl::QueueLineage,
+    source: &'a mbv_queue::QueueSource,
+    lineage: mbv_queue::QueueLineage,
 }
 
 /// Sends a command rejection to the requesting client and re-publishes the
@@ -139,19 +141,19 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
 /// kept per-command, matching what each arm sent before the gate moved here.
 /// Matches `OwnerGateRejection` exhaustively: its 3 variants are exactly the
 /// gated commands, so there is no wildcard/unreachable arm to fall into.
-fn send_role_gate_rejection(rejection: &crate::ctrl::OwnerGateRejection, ctx: &RejectContext<'_>) {
+fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &RejectContext<'_>) {
     match rejection {
-        crate::ctrl::OwnerGateRejection::AdoptQueue => {
+        mbv_ctrl::OwnerGateRejection::AdoptQueue => {
             reject_command(ctx, "Stay-alive owner queues cannot be adopted by Clients");
         }
-        crate::ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => {
+        mbv_ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => {
             queue_load::reject_queue_load(
                 ctx.reply_tx,
                 *request_id,
                 "idle queue loads are supported only by the Stay-alive owner".to_string(),
             );
         }
-        crate::ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
+        mbv_ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
             ctx.reply_tx,
             &CtrlEvent::CommandRejected(
                 "queue source updates are supported only by the Stay-alive owner".to_string(),
@@ -202,14 +204,14 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     );
 
     if ctx.role != crate::daemon::DaemonRole::Local && queue_state.items.is_empty() {
-        if let Some(existing) = crate::config::load_queue_state() {
+        if let Some(existing) = mbv_config::load_queue_state() {
             if !existing.items.is_empty() {
                 queue_state = existing;
             }
         }
     }
 
-    if let Err(e) = crate::config::save_queue_state(&queue_state) {
+    if let Err(e) = mbv_config::save_queue_state(&queue_state) {
         log::error!(
             target: "daemon",
             "coordinated shutdown rejected: queue persistence failed: {e}"
@@ -267,13 +269,13 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
     // straight to `shared_queue.lineage` for the next command's read.
     let queue_lineage = *ctx.shared_queue.lineage.lock().unwrap();
     match cmd.requires_owner() {
-        crate::ctrl::OwnerGate::OwnerOnly(rejection)
+        mbv_ctrl::OwnerGate::OwnerOnly(rejection)
             if ctx.role != crate::daemon::DaemonRole::Local =>
         {
             send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
             return;
         }
-        crate::ctrl::OwnerGate::NonOwnerOnly(rejection)
+        mbv_ctrl::OwnerGate::NonOwnerOnly(rejection)
             if ctx.role == crate::daemon::DaemonRole::Local =>
         {
             send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
@@ -291,7 +293,7 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
 fn dispatch_ctrl_command(
     cmd: CtrlCmd,
     ctx: &mut CtrlContext<'_>,
-    queue_lineage: crate::ctrl::QueueLineage,
+    queue_lineage: mbv_queue::QueueLineage,
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
@@ -306,7 +308,7 @@ fn dispatch_ctrl_command(
         // request-identity JumpTo is now the only jump path, so an ordinal
         // index carries no evidence about which slot was intended: reject it
         // visibly via the existing command-rejection path (design D6).
-        CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::JumpTo(_)) => {
+        CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::JumpTo(_)) => {
             send_to(
                 ctx.reply_tx,
                 &CtrlEvent::CommandRejected(
@@ -370,10 +372,10 @@ fn dispatch_ctrl_command(
 
 pub(crate) fn owner_admin_transport_allowed(
     role: crate::daemon::DaemonRole,
-    kind: crate::config::ServiceKind,
+    kind: mbv_queue::ServiceKind,
     transport: Option<CtrlTransport>,
 ) -> bool {
     let role_allowed = role == crate::daemon::DaemonRole::Packaged
-        || kind == crate::config::ServiceKind::Audiobookshelf;
+        || kind == mbv_queue::ServiceKind::Audiobookshelf;
     role_allowed && transport == Some(CtrlTransport::Local)
 }

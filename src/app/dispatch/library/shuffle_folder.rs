@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::ui_util::natural_sort_key;
 use crate::app::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use rand::seq::SliceRandom;
 
 fn sort_playable_items(items: &mut Vec<EmbyItem>) {
@@ -99,9 +99,9 @@ impl App {
         }
         let source = if shuffle {
             items.shuffle(&mut rand::rng());
-            crate::config::QueueSource::Shuffle
+            mbv_queue::QueueSource::Shuffle
         } else {
-            crate::config::QueueSource::Unknown
+            mbv_queue::QueueSource::Unknown
         };
         // Keep the Library focused: `play_items_routed` only moves focus when
         // the caller is not already in the Library panel. The gate defers the
@@ -144,7 +144,7 @@ impl App {
                     PendingQueueAction::PlayItems {
                         items,
                         start_idx: 0,
-                        source: crate::config::QueueSource::Collection { collection_type },
+                        source: mbv_queue::QueueSource::Collection { collection_type },
                         autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
@@ -205,7 +205,7 @@ impl App {
                     PendingQueueAction::PlayItems {
                         items,
                         start_idx: 0,
-                        source: crate::config::QueueSource::Shuffle,
+                        source: mbv_queue::QueueSource::Shuffle,
                         autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),

@@ -24,7 +24,7 @@ pub struct AudiobookshelfUser {
 /// Its Debug implementation redacts the candidate API key, which this type
 /// retains until the commit seam consumes it.
 pub struct AudiobookshelfValidatedSetup {
-    pub setup: crate::config::AudiobookshelfSetup,
+    pub setup: mbv_config::AudiobookshelfSetup,
     pub user: AudiobookshelfUser,
     api_key: String,
 }
@@ -42,7 +42,7 @@ impl std::fmt::Debug for AudiobookshelfValidatedSetup {
 impl AudiobookshelfValidatedSetup {
     #[must_use]
     pub fn new(
-        setup: crate::config::AudiobookshelfSetup,
+        setup: mbv_config::AudiobookshelfSetup,
         user: AudiobookshelfUser,
         api_key: String,
     ) -> Self {
@@ -54,15 +54,47 @@ impl AudiobookshelfValidatedSetup {
     }
 
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (
-        crate::config::AudiobookshelfSetup,
-        AudiobookshelfUser,
-        String,
-    ) {
+    pub fn into_parts(self) -> (mbv_config::AudiobookshelfSetup, AudiobookshelfUser, String) {
         (self.setup, self.user, self.api_key)
     }
+}
+
+/// Consume a validator result only after validation has succeeded. The
+/// returned identity is runtime-only and is never serialized by this seam.
+pub fn commit_audiobookshelf_candidate(
+    candidate: AudiobookshelfValidatedSetup,
+) -> Result<(AudiobookshelfUser, u64), String> {
+    let (setup, user, api_key) = candidate.into_parts();
+    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
+    Ok((user, revision))
+}
+
+pub fn repair_audiobookshelf_candidate(
+    candidate: AudiobookshelfValidatedSetup,
+) -> Result<(AudiobookshelfUser, u64), String> {
+    commit_audiobookshelf_candidate(candidate)
+}
+
+/// Confirmed different-server replacement. Validation is represented by the
+/// candidate type; confirmation belongs to the caller and must precede this
+/// destructive boundary.
+pub fn replace_audiobookshelf_candidate<C, R>(
+    candidate: AudiobookshelfValidatedSetup,
+    clear_owned_state: C,
+    restore_owned_state: R,
+) -> Result<(AudiobookshelfUser, u64), String>
+where
+    C: FnOnce() -> Result<(), String>,
+    R: FnOnce(),
+{
+    let (setup, user, api_key) = candidate.into_parts();
+    let revision = mbv_config::replace_audiobookshelf_setup_and_secret(
+        &setup,
+        &api_key,
+        clear_owned_state,
+        restore_owned_state,
+    )?;
+    Ok((user, revision))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,7 +211,7 @@ impl AudiobookshelfClient {
         api_key: &str,
         hard_bound: Duration,
     ) -> Result<AudiobookshelfValidatedSetup, AudiobookshelfError> {
-        let setup = crate::config::AudiobookshelfSetup::new(server_url);
+        let setup = mbv_config::AudiobookshelfSetup::new(server_url);
         if setup.server_url.is_empty() || api_key.trim().is_empty() {
             return Err(AudiobookshelfError::protocol());
         }

@@ -263,8 +263,7 @@ fn make_reporter(
             info.session_id,
         )
     });
-    let client =
-        client.unwrap_or_else(|| Arc::new(EmbyClient::new(crate::config::Config::default())));
+    let client = client.unwrap_or_else(|| Arc::new(EmbyClient::new(mbv_config::Config::default())));
     let has_session = session.is_some();
     let (item_id, media_source_id, session_id) = session.unwrap_or_else(|| {
         (
@@ -303,7 +302,7 @@ struct PlayerThreadStart {
     initial_volume: u8,
     items: Vec<ExecSlot>,
     start_idx: usize,
-    run_identity: crate::ctrl::PlaybackGeneration,
+    run_identity: mbv_ctrl::PlaybackGeneration,
     server_url: String,
     token: String,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,

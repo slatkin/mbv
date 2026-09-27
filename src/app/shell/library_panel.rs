@@ -19,7 +19,7 @@ use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::state::types::playback::DestinationLatestSource;
-use mbv_core::config::ServiceKind;
+use mbv_queue::ServiceKind;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
@@ -54,7 +54,7 @@ impl Model {
     /// Assemble the selected destination's bounded launch identities. This is
     /// a teardown-only query: the panel asks only its active owner, never any
     /// unselected destination.
-    pub(in crate::app) fn launch_state_snapshot(&self) -> mbv_core::config::TuiLaunchState {
+    pub(in crate::app) fn launch_state_snapshot(&self) -> mbv_config::TuiLaunchState {
         let key = self.active_library_key();
         let (selector, item) = key
             .as_ref()
@@ -67,16 +67,15 @@ impl Model {
             .unwrap_or((None, None));
         // A stale Service index has no stable library identity; represent it
         // as Home so startup follows the ordered first-guaranteed-tab fallback.
-        let tab = key.as_ref().map_or(
-            mbv_core::config::TabIdentity::Home,
-            LibraryKey::tab_identity,
-        );
-        mbv_core::config::TuiLaunchState {
-            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        let tab = key
+            .as_ref()
+            .map_or(mbv_config::TabIdentity::Home, LibraryKey::tab_identity);
+        mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
             tab,
             panel_focus: match self.app.effective_panel_focus() {
-                PanelFocus::Library => mbv_core::config::LaunchPanelFocus::Library,
-                PanelFocus::Queue => mbv_core::config::LaunchPanelFocus::Queue,
+                PanelFocus::Library => mbv_config::LaunchPanelFocus::Library,
+                PanelFocus::Queue => mbv_config::LaunchPanelFocus::Queue,
             },
             selector,
             item,
@@ -243,8 +242,8 @@ impl Model {
             .is_some_and(|panel| panel.reanchor_launch_state(&key, &state));
         if applied {
             let focus = match state.panel_focus {
-                mbv_core::config::LaunchPanelFocus::Library => PanelFocus::Library,
-                mbv_core::config::LaunchPanelFocus::Queue => PanelFocus::Queue,
+                mbv_config::LaunchPanelFocus::Library => PanelFocus::Library,
+                mbv_config::LaunchPanelFocus::Queue => PanelFocus::Queue,
             };
             self.app.set_panel_focus(focus);
             // Queue focus is restored only after the selected destination has

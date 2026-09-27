@@ -48,9 +48,9 @@ impl App {
                 && config.subtitle_lang.is_empty()
                 && config.audio_lang.is_empty()
             {
-                mbv_core::player::SubtitlePrefs::default()
+                mbv_ctrl::player::SubtitlePrefs::default()
             } else {
-                mbv_core::player::SubtitlePrefs {
+                mbv_ctrl::player::SubtitlePrefs {
                     mode: config.subtitle_mode.clone(),
                     subtitle_lang: config.subtitle_lang.clone(),
                     audio_lang: config.audio_lang.clone(),
@@ -91,7 +91,7 @@ impl App {
     pub(in crate::app) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
         self.player
-            .send_command(mbv_core::player::PlayerCommand::SetSubtitlePrefs {
+            .send_command(mbv_ctrl::player::PlayerCommand::SetSubtitlePrefs {
                 mode: prefs.mode,
                 subtitle_lang: prefs.subtitle_lang,
                 audio_lang: prefs.audio_lang,

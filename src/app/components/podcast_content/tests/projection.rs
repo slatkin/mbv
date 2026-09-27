@@ -4,10 +4,10 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 #[test]
 fn reanchor_launch_state_falls_back_to_first_show_scope_and_episode() {
     let mut owner = owner();
-    let state = mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::Home,
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+    let state = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: Some(SelectorIdentity::Audiobookshelf {
             key: AudiobookshelfSelectorKey::PodcastShow("gone".into()),
         }),

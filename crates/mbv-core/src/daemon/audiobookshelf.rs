@@ -2,8 +2,8 @@ use super::core::{
     broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress, DaemonEvent,
 };
 use super::{AudiobookshelfOwnerContext, ClientRegistry};
-use crate::playback_queue::PlaybackQueue;
 use crate::player::Player;
+use mbv_queue::PlaybackQueue;
 use std::sync::mpsc;
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
@@ -18,8 +18,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
         player.update_audiobookshelf_context(None);
         return;
     };
-    let Some(api_key) =
-        crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf)
+    let Some(api_key) = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
     else {
         player.update_audiobookshelf_context(None);
         return;
@@ -80,7 +79,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
+    let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
@@ -103,7 +102,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     }
     broadcast_audiobookshelf_progress(
         ctrl_clients,
-        crate::ctrl::AudiobookshelfProgressEvent {
+        mbv_ctrl::AudiobookshelfProgressEvent {
             library_item_id: update.library_item_id.clone(),
             episode_id: update.episode_id.clone(),
             position_ticks,
@@ -129,7 +128,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
+    let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
@@ -150,7 +149,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     }
     broadcast_audiobookshelf_book_progress(
         ctrl_clients,
-        crate::ctrl::AudiobookshelfBookProgressEvent {
+        mbv_ctrl::AudiobookshelfBookProgressEvent {
             library_item_id: update.library_item_id.clone(),
             position_ticks,
             is_finished: update.is_finished,

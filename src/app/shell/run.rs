@@ -232,7 +232,7 @@ impl Model {
             let level = lib.nav_stack.last()?;
             (lib.library.collection_type == "tvshows"
                 && lib.nav_stack.len() == 1
-                && lib.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest))
+                && lib.tv_content_mode == Some(mbv_queue::TvContentMode::Latest))
             .then(|| {
                 (
                     lib.library.id.clone(),
@@ -241,7 +241,7 @@ impl Model {
                         .items
                         .iter()
                         .cloned()
-                        .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                        .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
                         .collect(),
                 )
             })

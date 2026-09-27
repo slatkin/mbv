@@ -11,7 +11,7 @@ use crate::app::components::library_panel::content::HeroImageState;
 use crate::app::render::arrangements::wide_hero;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::{App, PanelMode, SeriesDetail};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use ratatui::layout::Rect;
 
 /// All App-derived data needed to paint the wide TV workspace.
@@ -30,17 +30,14 @@ pub(in crate::app) struct TvWideRenderCtx {
     pub(in crate::app) episode_cursor: Option<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) show_letter_pills: bool,
-    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_queue::TvContentMode>,
     /// The shell-projected hero image state (design D9/D16): the panel's
     /// shared `EmbyItem` producer reads it; painting never fetches.
     pub(in crate::app) hero_image: HeroImageState,
 }
 
 impl TvWideRenderCtx {
-    pub(in crate::app) fn set_tv_content_mode(
-        &mut self,
-        mode: Option<mbv_core::config::TvContentMode>,
-    ) {
+    pub(in crate::app) fn set_tv_content_mode(&mut self, mode: Option<mbv_queue::TvContentMode>) {
         self.tv_content_mode = mode;
     }
 

@@ -3,7 +3,7 @@ use crate::app::state::types::browse::BrowseResting;
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{BrowseLevel, LibraryTab};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use rstest::rstest;
 
 fn lib_tab(collection_type: &str) -> LibraryTab {
@@ -177,7 +177,7 @@ fn tv_first_capture_resolves_latest_and_replaces_large_library_rows() {
 
     assert_eq!(
         app.libs[0].tv_content_mode,
-        Some(mbv_core::config::TvContentMode::Latest)
+        Some(mbv_queue::TvContentMode::Latest)
     );
     assert!(app.libs[0].nav_stack[0].items.is_empty());
     assert_eq!(

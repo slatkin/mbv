@@ -11,9 +11,9 @@ use mbv_net::mock_http::MockHttp;
 const TEST_URL: &str = "http://127.0.0.1:1";
 
 fn client_with_url(url: &str) -> EmbyClient {
-    let cfg = crate::config::Config {
+    let cfg = mbv_config::Config {
         server_url: url.into(),
-        ..crate::config::Config::default()
+        ..mbv_config::Config::default()
     };
     let mut c = EmbyClient::new(cfg);
     c.token = "tok".into();
@@ -202,12 +202,12 @@ fn service_setup_validation_uses_setup_url_user_and_token() {
     let agent = http.agent();
     http.respond(200, "");
 
-    let config = crate::config::Config {
+    let config = mbv_config::Config {
         server_url: "http://stale.example".into(),
         ..Default::default()
     };
     let client = EmbyClient::new(config).with_test_agent(agent);
-    let setup = crate::config::EmbySetup::new(TEST_URL, "user-42");
+    let setup = mbv_config::EmbySetup::new(TEST_URL, "user-42");
     let authenticated = client
         .authenticate_service_setup_bounded(
             "persisted-token".to_string(),
@@ -228,12 +228,12 @@ fn service_setup_validation_uses_setup_url_user_and_token() {
 
 #[test]
 fn credential_exchange_rejection_and_connectivity_commit_nothing() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = mbv_config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let agent = http.agent();
     http.respond(401, "");
     http.fail(std::io::ErrorKind::ConnectionRefused);
-    let client = EmbyClient::new(crate::config::Config::default()).with_test_agent(agent);
+    let client = EmbyClient::new(mbv_config::Config::default()).with_test_agent(agent);
     client
         .exchange_credentials_bounded(
             TEST_URL,
@@ -242,9 +242,9 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
             std::time::Duration::from_secs(2),
         )
         .unwrap_err();
-    assert!(!crate::config::token_cache_path().exists());
-    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
-    assert!(!crate::config::config_path().exists());
+    assert!(!mbv_config::token_cache_path().exists());
+    assert!(!mbv_config::service_secret_path(mbv_queue::ServiceKind::Emby).exists());
+    assert!(!mbv_config::config_path().exists());
 
     client
         .exchange_credentials_bounded(
@@ -254,9 +254,9 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
             std::time::Duration::from_secs(2),
         )
         .unwrap_err();
-    assert!(!crate::config::token_cache_path().exists());
-    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
-    assert!(!crate::config::config_path().exists());
+    assert!(!mbv_config::token_cache_path().exists());
+    assert!(!mbv_config::service_secret_path(mbv_queue::ServiceKind::Emby).exists());
+    assert!(!mbv_config::config_path().exists());
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn seed_cached_token(server_url: &str, token: &str, user_id: &str) {
 
 #[test]
 fn authenticate_preserves_token_on_connectivity_error() {
-    let _g = crate::config::TestStateDirGuard::new();
+    let _g = mbv_config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let agent = http.agent();
     // Connection dropped without responding — a transport-level
@@ -308,12 +308,12 @@ fn authenticate_preserves_token_on_connectivity_error() {
     assert_eq!(client.token, "cache-token");
     assert_eq!(client.user_id, "cache-user");
     // The on-disk cache must also survive (not just the in-memory fields).
-    assert!(crate::config::token_cache_path().exists());
+    assert!(mbv_config::token_cache_path().exists());
 }
 
 #[test]
 fn authenticate_clears_token_on_401() {
-    let _g = crate::config::TestStateDirGuard::new();
+    let _g = mbv_config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let agent = http.agent();
     http.respond(401, "");
@@ -323,7 +323,7 @@ fn authenticate_clears_token_on_401() {
     assert_eq!(result, Err("Cached credentials expired".to_string()));
     assert_eq!(client.token, "");
     assert_eq!(client.user_id, "");
-    assert!(!crate::config::token_cache_path().exists());
+    assert!(!mbv_config::token_cache_path().exists());
 }
 
 // ── auth_header ──────────────────────────────────────────────────────────
@@ -348,9 +348,9 @@ fn device_name_trims_hostname_env_var() {
     // by observing that a client created with HOSTNAME set has no whitespace
     // in its device_name field.
     let name = {
-        let _g = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+        let _g = mbv_config::tests::SYS_ENV_LOCK.lock().unwrap();
         std::env::set_var("HOSTNAME", "  trimtest  \n");
-        let c = EmbyClient::new(crate::config::Config::default());
+        let c = EmbyClient::new(mbv_config::Config::default());
         std::env::remove_var("HOSTNAME");
         c.device_name
     };

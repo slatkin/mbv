@@ -7,7 +7,7 @@ use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::LetterFilter;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl EmbyLibraryContent {
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors

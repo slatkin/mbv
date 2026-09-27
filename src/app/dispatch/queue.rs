@@ -5,9 +5,9 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 mod pending_playback;
 mod playlist;
@@ -53,10 +53,7 @@ impl App {
             // Prefer the unified remote path; the in-process command is now
             // slot-addressed too.
             if let Some(sid) = slot_id {
-                if !self
-                    .player
-                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(sid))
-                {
+                if !self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid)) {
                     self.player.send_command(PlayerCommand::QueueRemove(sid));
                 }
             }
@@ -121,7 +118,7 @@ impl App {
     pub(in crate::app) fn remove_slots_from_queue(
         &mut self,
         scope: QueueScope,
-        slot_ids: &[mbv_core::playback_queue::QueueSlotId],
+        slot_ids: &[mbv_queue::QueueSlotId],
     ) {
         let needs_confirm = slot_ids.iter().any(|slot_id| {
             self.slot_index(scope, *slot_id)
@@ -158,7 +155,7 @@ impl App {
 
         // Descending order keeps the remaining positions valid as slots go;
         // the recorded undo positions are the pre-removal indices.
-        let mut removed_slots: Vec<mbv_core::playback_queue::QueueSlotId> = Vec::new();
+        let mut removed_slots: Vec<mbv_queue::QueueSlotId> = Vec::new();
         for pos in positions.iter().rev() {
             let Some(slot_id) = self.queue_for_scope(scope).slot_id_at(*pos) else {
                 continue;
@@ -194,7 +191,7 @@ impl App {
         if sent_queue_remove {
             let raw_slot_ids: Vec<u64> = removed_slots
                 .iter()
-                .map(|slot_id| mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
             // A remote owner takes the whole range in one edit. A local owner
             // has no batch command and keeps one player command per slot; its
@@ -285,7 +282,7 @@ impl App {
     fn apply_queue_move_by_slot(
         &mut self,
         scope: QueueScope,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         from: usize,
         to: usize,
     ) -> bool {
@@ -307,7 +304,7 @@ impl App {
             // slot-addressed (source) with an ordinal destination.
             let sent_unified = self
                 .player
-                .queue_move_slot(mbv_core::ctrl::slot_id_to_u64(slot_id), to);
+                .queue_move_slot(mbv_ctrl::slot_id_to_u64(slot_id), to);
             if !sent_unified {
                 self.player
                     .send_command(PlayerCommand::QueueMove(slot_id, to));

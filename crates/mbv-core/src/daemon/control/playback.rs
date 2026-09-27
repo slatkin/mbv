@@ -3,10 +3,12 @@ use super::{
     broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
 };
-use crate::api::{EmbyClient, EmbyItem};
-use crate::ctrl::CtrlEvent;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
-use crate::player::{PlayerCommand, PlayerOwnerState};
+use crate::api::EmbyClient;
+use crate::player::PlayerOwnerState;
+use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::CtrlEvent;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
@@ -39,7 +41,7 @@ pub(in crate::daemon) fn play_resolved_items(
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
-    new_source: crate::config::QueueSource,
+    new_source: mbv_queue::QueueSource,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -89,17 +91,14 @@ pub(in crate::daemon) fn play_resolved_items(
 /// then resolve its action. Correlated playback control — separate from
 /// `PlayerCmd` so guarded actions cannot silently fall back to the old,
 /// unacknowledged command path.
-pub(super) fn handle_playback_intent(
-    ctx: &mut CtrlContext<'_>,
-    intent: crate::ctrl::PlaybackIntent,
-) {
+pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl::PlaybackIntent) {
     let pipe_output = ctx.client.lock().unwrap().config.audio_pipe_enabled;
     let intents = &mut ctx.owner.intents;
     let accepted = intents.accept(ctx.client_id, intent.clone(), pipe_output);
     let coalesced = accepted.iter().any(|event| {
         matches!(
             event.outcome,
-            crate::ctrl::PlaybackIntentOutcome::Coalesced { .. }
+            mbv_ctrl::PlaybackIntentOutcome::Coalesced { .. }
         )
     });
     for event in accepted {
@@ -115,7 +114,7 @@ pub(super) fn handle_playback_intent(
     let intent_request_id = intent.request_id;
     let intent_generation = intent.generation;
     match intent.action {
-        crate::ctrl::PlaybackIntentAction::Play {
+        mbv_ctrl::PlaybackIntentAction::Play {
             item_ids,
             start_idx,
             start_ticks,
@@ -129,14 +128,14 @@ pub(super) fn handle_playback_intent(
             start_ticks,
             intent_source,
         ),
-        crate::ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
-        crate::ctrl::PlaybackIntentAction::SetPaused { paused } => {
+        mbv_ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
+        mbv_ctrl::PlaybackIntentAction::SetPaused { paused } => {
             if ctx.player.status.lock().unwrap().paused != paused {
                 ctx.player.send_command(PlayerCommand::TogglePause);
             }
         }
-        action @ (crate::ctrl::PlaybackIntentAction::Next
-        | crate::ctrl::PlaybackIntentAction::Previous) => {
+        action @ (mbv_ctrl::PlaybackIntentAction::Next
+        | mbv_ctrl::PlaybackIntentAction::Previous) => {
             step_to_neighbor_slot(ctx, &action, intent_request_id, intent_generation);
         }
     }
@@ -146,12 +145,12 @@ pub(super) fn handle_playback_intent(
 /// off the event-loop thread and rejoin with `DaemonEvent::PlaybackResolved`.
 fn resolve_play_intent(
     ctx: &mut CtrlContext<'_>,
-    request_id: crate::ctrl::PlaybackRequestId,
-    generation: crate::ctrl::PlaybackGeneration,
+    request_id: mbv_ctrl::PlaybackRequestId,
+    generation: mbv_ctrl::PlaybackGeneration,
     item_ids: Vec<String>,
     start_idx: usize,
     start_ticks: i64,
-    intent_source: crate::config::QueueSource,
+    intent_source: mbv_queue::QueueSource,
 ) {
     if !ctx.has_emby() {
         return;
@@ -184,9 +183,9 @@ fn resolve_play_intent(
 /// rapid Next presses kept landing on (or re-issuing) the wrong slot.
 fn step_to_neighbor_slot(
     ctx: &mut CtrlContext<'_>,
-    action: &crate::ctrl::PlaybackIntentAction,
-    request_id: crate::ctrl::PlaybackRequestId,
-    generation: crate::ctrl::PlaybackGeneration,
+    action: &mbv_ctrl::PlaybackIntentAction,
+    request_id: mbv_ctrl::PlaybackRequestId,
+    generation: mbv_ctrl::PlaybackGeneration,
 ) {
     let queue = &ctx.owner.core.queue;
     let transitions = &ctx.owner.core.transitions;
@@ -199,7 +198,7 @@ fn step_to_neighbor_slot(
         .or_else(|| queue.active_slot_id())
         .and_then(|slot| queue.slot_index(slot));
     let neighbor_idx = base_idx.and_then(|idx| match *action {
-        crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
+        mbv_ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
         _ => Some(idx + 1).filter(|&next| next < queue.len()),
     });
     log::info!(
@@ -224,7 +223,7 @@ fn step_to_neighbor_slot(
                 ctrl_clients: ctx.ctrl_clients,
             },
             ctx.client_id,
-            crate::playback_transition::Transition::new(request_id, generation, slot_id),
+            crate::player::transition::Transition::new(request_id, generation, slot_id),
         );
     }
 }

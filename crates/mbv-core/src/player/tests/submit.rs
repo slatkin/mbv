@@ -220,7 +220,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
-        runtime_ticks: 30 * crate::api::TICKS_PER_SECOND,
+        runtime_ticks: 30 * mbv_emby_model::TICKS_PER_SECOND,
         played: false,
         playback_position_ticks: 0,
         series_id: String::new(),
@@ -247,7 +247,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: crate::api::EmbyImageTags::default(),
+        image_tags: mbv_emby_model::EmbyImageTags::default(),
     })));
     let feed_slot = queue.append(QueueItem::Feed(make_feed_entry("podcast-ep", "Podcast Ep")));
     let other = queue.append(QueueItem::Feed(make_feed_entry("other-ep", "Other Ep")));
@@ -281,8 +281,8 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
 }
 
 fn audiobookshelf_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
-        crate::playback_queue::AudiobookshelfQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-1".into(),
             episode_id: "episode-1".into(),
             title: "Episode 1".into(),
@@ -300,8 +300,8 @@ fn audiobookshelf_item() -> QueueItem {
 }
 
 fn audiobookshelf_book_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
-        crate::playback_queue::AudiobookshelfBookQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(
+        mbv_queue::AudiobookshelfBookQueueItem {
             library_item_id: "book-1".into(),
             title: "Book 1".into(),
             author: None,
@@ -317,7 +317,7 @@ fn audiobookshelf_book_item() -> QueueItem {
 fn audiobookshelf_context() -> AudiobookshelfPlayerContext {
     AudiobookshelfPlayerContext::new(
         crate::service_runtime::SetupGeneration::new(7),
-        crate::config::AudiobookshelfSetup::new("https://books.example"),
+        mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
         "device".into(),
     )

@@ -5,7 +5,7 @@ use super::components::LibraryKind;
 use super::Model;
 use super::TabSelection;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
-use mbv_core::config::ServiceKind;
+use mbv_queue::ServiceKind;
 
 impl Model {
     fn abs_podcast_key(&self) -> Option<LibraryKey> {

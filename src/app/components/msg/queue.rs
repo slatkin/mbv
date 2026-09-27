@@ -5,7 +5,7 @@
 //! these types carry slot identity (or the focused scope), not a snapshot
 //! index.
 
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_queue::QueueSlotId;
 
 /// Queue requests carry slot identity, not a snapshot index. The queue can be
 /// reordered by the Player between paint and dispatch.

@@ -14,9 +14,9 @@
 
 use std::collections::HashSet;
 
-use mbv_core::api::EmbyItem;
-use mbv_core::config::ServiceKind;
 use mbv_core::service_runtime::SetupGeneration;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ServiceKind;
 
 use crate::app::components::library_panel::{LibraryKey, LibraryKind};
 use crate::app::components::msg::MusicArtistTarget;

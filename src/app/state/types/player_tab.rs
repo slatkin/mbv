@@ -1,6 +1,6 @@
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_execution_sequence::ExecSlot;
-use mbv_core::playback_queue::{
+use mbv_emby_model::EmbyItem;
+use mbv_queue::ExecSlot;
+use mbv_queue::{
     PlaybackQueue, QueueItem, QueueMutationResult, QueueSlot, QueueSlotId, RefreshMergeResult,
     RemoveSlotResult,
 };
@@ -31,13 +31,11 @@ impl PlayerTab {
         }
     }
 
-    pub(in crate::app) fn from_unified_state(
-        state: &mbv_core::ctrl::UnifiedQueueStateData,
-    ) -> Self {
+    pub(in crate::app) fn from_unified_state(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
         let active_index = state
             .active_slot
             .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
-        let slots: Vec<(QueueSlotId, mbv_core::playback_queue::QueueItem)> = state
+        let slots: Vec<(QueueSlotId, mbv_queue::QueueItem)> = state
             .slots
             .iter()
             .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item.clone()))
@@ -45,7 +43,7 @@ impl PlayerTab {
         let queue = PlaybackQueue::from_slot_items(
             slots,
             state.active_slot.map(QueueSlotId::from_raw),
-            mbv_core::playback_queue::QueueRevision::from_raw(state.revision),
+            mbv_queue::QueueRevision::from_raw(state.revision),
         );
         Self {
             queue_cursor: active_index.unwrap_or(0),
@@ -93,7 +91,7 @@ impl PlayerTab {
 
     pub(in crate::app) fn set_unified_state(
         &mut self,
-        state: &mbv_core::ctrl::UnifiedQueueStateData,
+        state: &mbv_ctrl::UnifiedQueueStateData,
         queue_cursor: usize,
     ) {
         *self = Self::from_unified_state(state);
@@ -205,7 +203,7 @@ impl PlayerTab {
     }
 
     /// Canonical queue revision, bumped on every structural queue mutation.
-    pub(in crate::app) fn revision(&self) -> mbv_core::playback_queue::QueueRevision {
+    pub(in crate::app) fn revision(&self) -> mbv_queue::QueueRevision {
         self.queue.revision()
     }
 

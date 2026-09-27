@@ -1,4 +1,5 @@
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
+use mbv_feed::IdleFeedItem;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -47,11 +48,6 @@ pub(in crate::app) enum SavePlaylistStage {
 pub(in crate::app) struct SavePlaylistDialog {
     pub(in crate::app) input: String,
     pub(in crate::app) stage: SavePlaylistStage,
-}
-
-pub(in crate::app) struct IdleFeedItem {
-    pub(in crate::app) title: String,
-    pub(in crate::app) link: Option<String>,
 }
 
 pub(in crate::app) struct IdleFeed {

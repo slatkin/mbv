@@ -1,5 +1,5 @@
 use crate::app::App;
-use mbv_core::playback_queue::{FeedEntry, PlaybackTitleParts, QueueItem};
+use mbv_queue::{FeedEntry, PlaybackTitleParts, QueueItem};
 
 impl App {
     /// Whether the queue column's transport projects a two-part now-playing

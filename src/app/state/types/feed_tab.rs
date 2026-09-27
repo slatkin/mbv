@@ -1,5 +1,5 @@
-use mbv_core::config::FeedSubscription;
-use mbv_core::playback_queue::FeedEntry;
+use mbv_config::FeedSubscription;
+use mbv_queue::FeedEntry;
 use std::sync::mpsc;
 
 /// Watched-state filter for the Feeds tab. Cycles
@@ -133,7 +133,7 @@ mod tests {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs,
-            feed_kind: Some(mbv_core::config::FeedKind::Video),
+            feed_kind: Some(mbv_queue::FeedKind::Video),
             feed_id: None,
             position_ticks: 0,
             played: false,

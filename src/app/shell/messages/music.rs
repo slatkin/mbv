@@ -161,7 +161,7 @@ impl super::super::Model {
     fn handle_music_artist_action(
         &mut self,
         action: crate::app::components::msg::MusicTreeAction,
-        items: Vec<mbv_core::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
         origin: crate::app::components::media_list::SelectionOrigin,
         unresolved_targets: &[String],
     ) {
@@ -213,7 +213,7 @@ impl super::super::Model {
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
         let resolved = self.music_owner().and_then(|owner| {
             let detail = owner.artist_detail_for_target(target)?;
-            let tracks: Vec<mbv_core::api::EmbyItem> = detail
+            let tracks: Vec<mbv_emby_model::EmbyItem> = detail
                 .track_groups
                 .iter()
                 .flat_map(|group| group.tracks.iter())

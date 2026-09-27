@@ -18,8 +18,8 @@
 //! owner never builds a banner layout or fetches an image itself (task 5.10's shell
 //! projection does that, generically, for every migrated owner).
 
-use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 use super::inline_search::InlineSearch;
 use super::library_panel::content::HeroImageState;

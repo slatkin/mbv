@@ -7,7 +7,8 @@
 //! client construction immediately without touching the network.
 
 use super::*;
-use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
+use mbv_config::AudiobookshelfSetup;
+use mbv_queue::ServiceKind;
 
 /// A podcast tab whose listed shows have no cached episodes yet, with a
 /// configured Audiobookshelf Service whose URL fails client construction
@@ -15,7 +16,7 @@ use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 fn unfetched_podcast_app(shows: usize) -> App {
     let mut app = make_app_stub();
     app.config.lock().unwrap().audiobookshelf_setup = Some(AudiobookshelfSetup::new(String::new()));
-    mbv_core::config::save_service_secret(ServiceKind::Audiobookshelf, "test-token").unwrap();
+    mbv_config::save_service_secret(ServiceKind::Audiobookshelf, "test-token").unwrap();
     let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
         name: "ABS Podcasts".into(),

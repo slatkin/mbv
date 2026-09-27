@@ -1,5 +1,5 @@
 use super::{clear_cached_token, device_id, device_name, load_cached_token, EmbyClient};
-use crate::config::Config;
+use mbv_config::Config;
 use serde_json::Value;
 
 fn user_matches_username(user: &Value, username: &str) -> bool {
@@ -228,7 +228,7 @@ impl EmbyClient {
     pub fn authenticate_service_setup_bounded(
         &self,
         token: String,
-        setup: &crate::config::EmbySetup,
+        setup: &mbv_config::EmbySetup,
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
         let mut clone = self.clone();
@@ -331,7 +331,7 @@ impl EmbyClient {
     }
 
     /// Fetch the current user's subtitle and audio language preferences from Emby.
-    pub fn get_user_subtitle_prefs(&self) -> Result<crate::player::SubtitlePrefs, String> {
+    pub fn get_user_subtitle_prefs(&self) -> Result<mbv_ctrl::player::SubtitlePrefs, String> {
         let resp: serde_json::Value = self
             .get("/Users/Me")
             .call()
@@ -352,7 +352,7 @@ impl EmbyClient {
             .as_str()
             .unwrap_or("")
             .to_string();
-        Ok(crate::player::SubtitlePrefs {
+        Ok(mbv_ctrl::player::SubtitlePrefs {
             mode,
             subtitle_lang,
             audio_lang,

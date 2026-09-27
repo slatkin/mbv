@@ -83,7 +83,7 @@ fn pipe_buffering_coalesces_until_its_generation_bound_deadline_settles() {
         .expect("pipe intent should report buffering");
     assert!(matches!(
         status.phase,
-        crate::ctrl::PipePlaybackPhase::OutputBuffering
+        mbv_ctrl::PipePlaybackPhase::OutputBuffering
     ));
 
     let duplicate = PlaybackIntent {
@@ -137,7 +137,7 @@ fn unconfigured_pipe_delay_settles_at_output_started_and_old_deadline_cannot_set
         .expect("pipe intent should report observed output start");
     assert!(matches!(
         status.phase,
-        crate::ctrl::PipePlaybackPhase::OutputStarted
+        mbv_ctrl::PipePlaybackPhase::OutputStarted
     ));
     assert!(matches!(
         state.accept(

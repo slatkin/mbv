@@ -1,5 +1,5 @@
-use mbv_core::api::EmbyItem;
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_emby_model::EmbyItem;
+use mbv_emby_model::TICKS_PER_SECOND;
 
 use crate::app::render::components::home_video::format_release_date;
 use crate::app::ui_util::fmt_duration_hms;

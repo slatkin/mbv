@@ -3,8 +3,8 @@ use crate::app::components::media_list::{
 };
 use crate::app::state::types::playback::PlaybackState;
 use crate::app::ui_util::fmt_duration_short;
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};
+use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
 
 /// Project Queue slots into the canonical provider-neutral row vocabulary
 /// (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the
@@ -113,7 +113,7 @@ fn queue_row_fields(
             },
             i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(ep)) => (
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(ep)) => (
             ep.title.clone(),
             if is_active {
                 playback.position_ticks
@@ -122,7 +122,7 @@ fn queue_row_fields(
             },
             i64::try_from(ep.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
-        QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(book)) => (
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => (
             book.title.clone(),
             if is_active {
                 playback.position_ticks

@@ -7,7 +7,7 @@ use crate::app::render::arrangements::playback_transport::{
     transport_buttons_fit, TransportMeasure,
 };
 use crate::app::ui_util::fmt_duration_short;
-use mbv_core::playback_queue::PlaybackTitleParts;
+use mbv_queue::PlaybackTitleParts;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -263,8 +263,8 @@ pub(super) fn render_queue_title_rows(
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
-    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_emby_model::TICKS_PER_SECOND);
     let time_text = format!("{pos_str}/{dur_str}");
     let time_w = width_u16(time_text.width());
     let has_context = ctx
@@ -326,8 +326,8 @@ fn render_context_title_rows(
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
-    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_emby_model::TICKS_PER_SECOND);
     let time_text = format!("{pos_str}/{dur_str}");
     let time_w = width_u16(time_text.width());
     let Some(context) = ctx
@@ -470,7 +470,7 @@ pub(in crate::app) fn render_title_row(
     }
 
     let (pos_ticks, _rt_ticks, paused) = ctx.controls.progress;
-    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
     let glyphs = control_glyphs(ctx, paused);
     // The strip's right side is the elapsed time and the status pill alone:
     // no progress cluster (the seekbar above already carries progress) and no

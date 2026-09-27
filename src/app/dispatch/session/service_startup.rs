@@ -1,7 +1,8 @@
+use mbv_config::{load_service_secret, EmbySetup};
 use mbv_core::api::EmbyClient;
 use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
+use mbv_queue::ServiceKind;
 use std::sync::mpsc;
 
 pub(in crate::app) enum AudiobookshelfCompletionKind {
@@ -19,7 +20,7 @@ pub(in crate::app) struct AudiobookshelfCompletion {
 }
 
 pub(in crate::app) struct AudiobookshelfValidatedCandidate {
-    pub(in crate::app) setup: mbv_core::config::AudiobookshelfSetup,
+    pub(in crate::app) setup: mbv_config::AudiobookshelfSetup,
     pub(in crate::app) user: mbv_core::audiobookshelf::AudiobookshelfUser,
     pub(in crate::app) api_key: String,
 }
@@ -89,7 +90,7 @@ fn audiobookshelf_client(
 /// on missing setup/credentials rather than surfacing a typed error.
 pub(in crate::app) fn audiobookshelf_setup_and_key(
     config: &crate::config::Config,
-) -> Option<(mbv_core::config::AudiobookshelfSetup, String)> {
+) -> Option<(mbv_config::AudiobookshelfSetup, String)> {
     let setup = config.audiobookshelf_setup.clone()?;
     let key = load_service_secret(ServiceKind::Audiobookshelf)?;
     Some((setup, key))
@@ -449,10 +450,10 @@ mod tests {
         config.server_url = "https://legacy.example.test".into();
         assert!(should_open_services(&config));
 
-        config.feeds.push(mbv_core::config::FeedSubscription {
+        config.feeds.push(mbv_config::FeedSubscription {
             name: "News".into(),
             url: "https://example.test/feed".into(),
-            kind: mbv_core::config::FeedKind::Audio,
+            kind: mbv_queue::FeedKind::Audio,
         });
         assert!(!should_open_services(&config));
 

@@ -3,7 +3,7 @@ use crate::app::render::{
 };
 use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -247,7 +247,7 @@ impl App {
             let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
             key.item_types = Some("Series".into());
             key.letter_filter = None;
-            level.tv_content_mode = Some(mbv_core::config::TvContentMode::All);
+            level.tv_content_mode = Some(mbv_queue::TvContentMode::All);
             level.letter_filter = None;
             level.all_items = None;
             level.items.clear();
@@ -255,7 +255,7 @@ impl App {
             level.item_types = Some("Series".into());
             level.set_resting_cursor(0);
             level.set_resting_scroll(0);
-            self.libs[lib_idx].tv_content_mode = Some(mbv_core::config::TvContentMode::All);
+            self.libs[lib_idx].tv_content_mode = Some(mbv_queue::TvContentMode::All);
             self.spawn_refresh(lib_idx, 0, key);
         }
         // The placeholder never plays: report handled even if the landing is

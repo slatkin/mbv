@@ -1,7 +1,6 @@
-use super::types::{
-    decode_entities, EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson,
-    SessionAudioStream, SessionMediaInfo, SessionSubtitleStream,
-};
+use super::types::{SessionAudioStream, SessionMediaInfo, SessionSubtitleStream};
+use mbv_emby_model::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
+use mbv_text::html::decode_entities;
 use serde_json::Value;
 
 #[must_use]
@@ -408,7 +407,7 @@ fn parse_image_tags(raw: &Value) -> EmbyImageTags {
 }
 
 pub(crate) fn load_cached_token() -> Option<(String, String, String)> {
-    let path = crate::config::token_cache_path();
+    let path = mbv_config::token_cache_path();
     let text = std::fs::read_to_string(path).ok()?;
     let v: Value = serde_json::from_str(&text).ok()?;
     let token = v["token"].as_str()?.to_string();
@@ -421,12 +420,12 @@ pub(crate) fn load_cached_token() -> Option<(String, String, String)> {
 }
 
 pub fn clear_cached_token() {
-    let _ = std::fs::remove_file(crate::config::token_cache_path());
+    let _ = std::fs::remove_file(mbv_config::token_cache_path());
 }
 
 #[cfg(test)]
 pub fn save_cached_token(server_url: &str, token: &str, user_id: &str) {
-    let path = crate::config::token_cache_path();
+    let path = mbv_config::token_cache_path();
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
