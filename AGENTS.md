@@ -42,8 +42,13 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `src/app/input/` — the only keyboard routing site (`router.rs` precedence,
   `key_policy.rs` order, `resolver.rs` chords); never add another.
 * `src/local_daemon.rs` — Local-daemon bootstrap; rest of `src/` = TUI binary.
-* `crates/mbv-core/` — runtime, Services, providers, source prep, mpv
-  projection, Player owner; no UI/feed fetch.
+* `crates/mbv-audiobookshelf/` — Audiobookshelf provider client.
+* `crates/mbv-cast/` — Google Cast client, discovery, per-provider dispatch.
+* `crates/mbv-emby/` — Emby provider client.
+* `crates/mbv-core/` — Service runtime state + app logging.
+* `crates/mbv-remote-player/` — Remote player runtime.
+* `crates/mbv-player/` — mpv-backed player.
+* `crates/mbv-daemon/` — Daemon library used by `mbvd` and the TUI in-process.
 * `crates/mbv-emby-model/` — Emby DTOs and tick units.
 * `crates/mbv-queue/` — canonical queue, kinds, state, and lineage.
 * `crates/mbv-ctrl/` — Player-owner protocol vocabulary.
