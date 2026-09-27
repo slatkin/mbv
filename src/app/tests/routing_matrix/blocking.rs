@@ -1,13 +1,13 @@
 //! Routing matrix: blocking precedence and policy rows.
 
 use super::support::*;
-use crate::app::components::msg::ConfirmIntent;
-use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
     resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
 };
 use crossterm::event::KeyCode;
+use mbv_ui_msg::ConfirmIntent;
+use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest};
 
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {

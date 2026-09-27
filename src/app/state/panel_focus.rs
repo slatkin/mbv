@@ -8,7 +8,7 @@ impl App {
     /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used
     /// unchanged.
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
-        if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
+        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
             match self.mini_view_focus {
                 PanelFocus::Library => PanelMode::LibraryOnly,
                 PanelFocus::Queue => PanelMode::QueueOnly,
@@ -22,7 +22,7 @@ impl App {
     /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
     /// the stored `panel_focus` is returned unchanged.
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
-        if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
+        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
             self.mini_view_focus
         } else {
             self.panel_focus
@@ -46,7 +46,7 @@ impl App {
         // Alt+Left/Right, context actions) must move the ephemeral mini-view
         // focus, never the real persisted panel_focus -- that state has to
         // survive narrowing/widening untouched.
-        if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
+        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
             if self.mini_view_focus == focus {
                 return;
             }

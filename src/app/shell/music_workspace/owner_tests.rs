@@ -6,13 +6,13 @@
 //! tick-integration or render tests.
 
 use super::*;
-use crate::app::components::library_panel::owner::LibraryContentOwner;
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::msg::AlbumCursorKind;
-use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::render::make_music_group_app;
-use crate::app::tests::make_item;
+use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::{LibraryTab, PanelFocus};
+use mbv_components::library_panel::owner::LibraryContentOwner;
+use mbv_components::library_panel::LibraryPanel;
+use mbv_emby_model::test_support::make_item;
+use mbv_ui_msg::AlbumCursorKind;
+use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -226,7 +226,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+                resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -243,7 +243,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 title: "Alpha".into(),
                 items: albums,
                 total_count: 3,
-                resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+                resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -323,7 +323,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         title: "Tracks".into(),
         items: vec![track],
         total_count: 1,
-        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+        resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),

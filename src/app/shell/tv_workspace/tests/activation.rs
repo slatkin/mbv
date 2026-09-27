@@ -1,6 +1,6 @@
 use super::*;
-use crate::app::tests::make_item;
-use crate::app::SeriesDetail;
+use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::browse::SeriesDetail;
 
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
@@ -57,13 +57,13 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         .test_tv_owner()
         .selected_item()
         .expect("component-selected Series");
-    model.handle_tv_request(crate::app::components::ShellRequest::TvActivate { item });
+    model.handle_tv_request(mbv_ui_msg::ShellRequest::TvActivate { item });
     let panel = model
         .application
-        .get_component(&crate::app::components::ComponentId::Library)
+        .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
     assert_eq!(
@@ -109,7 +109,7 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
        moved,
        Some(Msg::Shell(ref shell_boxed))
     if matches!(shell_boxed.as_ref(),
-           crate::app::components::ShellRequest::TvHitClick { .. }
+           mbv_ui_msg::ShellRequest::TvHitClick { .. }
        )));
     assert_eq!(
         model.test_tv_owner().selected_item().map(|item| item.id),
@@ -122,16 +122,16 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
         .expect("tree selects the second show");
     assert_eq!(selected_show.id, "movie-second");
 
-    model.handle_tv_request(crate::app::components::ShellRequest::TvActivate {
+    model.handle_tv_request(mbv_ui_msg::ShellRequest::TvActivate {
         item: selected_show,
     });
 
     let panel = model
         .application
-        .get_component(&crate::app::components::ComponentId::Library)
+        .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
 }

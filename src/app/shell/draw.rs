@@ -1,9 +1,9 @@
-use crate::app::layout::{AppLayout, FrameChromeGeometry};
-use crate::app::render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
-use crate::app::render::arrangements::queue::{
+use crate::app::App;
+use mbv_render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
+use mbv_render::arrangements::queue::{
     queue_footer_row, queue_list_box, queue_panel_subareas, QueuePanelGeometry,
 };
-use crate::app::App;
+use mbv_render::layout::{AppLayout, FrameChromeGeometry};
 use ratatui::layout::Rect;
 use ratatui::Frame;
 

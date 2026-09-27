@@ -1,5 +1,5 @@
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests::{make_items, make_local_daemon_app_stub, make_session};
+use crate::app::tests::{make_items, make_local_daemon_app_stub};
 use crate::app::QueueScope;
 use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
@@ -26,7 +26,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     let (event_tx, event_rx) = mpsc::channel();
     let endpoint = DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
     app.switch_to_direct_remote(
-        &make_session("remote-owner", "mbv"),
+        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
         remote,
         event_rx,
         &endpoint,

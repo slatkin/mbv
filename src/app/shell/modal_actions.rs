@@ -1,10 +1,9 @@
-use super::components::msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
-use super::components::{
-    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
-};
 use super::Model;
-use crate::app::state::types::confirm::ConfirmAction;
 use crossterm::event::{KeyCode, KeyEvent};
+use mbv_components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
+use mbv_ui_model::confirm::ConfirmAction;
+use mbv_ui_msg::{ComponentId, ModalId};
+use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 
 impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
@@ -121,7 +120,7 @@ impl Model {
                 title: " Overwrite Playlist ".into(),
                 message: format!(
                     "\"{}\" already exists.",
-                    crate::app::infra::ui_util::trunc_str(&name, 40)
+                    mbv_ui_model::ui_util::trunc_str(&name, 40)
                 ),
                 hint: "[y] Overwrite    [Esc] Back".into(),
                 on_confirm: ConfirmAction::SaveOverwritePlaylist {

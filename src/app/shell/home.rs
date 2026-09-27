@@ -1,10 +1,10 @@
 //! Home Continue Watching sync and typed effects for the shell `Model`.
 
-use super::components::home_content::HomeContent;
-use super::components::library_panel::LibraryKey;
-use super::components::ShellRequest;
 use super::Model;
+use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_msg::ShellRequest;
 
 impl Model {
     pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {
@@ -20,29 +20,26 @@ impl Model {
                 }
             }
             ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Home(targets),
+                mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
-                let origin = crate::app::components::media_list::SelectionOrigin::Library(
-                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
+                let origin = mbv_ui_model::media_list::SelectionOrigin::Library(
+                    mbv_ui_model::media_list::LibrarySelectionOrigin::Home,
                 );
                 self.context_menu_origin = Some(origin.clone());
-                self.context_action_snapshot = Some(
-                    crate::app::state::types::context_menu::ContextActionSnapshot {
+                self.context_action_snapshot =
+                    Some(mbv_ui_model::context_menu::ContextActionSnapshot {
                         origin,
-                        values: vec![
-                            crate::app::state::types::context_menu::ContextMenuTargets::Home(
-                                targets.clone(),
-                            ),
-                        ],
-                    },
-                );
+                        values: vec![mbv_ui_model::context_menu::ContextMenuTargets::Home(
+                            targets.clone(),
+                        )],
+                    });
                 let mut items = Vec::new();
                 let mut removes = Vec::new();
                 for target in &targets {
                     if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
                         removes.push(
-                            crate::app::state::types::context_menu::BulkRemoveTarget::ContinueWatching(
+                            mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
                                 item.clone(),
                             ),
                         );
@@ -57,7 +54,7 @@ impl Model {
                     self.app.open_context_menu_for_selection(
                         &items,
                         anchor,
-                        crate::app::PanelFocus::Library,
+                        mbv_ui_model::settings::PanelFocus::Library,
                         capabilities,
                         removes,
                     );
@@ -116,8 +113,9 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::HomeRowTarget;
-    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::tests::{make_app_stub, make_items};
+    use mbv_emby_model::test_support::make_item;
+    use mbv_ui_model::msg::HomeRowTarget;
 
     fn target(id: &str) -> HomeRowTarget {
         HomeRowTarget {
@@ -147,12 +145,10 @@ mod tests {
         let item = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![target(
-                &item.id,
-            )]),
+            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
             None,
         ));
-        let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+        let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
             panic!("Home context-menu request must open a menu");

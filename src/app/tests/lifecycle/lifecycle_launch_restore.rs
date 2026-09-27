@@ -1,9 +1,9 @@
 use super::*;
-use crate::app::components::LibraryKey;
+use mbv_ui_model::library::LibraryKey;
 
 #[test]
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
     app.pending_launch_state = Some(mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
@@ -41,7 +41,7 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
 /// tab, or the panel's owner is empty and the tab paints blank.
 #[test]
 fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.emby_catalog_ready = false;
 
     let mut second_library = make_item("Shows", "CollectionFolder");
@@ -88,7 +88,7 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
 
 #[test]
 fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.pending_launch_state = Some(mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::ServiceLibrary {

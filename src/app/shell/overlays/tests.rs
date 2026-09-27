@@ -1,7 +1,8 @@
 use super::*;
-use crate::app::components::{Msg, MultiselectComponent, ShellRequest, UserEvent};
-use crate::app::state::types::context_menu::{MultiSelectKind, MultiSelectPopup};
 use crate::app::tests::make_app_stub;
+use mbv_components::MultiselectComponent;
+use mbv_ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
+use mbv_ui_msg::{Msg, ShellRequest, UserEvent};
 use tuirealm::component::AppComponent;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -72,7 +73,8 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
 /// through the sweep.
 #[test]
 fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
-    use crate::app::components::{SearchSidebarComponent, ServiceRequest};
+    use mbv_components::SearchSidebarComponent;
+    use mbv_ui_msg::ServiceRequest;
     use std::time::Instant;
 
     let mut model = Model::new(make_app_stub());
@@ -105,13 +107,13 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
     assert!(matches!(
         dispatch(&mut model, &type_key('a')),
         Some(Msg::TerminalEvent(
-            crate::app::components::msg::TerminalObserverEvent::KeyClaimed
+            mbv_ui_msg::TerminalObserverEvent::KeyClaimed
         ))
     ));
     assert!(matches!(
         dispatch(&mut model, &type_key('b')),
         Some(Msg::TerminalEvent(
-            crate::app::components::msg::TerminalObserverEvent::KeyClaimed
+            mbv_ui_msg::TerminalObserverEvent::KeyClaimed
         ))
     ));
 
@@ -182,24 +184,24 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
 /// *and* close the menu (the shell owns the dismissal, task 5.3c).
 #[test]
 fn context_menu_click_select_executes_and_closes_the_menu() {
-    use crate::app::components::ContextMenuComponent;
-    use crate::app::state::types::context_menu::{
+    use mbv_components::ContextMenuComponent;
+    use mbv_ui_model::context_menu::{
         ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
     };
     use ratatui::layout::Rect;
     use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
     let mut model = Model::new(make_app_stub());
-    model.app.pending_overlay = Some(
-        crate::app::state::types::overlay::OverlayRequest::ContextMenu(ContextMenu {
-            anchor: ContextMenuAnchor::SelectedItem(crate::app::PanelFocus::Library),
+    model.app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(
+        ContextMenu {
+            anchor: ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library),
             entries: vec![ContextMenuEntry {
                 label: "Play",
                 action: Some(ContextAction::Play),
             }],
             cursor: 0,
-        }),
-    );
+        },
+    ));
     model.sync_modal_requests();
     let id = ComponentId::Overlay(OverlayId::ContextMenu);
     assert!(model.application.mounted(&id));

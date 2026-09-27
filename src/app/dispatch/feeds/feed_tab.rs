@@ -1,9 +1,9 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::feed_tab::FeedTabRefreshResult;
 use crate::app::App;
 use mbv_feed::fetch_and_parse_entries;
 use mbv_feed::FeedEntryState;
 use mbv_queue::{FeedEntry, QueueItem};
+use mbv_ui_model::feed_tab::FeedTabRefreshResult;
 use std::collections::HashMap;
 
 impl App {

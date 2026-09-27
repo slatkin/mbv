@@ -1,13 +1,14 @@
 //! Attached generic Emby Session commands remain direct operations.
 
-use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_session};
+use crate::app::tests::{install_test_emby, make_app_stub};
 use crate::app::*;
+use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 
 fn attached_app() -> App {
     let mut app = make_app_stub();
     app.connected_session_id = Some("session".into());
-    app.connected_session_state = Some(make_session("Client", "Emby"));
+    app.connected_session_state = Some(mbv_emby::test_support::make_session("Client", "Emby"));
     app.terminal_width = 160;
     app.player_tab.set_items(
         vec![make_item("a", "Movie"), make_item("b", "Movie")],
@@ -48,7 +49,7 @@ fn remote_command_app() -> (App, MockHttp) {
         .set_item_at(1, mbv_queue::QueueItem::Emby(Box::new(item_b)));
     app.player_tab
         .append_item(mbv_queue::QueueItem::Emby(Box::new(item_c)));
-    let mut session = make_session("Client", "Emby");
+    let mut session = mbv_emby::test_support::make_session("Client", "Emby");
     session.id = "session".into();
     session.now_playing_item_id = Some("a".into());
     session.position_s = 60;
@@ -109,7 +110,7 @@ fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
     second.id = "b".into();
     app.player_tab.set_items(vec![first, second], 0);
     // Receiver auto-advanced: item "b" (slot 2) is now playing.
-    let mut advanced = make_session("Client", "Emby");
+    let mut advanced = mbv_emby::test_support::make_session("Client", "Emby");
     advanced.id = "session".into();
     advanced.now_playing_item_id = Some("b".into());
     app.handle_session_event(SessionEvent::Loaded {

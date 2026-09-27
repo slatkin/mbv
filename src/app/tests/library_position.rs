@@ -24,7 +24,7 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
         1,
         10,
         Some(1),
-        crate::app::render::LetterFilterKind::Tv,
+        mbv_ui_model::sort_filter::LetterFilterKind::Tv,
     );
     let snapshot = level.to_position_level();
     assert_eq!(snapshot.tv_content_mode, Some(mode.clone()));
@@ -37,7 +37,7 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
         1,
         10,
         Some(1),
-        crate::app::render::LetterFilterKind::Tv,
+        mbv_ui_model::sort_filter::LetterFilterKind::Tv,
     );
     assert_eq!(restored.tv_content_mode, Some(mode));
     assert_eq!(restored.items[0].id, item.id);
@@ -63,7 +63,7 @@ fn restoring_upcoming_position_loads_upcoming_episode_content() {
     let restored = restore_library_position_with_fetched_rows_for_kind(
         &saved,
         10,
-        crate::app::render::LetterFilterKind::Tv,
+        mbv_ui_model::sort_filter::LetterFilterKind::Tv,
         |_| Ok((vec![episode.clone()], 1, 1)),
     )
     .expect("restore result")
@@ -84,7 +84,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -284,7 +284,7 @@ fn save_default_library_position_persists_focused_item() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            resting: crate::app::state::types::browse::BrowseResting::new(2, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(2, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -321,7 +321,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

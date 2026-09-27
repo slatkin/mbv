@@ -1,5 +1,5 @@
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel};
+use mbv_ui_model::browse::BrowseResting;
 
 /// The shared eligibility gate for the grouped Music owner, consumed by
 /// `is_music_group_view` and grouped landing validation. Keep this in sync
@@ -265,11 +265,11 @@ impl App {
         }
         let large = self.libs[lib_idx]
             .library_total
-            .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+            .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
         let Some(mode) = Self::tv_mode_for_pill(pill_index, large) else {
             return;
         };
-        if matches!((&mode, large), (mbv_queue::TvContentMode::Range(index), true) if *index >= crate::app::render::LetterFilter::count_for_kind(crate::app::render::LetterFilterKind::Tv))
+        if matches!((&mode, large), (mbv_queue::TvContentMode::Range(index), true) if *index >= mbv_ui_model::sort_filter::LetterFilter::count_for_kind(mbv_ui_model::sort_filter::LetterFilterKind::Tv))
         {
             return;
         }
@@ -287,16 +287,16 @@ impl App {
     }
 
     fn select_legacy_tv_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
-        let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
+        let Some(filter) = mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(
             pill_index,
-            crate::app::render::LetterFilterKind::Tv,
+            mbv_ui_model::sort_filter::LetterFilterKind::Tv,
         ) else {
             return;
         };
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };
-        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = Some(filter.clone());
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             level.letter_filter = Some(filter);
@@ -363,7 +363,7 @@ impl App {
                     last.loading = true;
                     last.item_types = Some("Series".into());
                 }
-                let key = crate::app::state::types::browse::LevelFetchKey {
+                let key = mbv_ui_model::browse::LevelFetchKey {
                     parent_id,
                     item_types: Some("Series".into()),
                     unplayed_only,
@@ -374,9 +374,9 @@ impl App {
                 self.spawn_refresh(lib_idx, 0, key);
             }
             mbv_queue::TvContentMode::Range(index) => {
-                let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
+                let Some(filter) = mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(
                     *index,
-                    crate::app::render::LetterFilterKind::Tv,
+                    mbv_ui_model::sort_filter::LetterFilterKind::Tv,
                 ) else {
                     return;
                 };
@@ -385,7 +385,7 @@ impl App {
                     last.item_types = Some("Series".into());
                     last.letter_filter = Some(filter.clone());
                 }
-                let key = crate::app::state::types::browse::LevelFetchKey {
+                let key = mbv_ui_model::browse::LevelFetchKey {
                     parent_id,
                     item_types: Some("Series".into()),
                     unplayed_only,
@@ -399,11 +399,11 @@ impl App {
     }
 
     fn select_library_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
-        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+        let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
         let Some(filter) =
-            crate::app::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
+            mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(pill_index, filter_kind)
         else {
             return;
         };
@@ -413,7 +413,7 @@ impl App {
         if level.letter_filter.as_ref() == Some(&filter) {
             return;
         }
-        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = Some(filter.clone());
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.letter_filter = Some(filter);
@@ -442,8 +442,8 @@ impl App {
                     .and_then(|level| level.tv_content_mode.clone());
             }
             if self.libs[lib_idx].tv_content_mode.is_none() {
-                let count = crate::app::render::LetterFilter::count_for_kind(
-                    crate::app::render::LetterFilterKind::Tv,
+                let count = mbv_ui_model::sort_filter::LetterFilter::count_for_kind(
+                    mbv_ui_model::sort_filter::LetterFilterKind::Tv,
                 );
                 let current = self.libs[lib_idx]
                     .nav_stack
@@ -457,7 +457,7 @@ impl App {
             }
             let large = self.libs[lib_idx]
                 .library_total
-                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+                .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
             let count = if large { 5 } else { 3 };
             let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
                 Some(mbv_queue::TvContentMode::Latest) => 0,
@@ -480,10 +480,10 @@ impl App {
             self.select_letter_pill(lib_idx, next);
             return;
         }
-        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+        let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
-        let n = crate::app::render::LetterFilter::count_for_kind(filter_kind);
+        let n = mbv_ui_model::sort_filter::LetterFilter::count_for_kind(filter_kind);
         if n == 0 {
             return;
         }

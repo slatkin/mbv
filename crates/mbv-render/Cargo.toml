@@ -1,0 +1,32 @@
+[package]
+name = "mbv-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Rendering and layout for mbv's terminal UI."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[features]
+test = []
+
+[dependencies]
+mbv-theme = { path = "../mbv-theme" }
+mbv-images = { path = "../mbv-images" }
+mbv-ui-model = { path = "../mbv-ui-model" }
+ratatui.workspace = true
+ratatui-image.workspace = true
+textwrap.workspace = true
+unicode-width.workspace = true
+tui-scrollbar.workspace = true
+mbv-queue = { path = "../mbv-queue" }
+mbv-config = { path = "../mbv-config" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-keybinds = { path = "../mbv-keybinds" }
+mbv-core = { path = "../mbv-core" }

@@ -1,3 +1,4 @@
+use crate::app::SidebarId;
 use mbv_emby::EmbyClient;
 
 use crate::app::App;
@@ -16,10 +17,10 @@ use super::browse::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
     retain_grouped_music_level_items,
 };
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::{
-    AlbumIndexState, AlbumSearchEntry, BrowseLevel, LibEvent, SidebarId, PAGE_SIZE, PREFETCH_AHEAD,
+    AlbumIndexState, AlbumSearchEntry, BrowseLevel, LibEvent, PAGE_SIZE, PREFETCH_AHEAD,
 };
+use mbv_ui_model::browse::BrowseResting;
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
@@ -199,9 +200,9 @@ impl App {
         &self,
         lib_idx: usize,
         loaded_count: usize,
-        key: crate::app::state::types::browse::LevelFetchKey,
+        key: mbv_ui_model::browse::LevelFetchKey,
     ) {
-        let crate::app::state::types::browse::LevelFetchKey {
+        let mbv_ui_model::browse::LevelFetchKey {
             parent_id,
             item_types,
             unplayed_only,
@@ -322,7 +323,7 @@ impl App {
             return;
         }
         let start_index = lvl.fetched_rows;
-        let key = crate::app::state::types::browse::LevelFetchKey::from_level(lvl);
+        let key = mbv_ui_model::browse::LevelFetchKey::from_level(lvl);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
         }

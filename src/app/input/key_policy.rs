@@ -5,12 +5,11 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
-use crate::app::dispatch::action::{
-    idle_feed_command_for_key, Command, IdleFeedLinkContext, VOLUME_STEP,
-};
-use crate::app::state::types::settings::{PanelFocus, PanelMode};
+use crate::app::dispatch::action::{idle_feed_command_for_key, Command, IdleFeedLinkContext};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{action_by_id, Keybinds};
+use mbv_ui_model::settings::{PanelFocus, PanelMode};
+use mbv_ui_model::volume::VOLUME_STEP;
 
 /// Which attached playback target currently owns remote-control shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -31,6 +31,14 @@ nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket
 rstest = { version = "0.27", default-features = false }
 fuzzy-matcher = "0.3"
 time = { version = "0.3", features = ["parsing"] }
+ratatui = "0.30"
+crossterm = "0.29"
+tuirealm = "4.1"
+textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
+ratatui-image = { version = "11", default-features = false, features = ["crossterm"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
+unicode-width = "0.2.2"
+tui-scrollbar = "0.2.7"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
@@ -121,37 +129,50 @@ mbv-keybinds = { path = "crates/mbv-keybinds" }
 mbv-net = { path = "crates/mbv-net" }
 mbv-ws = { path = "crates/mbv-ws" }
 mbv-text = { path = "crates/mbv-text" }
+mbv-theme = { path = "crates/mbv-theme" }
+mbv-images = { path = "crates/mbv-images" }
+mbv-ui-model = { path = "crates/mbv-ui-model" }
+mbv-ui-msg = { path = "crates/mbv-ui-msg" }
+mbv-render = { path = "crates/mbv-render" }
+mbv-components = { path = "crates/mbv-components" }
 mbv-emby-model = { path = "crates/mbv-emby-model" }
 mbv-queue = { path = "crates/mbv-queue" }
 mbv-visualizer = { path = "crates/mbv-visualizer" }
-ratatui = "0.30"
-crossterm = "0.29"
-tuirealm = "4.1"
+ratatui.workspace = true
+crossterm.workspace = true
+tuirealm.workspace = true
 ureq.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 rand.workspace = true
-textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
+textwrap.workspace = true
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }
-ratatui-image = { version = "11", default-features = false, features = ["crossterm"] }
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
-unicode-width = "0.2.2"
+ratatui-image.workspace = true
+image.workspace = true
+unicode-width.workspace = true
 log.workspace = true
 libc.workspace = true
 mimalloc.workspace = true
 nix.workspace = true
-tui-scrollbar = "0.2.7"
+tui-scrollbar.workspace = true
 time.workspace = true
 mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
+mbv-ui-msg = { path = "crates/mbv-ui-msg", features = ["test"] }
+mbv-images = { path = "crates/mbv-images", features = ["test"] }
 mbv-core = { path = "crates/mbv-core" }
 mbv-remote-player = { path = "crates/mbv-remote-player", features = ["test"] }
 mbv-player = { path = "crates/mbv-player", features = ["test"] }
 mbv-config = { path = "crates/mbv-config", features = ["test"] }
 mbv-net = { path = "crates/mbv-net", features = ["test"] }
+mbv-emby-model = { path = "crates/mbv-emby-model", features = ["test"] }
+mbv-emby = { path = "crates/mbv-emby", features = ["test"] }
+mbv-ui-model = { path = "crates/mbv-ui-model", features = ["test"] }
+mbv-render = { path = "crates/mbv-render", features = ["test"] }
+mbv-components = { path = "crates/mbv-components", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

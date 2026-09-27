@@ -1,5 +1,5 @@
-use super::{seconds_to_ticks, seconds_to_ticks_u64, App, QueueItem, ToastSeverity};
-pub(in crate::app) use mbv_queue::AudiobookshelfBookQueueItem;
+use super::{App, QueueItem, ToastSeverity};
+use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 
 // ---- Book browsing actions -----------------------------------------
 
@@ -79,7 +79,7 @@ impl App {
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
     pub(in crate::app) fn set_audiobookshelf_book_chapter_focus(
-        _selection: Option<crate::app::components::msg::BookChapterTarget>,
+        _selection: Option<mbv_ui_msg::BookChapterTarget>,
     ) {
     }
 
@@ -121,7 +121,7 @@ impl App {
     /// slot or session (book-playback spec).
     pub(in crate::app) fn activate_audiobookshelf_book_row_target(
         &mut self,
-        target: Option<crate::app::components::msg::BookChapterTarget>,
+        target: Option<mbv_ui_msg::BookChapterTarget>,
     ) {
         let Some(target) = target else { return };
         let Some(index) = self.tab.audiobookshelf_index() else {
@@ -225,9 +225,9 @@ impl App {
         self.set_queue_scope(scope);
         if !matches!(
             self.effective_panel_focus(),
-            crate::app::PanelFocus::Library
+            mbv_ui_model::settings::PanelFocus::Library
         ) {
-            self.set_panel_focus(crate::app::PanelFocus::Queue);
+            self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         }
     }
 
@@ -247,52 +247,4 @@ impl App {
             .append(item);
         self.queue_dirty = true;
     }
-}
-
-/// Resolve the Books tab's selected book as a `QueueItem::Audiobookshelf(AudiobookshelfItem::Book)`
-/// without mutating the queue or opening a playback lifecycle (factored out
-/// of `App::selected_audiobookshelf_book_queue_item` for task 5.4: the Books
-/// tab's selection path and Home's queue-item path feed the one hero
-/// producer through this single conversion).
-pub(in crate::app) fn audiobookshelf_book_queue_item(
-    state: &crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState,
-) -> Option<QueueItem> {
-    let book = state.selected_id.as_ref()?;
-    let book = state
-        .books
-        .iter()
-        .find(|candidate| candidate.library_item_id == *book)?;
-    if book.library_item_id.trim().is_empty() {
-        return None;
-    }
-    let detail = state.detail_cache.get(&book.library_item_id);
-    let duration_seconds = detail
-        .map(|(_, audio_files)| audio_files.iter().map(|file| file.duration).sum())
-        .filter(|duration| *duration > 0.0)
-        .or_else(|| {
-            detail.and_then(|(chapters, _)| {
-                chapters
-                    .iter()
-                    .map(|chapter| chapter.end)
-                    .max_by(f64::total_cmp)
-            })
-        });
-    let progress = state.progress.get(&book.library_item_id);
-    let position_ticks = progress.map_or(0, |progress| {
-        seconds_to_ticks(progress.current_time_seconds)
-    });
-    let is_finished = progress.is_some_and(|progress| progress.is_finished);
-
-    Some(QueueItem::Audiobookshelf(
-        mbv_queue::AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
-            library_item_id: book.library_item_id.clone(),
-            title: book.title.clone(),
-            author: book.author_display.clone(),
-            duration_ticks: duration_seconds.and_then(seconds_to_ticks_u64),
-            position_ticks,
-            played: is_finished,
-            is_finished,
-            cover_path: book.cover_path.clone(),
-        }),
-    ))
 }

@@ -9,15 +9,16 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::components::home_content::HomeContent;
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, Msg, UserEvent};
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
+use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{PanelFocus, TabSelection};
+use mbv_components::home_content::HomeContent;
+use mbv_components::library_panel::LibraryPanel;
+use mbv_emby_model::test_support::make_item;
 use mbv_keybinds::{RawKeybinds, RawSection};
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -76,7 +77,7 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .as_any()
         .downcast_ref::<LibraryPanel>()
         .expect("Library panel type")
-        .owner(&crate::app::components::library_panel::LibraryKey::Home)
+        .owner(&mbv_ui_model::library::LibraryKey::Home)
         .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
         .expect("Home owner installed")
 }
@@ -276,7 +277,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         .dispatch_router_command(&Command::CyclePanelMode);
     assert_ne!(
         harness.model().app.panel_mode,
-        crate::app::PanelMode::default(),
+        mbv_ui_model::settings::PanelMode::default(),
         "the mapped prefix action executed through the shell"
     );
 }

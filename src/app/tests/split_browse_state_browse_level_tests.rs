@@ -10,7 +10,7 @@
 //!      `PREFETCH_AHEAD` of the loaded edge (`library_search_actions.rs:240`).
 
 use super::*;
-use crate::app::state::types::browse::BrowseResting;
+use mbv_ui_model::browse::BrowseResting;
 
 fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> BrowseLevel {
     let fetched_rows = items.len();

@@ -1,7 +1,6 @@
-use super::components::{
-    ComponentId, ModalId, OverlayId, PlaylistsComponent, PlaylistsContent, ShellRequest,
-};
 use super::Model;
+use mbv_components::{PlaylistsComponent, PlaylistsContent};
+use mbv_ui_msg::{ComponentId, ModalId, OverlayId, ShellRequest};
 
 impl Model {
     pub(in crate::app) fn update_playlists_content(&mut self) {
@@ -86,7 +85,7 @@ impl Model {
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
                     self.app.request_queue_replacement(
-                        crate::app::state::types::playback::PendingQueueAction::PlayItems {
+                        mbv_ui_model::playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
                             source: mbv_queue::QueueSource::Playlist {
@@ -95,7 +94,7 @@ impl Model {
                             },
                             autostart: false,
                         },
-                        crate::app::state::types::playback::ReplacementExecutor::Pending,
+                        mbv_ui_model::playback::ReplacementExecutor::Pending,
                     );
                     // No sidebar dismiss here: `run_replacement` raises it once
                     // the replacement actually runs (immediately on an empty
@@ -122,7 +121,7 @@ impl Model {
                         title: " Delete Playlist ".into(),
                         message: format!(
                             "Delete playlist '{}'?",
-                            crate::app::infra::ui_util::trunc_str(&playlist.name, 40)
+                            mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
                         ),
                         hint: "[y] Confirm    [Esc] Cancel".into(),
                         on_confirm: crate::app::ConfirmAction::DeletePlaylist {
@@ -155,18 +154,16 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::{Msg, TerminalObserverEvent};
     use crate::app::tests::make_app_stub;
+    use mbv_ui_msg::{Msg, TerminalObserverEvent};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.pending_overlay = Some(
-            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
-                crate::app::SidebarId::Playlists,
-            ),
-        );
+        app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
+            mbv_ui_model::sidebar::SidebarId::Playlists,
+        ));
         let mut model = Model::new(app);
         model.sync_modal_requests();
         let id = ComponentId::Overlay(OverlayId::Playlists);

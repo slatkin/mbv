@@ -2,14 +2,14 @@
 //! Music is retained by the `LibraryPanel` under `LibraryKey::Service(Music)`;
 //! it is not a mounted destination component.
 
-use super::components::library_panel::LibraryKey;
-use super::components::msg::MusicArtistTarget;
-use super::components::music_content::MusicContent;
-use super::components::LibraryKind;
 use super::BrowseLevel;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
+use mbv_components::music_content::MusicContent;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::library::LibraryKind;
+use mbv_ui_model::msg::MusicArtistTarget;
 
 impl Model {
     pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {
@@ -223,7 +223,7 @@ impl Model {
         key: &LibraryKey,
         index: usize,
         cursor: Option<usize>,
-    ) -> crate::app::render::MusicWideRenderCtx {
+    ) -> mbv_render::MusicWideRenderCtx {
         let base_context = self.app.wide_music_render_ctx(index, cursor);
         // The artist detail projection (design D7, tasks 6.1–6.3): read the
         // owner's component-resolved artist target, re-bind it to this push's
@@ -248,10 +248,7 @@ impl Model {
         }
     }
 
-    fn fetch_music_workspace_album_tracks(
-        &mut self,
-        context: &crate::app::render::MusicWideRenderCtx,
-    ) {
+    fn fetch_music_workspace_album_tracks(&mut self, context: &mbv_render::MusicWideRenderCtx) {
         // Album fetch follows the tree owner's resolved album; an artist root
         // has no album and never starts an album-track fetch.
         let owner_selection_is_artist = self
@@ -270,7 +267,7 @@ impl Model {
 
     fn push_music_workspace_owner(
         &mut self,
-        context: crate::app::render::MusicWideRenderCtx,
+        context: mbv_render::MusicWideRenderCtx,
         reanchor: Option<(usize, usize)>,
         wide: bool,
         focused: bool,
@@ -347,8 +344,8 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::render::make_music_group_app;
     use crate::app::shell::Model;
+    use crate::app::tests::render_fixtures::make_music_group_app;
     use mbv_core::service_runtime::EmbyRuntime;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
@@ -392,13 +389,13 @@ mod tests {
                     id: "artist-alpha".into(),
                 }];
             }
-            let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
+            let mut catalog = mbv_ui_model::music_grouping::build_grouped_album_catalog(
                 &level.items,
-                &std::collections::HashMap::default(),
+                &std::collections::HashMap::<String, String>::default(),
             );
             catalog.revision = 7;
             catalog.parent_id = level.parent_id.clone();
-            level.music_grouping = Some(crate::app::state::music_grouping::MusicGroupingState {
+            level.music_grouping = Some(mbv_ui_model::music_grouping::MusicGroupingState {
                 revision: 7,
                 candidate: None,
                 settled: Some(catalog),
@@ -407,22 +404,22 @@ mod tests {
         app
     }
 
-    fn music_destination() -> crate::app::components::library_panel::LibraryKey {
-        crate::app::components::library_panel::LibraryKey::Service {
+    fn music_destination() -> mbv_ui_model::library::LibraryKey {
+        mbv_ui_model::library::LibraryKey::Service {
             service: mbv_queue::ServiceKind::Emby,
             library_id: "lib-music".into(),
-            kind: crate::app::components::LibraryKind::Music,
+            kind: mbv_ui_model::library::LibraryKind::Music,
         }
     }
 
     fn artist_focused_model() -> (Model, mbv_core::service_runtime::SetupGeneration) {
         let mut model = Model::new(settled_service_artist_app());
-        model.app.panel_focus = crate::app::PanelFocus::Library;
+        model.app.panel_focus = mbv_ui_model::settings::PanelFocus::Library;
         model.sync_mounted_surfaces();
         model
             .test_music_owner_mut()
             .browser
-            .apply(crate::app::components::list::tree_browser::TreeOperation::First);
+            .apply(mbv_components::list::tree_browser::TreeOperation::First);
         assert!(model.test_music_owner().selected_is_artist());
         model.push_music_workspace_content();
         let generation = model.app.emby_runtime.generation();
@@ -437,7 +434,7 @@ mod tests {
     fn artist_focus_dispatches_the_typed_requests_and_reuses_the_cache() {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
-        let key = crate::app::state::music_artist_detail::ArtistDetailKey {
+        let key = mbv_ui_model::music_artist_detail::ArtistDetailKey {
             destination: destination.clone(),
             generation: generation.value(),
             artist_id: "artist-alpha".into(),
@@ -466,9 +463,9 @@ mod tests {
             .expect("artist target");
         let (mut music_resize, mut tv_resize) = (false, false);
         model.handle_terminal_message(
-            crate::app::components::Msg::Shell(Box::new(
-                crate::app::components::ShellRequest::MusicArtistTracks { target },
-            )),
+            mbv_ui_msg::Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MusicArtistTracks {
+                target,
+            })),
             &mut music_resize,
             &mut tv_resize,
         );
@@ -476,16 +473,16 @@ mod tests {
         model.app.artist_detail_loading.remove(&key);
         model.app.artist_detail_cache.insert(
             key,
-            crate::app::state::music_artist_detail::ArtistDetailCacheEntry::default(),
+            mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry::default(),
         );
         let target = model
             .test_music_owner()
             .artist_detail_target()
             .expect("artist target");
         model.handle_terminal_message(
-            crate::app::components::Msg::Shell(Box::new(
-                crate::app::components::ShellRequest::MusicArtistTracks { target },
-            )),
+            mbv_ui_msg::Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MusicArtistTracks {
+                target,
+            })),
             &mut music_resize,
             &mut tv_resize,
         );
@@ -504,7 +501,7 @@ mod tests {
     /// result projects its grouped rows on the next push.
     #[test]
     fn only_a_completion_matching_the_pushed_identity_reaches_the_workspace() {
-        use crate::app::components::media_list::MediaListRow;
+        use mbv_render::components::media_list::MediaListRow;
 
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
@@ -516,7 +513,9 @@ mod tests {
                 generation,
                 artist_id: "artist-alpha".into(),
                 revision: 6,
-                result: Ok(vec![crate::app::tests::make_item("Stale", "Audio")]),
+                result: Ok(vec![mbv_emby_model::test_support::make_item(
+                    "Stale", "Audio",
+                )]),
             });
         model.push_music_workspace_content();
         assert!(
@@ -524,7 +523,7 @@ mod tests {
             "a replaced snapshot's completion paints nothing"
         );
 
-        let mut track = crate::app::tests::make_item("Song", "Audio");
+        let mut track = mbv_emby_model::test_support::make_item("Song", "Audio");
         track.id = "track-1".into();
         track.album_id = "album-1".into();
         model

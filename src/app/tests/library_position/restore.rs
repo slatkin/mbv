@@ -80,7 +80,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             title: "Movies".into(),
             items: make_items(2),
             total_count: 673,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -97,8 +97,8 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     assert!(app.should_show_letter_pills(0));
     assert_eq!(
         app.libs[0].nav_stack[0].letter_filter,
-        Some(super::render::LetterFilter::default_filter_for_kind(
-            super::render::LetterFilterKind::Movie
+        Some(mbv_render::LetterFilter::default_filter_for_kind(
+            mbv_render::LetterFilterKind::Movie
         )),
         "large restored library should get the default A-C pill applied"
     );
@@ -141,7 +141,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

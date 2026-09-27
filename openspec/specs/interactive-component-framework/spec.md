@@ -22,8 +22,15 @@ component trait, component registry, event dispatcher, focus framework, generic
 effect scheduler, or Flux store alongside TuiRealm.
 
 Render Components (rows, cards, heroes, pills, modal frames, scrollbars, and
-other painters under `src/app/render/components/`) are NOT interactive surfaces
-and remain plain painting functions invoked from a component's rendering.
+other painters in the `mbv-render` crate's `components` module) are NOT
+interactive surfaces and remain plain painting functions invoked from a
+component's rendering.
+
+Interactive Components SHALL live in the `mbv-components` crate and Render
+Components in the `mbv-render` crate. Neither crate SHALL depend on the TUI
+application crate that owns `App`, and a painter SHALL NOT take an Interactive
+Component type as input. A component or painter that names `App` therefore
+fails to compile, rather than relying on review.
 
 #### Scenario: An overlay is opened and dismissed
 
@@ -39,6 +46,12 @@ and remain plain painting functions invoked from a component's rendering.
 - **THEN** its component MAY remain mounted so its private cursor and scroll are
   preserved
 - **AND** a component for a Service library that has been removed is unmounted
+
+#### Scenario: A component cannot reach shell state
+
+- **WHEN** code in `mbv-components` or `mbv-render` names `App`, a shell
+  module, or a dispatch module
+- **THEN** the workspace does not compile
 
 ### Requirement: Interactive components own only presentation authority
 

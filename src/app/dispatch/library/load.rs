@@ -1,10 +1,10 @@
-use crate::app::state::types::playback::HomeContent;
 use crate::app::{
     dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use mbv_ui_model::playback::HomeContent;
 use std::collections::HashMap;
 
 impl App {
@@ -57,7 +57,7 @@ impl App {
         }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
-            let key = crate::app::state::types::browse::LevelFetchKey::from_level(lvl);
+            let key = mbv_ui_model::browse::LevelFetchKey::from_level(lvl);
             let loaded_count = lvl.items.len();
             self.spawn_refresh(lib_idx, loaded_count, key);
         }
@@ -126,7 +126,7 @@ impl App {
                     TabSelection::AudiobookshelfLibrary(index) => {
                         match self.audiobookshelf_kind_at(index) {
                             Some(
-                                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
+                                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
                             ) => self.audiobookshelf_book_refresh(),
                             _ => self.audiobookshelf_refresh(),
                         }
@@ -232,9 +232,9 @@ impl App {
     }
 
     pub(in crate::app) fn open_playlists_panel(&mut self) {
-        self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
+        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Sessions);
         self.close_settings();
-        self.request_sidebar_open(crate::app::SidebarId::Playlists);
+        self.request_sidebar_open(mbv_ui_model::sidebar::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }
@@ -341,7 +341,7 @@ impl App {
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
             let tv_content_mode = (view.collection_type == "tvshows").then(|| {
-                crate::app::render::resolve_tv_content_mode(
+                mbv_ui_model::sort_filter::resolve_tv_content_mode(
                     library_total.unwrap_or_default(),
                     saved.and_then(|state| state.tv_content_mode.as_ref()),
                 )

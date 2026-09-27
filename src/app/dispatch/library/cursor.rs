@@ -1,9 +1,7 @@
-use crate::app::render::{
-    effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD,
-};
-use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
+use mbv_render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
+use mbv_ui_model::events::{PendingSeriesHandoff, PendingSeriesLanding};
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -153,7 +151,7 @@ impl App {
         // The pill group the series sorts into (pills only exist at the
         // top level of pill-eligible libraries).
         let filter = if self.should_show_letter_pills(lib_idx) {
-            let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+            let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
                 self.libs[lib_idx].library.collection_type.as_str(),
             );
             LetterFilter::for_sort_key_for_kind(effective_sort_str(item), filter_kind)
@@ -244,7 +242,7 @@ impl App {
             let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
                 return false;
             };
-            let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+            let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
             key.item_types = Some("Series".into());
             key.letter_filter = None;
             level.tv_content_mode = Some(mbv_queue::TvContentMode::All);
@@ -365,9 +363,7 @@ impl App {
         {
             if !last.items.is_empty() {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| {
-                    crate::app::render::initial_group_artist_sort_key(&last.items[i])
-                });
+                order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
                 last.set_resting_cursor(order[0]);
             }
         }

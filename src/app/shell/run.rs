@@ -8,7 +8,7 @@ use super::{
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
 use super::App;
-use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
+use mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
@@ -93,13 +93,13 @@ impl Model {
         if self.handled_terminal_size == size && !resize_event {
             return;
         }
-        let was_wide = self.handled_terminal_size.0 >= crate::app::MINI_VIEW_THRESHOLD;
+        let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
         self.app.images.card_image_states.clear();
         self.app.images.card_image_loading.clear();
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
-        if resize_event && was_wide && size.0 < crate::app::MINI_VIEW_THRESHOLD {
+        if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
             self.app.mini_view_focus = PanelFocus::Queue;
         }
         if self.app.clamp_queue_column_width() {
@@ -128,25 +128,25 @@ impl Model {
         for placement in self.app.layout.root_frame.placements() {
             let Some(placement) = placement else { continue };
             match placement {
-                crate::app::render::arrangements::chrome::PanelPlacement::Tab(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::Tab(area) => {
                     self.render_tab_panel_at(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::Library(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::Library(area) => {
                     self.render_library_panel_at(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
                     self.render_library_playback_panel_at(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::Queue(area) => {
                     self.render_queue_panel_at(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
                     self.render_queue_playback_panel(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
                     self.render_status_bar_panel_at(f, area);
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
+                mbv_render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
                     self.render_queue_boundary_at(f, area);
                 }
             }

@@ -1,0 +1,134 @@
+use ratatui::layout::Rect;
+use ratatui::Frame;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, MouseButton, MouseEventKind};
+use tuirealm::props::{AttrValue, Attribute, QueryResult};
+use tuirealm::state::State;
+use tuirealm::subscription::{EventClause, Sub, SubClause};
+
+use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent};
+
+const OVERLAY_IDS: &[ComponentId] = &[
+    ComponentId::Overlay(OverlayId::Settings),
+    ComponentId::Overlay(OverlayId::Playlists),
+    ComponentId::Modal(ModalId::SavePlaylist),
+    ComponentId::Overlay(OverlayId::Help),
+    ComponentId::Modal(ModalId::Confirm),
+    ComponentId::Modal(ModalId::DaemonLost),
+    ComponentId::Overlay(OverlayId::ContextMenu),
+    ComponentId::Popup(PopupId::Multiselect),
+    ComponentId::Popup(PopupId::LibraryRoutes),
+    ComponentId::Popup(PopupId::FeedManage),
+    ComponentId::Overlay(OverlayId::Search),
+    ComponentId::Overlay(OverlayId::Sessions),
+];
+
+/// Root routing owns overlay z-order from a fixed canonical mount order;
+/// `TuiRealm` owns focus and its LIFO stack.
+#[derive(Debug)]
+pub struct UiRootComponent;
+
+impl Default for UiRootComponent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UiRootComponent {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Subscribe the root to every terminal event so the shell can distinguish
+    /// a processed event from an empty component message. The root remains a
+    /// permanent observer even while another component owns focus.
+    #[must_use]
+    pub fn subscriptions() -> Vec<Sub<ComponentId, UserEvent>> {
+        vec![Sub::new(EventClause::Any, SubClause::Always)]
+    }
+
+    #[must_use]
+    pub fn overlay_ids() -> &'static [ComponentId] {
+        OVERLAY_IDS
+    }
+}
+
+impl Component for UiRootComponent {
+    fn view(&mut self, _frame: &mut Frame, _area: Rect) {}
+
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
+        None
+    }
+
+    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+
+    fn state(&self) -> State {
+        State::None
+    }
+
+    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
+        CmdResult::NoChange
+    }
+}
+
+impl AppComponent<Msg, UserEvent> for UiRootComponent {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        let observed = match ev {
+            Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
+            Event::WindowResize(width, height) => TerminalObserverEvent::Resize {
+                width: *width,
+                height: *height,
+            },
+            Event::FocusGained => TerminalObserverEvent::FocusGained,
+            Event::FocusLost => TerminalObserverEvent::FocusLost,
+            // Mouse events are otherwise delivered to components through
+            // `mouse_sub()` subscriptions (ADR 0024); the observer only needs
+            // them as a redraw signal, same as the other non-chord events. A
+            // left-click press is distinguished from the other mouse kinds
+            // because it used to be the shell-resolved tab-bar click (task
+            // 6.5); the tab bar is a mounted `TabPanel` now (task 2.1), so a
+            // click is only the redraw echo and no shell geometry is read.
+            // The other mouse kinds get their own marker so the shell can
+            // silently disarm prefix mode on any mouse event (design D6,
+            // task 6.1) without mistaking them for the `NoOp` redraw echo.
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                TerminalObserverEvent::MouseClick {
+                    column: mouse.column,
+                    row: mouse.row,
+                }
+            }
+            Event::Mouse(_) => TerminalObserverEvent::Mouse,
+            Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
+                TerminalObserverEvent::NoOp
+            }
+        };
+        Some(Msg::TerminalEvent(observed))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn root_observer_marks_none_returning_local_key_as_processed() {
+        let event = Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+        // Any component whose local handler leaves the key unclaimed (here the
+        // status panel, which has no keyboard interpretation) must still be
+        // observed as processed by the root's terminal fold.
+        let mut panel = crate::status_bar_panel::StatusBarPanel::new();
+        assert!(panel.on(&event).is_none());
+
+        let mut root = UiRootComponent::new();
+        assert!(matches!(
+            root.on(&event),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::Key(_)))
+        ));
+    }
+}

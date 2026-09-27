@@ -10,16 +10,17 @@
 
 use ratatui::layout::Rect;
 
-use super::components::book_content::BookContent;
-use super::components::library_panel::content::HeroImageState;
-use super::components::library_panel::owner::LaunchSelector;
-use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
-use super::components::podcast_content::PodcastContent;
-use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
-use crate::app::state::types::playback::DestinationLatestSource;
+use mbv_components::book_content::BookContent;
+use mbv_components::library_panel::owner::LaunchSelector;
+use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
+use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::playback::DestinationLatestSource;
+use mbv_ui_msg::ComponentId;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
@@ -87,10 +88,10 @@ impl Model {
     /// route to the list that produced it, never the dispatch-time focus.
     pub(in crate::app) fn active_library_selection_origin(
         &self,
-    ) -> Option<crate::app::components::media_list::SelectionOrigin> {
+    ) -> Option<mbv_ui_model::media_list::SelectionOrigin> {
         self.active_library_key().map(|key| {
-            crate::app::components::media_list::SelectionOrigin::Library(
-                crate::app::components::media_list::LibrarySelectionOrigin::from(key),
+            mbv_ui_model::media_list::SelectionOrigin::Library(
+                mbv_ui_model::media_list::LibrarySelectionOrigin::from(key),
             )
         })
     }
@@ -104,7 +105,7 @@ impl Model {
             .and_then(|owner| {
                 owner
                     .as_any_mut()
-                    .downcast_mut::<super::components::emby_library_content::EmbyLibraryContent>()
+                    .downcast_mut::<mbv_components::emby_library_content::EmbyLibraryContent>()
             })
         {
             owner.set_latest_mode(latest);
@@ -200,7 +201,7 @@ impl Model {
         if level.letter_filter.is_none() {
             return;
         }
-        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = None;
         if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
             level.letter_filter = None;
@@ -457,7 +458,9 @@ impl Model {
     pub(in crate::app) fn library_panel_content_area(&self) -> Option<Rect> {
         let area = self.app.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
-        Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
+        Some(mbv_render::components::widgets::right_panel_content_area(
+            area, collapsed,
+        ))
     }
 
     /// The Library column's body fill: the placement's own back, painted with
@@ -467,8 +470,7 @@ impl Model {
     /// read, so both follow the same bit in every geometry.
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, focused)
-            .fill
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill
     }
 
     /// The transitional draw step: give the library rect to the mounted
@@ -574,4 +576,4 @@ impl Model {
     }
 }
 
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;

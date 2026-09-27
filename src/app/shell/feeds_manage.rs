@@ -7,12 +7,11 @@
 //! dialog, config persistence — and the background add-feed channel that
 //! cannot live in the component (`Model::feeds_manage`).
 
-use super::components::msg::FeedsManageIntent;
-use super::components::{ComponentId, FeedsManageComponent, PopupId};
-use crate::app::state::types::feeds_manage::{
-    FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
-};
+use mbv_components::FeedsManageComponent;
 use mbv_config::FeedSubscription;
+use mbv_ui_model::feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
+use mbv_ui_msg::FeedsManageIntent;
+use mbv_ui_msg::{ComponentId, PopupId};
 
 fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {
     result.and_then(|entries| {
@@ -150,7 +149,7 @@ impl super::Model {
             title: " Remove Feed ".into(),
             message: format!(
                 "Remove subscription '{}'?",
-                crate::app::infra::ui_util::trunc_str(&name, 40)
+                mbv_ui_model::ui_util::trunc_str(&name, 40)
             ),
             hint: "[y] Confirm    [Esc] Cancel".into(),
             on_confirm: super::ConfirmAction::RemoveFeedSubscription(index),

@@ -9,19 +9,21 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
-use crate::app::components::{
-    ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
-    TerminalObserverEvent, UserEvent,
-};
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
-use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
-use crate::app::state::types::overlay::OverlayRequest;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_components::SearchSidebarComponent;
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_msg::{
+    ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
+    UserEvent,
+};
+use mbv_ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -43,7 +45,7 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 /// resolved; `render_main` no longer writes `self.tab`.
 #[test]
 fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.library_tab_pending = 1;
     let mut harness = TickHarness::new(app);
 
@@ -295,7 +297,7 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
         Some(&ComponentId::Queue)
     );
 
-    let mut library_app = crate::app::render::make_movie_app();
+    let mut library_app = crate::app::tests::render_fixtures::make_movie_app();
     library_app.tab = TabSelection::EmbyLibrary(0);
     library_app.panel_focus = PanelFocus::Library;
     library_app.panel_mode = PanelMode::Both;
@@ -564,10 +566,10 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     // Locate the MouseSupport row ordinal instead of hardcoding Down presses:
     // the flat row order is SETTING_SECTIONS order, and rows shift whenever a
     // section is added (the Keys entry moved this row once already).
-    let mouse_support_downs = crate::app::state::types::settings::SETTING_SECTIONS
+    let mouse_support_downs = mbv_ui_model::settings::SETTING_SECTIONS
         .iter()
         .flat_map(|(_, keys)| keys.iter())
-        .position(|key| *key == crate::app::state::types::settings::SettingKey::MouseSupport)
+        .position(|key| *key == mbv_ui_model::settings::SettingKey::MouseSupport)
         .expect("MouseSupport row exists in SETTING_SECTIONS");
     for _ in 0..mouse_support_downs {
         harness.inject(key(Key::Down));

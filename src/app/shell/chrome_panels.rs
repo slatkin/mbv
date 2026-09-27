@@ -11,21 +11,21 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
-use super::components::{
-    ComponentId, LibraryPlaybackPanel, Msg, QueueComponent, QueuePlaybackPanel, StatusBarPanel,
-    TabPanel, UserEvent,
-};
 use super::{App, DestinationLatestSource, Model, PanelFocus};
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::layout::CardGeometry;
-use crate::app::render::arrangements::chrome::{
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::{
+    LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
+};
+use mbv_render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
     QUEUE_PLAYBACK_HEADER_ROWS,
 };
-use crate::app::render::components::card::queue_card_reserved_rect;
-use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
-use crate::app::render::{StatusBarModel, VisualModeIndicator};
-use crate::app::NowPlayingStatus;
+use mbv_render::components::card::queue_card_reserved_rect;
+use mbv_render::components::widgets::{fill_surface, queue_panel_inset};
+use mbv_render::layout::CardGeometry;
+use mbv_render::{StatusBarModel, VisualModeIndicator};
+use mbv_ui_model::playback_target::NowPlayingStatus;
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
     let area = app
@@ -165,7 +165,7 @@ impl Model {
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
         let (titles, markers): (Vec<String>, Vec<bool>) = std::iter::once((
-            crate::app::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
+            mbv_ui_model::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
             false,
         ))
         .chain(self.app.libs.iter().map(|lib| {
@@ -226,14 +226,12 @@ impl Model {
             self.application
                 .get_component(&ComponentId::Queue)
                 .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
-                .map(super::super::components::queue::QueueComponent::selection_summary)
+                .map(mbv_components::queue::QueueComponent::selection_summary)
         } else {
             self.application
                 .get_component_mut(&ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-                .and_then(
-                    super::super::components::library_panel::panel::LibraryPanel::focused_summary,
-                )
+                .and_then(mbv_components::library_panel::panel::LibraryPanel::focused_summary)
         };
         let visual_origin = focused_summary
             .as_ref()
@@ -277,7 +275,7 @@ impl Model {
         let mut transport = self.transport_projection();
         // The queue column's transport band: the fixed chrome surface, in
         // every queue-visible layout (D10).
-        transport.panel = crate::app::palette::Surface::QueueOnlyPlaybackPanel;
+        transport.panel = mbv_theme::Surface::QueueOnlyPlaybackPanel;
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
         let (host, host_is_remote) = self.app.playback_host_label_and_remote();
@@ -337,7 +335,7 @@ impl Model {
         fill_surface(
             frame,
             placement,
-            crate::app::palette::Surface::QueueColumn,
+            mbv_theme::Surface::QueueColumn,
             matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
         );
         // The slot region starts on the row below the placement's header band
@@ -354,13 +352,9 @@ impl Model {
         // when its content is hidden. Idle placements have a zero-height
         // slot region, so this remains a no-op while idle.
         frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::QueueOnlyPlaybackPanel,
-                    false,
-                )
-                .fill),
-            ),
+            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
+                mbv_theme::surface_colors(mbv_theme::Surface::QueueOnlyPlaybackPanel, false).fill,
+            )),
             slot_region,
         );
         if self.app.visual_slot_shown() {

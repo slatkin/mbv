@@ -1,11 +1,11 @@
 ---
 name: mbv-frontend
-description: Ownership rules and workflow for mbv's terminal UI - the TuiRealm Interactive Components in src/app/components/ and the render tree in src/app/render/. Use this before adding or changing any component, painter, arrangement, or theme role; before handling a key, a mouse event, or component-local state; before adding a new visual variant; and before reporting a TUI change complete. Use it even when the change looks like a one-line tweak, because the two trees have colliding file names and the keyboard has exactly one legal routing site.
+description: Ownership rules and workflow for mbv's terminal UI - the TuiRealm Interactive Components in crates/mbv-components/src/ and the render tree in crates/mbv-render/src/. Use this before adding or changing any component, painter, arrangement, or theme role; before handling a key, a mouse event, or component-local state; before adding a new visual variant; and before reporting a TUI change complete. Use it even when the change looks like a one-line tweak, because the two trees have colliding file names and the keyboard has exactly one legal routing site.
 ---
 
 # mbv-frontend
 
-`src/app/render/` is split into four kinds of module. The split is the
+`crates/mbv-render/src/` is split into four kinds of module. The split is the
 enforcement boundary from the completed change archived at
 `openspec/changes/archive/2026-08-23-enforce-mbv-ui-design-system/`; the term
 definitions live in `CONTEXT.md` under Presentation and are authoritative if this
@@ -15,13 +15,13 @@ skill and `CONTEXT.md` ever disagree.
 |---|---|---|
 | `screens/` | app state in, typed content model out | call Ratatui, construct a `Rect`, compute a hit target |
 | `arrangements/` | placement of components within a `Rect`, breakpoints | own painting or app state |
-| `render/components/` | painting, its own geometry within a `Rect` | take arbitrary `Color`/`Style` from a screen |
-| `theme/` | semantic roles (public) | expose raw `Color` primitives (private) |
+| `components/` | painting, its own geometry within a `Rect` | take arbitrary `Color`/`Style` from a screen |
+| `crates/mbv-theme/` | semantic roles (public) | expose raw `Color` primitives (private) |
 
 Dependency order: `screens -> arrangements -> render/components -> Ratatui`.
 Rendering never performs Service/image/playback/persistence effects.
-Throughout this section, a bare `components/` means `src/app/render/components/`;
-the TuiRealm Interactive Components in `src/app/components/` are a separate tree,
+Throughout this section, a bare `components/` means `crates/mbv-render/src/components/`;
+the TuiRealm Interactive Components in `crates/mbv-components/src/` are a separate tree,
 described below.
 
 The interactive-surface ledger records current ownership and composition. A
@@ -31,27 +31,27 @@ the root composes the painted surface. Follow the Panel/slot workflow below.
 ## Two trees, not one
 
 This is the easiest place to put code in the wrong file, because the two trees
-have colliding names. `src/app/components/help.rs` and
-`src/app/render/components/help.rs` are different things:
+have colliding names. `crates/mbv-components/src/help.rs` and
+`crates/mbv-render/src/components/help.rs` are different things:
 
 | Tree | What lives there | Example |
 |---|---|---|
-| `src/app/components/` | **Interactive Components** — TuiRealm `impl Component`: local interaction state, event interpretation, `update()`, and the `view()` entry point | `HelpComponent` |
-| `src/app/render/` | **The visual substrate** — the Ratatui painters, arrangements, and theme roles a component's `view()` calls into | `render_help_panel` |
+| `crates/mbv-components/src/` | **Interactive Components** — TuiRealm `impl Component`: local interaction state, event interpretation, `update()`, and the `view()` entry point | `HelpComponent` |
+| `crates/mbv-render/src/` | **The visual substrate** — the Ratatui painters, arrangements, and theme roles a component's `view()` calls into | `render_help_panel` |
 
 The seam is `Component::view(&mut self, f: &mut Frame, area: Rect)`: it receives
 an outer area from an arrangement or the root layout, and delegates the painting
-to a `render/` function. A component holds *cursor, scroll, drafts, viewport, and
-hit geometry*; `render/` holds *pixels*. When unsure where a difference belongs,
+to a `mbv-render` function. A component holds *cursor, scroll, drafts, viewport, and
+hit geometry*; `mbv-render` holds *pixels*. When unsure where a difference belongs,
 ask "is this interaction, state, painting, layout, or style?" and route to
-`components/` / `screens/` / `render/components/` / `arrangements/` / `theme/`
+`mbv-components` / `screens/` / `components/` / `arrangements/` / `crates/mbv-theme/`
 accordingly.
 
 ## Interactive ownership (ADR 0022)
 
 An Interactive Component owns its private presentation state, event
 interpretation, local updates, rendering, viewport, and render-derived hit
-geometry. It emits a typed `Msg` (`src/app/components/msg/`) for anything
+geometry. It emits a typed `Msg` (`crates/mbv-components/src/msg/`) for anything
 crossing that boundary. The shell `Model` (`src/app/shell/`) owns `App`,
 terminal/Service/worker lifecycle, Player and canonical queue authority,
 persistence, and external effects.
@@ -136,7 +136,7 @@ Two approaches that look reasonable and are not:
 Legacy-endpoint removal is complete (archived at
 `openspec/changes/archive/2026-08-29-remove-legacy-keyboard-endpoint/`):
 `GlobalViewKey`, the raw `*Key` shell request variants, `CONTEXT_STACK`,
-`Model::handle_legacy_key`, and `src/app/components/typed_key.rs` are deleted.
+`Model::handle_legacy_key`, and `crates/mbv-components/src/typed_key.rs` are deleted.
 Do not reintroduce them; they are deleted from the tree, and nothing will flag
 them coming back.
 
@@ -169,7 +169,7 @@ TuiRealm bump.
 Before writing rendering code for a screen:
 
 1. **Look for an existing component or arrangement first.** Check
-   `src/app/render/components.rs` and `src/app/render/arrangements.rs`
+   `crates/mbv-render/src/components.rs` and `crates/mbv-render/src/arrangements.rs`
    for something that already paints this shape (a row, a card, a modal
    frame, a hero pane). Reuse it before writing a new painter — for a
    hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`
@@ -220,16 +220,16 @@ None of these rows permit screen-owned geometry, raw Ratatui calls, or raw
 
 ```rust
 // Wrong: screen calls Ratatui directly.
-// src/app/render/screens/some_screen.rs
+// crates/mbv-render/src/screens/some_screen.rs
 f.render_widget(Paragraph::new(text), Rect { x, y, width, height });
 
 // Right: screen builds a content model, component paints it.
-// src/app/render/screens/some_screen.rs
+// crates/mbv-render/src/screens/some_screen.rs
 let model = SomeRowModel { text, focused };
 self.render_some_row(f, area, &model); // defined in components/
 
-// src/app/render/components/some_component.rs
-pub(in crate::app::render) fn render_some_row(f: &mut Frame, area: Rect, model: &SomeRowModel) {
+// crates/mbv-render/src/components/some_component.rs
+pub fn render_some_row(f: &mut Frame, area: Rect, model: &SomeRowModel) {
     let fg = focused_or_muted(model.focused); // named policy, not a raw Color
     f.render_widget(Paragraph::new(model.text.clone()).style(Style::default().fg(fg)), area);
 }
@@ -258,7 +258,7 @@ One mechanism enforces this boundary on its own, and its limits matter more
 than a second check that does not exist:
 
 1. **The compiler** — private theme primitives. A raw `Color` outside
-   `theme/` is a compile error. Cannot be bypassed.
+   `crates/mbv-theme/` is a compile error. Cannot be bypassed.
 
 Nothing else is checked mechanically. A `screens/` module importing ratatui,
 constructing a `Rect`, calling `render_widget`, or reaching for `buffer_mut()`

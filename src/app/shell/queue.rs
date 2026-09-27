@@ -1,11 +1,9 @@
-use super::components::{
-    ComponentId, QueueColumnResize, QueueComponent, QueueCursorUpdate, QueueIntent, QueueMove,
-    QueueRequest,
-};
 use super::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
+use mbv_components::{QueueComponent, QueueCursorUpdate};
 use mbv_queue::QueueSlotId;
+use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 
 /// The row projection inputs that can change queue rows. Chrome and pause
 /// state are delivered independently; pause only affects the paint-time
@@ -60,7 +58,7 @@ struct QueueProjectionUpdate {
     slots: Option<Vec<mbv_queue::QueueSlot>>,
     patch: Option<(
         QueueSlotId,
-        crate::app::components::media_list::MediaListRow<QueueSlotId>,
+        mbv_render::components::media_list::MediaListRow<QueueSlotId>,
     )>,
 }
 
@@ -209,7 +207,7 @@ impl Model {
                         .map(|(index, slot)| {
                             (
                                 target,
-                                crate::app::components::queue::queue_media_row(
+                                mbv_components::queue::queue_media_row(
                                     slot,
                                     index,
                                     update.playback,
@@ -489,8 +487,9 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::Msg;
-    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::tests::{make_app_stub, make_items};
+    use mbv_emby_model::test_support::make_item;
+    use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -663,7 +662,7 @@ mod tests {
         let slots: Vec<_> = (1..=4)
             .map(|index| model.app.player_tab.slot_id_at(index).unwrap())
             .collect();
-        model.handle_queue_request(crate::app::components::QueueRequest::RemoveSelection {
+        model.handle_queue_request(mbv_ui_msg::QueueRequest::RemoveSelection {
             scope: QueueScope::Local,
             slot_ids: slots,
         });
@@ -707,7 +706,7 @@ mod tests {
         // emit Undo { scope: Remote } for a frame. With no direct remote queue
         // the visible queue is Local, so undo the Local edit instead of
         // flashing an error.
-        use crate::app::state::types::playback::UndoEntry;
+        use mbv_ui_model::playback::UndoEntry;
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove(

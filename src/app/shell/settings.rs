@@ -1,17 +1,16 @@
-use super::components::{
-    ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
-    SettingsRow, SettingsSnapshot, SetupDraft,
-};
 use super::Model;
-use crate::app::state::types::settings;
-use crate::app::state::types::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
+use mbv_components::{SettingsComponent, SettingsSnapshot};
 use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
+use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
+use mbv_ui_model::settings;
+use mbv_ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
+use mbv_ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
 
 impl Model {
     pub(in crate::app) fn update_settings_content(&mut self) {
-        let id = ComponentId::Overlay(super::components::OverlayId::Settings);
+        let id = ComponentId::Overlay(mbv_ui_msg::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
         }
@@ -39,7 +38,7 @@ impl Model {
     }
 
     pub(in crate::app) fn render_settings_overlay(&mut self, frame: &mut ratatui::Frame) {
-        let id = ComponentId::Overlay(super::components::OverlayId::Settings);
+        let id = ComponentId::Overlay(mbv_ui_msg::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
         }
@@ -69,8 +68,7 @@ impl Model {
             }
         }
         rows.push(SettingsRow {
-            label: settings::setting_label(crate::app::state::types::settings::SettingKey::LogOut)
-                .into(),
+            label: settings::setting_label(mbv_ui_model::settings::SettingKey::LogOut).into(),
             value: String::new(),
             section: false,
             cursor: Some(cursor),
@@ -94,10 +92,7 @@ impl Model {
                             action
                         )
                     },
-                    muted: matches!(
-                        *entry,
-                        crate::app::state::types::settings::ServiceEntry::Audiobookshelf
-                    ),
+                    muted: matches!(*entry, mbv_ui_model::settings::ServiceEntry::Audiobookshelf),
                 }
             })
             .collect();
@@ -210,7 +205,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    crate::app::state::types::settings::ServiceActionIntent::ReplaceAudiobookshelf,
+                    mbv_ui_model::settings::ServiceActionIntent::ReplaceAudiobookshelf,
                 );
                 false
             }
@@ -218,7 +213,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    crate::app::state::types::settings::ServiceActionIntent::RemoveAudiobookshelf,
+                    mbv_ui_model::settings::ServiceActionIntent::RemoveAudiobookshelf,
                 );
                 false
             }
@@ -296,9 +291,10 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                self.app.handle_settings_activate(
-                    crate::app::state::types::settings::settings_cursor_to_key(cursor),
-                );
+                self.app
+                    .handle_settings_activate(mbv_ui_model::settings::settings_cursor_to_key(
+                        cursor,
+                    ));
                 false
             }
         }
@@ -336,8 +332,8 @@ mod tests {
     /// actions whose router binding deviates from the declared default.
     #[test]
     fn keys_row_summary_follows_the_loaded_configuration() {
-        use crate::app::state::types::settings;
         use crate::app::SettingKey;
+        use mbv_ui_model::settings;
         let app = crate::app::tests::make_app_stub();
         let cfg = app.config.lock().unwrap().clone();
         let ui = app.ui_config_snapshot();

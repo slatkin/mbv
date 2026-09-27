@@ -1,11 +1,11 @@
-use super::components::library_panel::LibraryKey;
-use super::components::msg::PodcastEpisodeIntent;
-use super::components::podcast_content::PodcastContent;
-use super::components::LibraryKind;
 use super::Model;
 use super::TabSelection;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::library::LibraryKind;
+use mbv_ui_msg::PodcastEpisodeIntent;
 
 impl Model {
     fn abs_podcast_key(&self) -> Option<LibraryKey> {
@@ -63,18 +63,17 @@ impl Model {
         };
         let selected_latest = self
             .application
-            .get_component(&super::components::ComponentId::Library)
+            .get_component(&mbv_ui_msg::ComponentId::Library)
             .and_then(|component| {
                 component
                     .as_any()
-                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
             })
             .and_then(|panel| panel.owner(&key))
             .and_then(|owner| owner.as_any().downcast_ref::<PodcastContent>())
             .is_some_and(PodcastContent::latest_selected);
-        let source = crate::app::state::types::playback::DestinationLatestSource::Audiobookshelf(
-            library_id.clone(),
-        );
+        let source =
+            mbv_ui_model::playback::DestinationLatestSource::Audiobookshelf(library_id.clone());
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {
             self.record_home_latest_acknowledgement(source.clone());
         }
@@ -91,7 +90,8 @@ impl Model {
         &mut self,
         intent: PodcastEpisodeIntent,
     ) {
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         let index = self.app.tab.audiobookshelf_index();
         match intent {
             PodcastEpisodeIntent::FocusOrPlay(Some(target))

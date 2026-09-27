@@ -7,9 +7,8 @@ pub(crate) fn audiobookshelf_app() -> App {
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
     };
-    let mut state = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
-        library.clone(),
-    );
+    let mut state =
+        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
     state.append_page(
         0,
         20,
@@ -54,7 +53,7 @@ pub(super) fn add_emby_movie_library(app: &mut App) {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -78,7 +77,7 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     assert!(
         !matches!(
             app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
+            Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
         ),
         "Audiobookshelf must not open an Emby context menu"
     );
@@ -89,7 +88,7 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     app.open_context_menu(false, None);
     assert!(matches!(
         app.pending_overlay,
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
+        Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(_))
     ));
 }
 
@@ -104,7 +103,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu(false, None);
-    let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+    let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
         app.pending_overlay.as_ref()
     else {
         panic!("queue panel must open a menu");

@@ -1708,6 +1708,7 @@ dependencies = [
  "log",
  "mbv-audiobookshelf",
  "mbv-cast",
+ "mbv-components",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
@@ -1716,12 +1717,17 @@ dependencies = [
  "mbv-emby-model",
  "mbv-feed",
  "mbv-ids",
+ "mbv-images",
  "mbv-keybinds",
  "mbv-net",
  "mbv-player",
  "mbv-queue",
  "mbv-remote-player",
+ "mbv-render",
  "mbv-text",
+ "mbv-theme",
+ "mbv-ui-model",
+ "mbv-ui-msg",
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
@@ -1773,6 +1779,31 @@ dependencies = [
  "rstest",
  "rust_cast",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-components"
+version = "0.21.2"
+dependencies = [
+ "mbv-audiobookshelf",
+ "mbv-config",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-images",
+ "mbv-keybinds",
+ "mbv-queue",
+ "mbv-render",
+ "mbv-text",
+ "mbv-theme",
+ "mbv-ui-model",
+ "mbv-ui-msg",
+ "ratatui",
+ "ratatui-image",
+ "rstest",
+ "textwrap",
+ "time",
+ "tuirealm",
+ "unicode-width",
 ]
 
 [[package]]
@@ -1895,6 +1926,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-images"
+version = "0.21.2"
+dependencies = [
+ "image",
+ "log",
+ "ratatui",
+ "ratatui-image",
+]
+
+[[package]]
 name = "mbv-keybinds"
 version = "0.21.2"
 
@@ -1956,10 +1997,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-render"
+version = "0.21.2"
+dependencies = [
+ "mbv-config",
+ "mbv-core",
+ "mbv-emby-model",
+ "mbv-images",
+ "mbv-keybinds",
+ "mbv-queue",
+ "mbv-theme",
+ "mbv-ui-model",
+ "ratatui",
+ "ratatui-image",
+ "textwrap",
+ "tui-scrollbar",
+ "unicode-width",
+]
+
+[[package]]
 name = "mbv-text"
 version = "0.21.2"
 dependencies = [
  "fuzzy-matcher",
+]
+
+[[package]]
+name = "mbv-theme"
+version = "0.21.2"
+dependencies = [
+ "ratatui",
+]
+
+[[package]]
+name = "mbv-ui-model"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-cast",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-feed",
+ "mbv-player",
+ "mbv-queue",
+ "mbv-remote-player",
+ "mbv-ws",
+ "ratatui",
+ "rstest",
+ "time",
+ "unicode-width",
+]
+
+[[package]]
+name = "mbv-ui-msg"
+version = "0.21.2"
+dependencies = [
+ "mbv-emby-model",
+ "mbv-queue",
+ "mbv-ui-model",
+ "tuirealm",
 ]
 
 [[package]]

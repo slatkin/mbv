@@ -11,13 +11,13 @@ impl App {
 
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
         let indicator_style = match self.indicator_style {
-            crate::app::render::indicators::IndicatorStyle::Brackets => "brackets",
-            crate::app::render::indicators::IndicatorStyle::Chips => "chips",
-            crate::app::render::indicators::IndicatorStyle::Outlined => "outlined",
-            crate::app::render::indicators::IndicatorStyle::Dots => "dots",
-            crate::app::render::indicators::IndicatorStyle::Pipes => "pipes",
-            crate::app::render::indicators::IndicatorStyle::KeyValue => "keyvalue",
-            crate::app::render::indicators::IndicatorStyle::Powerline => "powerline",
+            mbv_render::indicators::IndicatorStyle::Brackets => "brackets",
+            mbv_render::indicators::IndicatorStyle::Chips => "chips",
+            mbv_render::indicators::IndicatorStyle::Outlined => "outlined",
+            mbv_render::indicators::IndicatorStyle::Dots => "dots",
+            mbv_render::indicators::IndicatorStyle::Pipes => "pipes",
+            mbv_render::indicators::IndicatorStyle::KeyValue => "keyvalue",
+            mbv_render::indicators::IndicatorStyle::Powerline => "powerline",
         };
         crate::config::UiConfig {
             image_protocol: self.images.image_protocol.clone(),

@@ -12,15 +12,16 @@
 //! the shell's dispatch is keyed by the active tab, not by which owner sent
 //! it.
 
-use super::components::library_panel::{LibraryKey, LibraryPanel};
-use super::components::tv_content::TvContent;
-use super::components::ComponentId;
-use super::components::{LibraryKind, ShellRequest};
-use super::render::TvWideRenderCtx;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
+use mbv_render::components::tv_wide::TvWideRenderCtx;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::ComponentId;
+use mbv_ui_msg::ShellRequest;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
@@ -70,7 +71,7 @@ impl Model {
                 // authoritative selection to lazily fetch uncached episodes.
                 let selected_season = self
                     .tv_owner()
-                    .and_then(super::super::components::tv_content::TvContent::selected_season);
+                    .and_then(mbv_components::tv_content::TvContent::selected_season);
                 if let Some((series_id, season_id)) = selected_season {
                     self.app.fetch_series_season_episodes(series_id, season_id);
                     self.push_tv_workspace_content();
@@ -268,11 +269,9 @@ impl Model {
         if library.library.collection_type == "tvshows"
             && library.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
         {
-            self.acknowledge_home_latest(
-                crate::app::state::types::playback::DestinationLatestSource::Emby(
-                    library.library.id.clone(),
-                ),
-            );
+            self.acknowledge_home_latest(mbv_ui_model::playback::DestinationLatestSource::Emby(
+                library.library.id.clone(),
+            ));
         }
     }
 
@@ -322,7 +321,7 @@ impl Model {
     #[cfg(test)]
     pub(in crate::app) fn test_painted_library_layout(
         &self,
-    ) -> crate::app::layout::PaintedRowGeometry {
+    ) -> mbv_render::layout::PaintedRowGeometry {
         self.application
             .get_component(&ComponentId::Library)
             .expect("library panel mounted")
@@ -356,7 +355,7 @@ impl Model {
     pub(in crate::app) fn test_paint_library_panel(
         &mut self,
         area: ratatui::layout::Rect,
-    ) -> Option<crate::app::components::library_panel::PanelHeroImagePaint> {
+    ) -> Option<mbv_components::library_panel::PanelHeroImagePaint> {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
                 .expect("test terminal");
@@ -396,7 +395,7 @@ impl Model {
     /// after the panel points at the active owner, so opening it never targets
     /// the previous tab's owner.
     pub(in crate::app) fn sync_tv_mini_view_hero(&mut self) {
-        let mini_view = self.app.terminal_width < crate::app::MINI_VIEW_THRESHOLD
+        let mini_view = self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
             && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         if let Some(panel) = self
             .application
@@ -496,7 +495,7 @@ impl Model {
         context.set_tv_content_mode(tv_content_mode.clone());
         context.set_series_details(series_details);
         let latest_source =
-            crate::app::state::types::playback::DestinationLatestSource::Emby(library_id.clone());
+            mbv_ui_model::playback::DestinationLatestSource::Emby(library_id.clone());
         if tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
             && !self
                 .acknowledged_home_latest_sources

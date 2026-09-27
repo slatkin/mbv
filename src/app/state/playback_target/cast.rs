@@ -5,9 +5,9 @@
 // "command not supported" flash instead of a client call.
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::render::indicators::IndicatorData;
 use crate::app::{App, CastPlaybackTarget};
 use mbv_cast::client::CastPlaybackState;
+use mbv_render::indicators::IndicatorData;
 
 impl CastPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {

@@ -1,12 +1,12 @@
 # Invariant 9 — The Grouped Music tree claims a point only from the latest completed view
 
-**Scope:** the shared `TreeBrowser` (`src/app/components/list/tree_browser.rs`)
-with the Grouped Music target (`src/app/components/music_content/tree_target.rs`),
+**Scope:** the shared `TreeBrowser` (`crates/mbv-components/src/list/tree_browser.rs`)
+with the Grouped Music target (`crates/mbv-components/src/music_content/tree_target.rs`),
 its
-`PanelList` adapter (`src/app/components/library_panel/panel_list.rs`), the
+`PanelList` adapter (`crates/mbv-components/src/library_panel/panel_list.rs`), the
 Wide paint order that drives it
-(`src/app/components/library_panel/wide.rs`), and the pointer consumers
-(`src/app/components/music_content/interaction.rs`, `music_content.rs`).
+(`crates/mbv-components/src/library_panel/wide.rs`), and the pointer consumers
+(`crates/mbv-components/src/music_content/interaction.rs`, `music_content.rs`).
 
 ## The invariant
 
@@ -22,7 +22,7 @@ Wide paint order that drives it
    - `reconcile(entries)` — only when the projection was actually rebuilt
      (a no-op settled push keeps the completed geometry);
    - the filter edit path (`TreeOperation::EditFilter` → `filter_edit`,
-    `src/app/components/list/tree_browser/operations.rs`) — note: the shared
+    `crates/mbv-components/src/list/tree_browser/operations.rs`) — note: the shared
     browser now invalidates the paint on every filter edit, so no unchanged-
     match-set early-return path exists any more (the former
     `apply_filter_query` / `set_filter_matches` seam was removed by the
@@ -85,7 +85,7 @@ render, so the retained geometry still matches the frame the user saw.
   claimable geometry; the run loop draws after processing events, so a
   pointer event is resolved against the previous completed frame.
 - **Tests.** `tree_hit_geometry_is_claimable_only_after_the_latest_view`
-  (`src/app/components/music_content/tests/tree.rs`) pins the gate for an explicit
+  (`crates/mbv-components/src/music_content/tests/tree.rs`) pins the gate for an explicit
   `invalidate`, a `reconcile` that rebuilds, and `clamp_viewport_to`.
 
 ## Where it currently fails / how it could regress

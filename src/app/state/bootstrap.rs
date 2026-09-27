@@ -1,4 +1,4 @@
-use crate::app::state::types::player_tab::PlayerTab;
+use mbv_ui_model::player_tab::PlayerTab;
 
 pub(in crate::app) fn bootstrap_legacy_queue(
     items: Vec<mbv_emby_model::EmbyItem>,

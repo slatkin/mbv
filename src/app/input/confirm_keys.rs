@@ -1,7 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::SidebarId;
 use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
+    SavePlaylistDialog, SavePlaylistStage, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use mbv_queue::RemoveSlotResult;

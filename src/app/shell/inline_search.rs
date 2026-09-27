@@ -1,8 +1,9 @@
-use super::components::inline_search::InlineSearchHost;
-use super::components::library_panel::LibraryPanel;
-use super::components::{ComponentId, SearchPool};
 use super::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
+use mbv_components::inline_search::InlineSearchHost;
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::SearchPool;
+use mbv_ui_msg::ComponentId;
 
 impl Model {
     /// The panel's active owner's Inline Search session, when one is
@@ -80,9 +81,10 @@ impl Model {
         if !has_session {
             return;
         }
-        if self.active_inline_search_session_ref().is_some_and(
-            super::super::components::inline_search::InlineSearchHost::uses_local_filter,
-        ) {
+        if self
+            .active_inline_search_session_ref()
+            .is_some_and(mbv_components::inline_search::InlineSearchHost::uses_local_filter)
+        {
             // Grouped Music keeps the tree as the sole browser owner. Its
             // InlineSearch is only the shared editor/debounce/bar projection.
             return;
@@ -141,9 +143,10 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        if self.active_inline_search_session_ref().is_some_and(
-            super::super::components::inline_search::InlineSearchHost::uses_local_filter,
-        ) {
+        if self
+            .active_inline_search_session_ref()
+            .is_some_and(mbv_components::inline_search::InlineSearchHost::uses_local_filter)
+        {
             return;
         }
         if self.app.recursive_album_search_enabled(index) {
@@ -174,9 +177,9 @@ impl Model {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
         };
-        let selected = self.active_inline_search_session_ref().and_then(
-            super::super::components::inline_search::InlineSearchHost::selected_inline_search_item,
-        );
+        let selected = self
+            .active_inline_search_session_ref()
+            .and_then(mbv_components::inline_search::InlineSearchHost::selected_inline_search_item);
         if self.app.recursive_album_search_enabled(lib_idx) {
             let library_id = self.app.libs[lib_idx].library.id.clone();
             let entry = match self.app.album_indexes.get(&library_id) {
@@ -249,7 +252,7 @@ impl Model {
         // the shell hand-off (task 3.1/3.2) subsumes it.
         if let super::LibEvent::NavigateTo {
             lib_idx,
-            landing: crate::app::state::types::events::NavigateLanding::Chain { ref nav_stack },
+            landing: mbv_ui_model::events::NavigateLanding::Chain { ref nav_stack },
             switch_tab: true,
         } = ev
         {

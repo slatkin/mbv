@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::msg::TvHit;
+use mbv_ui_msg::TvHit;
 
 #[test]
 fn typed_tv_requests_keep_component_cursor_authoritative() {
@@ -97,7 +97,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
        request,
        Some(Msg::Shell(ref shell_boxed))
     if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
-           target: crate::app::components::tv_tree_target::TvTreeTarget::Show(_)
+           target: mbv_ui_msg::TvTreeTarget::Show(_)
        })));
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 }
@@ -105,18 +105,18 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
 #[test]
 fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     let mut model = mounted_tv_model();
-    let mut season_one = crate::app::tests::make_item("Season 1", "Season");
+    let mut season_one = mbv_emby_model::test_support::make_item("Season 1", "Season");
     season_one.id = "season-1".into();
-    let mut season_two = crate::app::tests::make_item("Season 2", "Season");
+    let mut season_two = mbv_emby_model::test_support::make_item("Season 2", "Season");
     season_two.id = "season-2".into();
-    let mut episode = crate::app::tests::make_item("Episode 2", "Episode");
+    let mut episode = mbv_emby_model::test_support::make_item("Episode 2", "Episode");
     episode.id = "episode-2".into();
     episode.series_id = "movie-focused".into();
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-2".into(), vec![episode]);
     model.app.series_detail_cache.insert(
         "movie-focused".into(),
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons: vec![season_one, season_two],
             episodes,
         },
@@ -160,7 +160,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     // to row 2, so a reset-to-0 implementation (0), a child-cursor
     // implementation (99), and a stale-mirror implementation (1) all
     // fail.
-    let mut third = crate::app::tests::make_item("Third Series", "Series");
+    let mut third = mbv_emby_model::test_support::make_item("Third Series", "Series");
     third.id = "movie-third".into();
     model.app.libs[0].nav_stack[0].items.push(third);
     assert_eq!(

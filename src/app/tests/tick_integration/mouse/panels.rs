@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn queue_boundary_unmounts_outside_the_two_panel_layout() {
     for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
-        let mut app = crate::app::render::make_queue_app(2);
+        let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
         app.panel_mode = mode;
         let mut harness = TickHarness::new(app);
         assert!(
@@ -34,7 +34,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
     // Mini view derives its mode from `mini_view_focus`, never the stored
     // Both: a narrow terminal in the Library mini view has no boundary either.
-    let mut mini = crate::app::render::make_queue_app(2);
+    let mut mini = crate::app::tests::render_fixtures::make_queue_app(2);
     mini.terminal_width = 70;
     let mut harness = TickHarness::new(mini);
     harness.model_mut().sync_mounted_surfaces();
@@ -46,7 +46,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 
 #[test]
 fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
-    let mut app = crate::app::render::make_queue_app(2);
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
     app.panel_mode = PanelMode::Both;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
@@ -87,10 +87,10 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
         assert!(outcome.raw_messages.iter().all(|msg| {
             !matches!(
                 msg,
-                Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(_))
+                Msg::Queue(mbv_ui_msg::QueueRequest::ResizeColumnLive(_))
             ) && !matches!(
                 msg,
-                Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_))
+                Msg::Queue(mbv_ui_msg::QueueRequest::ResizeColumnEnd(_))
             ) && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))
                 && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))
         }));
@@ -107,7 +107,7 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
 
 #[test]
 fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_stale_one() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);

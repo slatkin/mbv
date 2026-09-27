@@ -1,6 +1,6 @@
 use super::make_app_stub;
-use crate::app::state::types::overlay::OverlayRequest;
-use crate::app::state::types::settings::SettingKey;
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::settings::SettingKey;
 use rstest::rstest;
 
 #[rstest]

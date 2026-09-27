@@ -1,11 +1,11 @@
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::BrowseResting;
 
 type BrowseRefresh = (
     usize,
-    crate::app::state::types::browse::LevelFetchKey,
+    mbv_ui_model::browse::LevelFetchKey,
     usize,
     Option<mbv_queue::TvContentMode>,
 );
@@ -119,7 +119,7 @@ impl App {
                 lib.nav_stack.last().map(|lvl| {
                     (
                         i,
-                        crate::app::state::types::browse::LevelFetchKey::from_level(lvl),
+                        mbv_ui_model::browse::LevelFetchKey::from_level(lvl),
                         lvl.items.len(),
                         (lib.library.collection_type == "tvshows" && lib.nav_stack.len() == 1)
                             .then(|| {
@@ -261,7 +261,7 @@ mod tv_latest_tests {
 
     #[test]
     fn latest_library_fetch_uses_home_feed_request_without_home_state() {
-        let mut episode = crate::app::tests::make_item("Feed episode", "Episode");
+        let mut episode = mbv_emby_model::test_support::make_item("Feed episode", "Episode");
         episode.id = "feed-episode".into();
         let source = FakeLatestSource {
             request: RefCell::new(None),
@@ -293,10 +293,10 @@ mod tv_latest_tests {
             std::sync::Mutex::new(client),
         ));
 
-        let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
+        let mut library = mbv_emby_model::test_support::make_item("Shows", "CollectionFolder");
         library.id = "tv-library".into();
         library.collection_type = "tvshows".into();
-        let mut level_item = crate::app::tests::make_item("Old episode", "Episode");
+        let mut level_item = mbv_emby_model::test_support::make_item("Old episode", "Episode");
         level_item.id = "old-episode".into();
         app.libs.push(LibraryTab {
             library,
@@ -318,7 +318,10 @@ mod tv_latest_tests {
                 music_grouping: None,
             }],
             tv_content_mode: Some(mode),
-            ..LibraryTab::new(crate::app::tests::make_item("unused", "CollectionFolder"))
+            ..LibraryTab::new(mbv_emby_model::test_support::make_item(
+                "unused",
+                "CollectionFolder",
+            ))
         });
 
         // fetch_home makes three requests; the fourth response is the selected

@@ -1,4 +1,4 @@
-use crate::app::state::types::browse::BrowseResting;
+use mbv_ui_model::browse::BrowseResting;
 
 use crate::app::App;
 use rstest::rstest;
@@ -13,14 +13,14 @@ fn remote_seek(#[case] position: i64, #[case] delta: f64, #[case] expected: i64)
 
 #[test]
 fn queue_double_click_plays_clicked_index_not_follow_cursor() {
-    use crate::app::tests::make_item;
     use mbv_ctrl::player::PlayerCommand;
+    use mbv_emby_model::test_support::make_item;
 
     // The queue-row double-click must play the index resolved from the
     // clicked slot, passed straight through (D2), not recovered from
     // `queue_cursor`: a follow cursor pointing elsewhere must not redirect.
     let mut app = crate::app::tests::make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.panel_focus = mbv_ui_model::settings::PanelFocus::Queue;
     app.player_tab
         .set_items(vec![make_item("A", "Movie"), make_item("B", "Movie")], 0);
     // Follow cursor points at row A (index 0).
@@ -46,9 +46,9 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
 #[test]
 fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     use crate::app::dispatch::action::Command;
-    use crate::app::tests::make_item;
     use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
     use mbv_ctrl::player::PlayerCommand;
+    use mbv_emby_model::test_support::make_item;
 
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;

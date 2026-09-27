@@ -1,15 +1,15 @@
-use super::super::components::library_panel::LibraryPanel;
-use super::super::components::msg::ContextMenuIntent;
-use super::super::components::{
-    ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
-    PopupId, QueueComponent, ShellRequest,
-};
 use super::super::Model;
-use crate::app::state::types::context_menu::{
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::{
+    ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
+};
+use mbv_ui_model::context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
-use crate::app::PanelFocus;
+use mbv_ui_model::settings::PanelFocus;
+use mbv_ui_msg::ContextMenuIntent;
+use mbv_ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
 use ratatui::layout::Rect;
 
 impl Model {
@@ -209,18 +209,18 @@ impl Model {
 
     pub(crate) fn clear_multi_selection_from_origin(
         &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
+        origin: mbv_ui_model::media_list::SelectionOrigin,
     ) {
         self.visual_selection = None;
         match origin {
-            crate::app::components::media_list::SelectionOrigin::Queue => {
+            mbv_ui_model::media_list::SelectionOrigin::Queue => {
                 if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
                     if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                         queue.clear_selection();
                     }
                 }
             }
-            crate::app::components::media_list::SelectionOrigin::Library(origin) => {
+            mbv_ui_model::media_list::SelectionOrigin::Library(origin) => {
                 if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
                     if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
                         panel.clear_selection_for_origin(&origin);
@@ -532,10 +532,8 @@ impl Model {
     }
 
     fn library_routes_cursor(&self) -> usize {
-        self.with_library_routes(
-            crate::app::components::library_routes::LibraryRoutesComponent::cursor,
-        )
-        .unwrap_or(0)
+        self.with_library_routes(mbv_components::library_routes::LibraryRoutesComponent::cursor)
+            .unwrap_or(0)
     }
 
     pub(in crate::app) fn enter_device_stage(&mut self, library_lower: String) {
@@ -637,7 +635,8 @@ impl Model {
         let cfg = self.app.config.lock().unwrap().clone();
         self.app.library_routes = cfg.library_routes.clone();
         log::info!(target: "library_route", "runtime route table synchronized count={}", self.app.library_routes.len());
-        let save_result = crate::app::render::save_route_config(&cfg);
+        let save_result =
+            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes);
         if !self.finish_route_config_save(save_result) {
             return;
         }

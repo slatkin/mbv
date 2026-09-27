@@ -1,10 +1,9 @@
-use super::super::components::{
-    ComponentId, HelpComponent, OverlayId, PlaylistsComponent, SearchSidebarComponent,
-    SessionsComponent, SettingsComponent,
-};
-use super::super::components::{Msg, UserEvent};
 use super::super::Model;
 use super::super::SidebarId;
+use mbv_components::{
+    HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent, SettingsComponent,
+};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 use tuirealm::component::AppComponent;
 
 impl Model {
@@ -118,7 +117,13 @@ impl Model {
             .map(|attachment| attachment.receiver_id.as_str());
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>() {
-                sessions.set_display_context(self.app.use_nerd_fonts, self.app.emby_runtime.state);
+                sessions.set_display_context(
+                    self.app.use_nerd_fonts,
+                    mbv_render::components::widgets::service_state_color(
+                        self.app.emby_runtime.state,
+                        mbv_theme::ACCENT,
+                    ),
+                );
                 sessions.set_content(
                     &self.app.panel_targets,
                     self.app.sessions_loading,

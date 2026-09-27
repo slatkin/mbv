@@ -40,7 +40,8 @@ impl super::super::Model {
                 album_target,
                 track_id,
             } => {
-                self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                self.app
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.app.play_grouped_track(&album_target, &track_id);
                 self.push_music_workspace_content();
             }
@@ -49,7 +50,8 @@ impl super::super::Model {
             // the shell resolves it to the cached track and runs
             // the App effect (task 5.3d, Album track focus).
             ShellRequest::MusicTrackActivate { album_id, track } => {
-                self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                self.app
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.app.play_album_track(&album_id, &track);
                 self.push_music_workspace_content();
             }
@@ -76,7 +78,7 @@ impl super::super::Model {
             ShellRequest::MusicAlbumActivate { item } => {
                 let owner_has_target = self
                     .music_owner()
-                    .and_then(crate::app::components::music_content::MusicContent::selected_item)
+                    .and_then(mbv_components::music_content::MusicContent::selected_item)
                     .is_some_and(|selected| selected.id == item.id);
                 if self.app.tab.emby_library_index().is_some()
                     && !self.app.is_right_panel_wide()
@@ -106,11 +108,12 @@ impl super::super::Model {
 
     fn handle_music_artist_tracks(
         &mut self,
-        target: super::super::components::msg::MusicArtistTarget,
+        target: mbv_ui_model::msg::MusicArtistTarget,
         music_resize: &mut bool,
         tv_resize: &mut bool,
     ) {
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             self.app
                 .maybe_fetch_next_page_for_music_artist(lib_idx, &target.album_targets);
@@ -123,12 +126,9 @@ impl super::super::Model {
         );
     }
 
-    fn handle_music_album_cursor(
-        &mut self,
-        target: usize,
-        kind: crate::app::components::msg::AlbumCursorKind,
-    ) {
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+    fn handle_music_album_cursor(&mut self, target: usize, kind: mbv_ui_msg::AlbumCursorKind) {
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             match kind {
                 AlbumCursorKind::Move => {
@@ -160,14 +160,15 @@ impl super::super::Model {
 
     fn handle_music_artist_action(
         &mut self,
-        action: crate::app::components::msg::MusicTreeAction,
+        action: mbv_ui_msg::MusicTreeAction,
         items: Vec<mbv_emby_model::EmbyItem>,
-        origin: crate::app::components::media_list::SelectionOrigin,
+        origin: mbv_ui_model::media_list::SelectionOrigin,
         unresolved_targets: &[String],
     ) {
-        use crate::app::components::msg::MusicTreeAction;
+        use mbv_ui_msg::MusicTreeAction;
 
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         let had_items = !items.is_empty();
         match action {
             MusicTreeAction::Play | MusicTreeAction::Shuffle => {
@@ -207,17 +208,18 @@ impl super::super::Model {
 
     fn handle_music_artist_track_activate(
         &mut self,
-        target: &super::super::components::msg::MusicArtistTarget,
+        target: &mbv_ui_model::msg::MusicArtistTarget,
         track_id: &str,
     ) {
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         let resolved = self.music_owner().and_then(|owner| {
             let detail = owner.artist_detail_for_target(target)?;
             let tracks: Vec<mbv_emby_model::EmbyItem> = detail
                 .track_groups
                 .iter()
                 .flat_map(|group| group.tracks.iter())
-                .filter(|track| crate::app::ui_util::is_playable(track))
+                .filter(|track| mbv_ui_model::ui_util::is_playable(track))
                 .cloned()
                 .collect();
             let start_idx = tracks.iter().position(|track| track.id == track_id)?;

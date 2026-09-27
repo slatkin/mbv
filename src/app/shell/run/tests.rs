@@ -2,17 +2,17 @@ use super::*;
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
 };
-use crate::app::images::series_image_cache_key;
-use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
-use crate::app::render::make_movie_app;
-use crate::app::state::types::events::LibEvent;
-use crate::app::tests::{make_app_stub, make_session};
+use crate::app::tests::make_app_stub;
+use crate::app::tests::render_fixtures::make_movie_app;
 use crate::app::SessionEvent;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
 };
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_images::series_image_cache_key;
+use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
+use mbv_ui_model::events::LibEvent;
 use rstest::rstest;
 use std::collections::HashMap;
 
@@ -107,7 +107,7 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     assert!(
         matches!(
             app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::DismissConfirm)
+            Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm)
         ),
         "clear:yes must dismiss the confirmation modal"
     );
@@ -132,7 +132,7 @@ fn drain_session_events_dispatches_a_queued_event() {
     app.channels
         .sessions_tx
         .send(SessionEvent::Loaded {
-            sessions: vec![make_session("living-room", "mbv")],
+            sessions: vec![mbv_emby::test_support::make_session("living-room", "mbv")],
         })
         .expect("sessions channel");
 

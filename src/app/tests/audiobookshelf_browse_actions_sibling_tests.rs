@@ -23,10 +23,8 @@ fn podcast_episode_targets_include_parent_show_identity() {
             duration_seconds: Some(1.0),
         }],
     );
-    let first =
-        crate::app::components::msg::PodcastEpisodeTarget::new("show-a".into(), "episode-1".into());
-    let second =
-        crate::app::components::msg::PodcastEpisodeTarget::new("show-b".into(), "episode-1".into());
+    let first = mbv_ui_msg::PodcastEpisodeTarget::new("show-a".into(), "episode-1".into());
+    let second = mbv_ui_msg::PodcastEpisodeTarget::new("show-b".into(), "episode-1".into());
     let first_item = app
         .selected_audiobookshelf_queue_item_target(0, &first)
         .unwrap();

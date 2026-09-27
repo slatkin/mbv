@@ -1,28 +1,27 @@
-use crate::app::infra::layout;
-use crate::app::render;
-use crate::app::state::panel_targets::PanelTarget;
-use crate::app::state::queue_owner::QueueEpoch;
-use crate::app::state::types::browse::{AlbumIndexState, SeriesDetail};
 use crate::app::state::types::cast::CastAttachment;
-use crate::app::state::types::confirm::ConfirmModal;
-use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
-use crate::app::state::types::feed::IdleFeed;
-use crate::app::state::types::feed::SavePlaylistDialog;
-use crate::app::state::types::feed_tab::FeedTabState;
-use crate::app::state::types::library_tab::LibraryTab;
-use crate::app::state::types::playback::{
-    PendingQueueAction, PlaylistMutationState, QueueScope, ReplacementExecutor,
-    SuspendedLocalSession, UndoEntry,
-};
-use crate::app::state::types::player_tab::PlayerTab;
-use crate::app::state::types::settings::{PanelFocus, PanelMode, SettingsDestination};
-use crate::app::state::types::tab_selection::TabSelection;
-use crate::app::SidebarId;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
+use mbv_render as render;
+use mbv_render::layout;
+use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
+use mbv_ui_model::confirm::ConfirmModal;
+use mbv_ui_model::events::{PendingSeriesHandoff, PendingSeriesLanding};
+use mbv_ui_model::feed::IdleFeed;
+use mbv_ui_model::feed::SavePlaylistDialog;
+use mbv_ui_model::feed_tab::FeedTabState;
+use mbv_ui_model::library_tab::LibraryTab;
+use mbv_ui_model::panel_targets::PanelTarget;
+use mbv_ui_model::playback::{
+    PendingQueueAction, PlaylistMutationState, QueueScope, ReplacementExecutor,
+    SuspendedLocalSession, UndoEntry,
+};
+use mbv_ui_model::player_tab::PlayerTab;
+use mbv_ui_model::queue_owner::QueueEpoch;
+use mbv_ui_model::settings::{PanelFocus, PanelMode, SettingsDestination};
+use mbv_ui_model::tab_selection::TabSelection;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
 use std::sync::mpsc;
@@ -91,9 +90,9 @@ pub struct App {
     pub(in crate::app) audiobookshelf_shelf_cache:
         std::collections::HashMap<String, Vec<mbv_queue::QueueItem>>,
     pub(in crate::app) audiobookshelf_browse:
-        Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState>,
+        Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:
-        Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
+        Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
     pub(in crate::app) player: PlayerProxy,
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps
@@ -151,8 +150,7 @@ pub struct App {
     /// player to restore in that case).
     pub(in crate::app) home_is_local_daemon: bool,
     pub(in crate::app) hidden_libraries: Vec<String>,
-    pub(in crate::app) home_latest_launch_window:
-        crate::app::state::home_latest::HomeLatestLaunchWindow,
+    pub(in crate::app) home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_remote_player::resolve_library_route`.
@@ -166,7 +164,7 @@ pub struct App {
     pub(in crate::app) terminal_height: u16,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
-    pub(in crate::app) pending_overlay: Option<crate::app::state::types::overlay::OverlayRequest>,
+    pub(in crate::app) pending_overlay: Option<mbv_ui_model::overlay::OverlayRequest>,
     /// Set right before requesting a clean exit on an announced daemon
     /// shutdown (task 7.2); printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
@@ -255,8 +253,7 @@ pub struct App {
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
-    pub(in crate::app) queue_card_projection:
-        crate::app::render::components::card::QueueCardProjection,
+    pub(in crate::app) queue_card_projection: mbv_ui_model::queue_card::QueueCardProjection,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
@@ -417,18 +414,18 @@ pub struct App {
     /// stable `ArtistItems` identity, and settled catalog revision (design
     /// D7, tasks 6.1–6.3). Shell-owned; the component never sees the cache.
     pub(in crate::app) artist_detail_cache: std::collections::HashMap<
-        crate::app::state::music_artist_detail::ArtistDetailKey,
-        crate::app::state::music_artist_detail::ArtistDetailCacheEntry,
+        mbv_ui_model::music_artist_detail::ArtistDetailKey,
+        mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry,
     >,
     pub(in crate::app) artist_detail_loading:
-        std::collections::HashSet<crate::app::state::music_artist_detail::ArtistDetailKey>,
+        std::collections::HashSet<mbv_ui_model::music_artist_detail::ArtistDetailKey>,
     /// Typed identity hand-off for artist artwork fetched by the shared image
     /// worker. The image cache itself remains provider/generic.
     pub(in crate::app) artist_artwork_requests:
-        std::collections::HashMap<String, crate::app::state::music_artist_detail::ArtistDetailKey>,
+        std::collections::HashMap<String, mbv_ui_model::music_artist_detail::ArtistDetailKey>,
     pub(in crate::app) artist_artwork_status: std::collections::HashMap<
-        crate::app::state::music_artist_detail::ArtistDetailKey,
-        crate::app::state::music_artist_detail::ArtistArtworkStatus,
+        mbv_ui_model::music_artist_detail::ArtistDetailKey,
+        mbv_ui_model::music_artist_detail::ArtistArtworkStatus,
     >,
     /// TV series detail cache for inline rendering.
     /// When a Series is selected, we proactively fetch seasons and episodes
@@ -439,7 +436,7 @@ pub struct App {
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
-    pub(in crate::app) images: crate::app::infra::images::cache::ImageCache,
+    pub(in crate::app) images: mbv_images::cache::ImageCache,
     pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
     pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
@@ -458,44 +455,60 @@ pub struct App {
 }
 
 impl App {
-    pub(in crate::app) fn request_sidebar_open(&mut self, sidebar: SidebarId) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::OpenSidebar(sidebar));
+    pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
+        let normalized = mbv_render::arrangements::queue::normalize_queue_column_width(
+            self.queue_column_width,
+            self.terminal_width,
+        );
+        if normalized == self.queue_column_width {
+            return false;
+        }
+        self.queue_column_width = normalized;
+        true
     }
 
-    pub(in crate::app) fn request_sidebar_dismiss(&mut self, sidebar: SidebarId) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::DismissSidebar(sidebar));
+    pub(in crate::app) fn request_sidebar_open(
+        &mut self,
+        sidebar: mbv_ui_model::sidebar::SidebarId,
+    ) {
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
-    pub(in crate::app) fn request_sidebar_toggle(&mut self, sidebar: SidebarId) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::ToggleSidebar(sidebar));
-    }
-
-    pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
-        self.pending_overlay = Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
-            modal,
+    pub(in crate::app) fn request_sidebar_dismiss(
+        &mut self,
+        sidebar: mbv_ui_model::sidebar::SidebarId,
+    ) {
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
+            sidebar,
         ));
     }
 
+    pub(in crate::app) fn request_sidebar_toggle(
+        &mut self,
+        sidebar: mbv_ui_model::sidebar::SidebarId,
+    ) {
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ToggleSidebar(
+            sidebar,
+        ));
+    }
+
+    pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal));
+    }
+
     pub(in crate::app) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::SavePlaylist(dialog));
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::SavePlaylist(dialog));
     }
 
     pub(in crate::app) fn dismiss_confirm(&mut self) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::DismissConfirm);
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
     }
 
     pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::DismissDaemonLost);
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
     }
 
     pub(in crate::app) fn dismiss_save_playlist(&mut self) {
-        self.pending_overlay =
-            Some(crate::app::state::types::overlay::OverlayRequest::DismissSavePlaylist);
+        self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
     }
 }

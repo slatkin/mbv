@@ -3,19 +3,20 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest};
-use crate::app::render::make_music_group_app;
-use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
-use crate::app::state::types::context_menu::{
-    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
-};
-use crate::app::state::types::daemon_lost::DaemonLostModal;
-use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::tests::make_app_stub;
+use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::QueueComponent;
+use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
+use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry};
+use mbv_ui_model::daemon_lost::DaemonLostModal;
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
 // rung 1), not by message discarding. A mounted Search sidebar painted with
@@ -158,7 +159,7 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
 }
 
 fn drawn_tab_harness() -> TickHarness {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
     let mut harness = TickHarness::new(app);
     // The sync pass mounts the panels from paint-free chrome geometry; draw
@@ -176,14 +177,14 @@ fn drawn_tab_harness() -> TickHarness {
     harness
 }
 
-fn tab_panel_component(harness: &TickHarness) -> &crate::app::components::TabPanel {
+fn tab_panel_component(harness: &TickHarness) -> &mbv_components::TabPanel {
     harness
         .model()
         .application
         .get_component(&ComponentId::TabPanel)
         .expect("TabPanel mounted when the library column is visible")
         .as_any()
-        .downcast_ref::<crate::app::components::TabPanel>()
+        .downcast_ref::<mbv_components::TabPanel>()
         .expect("TabPanel component")
 }
 
@@ -201,7 +202,7 @@ fn library_panel_component(harness: &TickHarness) -> &LibraryPanel {
 #[test]
 fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide_modes() {
     for (terminal_width, terminal_height) in [(80, 24), (120, 30)] {
-        let mut app = crate::app::render::make_music_group_app();
+        let mut app = crate::app::tests::render_fixtures::make_music_group_app();
         app.panel_mode = PanelMode::LibraryOnly;
         app.panel_focus = PanelFocus::Library;
         app.terminal_width = terminal_width;
@@ -375,7 +376,7 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
 // use.
 #[test]
 fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.ui_volume = 60;
     app.mute_on = false;
     let mut harness = TickHarness::new(app);
@@ -404,9 +405,9 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Playback(
-            crate::app::components::PlaybackRequest::VolumeDelta(-5)
-        )),
+        outcome
+            .messages
+            .contains(&Msg::Playback(mbv_ui_msg::PlaybackRequest::VolumeDelta(-5))),
         "the volume intent reaches the shell: {:?}",
         outcome.messages
     );
@@ -418,14 +419,14 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     );
 }
 
-fn tab_panel_status_regions(harness: &TickHarness) -> crate::app::render::StatusBarRegions {
+fn tab_panel_status_regions(harness: &TickHarness) -> mbv_render::StatusBarRegions {
     harness
         .model()
         .application
         .get_component(&ComponentId::StatusBarPanel)
         .expect("StatusBarPanel mounted when the library column is visible")
         .as_any()
-        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .downcast_ref::<mbv_components::StatusBarPanel>()
         .expect("StatusBarPanel component")
         .regions()
 }
@@ -575,7 +576,7 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
 
 #[test]
 fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
-    let mut app = crate::app::render::make_queue_app(2);
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);

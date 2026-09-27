@@ -5,11 +5,11 @@ use mbv_queue::QueueState;
 
 fn forward_audiobookshelf_updates<T, F>(
     receiver: &std::sync::mpsc::Receiver<T>,
-    sender: &std::sync::mpsc::Sender<crate::app::state::types::events::LibEvent>,
+    sender: &std::sync::mpsc::Sender<mbv_ui_model::events::LibEvent>,
     event: F,
 ) where
     T: Send + 'static,
-    F: Fn(T) -> crate::app::state::types::events::LibEvent + Send + 'static,
+    F: Fn(T) -> mbv_ui_model::events::LibEvent + Send + 'static,
 {
     for update in receiver {
         if sender.send(event(update)).is_err() {
@@ -84,16 +84,15 @@ impl App {
                             previous_state: completion.previous_state,
                         });
                     self.setup.audiobookshelf_setup_form = None;
-                    self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
+                    self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
                         title: " Replace Audiobookshelf ".into(),
                         message:
                             "Replace Audiobookshelf? Service-owned setup and state will be cleared."
                                 .into(),
                         hint: "[y/Enter] Replace    [Esc] Cancel".into(),
-                        on_confirm:
-                            crate::app::state::types::confirm::ConfirmAction::ReplaceAudiobookshelf(
-                                completion.generation,
-                            ),
+                        on_confirm: mbv_ui_model::confirm::ConfirmAction::ReplaceAudiobookshelf(
+                            completion.generation,
+                        ),
                     });
                     return;
                 }
@@ -346,7 +345,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &receiver,
                         &lib_tx,
-                        crate::app::state::types::events::LibEvent::AudiobookshelfProgressAcknowledged,
+                        mbv_ui_model::events::LibEvent::AudiobookshelfProgressAcknowledged,
                     );
                 });
                 let (book_sender, book_receiver) = std::sync::mpsc::channel();
@@ -356,7 +355,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &book_receiver,
                         &lib_tx,
-                        crate::app::state::types::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
+                        mbv_ui_model::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
                     );
                 });
                 context

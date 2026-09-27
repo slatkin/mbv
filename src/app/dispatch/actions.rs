@@ -1,5 +1,4 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::natural_sort_key;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
@@ -8,6 +7,7 @@ pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::{QueueItem, QueueItemContentId};
+use mbv_ui_model::ui_util::natural_sort_key;
 use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.
@@ -109,11 +109,11 @@ impl App {
             .or_else(|| self.remote.direct_remote_label.clone())
             .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
             .unwrap_or_else(|| "this owner".into());
-        self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
+        self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
             title: format!(" Play locally instead of {owner} "),
             message: format!("Play \"{label}\" on this machine instead?"),
             hint: "[y] Play here    [n] Cancel".into(),
-            on_confirm: crate::app::state::types::confirm::ConfirmAction::PlayLocallyInstead,
+            on_confirm: mbv_ui_model::confirm::ConfirmAction::PlayLocallyInstead,
         });
     }
 

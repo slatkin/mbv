@@ -21,9 +21,9 @@
 //! split episode rows, Workspace-free Wide hero, one painter per surface).
 
 use super::*;
-use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, Msg, ShellRequest};
+use mbv_components::emby_library_content::EmbyLibraryContent as BrowserOwner;
+use mbv_components::library_panel::LibraryPanel;
+use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_emby_model::EmbyItem> {
@@ -124,7 +124,7 @@ fn tv_shows_app() -> App {
             title: "Shows".into(),
             items: folder_items("Series", "Series", 5),
             total_count: 5,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -198,7 +198,7 @@ fn feed_home_video_group_app() -> App {
             title: "YouTube".into(),
             items: vec![folder.clone()],
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

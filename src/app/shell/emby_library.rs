@@ -1,7 +1,7 @@
-use super::components::ShellRequest;
 use super::Model;
 use super::{ConfirmAction, ConfirmModal};
-use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
+use crate::app::infra::image_fetch::NAV_IMAGE_FETCH_IDLE_DELAY;
+use mbv_ui_msg::ShellRequest;
 use std::time::Instant;
 
 impl Model {

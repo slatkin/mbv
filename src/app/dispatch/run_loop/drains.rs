@@ -1,4 +1,4 @@
-use crate::app::state::types::playback::PendingQueueAction;
+use mbv_ui_model::playback::PendingQueueAction;
 
 use crate::app::App;
 
@@ -124,15 +124,13 @@ impl App {
             .audiobookshelf_libraries
             .iter()
             .cloned()
-            .map(crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new)
+            .map(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new)
             .collect();
         self.audiobookshelf_book_browse = self
             .audiobookshelf_libraries
             .iter()
             .cloned()
-            .map(
-                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new,
-            )
+            .map(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState::new)
             .collect();
         for index in 0..self.audiobookshelf_browse.len() {
             self.activate_audiobookshelf_position(index);
@@ -154,15 +152,18 @@ impl App {
         >,
     ) {
         for index in 0..self.audiobookshelf_browse.len() {
-            let book_kind = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
-                &self.audiobookshelf_libraries[index].media_type,
-            );
+            let book_kind =
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+                    &self.audiobookshelf_libraries[index].media_type,
+                );
             // Podcast libraries reconcile the episode progress map; book libraries the book progress map.
             match book_kind {
-                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
-                    self.audiobookshelf_browse[index].progress.clone_from(progress);
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                    self.audiobookshelf_browse[index]
+                        .progress
+                        .clone_from(progress);
                 }
-                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                     self.audiobookshelf_book_browse[index]
                         .progress
                         .clone_from(book_progress);
@@ -176,9 +177,12 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
         for library in &self.audiobookshelf_libraries {
-            let book_kind = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(&library.media_type);
+            let book_kind =
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+                    &library.media_type,
+                );
             match book_kind {
-                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
                         self.config.lock().unwrap().clone(),
                         generation,
@@ -193,7 +197,7 @@ impl App {
                         self.channels.lib_tx.clone(),
                     );
                 }
-                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
                         self.config.lock().unwrap().clone(),
                         generation,

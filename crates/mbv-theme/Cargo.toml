@@ -1,0 +1,17 @@
+[package]
+name = "mbv-theme"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Semantic colour roles and surface palette for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+ratatui.workspace = true

@@ -1,0 +1,21 @@
+use ratatui::layout::Rect;
+
+pub mod chrome;
+// Inline Search consumes destination-owned geometry directly: no arrangement.
+pub mod library;
+pub mod playback_transport;
+pub mod queue;
+pub mod wide_hero;
+
+/// Inset a `Rect` by symmetric horizontal/vertical padding: `pad_x` on each
+/// side, `pad_y` top and bottom. Shared by every arrangement that pads a
+/// panel into a content area.
+#[must_use]
+pub fn padded_rect(area: Rect, pad_x: u16, pad_y: u16) -> Rect {
+    Rect {
+        x: area.x.saturating_add(pad_x),
+        y: area.y.saturating_add(pad_y),
+        width: area.width.saturating_sub(pad_x * 2),
+        height: area.height.saturating_sub(pad_y * 2),
+    }
+}

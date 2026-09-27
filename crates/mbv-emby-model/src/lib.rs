@@ -1,5 +1,8 @@
 //! Emby item models and shared playback-position units.
 
+#[cfg(any(test, feature = "test"))]
+pub mod test_support;
+
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 // Keep this equal to TICKS_PER_SECOND; the f64 form avoids repeated integer casts.
 pub const TICKS_PER_SECOND_F64: f64 = 10_000_000.0;

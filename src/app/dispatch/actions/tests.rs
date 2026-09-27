@@ -2,10 +2,11 @@ use super::*;
 use crate::app::dispatch::library::browse::{
     build_album_index_with, recursive_album_search_eligible,
 };
-use crate::app::tests::{confirm_replace_queue, install_test_emby, make_app_stub, make_item};
+use crate::app::tests::{confirm_replace_queue, install_test_emby, make_app_stub};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, BrowseLevel, LibEvent, LibraryTab, PanelFocus, TabSelection,
 };
+use mbv_emby_model::test_support::make_item;
 use std::collections::HashMap;
 
 fn folder(id: &str, name: &str) -> EmbyItem {

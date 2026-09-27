@@ -1,8 +1,8 @@
 use super::*;
-use crate::app::components::{Msg, ShellRequest};
-use crate::app::render::make_movie_app;
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_net::mock_http::MockHttp;
+use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_msg::{Msg, ShellRequest};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 mod group;
@@ -65,9 +65,7 @@ fn expanding_an_uncached_show_starts_the_detail_fetch() {
     assert!(model.app.series_detail_cache.is_empty());
 
     model.handle_tv_request(ShellRequest::TvTreeExpand {
-        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
-            "tv-id:13:movie-focused".into(),
-        ),
+        target: mbv_ui_msg::TvTreeTarget::Show("tv-id:13:movie-focused".into()),
     });
 
     assert_eq!(
@@ -100,14 +98,14 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
     let seasons = ["season-1", "season-2", "season-3"]
         .into_iter()
         .map(|id| {
-            let mut season = crate::app::tests::make_item(id, "Season");
+            let mut season = mbv_emby_model::test_support::make_item(id, "Season");
             season.id = id.into();
             season
         })
         .collect();
     model.app.handle_series_detail_fetched(
         "movie-focused",
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons,
             episodes: std::collections::HashMap::new(),
         },
@@ -127,21 +125,21 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
 #[test]
 fn late_series_detail_completion_does_not_replace_cached_detail() {
     let mut app = make_movie_app();
-    let mut cached_season = crate::app::tests::make_item("Current", "Season");
+    let mut cached_season = mbv_emby_model::test_support::make_item("Current", "Season");
     cached_season.id = "current-season".into();
     app.series_detail_cache.insert(
         "show-id".into(),
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons: vec![cached_season],
             episodes: std::collections::HashMap::new(),
         },
     );
 
-    let mut stale_season = crate::app::tests::make_item("Stale", "Season");
+    let mut stale_season = mbv_emby_model::test_support::make_item("Stale", "Season");
     stale_season.id = "stale-season".into();
     app.handle_series_detail_fetched(
         "show-id",
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons: vec![stale_season],
             episodes: std::collections::HashMap::new(),
         },
@@ -175,7 +173,7 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
 
     model.app.series_detail_cache.insert(
         "movie-focused".into(),
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons: Vec::new(),
             episodes: std::collections::HashMap::new(),
         },
@@ -204,12 +202,11 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     assert!(matches!(
         move_request,
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
-            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
+            hit: mbv_ui_msg::TvHit::SeriesRow(ref target)
         } if target == "movie-second")));
-    model.app.handle_mouse_single_click_tv(
-        0,
-        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
-    );
+    model
+        .app
+        .handle_mouse_single_click_tv(0, mbv_ui_msg::TvHit::SeriesRow("movie-second".into()));
     model.push_tv_workspace_content();
     let selected_id = |model: &mut Model| {
         model
@@ -222,16 +219,16 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     // Seed detail for the selected series (movie-second, the row the
     // component cursor sits on after Down) and Enter it so the component
     // enters the Episodes pane (episode_cursor becomes Some(0)).
-    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    let mut season = mbv_emby_model::test_support::make_item("Season 1", "Season");
     season.id = "season-1".into();
-    let mut episode = crate::app::tests::make_item("Episode 1", "Episode");
+    let mut episode = mbv_emby_model::test_support::make_item("Episode 1", "Episode");
     episode.id = "episode-1".into();
     episode.series_id = "movie-second".into();
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-1".into(), vec![episode]);
     model.app.series_detail_cache.insert(
         "movie-second".into(),
-        crate::app::SeriesDetail {
+        mbv_ui_model::browse::SeriesDetail {
             seasons: vec![season],
             episodes,
         },

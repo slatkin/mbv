@@ -5,12 +5,12 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::SessionsComponent;
-use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 use crate::app::dispatch::action::Command;
-use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
-use crate::app::tests::{make_app_stub, make_session};
+use mbv_components::SessionsComponent;
+use mbv_ui_model::panel_targets::{PanelTarget, SessionTargetKey};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -22,7 +22,7 @@ fn key(code: Key) -> Event<UserEvent> {
 fn sessions(ids: &[&str]) -> Vec<PanelTarget> {
     ids.iter()
         .map(|id| {
-            let mut session = make_session(id, "mbv");
+            let mut session = mbv_emby::test_support::make_session(id, "mbv");
             session.id = (*id).into();
             PanelTarget::Emby(Box::new(session))
         })
@@ -115,7 +115,7 @@ fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
         let outcome = harness.step();
         assert!(outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
+            Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::KeyClaimed)
         )));
     }
     assert_eq!(
@@ -363,6 +363,6 @@ fn tick_sessions_selection_delivers_through_focused_tick_after_f3() {
     );
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
+        Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::KeyClaimed)
     )));
 }

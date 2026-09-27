@@ -1,10 +1,10 @@
 //! Shell-invoked mouse effect handlers for migrated interactive surfaces.
 
-use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::App;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
+use mbv_ui_msg::TvHit;
 use std::time::{Duration, Instant};
 
 impl App {
@@ -53,7 +53,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: &str) {
-        self.set_panel_focus(crate::app::PanelFocus::Library);
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
@@ -70,7 +70,7 @@ impl App {
         &mut self,
         slot_id: Option<mbv_queue::QueueSlotId>,
     ) -> Option<usize> {
-        self.set_panel_focus(crate::app::PanelFocus::Queue);
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         let slot_id = slot_id?;
         let index = self
             .displayed_queue()
@@ -189,7 +189,7 @@ impl App {
                 .iter()
                 .find(|item| {
                     if item.id.is_empty() {
-                        crate::app::components::tv_content::upcoming_episode_target(item) == target
+                        mbv_components::tv_content::upcoming_episode_target(item) == target
                     } else {
                         item.id == target
                     }
@@ -208,10 +208,10 @@ impl App {
     pub(in crate::app) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
-                self.set_panel_focus(crate::app::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
             }
             TvHit::SeriesRow(target) => {
-                self.set_panel_focus(crate::app::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 // The component resolved the stable ID from its painted row;
                 // persist that resolved nav index rather than re-reading the
                 // shell's previous cursor. A stale target is a no-op.
@@ -231,7 +231,7 @@ impl App {
             // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
             // letter-pill arm.
             TvHit::LetterPill(index) => {
-                self.set_panel_focus(crate::app::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.select_letter_pill(lib_idx, index);
             }
         }

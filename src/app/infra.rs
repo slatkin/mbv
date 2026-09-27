@@ -1,9 +1,7 @@
-pub(crate) mod images;
-pub(crate) mod layout;
-pub(crate) mod palette;
+pub(crate) mod image_fetch;
+
+pub(crate) mod paging;
 pub(in crate::app) mod render_cadence;
-pub(in crate::app) mod resize;
 pub(in crate::app) mod signals;
 pub(in crate::app) mod terminal;
-pub(crate) mod ui_util;
 pub(in crate::app) mod visualizer;

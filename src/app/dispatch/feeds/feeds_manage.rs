@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::App;
 use mbv_config::FeedSubscription;
+use mbv_ui_model::tab_selection::TabSelection;
 
 impl App {
     /// Effect for `ConfirmAction::RemoveFeedSubscription`'s "yes" answer

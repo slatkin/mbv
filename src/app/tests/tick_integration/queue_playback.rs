@@ -7,15 +7,16 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::msg::PlaybackRequest;
-use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
-use crate::app::state::types::playback::PlaybackState;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
+use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_ctrl::player::PlayerEvent;
+use mbv_ui_model::playback::PlaybackState;
+use mbv_ui_msg::PlaybackRequest;
+use mbv_ui_msg::{ComponentId, Msg};
 
-fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
+fn click(column: u16, row: u16) -> tuirealm::event::Event<mbv_ui_msg::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column,
@@ -27,7 +28,7 @@ fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components
 /// An app with active playback and a non-empty queue, in the given panel
 /// mode (mini view uses the ephemeral queue focus).
 fn active_app(panel_mode: PanelMode) -> crate::app::App {
-    let mut app = crate::app::render::make_queue_app(3);
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
     app.panel_mode = panel_mode;
     if panel_mode != PanelMode::Both {
         app.mini_view_focus = PanelFocus::Queue;
@@ -157,7 +158,7 @@ mod strip_hits {
 
 #[test]
 fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints() {
-    use crate::app::render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
+    use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
 
     for width in [80, 120] {
         let mut app = active_app(PanelMode::QueueOnly);
@@ -423,9 +424,7 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if cell.symbol() == "\u{2594}"
-                    && cell.style().fg == Some(crate::app::palette::ACCENT)
-                {
+                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(mbv_theme::ACCENT) {
                     painted += 1;
                     assert!(
                         owner.contains((x, y).into()),
@@ -440,9 +439,9 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
 
 #[test]
 fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
-    use crate::app::components::media_list::MediaSemanticState;
-    use crate::app::components::queue::queue_media_rows;
     use crate::app::tests::make_audio_items;
+    use mbv_components::queue::queue_media_rows;
+    use mbv_render::components::media_list::MediaSemanticState;
 
     let mut app = make_app_stub();
     app.player_tab.set_items(make_audio_items(2), 0);
@@ -466,14 +465,14 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[0],
-        crate::app::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::NowPlaying { .. },
             ..
         }
     ));
     assert!(matches!(
         &rows[1],
-        crate::app::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }
@@ -509,7 +508,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[1],
-        crate::app::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }

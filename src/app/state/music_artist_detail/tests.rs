@@ -1,8 +1,8 @@
 use super::*;
-use crate::app::render::make_music_group_app;
-use crate::app::state::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
-use crate::app::tests::make_item;
+use crate::app::tests::render_fixtures::make_music_group_app;
+use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyArtistRef;
+use mbv_ui_model::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
 use std::collections::HashMap;
 
 fn destination() -> LibraryKey {
@@ -293,7 +293,7 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
     // status is terminal for this source identity.
     app.images.card_image_states.insert(
         cache_key.clone(),
-        crate::app::images::CachedImage {
+        mbv_images::CachedImage {
             img: Some(image::DynamicImage::ImageRgba8(
                 image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
             )),

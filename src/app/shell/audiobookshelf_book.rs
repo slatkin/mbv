@@ -1,11 +1,10 @@
-use super::components::book_content::BookContent;
-use super::components::library_panel::LibraryKey;
-use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
-use super::components::LibraryKind;
 use super::Model;
 use super::TabSelection;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_components::book_content::BookContent;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 
 impl Model {
     fn abs_book_key(&self) -> Option<LibraryKey> {
@@ -61,7 +60,8 @@ impl Model {
         if self.abs_book_owner().is_none() {
             return;
         }
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
                 AudiobookshelfBookMove::Book(Some(target)) => {
@@ -97,7 +97,9 @@ impl Model {
                 }
                 AudiobookshelfBookIntent::FocusChapters => {
                     if self.app.is_right_panel_wide() {
-                        self.update_abs_book_owner(super::super::components::book_content::BookContent::enter_chapter_focus);
+                        self.update_abs_book_owner(
+                            mbv_components::book_content::BookContent::enter_chapter_focus,
+                        );
                     } else {
                         self.open_library_hero_overlay();
                     }

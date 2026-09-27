@@ -1,4 +1,5 @@
-use crate::app::{App, SidebarId};
+use crate::app::App;
+use crate::app::SidebarId;
 
 impl App {
     /// Activate a search result: navigate to the item and close the sidebar.

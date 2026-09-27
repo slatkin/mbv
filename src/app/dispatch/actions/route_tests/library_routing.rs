@@ -56,7 +56,7 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
     let stale_item = make_item("Stale", "Movie");
     let (remote, remote_rx, command_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
-    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
+    let sess = mbv_emby::test_support::make_session("remote-mbv", "mbv");
     app.switch_to_direct_remote(
         &sess,
         remote,
@@ -120,7 +120,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
             items: vec![anchor.clone()],
             fetched_rows: 1,
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -153,9 +153,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
     assert!(
         !matches!(
             app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
-                _
-            ))
+            Some(mbv_ui_model::overlay::OverlayRequest::Confirm(_))
         ),
         "library autoplay is never gated"
     );

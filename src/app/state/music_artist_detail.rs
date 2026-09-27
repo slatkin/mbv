@@ -18,91 +18,23 @@ use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
-use crate::app::components::library_panel::{LibraryKey, LibraryKind};
-use crate::app::components::msg::MusicArtistTarget;
-use crate::app::render::MusicWideRenderCtx;
-use crate::app::state::music_grouping::ArtistKey;
-use crate::app::ui_util::sort_audio_tracks;
 use crate::app::{App, LibEvent};
+use mbv_render::MusicWideRenderCtx;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::msg::MusicArtistTarget;
+use mbv_ui_model::music_artist_detail::track_matches_album;
+use mbv_ui_model::music_artist_detail::{
+    ArtistArtworkStatus, ArtistDetailCacheEntry, ArtistDetailKey, ArtistDetailProjection,
+    ArtistSummary, ArtistTrackGroup,
+};
+use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::ui_util::sort_audio_tracks;
 
 /// At most this many fallback artist per-album track fetches run at once. A
 /// fallback root's scope can be the whole settled catalog, so arming every
 /// album on focus would issue one request per album in one burst; the queue
 /// arms the bound and each arrival frees a slot for the next album.
 const MAX_ARTIST_FALLBACK_TRACK_FETCHES: usize = 6;
-
-/// The cache identity of one artist-detail query. Every axis is part of the
-/// identity so a late response from a replaced browse snapshot, a re-settled
-/// catalog, or a Service re-setup can never become the Workspace for the new
-/// source.
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub(in crate::app) struct ArtistDetailKey {
-    pub(in crate::app) destination: LibraryKey,
-    pub(in crate::app) generation: u64,
-    pub(in crate::app) artist_id: String,
-    pub(in crate::app) revision: u64,
-}
-
-#[derive(Debug, Clone, Default)]
-pub(in crate::app) struct ArtistDetailCacheEntry {
-    pub(in crate::app) tracks: Vec<EmbyItem>,
-    /// A terminal query failure (the Service rejected or does not support the
-    /// `ArtistIds` query). Projection switches to the documented per-album
-    /// aggregation fallback, and repeated pushes do not turn the Service
-    /// error into an unbounded request loop.
-    pub(in crate::app) failed: bool,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::app) enum ArtistArtworkStatus {
-    Loading,
-    Ready,
-    None,
-}
-
-/// Immediate facts for the focused artist. These derive from the settled
-/// in-scope album set, so they are available while tracks/artwork are still
-/// loading. Read by the task-6.4 Hero wiring.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(in crate::app) struct ArtistSummary {
-    pub(in crate::app) name: String,
-    pub(in crate::app) album_count: usize,
-    pub(in crate::app) year_start: Option<u32>,
-    pub(in crate::app) year_end: Option<u32>,
-}
-
-impl ArtistSummary {
-    pub(in crate::app) fn year_span(&self) -> Option<String> {
-        match (self.year_start, self.year_end) {
-            (Some(start), Some(end)) if start != end => Some(format!("{start}\u{2013}{end}")),
-            (Some(year), _) | (_, Some(year)) => Some(year.to_string()),
-            (None, None) => None,
-        }
-    }
-}
-
-/// One settled album's slice of the artist Workspace snapshot (task 6.3):
-/// tracks of that album only, in disc/track order.
-#[derive(Clone)]
-pub(in crate::app) struct ArtistTrackGroup {
-    pub(in crate::app) album_id: String,
-    pub(in crate::app) album_title: String,
-    pub(in crate::app) tracks: Vec<EmbyItem>,
-}
-
-/// The shell-owned projection for one focused artist root. Its summary facts
-/// and grouped rows feed the Music Hero and canonical track Workspace
-/// (`MusicContent`, task 6.4). The legacy typed artist-artwork cache remains
-/// retained for its completion machinery, but the Hero image source is now the
-/// selected album's existing artwork path.
-#[derive(Clone)]
-pub(in crate::app) struct ArtistDetailProjection {
-    pub(in crate::app) target: MusicArtistTarget,
-    /// Immediate artist facts (task 6.2): the Hero's artist name, in-scope
-    /// album count, and year span.
-    pub(in crate::app) summary: ArtistSummary,
-    pub(in crate::app) track_groups: Vec<ArtistTrackGroup>,
-}
 
 pub(in crate::app) fn artist_artwork_cache_key(
     destination: &LibraryKey,
@@ -210,17 +142,6 @@ fn current_album_ids(
             Some((index, row_target.clone(), item.id.clone(), title))
         })
         .collect()
-}
-
-/// Whether one artist-track result belongs to the settled album carrying
-/// `album_id`. Only the Service album ID may match: the `ArtistIds` Audio
-/// query this cache holds is user-scoped and never requests `AlbumId`, so a
-/// track with no album ID is a live payload shape, and a title match would
-/// admit another same-titled album's tracks as playable rows. A track the
-/// Service omitted an album ID for can still reach the Workspace through the
-/// fallback path's per-album fetches, which carry real album IDs.
-pub(in crate::app) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
-    !album_id.is_empty() && track.album_id == album_id
 }
 
 impl App {

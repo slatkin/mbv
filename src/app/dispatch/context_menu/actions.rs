@@ -1,10 +1,10 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::context_menu::BulkRemoveTarget;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
 };
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::BulkRemoveTarget;
 use rand::seq::SliceRandom;
 
 impl App {
@@ -63,7 +63,7 @@ impl App {
                 } else {
                     for item in items
                         .into_iter()
-                        .filter(|item| !item.is_folder && crate::app::ui_util::is_playable(item))
+                        .filter(|item| !item.is_folder && mbv_ui_model::ui_util::is_playable(item))
                     {
                         self.submit_queue_item(mbv_queue::QueueItem::Emby(Box::new(item)), false);
                     }

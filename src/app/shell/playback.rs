@@ -1,6 +1,8 @@
-use super::components::{PlaybackProjection, PlaybackRequest};
 use super::Model;
 use super::{palette, PanelFocus};
+use mbv_components::PlaybackProjection;
+use mbv_render::components::chrome_player::TransportAvailability;
+use mbv_ui_msg::PlaybackRequest;
 
 impl Model {
     /// The shared transport projection both playback panels consume (task
@@ -76,7 +78,7 @@ impl Model {
                 })
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
-            availability: super::components::library_playback_panel::TransportAvailability {
+            availability: TransportAvailability {
                 stop: self.app.connected_session_id.is_some() || state.active,
                 previous: prev_available,
                 next: next_available,
@@ -113,7 +115,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::Msg;
+    use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -125,7 +127,7 @@ mod tests {
             Msg::Playback(PlaybackRequest::VolumeDelta(5)),
             Msg::Playback(PlaybackRequest::VolumeDelta(_))
         ));
-        let _ = Event::<super::super::components::UserEvent>::Keyboard(KeyEvent {
+        let _ = Event::<mbv_ui_msg::UserEvent>::Keyboard(KeyEvent {
             code: Key::Char('m'),
             modifiers: KeyModifiers::NONE,
         });

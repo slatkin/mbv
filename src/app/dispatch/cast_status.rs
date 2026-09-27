@@ -99,13 +99,13 @@ impl App {
     /// local/remote-session playback state.
     pub(in crate::app) fn cast_effective_playback_state(
         &self,
-    ) -> Option<crate::app::PlaybackState> {
+    ) -> Option<mbv_ui_model::playback::PlaybackState> {
         let cast = self.cast_attachment.as_ref()?;
         let Some(status) = cast.status.as_ref() else {
             // Attached and dispatched, but no status polled yet: present as
             // active so controls appear immediately (optimistic, matching
             // `attach_cast`'s optimistic-attach shape) rather than idle.
-            return Some(crate::app::PlaybackState {
+            return Some(mbv_ui_model::playback::PlaybackState {
                 active: !cast.dispatched.is_empty(),
                 active_idx: self.cast_active_queue_index(cast),
                 position_ticks: 0,
@@ -116,7 +116,7 @@ impl App {
         let active = status.state != CastPlaybackState::Idle;
         let position_seconds = cast_extrapolate(status, cast.status_at).unwrap_or(0.0);
         let runtime_ticks = seconds_to_ticks(f64::from(status.duration_seconds.unwrap_or(0.0)));
-        Some(crate::app::PlaybackState {
+        Some(mbv_ui_model::playback::PlaybackState {
             active,
             active_idx: self.cast_active_queue_index(cast),
             position_ticks: seconds_to_ticks(f64::from(position_seconds)),

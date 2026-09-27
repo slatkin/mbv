@@ -11,8 +11,8 @@ use mbv_keybinds::Keybinds;
 
 use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
 use super::resolver::KeyChord;
-use crate::app::components::ComponentId;
 use crate::app::dispatch::action::Command;
+use mbv_ui_msg::ComponentId;
 
 pub(in crate::app) use super::key_policy::RouterSnapshot;
 
@@ -182,7 +182,7 @@ pub(in crate::app) fn resolve_armed_outcome(
 /// "the focused leaf is the overlay itself" from "an overlay is mounted
 /// elsewhere".
 pub(in crate::app) fn is_blocking_overlay(id: &ComponentId) -> bool {
-    use crate::app::components::{ModalId, OverlayId, PopupId};
+    use mbv_ui_msg::{ModalId, OverlayId, PopupId};
     matches!(
         id,
         ComponentId::Overlay(OverlayId::ContextMenu)

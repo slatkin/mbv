@@ -1,9 +1,9 @@
-use crate::app::state::types::feed::IdleFeed;
-use crate::app::state::types::playback::QueueScope;
-use crate::app::state::types::player_tab::PlayerTab;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
+use mbv_ui_model::feed::IdleFeed;
+use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::player_tab::PlayerTab;
 use mbv_ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -30,7 +30,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) use_nerd_fonts: bool,
-    pub(in crate::app) indicator_style: crate::app::render::indicators::IndicatorStyle,
+    pub(in crate::app) indicator_style: mbv_render::indicators::IndicatorStyle,
     pub(in crate::app) image_cache_size: usize,
     pub(in crate::app) visualizer_glyph: String,
     pub(in crate::app) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,

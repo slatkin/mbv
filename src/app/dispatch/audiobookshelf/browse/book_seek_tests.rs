@@ -1,8 +1,8 @@
 use super::*;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::tests::make_app_stub;
 use mbv_queue::AudiobookshelfBookQueueItem;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use mbv_ui_model::tab_selection::TabSelection;
 
 fn library() -> mbv_audiobookshelf::AudiobookshelfLibrary {
     mbv_audiobookshelf::AudiobookshelfLibrary {
@@ -62,9 +62,10 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
     app.player_tab.queue =
         mbv_queue::PlaybackQueue::from_queue_items(vec![book_queue_item("book-1")], Some(0));
 
-    app.activate_audiobookshelf_book_row_target(Some(
-        crate::app::components::msg::BookChapterTarget::new("book-1".into(), 1),
-    ));
+    app.activate_audiobookshelf_book_row_target(Some(mbv_ui_msg::BookChapterTarget::new(
+        "book-1".into(),
+        1,
+    )));
 
     assert!(
         matches!(

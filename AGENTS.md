@@ -35,10 +35,10 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `src/app/shell/` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
   runtime lifecycle, projections, dispatch, effects, and the single tick/draw
   path (`shell/run.rs`, `shell/draw.rs`).
-* `src/app/components/` — Interactive Components + typed `Msg`s; `media_list/`
-  embedded list controls; `mouse/` pointer primitives.
-* `src/app/render/` — `screens/` prepare content, `arrangements/` place it,
-  `components/` paint it, `theme/` semantic roles.
+* `crates/mbv-components/` — Interactive Components + typed `Msg`s; embedded
+  list controls and pointer primitives.
+* `crates/mbv-render/` — `screens/` prepare content, `arrangements/` place it,
+  `components/` paint it, `layout.rs` composes layouts.
 * `src/app/input/` — the only keyboard routing site (`router.rs` precedence,
   `key_policy.rs` order, `resolver.rs` chords); never add another.
 * `src/local_daemon.rs` — Local-daemon bootstrap; rest of `src/` = TUI binary.
@@ -61,6 +61,12 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `crates/mbv-ws/` — Emby websocket client transport.
 * `crates/mbv-visualizer/` — PipeWire stereo audio capture worker for the visualizer.
 * `crates/mbv-text/` — fuzzy-match acceptance and control-character predicates for text input.
+* `crates/mbv-theme/` — semantic theme roles and palette values.
+* `crates/mbv-images/` — shared image loading and image-processing primitives.
+* `crates/mbv-ui-model/` — plain presentation models shared by UI crates.
+* `crates/mbv-render/` — TUI screens, arrangements, painters, and layout.
+* `crates/mbv-ui-msg/` — typed messages crossing the interactive-component boundary.
+* `crates/mbv-components/` — TuiRealm Interactive Components and local interaction state.
 
 ## Interactive architecture
 
@@ -75,7 +81,9 @@ App/runtime <- shell handles typed Msg with resolved target <- component update
   state. `App` remains the shell's domain/effect state and base-frame geometry
   composer; `Model::draw_frame` composes that frame once, then mounted
   components paint their owned surfaces.
-* Mounted `AppComponent` (`src/app/components/`) owns cursor, scroll, local
+* Components and painters cannot name `App`: their crates sit below the TUI
+  crate, so breaking this boundary is a compile error.
+* Mounted `AppComponent` (`crates/mbv-components/`) owns cursor, scroll, local
   focus/selection, filters, drafts, viewport, event interpretation, `view()`,
   hit geometry; mutates local state directly; typed `Msg` only for work outside
   its authority.

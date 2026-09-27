@@ -5,10 +5,10 @@ use tuirealm::application::PollStrategy;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::listener::{EventListenerCfg, Poll, PortResult};
 
-use crate::app::components::{ComponentId, Msg, UserEvent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::{fold_mouse_messages, Model};
 use crate::app::App;
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 const INJECT_PORT_INTERVAL: Duration = Duration::from_millis(1);
 const INJECT_PORT_MAX_POLL: usize = 8;

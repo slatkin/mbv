@@ -1,12 +1,11 @@
 use crate::app::dispatch::notify::ToastSeverity;
-#[cfg(test)]
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
 use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
+#[cfg(test)]
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 
 mod books;
-pub(in crate::app) use books::audiobookshelf_book_queue_item;
 
 /// The number of per-show episode fetches the podcast fan-out keeps in
 /// flight at once (design D5: bounded in-flight requests; a library with
@@ -25,9 +24,9 @@ impl App {
     pub(in crate::app) fn audiobookshelf_kind_at(
         &self,
         index: usize,
-    ) -> Option<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind> {
+    ) -> Option<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind> {
         self.audiobookshelf_libraries.get(index).map(|library| {
-            crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+            mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
                 &library.media_type,
             )
         })
@@ -76,7 +75,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                crate::app::state::types::events::LibEvent::AudiobookshelfDetailFetched {
+                mbv_ui_model::events::LibEvent::AudiobookshelfDetailFetched {
                     generation,
                     request,
                     library_item_id,
@@ -127,7 +126,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                crate::app::state::types::events::LibEvent::AudiobookshelfBookDetailFetched {
+                mbv_ui_model::events::LibEvent::AudiobookshelfBookDetailFetched {
                     generation,
                     library_item_id,
                     result,
@@ -312,7 +311,7 @@ impl App {
     pub(in crate::app) fn play_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &mbv_ui_msg::PodcastEpisodeTarget,
     ) {
         let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
             return;
@@ -330,7 +329,7 @@ impl App {
     pub(in crate::app) fn enqueue_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &mbv_ui_msg::PodcastEpisodeTarget,
     ) {
         let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
             return;
@@ -413,7 +412,7 @@ impl App {
             .to_owned();
         self.selected_audiobookshelf_queue_item_target(
             audiobookshelf_library_index,
-            &crate::app::components::msg::PodcastEpisodeTarget::new(
+            &mbv_ui_msg::PodcastEpisodeTarget::new(
                 episode.library_item_id.clone(),
                 episode.episode_id.clone(),
             ),
@@ -423,7 +422,7 @@ impl App {
     pub(in crate::app) fn selected_audiobookshelf_queue_item_target(
         &self,
         audiobookshelf_library_index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &mbv_ui_msg::PodcastEpisodeTarget,
     ) -> Option<QueueItem> {
         if target.library_item_id().trim().is_empty() || target.episode_id().trim().is_empty() {
             return None;

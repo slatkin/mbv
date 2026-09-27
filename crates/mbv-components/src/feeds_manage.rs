@@ -1,0 +1,398 @@
+//! Interactive Component for the nested Settings Feed-management popup.
+
+use ratatui::layout::{Position, Rect};
+use ratatui::Frame;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use tuirealm::props::{AttrValue, Attribute, QueryResult};
+use tuirealm::state::State;
+
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
+use mbv_config::FeedSubscription;
+use mbv_queue::FeedKind;
+use mbv_render::{render_feeds_manage_content, FeedsManageRenderModel};
+use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
+
+#[derive(Debug)]
+pub struct FeedsManageComponent {
+    feeds: Vec<FeedSubscription>,
+    stage: Option<FeedsManageStage>,
+    cursor: usize,
+    pending_add: Option<u64>,
+    dim_backdrop_active: bool,
+    /// The painted modal rect (last frame) — the outside-click boundary.
+    frame: Rect,
+    /// Irregular painted chrome (task 5.1, design.md D6): list-stage feed
+    /// rows and form-stage field rows, repopulated in `view()` from the
+    /// geometry the painter just produced.
+    hit_rows: HitRegions<usize>,
+    hit_fields: HitRegions<FeedFormField>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
+}
+
+impl FeedsManageComponent {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            feeds: Vec::new(),
+            stage: None,
+            cursor: 0,
+            pending_add: None,
+            dim_backdrop_active: false,
+            frame: Rect::default(),
+            hit_rows: HitRegions::new(),
+            hit_fields: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
+        }
+    }
+
+    /// The shell pushes only stage transitions and content changes (task
+    /// 5.3d): the component owns the draft (`stage`/`cursor`/form edits), so
+    /// no per-tick mirror runs. `set_stage` replaces the current stage
+    /// (open-add/edit, cancel, submit completion); `set_feeds` pushes the
+    /// current `config.feeds` on change; `set_pending_add` carries the shell
+    /// add-fetch marker (`submitting`).
+    pub fn set_stage(&mut self, stage: FeedsManageStage) {
+        self.stage = Some(stage);
+    }
+
+    pub fn set_feeds(&mut self, feeds: Vec<FeedSubscription>) {
+        self.feeds = feeds;
+        self.cursor = self.cursor.min(self.feeds.len().saturating_sub(1));
+    }
+
+    pub fn set_pending_add(&mut self, pending_add: Option<u64>) {
+        self.pending_add = pending_add;
+    }
+
+    #[must_use]
+    pub fn stage_clone(&self) -> Option<FeedsManageStage> {
+        self.stage.clone()
+    }
+
+    #[must_use]
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    fn submitting(&self) -> bool {
+        self.pending_add.is_some()
+    }
+
+    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let stage = self.stage.clone()?;
+        match stage {
+            FeedsManageStage::List => self.handle_list_key(key),
+            FeedsManageStage::Form(form) => self.handle_form_key(key, &form),
+        }
+    }
+
+    fn handle_list_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up => {
+                self.cursor = self.cursor.saturating_sub(1);
+                None
+            }
+            Key::Down => {
+                if !self.feeds.is_empty() {
+                    self.cursor = (self.cursor + 1).min(self.feeds.len() - 1);
+                }
+                None
+            }
+            Key::Esc => Some(Self::shell_intent(FeedsManageIntent::Dismiss)),
+            Key::Char('a') => Some(Self::shell_intent(FeedsManageIntent::Add)),
+            Key::Enter | Key::Char('e') => Some(Self::shell_intent(FeedsManageIntent::Edit)),
+            Key::Char('d') => Some(Self::shell_intent(FeedsManageIntent::Remove)),
+            _ => None,
+        }
+    }
+
+    fn handle_form_key(&mut self, key: &KeyEvent, form: &FeedForm) -> Option<Msg> {
+        if matches!(key.code, Key::Esc)
+            || (!self.submitting()
+                && matches!(
+                    key.code,
+                    Key::Tab | Key::BackTab | Key::Enter | Key::Backspace | Key::Left | Key::Right
+                )
+                && (matches!(key.code, Key::Enter | Key::Tab | Key::BackTab)
+                    || form.focus == FeedFormField::Kind
+                    || matches!(key.code, Key::Backspace)))
+        {
+            match key.code {
+                Key::Tab => self.next_field(),
+                Key::BackTab => self.previous_field(),
+                Key::Left | Key::Right if form.focus == FeedFormField::Kind => self.toggle_kind(),
+                Key::Backspace => self.backspace(),
+                Key::Enter => return Some(Self::shell_intent(FeedsManageIntent::Submit)),
+                Key::Esc => return Some(Self::shell_intent(FeedsManageIntent::Cancel)),
+                _ => {}
+            }
+            return None;
+        }
+        if !self.submitting()
+            && matches!(key.code, Key::Char(_))
+            && (key.modifiers == KeyModifiers::NONE || key.modifiers == KeyModifiers::SHIFT)
+        {
+            if let Key::Char(c) = key.code {
+                self.push_char(c);
+            }
+        }
+        None
+    }
+
+    fn shell_intent(intent: FeedsManageIntent) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::FeedsManageIntent(intent)))
+    }
+
+    /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
+    /// List stage: a feed-row click selects (Up/Down equivalent), a
+    /// double-click edits (Enter equivalent), an outside click dismisses
+    /// (Esc equivalent). Form stage: a field-row click focuses that field
+    /// (Tab equivalent; the read-only edit-mode URL is unreachable by
+    /// keyboard too), an outside click cancels (Esc equivalent). The popup
+    /// paints no buttons, so add/remove have no click targets, and
+    /// right-click/wheel have no keyboard equivalent here — both ignored.
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        let stage = self.stage.clone()?;
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click { at, .. } => match &stage {
+                FeedsManageStage::List => {
+                    if let Some(&index) = self.hit_rows.resolve(at) {
+                        self.cursor = index;
+                        return None;
+                    }
+                    self.dismiss_outside(at, &stage)
+                }
+                FeedsManageStage::Form(_) => {
+                    if let Some(&field) = self.hit_fields.resolve(at) {
+                        self.focus_field(field);
+                        return None;
+                    }
+                    self.dismiss_outside(at, &stage)
+                }
+            },
+            MouseGesture::DoubleClick(at) => {
+                if let FeedsManageStage::List = &stage {
+                    if let Some(&index) = self.hit_rows.resolve(at) {
+                        self.cursor = index;
+                        return Some(Self::shell_intent(FeedsManageIntent::Edit));
+                    }
+                }
+                // Outside double-click: the first click already dismissed.
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// A click outside the painted modal mirrors the stage's Esc path:
+    /// Dismiss on the list, Cancel on the form (which returns to the list).
+    fn dismiss_outside(&mut self, at: Position, stage: &FeedsManageStage) -> Option<Msg> {
+        if self.frame.contains(at) {
+            return None;
+        }
+        Some(Self::shell_intent(match stage {
+            FeedsManageStage::List => FeedsManageIntent::Dismiss,
+            FeedsManageStage::Form(_) => FeedsManageIntent::Cancel,
+        }))
+    }
+
+    /// Focus a clicked form field — the Tab/BackTab equivalent. While a
+    /// submission is in flight the keyboard ignores everything but Esc, so
+    /// the mouse does too; the edit-mode URL is read-only and keyboard-
+    /// unreachable (`next_field` skips it), so clicking it is a no-op.
+    fn focus_field(&mut self, field: FeedFormField) {
+        if self.submitting() {
+            return;
+        }
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        if form.editing_index.is_some() && field == FeedFormField::Url {
+            return;
+        }
+        form.focus = field;
+    }
+
+    fn next_field(&mut self) {
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        form.focus = match (form.focus, form.editing_index.is_some()) {
+            (FeedFormField::Name, true) | (FeedFormField::Url, _) => FeedFormField::Kind,
+            (FeedFormField::Name, false) => FeedFormField::Url,
+            (FeedFormField::Kind, _) => FeedFormField::Name,
+        };
+    }
+
+    fn previous_field(&mut self) {
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        form.focus = match (form.focus, form.editing_index.is_some()) {
+            (FeedFormField::Name, _) => FeedFormField::Kind,
+            (FeedFormField::Url, _) | (FeedFormField::Kind, true) => FeedFormField::Name,
+            (FeedFormField::Kind, false) => FeedFormField::Url,
+        };
+    }
+
+    fn toggle_kind(&mut self) {
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        form.kind = match form.kind {
+            FeedKind::Audio => FeedKind::Video,
+            FeedKind::Video => FeedKind::Audio,
+        };
+    }
+
+    fn push_char(&mut self, c: char) {
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        match form.focus {
+            FeedFormField::Name => form.name.push(c),
+            FeedFormField::Url if form.editing_index.is_none() => form.url.push(c),
+            _ => {}
+        }
+    }
+
+    fn backspace(&mut self) {
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        match form.focus {
+            FeedFormField::Name => {
+                form.name.pop();
+            }
+            FeedFormField::Url if form.editing_index.is_none() => {
+                form.url.pop();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Default for FeedsManageComponent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Component for FeedsManageComponent {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = area;
+        let Some(stage) = self.stage.as_ref() else {
+            return;
+        };
+        let geometry = render_feeds_manage_content(
+            frame,
+            &mut self.dim_backdrop_active,
+            &FeedsManageRenderModel {
+                feeds: &self.feeds,
+                stage,
+                cursor: self.cursor,
+                pending_add: self.pending_add,
+            },
+        );
+        // Adopt the rects the painter just produced into the irregular-
+        // chrome registries (task 5.1, design.md D6).
+        self.frame = geometry.frame;
+        self.hit_rows.clear();
+        for (rect, index) in geometry.rows {
+            self.hit_rows.push(rect, index);
+        }
+        self.hit_fields.clear();
+        for (rect, field) in geometry.fields {
+            self.hit_fields.push(rect, field);
+        }
+    }
+
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
+        None
+    }
+
+    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+
+    fn state(&self) -> State {
+        State::None
+    }
+
+    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
+        CmdResult::NoChange
+    }
+}
+
+impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up
+                        | Key::Down
+                        | Key::Tab
+                        | Key::BackTab
+                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Left
+                        | Key::Right
+                        | Key::Esc
+                        | Key::Char(_)
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(code: Key) -> Event<UserEvent> {
+        Event::Keyboard(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
+    }
+
+    #[test]
+    fn settings_popup_feeds_manage_form_edits_are_local() {
+        let mut component = FeedsManageComponent::new();
+        component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
+        component.on(&key(Key::Char('x')));
+
+        let Some(FeedsManageStage::Form(form)) = component.stage else {
+            panic!("expected form stage");
+        };
+        assert_eq!(form.name, "x");
+    }
+
+    #[test]
+    fn settings_popup_feeds_manage_submit_is_typed() {
+        let mut component = FeedsManageComponent::new();
+        component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
+
+        assert!(matches!(
+           component.on(&key(Key::Enter)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+               FeedsManageIntent::Submit
+           ))));
+    }
+}

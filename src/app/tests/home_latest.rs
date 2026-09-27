@@ -1,6 +1,6 @@
-use crate::app::components::library_panel::LibraryContentOwner;
 use crate::app::shell::Model;
 use crate::app::tests::make_app_stub;
+use mbv_components::library_panel::LibraryContentOwner;
 use mbv_config::{HomeSelectorKey, SelectorIdentity};
 
 #[test]

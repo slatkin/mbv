@@ -1,31 +1,28 @@
+use mbv_theme as palette;
 use std::time::Duration;
 
-use super::components::msg::AlbumCursorKind;
-use super::components::{
-    ComponentId, Msg, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent,
-    UserEvent,
-};
-use super::{
-    components, palette, render, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal,
-    IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
-};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
-#[cfg(test)]
-pub(in crate::app) use crate::app::components::OverlayId;
+use super::{
+    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
+    PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage,
+    SidebarId, TabSelection, ToastSeverity,
+};
 #[cfg(test)]
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
+use mbv_components::{QueueBoundaryComponent, UiRootComponent};
+use mbv_ui_model::feeds_manage::FeedsManagePopup;
 #[cfg(test)]
-use crate::app::state::home_latest::current_launch_secs;
-use crate::app::state::home_latest::HomeLatestLaunchWindow;
-use crate::app::state::types::feeds_manage::FeedsManagePopup;
-use crate::app::state::types::playback::{
-    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
-};
+use mbv_ui_model::home_latest::current_launch_secs;
+use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
+use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
+use mbv_ui_msg::AlbumCursorKind;
+#[cfg(test)]
+pub(in crate::app) use mbv_ui_msg::OverlayId;
+use mbv_ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -180,13 +177,11 @@ pub struct Model {
     /// progress-% bucket + paused + the title model.
     pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
-    pub(in crate::app) visual_selection:
-        Option<(crate::app::state::types::settings::PanelFocus, usize)>,
-    pub(in crate::app) context_menu_origin:
-        Option<crate::app::components::media_list::SelectionOrigin>,
+    pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
+    pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
     pub(in crate::app) context_action_snapshot: Option<
-        crate::app::state::types::context_menu::ContextActionSnapshot<
-            crate::app::state::types::context_menu::ContextMenuTargets,
+        mbv_ui_model::context_menu::ContextActionSnapshot<
+            mbv_ui_model::context_menu::ContextMenuTargets,
         >,
     >,
     /// The last Esc press, for the double-Esc playback stop. Shell-owned
@@ -320,14 +315,14 @@ impl Model {
         // panel from the first sync (tasks 5.11, 7.3). The other destinations
         // install owners in their conversion slices (tasks 8+).
         {
-            let mut panel = super::components::library_panel::LibraryPanel::new();
+            let mut panel = mbv_components::library_panel::LibraryPanel::new();
             panel.insert_owner(
-                super::components::library_panel::LibraryKey::Home,
-                Box::new(super::components::home_content::HomeContent::new()),
+                mbv_ui_model::library::LibraryKey::Home,
+                Box::new(mbv_components::home_content::HomeContent::new()),
             );
             panel.insert_owner(
-                super::components::library_panel::LibraryKey::Feeds,
-                Box::new(super::components::feeds_content::FeedsContent::new()),
+                mbv_ui_model::library::LibraryKey::Feeds,
+                Box::new(mbv_components::feeds_content::FeedsContent::new()),
             );
             model
                 .application
