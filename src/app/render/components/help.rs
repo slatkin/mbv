@@ -1,7 +1,7 @@
 use super::chrome;
-use crate::app::infra::palette;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
+use mbv_theme as palette;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;

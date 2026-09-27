@@ -13,9 +13,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::render::components::media_list::MediaSemanticState;
+use mbv_theme as palette;
 
 /// The pinned trailing-metadata slot (design D8): a fixed six-column
 /// right-aligned date cell, plus the two-column gap between it and the row's

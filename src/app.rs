@@ -17,7 +17,7 @@ pub(in crate::app) use self::infra::signals::{
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
-pub(crate) use self::infra::{images, layout, palette};
+pub(crate) use self::infra::{images, layout};
 pub use self::state::app_struct::App;
 #[cfg(test)]
 mod test_seams;

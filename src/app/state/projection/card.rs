@@ -3,7 +3,7 @@ use crate::app::images::{
 };
 use crate::app::render::components::card::{queue_card_reserved_rect, render_card_painting};
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
-use crate::app::{palette, App};
+use crate::app::App;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use ratatui::layout::Rect;
@@ -51,7 +51,7 @@ impl App {
         );
         // The row is fixed (it paints the playback panel's band), so the
         // focus bit is not read; the literal keeps that visible at the site.
-        let bg = palette::surface_colors(palette::Surface::QueueCardVisualizer, false).fill;
+        let bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueCardVisualizer, false).fill;
         self.render_visualizer(f, rect, bg);
         (rect.height, rect.width, false)
     }

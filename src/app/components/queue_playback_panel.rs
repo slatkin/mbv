@@ -25,7 +25,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
-use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::render::components::widgets::queue_panel_inset;
@@ -34,6 +33,7 @@ use crate::app::render::{render_playback_header, render_player_panel, PlaybackRe
 use crate::app::ui_model::playback_target::NowPlayingStatus;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, PlaybackRequest};
+use mbv_theme as palette;
 
 /// The queue-column transport's surface: the fixed chrome band the queue
 /// playback panel paints in every queue-visible layout (the former

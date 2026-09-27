@@ -468,8 +468,7 @@ impl Model {
     /// read, so both follow the same bit in every geometry.
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, focused)
-            .fill
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill
     }
 
     /// The transitional draw step: give the library rect to the mounted

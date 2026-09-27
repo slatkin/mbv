@@ -12,8 +12,9 @@ use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::MediaListCarrier;
-use crate::app::palette::{self, Surface};
 use crate::app::render::components::media_list::{WideMediaListPaintPolicy, ZebraStripe};
+use mbv_theme as palette;
+use mbv_theme::Surface;
 
 use super::content::{PanelList, PanelListPaintPolicy};
 

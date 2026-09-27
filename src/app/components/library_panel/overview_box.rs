@@ -9,9 +9,9 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::palette;
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
 use crate::app::ui_model::ui_util::trunc_str;
+use mbv_theme as palette;
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 

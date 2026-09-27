@@ -1,5 +1,5 @@
 use super::backdrop::dim_backdrop;
-use crate::app::infra::palette;
+use mbv_theme as palette;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;

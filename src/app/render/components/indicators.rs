@@ -4,7 +4,7 @@
 //! chips. Colors map onto the mbv palette: resolution = orange,
 //! audio = blue (FOAM), subtitles = yellow (YELLOW) when on / dim when off.
 
-use crate::app::palette;
+use mbv_theme as palette;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 

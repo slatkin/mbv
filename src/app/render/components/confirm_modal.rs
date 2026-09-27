@@ -26,17 +26,13 @@ pub(in crate::app) fn render_confirm_modal_content(
         title,
         60,
         7,
-        crate::app::infra::palette::surface_colors(
-            crate::app::infra::palette::Surface::PopupFrame,
-            false,
-        )
-        .fill,
+        mbv_theme::surface_colors(mbv_theme::Surface::PopupFrame, false).fill,
     );
     let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
     f.render_widget(
         Paragraph::new(Span::styled(
             message,
-            Style::default().fg(crate::app::infra::palette::TEXT_STRONG),
+            Style::default().fg(mbv_theme::TEXT_STRONG),
         )),
         Rect {
             x: inner.x + 1,
@@ -48,7 +44,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(crate::app::infra::palette::TEXT_SECONDARY),
+            Style::default().fg(mbv_theme::TEXT_SECONDARY),
         )),
         Rect {
             x: inner.x + 1,

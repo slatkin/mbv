@@ -19,8 +19,8 @@ use ratatui::style::Color;
 
 /// The resolved colour of one rendered surface for one frame.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct SurfaceColors {
-    pub(in crate::app) fill: Color,
+pub struct SurfaceColors {
+    pub fill: Color,
 }
 
 impl SurfaceColors {
@@ -31,7 +31,8 @@ impl SurfaceColors {
 
 /// Resolves a surface's fill from the call site's own focus bit
 /// (design D1/D2/D3).
-pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> SurfaceColors {
+#[must_use]
+pub fn surface_colors(surface: Surface, focused: bool) -> SurfaceColors {
     let row = row(surface);
     // The table is closed: `row` matches every variant, and every row's
     // resting value is its level's default or an explicitly declared

@@ -1,8 +1,8 @@
 use super::row::media_list_row;
-use crate::app::palette;
 use crate::app::render::components::media_list::{
     MediaListRow, RowGeometry, SelectedRowSurface, WideMediaListPaintPolicy,
 };
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::widgets::{List, ListItem};

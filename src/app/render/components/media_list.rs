@@ -1,9 +1,9 @@
 mod row;
 mod wide;
 
-use crate::app::palette;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 

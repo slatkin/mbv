@@ -11,9 +11,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::palette;
 use crate::app::ui_model::playback_target::NowPlayingStatus;
 use crate::app::ui_model::ui_util::trunc_str;
+use mbv_theme as palette;
 
 /// The header's status word for one now-playing status.
 pub(in crate::app) fn header_status_word(status: NowPlayingStatus) -> &'static str {

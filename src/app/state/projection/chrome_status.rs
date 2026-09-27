@@ -12,7 +12,7 @@
 use crate::app::render::components::chrome::daemon_endpoint_label;
 use crate::app::render::components::widgets::service_state_color;
 use crate::app::render::indicators;
-use crate::app::{palette, App, PanelFocus, RemoteSlotState};
+use crate::app::{App, PanelFocus, RemoteSlotState};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
@@ -39,7 +39,7 @@ impl App {
             RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
         );
         let glyph_style = Style::default()
-            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
@@ -69,17 +69,17 @@ impl App {
         };
         let label_style = Style::default()
             .fg(if remote_on {
-                palette::ACCENT
+                mbv_theme::ACCENT
             } else {
                 ratatui::style::Color::Black
             })
-            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill);
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
 
         vec![
             Span::styled(
                 " ",
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::StatusBarPill,
+                Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::StatusBarPill,
                     false,
                 )
                 .fill),
@@ -95,8 +95,8 @@ impl App {
             Span::styled(label, label_style),
             Span::styled(
                 " ",
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::StatusBarPill,
+                Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::StatusBarPill,
                     false,
                 )
                 .fill),
@@ -171,21 +171,21 @@ impl App {
             _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
-            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on {
-                palette::TEXT_FOCUS_ACCENT
+                mbv_theme::TEXT_FOCUS_ACCENT
             } else {
-                palette::TEXT_SECONDARY
+                mbv_theme::TEXT_SECONDARY
             })
-            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill);
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
 
         vec![
             Span::styled(
                 " ",
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::StatusBarPill,
+                Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::StatusBarPill,
                     false,
                 )
                 .fill),
@@ -201,8 +201,8 @@ impl App {
             Span::styled(label, label_style),
             Span::styled(
                 " ",
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::StatusBarPill,
+                Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::StatusBarPill,
                     false,
                 )
                 .fill),
@@ -220,8 +220,8 @@ impl App {
             Some(vec![
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -229,14 +229,17 @@ impl App {
                 Span::styled(
                     " UNSAVED ",
                     Style::default()
-                        .fg(palette::TEXT_FOCUS_ACCENT)
-                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+                        .fg(mbv_theme::TEXT_FOCUS_ACCENT)
+                        .bg(
+                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                                .fill,
+                        )
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -246,8 +249,8 @@ impl App {
             Some(vec![
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -255,13 +258,16 @@ impl App {
                 Span::styled(
                     " AUTOSAVE ",
                     Style::default()
-                        .fg(palette::ACCENT)
-                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                        .fg(mbv_theme::ACCENT)
+                        .bg(
+                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                                .fill,
+                        ),
                 ),
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -279,8 +285,8 @@ impl App {
                 vec![
                     Span::styled(
                         " ",
-                        Style::default().bg(palette::surface_colors(
-                            palette::Surface::StatusBarPill,
+                        Style::default().bg(mbv_theme::surface_colors(
+                            mbv_theme::Surface::StatusBarPill,
                             false,
                         )
                         .fill),
@@ -288,17 +294,17 @@ impl App {
                     Span::styled(
                         "muted",
                         Style::default()
-                            .fg(palette::STATUS_ERROR)
+                            .fg(mbv_theme::STATUS_ERROR)
                             .bg(
-                                palette::surface_colors(palette::Surface::StatusBarPill, false)
+                                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
                                     .fill,
                             )
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(
                         " ",
-                        Style::default().bg(palette::surface_colors(
-                            palette::Surface::StatusBarPill,
+                        Style::default().bg(mbv_theme::surface_colors(
+                            mbv_theme::Surface::StatusBarPill,
                             false,
                         )
                         .fill),
@@ -316,8 +322,8 @@ impl App {
             vec![
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -325,14 +331,17 @@ impl App {
                 Span::styled(
                     " PREFIX ",
                     Style::default()
-                        .fg(palette::ACCENT)
-                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+                        .fg(mbv_theme::ACCENT)
+                        .bg(
+                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                                .fill,
+                        )
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     " ",
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -356,8 +365,8 @@ impl App {
         vec![
             Span::styled(
                 " ",
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::StatusBarPill,
+                Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::StatusBarPill,
                     false,
                 )
                 .fill),
@@ -365,14 +374,14 @@ impl App {
             Span::styled(
                 icon,
                 Style::default()
-                    .fg(palette::PLAYBACK_META_FG)
-                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::PLAYBACK_META_FG)
+                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
-                    .fg(palette::ACCENT)
-                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+                    .fg(mbv_theme::ACCENT)
+                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
                     .add_modifier(Modifier::BOLD),
             ),
         ]
@@ -393,11 +402,11 @@ impl App {
         // current player target: a stay-alive client that routes playback to
         // another daemon is still in stay-alive mode.
         let alive_color = if !stay_alive {
-            palette::TEXT_MUTED
+            mbv_theme::TEXT_MUTED
         } else if self.player.is_remote_disconnected() {
-            palette::TEXT_FOCUS_ACCENT
+            mbv_theme::TEXT_FOCUS_ACCENT
         } else {
-            palette::STATUS_ERROR
+            mbv_theme::STATUS_ERROR
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label = queue_source_status_label(
@@ -415,8 +424,8 @@ impl App {
                 &mut right_spans,
                 Span::styled(
                     format!(" {label} "),
-                    Style::default().fg(color).bg(palette::surface_colors(
-                        palette::Surface::StatusBarPill,
+                    Style::default().fg(color).bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
                         false,
                     )
                     .fill),
@@ -430,14 +439,14 @@ impl App {
             right_spans.push(Span::styled(
                 " 🯅",
                 Style::default()
-                    .fg(palette::TEXT_METADATA)
-                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::TEXT_METADATA)
+                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
             right_spans.push(Span::styled(
                 format!(" {username} "),
                 Style::default()
-                    .fg(palette::PLAYBACK_META_FG)
-                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::PLAYBACK_META_FG)
+                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
         }
         // Service-state glyphs — Emby coloured by state (brand colour
@@ -450,13 +459,13 @@ impl App {
                 "\u{F06B4}",
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
-                    palette::ACCENT,
+                    mbv_theme::ACCENT,
                 )),
             ),
             Span::raw(" "),
             Span::styled(
                 "\u{EDE2}",
-                Style::default().fg(palette::ACCENT_AUDIOBOOKSHELF),
+                Style::default().fg(mbv_theme::ACCENT_AUDIOBOOKSHELF),
             ),
             Span::raw(" "),
             Span::styled(
@@ -492,5 +501,5 @@ fn queue_source_status_label(
             return None;
         }
     };
-    Some((label, palette::TEXT_MUTED))
+    Some((label, mbv_theme::TEXT_MUTED))
 }

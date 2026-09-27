@@ -1,4 +1,4 @@
-use crate::app::palette;
+use mbv_theme as palette;
 use ratatui::widgets::Block;
 use ratatui::{layout::Rect, Frame};
 

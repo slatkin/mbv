@@ -14,7 +14,6 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::palette;
 use crate::app::render::arrangements::library::{
     wide_library_panes_with_selector, WideLibraryPanes,
 };
@@ -23,6 +22,7 @@ use crate::app::render::{
     render_placeholder, render_search_box, wide_hero_hero_pane, PillBarWindow, PANE_PAD_X,
     PANE_PAD_Y,
 };
+use mbv_theme as palette;
 
 use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
@@ -433,7 +433,7 @@ pub(in crate::app) fn render_wide_skeleton(
             &mut hits.links,
             &mut hits.workspace_selector,
             &mut windows.workspace_selector,
-            crate::app::palette::Surface::HeroPane,
+            mbv_theme::Surface::HeroPane,
             terminal_height,
         );
         geometry.workspace = composition.workspace;

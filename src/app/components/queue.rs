@@ -11,7 +11,6 @@ use tuirealm::state::State;
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
-use crate::app::palette;
 use crate::app::render::arrangements::queue::{
     queue_footer_row, queue_list_box, queue_panel_subareas,
 };
@@ -27,6 +26,7 @@ use crate::app::ui_model::playback::{PlaybackState, QueueScope};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, QueueRequest};
 use mbv_queue::{QueueSlot, QueueSlotId};
+use mbv_theme as palette;
 
 mod keys;
 mod pointer;

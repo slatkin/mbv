@@ -1722,6 +1722,7 @@ dependencies = [
  "mbv-queue",
  "mbv-remote-player",
  "mbv-text",
+ "mbv-theme",
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
@@ -1960,6 +1961,13 @@ name = "mbv-text"
 version = "0.21.2"
 dependencies = [
  "fuzzy-matcher",
+]
+
+[[package]]
+name = "mbv-theme"
+version = "0.21.2"
+dependencies = [
+ "ratatui",
 ]
 
 [[package]]

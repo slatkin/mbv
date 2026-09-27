@@ -1,4 +1,4 @@
-use crate::app::palette;
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

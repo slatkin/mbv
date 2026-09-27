@@ -1,9 +1,9 @@
-use crate::app::infra::palette;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use crate::app::ui_model::feeds_manage::{FeedFormField, FeedsManageStage};
 use crate::app::ui_model::ui_util::trunc_str;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

@@ -277,7 +277,7 @@ impl Model {
         let mut transport = self.transport_projection();
         // The queue column's transport band: the fixed chrome surface, in
         // every queue-visible layout (D10).
-        transport.panel = crate::app::palette::Surface::QueueOnlyPlaybackPanel;
+        transport.panel = mbv_theme::Surface::QueueOnlyPlaybackPanel;
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
         let (host, host_is_remote) = self.app.playback_host_label_and_remote();
@@ -337,7 +337,7 @@ impl Model {
         fill_surface(
             frame,
             placement,
-            crate::app::palette::Surface::QueueColumn,
+            mbv_theme::Surface::QueueColumn,
             matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
         );
         // The slot region starts on the row below the placement's header band
@@ -354,13 +354,9 @@ impl Model {
         // when its content is hidden. Idle placements have a zero-height
         // slot region, so this remains a no-op while idle.
         frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::QueueOnlyPlaybackPanel,
-                    false,
-                )
-                .fill),
-            ),
+            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
+                mbv_theme::surface_colors(mbv_theme::Surface::QueueOnlyPlaybackPanel, false).fill,
+            )),
             slot_region,
         );
         if self.app.visual_slot_shown() {

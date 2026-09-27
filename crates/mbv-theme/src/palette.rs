@@ -5,7 +5,7 @@ use ratatui::style::Color;
 /// The 19 approved palette variants (hue families, dark-to-light within each
 /// family; see `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub(in crate::app) enum Palette {
+pub(crate) enum Palette {
     Grey1,
     Grey2,
     Grey3,
@@ -30,7 +30,7 @@ pub(in crate::app) enum Palette {
 impl Palette {
     /// The variant's colour. The only place a palette `Color::Rgb(...)`
     /// literal lives in theme code.
-    pub(in crate::app) const fn color(self) -> Color {
+    pub(crate) const fn color(self) -> Color {
         match self {
             Palette::Grey1 => Color::Rgb(0x1a, 0x1a, 0x1a),
             Palette::Grey2 => Color::Rgb(0x9e, 0x9e, 0x9e),

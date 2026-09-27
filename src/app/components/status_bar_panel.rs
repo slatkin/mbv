@@ -132,7 +132,7 @@ mod tests {
     use ratatui::text::Span;
     use ratatui::Terminal;
 
-    use crate::app::palette;
+    use mbv_theme as palette;
 
     fn pill(text: impl Into<String>, fg: Color) -> Vec<Span<'static>> {
         let fill = palette::surface_colors(palette::Surface::StatusBarPill, false).fill;

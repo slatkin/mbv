@@ -1,9 +1,10 @@
+use mbv_theme as palette;
 use std::time::Duration;
 
 use super::components::{QueueBoundaryComponent, UiRootComponent};
 use super::ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use super::{
-    components, palette, render, ui_model::sidebar::SidebarId, AlbumIndexState, App, BrowseLevel,
+    components, render, ui_model::sidebar::SidebarId, AlbumIndexState, App, BrowseLevel,
     ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState,
     PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage, TabSelection, ToastSeverity,
 };

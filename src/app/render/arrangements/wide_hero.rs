@@ -3,7 +3,7 @@
 //! Home, and future screens (design.md decisions 4–6).
 
 use super::padded_rect;
-use crate::app::palette;
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

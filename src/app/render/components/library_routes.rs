@@ -1,6 +1,6 @@
 use super::super::super::LibraryRouteStage;
-use crate::app::infra::palette;
 use crate::app::render::components::modal_frame::render_modal_frame;
+use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

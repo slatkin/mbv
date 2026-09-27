@@ -22,7 +22,6 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::render::PlaybackStripAreas;
@@ -31,6 +30,7 @@ use crate::app::ui_model::playback::PlaybackState;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 use mbv_queue::PlaybackTitleParts;
+use mbv_theme as palette;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {

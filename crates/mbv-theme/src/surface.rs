@@ -123,7 +123,7 @@ macro_rules! declare_surfaces {
         /// not a screen. The same position in a different screen or provider
         /// is the same identity; what the surface holds is content.
         #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-        pub(in crate::app) enum Surface {
+        pub enum Surface {
             $($variant),+
         }
     };

@@ -3,7 +3,7 @@ use crate::app::infra::images::{
     cover_fill_hero_box, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
     QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER,
 };
-use crate::app::palette;
+use mbv_theme as palette;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 

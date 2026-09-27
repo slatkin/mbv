@@ -13,8 +13,8 @@ mod surface_table;
 // names a `Surface` and calls the resolver; the `Level`/`Row`/`FocusSource`
 // machinery stays private to the theme. Re-exported here so `render.rs` and
 // `palette.rs` can bridge the names to production call sites.
-pub(in crate::app) use surface::Surface;
-pub(in crate::app) use surface_resolve::surface_colors;
+pub use surface::Surface;
+pub use surface_resolve::surface_colors;
 
 use ratatui::style::Color;
 
@@ -142,6 +142,7 @@ pub const SELECTED_ROW_PROGRESS_FG: Color = Palette::Storm.color();
 /// ordinary text roles do not read on the light fill; elsewhere a row keeps
 /// the role it was given. Shared by the media list and the sessions sidebar,
 /// the two surfaces that paint this bar.
+#[must_use]
 pub fn bar_role_fg(role: Color, on_bar: bool) -> Color {
     if on_bar {
         SELECTED_ROW_FG

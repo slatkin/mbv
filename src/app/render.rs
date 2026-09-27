@@ -1,7 +1,6 @@
 pub(in crate::app) mod arrangements;
 pub(in crate::app) mod components;
 mod screens;
-mod theme;
 
 // Render-seam re-exports for Interactive Components (design D9): the free
 // functions extracted from `impl App` methods are `pub(in crate::app)` inside
@@ -89,22 +88,9 @@ pub(super) use screens::album_plan::sorted_group_album_order;
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
-pub(crate) use theme::{
-    bar_role_fg, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, GROUP_HEADING_FG,
-    HERO_CREDITS_NAME, HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR,
-    HINT_PILL_FILLS, INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_OVERFLOW_FG,
-    PILL_SELECTED_FG, PLAYBACK_CONTEXT_FG, PLAYBACK_META_FG, PLAYBACK_TITLE_FG, PLAYBACK_VALUE_FG,
-    PLAYLIST_LOADED_FG, PLAYLIST_STRIPE_BG, PROGRESS_PERCENT, PROGRESS_TRACK, SCROLLBAR,
-    SELECTED_ROW_BG, SELECTED_ROW_FG, SELECTED_ROW_PROGRESS_FG, SESSIONS_STRIPE_BG,
-    SETTINGS_STRIPE_BG, SIDEBAR_SCROLLBAR, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG,
-    STATUS_AVAILABLE, STATUS_ERROR, SURFACE_RESTING, TEXT_ACCENT_MUTED, TEXT_EMPHASIS,
-    TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY,
-    TEXT_SECONDARY, TEXT_STRONG, WORKSPACE_HEADER_FG,
-};
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
 // to `palette.rs` the same way. Its visibility is `crate::app`, so it is not
 // part of the wider `pub(crate)` role list above.
-pub(in crate::app) use theme::{surface_colors, Surface};
 
-use super::palette;
 use crate::app::ui_model::ui_util::natural_sort_key;
+use mbv_theme as palette;
