@@ -22,11 +22,11 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
-use crate::app::dispatch::audiobookshelf::browse::audiobookshelf_book_queue_item;
 use crate::app::render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use crate::app::render::components::tv_wide::HeroImageState;
+use crate::app::ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use crate::app::ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use crate::app::ui_msg::{

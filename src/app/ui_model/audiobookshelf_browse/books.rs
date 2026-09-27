@@ -7,6 +7,59 @@ use mbv_audiobookshelf::{
 };
 use std::collections::{HashMap, HashSet};
 
+use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
+use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
+
+/// Resolve the selected book as a queue item without mutating playback state.
+pub(in crate::app) fn audiobookshelf_book_queue_item(
+    state: &AudiobookshelfBookBrowseState,
+) -> Option<QueueItem> {
+    let book_id = state.selected_id.as_ref()?;
+    let book = state
+        .books
+        .iter()
+        .find(|book| &book.library_item_id == book_id)?;
+    if book.library_item_id.trim().is_empty() {
+        return None;
+    }
+    let detail = state.detail_cache.get(&book.library_item_id);
+    let duration_seconds = detail
+        .map(|(_, files)| files.iter().map(|file| file.duration).sum())
+        .filter(|duration| *duration > 0.0)
+        .or_else(|| {
+            detail.and_then(|(chapters, _)| {
+                chapters
+                    .iter()
+                    .map(|chapter| chapter.end)
+                    .max_by(f64::total_cmp)
+            })
+        });
+    let progress = state.progress.get(&book.library_item_id);
+    let to_ticks = |seconds: f64| {
+        (seconds.is_finite() && seconds >= 0.0)
+            .then(|| saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).round()))
+            .and_then(|ticks| u64::try_from(ticks).ok())
+    };
+    let is_finished = progress.is_some_and(|progress| progress.is_finished);
+    Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
+        AudiobookshelfBookQueueItem {
+            library_item_id: book.library_item_id.clone(),
+            title: book.title.clone(),
+            author: book.author_display.clone(),
+            duration_ticks: duration_seconds.and_then(to_ticks),
+            position_ticks: progress
+                .and_then(|progress| {
+                    to_ticks(progress.current_time_seconds)
+                        .and_then(|ticks| i64::try_from(ticks).ok())
+                })
+                .unwrap_or(0),
+            played: is_finished,
+            is_finished,
+            cover_path: book.cover_path.clone(),
+        },
+    )))
+}
+
 /// Fixed alphabetical author-surname bucket labels for the book tab's
 /// pill-filtered browsing (design "Alphabetical surname buckets..."):
 /// mirrors `LETTER_FILTER_BUCKETS`' A-Z ranges without its non-alphabetic

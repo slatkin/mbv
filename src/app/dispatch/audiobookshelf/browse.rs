@@ -6,7 +6,6 @@ use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 
 mod books;
-pub(in crate::app) use books::audiobookshelf_book_queue_item;
 
 /// The number of per-show episode fetches the podcast fan-out keeps in
 /// flight at once (design D5: bounded in-flight requests; a library with
