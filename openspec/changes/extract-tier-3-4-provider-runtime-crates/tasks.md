@@ -149,7 +149,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 4. `mbv-emby`
 
-- [ ] 4.1 Create `crates/mbv-emby`. Deps: `mbv-cast`, `mbv-config`,
+- [x] 4.1 Create `crates/mbv-emby`. Deps: `mbv-cast`, `mbv-config`,
   `mbv-ctrl`, `mbv-emby-model`, `mbv-text`, `mbv-net`, `mbv-ws`, `mbv-ids`,
   `ureq`, `serde`, `serde_json`, `uuid`, `rand`, `log`, plus others only if
   the compiler asks. Dev-deps: `rstest`, `mbv-net` with `test`, `mbv-config`
@@ -163,7 +163,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   calls one. Verify: `cargo nextest run -p mbv-emby` passes and
   `rg 'mbv_core|crate::(audiobookshelf|player|remote_player|daemon|service_runtime)' crates/mbv-emby`
   is empty.
-- [ ] 4.2 Delete `pub mod api;` from `mbv-core/src/lib.rs`. Add `mbv-emby` to
+- [x] 4.2 Delete `pub mod api;` from `mbv-core/src/lib.rs`. Add `mbv-emby` to
   `[dependencies]` in `mbv-core`, the TUI, and `mbvd`. Rewrite
   `crate::api::` (in `mbv-core`) and `mbv_core::api::` (~123 TUI files,
   `mbvd`) → `mbv_emby::`. Fix any `use mbv_core::api;` followed by `api::X`
