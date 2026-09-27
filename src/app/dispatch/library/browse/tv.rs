@@ -149,7 +149,7 @@ impl App {
                     );
                 }
                 Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
-                    self.spawn_refresh(lib_idx, loaded_count, key)
+                    self.spawn_refresh(lib_idx, loaded_count, key);
                 }
             }
         }

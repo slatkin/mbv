@@ -100,10 +100,9 @@ pub(crate) fn resolve_tv_content_mode(
 ) -> mbv_queue::TvContentMode {
     let large = total > LIBRARY_PILL_THRESHOLD;
     match restored {
-        Some(mbv_queue::TvContentMode::All) if large => mbv_queue::TvContentMode::Latest,
+        Some(mbv_queue::TvContentMode::All) | None if large => mbv_queue::TvContentMode::Latest,
         Some(mbv_queue::TvContentMode::Range(_)) if !large => mbv_queue::TvContentMode::All,
         Some(mode) => mode.clone(),
-        None if large => mbv_queue::TvContentMode::Latest,
         None => mbv_queue::TvContentMode::All,
     }
 }
