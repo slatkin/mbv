@@ -201,7 +201,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 6. `mbv-player`
 
-- [ ] 6.1 Create `crates/mbv-player`. Deps: `mbv-remote-player`, `mbv-core`,
+- [x] 6.1 Create `crates/mbv-player`. Deps: `mbv-remote-player`, `mbv-core`,
   `mbv-emby`, `mbv-emby-model`, `mbv-audiobookshelf`, `mbv-ctrl`,
   `mbv-config`, `mbv-queue`, `mbv-ids`, `mbv-net`, `mbv-ws`, `libmpv2`,
   `libmpv2-sys`, `libc`, `serde_json`, `log`, plus others only if the
@@ -216,7 +216,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   `mbv_remote_player::`. Verify: `cargo nextest run -p mbv-player` passes and
   `rg 'crate::(daemon|api|audiobookshelf|remote_player|service_runtime)' crates/mbv-player`
   is empty.
-- [ ] 6.2 In `mbv-core/src/lib.rs`, delete `pub mod player;` and the whole
+- [x] 6.2 In `mbv-core/src/lib.rs`, delete `pub mod player;` and the whole
   `pub mod player_owner_state { … }` alias block. Add `mbv-player` to
   `[dependencies]` in `mbv-daemon`, the TUI, and `mbvd` if the compiler asks
   (never in `mbv-core` — nothing there uses player once daemon has moved;
