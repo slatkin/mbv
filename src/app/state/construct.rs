@@ -1,3 +1,4 @@
+use crate::app::state::service_setup::StartupRequest;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
@@ -393,10 +394,16 @@ impl App {
             channels,
             idle_feed: None,
         });
-        app.setup.emby_startup_request = configured.then_some((app_config.clone(), generation));
+        app.setup.emby_startup_request = configured.then_some(StartupRequest {
+            config: app_config.clone(),
+            generation,
+        });
         app.setup.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
-            .then_some((app_config.clone(), generation));
+            .then_some(StartupRequest {
+                config: app_config.clone(),
+                generation,
+            });
         if crate::app::dispatch::session::service_startup::should_open_services(app_config) {
             app.open_services_settings();
         }

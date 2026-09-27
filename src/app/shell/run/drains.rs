@@ -453,13 +453,14 @@ impl Model {
         // Only start the configured Remote Service after the first TUI frame
         // has been rendered. The selected Player owner and UI therefore never
         // wait for Emby setup, authentication, or connectivity.
-        if let Some((config, generation)) = self.app.setup.emby_startup_request.take() {
-            self.app.setup.emby_startup_rx = Some(service_startup::start(config, generation));
+        if let Some(request) = self.app.setup.emby_startup_request.take() {
+            self.app.setup.emby_startup_rx =
+                Some(service_startup::start(request.config, request.generation));
         }
-        if let Some((config, generation)) = self.app.setup.audiobookshelf_startup_request.take() {
+        if let Some(request) = self.app.setup.audiobookshelf_startup_request.take() {
             self.app.setup.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                config,
-                generation,
+                request.config,
+                request.generation,
                 service_startup::AudiobookshelfCompletionKind::Startup,
             ));
         }

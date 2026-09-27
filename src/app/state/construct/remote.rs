@@ -258,10 +258,10 @@ impl App {
         }
         app.setup.audiobookshelf_startup_request = (services.audiobookshelf_configured
             && services.audiobookshelf_credential_present)
-            .then_some((
-                app.config.lock().unwrap().clone(),
-                app.audiobookshelf_runtime.generation(),
-            ));
+            .then_some(crate::app::state::service_setup::StartupRequest {
+                config: app.config.lock().unwrap().clone(),
+                generation: app.audiobookshelf_runtime.generation(),
+            });
         app
     }
 }

@@ -5,22 +5,22 @@ use crate::app::dispatch::session::service_startup::{
 use crate::app::dispatch::session::services_settings::{AudiobookshelfSetupForm, EmbySetupForm};
 use std::sync::mpsc;
 
+/// A Service's config and generation queued for a startup attempt.
+pub(in crate::app) struct StartupRequest {
+    pub(in crate::app) config: crate::config::Config,
+    pub(in crate::app) generation: mbv_core::service_runtime::SetupGeneration,
+}
+
 /// Startup, setup, and replacement state for the remote Services.
 pub(in crate::app) struct ServiceSetup {
     /// Worker for an Emby startup attempt, initial or retried.
     pub(in crate::app) emby_startup_rx: Option<StartupReceiver>,
     /// Config and generation queued for Emby startup.
-    pub(in crate::app) emby_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
+    pub(in crate::app) emby_startup_request: Option<StartupRequest>,
     /// Worker for an Audiobookshelf startup attempt, initial or retried.
     pub(in crate::app) audiobookshelf_startup_rx: Option<AudiobookshelfStartupReceiver>,
     /// Config and generation queued for Audiobookshelf startup.
-    pub(in crate::app) audiobookshelf_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
+    pub(in crate::app) audiobookshelf_startup_request: Option<StartupRequest>,
     /// Result channel for loading the Audiobookshelf catalog.
     pub(in crate::app) audiobookshelf_catalog_rx: Option<AudiobookshelfCatalogReceiver>,
     /// Result channel for testing Audiobookshelf credentials.
