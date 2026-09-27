@@ -386,6 +386,9 @@ impl PlayerProxy {
         }
     }
 
+    /// Remote-only: relative stepping for a local player goes through the
+    /// owner via `request_relative_step`/`transport_sender`, not here.
+    /// Returns `false` for local players.
     pub fn next(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -395,6 +398,9 @@ impl PlayerProxy {
         }
     }
 
+    /// Remote-only: relative stepping for a local player goes through the
+    /// owner via `request_relative_step`/`transport_sender`, not here.
+    /// Returns `false` for local players.
     pub fn previous(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,

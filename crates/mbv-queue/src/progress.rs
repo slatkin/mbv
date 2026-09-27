@@ -127,10 +127,7 @@ impl ProgressState {
 }
 
 /// Writes a resolved position/played pair into whichever kind `item` is.
-/// Shared by [`ProgressState::apply_to_item`] (the canonical `PlaybackQueue`)
-/// and [`crate::execution_sequence::ExecutionSequence`]'s own
-/// progress application (the Playback run's local queue mirror), so the two
-/// never diverge on how a kind's fields are written.
+/// Sole caller: [`ProgressState::apply_to_item`].
 pub(crate) fn apply_progress_to_queue_item(
     item: &mut QueueItem,
     position_ticks: i64,

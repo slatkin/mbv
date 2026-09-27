@@ -447,6 +447,9 @@ pub(super) fn dispatch_slot_jump(
                     );
                 }
             }
+            // Transport senders (MPRIS/tray/Emby-ws) have no ctrl wire form and
+            // so no `Superseded` event to receive; only `Ctrl` origins are worth
+            // tracking here.
             *queued_origin = match origin {
                 JumpOrigin::Ctrl(client_id) => Some((transition.request_id, client_id)),
                 JumpOrigin::Transport => None,
