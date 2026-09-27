@@ -160,7 +160,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 5. `mbv-ctrl`
 
-- [ ] 5.1 Create `crates/mbv-ctrl` (deps: `mbv-queue`, `mbv-emby-model`,
+- [x] 5.1 Create `crates/mbv-ctrl` (deps: `mbv-queue`, `mbv-emby-model`,
   `mbv-ids`, `serde`, others only as the compiler asks; dev-deps `rstest`,
   `serde_json` if tests use it). `git mv crates/mbv-core/src/ctrl.rs
   crates/mbv-ctrl/src/lib.rs`, `ctrl/tests.rs` + `ctrl/tests/` →
@@ -169,13 +169,13 @@ Grouped imports that mix moved and unmoved names (e.g.
   new crate `crate::player::` paths stay as written;
   rewrite `crate::ctrl::` → `crate::`, queue/emby-model paths to their crates.
   Verify: `cargo check -p mbv-ctrl` succeeds.
-- [ ] 5.2 Split the test `local_only_command_is_refused_without_delivery_or_termination`
+- [x] 5.2 Split the test `local_only_command_is_refused_without_delivery_or_termination`
   in `tests/tests_wire.rs`: the `WireCommand::try_from_player_command` assertion
   stays in `mbv-ctrl`; the `RemotePlayer::stub_with_command_rx` send-path half
   becomes its own test in `mbv-core`'s `remote_player` test module, keeping the
   comment that explains it. Replace `ServiceKind`/`FeedEntry`/`EmbyItem` test
   paths with the new crates. Verify: `cargo nextest run -p mbv-ctrl` passes.
-- [ ] 5.3 Delete `pub mod ctrl;` from `mbv-core/src/lib.rs` and `mod types;
+- [x] 5.3 Delete `pub mod ctrl;` from `mbv-core/src/lib.rs` and `mod types;
   pub use types::*;` from `player.rs`. Add `mbv-ctrl` to `mbv-core`, TUI and
   `mbvd` `[dependencies]` as needed. Rewrite `crate::ctrl::` /
   `mbv_core::ctrl::` → `mbv_ctrl::`, and `crate::player::` / `super::` /
