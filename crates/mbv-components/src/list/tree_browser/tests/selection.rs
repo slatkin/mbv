@@ -49,8 +49,12 @@ fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
     assert!(browser.viewport_offset <= 2);
 }
 
+// Product rule: selecting or restoring a node programmatically (anchoring)
+// SHALL NOT change expansion -- only an explicit user expand/collapse action
+// does. A hidden target selects its shallowest collapsed ancestor instead,
+// which stays collapsed and is itself visible.
 #[test]
-fn anchor_selection_counts_all_levels_in_the_settled_flow() {
+fn anchor_selection_never_expands_and_selects_the_shallowest_hidden_ancestor() {
     let mut browser = TreeBrowser::new();
     browser
         .reconcile([
@@ -60,6 +64,35 @@ fn anchor_selection_counts_all_levels_in_the_settled_flow() {
             node(Target::Other, None),
         ])
         .unwrap();
+
+    browser.apply(super::super::TreeOperation::AnchorSelection {
+        target: Target::Leaf,
+        flow_offset: 2,
+    });
+
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert!(!browser.is_expanded(&Target::Root));
+    assert!(!browser.is_expanded(&Target::Branch));
+    assert_eq!(browser.visible_targets(), vec![Target::Root, Target::Other]);
+}
+
+#[test]
+fn anchor_selection_selects_the_target_directly_once_its_ancestors_are_expanded() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, Some(Target::Root)),
+            node(Target::Leaf, Some(Target::Branch)),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Branch,
+    ));
 
     browser.apply(super::super::TreeOperation::AnchorSelection {
         target: Target::Leaf,

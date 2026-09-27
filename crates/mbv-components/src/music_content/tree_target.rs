@@ -47,19 +47,23 @@ impl MusicContent {
         }
     }
 
-    /// The selected artist root's Service-backed Emby id, for launch-state
-    /// persistence only. Task 2.2 exempts artist focus from the album
+    /// The selected artist root's launch-state identity: its Service-backed
+    /// Emby id, or its deterministic fallback display name when the Service
+    /// supplies no stable id. Task 2.2 exempts artist focus from the album
     /// persistence request (`album_selection_request`), but the launch-state
     /// snapshot still needs a stable identity to reselect the artist row
     /// itself on restore, rather than silently falling back to a stale saved
-    /// album. `None` for a Fallback-keyed artist (no Emby id) or any
+    /// album. The fallback name is stable across an ordinary refresh (same
+    /// guarantee the tree projection relies on), so it round-trips exactly
+    /// like a Service id even though it is not a real Emby id. `None` for any
     /// non-artist selection.
     #[must_use]
     pub fn selected_artist_launch_id(&self) -> Option<String> {
         match self.browser.selected_target()? {
-            MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(id)) => {
-                Some(id.clone())
-            }
+            MusicTreeTarget::Artist(
+                mbv_ui_model::music_grouping::ArtistKey::Service(id)
+                | mbv_ui_model::music_grouping::ArtistKey::Fallback(id),
+            ) => Some(id.clone()),
             _ => None,
         }
     }

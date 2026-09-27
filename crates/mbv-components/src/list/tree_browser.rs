@@ -492,13 +492,19 @@ impl<Target> TreeBrowser<Target> {
         self.paint.is_valid()
     }
 
-    /// The `AnchorSelection` operation's implementation: select `target`,
-    /// revealing its ancestor path, and anchor the viewport at the persisted
-    /// fully-expanded flow `offset`. The persisted value names a row in the
-    /// complete settled order, not the current projection, so the anchor
-    /// rounds forward to the next visible row instead of parking the viewport
-    /// on a hidden one. A target the owner does not hold is an explicit
-    /// absent result.
+    /// The `AnchorSelection` operation's implementation: select `target`, or
+    /// its nearest ancestor still visible under the current expansion state,
+    /// and anchor the viewport at the persisted fully-expanded flow `offset`.
+    /// Selecting or restoring a node programmatically SHALL NOT change
+    /// expansion (product rule): only an explicit user expand/collapse
+    /// action does that. When `target` is hidden under a collapsed ancestor,
+    /// the shallowest collapsed ancestor on its path is selected instead —
+    /// itself visible, and still collapsed — rather than exposing the
+    /// hidden target by force-expanding down to it. The persisted `offset`
+    /// names a row in the complete settled order, not the current
+    /// projection, so the viewport anchor rounds forward to the next visible
+    /// row instead of parking on a hidden one. A target the owner does not
+    /// hold is an explicit absent result.
     fn anchor_selection_to(&mut self, target: &Target, flow_offset: usize) -> bool
     where
         Target: Clone + Eq + Hash,
@@ -506,14 +512,21 @@ impl<Target> TreeBrowser<Target> {
         let Some(id) = self.target_to_node.get(target).copied() else {
             return false;
         };
-        // Reveal the target's ancestor path without touching any other
-        // branch's expansion.
+        // Walk the ancestor chain root-to-target and stop at the shallowest
+        // one that is not expanded: everything below it is hidden, so it is
+        // the deepest node still guaranteed visible.
+        let mut ancestors = Vec::new();
         let mut cursor = id;
         while let Some(parent) = self.arena[&cursor].node.parent.clone() {
-            self.expanded.insert(parent.clone());
+            ancestors.push(parent.clone());
             cursor = self.target_to_node[&parent];
         }
-        self.selected = Some(target.clone());
+        ancestors.reverse();
+        let visible_target = ancestors
+            .into_iter()
+            .find(|ancestor| !self.expanded.contains(ancestor))
+            .unwrap_or_else(|| target.clone());
+        self.selected = Some(visible_target);
         if let Some(row) = self.visible_row_for_flow_offset(flow_offset) {
             self.viewport_offset = row;
         }
@@ -521,6 +534,28 @@ impl<Target> TreeBrowser<Target> {
         // same deferred keep-visible rule a Panel-driven restore follows.
         self.invalidate_paint();
         true
+    }
+
+    /// Explicitly reveal `target`'s ancestor path (expand every collapsed
+    /// ancestor) without touching any other branch's expansion. Ordinary
+    /// selection restores (`AnchorSelection`) never reveal (product rule);
+    /// this is the one narrow, explicit exception for a caller whose own
+    /// direct user action requires the tree to land on a visible row, e.g.
+    /// Enter activating a filter-matched leaf under a persistently collapsed
+    /// root (`grouped-music-tree-browser`'s "Filtered album activation
+    /// dismisses filtering"). A target the owner does not hold is a no-op.
+    pub fn reveal(&mut self, target: &Target)
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let Some(id) = self.target_to_node.get(target).copied() else {
+            return;
+        };
+        let mut cursor = id;
+        while let Some(parent) = self.arena[&cursor].node.parent.clone() {
+            self.expanded.insert(parent.clone());
+            cursor = self.target_to_node[&parent];
+        }
     }
 
     /// The visible row at or after a persisted fully-expanded flow offset.

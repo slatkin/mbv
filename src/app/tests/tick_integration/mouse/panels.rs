@@ -1,4 +1,5 @@
 use super::*;
+use mbv_components::library_panel::owner::LibraryContentOwner as _;
 
 #[test]
 fn queue_boundary_unmounts_outside_the_two_panel_layout() {
@@ -230,6 +231,17 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         })
     };
 
+    // Anchoring never expands (product rule): the fixture's initial album
+    // adoption now lands on the collapsed artist root, so expand it (the
+    // same explicit Right chord a user would press) before painting, so the
+    // first row below it is an album row a click resolves as a cursor move.
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .on_key(&tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Right,
+            modifiers: KeyModifiers::NONE,
+        });
     let mut wide_terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     wide_terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))

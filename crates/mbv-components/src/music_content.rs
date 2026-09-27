@@ -551,17 +551,22 @@ impl MusicContent {
         // pre-filter anchor, then re-select it: the shared `ClearFilter`
         // restores `filter_anchor`, so without this the tree (and with it
         // Hero/Workspace/persistence) would revert to the row the filter
-        // started on. `AnchorSelection` rather than `Select` because the
-        // filter can reach a leaf under a collapsed artist root: `Select`
-        // only addresses a visible row, so the re-selection would come back
-        // `Unhandled` and the tree would revert. `AnchorSelection` reveals
-        // the ancestor path (legacy `select_album_target` parity) and re-arms
-        // the viewport visibility rule for the next view.
+        // started on. The filter can reach a leaf under a collapsed artist
+        // root; `Select` only addresses a visible row, so this explicit
+        // `reveal` is the one spec-mandated exception to the ordinary
+        // no-auto-expand rule ("Filtered album activation dismisses
+        // filtering" SHALL focus the album in the unfiltered tree): Enter is
+        // itself the explicit user action that lands on this exact leaf, so
+        // exposing it is the direct result of that action, not a
+        // side-effect of an unrelated restore. `AnchorSelection` alone would
+        // no longer reveal it (legacy `select_album_target` parity ends
+        // here); `reveal` restores that ancestor path before selecting.
         let target = self.browser.selected_target().cloned();
         let item = self.selected_item()?;
         self.inline_search.close();
         self.browser.apply(TreeOperation::ClearFilter);
         if let Some(target) = target {
+            self.browser.reveal(&target);
             self.browser.apply(TreeOperation::AnchorSelection {
                 target,
                 flow_offset: 0,

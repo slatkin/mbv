@@ -19,6 +19,20 @@ fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
 }
 
 fn enter_track_focus(model: &mut Model, _id: &ComponentId) {
+    // Anchoring never expands (product rule): the fixture's initial album
+    // adoption lands on the collapsed artist root, so an explicit Right then
+    // Down (exactly the chords a user presses) expand it and move onto
+    // "album-1" before track focus, which requires an album selected.
+    let owner = model.test_music_owner_mut();
+    owner.on_key(&TuiKeyEvent {
+        code: Key::Right,
+        modifiers: TuiKeyModifiers::NONE,
+    });
+    owner.on_key(&TuiKeyEvent {
+        code: Key::Down,
+        modifiers: TuiKeyModifiers::NONE,
+    });
+    owner.reconcile_workspace_rows();
     model.test_music_owner_mut().enter_track_focus();
 }
 

@@ -46,6 +46,14 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         vec![0],
         None,
     ));
+    // Anchoring never expands (product rule): expand the album's artist root
+    // first, as if the user had already opened it, so the album itself is
+    // visible and actually gets selected.
+    owner.browser.apply(TreeOperation::ToggleExpansionTarget(
+        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Fallback(
+            "Artist".into(),
+        )),
+    ));
     assert_eq!(
         owner
             .browser
@@ -163,6 +171,73 @@ fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album
     assert_eq!(owner.selected_album_target(), None);
 }
 
+// Startup regression (real repro): quit with the Jazz pill selected and its
+// first artist, a Fallback-keyed root (no stable Service id, the common case
+// for this library), selected but collapsed. On relaunch the saved pill plus
+// saved artist item must restore exactly that: the artist selected and still
+// collapsed, and nothing else in the group expanded -- not the saved
+// artist's own first album, and not any other artist's.
+#[test]
+fn launch_restore_selects_the_saved_artist_collapsed_and_expands_nothing() {
+    let mut first_album = make_item("First Artist Album", "Folder");
+    first_album.id = "first-artist-album".into();
+    let mut second_album = make_item("Second Artist Album", "Folder");
+    second_album.id = "second-artist-album".into();
+    let mut group = make_item("Jazz", "MusicArtist");
+    group.id = "jazz-group".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first_album, second_album], 0),
+        None,
+        String::new(),
+        vec![group],
+        0,
+        vec![
+            (
+                "First Artist".into(),
+                "2001".into(),
+                "First Artist Album".into(),
+            ),
+            (
+                "Second Artist".into(),
+                "2002".into(),
+                "Second Artist Album".into(),
+            ),
+        ],
+        vec![
+            mbv_ui_model::music_grouping::ArtistKey::Fallback("First Artist".into()),
+            mbv_ui_model::music_grouping::ArtistKey::Fallback("Second Artist".into()),
+        ],
+        vec![0, 1],
+        None,
+    ));
+    let state = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
+        selector: Some(mbv_config::SelectorIdentity::Emby {
+            key: mbv_config::EmbySelectorKey::Group("jazz-group".into()),
+        }),
+        item: Some(mbv_config::LibraryItemIdentity::Emby {
+            id: "First Artist".into(),
+        }),
+    };
+
+    assert!(owner.reanchor_launch_state(&state));
+
+    assert!(owner.selected_is_artist(), "the saved artist is selected");
+    assert_eq!(
+        owner.browser.selected_target().cloned(),
+        Some(MusicTreeTarget::Artist(
+            mbv_ui_model::music_grouping::ArtistKey::Fallback("First Artist".into())
+        ))
+    );
+    assert!(
+        owner.browser.expanded.is_empty(),
+        "no artist root -- saved or otherwise -- is expanded by a programmatic restore"
+    );
+}
+
 #[test]
 fn saved_music_latest_selector_falls_back_to_normal_default() {
     let mut album = make_item("Album", "Folder");
@@ -195,6 +270,10 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
         }),
     };
     assert!(owner.reanchor_launch_state(&state));
+    // The default fallback selects the first visible row (the collapsed
+    // artist root) rather than expanding into its first album (product
+    // rule: a programmatic selection never changes expansion), so the
+    // snapshot carries the artist's own fallback-name identity.
     assert_eq!(
         owner.launch_snapshot(),
         (
@@ -202,7 +281,7 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
                 key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
             }),
             Some(mbv_config::LibraryItemIdentity::Emby {
-                id: "album-stable".into()
+                id: "Artist".into(),
             }),
         )
     );
