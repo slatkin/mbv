@@ -37,9 +37,9 @@ Gate for every group: `cargo check --workspace`,
 
 ## 6. Run loses relative navigation and its progress copy
 
-- [ ] 6.1 Delete `PlayerCommand::Next`/`Previous` (`crates/mbv-ctrl/src/player.rs`), their arms in `crates/mbv-ctrl/src/commands.rs` and `crates/mbv-player/src/run/commands.rs`, `step_to_index` and `relative_step_base`, the Local branches of `PlayerProxy::next`/`previous` (`proxy.rs`), and `Player::next`/`previous` (`controller.rs`). Also delete the D4 comment about the relative-nav exception. Verify: the workspace compiles and `rg "PlayerCommand::(Next|Previous)\b"` is empty.
-- [ ] 6.2 Delete `ExecutionSequence::apply_progress` and its tests (`crates/mbv-queue/src/execution_sequence.rs`), and the write at `run/events/queue_advance.rs:118` with its comment. Verify: the workspace compiles and `rg "fn apply_progress" crates/mbv-queue/src/execution_sequence.rs` is empty.
-- [ ] 6.3 Make `cmd_jump_to_active_file` honour `resume_ticks` for non-Audiobookshelf items by overriding the prepared source's `start_seconds` (design D2). Audiobookshelf keeps its session position. Add a run-level test: a non-Audiobookshelf slot in an active-file queue loads with `start=` from `resume_ticks`. Verify: the test passes.
+- [x] 6.1 Delete `PlayerCommand::Next`/`Previous` (`crates/mbv-ctrl/src/player.rs`), their arms in `crates/mbv-ctrl/src/commands.rs` and `crates/mbv-player/src/run/commands.rs`, `step_to_index` and `relative_step_base`, the Local branches of `PlayerProxy::next`/`previous` (`proxy.rs`), and `Player::next`/`previous` (`controller.rs`). Also delete the D4 comment about the relative-nav exception. Verify: the workspace compiles and `rg "PlayerCommand::(Next|Previous)\b"` is empty.
+- [x] 6.2 Delete `ExecutionSequence::apply_progress` and its tests (`crates/mbv-queue/src/execution_sequence.rs`), and the write at `run/events/queue_advance.rs:118` with its comment. Verify: the workspace compiles and `rg "fn apply_progress" crates/mbv-queue/src/execution_sequence.rs` is empty.
+- [x] 6.3 Make `cmd_jump_to_active_file` honour `resume_ticks` for non-Audiobookshelf items by overriding the prepared source's `start_seconds` (design D2). Audiobookshelf keeps its session position. Add a run-level test: a non-Audiobookshelf slot in an active-file queue loads with `start=` from `resume_ticks`. Verify: the test passes.
 
 ## 7. Item lifecycle types (invariant 03)
 
