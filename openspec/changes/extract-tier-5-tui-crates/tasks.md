@@ -321,7 +321,7 @@ Each task below is its own commit, and the full gate passes after each.
   `docs/invariants/09-completed-frame-hit-claim.md`, to the new crate paths.
   Leave ADRs unchanged. Verify:
   `rg 'src/app/(render|components)' .agents docs/invariants` is empty.
-- [ ] 9.3 Run `make check-code-file-lines` before pushing. Split any file it
+- [x] 9.3 Run `make check-code-file-lines` before pushing. Split any file it
   flags along a responsibility seam, following the `splitting-files` skill.
   Verify: the check passes.
 - [ ] 9.4 Comment on issue #814. Summarise the Tier 5 crates, the graph
