@@ -147,6 +147,8 @@ impl App {
             mpris: None,
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,
+            transport_rx: init.transport_rx,
+            transport_tx: init.transport_tx,
             ws_send_tx: init.ws_send_tx,
             audiobookshelf_socket_rx: init.audiobookshelf_socket_rx,
             audiobookshelf_socket_tx: init.audiobookshelf_socket_tx,
@@ -330,6 +332,7 @@ impl App {
     pub fn new_independent(app_config: &crate::config::Config) -> Self {
         let (player_tx, player_rx) = mpsc::channel();
         let (_, ws_rx) = mpsc::channel();
+        let (transport_tx, transport_rx) = mpsc::channel();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
@@ -372,6 +375,8 @@ impl App {
             player,
             player_rx,
             ws_rx,
+            transport_rx,
+            transport_tx,
             ws_send_tx: None,
             audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,

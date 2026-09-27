@@ -248,6 +248,22 @@ impl Model {
         had_events
     }
 
+    pub(crate) fn drain_transport_events(&mut self) -> bool {
+        let mut had_events = false;
+        while let Ok(transport) = self.app.transport_rx.try_recv() {
+            had_events = true;
+            match transport {
+                mbv_ctrl::TransportCommand::Step(direction) => {
+                    let _ = self.app.request_relative_step(direction);
+                }
+                mbv_ctrl::TransportCommand::Player(command) => {
+                    self.app.player.send_command(command);
+                }
+            }
+        }
+        had_events
+    }
+
     /// Drain Emby websocket events. Returns whether any event was drained.
     pub(super) fn drain_ws_events(&mut self) -> bool {
         let mut had_events = false;

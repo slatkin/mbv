@@ -162,6 +162,7 @@ pub(crate) fn make_built_app() -> App {
 
     let (_, player_rx) = std::sync::mpsc::channel();
     let (_, ws_rx) = std::sync::mpsc::channel();
+    let (transport_tx, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
@@ -178,6 +179,8 @@ pub(crate) fn make_built_app() -> App {
         player,
         player_rx,
         ws_rx,
+        transport_rx,
+        transport_tx,
         ws_send_tx: None,
         audiobookshelf_socket_rx: {
             let (_, rx) = std::sync::mpsc::channel();

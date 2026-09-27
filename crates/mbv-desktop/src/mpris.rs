@@ -18,7 +18,10 @@ use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
 
-use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
+#[cfg(not(test))]
+use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::player::PlayerStatus;
+use mbv_ctrl::TransportCommand;
 #[cfg(not(test))]
 use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND};
 
@@ -101,7 +104,7 @@ impl MediaPlayer2 {
 /// whatever was live when `start` was first called.
 pub struct MprisSource {
     status: Arc<Mutex<PlayerStatus>>,
-    send: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
+    send: Arc<dyn Fn(TransportCommand) + Send + Sync>,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
@@ -233,7 +236,7 @@ fn make_metadata_with_art_resolver(
 #[cfg(not(test))]
 type StatusAndSender = (
     Arc<Mutex<PlayerStatus>>,
-    Arc<dyn Fn(PlayerCommand) + Send + Sync>,
+    Arc<dyn Fn(TransportCommand) + Send + Sync>,
 );
 
 #[cfg(not(test))]
@@ -260,31 +263,31 @@ impl MediaPlayer2Player {
     fn play(&self) {
         let (status, send) = self.status_and_sender();
         if let Some(cmd) = status.lock().unwrap().toggle_to_reach(false) {
-            send(cmd);
+            send(TransportCommand::Player(cmd));
         };
     }
 
     fn pause(&self) {
         let (status, send) = self.status_and_sender();
         if let Some(cmd) = status.lock().unwrap().toggle_to_reach(true) {
-            send(cmd);
+            send(TransportCommand::Player(cmd));
         };
     }
 
     fn play_pause(&self) {
-        (self.status_and_sender().1)(PlayerCommand::TogglePause);
+        (self.status_and_sender().1)(TransportCommand::Player(PlayerCommand::TogglePause));
     }
 
     fn stop(&self) {
-        (self.status_and_sender().1)(PlayerCommand::TogglePause);
+        (self.status_and_sender().1)(TransportCommand::Player(PlayerCommand::TogglePause));
     }
 
     fn next(&self) {
-        (self.status_and_sender().1)(PlayerCommand::Next);
+        (self.status_and_sender().1)(TransportCommand::Step(mbv_ctrl::Direction::Next));
     }
 
     fn previous(&self) {
-        (self.status_and_sender().1)(PlayerCommand::Previous);
+        (self.status_and_sender().1)(TransportCommand::Step(mbv_ctrl::Direction::Previous));
     }
 
     fn seek(&self, offset_us: i64) {
@@ -293,7 +296,7 @@ impl MediaPlayer2Player {
         if secs.abs() > 86400.0 {
             return;
         }
-        (self.source.lock().unwrap().send)(PlayerCommand::Seek(secs));
+        (self.source.lock().unwrap().send)(TransportCommand::Player(PlayerCommand::Seek(secs)));
     }
 
     #[expect(
@@ -313,7 +316,9 @@ impl MediaPlayer2Player {
         if runtime_us > 0 && position_us > runtime_us {
             return;
         }
-        (source.send)(PlayerCommand::SeekAbsolute(us_to_seconds(position_us)));
+        (source.send)(TransportCommand::Player(PlayerCommand::SeekAbsolute(
+            us_to_seconds(position_us),
+        )));
     }
 
     #[expect(
@@ -376,8 +381,8 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn set_volume(&self, vol: f64) {
-        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume(saturating_i64_from_f64(
-            (vol * 100.0).round(),
+        (self.source.lock().unwrap().send)(TransportCommand::Player(PlayerCommand::SetVolume(
+            saturating_i64_from_f64((vol * 100.0).round()),
         )));
     }
 
@@ -556,7 +561,7 @@ async fn poll_status(
 #[cfg(not(test))]
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
-    send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    send: impl Fn(TransportCommand) + Send + Sync + 'static,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
     art_path: fn(&str) -> Option<std::path::PathBuf>,
 ) -> MprisHandle {
@@ -627,7 +632,7 @@ pub fn start(
 pub fn rebind(
     handle: &MprisHandle,
     status: Arc<Mutex<PlayerStatus>>,
-    send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    send: impl Fn(TransportCommand) + Send + Sync + 'static,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) {
     let mut source = handle.lock().unwrap();

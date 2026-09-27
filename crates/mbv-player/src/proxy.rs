@@ -513,20 +513,29 @@ impl PlayerProxy {
     /// In local mode the returned closure panics if the local player's `cmd_tx`
     /// mutex is poisoned — a previous owner panicked while holding it. The
     /// remote closure takes no lock and cannot panic.
-    pub fn command_sender(&self) -> Arc<dyn Fn(PlayerCommand) + Send + Sync> {
+    pub fn transport_sender(
+        &self,
+        local_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
+    ) -> Arc<dyn Fn(mbv_ctrl::TransportCommand) + Send + Sync> {
         match &self.inner {
-            PlayerProxyInner::Local(p) => {
-                let cmd_tx = Arc::clone(&p.cmd_tx);
-                Arc::new(move |cmd: PlayerCommand| {
-                    if let Some(tx) = cmd_tx.lock().unwrap().as_ref() {
-                        let _ = tx.send(cmd);
-                    }
-                })
-            }
+            PlayerProxyInner::Local(_) => Arc::new(move |transport| {
+                let _ = local_tx.send(transport);
+            }),
             PlayerProxyInner::Remote(r) => {
                 let remote = r.clone();
-                Arc::new(move |cmd: PlayerCommand| {
-                    let _ = remote.send_command(cmd);
+                Arc::new(move |transport| match transport {
+                    mbv_ctrl::TransportCommand::Step(direction) => {
+                        let action = match direction {
+                            mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
+                            mbv_ctrl::Direction::Previous => {
+                                mbv_ctrl::PlaybackIntentAction::Previous
+                            }
+                        };
+                        let _ = remote.send_playback_intent(remote.new_playback_intent(action));
+                    }
+                    mbv_ctrl::TransportCommand::Player(command) => {
+                        let _ = remote.send_command(command);
+                    }
                 })
             }
         }

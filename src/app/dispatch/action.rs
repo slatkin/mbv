@@ -17,6 +17,7 @@ use crate::app::input::resolver::KeyChord;
 use crate::app::App;
 use crossterm::event::KeyCode;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::Direction;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 use std::sync::Arc;
@@ -188,6 +189,30 @@ impl App {
     /// here. When this process is the owner, sync the canonical snapshot,
     /// mint and accept a local transition, and dispatch the transition the
     /// owner accepted now (or queue it behind an in-flight one).
+    pub(in crate::app) fn request_relative_step(&mut self, direction: Direction) -> bool {
+        self.bare_owner
+            .sync_canonical_queue(self.playback_queue().queue.clone());
+        match self.bare_owner.relative_step_target(direction) {
+            mbv_player::StepTarget::Jump(slot_id) => {
+                let (request_id, generation) = self.bare_owner.mint_local_transition();
+                let transition = mbv_player::transition::Transition::with_cause(
+                    request_id,
+                    generation,
+                    slot_id,
+                    mbv_player::transition::TransitionCause::Step(direction),
+                );
+                match self.bare_owner.accept_local_transition(transition) {
+                    mbv_player::transition::DispatchDecision::DispatchNow(t) => {
+                        self.dispatch_jump(t)
+                    }
+                    mbv_player::transition::DispatchDecision::Queued { .. } => true,
+                }
+            }
+            mbv_player::StepTarget::Coalesced => true,
+            mbv_player::StepTarget::AtEdge => false,
+        }
+    }
+
     pub(in crate::app) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
         if self.player.is_remote() {
             return self.request_remote_slot_jump(slot_id);

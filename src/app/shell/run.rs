@@ -407,6 +407,7 @@ impl Model {
         *had_events |= self.drain_card_image_completions();
         self.app.drain_image_fetches();
         *had_events |= self.drain_resize_responses();
+        *had_events |= self.drain_transport_events();
         *had_events |= self.drain_ws_events();
         *had_events |= self.drain_audiobookshelf_socket_events();
         *had_events |= self.drain_idle_feed();
