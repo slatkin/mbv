@@ -28,11 +28,11 @@ use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
 use crate::app::render::current_time_secs;
-use crate::app::state::types::audiobookshelf_browse::{
+use crate::app::ui_model::audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,
 };
-use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
+use crate::app::ui_model::ui_util::{fmt_publish_date_short, trunc_str};
 
 /// Shared max pill label length (`feeds_content.rs`): this owner is the one
 /// producer of the Selector row's labels, and show pills truncate like the

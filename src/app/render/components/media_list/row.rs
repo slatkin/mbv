@@ -4,7 +4,7 @@ use crate::app::components::media_list::{
 };
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_model::ui_util::trunc_str;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::ListItem;

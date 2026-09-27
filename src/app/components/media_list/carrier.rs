@@ -8,9 +8,10 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
-    MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition, SelectionOrigin,
-    SelectionSummary, WideMediaList,
+    MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition, SelectionSummary,
+    WideMediaList,
 };
+use crate::app::ui_model::media_list::SelectionOrigin;
 
 /// One logical row flow's destination-side carrier over one canonical owner.
 pub struct MediaListCarrier<Target> {

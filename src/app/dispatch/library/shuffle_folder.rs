@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;
 use crate::app::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use mbv_emby_model::EmbyItem;
 use rand::seq::SliceRandom;

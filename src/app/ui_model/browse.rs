@@ -121,14 +121,14 @@ pub(in crate::app) struct BrowseLevel {
     pub(in crate::app) loading: bool,
     pub(in crate::app) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
     /// Active letter-range pill scope for a large non-TV library.
-    pub(in crate::app) letter_filter: Option<crate::app::render::LetterFilter>,
+    pub(in crate::app) letter_filter: Option<crate::app::ui_model::sort_filter::LetterFilter>,
     /// Selected top-level TV content mode; absent means resolve the size
     /// default after the unfiltered capture load.
     pub(in crate::app) tv_content_mode: Option<mbv_queue::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
     pub(in crate::app) music_grouping:
-        Option<crate::app::state::music_grouping::MusicGroupingState>,
+        Option<crate::app::ui_model::music_grouping::MusicGroupingState>,
 }
 
 /// The fetch key a spawned level (re)fetch must preserve: everything a
@@ -142,7 +142,7 @@ pub(in crate::app) struct LevelFetchKey {
     pub(in crate::app) unplayed_only: bool,
     pub(in crate::app) sort_by: String,
     pub(in crate::app) sort_order: String,
-    pub(in crate::app) letter_filter: Option<crate::app::render::LetterFilter>,
+    pub(in crate::app) letter_filter: Option<crate::app::ui_model::sort_filter::LetterFilter>,
 }
 
 impl LevelFetchKey {
@@ -177,7 +177,7 @@ impl BrowseLevel {
             total_count,
             visible_rows,
             saved.fetched_rows,
-            crate::app::render::LetterFilterKind::Movie,
+            crate::app::ui_model::sort_filter::LetterFilterKind::Movie,
         )
     }
 
@@ -187,7 +187,7 @@ impl BrowseLevel {
         total_count: usize,
         visible_rows: usize,
         fetched_rows: Option<usize>,
-        filter_kind: crate::app::render::LetterFilterKind,
+        filter_kind: crate::app::ui_model::sort_filter::LetterFilterKind,
     ) -> Self {
         let cursor = saved
             .focused_item_id
@@ -210,20 +210,28 @@ impl BrowseLevel {
             all_items: None,
             letter_filter: match (filter_kind, saved.tv_content_mode.as_ref()) {
                 (
-                    crate::app::render::LetterFilterKind::Tv,
+                    crate::app::ui_model::sort_filter::LetterFilterKind::Tv,
                     Some(mbv_queue::TvContentMode::Range(index)),
-                ) => crate::app::render::LetterFilter::for_index_for_kind(*index, filter_kind),
-                (crate::app::render::LetterFilterKind::Tv, Some(_)) => None,
+                ) => crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
+                    *index,
+                    filter_kind,
+                ),
+                (crate::app::ui_model::sort_filter::LetterFilterKind::Tv, Some(_)) => None,
                 _ => saved.letter_filter_index.and_then(|index| {
-                    crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                    crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
+                        index,
+                        filter_kind,
+                    )
                 }),
             },
-            tv_content_mode: (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
-                crate::app::render::resolve_tv_content_mode(
-                    saved.library_total.unwrap_or_default(),
-                    saved.tv_content_mode.as_ref(),
-                )
-            }),
+            tv_content_mode: (filter_kind
+                == crate::app::ui_model::sort_filter::LetterFilterKind::Tv)
+                .then(|| {
+                    crate::app::ui_model::sort_filter::resolve_tv_content_mode(
+                        saved.library_total.unwrap_or_default(),
+                        saved.tv_content_mode.as_ref(),
+                    )
+                }),
             music_grouping: None,
         }
     }
@@ -288,7 +296,7 @@ where
     restore_library_position_with_fetched_rows_for_kind(
         saved,
         visible_rows,
-        crate::app::render::LetterFilterKind::Movie,
+        crate::app::ui_model::sort_filter::LetterFilterKind::Movie,
         |saved_level| {
             fetch_level(saved_level).map(|(items, total_count)| {
                 let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
@@ -301,7 +309,7 @@ where
 pub(in crate::app) fn restore_library_position_with_fetched_rows_for_kind<F>(
     saved: &mbv_queue::LibraryPosition,
     visible_rows: usize,
-    filter_kind: crate::app::render::LetterFilterKind,
+    filter_kind: crate::app::ui_model::sort_filter::LetterFilterKind,
     mut fetch_level: F,
 ) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, String>
 where

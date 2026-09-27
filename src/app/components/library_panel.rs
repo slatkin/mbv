@@ -32,5 +32,4 @@ pub(in crate::app) use content::{
 pub(in crate::app) use hero::{hero_content_emby, HeroContentData};
 pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};
-pub use owner::{LibraryKey, LibraryKind};
 pub(in crate::app) use panel::LibraryPanel;

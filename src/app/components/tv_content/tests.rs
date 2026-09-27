@@ -11,7 +11,7 @@ mod workspace_tests;
 fn tv_tree_context(
     items: Vec<EmbyItem>,
     selected_id: Option<&str>,
-    detail: Option<crate::app::SeriesDetail>,
+    detail: Option<crate::app::ui_model::browse::SeriesDetail>,
     show_letter_pills: bool,
 ) -> TvWideRenderCtx {
     let selected = selected_id.and_then(|id| items.iter().find(|item| item.id == id).cloned());

@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::context_menu::BulkRemoveTarget;
+use crate::app::ui_model::context_menu::BulkRemoveTarget;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
@@ -61,10 +61,9 @@ impl App {
                         self.enqueue_lib_item(lib_idx, item);
                     }
                 } else {
-                    for item in items
-                        .into_iter()
-                        .filter(|item| !item.is_folder && crate::app::ui_util::is_playable(item))
-                    {
+                    for item in items.into_iter().filter(|item| {
+                        !item.is_folder && crate::app::ui_model::ui_util::is_playable(item)
+                    }) {
                         self.submit_queue_item(mbv_queue::QueueItem::Emby(Box::new(item)), false);
                     }
                 }

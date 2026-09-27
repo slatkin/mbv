@@ -4,8 +4,8 @@
 // (`MockHttp`), per the AGENTS.md mocks-only policy.
 
 use super::*;
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::make_app_stub;
+use crate::app::ui_model::browse::BrowseResting;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 

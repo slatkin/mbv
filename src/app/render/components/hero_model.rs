@@ -2,7 +2,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_emby_model::TICKS_PER_SECOND;
 
 use crate::app::render::components::home_video::format_release_date;
-use crate::app::ui_util::fmt_duration_hms;
+use crate::app::ui_model::ui_util::fmt_duration_hms;
 
 /// Canonical TV Wide Series image-type candidate chain. The panel's artwork
 /// policy reuses this chain for Series landscape arms.

@@ -1,11 +1,11 @@
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 
 type BrowseRefresh = (
     usize,
-    crate::app::state::types::browse::LevelFetchKey,
+    crate::app::ui_model::browse::LevelFetchKey,
     usize,
     Option<mbv_queue::TvContentMode>,
 );
@@ -119,7 +119,7 @@ impl App {
                 lib.nav_stack.last().map(|lvl| {
                     (
                         i,
-                        crate::app::state::types::browse::LevelFetchKey::from_level(lvl),
+                        crate::app::ui_model::browse::LevelFetchKey::from_level(lvl),
                         lvl.items.len(),
                         (lib.library.collection_type == "tvshows" && lib.nav_stack.len() == 1)
                             .then(|| {

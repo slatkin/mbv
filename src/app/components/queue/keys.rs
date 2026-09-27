@@ -4,8 +4,8 @@ use crate::app::components::media_list::{MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{
     LeafKeyResult, Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
 };
-use crate::app::state::types::context_menu::ContextMenuTargets;
-use crate::app::state::types::playback::QueueScope;
+use crate::app::ui_model::context_menu::ContextMenuTargets;
+use crate::app::ui_model::playback::QueueScope;
 
 use super::QueueComponent;
 

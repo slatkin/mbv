@@ -8,9 +8,9 @@ use tuirealm::event::{
 use crate::app::components::SessionsComponent;
 use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 use crate::app::dispatch::action::Command;
-use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use crate::app::ui_model::panel_targets::{PanelTarget, SessionTargetKey};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::take_chars;
 use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
+use crate::app::ui_model::ui_util::take_chars;
 use crate::app::{App, LocalPlaybackTarget};
 use mbv_ctrl::player::PlayerCommand;
 

@@ -13,7 +13,7 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
-use crate::app::state::types::settings::SettingsDestination;
+use crate::app::ui_model::settings::SettingsDestination;
 
 mod setup;
 

@@ -1,4 +1,4 @@
-use crate::app::state::types::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
+use crate::app::ui_model::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 use crate::app::App;
 use crate::app::{ConfirmAction, ConfirmModal};
 use mbv_core::service_runtime::ServiceState;
@@ -43,12 +43,12 @@ impl EmbySetupForm {
 
 impl App {
     pub(crate) fn open_services_settings(&mut self) {
-        self.request_sidebar_open(crate::app::SidebarId::Settings);
+        self.request_sidebar_open(crate::app::ui_model::sidebar::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
     }
 
     pub(crate) fn open_keys_settings(&mut self) {
-        self.request_sidebar_open(crate::app::SidebarId::Settings);
+        self.request_sidebar_open(crate::app::ui_model::sidebar::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Keys;
     }
 
@@ -207,7 +207,7 @@ impl App {
         match intent {
             ServiceActionIntent::ManageFeeds => {
                 self.pending_overlay =
-                    Some(crate::app::state::types::overlay::OverlayRequest::OpenFeedsManage);
+                    Some(crate::app::ui_model::overlay::OverlayRequest::OpenFeedsManage);
             }
             ServiceActionIntent::SetupAudiobookshelf
             | ServiceActionIntent::ReplaceAudiobookshelf => {

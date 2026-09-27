@@ -21,7 +21,7 @@ use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::components::widgets::service_state_color;
-use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::ui_model::panel_targets::{PanelTarget, SessionTargetKey};
 
 /// The Interactive Component for the Sessions sidebar.
 struct SessionsDisplayContext {
@@ -234,8 +234,12 @@ impl SessionsComponent {
                         let time = if session.now_playing.is_some() {
                             format!(
                                 " {}/{}",
-                                crate::app::ui_util::fmt_duration_short(session.position_s),
-                                crate::app::ui_util::fmt_duration_short(session.runtime_s)
+                                crate::app::ui_model::ui_util::fmt_duration_short(
+                                    session.position_s
+                                ),
+                                crate::app::ui_model::ui_util::fmt_duration_short(
+                                    session.runtime_s
+                                )
                             )
                         } else {
                             String::new()
@@ -249,7 +253,7 @@ impl SessionsComponent {
                             vec![
                                 kind,
                                 ThreeLineSpan::new(
-                                    crate::app::ui_util::trunc_str(
+                                    crate::app::ui_model::ui_util::trunc_str(
                                         &session.device_name,
                                         text_width
                                             .saturating_sub(kind_w)
@@ -263,7 +267,7 @@ impl SessionsComponent {
                             vec![ThreeLineSpan::new(
                                 format!(
                                     "{state_icon} {}{time}",
-                                    crate::app::ui_util::trunc_str(title, title_width)
+                                    crate::app::ui_model::ui_util::trunc_str(title, title_width)
                                 ),
                                 ThreeLineRole::Status,
                             )],
@@ -283,7 +287,7 @@ impl SessionsComponent {
                             vec![
                                 kind,
                                 ThreeLineSpan::new(
-                                    crate::app::ui_util::trunc_str(
+                                    crate::app::ui_model::ui_util::trunc_str(
                                         &receiver.friendly_name,
                                         text_width
                                             .saturating_sub(kind_w)

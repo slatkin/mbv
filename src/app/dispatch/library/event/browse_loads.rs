@@ -1,4 +1,4 @@
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel};
 use mbv_emby_model::EmbyItem;
 
@@ -79,17 +79,17 @@ impl App {
         let total = level.total_count;
         let parent_id = level.parent_id.clone();
         let is_tv = lib.library.collection_type == "tvshows";
-        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::ui_model::sort_filter::LetterFilterKind::from_collection_type(
             lib.library.collection_type.as_str(),
         );
         // The key clones the level's fetch fields, so build it before the
         // mutations below release the `level` borrow.
-        let key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        let key = crate::app::ui_model::browse::LevelFetchKey::from_level(level);
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
         if is_tv {
-            let mode = crate::app::render::resolve_tv_content_mode(total, None);
+            let mode = crate::app::ui_model::sort_filter::resolve_tv_content_mode(total, None);
             let large = total > crate::app::render::LIBRARY_PILL_THRESHOLD;
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 lib.tv_content_mode = Some(mode.clone());
@@ -110,7 +110,8 @@ impl App {
         if total <= crate::app::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = crate::app::render::LetterFilter::default_filter_for_kind(filter_kind);
+        let filter =
+            crate::app::ui_model::sort_filter::LetterFilter::default_filter_for_kind(filter_kind);
         let mut key = key;
         key.letter_filter = Some(filter.clone());
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -315,7 +316,7 @@ impl App {
             root.library_total = library_total;
             root.tv_content_mode =
                 (self.libs[lib_idx].library.collection_type == "tvshows").then(|| {
-                    crate::app::render::resolve_tv_content_mode(
+                    crate::app::ui_model::sort_filter::resolve_tv_content_mode(
                         library_total.unwrap_or_default(),
                         requested_position
                             .levels
@@ -343,7 +344,7 @@ impl App {
         let restored = self
             .libs
             .get(lib_idx)
-            .map(crate::app::state::types::library_tab::LibraryTab::library_position_snapshot);
+            .map(crate::app::ui_model::library_tab::LibraryTab::library_position_snapshot);
         if restored.as_ref() != self.saved_library_position(lib_idx).as_ref() {
             if let Some(restored) = restored {
                 self.replace_saved_library_position(lib_idx, restored);

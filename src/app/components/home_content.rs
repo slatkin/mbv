@@ -22,7 +22,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaListTransition, MediaSemanticState, RowIntent,
 };
-use crate::app::state::types::context_menu::ContextMenuTargets;
+use crate::app::ui_model::context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
@@ -130,8 +130,11 @@ impl HomeContent {
 
     /// Home's typed request target for a stable item identity the shared
     /// owner resolved, or the owner's current selection for a local effect.
-    fn home_row_target(_self: &Self, item_id: Option<String>) -> super::msg::HomeRowTarget {
-        super::msg::HomeRowTarget {
+    fn home_row_target(
+        _self: &Self,
+        item_id: Option<String>,
+    ) -> crate::app::ui_model::msg::HomeRowTarget {
+        crate::app::ui_model::msg::HomeRowTarget {
             item_id,
             source: None,
             from_continue_watching: true,
@@ -140,7 +143,7 @@ impl HomeContent {
 
     /// The typed effect target for Home's current selection (the shared
     /// owner's stable target, never a cursor-minus-section-index lookup).
-    fn row_target(&self) -> super::msg::HomeRowTarget {
+    fn row_target(&self) -> crate::app::ui_model::msg::HomeRowTarget {
         Self::home_row_target(self, self.carrier.selected_target().cloned())
     }
 
@@ -328,10 +331,7 @@ impl LibraryContentOwner for HomeContent {
         self.carrier.clear_owner_selection();
     }
 
-    fn set_selection_origin(
-        &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
-    ) {
+    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
         self.carrier.set_selection_origin(origin);
     }
 

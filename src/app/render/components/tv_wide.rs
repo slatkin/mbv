@@ -9,7 +9,7 @@
 
 use crate::app::components::library_panel::content::HeroImageState;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
-use crate::app::SeriesDetail;
+use crate::app::ui_model::browse::SeriesDetail;
 use mbv_emby_model::EmbyItem;
 
 /// All App-derived data needed to paint the wide TV workspace.

@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
 use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
@@ -25,9 +25,9 @@ impl App {
     pub(in crate::app) fn audiobookshelf_kind_at(
         &self,
         index: usize,
-    ) -> Option<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind> {
+    ) -> Option<crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind> {
         self.audiobookshelf_libraries.get(index).map(|library| {
-            crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+            crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
                 &library.media_type,
             )
         })
@@ -76,7 +76,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                crate::app::state::types::events::LibEvent::AudiobookshelfDetailFetched {
+                crate::app::ui_model::events::LibEvent::AudiobookshelfDetailFetched {
                     generation,
                     request,
                     library_item_id,
@@ -127,7 +127,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                crate::app::state::types::events::LibEvent::AudiobookshelfBookDetailFetched {
+                crate::app::ui_model::events::LibEvent::AudiobookshelfBookDetailFetched {
                     generation,
                     library_item_id,
                     result,

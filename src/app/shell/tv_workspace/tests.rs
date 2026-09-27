@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::{Msg, ShellRequest};
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::render_fixtures::make_movie_app;
+use crate::app::ui_model::browse::BrowseResting;
 use mbv_net::mock_http::MockHttp;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -107,7 +107,7 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
         .collect();
     model.app.handle_series_detail_fetched(
         "movie-focused",
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons,
             episodes: std::collections::HashMap::new(),
         },
@@ -131,7 +131,7 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     cached_season.id = "current-season".into();
     app.series_detail_cache.insert(
         "show-id".into(),
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons: vec![cached_season],
             episodes: std::collections::HashMap::new(),
         },
@@ -141,7 +141,7 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     stale_season.id = "stale-season".into();
     app.handle_series_detail_fetched(
         "show-id",
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons: vec![stale_season],
             episodes: std::collections::HashMap::new(),
         },
@@ -175,7 +175,7 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
 
     model.app.series_detail_cache.insert(
         "movie-focused".into(),
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons: Vec::new(),
             episodes: std::collections::HashMap::new(),
         },
@@ -231,7 +231,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     episodes.insert("season-1".into(), vec![episode]);
     model.app.series_detail_cache.insert(
         "movie-second".into(),
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons: vec![season],
             episodes,
         },

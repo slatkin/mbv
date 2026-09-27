@@ -6,13 +6,6 @@
 //! interpretation and the shell owning the corresponding `App` side effect.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HomeRowTarget {
-    pub item_id: Option<String>,
-    pub source: Option<String>,
-    pub from_continue_watching: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PodcastEpisodeTarget {
     pub(crate) library_item_id: String,
     pub(crate) episode_id: String,
@@ -85,34 +78,6 @@ pub enum MusicTreeAction {
     Play,
     Enqueue,
     Shuffle,
-}
-
-/// Stable, component-resolved identity for one focused Grouped Music artist
-/// (design D7). The tree owner resolves the root's settled identity, display
-/// name, and leaf album targets before this crosses the boundary; the shell
-/// uses the settled revision and the opaque targets to reject late
-/// completions and to aggregate fallback tracks without re-reading a cursor.
-/// A `None` artist ID is the explicit fallback arm: the root only has the
-/// deterministic grouping key, so no provider-ID request may be invented.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MusicArtistTarget {
-    pub artist_id: Option<String>,
-    pub artist_name: String,
-    pub album_targets: Vec<String>,
-    pub revision: u64,
-}
-
-impl MusicArtistTarget {
-    /// Whether two targets address the same artist source, ignoring the
-    /// settled revision. The shell binds a projection to the owner-resolved
-    /// target's revision at push time, so the revision is a shell staleness
-    /// axis; presentation identity is the artist identity, display name, and
-    /// in-scope album set.
-    pub(in crate::app) fn same_source(&self, other: &Self) -> bool {
-        self.artist_id == other.artist_id
-            && self.artist_name == other.artist_name
-            && self.album_targets == other.album_targets
-    }
 }
 
 /// Closed set of podcast episode action intents (task 5.3d.7). The component

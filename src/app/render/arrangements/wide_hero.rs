@@ -20,6 +20,23 @@ pub(in crate::app) const WIDE_HERO_MIN_PANE_WIDTH: u16 = 40;
 /// Empty columns separating the Wide hero arrangement's two panes. The
 /// draggable boundary IS this gap; the split's override clamp reserves it.
 pub(in crate::app) const WIDE_HERO_PANE_GAP: u16 = 2;
+
+/// Clamps a Wide hero list-pane width override to the shared arrangement's
+/// valid range against `content_width`: the list pane and the hero pane each
+/// stay at or above `WIDE_HERO_MIN_PANE_WIDTH`, separated by the
+/// `WIDE_HERO_PANE_GAP` gutter. `None` passes through (default ratio). An
+/// empty range — content too narrow for two minimum panes plus the gap —
+/// yields `None` so the default ratio applies.
+pub(in crate::app) fn normalize_list_pane_width(
+    override_width: Option<u16>,
+    content_width: u16,
+) -> Option<u16> {
+    let override_width = override_width?;
+    let max = content_width
+        .saturating_sub(WIDE_HERO_MIN_PANE_WIDTH)
+        .saturating_sub(WIDE_HERO_PANE_GAP);
+    (max >= WIDE_HERO_MIN_PANE_WIDTH).then(|| override_width.clamp(WIDE_HERO_MIN_PANE_WIDTH, max))
+}
 /// Height of the pill row at the top of the Wide hero arrangement's left
 /// (list) pane.
 const WIDE_HERO_PILLS_ROW_HEIGHT: u16 = 1;
@@ -199,12 +216,12 @@ pub(in crate::app) fn wide_hero_hero_pane(
 /// `WIDE_HERO_MIN_PANE_WIDTH`. A `Some` override replaces the ratio default
 /// after being clamped to the valid range for this `content_area`; callers
 /// reach it only through [`wide_hero_presentation`]/[`wide_library_panes`].
-/// The clamp lives in `src/app/list_pane_width.rs`.
+/// The clamp lives alongside this arrangement.
 pub(in crate::app::render) fn wide_hero_split(
     content_area: Rect,
     override_width: Option<u16>,
 ) -> (Rect, Rect) {
-    let browser_w = crate::app::state::list_pane_width::normalize_list_pane_width(
+    let browser_w = crate::app::render::arrangements::wide_hero::normalize_list_pane_width(
         override_width,
         content_area.width,
     )

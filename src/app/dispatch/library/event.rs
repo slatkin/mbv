@@ -1,6 +1,6 @@
-use crate::app::infra::ui_util::sort_audio_tracks;
 use crate::app::state::app_struct::LevelFillState;
-use crate::app::state::types::events::{NavigateLanding, PendingSeriesHandoff};
+use crate::app::ui_model::events::{NavigateLanding, PendingSeriesHandoff};
+use crate::app::ui_model::ui_util::sort_audio_tracks;
 use crate::app::{
     dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
     FeedHomeVideoState, LibEvent, QueueScope,
@@ -118,7 +118,7 @@ impl App {
                 episodes,
             } => self.handle_series_detail_fetched(
                 &series_id,
-                crate::app::SeriesDetail { seasons, episodes },
+                crate::app::ui_model::browse::SeriesDetail { seasons, episodes },
             ),
             LibEvent::SeriesSeasonEpisodesFetched {
                 series_id,
@@ -228,7 +228,7 @@ impl App {
         lib_idx: usize,
         parent_id: &str,
         all_items: Vec<mbv_emby_model::EmbyItem>,
-        groups: Vec<crate::app::state::types::feed::FeedHomeVideoGroup>,
+        groups: Vec<crate::app::ui_model::feed::FeedHomeVideoGroup>,
     ) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             if lib
@@ -401,7 +401,7 @@ impl App {
     fn handle_recursive_album_activated(
         &mut self,
         library_id: &str,
-        nav_stack: Vec<crate::app::state::types::browse::BrowseLevel>,
+        nav_stack: Vec<crate::app::ui_model::browse::BrowseLevel>,
     ) {
         let Some(lib_idx) = self
             .libs

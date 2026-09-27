@@ -41,9 +41,9 @@ pub(in crate::app) use components::library_routes::{
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::album_plan::group_album_plan;
 pub(in crate::app) use screens::feeds_model::{
-    current_time_secs, feed_age_group, feed_display_rows, FeedAgeGroup, FeedDisplayRow,
+    current_time_secs, feed_display_rows, FeedDisplayRow,
 };
-// `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
+// `LetterFilter` is already `pub(crate)` re-exported below (ui_model::sort_filter).
 pub(in crate::app) use components::media_list::render_wide_media_list_component;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
@@ -77,16 +77,15 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // trio is referenced from outside `render` entirely (src/app.rs,
 // src/app/actions.rs); the rest are referenced via `super::X` from render's
 // sibling submodules (album, card, detail, home, list, music, pills, queue).
+pub(super) use crate::app::ui_model::sort_filter::{
+    effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
+};
+pub(crate) use crate::app::ui_model::sort_filter::{
+    initial_group_artist_sort_key, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD,
+};
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
 pub(super) use screens::album_plan::sorted_group_album_order;
-pub(super) use screens::sort_filter::{
-    effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
-};
-pub(crate) use screens::sort_filter::{
-    initial_group_artist_sort_key, resolve_tv_content_mode, LetterFilter, LetterFilterKind,
-    LIBRARY_PILL_THRESHOLD,
-};
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
@@ -108,4 +107,4 @@ pub(crate) use theme::{
 pub(in crate::app) use theme::{surface_colors, Surface};
 
 use super::palette;
-use crate::app::infra::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;

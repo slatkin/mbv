@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
-use crate::app::state::types::settings;
+use crate::app::ui_model::settings;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedEntry;
 use mbv_queue::{FeedKind, ServiceKind};

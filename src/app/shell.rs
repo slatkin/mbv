@@ -6,9 +6,9 @@ use super::components::{
     UserEvent,
 };
 use super::{
-    components, palette, render, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal,
-    IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
+    components, palette, render, ui_model::sidebar::SidebarId, AlbumIndexState, App, BrowseLevel,
+    ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState,
+    PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage, TabSelection, ToastSeverity,
 };
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
@@ -19,11 +19,11 @@ pub(in crate::app) use crate::app::components::OverlayId;
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
+use crate::app::ui_model::feeds_manage::FeedsManagePopup;
 #[cfg(test)]
-use crate::app::state::home_latest::current_launch_secs;
-use crate::app::state::home_latest::HomeLatestLaunchWindow;
-use crate::app::state::types::feeds_manage::FeedsManagePopup;
-use crate::app::state::types::playback::{
+use crate::app::ui_model::home_latest::current_launch_secs;
+use crate::app::ui_model::home_latest::HomeLatestLaunchWindow;
+use crate::app::ui_model::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
 use tuirealm::application::{Application, PollStrategy};
@@ -181,12 +181,12 @@ pub struct Model {
     pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
     pub(in crate::app) visual_selection:
-        Option<(crate::app::state::types::settings::PanelFocus, usize)>,
+        Option<(crate::app::ui_model::settings::PanelFocus, usize)>,
     pub(in crate::app) context_menu_origin:
-        Option<crate::app::components::media_list::SelectionOrigin>,
+        Option<crate::app::ui_model::media_list::SelectionOrigin>,
     pub(in crate::app) context_action_snapshot: Option<
-        crate::app::state::types::context_menu::ContextActionSnapshot<
-            crate::app::state::types::context_menu::ContextMenuTargets,
+        crate::app::ui_model::context_menu::ContextActionSnapshot<
+            crate::app::ui_model::context_menu::ContextMenuTargets,
         >,
     >,
     /// The last Esc press, for the double-Esc playback stop. Shell-owned
@@ -322,11 +322,11 @@ impl Model {
         {
             let mut panel = super::components::library_panel::LibraryPanel::new();
             panel.insert_owner(
-                super::components::library_panel::LibraryKey::Home,
+                crate::app::ui_model::library::LibraryKey::Home,
                 Box::new(super::components::home_content::HomeContent::new()),
             );
             panel.insert_owner(
-                super::components::library_panel::LibraryKey::Feeds,
+                crate::app::ui_model::library::LibraryKey::Feeds,
                 Box::new(super::components::feeds_content::FeedsContent::new()),
             );
             model

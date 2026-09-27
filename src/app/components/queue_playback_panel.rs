@@ -32,7 +32,7 @@ use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::components::widgets::queue_panel_inset;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
-use crate::app::NowPlayingStatus;
+use crate::app::ui_model::playback_target::NowPlayingStatus;
 
 /// The queue-column transport's surface: the fixed chrome band the queue
 /// playback panel paints in every queue-visible layout (the former
@@ -74,7 +74,7 @@ impl QueuePlaybackPanel {
             host: String::new(),
             host_is_remote: false,
             transport: PlaybackProjection {
-                state: crate::app::state::types::playback::PlaybackState::default(),
+                state: crate::app::ui_model::playback::PlaybackState::default(),
                 show_controls: false,
                 panel: TRANSPORT_SURFACE,
                 panel_focused: false,

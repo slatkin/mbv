@@ -116,7 +116,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     episodes.insert("season-2".into(), vec![episode]);
     model.app.series_detail_cache.insert(
         "movie-focused".into(),
-        crate::app::SeriesDetail {
+        crate::app::ui_model::browse::SeriesDetail {
             seasons: vec![season_one, season_two],
             episodes,
         },

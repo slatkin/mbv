@@ -22,7 +22,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
     };
-    let mut state = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
+    let mut state = crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(
         library.clone(),
     );
     let shows: Vec<mbv_audiobookshelf::AudiobookshelfShow> = (0..shows)
@@ -43,7 +43,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
 }
 
 fn loading(
-    state: &crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState,
+    state: &crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseState,
 ) -> Vec<String> {
     let mut ids: Vec<String> = state.detail_loading_ids.keys().cloned().collect();
     ids.sort();

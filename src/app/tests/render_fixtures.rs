@@ -5,8 +5,8 @@
 //! The render presentation suite that once lived beside these was pruned in
 //! issue #801 section 2; only the fixtures with surviving callers remain.
 
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::make_app_stub;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;

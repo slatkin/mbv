@@ -5,9 +5,9 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     let mut model = super::mounted_tv_model();
     model.app.libs[0].library_total = Some(1000);
     model.app.libs[0].nav_stack[0].letter_filter = Some(
-        crate::app::render::LetterFilter::for_index_for_kind(
+        crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
             0,
-            crate::app::render::LetterFilterKind::Tv,
+            crate::app::ui_model::sort_filter::LetterFilterKind::Tv,
         )
         .unwrap(),
     );
@@ -32,9 +32,9 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     let mut fresh = super::mounted_tv_model();
     fresh.app.libs[0].library_total = Some(1000);
     fresh.app.libs[0].nav_stack[0].letter_filter = Some(
-        crate::app::render::LetterFilter::for_index_for_kind(
+        crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
             0,
-            crate::app::render::LetterFilterKind::Tv,
+            crate::app::ui_model::sort_filter::LetterFilterKind::Tv,
         )
         .unwrap(),
     );

@@ -5,16 +5,16 @@ use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKi
 
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest};
-use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
-use crate::app::state::types::context_menu::{
-    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
-};
-use crate::app::state::types::daemon_lost::DaemonLostModal;
-use crate::app::state::types::overlay::OverlayRequest;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
+use crate::app::ui_model::confirm::{ConfirmAction, ConfirmModal};
+use crate::app::ui_model::context_menu::{
+    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
+};
+use crate::app::ui_model::daemon_lost::DaemonLostModal;
+use crate::app::ui_model::overlay::OverlayRequest;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 use mbv_emby_model::test_support::make_item;
 

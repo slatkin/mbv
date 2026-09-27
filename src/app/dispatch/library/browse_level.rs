@@ -1,5 +1,5 @@
-use crate::app::infra::ui_util::sort_episodes;
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
+use crate::app::ui_model::ui_util::sort_episodes;
 use crate::app::{App, BrowseLevel};
 
 impl App {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::state::types::settings::ServiceEntry;
+use crate::app::ui_model::settings::ServiceEntry;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_config::EmbySetup;
@@ -192,9 +192,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     assert!(app.setup.pending_emby_replacement.is_some());
     assert!(matches!(
         app.pending_overlay,
-        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
-            _
-        ))
+        Some(crate::app::ui_model::overlay::OverlayRequest::Confirm(_))
     ));
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(old_setup));
     assert_eq!(
@@ -202,7 +200,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
         Some("old-token".into())
     );
     let action = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal)) => {
+        Some(crate::app::ui_model::overlay::OverlayRequest::Confirm(modal)) => {
             modal.on_confirm.clone()
         }
         _ => panic!("confirmation request missing"),

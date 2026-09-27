@@ -20,7 +20,7 @@ pub(super) fn tree_owner_with_tracks(
 ) -> MusicContent {
     let mut items: Vec<EmbyItem> = Vec::new();
     let mut album_info: Vec<(String, String, String)> = Vec::new();
-    let mut artist_keys: Vec<crate::app::state::music_grouping::ArtistKey> = Vec::new();
+    let mut artist_keys: Vec<crate::app::ui_model::music_grouping::ArtistKey> = Vec::new();
     for (artist, targets) in artists {
         for target in *targets {
             let mut album = make_item(target, "MusicAlbum");
@@ -35,7 +35,7 @@ pub(super) fn tree_owner_with_tracks(
                 "2001".to_string(),
                 (*target).to_string(),
             ));
-            artist_keys.push(crate::app::state::music_grouping::ArtistKey::Service(
+            artist_keys.push(crate::app::ui_model::music_grouping::ArtistKey::Service(
                 format!("artist-{artist}"),
             ));
         }
@@ -56,11 +56,11 @@ pub(super) fn tree_owner_with_tracks(
     let mut owner = MusicContent::new();
     owner.set_content(ctx);
     owner.selection_origin = Some(SelectionOrigin::Library(
-        crate::app::components::media_list::LibrarySelectionOrigin::Service(
-            crate::app::components::library_panel::owner::LibraryKey::Service {
+        crate::app::ui_model::media_list::LibrarySelectionOrigin::Service(
+            crate::app::ui_model::library::LibraryKey::Service {
                 service: mbv_queue::ServiceKind::Emby,
                 library_id: "music-library".into(),
-                kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+                kind: crate::app::ui_model::library::LibraryKind::Music,
             },
         ),
     ));

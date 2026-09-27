@@ -13,19 +13,19 @@
 use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::media_list::{
-    LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
-};
+use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use crate::app::render::arrangements::wide_hero::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
-use crate::app::state::list_pane_width::normalize_list_pane_width;
+use crate::app::ui_model::library::LibraryKey;
+use crate::app::ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 
 use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;
 use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::render_narrow_skeleton;
-use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
+use super::owner::{LibraryContentOwner, LibraryOwners, LibrarySlotEvent};
 use super::wide::{
     render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry,
     WideSkeletonPaintParams,

@@ -101,7 +101,7 @@ pub(in crate::app) enum Command {
     OpenSearch,
     /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
     OpenHelp,
-    FocusPanel(crate::app::PanelFocus),
+    FocusPanel(crate::app::ui_model::settings::PanelFocus),
 }
 
 /// Resolve the idle-feed link shortcut. The link's eligibility is its own
@@ -303,8 +303,12 @@ impl App {
             Command::ForceClear => self.force_clear = true,
             Command::RequestClearQueue => self.request_clear_queue(),
             Command::RefreshCurrentView => self.refresh_current_view(),
-            Command::ToggleSettings => self.request_sidebar_toggle(crate::app::SidebarId::Settings),
-            Command::OpenSessions => self.request_sidebar_toggle(crate::app::SidebarId::Sessions),
+            Command::ToggleSettings => {
+                self.request_sidebar_toggle(crate::app::ui_model::sidebar::SidebarId::Settings);
+            }
+            Command::OpenSessions => {
+                self.request_sidebar_toggle(crate::app::ui_model::sidebar::SidebarId::Sessions);
+            }
             Command::OpenPlaylists => self.open_playlists_panel(),
             Command::OpenSearch => self.open_search_sidebar(),
             // Model handles this shell-only command before delegating the
@@ -335,10 +339,17 @@ impl App {
         // exactly two states, library-only ⇄ queue-only.
         if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
             self.mini_view_focus = match self.mini_view_focus {
-                crate::app::PanelFocus::Library => crate::app::PanelFocus::Queue,
-                crate::app::PanelFocus::Queue => crate::app::PanelFocus::Library,
+                crate::app::ui_model::settings::PanelFocus::Library => {
+                    crate::app::ui_model::settings::PanelFocus::Queue
+                }
+                crate::app::ui_model::settings::PanelFocus::Queue => {
+                    crate::app::ui_model::settings::PanelFocus::Library
+                }
             };
-            if matches!(self.mini_view_focus, crate::app::PanelFocus::Queue) {
+            if matches!(
+                self.mini_view_focus,
+                crate::app::ui_model::settings::PanelFocus::Queue
+            ) {
                 self.focus_queue_initial_item();
             }
         } else {
@@ -348,20 +359,29 @@ impl App {
 
     fn cycle_wide_panel_mode(&mut self) {
         self.panel_mode = match self.panel_mode {
-            crate::app::PanelMode::Both => crate::app::PanelMode::QueueOnly,
-            crate::app::PanelMode::QueueOnly => crate::app::PanelMode::LibraryOnly,
-            crate::app::PanelMode::LibraryOnly => crate::app::PanelMode::Both,
+            crate::app::ui_model::settings::PanelMode::Both => {
+                crate::app::ui_model::settings::PanelMode::QueueOnly
+            }
+            crate::app::ui_model::settings::PanelMode::QueueOnly => {
+                crate::app::ui_model::settings::PanelMode::LibraryOnly
+            }
+            crate::app::ui_model::settings::PanelMode::LibraryOnly => {
+                crate::app::ui_model::settings::PanelMode::Both
+            }
         };
         match self.panel_mode {
-            crate::app::PanelMode::LibraryOnly => {
-                if matches!(self.panel_focus, crate::app::PanelFocus::Queue) {
-                    self.set_panel_focus(crate::app::PanelFocus::Library);
+            crate::app::ui_model::settings::PanelMode::LibraryOnly => {
+                if matches!(
+                    self.panel_focus,
+                    crate::app::ui_model::settings::PanelFocus::Queue
+                ) {
+                    self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
                 }
             }
-            crate::app::PanelMode::QueueOnly => {
-                self.set_panel_focus(crate::app::PanelFocus::Queue);
+            crate::app::ui_model::settings::PanelMode::QueueOnly => {
+                self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Queue);
             }
-            crate::app::PanelMode::Both => {}
+            crate::app::ui_model::settings::PanelMode::Both => {}
         }
     }
     /// Own the `Command::QueuePlayCursor` state transitions (extracted from

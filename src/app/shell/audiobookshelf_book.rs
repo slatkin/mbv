@@ -1,10 +1,9 @@
 use super::components::book_content::BookContent;
-use super::components::library_panel::LibraryKey;
 use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
-use super::components::LibraryKind;
 use super::Model;
 use super::TabSelection;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use crate::app::ui_model::library::{LibraryKey, LibraryKind};
 use mbv_queue::ServiceKind;
 
 impl Model {
@@ -61,7 +60,8 @@ impl Model {
         if self.abs_book_owner().is_none() {
             return;
         }
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        self.app
+            .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
                 AudiobookshelfBookMove::Book(Some(target)) => {

@@ -30,8 +30,8 @@ use super::msg::{
     ShellRequest,
 };
 use crate::app::dispatch::audiobookshelf::browse::audiobookshelf_book_queue_item;
-use crate::app::state::types::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
-use crate::app::ui_util::{clean_overview, fmt_duration_gutter};
+use crate::app::ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
+use crate::app::ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 
 /// The plain Books content owner. Its list controls retain cursor, scroll,
 /// selected targets, and chapter-pane focus locally; shell pushes replace
@@ -519,10 +519,7 @@ impl LibraryContentOwner for BookContent {
         self.carrier.selected_target().is_some()
     }
 
-    fn set_selection_origin(
-        &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
-    ) {
+    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
         self.carrier.set_selection_origin(origin);
     }
 

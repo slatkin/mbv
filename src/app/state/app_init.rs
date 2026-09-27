@@ -1,6 +1,6 @@
-use crate::app::state::types::feed::IdleFeed;
-use crate::app::state::types::playback::QueueScope;
-use crate::app::state::types::player_tab::PlayerTab;
+use crate::app::ui_model::feed::IdleFeed;
+use crate::app::ui_model::playback::QueueScope;
+use crate::app::ui_model::player_tab::PlayerTab;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;

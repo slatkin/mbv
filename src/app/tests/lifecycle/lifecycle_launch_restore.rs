@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::LibraryKey;
+use crate::app::ui_model::library::LibraryKey;
 
 #[test]
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {

@@ -1,7 +1,7 @@
 use super::chrome;
 use crate::app::infra::palette;
-use crate::app::infra::ui_util::trunc_str;
 use crate::app::render::components::modal_frame::render_modal_frame;
+use crate::app::ui_model::ui_util::trunc_str;
 use mbv_emby_model::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};

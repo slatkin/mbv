@@ -17,8 +17,9 @@ use super::intents::{
     SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
-use crate::app::components::media_list::SelectionOrigin;
-use crate::app::state::types::context_menu::ContextMenuTargets;
+use crate::app::ui_model::context_menu::ContextMenuTargets;
+use crate::app::ui_model::media_list::SelectionOrigin;
+use crate::app::ui_model::msg::{HomeRowTarget, MusicArtistTarget};
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -40,7 +41,7 @@ pub enum ShellRequest {
     /// arms the existing per-album fetches instead of issuing a provider
     /// query with an invented ID.
     MusicArtistTracks {
-        target: super::intents::MusicArtistTarget,
+        target: MusicArtistTarget,
     },
     /// Request the focused artist's stable-ID artwork through the existing
     /// image/cache boundary (task 6.2). Fallback artists carry no provider ID
@@ -48,7 +49,7 @@ pub enum ShellRequest {
     /// both concerns together (see the tracks arm); this arm is the artwork
     /// concern's own typed boundary and dispatch point.
     MusicArtistArtwork {
-        target: super::intents::MusicArtistTarget,
+        target: MusicArtistTarget,
     },
     /// A focused artist root resolved by the tree owner to ordered album
     /// items. `origin` is the stable tree/list identity recorded for the
@@ -74,7 +75,7 @@ pub enum ShellRequest {
     /// (Right on an already expanded root, task 6.4). Carries the
     /// component-resolved target so the shell never re-reads a tree cursor.
     MusicArtistActivate {
-        target: super::intents::MusicArtistTarget,
+        target: MusicArtistTarget,
     },
     /// The Grouped Music tree's post-paint neighbour album-artwork window
     /// (task 6.5, design D4): up to one visible leaf behind and three ahead
@@ -102,7 +103,7 @@ pub enum ShellRequest {
     /// Activate a focused artist Workspace track. The shell resolves the
     /// ordered discography and chosen `EmbyItem` from the projected detail.
     MusicArtistTrackActivate {
-        target: super::intents::MusicArtistTarget,
+        target: MusicArtistTarget,
         track_id: String,
     },
     /// Open a context menu for already-resolved Music targets. This keeps
@@ -125,7 +126,7 @@ pub enum ShellRequest {
     /// Project the focused list's count-only summary to the Status bar.
     SelectionProjection(crate::app::components::media_list::SelectionSummary),
     /// Clear the active list's Visual selection from the status indicator.
-    ClearMultiSelection(crate::app::components::media_list::SelectionOrigin),
+    ClearMultiSelection(crate::app::ui_model::media_list::SelectionOrigin),
     /// Select the left-panel tab at the position the mounted `TabPanel`
     /// resolved from its own painted hit regions (task 2.1). The shell owns
     /// the tab switch and its side effects; the panel only reports which tab
@@ -178,7 +179,7 @@ pub enum ShellRequest {
     /// Refresh the Emby session and Cast receiver snapshots.
     RefreshSessions,
     /// Activate the selected session/cast target by kind-qualified identity.
-    SelectSession(crate::app::state::panel_targets::SessionTargetKey),
+    SelectSession(crate::app::ui_model::panel_targets::SessionTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
     /// Refresh the Feeds subscriptions through the shell-owned worker.
@@ -197,7 +198,7 @@ pub enum ShellRequest {
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
     MultiselectCommit {
-        kind: crate::app::state::types::context_menu::MultiSelectKind,
+        kind: crate::app::ui_model::context_menu::MultiSelectKind,
         items: Vec<(String, String, bool)>,
     },
     /// Advance or leave the nested Library-routes picker through App's
@@ -207,9 +208,9 @@ pub enum ShellRequest {
     /// Semantic feed-management action; local form edits stay in the component.
     FeedsManageIntent(FeedsManageIntent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).
-    HomePlay(super::intents::HomeRowTarget),
+    HomePlay(HomeRowTarget),
     /// Enqueue the Home item at the component-owned flat cursor.
-    HomeEnqueue(super::intents::HomeRowTarget),
+    HomeEnqueue(HomeRowTarget),
     /// Open a destination row context menu at an optional pointer anchor.
     ///
     /// The anchor remains a raw pointer-coordinate tuple because the shell
@@ -220,20 +221,20 @@ pub enum ShellRequest {
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
-    HomeDelete(super::intents::HomeRowTarget),
+    HomeDelete(HomeRowTarget),
     /// Toggle watched state for the component-resolved Continue Watching row.
     /// The shell resolves this stable identity and never consults a cursor.
-    HomeToggleWatched(super::intents::HomeRowTarget),
+    HomeToggleWatched(HomeRowTarget),
     /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
     HomeRowClick {
-        target: super::intents::HomeRowTarget,
+        target: HomeRowTarget,
     },
     /// A row the user double-clicked; `target` is the component-resolved flat
     /// index and the shell activates it (design.md D3/D4).
     HomeRowActivate {
-        target: super::intents::HomeRowTarget,
+        target: HomeRowTarget,
     },
 
     /// Request shell-owned data for a newly expanded TV tree branch. The TV
@@ -489,7 +490,7 @@ pub enum ShellRequest {
     /// boundary; the shell retains the legacy migration snapshot in memory
     /// without re-reading the component cursor.
     LibraryScroll {
-        key: crate::app::components::library_panel::LibraryKey,
+        key: crate::app::ui_model::library::LibraryKey,
         index: usize,
         scroll: usize,
     },

@@ -250,8 +250,8 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-    use crate::app::state::types::events::LibEvent;
+    use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+    use crate::app::ui_model::events::LibEvent;
     use mbv_audiobookshelf::{
         AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage, AudiobookshelfChapter,
         AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,

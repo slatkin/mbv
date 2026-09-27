@@ -8,8 +8,8 @@ pub(in crate::app) enum BulkRemoveTarget {
 }
 use ratatui::layout::Rect;
 
-use crate::app::components::media_list::SelectionOrigin;
-use crate::app::components::msg::HomeRowTarget;
+use crate::app::ui_model::media_list::SelectionOrigin;
+use crate::app::ui_model::msg::HomeRowTarget;
 
 /// Values resolved when a context menu opens. The overlay never re-resolves
 /// these values after focus changes.
@@ -30,7 +30,7 @@ pub(crate) enum ContextMenuTargets {
 }
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::state::types::settings::PanelFocus;
+use crate::app::ui_model::settings::PanelFocus;
 
 /// How a context menu's position is anchored. A keyboard-opened menu keeps a
 /// selected-item anchor resolved from each fresh frame's layout; a

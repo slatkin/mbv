@@ -37,7 +37,7 @@ impl TvContent {
             _ => return None,
         };
         Some(ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
             None,
         ))
     }
@@ -154,7 +154,7 @@ impl TvContent {
                     _ => vec![item],
                 };
                 Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                    crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
                 ))))
             }
@@ -271,7 +271,7 @@ impl TvContent {
             _ => vec![item],
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
             Some((at.x, at.y)),
         ))))
     }
@@ -343,9 +343,9 @@ impl TvContent {
                     Some(RowIntent::Context(target)) => {
                         search.item_for_target(&target).map(|item| {
                             Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(
-                                    vec![item],
-                                ),
+                                crate::app::ui_model::context_menu::ContextMenuTargets::Emby(vec![
+                                    item,
+                                ]),
                                 None,
                             )))
                         })
@@ -431,7 +431,7 @@ impl TvContent {
         let item = self.show_item_for_tree_target(&target)?;
         self.browser.apply(TreeOperation::Select(target));
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
+            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
             Some((at.x, at.y)),
         ))))
     }

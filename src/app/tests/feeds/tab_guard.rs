@@ -36,7 +36,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: crate::app::ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -198,7 +198,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: crate::app::ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -216,10 +216,9 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
     };
-    let mut abs_state =
-        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
-            abs_library.clone(),
-        );
+    let mut abs_state = crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(
+        abs_library.clone(),
+    );
     abs_state.append_page(
         0,
         20,

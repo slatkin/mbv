@@ -1,6 +1,6 @@
-use crate::app::state::types::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
-use crate::app::state::types::feed::FeedHomeVideoGroup;
-use crate::app::state::types::playback::HomeContent;
+use crate::app::ui_model::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
+use crate::app::ui_model::feed::FeedHomeVideoGroup;
+use crate::app::ui_model::playback::HomeContent;
 use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 
@@ -157,7 +157,7 @@ pub(in crate::app) enum LibEvent {
     /// revision all ride the completion so the shell can reject a response
     /// from a navigated-away or replaced source instead of painting it.
     ArtistTracksFetched {
-        destination: crate::app::components::library_panel::LibraryKey,
+        destination: crate::app::ui_model::library::LibraryKey,
         generation: mbv_core::service_runtime::SetupGeneration,
         artist_id: String,
         revision: u64,
@@ -166,7 +166,7 @@ pub(in crate::app) enum LibEvent {
     /// Completion notification emitted after the shared image/cache boundary
     /// has stored an artist's stable-ID artwork (task 6.2).
     ArtistArtworkFetched {
-        destination: crate::app::components::library_panel::LibraryKey,
+        destination: crate::app::ui_model::library::LibraryKey,
         generation: mbv_core::service_runtime::SetupGeneration,
         artist_id: String,
         revision: u64,
@@ -293,14 +293,14 @@ pub(in crate::app) enum SessionEvent {
     PlaylistMutationComplete {
         mutation_id: u64,
         playlist_id: String,
-        origin: crate::app::state::queue_owner::QueueOrigin,
+        origin: crate::app::ui_model::queue_owner::QueueOrigin,
         source_playlist_id: String,
         result: Result<(), String>,
     },
     PlaylistReplacementComplete {
         mutation_id: u64,
         playlist_id: String,
-        origin: crate::app::state::queue_owner::QueueOrigin,
+        origin: crate::app::ui_model::queue_owner::QueueOrigin,
         name: String,
         result: Result<String, String>,
     },
@@ -308,7 +308,7 @@ pub(in crate::app) enum SessionEvent {
         mutation_id: u64,
         coordinator_key: String,
         name: String,
-        origin: crate::app::state::queue_owner::QueueOrigin,
+        origin: crate::app::ui_model::queue_owner::QueueOrigin,
         source_playlist_id: Option<String>,
         result: Result<String, String>,
     },

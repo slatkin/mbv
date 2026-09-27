@@ -5,7 +5,7 @@
 use super::{
     is_playable, App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity,
 };
-use crate::app::state::queue_owner::QueueOrigin;
+use crate::app::ui_model::queue_owner::QueueOrigin;
 use mbv_emby::EmbyClient;
 
 impl App {

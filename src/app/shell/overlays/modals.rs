@@ -3,7 +3,7 @@ use super::super::components::{
     SavePlaylistComponent,
 };
 use super::super::Model;
-use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::ui_model::overlay::OverlayRequest;
 
 impl Model {
     fn confirm_id() -> ComponentId {
@@ -66,7 +66,7 @@ impl Model {
         self.assert_modal_mount_exclusive();
     }
 
-    fn mount_confirm_modal(&mut self, modal: &crate::app::state::types::confirm::ConfirmModal) {
+    fn mount_confirm_modal(&mut self, modal: &crate::app::ui_model::confirm::ConfirmModal) {
         self.dismiss_modal(&Self::confirm_id());
         let id = Self::confirm_id();
         self.application
@@ -83,7 +83,7 @@ impl Model {
 
     fn mount_daemon_lost_modal(
         &mut self,
-        modal: &crate::app::state::types::daemon_lost::DaemonLostModal,
+        modal: &crate::app::ui_model::daemon_lost::DaemonLostModal,
     ) {
         self.dismiss_blocking_modals();
         let id = Self::daemon_lost_id();
@@ -105,7 +105,7 @@ impl Model {
 
     fn mount_save_playlist_modal(
         &mut self,
-        dialog: crate::app::state::types::feed::SavePlaylistDialog,
+        dialog: crate::app::ui_model::feed::SavePlaylistDialog,
     ) {
         self.dismiss_blocking_modals();
         let id = ComponentId::Modal(ModalId::SavePlaylist);
@@ -121,7 +121,7 @@ impl Model {
         }
     }
 
-    fn mount_context_menu(&mut self, menu: crate::app::state::types::context_menu::ContextMenu) {
+    fn mount_context_menu(&mut self, menu: crate::app::ui_model::context_menu::ContextMenu) {
         // An open context menu replaces any sidebar surface (the old
         // `sync_context_menu` dismissed sidebars before mounting).
         self.dismiss_sidebars();

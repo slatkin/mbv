@@ -15,7 +15,7 @@ fn mixed_services_app() -> App {
             title: "Movies".into(),
             items: make_items(1),
             total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
+            resting: crate::app::ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -33,10 +33,9 @@ fn mixed_services_app() -> App {
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
     };
-    let mut abs_state =
-        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
-            abs_library.clone(),
-        );
+    let mut abs_state = crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(
+        abs_library.clone(),
+    );
     abs_state.append_page(
         0,
         20,

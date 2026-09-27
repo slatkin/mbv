@@ -4,7 +4,7 @@ use tuirealm::event::{MouseEvent, MouseEventKind};
 use crate::app::components::media_list::{MediaListSurfaceInput, RowIntent};
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture};
 use crate::app::components::msg::{Msg, QueueRequest, ShellRequest, TerminalObserverEvent};
-use crate::app::state::types::context_menu::ContextMenuTargets;
+use crate::app::ui_model::context_menu::ContextMenuTargets;
 
 use super::QueueComponent;
 

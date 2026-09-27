@@ -23,13 +23,13 @@ use mbv_queue::QueueItem;
 
 use super::inline_search::InlineSearch;
 use super::library_panel::content::HeroImageState;
-use super::library_panel::LibraryKind;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaListTrailing,
     MediaSemanticState,
 };
 use super::msg::{Msg, ShellRequest};
 use crate::app::render::{effective_sort_str, LetterFilter};
+use crate::app::ui_model::library::LibraryKind;
 
 mod input;
 mod panel;
@@ -62,8 +62,8 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
         Some(context) => (context.text, Some(parts.title.text)),
         None => (parts.title.text, None),
     };
-    let trailing = crate::app::state::home_latest::provider_timestamp_secs(&item)
-        .map(crate::app::ui_util::fmt_publish_date_short)
+    let trailing = crate::app::ui_model::home_latest::provider_timestamp_secs(&item)
+        .map(crate::app::ui_model::ui_util::fmt_publish_date_short)
         .filter(|date| !date.is_empty())
         .map(MediaListTrailing::Gutter);
     (primary, secondary, trailing)

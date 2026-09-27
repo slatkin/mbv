@@ -9,7 +9,7 @@
 
 use super::components::msg::FeedsManageIntent;
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
-use crate::app::state::types::feeds_manage::{
+use crate::app::ui_model::feeds_manage::{
     FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
 };
 use mbv_config::FeedSubscription;
@@ -150,7 +150,7 @@ impl super::Model {
             title: " Remove Feed ".into(),
             message: format!(
                 "Remove subscription '{}'?",
-                crate::app::infra::ui_util::trunc_str(&name, 40)
+                crate::app::ui_model::ui_util::trunc_str(&name, 40)
             ),
             hint: "[y] Confirm    [Esc] Cancel".into(),
             on_confirm: super::ConfirmAction::RemoveFeedSubscription(index),

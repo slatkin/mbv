@@ -1,7 +1,7 @@
 //! Podcast-tab browse state: the paged show list, the per-show episode
 //! cache with its lazy fan-out bookkeeping, and the flat episode views.
 
-use crate::app::render::{feed_age_group, FeedAgeGroup};
+use crate::app::ui_model::feed_age::{feed_age_group, FeedAgeGroup};
 use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShow,

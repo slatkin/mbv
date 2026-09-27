@@ -1,4 +1,4 @@
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 
@@ -8,21 +8,24 @@ fn restored_tv_content_mode(
     saved_mode: Option<&mbv_queue::TvContentMode>,
 ) -> Option<mbv_queue::TvContentMode> {
     is_tv_library.then(|| {
-        crate::app::render::resolve_tv_content_mode(library_total.unwrap_or_default(), saved_mode)
+        crate::app::ui_model::sort_filter::resolve_tv_content_mode(
+            library_total.unwrap_or_default(),
+            saved_mode,
+        )
     })
 }
 
 fn restored_letter_filter(
     index: Option<usize>,
-    kind: crate::app::render::LetterFilterKind,
-) -> Option<crate::app::render::LetterFilter> {
+    kind: crate::app::ui_model::sort_filter::LetterFilterKind,
+) -> Option<crate::app::ui_model::sort_filter::LetterFilter> {
     let index = index?;
-    if kind == crate::app::render::LetterFilterKind::Tv
-        && index >= crate::app::render::LetterFilter::count_for_kind(kind)
+    if kind == crate::app::ui_model::sort_filter::LetterFilterKind::Tv
+        && index >= crate::app::ui_model::sort_filter::LetterFilter::count_for_kind(kind)
     {
         return None;
     }
-    crate::app::render::LetterFilter::for_index_for_kind(index, kind)
+    crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(index, kind)
 }
 
 pub(in crate::app) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
@@ -59,9 +62,10 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
-                    let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
-                        self.libs[idx].library.collection_type.as_str(),
-                    );
+                    let filter_kind =
+                        crate::app::ui_model::sort_filter::LetterFilterKind::from_collection_type(
+                            self.libs[idx].library.collection_type.as_str(),
+                        );
                     self.libs[idx].library_total = root.library_total;
                     self.libs[idx].tv_content_mode = restored_tv_content_mode(
                         self.libs[idx].library.collection_type == "tvshows",
@@ -147,7 +151,7 @@ impl App {
             return;
         };
         let tx = self.channels.lib_tx.clone();
-        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::ui_model::sort_filter::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
         std::thread::spawn(move || {
@@ -156,9 +160,10 @@ impl App {
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let tv_mode =
-                        (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
-                            crate::app::render::resolve_tv_content_mode(
+                    let tv_mode = (filter_kind
+                        == crate::app::ui_model::sort_filter::LetterFilterKind::Tv)
+                        .then(|| {
+                            crate::app::ui_model::sort_filter::resolve_tv_content_mode(
                                 saved_level.library_total.unwrap_or_default(),
                                 saved_level.tv_content_mode.as_ref(),
                             )
@@ -175,10 +180,16 @@ impl App {
                     }
                     let letter_filter = match tv_mode {
                         Some(mbv_queue::TvContentMode::Range(index)) => {
-                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
+                                index,
+                                filter_kind,
+                            )
                         }
                         _ => saved_level.letter_filter_index.and_then(|index| {
-                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
+                                index,
+                                filter_kind,
+                            )
                         }),
                     };
                     let (name_ge, name_lt) = letter_filter
@@ -300,9 +311,9 @@ impl App {
         lib_idx: usize,
         start_index: usize,
         limit: usize,
-        key: crate::app::state::types::browse::LevelFetchKey,
+        key: crate::app::ui_model::browse::LevelFetchKey,
     ) {
-        let crate::app::state::types::browse::LevelFetchKey {
+        let crate::app::ui_model::browse::LevelFetchKey {
             parent_id,
             item_types,
             unplayed_only,

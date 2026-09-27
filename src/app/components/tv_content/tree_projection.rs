@@ -5,7 +5,7 @@ use super::super::tv_tree_target::TvTreeTarget;
 use super::episode_rows::upcoming_episode_target;
 use super::TvContent;
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
-use crate::app::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;
 use mbv_emby_model::EmbyItem;
 
 impl TvContent {
@@ -80,7 +80,7 @@ impl TvContent {
     pub(super) fn detail_for_projection<'a>(
         context: &'a TvWideRenderCtx,
         show: &EmbyItem,
-    ) -> Option<&'a crate::app::SeriesDetail> {
+    ) -> Option<&'a crate::app::ui_model::browse::SeriesDetail> {
         context.series_details.get(&show.id).or_else(|| {
             context
                 .selected_series
@@ -93,7 +93,10 @@ impl TvContent {
     /// The loaded detail holding `show`'s seasons/episodes for target
     /// resolution: the shell's per-show map entry when present, else the
     /// pushed selected detail (existing single-detail contexts).
-    pub(super) fn detail_for_show(&self, show: &EmbyItem) -> Option<&crate::app::SeriesDetail> {
+    pub(super) fn detail_for_show(
+        &self,
+        show: &EmbyItem,
+    ) -> Option<&crate::app::ui_model::browse::SeriesDetail> {
         self.context
             .series_details
             .get(&show.id)

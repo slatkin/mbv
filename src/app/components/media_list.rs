@@ -8,6 +8,8 @@ use crate::app::components::list::{
 };
 use std::time::Instant;
 
+use crate::app::ui_model::media_list::SelectionOrigin;
+
 /// The flat shape's fixed selectable-row page distance (design D4). Flat
 /// lists keep a fixed row count per page; the tree owns its own policy.
 const PAGE_DISTANCE: i64 = 5;
@@ -23,10 +25,10 @@ mod wide;
 pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
 pub use types::{
-    ActiveProgress, LibrarySelectionOrigin, MediaKind, MediaListDisposition, MediaListOperation,
-    MediaListRow, MediaListSurfaceInput, MediaListTitleReveal, MediaListTrailing,
-    MediaListTransition, MediaSemanticState, RowGeometry, RowIntent, SelectedRowSurface,
-    SelectionOrigin, SelectionSummary, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
+    ActiveProgress, MediaKind, MediaListDisposition, MediaListOperation, MediaListRow,
+    MediaListSurfaceInput, MediaListTitleReveal, MediaListTrailing, MediaListTransition,
+    MediaSemanticState, RowGeometry, RowIntent, SelectedRowSurface, SelectionSummary,
+    WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
 pub use wide::WideMediaList;
 pub(crate) use wide::{queue_row_background, queue_row_zebra_stripe, row_marquee_key};

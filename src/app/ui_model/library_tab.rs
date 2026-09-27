@@ -1,5 +1,5 @@
-use crate::app::state::types::browse::BrowseLevel;
-use crate::app::state::types::feed::FeedHomeVideoState;
+use crate::app::ui_model::browse::BrowseLevel;
+use crate::app::ui_model::feed::FeedHomeVideoState;
 use mbv_emby_model::EmbyItem;
 
 pub(in crate::app) struct LibraryTab {

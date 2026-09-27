@@ -6,5 +6,4 @@ pub(crate) mod palette;
 pub(in crate::app) mod render_cadence;
 pub(in crate::app) mod signals;
 pub(in crate::app) mod terminal;
-pub(crate) mod ui_util;
 pub(in crate::app) mod visualizer;

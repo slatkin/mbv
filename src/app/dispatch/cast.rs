@@ -6,10 +6,10 @@
 // selection uses lives here too.
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
+use crate::app::ui_model::panel_targets::PanelTarget;
 use crate::app::App;
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_cast::client::CastMediaItem;

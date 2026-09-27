@@ -1,8 +1,8 @@
-use crate::app::state::types::confirm::ConfirmModal;
-use crate::app::state::types::context_menu::{ContextMenu, MultiSelectKind};
-use crate::app::state::types::daemon_lost::DaemonLostModal;
-use crate::app::state::types::feed::SavePlaylistDialog;
-use crate::app::state::types::sidebar::SidebarId;
+use crate::app::ui_model::confirm::ConfirmModal;
+use crate::app::ui_model::context_menu::{ContextMenu, MultiSelectKind};
+use crate::app::ui_model::daemon_lost::DaemonLostModal;
+use crate::app::ui_model::feed::SavePlaylistDialog;
+use crate::app::ui_model::sidebar::SidebarId;
 
 /// Shell handoffs used while App action code is still called below Model.
 /// These are requests, not a second copy of component interaction state.

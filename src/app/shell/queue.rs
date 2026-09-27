@@ -708,7 +708,7 @@ mod tests {
         // emit Undo { scope: Remote } for a frame. With no direct remote queue
         // the visible queue is Local, so undo the Local edit instead of
         // flashing an error.
-        use crate::app::state::types::playback::UndoEntry;
+        use crate::app::ui_model::playback::UndoEntry;
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove(

@@ -1,6 +1,6 @@
 use super::components::feeds_content::{FeedsContent, FeedsOwnerPush};
-use super::components::library_panel::LibraryKey;
 use super::Model;
+use crate::app::ui_model::library::LibraryKey;
 
 impl Model {
     /// Event-scoped content projection for the Feeds owner inside the mounted
@@ -60,8 +60,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::library_panel::LibraryContentOwner;
-    use crate::app::state::types::feed_tab::WatchedFilter;
     use crate::app::tests::make_app_stub;
+    use crate::app::ui_model::feed_tab::WatchedFilter;
     use mbv_config::FeedSubscription;
     use mbv_queue::FeedKind;
 

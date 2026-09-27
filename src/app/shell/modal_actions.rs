@@ -3,7 +3,7 @@ use super::components::{
     ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
 };
 use super::Model;
-use crate::app::state::types::confirm::ConfirmAction;
+use crate::app::ui_model::confirm::ConfirmAction;
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl Model {
@@ -121,7 +121,7 @@ impl Model {
                 title: " Overwrite Playlist ".into(),
                 message: format!(
                     "\"{}\" already exists.",
-                    crate::app::infra::ui_util::trunc_str(&name, 40)
+                    crate::app::ui_model::ui_util::trunc_str(&name, 40)
                 ),
                 hint: "[y] Overwrite    [Esc] Back".into(),
                 on_confirm: ConfirmAction::SaveOverwritePlaylist {

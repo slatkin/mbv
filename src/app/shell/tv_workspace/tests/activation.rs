@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::SeriesDetail;
+use crate::app::ui_model::browse::SeriesDetail;
 use mbv_emby_model::test_support::make_item;
 
 #[test]

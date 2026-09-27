@@ -1,7 +1,7 @@
 use super::*;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::tests::make_app_stub;
+use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use crate::app::ui_model::tab_selection::TabSelection;
 use mbv_queue::AudiobookshelfBookQueueItem;
 
 fn library() -> mbv_audiobookshelf::AudiobookshelfLibrary {

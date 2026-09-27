@@ -74,7 +74,7 @@ impl FeedsContent {
             _ => vec![self.entry_for_target(&target)?.clone()],
         };
         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
+            crate::app::ui_model::context_menu::ContextMenuTargets::Feeds(entries),
             Some((at.x, at.y)),
         ))))
     }
@@ -185,10 +185,7 @@ impl LibraryContentOwner for FeedsContent {
         self.carrier.clear_owner_selection();
     }
 
-    fn set_selection_origin(
-        &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
-    ) {
+    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
         self.carrier.set_selection_origin(origin);
     }
 

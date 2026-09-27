@@ -9,7 +9,7 @@
 //! direct-remote path uses).
 
 #[cfg(test)]
-use crate::app::TabSelection;
+use crate::app::ui_model::tab_selection::TabSelection;
 use crate::app::{App, Duration, Instant, PanelFocus};
 #[cfg(test)]
 use mbv_emby_model::test_support::make_item;

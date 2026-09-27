@@ -49,7 +49,7 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
         tv_tree_context(
             vec![tv_show("Alpha", "show-a")],
             Some("show-a"),
-            Some(crate::app::SeriesDetail {
+            Some(crate::app::ui_model::browse::SeriesDetail {
                 seasons: vec![season.clone()],
                 episodes: [("season-1".into(), vec![episode.clone()])]
                     .into_iter()
@@ -128,10 +128,11 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
 
 #[test]
 fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
-    use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+    use crate::app::components::library_panel::LibraryPanel;
     use crate::app::components::list::tree_browser::TreeOperation;
     use crate::app::components::media_list::MediaListSurfaceInput;
     use crate::app::components::tv_tree_target::TvTreeTarget;
+    use crate::app::ui_model::library::LibraryKey;
     use ratatui::layout::Rect;
     use tuirealm::component::Component;
 
@@ -142,7 +143,7 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
     let mut episode = make_item("Pilot", "Episode");
     episode.id = "episode-1".into();
     episode.series_id = show.id.clone();
-    let detail = crate::app::SeriesDetail {
+    let detail = crate::app::ui_model::browse::SeriesDetail {
         seasons: vec![season],
         episodes: [("season-1".into(), vec![episode.clone()])]
             .into_iter()
@@ -179,7 +180,7 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
     let key = LibraryKey::Service {
         service: mbv_queue::ServiceKind::Emby,
         library_id: "lib-tv".into(),
-        kind: crate::app::components::LibraryKind::TvShows,
+        kind: crate::app::ui_model::library::LibraryKind::TvShows,
     };
     let mut panel = LibraryPanel::new();
     panel.insert_owner(key.clone(), Box::new(owner));

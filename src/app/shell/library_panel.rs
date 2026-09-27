@@ -15,10 +15,11 @@ use super::components::library_panel::content::HeroImageState;
 use super::components::library_panel::owner::LaunchSelector;
 use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
-use super::components::{ComponentId, LibraryKey, LibraryKind};
+use super::components::ComponentId;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
-use crate::app::state::types::playback::DestinationLatestSource;
+use crate::app::ui_model::library::{LibraryKey, LibraryKind};
+use crate::app::ui_model::playback::DestinationLatestSource;
 use mbv_queue::ServiceKind;
 
 impl Model {
@@ -87,10 +88,10 @@ impl Model {
     /// route to the list that produced it, never the dispatch-time focus.
     pub(in crate::app) fn active_library_selection_origin(
         &self,
-    ) -> Option<crate::app::components::media_list::SelectionOrigin> {
+    ) -> Option<crate::app::ui_model::media_list::SelectionOrigin> {
         self.active_library_key().map(|key| {
-            crate::app::components::media_list::SelectionOrigin::Library(
-                crate::app::components::media_list::LibrarySelectionOrigin::from(key),
+            crate::app::ui_model::media_list::SelectionOrigin::Library(
+                crate::app::ui_model::media_list::LibrarySelectionOrigin::from(key),
             )
         })
     }
@@ -200,7 +201,7 @@ impl Model {
         if level.letter_filter.is_none() {
             return;
         }
-        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        let mut key = crate::app::ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = None;
         if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
             level.letter_filter = None;
@@ -574,4 +575,4 @@ impl Model {
     }
 }
 
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;

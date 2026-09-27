@@ -1,4 +1,4 @@
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
 use mbv_emby_model::test_support::make_item;
 
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
@@ -122,9 +122,9 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
     {
         let lvl = lib.nav_stack.last_mut().unwrap();
         lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
-        lvl.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(
+        lvl.letter_filter = crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
             4,
-            crate::app::render::LetterFilterKind::Movie,
+            crate::app::ui_model::sort_filter::LetterFilterKind::Movie,
         );
     };
     let lvl = lib.nav_stack.last().unwrap();

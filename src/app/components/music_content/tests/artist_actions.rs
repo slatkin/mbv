@@ -19,7 +19,7 @@ fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicConten
                 "2001".to_string(),
                 (*target).to_string(),
             ));
-            artist_keys.push(crate::app::state::music_grouping::ArtistKey::Service(
+            artist_keys.push(crate::app::ui_model::music_grouping::ArtistKey::Service(
                 (*artist_id).to_string(),
             ));
         }
@@ -39,11 +39,11 @@ fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicConten
         None,
     ));
     owner.selection_origin = Some(SelectionOrigin::Library(
-        crate::app::components::media_list::LibrarySelectionOrigin::Service(
-            crate::app::components::library_panel::owner::LibraryKey::Service {
+        crate::app::ui_model::media_list::LibrarySelectionOrigin::Service(
+            crate::app::ui_model::library::LibraryKey::Service {
                 service: mbv_queue::ServiceKind::Emby,
                 library_id: "music-library".into(),
-                kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+                kind: crate::app::ui_model::library::LibraryKind::Music,
             },
         ),
     ));
@@ -83,7 +83,7 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
         }
         Some(Msg::Shell(shell_boxed)) => {
             let ShellRequest::MusicRowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
                 _,
             ) = *shell_boxed
             else {

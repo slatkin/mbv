@@ -13,7 +13,7 @@ use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
 };
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
-use crate::app::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
+use crate::app::ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
 use super::content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,

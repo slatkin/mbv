@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
@@ -46,7 +46,7 @@ impl App {
             .and_then(|lib| lib.feed_home_video.as_ref())
             .map_or(
                 0,
-                crate::app::state::types::feed::FeedHomeVideoState::selected_group_index,
+                crate::app::ui_model::feed::FeedHomeVideoState::selected_group_index,
             )
     }
 

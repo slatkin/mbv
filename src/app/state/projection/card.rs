@@ -128,7 +128,7 @@ impl App {
 
     fn queue_card_emby_source(
         &self,
-        playback: crate::app::PlaybackState,
+        playback: crate::app::ui_model::playback::PlaybackState,
     ) -> Option<(usize, EmbyItem)> {
         let slotless_active = playback.active && playback.active_idx.is_none();
         let active = if playback.active {
@@ -171,7 +171,7 @@ impl App {
     /// The active/selected slot holds a non-Emby item (or the queue is empty).
     fn project_audiobookshelf_cover(
         &mut self,
-        playback: crate::app::PlaybackState,
+        playback: crate::app::ui_model::playback::PlaybackState,
         projection: &mut QueueCardProjection,
     ) -> bool {
         let slotless_active = playback.active && playback.active_idx.is_none();

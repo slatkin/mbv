@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
@@ -109,11 +109,11 @@ impl App {
             .or_else(|| self.remote.direct_remote_label.clone())
             .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
             .unwrap_or_else(|| "this owner".into());
-        self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
+        self.ask_confirm(crate::app::ui_model::confirm::ConfirmModal {
             title: format!(" Play locally instead of {owner} "),
             message: format!("Play \"{label}\" on this machine instead?"),
             hint: "[y] Play here    [n] Cancel".into(),
-            on_confirm: crate::app::state::types::confirm::ConfirmAction::PlayLocallyInstead,
+            on_confirm: crate::app::ui_model::confirm::ConfirmAction::PlayLocallyInstead,
         });
     }
 

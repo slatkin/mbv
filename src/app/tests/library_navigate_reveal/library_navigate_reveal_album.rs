@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::state::types::events::NavigateLanding;
+use crate::app::ui_model::events::NavigateLanding;
 
 #[test]
 fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {

@@ -81,7 +81,7 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
 /// so the poisoned legacy copies stay stale for the whole placement.
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
-    use crate::app::state::types::context_menu::ContextMenu;
+    use crate::app::ui_model::context_menu::ContextMenu;
     let _guard = crate::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
@@ -91,8 +91,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.handle_terminal_message(
         Msg::Shell(Box::new(
             crate::app::components::ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![
-                    crate::app::components::msg::HomeRowTarget {
+                crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
+                    crate::app::ui_model::msg::HomeRowTarget {
                         item_id: Some("id0".into()),
                         source: None,
                         from_continue_watching: true,
@@ -107,7 +107,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     assert!(
         matches!(
             model.app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
+            Some(crate::app::ui_model::overlay::OverlayRequest::ContextMenu(
+                _
+            ))
         ),
         "'.' should open the context menu"
     );
@@ -192,7 +194,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 /// still anchors to the panel's own Narrow-painted geometry.
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow() {
-    use crate::app::state::types::context_menu::ContextMenu;
+    use crate::app::ui_model::context_menu::ContextMenu;
     let _guard = crate::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
@@ -202,8 +204,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.handle_terminal_message(
         Msg::Shell(Box::new(
             crate::app::components::ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![
-                    crate::app::components::msg::HomeRowTarget {
+                crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
+                    crate::app::ui_model::msg::HomeRowTarget {
                         item_id: Some("id0".into()),
                         source: None,
                         from_continue_watching: true,
@@ -218,7 +220,9 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     assert!(
         matches!(
             model.app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
+            Some(crate::app::ui_model::overlay::OverlayRequest::ContextMenu(
+                _
+            ))
         ),
         "'.' should open the context menu"
     );

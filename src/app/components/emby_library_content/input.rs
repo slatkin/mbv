@@ -6,7 +6,7 @@ use super::EmbyLibraryContent;
 use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent};
-use crate::app::render::LetterFilter;
+use crate::app::ui_model::sort_filter::LetterFilter;
 use mbv_emby_model::EmbyItem;
 
 impl EmbyLibraryContent {
@@ -93,9 +93,9 @@ impl EmbyLibraryContent {
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
                         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
-                                vec![target],
-                            ),
+                            crate::app::ui_model::context_menu::ContextMenuTargets::Browser(vec![
+                                target,
+                            ]),
                             None,
                         ))))
                     }
@@ -211,7 +211,7 @@ impl EmbyLibraryContent {
                     _ => return None,
                 };
                 Some(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
+                    crate::app::ui_model::context_menu::ContextMenuTargets::Browser(targets),
                     None,
                 ))
             }
@@ -262,7 +262,7 @@ impl EmbyLibraryContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::library_panel::LibraryKind;
+    use crate::app::ui_model::library::LibraryKind;
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {

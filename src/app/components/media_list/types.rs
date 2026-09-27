@@ -1,4 +1,4 @@
-use crate::app::components::library_panel::LibraryKey;
+use crate::app::ui_model::media_list::SelectionOrigin;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use ratatui::layout::{Position, Rect};
@@ -252,22 +252,6 @@ pub enum MediaListOperation<Target> {
 pub enum MediaListDisposition {
     Unhandled,
     Consumed,
-}
-
-/// Stable coordination identity for a `MediaList` selection. This identifies
-/// the list that produced a projection or delayed action; it never carries
-/// selection membership.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SelectionOrigin {
-    Library(LibrarySelectionOrigin),
-    Queue,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LibrarySelectionOrigin {
-    Home,
-    Feeds,
-    Service(LibraryKey),
 }
 
 /// Read-only presentation projection of a `MediaList` selection. Membership is

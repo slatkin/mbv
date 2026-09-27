@@ -1,6 +1,6 @@
 use super::make_app_stub;
-use crate::app::state::types::overlay::OverlayRequest;
-use crate::app::state::types::settings::SettingKey;
+use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_model::settings::SettingKey;
 use rstest::rstest;
 
 #[rstest]

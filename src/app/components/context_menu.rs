@@ -22,8 +22,8 @@ use tuirealm::state::State;
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_context_menu_content;
-use crate::app::state::types::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
-use crate::app::PanelFocus;
+use crate::app::ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
+use crate::app::ui_model::settings::PanelFocus;
 
 /// The Interactive Component for the Context menu.
 ///

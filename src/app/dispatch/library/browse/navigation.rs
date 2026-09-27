@@ -1,7 +1,7 @@
 use super::search::build_album_index_with;
-use crate::app::infra::ui_util::sort_episodes;
-use crate::app::state::types::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
-use crate::app::state::types::events::NavigateLanding;
+use crate::app::ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
+use crate::app::ui_model::events::NavigateLanding;
+use crate::app::ui_model::ui_util::sort_episodes;
 use crate::app::{AlbumPathPart, App, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;

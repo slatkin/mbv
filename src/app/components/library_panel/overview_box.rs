@@ -11,7 +11,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_model::ui_util::trunc_str;
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 

@@ -1,6 +1,6 @@
 //! Regression tests for Audiobookshelf browse states and browse-kind resolution.
 
-use crate::app::render::FeedAgeGroup;
+use crate::app::ui_model::feed_age::FeedAgeGroup;
 use mbv_audiobookshelf::{
     AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfDownloadedEpisode,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow,

@@ -1,5 +1,5 @@
-use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
-use crate::app::state::queue_owner::QueueOrigin;
+use crate::app::ui_model::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
+use crate::app::ui_model::queue_owner::QueueOrigin;
 use crate::app::PlayerTab;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;

@@ -226,7 +226,7 @@ fn tree_row_spans(
             title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
         }
         spans.push(Span::styled(
-            crate::app::ui_util::trunc_str(title, budget),
+            crate::app::ui_model::ui_util::trunc_str(title, budget),
             title_style,
         ));
     }

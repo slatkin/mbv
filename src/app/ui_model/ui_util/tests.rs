@@ -1,4 +1,4 @@
-use crate::app::infra::ui_util::{
+use crate::app::ui_model::ui_util::{
     fmt_duration_gutter, fmt_duration_hms, fmt_duration_short, fmt_publish_date_short,
 };
 

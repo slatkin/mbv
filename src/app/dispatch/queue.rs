@@ -1,9 +1,10 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::is_playable;
-use crate::app::state::types::playback::PlaylistMutation;
+use crate::app::ui_model::playback::PlaylistMutation;
+use crate::app::ui_model::ui_util::is_playable;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
-    ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
+    ui_model::sidebar::SidebarId, App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus,
+    PendingQueueAction, QueueScope, ReplacementExecutor, RoutedReplacementPrep, SessionEvent,
+    UndoEntry,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;

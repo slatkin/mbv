@@ -1,5 +1,5 @@
 use crate::app::state::types::cast::CastEvent;
-use crate::app::state::types::events::{LibEvent, SessionEvent};
+use crate::app::ui_model::events::{LibEvent, SessionEvent};
 use mbv_emby_model::EmbyItem;
 use std::sync::mpsc;
 

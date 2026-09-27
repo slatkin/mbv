@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::infra::ui_util::is_playable;
+use crate::app::ui_model::ui_util::is_playable;
 use crate::app::App;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;

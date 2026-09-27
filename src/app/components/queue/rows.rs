@@ -1,8 +1,8 @@
 use crate::app::components::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaSemanticState,
 };
-use crate::app::state::types::playback::PlaybackState;
-use crate::app::ui_util::fmt_duration_short;
+use crate::app::ui_model::playback::PlaybackState;
+use crate::app::ui_model::ui_util::fmt_duration_short;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
 

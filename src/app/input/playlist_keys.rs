@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::types::playback::PlaylistMutation;
+use crate::app::ui_model::playback::PlaylistMutation;
 use crate::app::App;
 
 impl App {

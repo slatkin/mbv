@@ -41,7 +41,7 @@ fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
     component.set_content(tv_tree_context(
         vec![tv_show("Alpha", "show-a")],
         Some("show-a"),
-        Some(crate::app::SeriesDetail {
+        Some(crate::app::ui_model::browse::SeriesDetail {
             seasons: vec![season],
             episodes: std::collections::HashMap::new(),
         }),
@@ -83,7 +83,7 @@ fn duplicate_child_identities_are_scoped_to_their_parent(
             episode
         })
         .collect::<Vec<_>>();
-    let detail = crate::app::SeriesDetail {
+    let detail = crate::app::ui_model::browse::SeriesDetail {
         seasons,
         episodes: [("season-1".into(), episodes)].into_iter().collect(),
     };
@@ -123,7 +123,7 @@ fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() 
     season_item.id = "season-1".into();
     let mut episode_item = make_item("Pilot", "Episode");
     episode_item.id = "episode-1".into();
-    let detail = crate::app::SeriesDetail {
+    let detail = crate::app::ui_model::browse::SeriesDetail {
         seasons: vec![season_item],
         episodes: [("season-1".into(), vec![episode_item])]
             .into_iter()

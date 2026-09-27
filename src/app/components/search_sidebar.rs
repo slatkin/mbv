@@ -31,8 +31,8 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{LeafKeyResult, Msg, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::state::search_sidebar::SearchSidebar;
-use crate::app::ui_util::move_cursor;
+use crate::app::ui_model::search_sidebar::SearchSidebar;
+use crate::app::ui_model::ui_util::move_cursor;
 
 const SEARCH_DEBOUNCE_MS: u64 = 300;
 

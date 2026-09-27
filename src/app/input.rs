@@ -98,9 +98,9 @@ impl App {
                 .unwrap_or(u16::MAX)
                 .saturating_add(pad)
         };
-        let mut w = vec![title_width(crate::app::ui_util::continue_tab_title(
-            self.use_nerd_fonts,
-        ))];
+        let mut w = vec![title_width(
+            crate::app::ui_model::ui_util::continue_tab_title(self.use_nerd_fonts),
+        )];
         for l in &self.libs {
             w.push(title_width(&l.library.name));
         }

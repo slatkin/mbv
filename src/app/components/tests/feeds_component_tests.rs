@@ -5,10 +5,11 @@
 //! owner (the destination component is deleted).
 
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
-use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
+use super::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
-use crate::app::state::types::feed_tab::WatchedFilter;
+use crate::app::ui_model::feed_tab::WatchedFilter;
+use crate::app::ui_model::library::LibraryKey;
 use mbv_config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
@@ -740,7 +741,7 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     assert!(matches!(
         click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
+            crate::app::ui_model::context_menu::ContextMenuTargets::Feeds(entries),
             Some(_),
         ) if entries.len() == 1)));
 }

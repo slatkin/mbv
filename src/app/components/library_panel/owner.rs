@@ -15,39 +15,17 @@ use tuirealm::event::KeyEvent;
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
-use mbv_config::{LibraryItemIdentity, SelectorIdentity, TabIdentity, TuiLaunchState};
-use mbv_queue::ServiceKind;
+use crate::app::ui_model::library::LibraryKey;
+use mbv_config::{LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
 
-/// The behavioural category of one service library.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum LibraryKind {
-    Generic,
-    Movies,
-    TvShows,
-    Music,
-    HomeVideos,
-    AudiobookshelfPodcast,
-    AudiobookshelfBook,
-}
-
-impl LibraryKind {
-    pub fn from_collection_type(collection_type: &str) -> Self {
-        match collection_type {
-            "movies" => Self::Movies,
-            "tvshows" => Self::TvShows,
-            "music" => Self::Music,
-            "homevideos" => Self::HomeVideos,
-            _ => Self::Generic,
-        }
-    }
-}
-
 #[cfg(test)]
 mod library_kind_tests {
-    use super::LibraryKind;
+    use crate::app::ui_model::library::LibraryKind;
+    use mbv_config::TabIdentity;
+    use mbv_queue::ServiceKind;
 
     #[test]
     fn maps_known_collection_types() {
@@ -129,40 +107,6 @@ mod library_kind_tests {
                 library_id: "abs-lib".to_string(),
             }
         );
-    }
-}
-
-/// The identity of one library destination, keying the panel's owner map.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum LibraryKey {
-    Home,
-    Feeds,
-    Service {
-        service: ServiceKind,
-        library_id: String,
-        kind: LibraryKind,
-    },
-}
-
-impl LibraryKey {
-    /// The stable launch-state tab identity for this destination (task 2.1).
-    /// Every [`LibraryKind`] maps through — the tab identity carries only
-    /// the Service kind plus library ID, so the browse kind selects the
-    /// destination-tagged pill/item interpretation, never the tab.
-    // Consumed by selected-tab teardown assembly in task 2.3.
-    pub fn tab_identity(&self) -> TabIdentity {
-        match self {
-            Self::Home => TabIdentity::Home,
-            Self::Feeds => TabIdentity::Feeds,
-            Self::Service {
-                service,
-                library_id,
-                ..
-            } => TabIdentity::ServiceLibrary {
-                kind: *service,
-                library_id: library_id.clone(),
-            },
-        }
     }
 }
 
@@ -337,10 +281,7 @@ pub(in crate::app) trait LibraryContentOwner {
         None
     }
 
-    fn set_selection_origin(
-        &mut self,
-        _origin: crate::app::components::media_list::SelectionOrigin,
-    ) {
+    fn set_selection_origin(&mut self, _origin: crate::app::ui_model::media_list::SelectionOrigin) {
     }
 
     /// The owner-resolved cursor and resting scroll after local movement.

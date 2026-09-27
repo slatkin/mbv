@@ -77,7 +77,7 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .as_any()
         .downcast_ref::<LibraryPanel>()
         .expect("Library panel type")
-        .owner(&crate::app::components::library_panel::LibraryKey::Home)
+        .owner(&crate::app::ui_model::library::LibraryKey::Home)
         .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
         .expect("Home owner installed")
 }
@@ -277,7 +277,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         .dispatch_router_command(&Command::CyclePanelMode);
     assert_ne!(
         harness.model().app.panel_mode,
-        crate::app::PanelMode::default(),
+        crate::app::ui_model::settings::PanelMode::default(),
         "the mapped prefix action executed through the shell"
     );
 }

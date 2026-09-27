@@ -1,8 +1,8 @@
 use crate::app::state::service_setup::StartupRequest;
-use crate::app::state::types::playback::QueueScope;
-use crate::app::state::types::player_tab::PlayerTab;
-use crate::app::state::types::settings::{PanelFocus, PanelMode};
-use crate::app::state::types::tab_selection::TabSelection;
+use crate::app::ui_model::playback::QueueScope;
+use crate::app::ui_model::player_tab::PlayerTab;
+use crate::app::ui_model::settings::{PanelFocus, PanelMode};
+use crate::app::ui_model::tab_selection::TabSelection;
 use crate::app::{
     layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
@@ -166,7 +166,7 @@ impl App {
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            home_latest_launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow {
+            home_latest_launch_window: crate::app::ui_model::home_latest::HomeLatestLaunchWindow {
                 previous: None,
                 current: 0,
             },
@@ -245,7 +245,7 @@ impl App {
             queue_card_projection:
                 crate::app::state::projection::card::QueueCardProjection::default(),
             dim_backdrop_active: false,
-            settings_destination: crate::app::state::types::settings::SettingsDestination::Main,
+            settings_destination: crate::app::ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,
             mouse_capture_pending: None,
             confirm_logout: false,
@@ -278,7 +278,7 @@ impl App {
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
             cast_status_loading: false,
-            queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
+            queue_epoch: crate::app::ui_model::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,
@@ -318,7 +318,7 @@ impl App {
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
-            feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
+            feed_tab: crate::app::ui_model::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_feed::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();

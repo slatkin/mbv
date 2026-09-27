@@ -1,5 +1,5 @@
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::*;
+use crate::app::ui_model::browse::BrowseResting;
 use rstest::{fixture, rstest};
 
 #[fixture]

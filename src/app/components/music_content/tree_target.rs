@@ -158,7 +158,7 @@ impl MusicContent {
     pub(super) fn tree_projection(&self) -> Vec<TreeNode<MusicTreeTarget>> {
         let mut nodes: Vec<TreeNode<MusicTreeTarget>> = Vec::new();
         let mut root_of_key: HashMap<
-            crate::app::state::music_grouping::ArtistKey,
+            crate::app::ui_model::music_grouping::ArtistKey,
             MusicTreeTarget,
         > = HashMap::new();
         for &index in &self.context.album_order {

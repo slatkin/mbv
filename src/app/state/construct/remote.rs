@@ -2,8 +2,8 @@ use super::{
     detached_socket_rx, independent_audiobookshelf_runtime, independent_emby_runtime, App,
 };
 use crate::app::state::bootstrap::{bootstrap_legacy_queue, LocalDaemonBootstrap};
-use crate::app::state::types::playback::QueueScope;
-use crate::app::state::types::player_tab::PlayerTab;
+use crate::app::ui_model::playback::QueueScope;
+use crate::app::ui_model::player_tab::PlayerTab;
 use crate::app::{bootstrap_unified_queue, AppInit};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;

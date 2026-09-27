@@ -1,4 +1,4 @@
-use crate::app::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;
 
 /// For folder-based music libraries where albums are stored as directories named
 /// "Artist (YYYY) Album Title", parse out the three components.
@@ -85,7 +85,7 @@ pub(crate) fn effective_sort_str(item: &mbv_emby_model::EmbyItem) -> &str {
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
 /// individual letters for 250+ items.
 pub(crate) fn letter_bucket(item: &mbv_emby_model::EmbyItem, total: usize) -> String {
-    crate::app::ui_util::letter_bucket_label(effective_sort_str(item), total)
+    crate::app::ui_model::ui_util::letter_bucket_label(effective_sort_str(item), total)
 }
 
 /// Library size above which the library list shows the

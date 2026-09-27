@@ -1,6 +1,6 @@
 use super::*;
-use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::make_app_stub;
+use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{BrowseLevel, LibraryTab};
 use mbv_emby_model::test_support::make_item;
 

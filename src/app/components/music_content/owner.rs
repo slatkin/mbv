@@ -85,10 +85,7 @@ impl LibraryContentOwner for MusicContent {
         Some(self)
     }
 
-    fn set_selection_origin(
-        &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
-    ) {
+    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
         // The panel's active-owner projection records the stable identity
         // used by both the status pill and bulk-action clear routing. Direct
         // tree actions carry the same identity without exposing membership.
@@ -618,14 +615,14 @@ impl MusicContent {
                     .collect();
                 (!items.is_empty()).then_some(Msg::Shell(Box::new(
                     ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                        crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
                         None,
                     ),
                 )))
             }
             Some(RowIntent::Context(target)) => self.workspace_track_item(&target).map(|track| {
                 Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![track]),
+                    crate::app::ui_model::context_menu::ContextMenuTargets::Emby(vec![track]),
                     None,
                 )))
             }),
@@ -641,13 +638,13 @@ impl MusicContent {
                 return None;
             }
             Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
                 None,
             ))))
         } else {
             self.selected_item().map(|item| {
                 Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
+                    crate::app::ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
                     None,
                 )))
             })

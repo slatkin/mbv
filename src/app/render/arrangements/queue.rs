@@ -7,6 +7,15 @@ use crate::app::render::components::widgets::queue_panel_inset;
 /// sits outside the recessed panel, as wide as the `QueueColumn` header.
 pub(in crate::app) const QUEUE_FOOTER_BAND: u16 = 3;
 
+pub(crate) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
+    use crate::app::LEFT_WIDTH_DEFAULT;
+
+    width.clamp(
+        LEFT_WIDTH_DEFAULT,
+        LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5),
+    )
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct QueuePanelGeometry {
     pub panel_area: Rect,

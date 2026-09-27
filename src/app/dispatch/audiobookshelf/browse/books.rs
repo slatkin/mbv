@@ -225,9 +225,9 @@ impl App {
         self.set_queue_scope(scope);
         if !matches!(
             self.effective_panel_focus(),
-            crate::app::PanelFocus::Library
+            crate::app::ui_model::settings::PanelFocus::Library
         ) {
-            self.set_panel_focus(crate::app::PanelFocus::Queue);
+            self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Queue);
         }
     }
 
@@ -255,7 +255,7 @@ impl App {
 /// tab's selection path and Home's queue-item path feed the one hero
 /// producer through this single conversion).
 pub(in crate::app) fn audiobookshelf_book_queue_item(
-    state: &crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState,
+    state: &crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState,
 ) -> Option<QueueItem> {
     let book = state.selected_id.as_ref()?;
     let book = state

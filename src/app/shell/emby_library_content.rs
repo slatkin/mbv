@@ -16,9 +16,9 @@
 
 use super::components::emby_library_content::EmbyLibraryIdentity;
 use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
-use super::components::{LibraryKey, LibraryKind};
 use super::Model;
 use super::TabSelection;
+use crate::app::ui_model::library::{LibraryKey, LibraryKind};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
@@ -78,7 +78,7 @@ impl Model {
             feed_group: lib
                 .feed_home_video
                 .as_ref()
-                .map(super::super::state::types::feed::FeedHomeVideoState::selected_group_index),
+                .map(super::super::ui_model::feed::FeedHomeVideoState::selected_group_index),
         }
     }
 

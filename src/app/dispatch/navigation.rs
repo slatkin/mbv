@@ -1,5 +1,5 @@
-use crate::app::infra::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
-use crate::app::state::types::browse::BrowseResting;
+use crate::app::ui_model::browse::BrowseResting;
+use crate::app::ui_model::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use crate::app::{
     App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
@@ -177,7 +177,7 @@ impl App {
                         .tracks
                         .iter()
                         .filter(|track| {
-                            crate::app::state::music_artist_detail::track_matches_album(
+                            crate::app::ui_model::music_artist_detail::track_matches_album(
                                 track, album_id,
                             )
                         })

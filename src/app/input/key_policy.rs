@@ -8,7 +8,7 @@ use super::resolver::KeyChord;
 use crate::app::dispatch::action::{
     idle_feed_command_for_key, Command, IdleFeedLinkContext, VOLUME_STEP,
 };
-use crate::app::state::types::settings::{PanelFocus, PanelMode};
+use crate::app::ui_model::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{action_by_id, Keybinds};
 

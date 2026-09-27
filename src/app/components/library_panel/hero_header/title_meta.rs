@@ -11,7 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::palette;
 use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_model::ui_util::trunc_str;
 
 use super::super::content::{HeroContent, HeroFacts, HeroHeader};
 use super::super::overview_box;

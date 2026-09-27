@@ -1,5 +1,5 @@
 use crate::app::render::{natural_sort_key, strip_article};
-use crate::app::state::music_grouping::{
+use crate::app::ui_model::music_grouping::{
     derive_album_artist, derive_album_display_name, ArtistKey, GroupedAlbumCatalog,
 };
 use std::collections::HashMap;

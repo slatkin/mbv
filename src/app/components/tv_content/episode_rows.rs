@@ -3,7 +3,7 @@ use super::{
     MediaListTrailing, MediaSemanticState, Pane, QueueItem, TvContent, TICKS_PER_SECOND,
 };
 use crate::app::render::effective_sort_str;
-use crate::app::ui_util::natural_sort_key;
+use crate::app::ui_model::ui_util::natural_sort_key;
 
 pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -42,7 +42,7 @@ pub(super) fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListR
                 Some(context) => (context.text, Some(parts.title.text)),
                 None => (parts.title.text, None),
             };
-            let trailing = crate::app::state::home_latest::provider_timestamp_secs(&item)
+            let trailing = crate::app::ui_model::home_latest::provider_timestamp_secs(&item)
                 .map(fmt_publish_date_short)
                 .filter(|date| !date.is_empty())
                 .map(MediaListTrailing::Gutter);

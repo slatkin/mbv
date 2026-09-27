@@ -1,6 +1,6 @@
 use crate::app::infra::palette;
 use crate::app::render::components::modal_frame::render_modal_frame;
-use crate::app::state::types::context_menu::MultiSelectKind;
+use crate::app::ui_model::context_menu::MultiSelectKind;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

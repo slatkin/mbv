@@ -9,9 +9,9 @@ use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::msg::PlaybackRequest;
 use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
-use crate::app::state::types::playback::PlaybackState;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::ui_model::playback::PlaybackState;
 use crate::app::{PanelFocus, PanelMode};
 use mbv_ctrl::player::PlayerEvent;
 
