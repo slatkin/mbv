@@ -2,7 +2,6 @@ mod dispatch;
 mod infra;
 mod input;
 pub(in crate::app) mod state;
-pub(crate) mod ui_msg;
 
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
