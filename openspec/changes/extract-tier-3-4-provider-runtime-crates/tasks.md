@@ -260,7 +260,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 8. `mbv-core` residue and manifests
 
-- [ ] 8.1 Trim `crates/mbv-core`. `src/lib.rs` should declare only `applog`
+- [x] 8.1 Trim `crates/mbv-core`. `src/lib.rs` should declare only `applog`
   and `service_runtime`. Remove every `[dependencies]`/`[dev-dependencies]`
   line that `cargo check -p mbv-core --all-targets` does not need
   (`libmpv2`, `libmpv2-sys`, `tungstenite`, `ureq`, `rand`, `uuid`, `libc`,
@@ -271,7 +271,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   "Service runtime state and application logging for mbv.". Verify: gate
   passes; `cargo tree -p mbv-core --depth 1 -e normal` lists only
   `mbv-emby`, `mbv-audiobookshelf`, and the externals `applog` needs.
-- [ ] 8.2 Check the crate graph. Verify: `cargo tree -p mbv-audiobookshelf -e normal`
+- [x] 8.2 Check the crate graph. Verify: `cargo tree -p mbv-audiobookshelf -e normal`
   contains none of `mbv-emby`, `mbv-cast`, `mbv-core`, `mbv-player`, or
   `mbv-daemon`; `cargo tree -p mbv-emby -e normal` contains none of
   `mbv-core`, `mbv-player`, or `mbv-daemon`; `cargo tree -p mbv-player -e normal`
