@@ -7,9 +7,9 @@ Gate for every group: `cargo check --workspace`,
 
 ## 1. One progress gate (`ProgressObservation`)
 
-- [ ] 1.1 Add `ProgressObservation::{Completed, Stopped}` with `position_to_record(&QueueItem)` and `played()` to `crates/mbv-queue` (design D1), with a named `#[case]` table covering: completed below and at the 30 s floor, completed audio, completed played, stopped positive, stopped zero, stopped audio, stopped played. Verify: the new `mbv-queue` tests pass.
-- [ ] 1.2 Replace the two hand-written gates in `crates/mbv-daemon/src/run.rs` (`apply_track_completed_observation`, `apply_stopped_observation`) with `ProgressObservation`. Verify: `cargo nextest run -p mbv-daemon` passes.
-- [ ] 1.3 Replace the two gates in `src/app/dispatch/session/player_event.rs` (`apply_stopped_slot_progress` and the `TrackCompleted` arm) with `ProgressObservation`. If `MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS` now has no user outside the gate, move it into `mbv-queue`. Verify: `cargo nextest run -p mbv` passes and `rg MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS` shows only the gate.
+- [x] 1.1 Add `ProgressObservation::{Completed, Stopped}` with `position_to_record(&QueueItem)` and `played()` to `crates/mbv-queue` (design D1), with a named `#[case]` table covering: completed below and at the 30 s floor, completed audio, completed played, stopped positive, stopped zero, stopped audio, stopped played. Verify: the new `mbv-queue` tests pass.
+- [x] 1.2 Replace the two hand-written gates in `crates/mbv-daemon/src/run.rs` (`apply_track_completed_observation`, `apply_stopped_observation`) with `ProgressObservation`. Verify: `cargo nextest run -p mbv-daemon` passes.
+- [x] 1.3 Replace the two gates in `src/app/dispatch/session/player_event.rs` (`apply_stopped_slot_progress` and the `TrackCompleted` arm) with `ProgressObservation`. If `MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS` now has no user outside the gate, move it into `mbv-queue`. Verify: `cargo nextest run -p mbv` passes and `rg MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS` shows only the gate.
 
 ## 2. Direction and the shared neighbour rule
 
