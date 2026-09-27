@@ -83,7 +83,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 1. Cycle cuts inside `mbv-core`
 
-- [ ] 1.1 Move the `audiobookshelf_response` helper and the two tests that use
+- [x] 1.1 Move the `audiobookshelf_response` helper and the two tests that use
   it (`audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures`,
   `dead_audiobookshelf_endpoint_is_connectivity`) from
   `crates/mbv-core/src/api/tests/failure.rs` into a new
@@ -94,7 +94,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   `rg 'audiobookshelf' crates/mbv-core/src/api` is empty and
   `cargo nextest run -p mbv-core failure` runs the same number of tests as
   before.
-- [ ] 1.2 Move `EmbyFailureClass`, `EmbyFailure` (with its three `impl`
+- [x] 1.2 Move `EmbyFailureClass`, `EmbyFailure` (with its three `impl`
   blocks), and `EmbyBootstrap` from `crates/mbv-core/src/service_runtime.rs`
   into a new `crates/mbv-core/src/api/failure.rs`, declared
   `mod failure; pub use failure::*;` in `api.rs`. Rewrite
@@ -104,7 +104,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   `rg 'service_runtime' crates/mbv-core/src/api` is empty;
   `rg 'EmbyFailure|EmbyBootstrap' crates/mbv-core/src/service_runtime.rs`
   shows only the `use crate::api::…` import (if the compiler needs it).
-- [ ] 1.3 Delete the orphaned `crates/mbv-core/src/id_types.rs`. Verify:
+- [x] 1.3 Delete the orphaned `crates/mbv-core/src/id_types.rs`. Verify:
   `rg 'id_types' crates/mbv-core` is empty and `cargo check -p mbv-core`
   succeeds.
 
