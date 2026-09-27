@@ -387,13 +387,8 @@ impl PlayerProxy {
     }
 
     pub fn next(&self) -> bool {
-        // No mirror gate: the playback owner bounds-checks the step against
-        // its own authoritative state. Gating here on the client's status
-        // mirror silently dropped Next/Previous whenever the mirror lagged a
-        // transition (stale current_idx/queue_len), making the transport
-        // button intermittently do nothing.
         match &self.inner {
-            PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Next),
+            PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                 remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Next),
             ),
@@ -402,7 +397,7 @@ impl PlayerProxy {
 
     pub fn previous(&self) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Previous),
+            PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                 remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Previous),
             ),

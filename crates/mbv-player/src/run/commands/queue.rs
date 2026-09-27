@@ -33,14 +33,19 @@ impl PlaybackRun {
             request_id, generation, slot_id,
         ));
         if self.active_file {
-            self.cmd_jump_to_active_file(slot_id, mpv);
+            self.cmd_jump_to_active_file(slot_id, resume_ticks, mpv);
         } else {
             self.cmd_jump_to_playlist(slot_id, idx, resume_ticks, mpv);
         }
     }
 
-    fn cmd_jump_to_active_file(&mut self, slot_id: QueueSlotId, mpv: &Mpv) {
-        match self.select_active_slot(slot_id, mpv) {
+    fn cmd_jump_to_active_file(
+        &mut self,
+        slot_id: QueueSlotId,
+        resume_ticks: Option<i64>,
+        mpv: &Mpv,
+    ) {
+        match self.select_active_slot_with_resume(slot_id, resume_ticks, mpv) {
             Ok(()) => {
                 let _ = mpv.set_property("pause", false);
                 // Active-file projection has no mpv playlist move to

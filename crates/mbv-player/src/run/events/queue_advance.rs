@@ -108,16 +108,6 @@ impl PlaybackRun {
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
             self.last_valid_pos, completed_runtime);
-        // Keep this run's own queue mirror current too: it is never refreshed
-        // from the owner's canonical queue mid-session, so a later relative
-        // Next/Previous step (which resolves resume position locally, not via
-        // a dispatched command) would otherwise still see this slot's
-        // submission-time position.
-        if let Some(slot_id) = completed_slot_id {
-            self.queue
-                .apply_progress(slot_id, completed_pos, played_out);
-        }
-
         // Consume the in-flight jump's identity alongside `forced_slot_id`
         // (same lifetime, design D4); it tags the `TrackChanged` emit below
         // only if this observation actually lands on its target slot.

@@ -1,4 +1,4 @@
-use super::{mpv_err_str, PlaybackRun, QueueSlotId};
+use super::{PlaybackRun, QueueSlotId};
 use crate::shift_index_for_move;
 use libmpv2::Mpv;
 
@@ -102,42 +102,5 @@ impl PlaybackRun {
         // it from the observed active slot.
         self.current_idx = shift_index_for_move(self.current_idx, from, to);
         self.sync_status_position();
-    }
-
-    /// Relative single-step nav (`PlayerCommand::Next`/`Previous`) for an
-    /// already-bounds-checked target ordinal. Mirrors the `JumpTo` move minus
-    /// request identity: no `forced_transition` (design D4 — relative nav
-    /// correlates like natural advancement). Still pins `forced_slot_id` so the
-    /// resulting mpv observation is attributed to the right slot.
-    pub(super) fn step_to_index(&mut self, idx: usize, mpv: &Mpv) {
-        let Some(slot_id) = self.slot_id_at(idx) else {
-            return;
-        };
-        if self.active_file {
-            if let Err(error) = self.select_active_slot(slot_id, mpv) {
-                log::warn!(target: "player", "active-file step to idx={idx} failed: {error}");
-            } else {
-                let _ = mpv.set_property("pause", false);
-            }
-            return;
-        }
-        // Unlike JumpTo (which gets the target's resume position from the
-        // owner's canonical queue via the command itself), relative nav is
-        // resolved entirely locally — this run's own queue mirror is now kept
-        // current for exactly this (see `on_end_file`'s `apply_progress`
-        // call), so the same per-kind gate can be evaluated straight off it.
-        let resume_ticks = self
-            .queue
-            .slot(slot_id)
-            .and_then(|slot| crate::resume_ticks_for_item(&slot.item));
-        self.forced_slot_id = Some(slot_id);
-        self.forced_resume_ticks = resume_ticks;
-        if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
-            self.forced_slot_id = None;
-            self.forced_resume_ticks = None;
-            log::warn!(target: "player", "step to idx={idx} failed: {}", mpv_err_str(&e));
-        } else {
-            let _ = mpv.set_property("pause", false);
-        }
     }
 }

@@ -133,6 +133,12 @@ impl PreparedSource {
         }
     }
 
+    pub(crate) fn override_jump_resume(&mut self, item: &QueueItem, resume_ticks: Option<i64>) {
+        if !item.is_audiobookshelf() {
+            self.start_seconds = resume_ticks.map_or(0.0, mbv_emby_model::ticks_to_seconds);
+        }
+    }
+
     /// Options for the first source load (title, resume start, per-file
     /// header). For a merged timeline the resume start is omitted here and
     /// applied as an absolute seek after loading, so the position is

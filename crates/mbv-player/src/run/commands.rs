@@ -113,17 +113,6 @@ impl PlaybackRun {
                 let paused = self.status.lock().unwrap().paused;
                 let _ = mpv.set_property("pause", !paused);
             }
-            PlayerCommand::Next => {
-                let target = self.relative_step_base() + 1;
-                if target < self.queue_len() {
-                    self.step_to_index(target, mpv);
-                }
-            }
-            PlayerCommand::Previous => {
-                if let Some(target) = self.relative_step_base().checked_sub(1) {
-                    self.step_to_index(target, mpv);
-                }
-            }
             command @ (PlayerCommand::NextUpDismiss | PlayerCommand::SkipIntroDismiss) => {
                 let message = if matches!(command, PlayerCommand::NextUpDismiss) {
                     "mbv-next-up-dismiss"

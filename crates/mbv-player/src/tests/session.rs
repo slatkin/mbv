@@ -667,6 +667,28 @@ fn queue_load_plan_never_starts_playback_mid_load() {
 }
 
 #[test]
+fn active_file_jump_loads_non_audiobookshelf_resume_ticks() {
+    let (mut run, _) = make_queue_session_for_pos_tests(0);
+    let target_id = QueueSlotId::from_raw(2);
+    let target = QueueItem::Feed(make_feed_entry("feed", "episode"));
+    run.queue = ExecutionSequence::from_slot_items(
+        vec![
+            (QueueSlotId::from_raw(1), abs_item()),
+            (target_id, target.clone()),
+        ],
+        Some(QueueSlotId::from_raw(1)),
+    );
+    assert!(run.queue.has_audiobookshelf_entries());
+
+    let resume_ticks = 42 * TICKS_PER_SECOND;
+    let (_, prepared) = run
+        .prepare_active_slot_with_resume(target_id, Some(resume_ticks))
+        .unwrap();
+
+    assert!(prepared.mpv_load_options(&target).contains(",start=42"));
+}
+
+#[test]
 fn cold_active_file_single_load_starts_playback_via_replace() {
     // The cold submit path's active-file (Audiobookshelf) branch loads exactly
     // one slot and skips `start_queue_playback`, so its load must start

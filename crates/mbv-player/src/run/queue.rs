@@ -24,18 +24,6 @@ struct InitialItemState {
 }
 
 impl PlaybackRun {
-    /// The ordinal a relative step (Next/Previous) advances from: the active
-    /// slot's identity resolved to this run's ordinal (the permitted
-    /// identity -> ordinal direction, design D2), falling back to the run
-    /// coordinate when the sequence holds no active marker. Deriving the
-    /// neighbor from `current_idx` alone re-used a coordinate that a
-    /// settling observation can briefly outrun.
-    pub(crate) fn relative_step_base(&self) -> usize {
-        self.active_slot_id()
-            .and_then(|id| self.queue.slot_index(id))
-            .unwrap_or(self.current_idx)
-    }
-
     pub(crate) fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
@@ -389,12 +377,31 @@ impl PlaybackRun {
         slot_id: QueueSlotId,
         mpv: &Mpv,
     ) -> Result<(), AudiobookshelfError> {
+        self.select_active_slot_with_resume(slot_id, None, mpv)
+    }
+
+    pub(crate) fn prepare_active_slot_with_resume(
+        &mut self,
+        slot_id: QueueSlotId,
+        resume_ticks: Option<i64>,
+    ) -> Result<(QueueItem, PreparedSource), AudiobookshelfError> {
         let item = self
             .queue
             .slot(slot_id)
             .map(|slot| slot.item.clone())
             .ok_or_else(|| AudiobookshelfError::from_class(AudiobookshelfFailureClass::Protocol))?;
-        let prepared = self.prepare_item(&item)?;
+        let mut prepared = self.prepare_item(&item)?;
+        prepared.override_jump_resume(&item, resume_ticks);
+        Ok((item, prepared))
+    }
+
+    pub(crate) fn select_active_slot_with_resume(
+        &mut self,
+        slot_id: QueueSlotId,
+        resume_ticks: Option<i64>,
+        mpv: &Mpv,
+    ) -> Result<(), AudiobookshelfError> {
+        let (item, prepared) = self.prepare_active_slot_with_resume(slot_id, resume_ticks)?;
         self.install_active_projection(mpv, prepared, &item)?;
         let _ = self.queue.set_active_slot(slot_id);
         // Resolve the just-selected slot to this run's mpv-local coordinate

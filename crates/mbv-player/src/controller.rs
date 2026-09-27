@@ -387,14 +387,6 @@ impl Player {
         rx
     }
 
-    pub fn next(&self) -> bool {
-        self.send_command(PlayerCommand::Next)
-    }
-
-    pub fn previous(&self) -> bool {
-        self.send_command(PlayerCommand::Previous)
-    }
-
     /// # Panics
     ///
     /// Panics if the local `status` mutex is poisoned, or if a mutex locked by
