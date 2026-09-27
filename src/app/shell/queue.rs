@@ -490,7 +490,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::Msg;
-    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::tests::{make_app_stub, make_items};
+    use mbv_emby_model::test_support::make_item;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

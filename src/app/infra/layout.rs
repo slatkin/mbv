@@ -38,8 +38,6 @@ pub(in crate::app) const MINI_VIEW_THRESHOLD: u16 = 80;
 /// edge instead.
 pub(in crate::app) const TABBAR_LEFT_RESERVE: u16 = 0;
 
-pub(in crate::app) const PAGE_SIZE: usize = 100;
-pub(in crate::app) const PREFETCH_AHEAD: usize = 25;
 pub(in crate::app) const SEARCH_PANEL_W: u16 = 40;
 
 use crate::app::render::arrangements::chrome::RootFrame;

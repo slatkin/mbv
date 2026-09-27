@@ -5,8 +5,8 @@ use crate::app::dispatch::session::service_startup::{
 use crate::app::images::series_image_cache_key;
 use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use crate::app::state::types::events::LibEvent;
+use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_movie_app;
-use crate::app::tests::{make_app_stub, make_session};
 use crate::app::SessionEvent;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
@@ -132,7 +132,7 @@ fn drain_session_events_dispatches_a_queued_event() {
     app.channels
         .sessions_tx
         .send(SessionEvent::Loaded {
-            sessions: vec![make_session("living-room", "mbv")],
+            sessions: vec![mbv_emby::test_support::make_session("living-room", "mbv")],
         })
         .expect("sessions channel");
 

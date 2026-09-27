@@ -372,7 +372,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_item;
+    use mbv_emby_model::test_support::make_item;
     use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers};
 

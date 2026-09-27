@@ -160,6 +160,8 @@ mbv-remote-player = { path = "crates/mbv-remote-player", features = ["test"] }
 mbv-player = { path = "crates/mbv-player", features = ["test"] }
 mbv-config = { path = "crates/mbv-config", features = ["test"] }
 mbv-net = { path = "crates/mbv-net", features = ["test"] }
+mbv-emby-model = { path = "crates/mbv-emby-model", features = ["test"] }
+mbv-emby = { path = "crates/mbv-emby", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

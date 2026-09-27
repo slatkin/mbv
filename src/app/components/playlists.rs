@@ -416,8 +416,8 @@ mod tests {
     fn closed_playlist_keys_open_and_clamp_navigation() {
         let mut component = PlaylistsComponent::new();
         component.playlists = vec![
-            crate::app::tests::make_item("First", "Playlist"),
-            crate::app::tests::make_item("Second", "Playlist"),
+            mbv_emby_model::test_support::make_item("First", "Playlist"),
+            mbv_emby_model::test_support::make_item("Second", "Playlist"),
         ];
 
         component.handle_key(&key(Key::End));
@@ -431,10 +431,12 @@ mod tests {
     #[test]
     fn open_playlist_back_clears_open_items() {
         let mut component = PlaylistsComponent::new();
-        component.open = Some(crate::app::tests::make_item("Playlist", "Playlist"));
+        component.open = Some(mbv_emby_model::test_support::make_item(
+            "Playlist", "Playlist",
+        ));
         component
             .open_items
-            .push(crate::app::tests::make_item("Film", "Movie"));
+            .push(mbv_emby_model::test_support::make_item("Film", "Movie"));
 
         assert_eq!(
             component.handle_key(&key(Key::Esc)),

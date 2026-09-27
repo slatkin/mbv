@@ -10,8 +10,8 @@
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
 use crate::app::render::components::chrome::daemon_endpoint_label;
+use crate::app::render::components::widgets::service_state_color;
 use crate::app::render::indicators;
-use crate::app::ui_util::service_state_color;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;

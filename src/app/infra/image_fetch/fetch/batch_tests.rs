@@ -1,5 +1,5 @@
 use super::level_artists::{bucket_tracks_by_album, level_artists_from_items, vote_album_artist};
-use crate::app::tests::make_item;
+use mbv_emby_model::test_support::make_item;
 use rstest::rstest;
 fn track(
     parent: &str,

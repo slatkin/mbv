@@ -7,9 +7,10 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 use crate::app::components::{ComponentId, LibraryPlaybackPanel, QueuePlaybackPanel};
+use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{App, PanelFocus, PanelMode};
+use mbv_emby_model::test_support::make_item;
 use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 
 /// An unbound chord: no policy arm claims it and the focused component

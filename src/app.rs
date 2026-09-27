@@ -10,7 +10,7 @@ pub(in crate::app) use self::infra::layout::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,
     TWO_COLUMN_THRESHOLD,
 };
-use self::infra::layout::{PAGE_SIZE, PREFETCH_AHEAD};
+pub(crate) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     install_signal_handlers, start_quit_watchdog, QUIT_REQUESTED,
 };

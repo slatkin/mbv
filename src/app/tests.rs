@@ -31,73 +31,11 @@ mod settings_activation;
 mod split_browse_state_browse_level_tests;
 pub(crate) mod tick_integration;
 
+use mbv_emby::test_support::make_session;
+use mbv_emby_model::test_support::make_item;
 use ratatui::backend::TestBackend;
 
 use ratatui::Terminal;
-
-pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
-    EmbyItem {
-        id: "id".into(),
-        name: name.into(),
-        item_type: item_type.into(),
-        is_folder: false,
-        child_count: None,
-        media_type: "Video".into(),
-        collection_type: String::new(),
-        runtime_ticks: 0,
-        played: false,
-        playback_position_ticks: 0,
-        series_id: String::new(),
-        series_name: String::new(),
-        album_id: String::new(),
-        album: String::new(),
-        index_number: 0,
-        parent_index_number: 0,
-        unplayed_item_count: 0,
-        path: String::new(),
-        artist: String::new(),
-        artist_items: Vec::new(),
-        sort_name: String::new(),
-        production_year: 0,
-        end_year: 0,
-        overview: String::new(),
-        premiere_date: String::new(),
-        date_added: String::new(),
-        total_count: 0,
-        container: String::new(),
-        video_info: String::new(),
-        audio_info: String::new(),
-        genres: Vec::new(),
-        people: Vec::new(),
-        external_urls: Vec::new(),
-        playlist_item_id: String::new(),
-        image_tags: mbv_emby_model::EmbyImageTags::default(),
-    }
-}
-
-pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_emby::SessionInfo {
-    mbv_emby::SessionInfo {
-        id: "sess-1".into(),
-        device_name: device_name.into(),
-        client: client.into(),
-        user_name: "user".into(),
-        host: "127.0.0.1".into(),
-        supported_commands: Vec::new(),
-        playable_media_types: Vec::new(),
-        now_playing: None,
-        now_playing_item_id: None,
-        position_s: 0,
-        runtime_s: 0,
-        position_ticks: 0,
-        runtime_ticks: 0,
-        is_paused: false,
-        volume: 100,
-        sub_index: -1,
-        audio_index: 1,
-        muted: false,
-        media_info: mbv_emby::SessionMediaInfo::default(),
-    }
-}
 
 // ── test helpers ─────────────────────────────────────────────────────────
 

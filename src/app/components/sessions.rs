@@ -20,8 +20,8 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::palette;
+use crate::app::render::components::widgets::service_state_color;
 use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
-use crate::app::ui_util::service_state_color;
 
 /// The Interactive Component for the Sessions sidebar.
 struct SessionsDisplayContext {
@@ -461,7 +461,7 @@ mod tests {
     }
 
     fn painted_component() -> SessionsComponent {
-        use crate::app::tests::make_session;
+        use mbv_emby::test_support::make_session;
         let mut first = make_session("a", "mbv");
         first.id = "a".to_string();
         let mut second = make_session("b", "mbv");

@@ -122,7 +122,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
 
 #[test]
 fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() {
-    use crate::app::tests::make_session;
+    use mbv_emby::test_support::make_session;
 
     let mut app = make_app_stub();
     app.connected_session_id = Some("session-1".into());
@@ -171,8 +171,8 @@ fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
 // Shared by the queue tab's `Enter` key and a double-click on a queue row
 // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
 
-use crate::app::tests::make_item;
 use crate::app::tests::make_items;
+use mbv_emby_model::test_support::make_item;
 
 fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
     app.player_tab.set_items(items, cursor);

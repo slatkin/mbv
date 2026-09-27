@@ -1,11 +1,10 @@
 use super::*;
 use crate::app::components::media_list::SelectionOrigin;
 use crate::app::components::msg::MusicTreeAction;
-use crate::app::tests::{
-    install_test_emby, make_app_stub, make_item, make_remote_app_stub_with_cmd_rx,
-};
+use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
 use crate::app::LibraryTab;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
 use mbv_net::mock_http::MockHttp;
 use std::sync::{Arc, Mutex};

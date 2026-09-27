@@ -100,7 +100,7 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
     let seasons = ["season-1", "season-2", "season-3"]
         .into_iter()
         .map(|id| {
-            let mut season = crate::app::tests::make_item(id, "Season");
+            let mut season = mbv_emby_model::test_support::make_item(id, "Season");
             season.id = id.into();
             season
         })
@@ -127,7 +127,7 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
 #[test]
 fn late_series_detail_completion_does_not_replace_cached_detail() {
     let mut app = make_movie_app();
-    let mut cached_season = crate::app::tests::make_item("Current", "Season");
+    let mut cached_season = mbv_emby_model::test_support::make_item("Current", "Season");
     cached_season.id = "current-season".into();
     app.series_detail_cache.insert(
         "show-id".into(),
@@ -137,7 +137,7 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
         },
     );
 
-    let mut stale_season = crate::app::tests::make_item("Stale", "Season");
+    let mut stale_season = mbv_emby_model::test_support::make_item("Stale", "Season");
     stale_season.id = "stale-season".into();
     app.handle_series_detail_fetched(
         "show-id",
@@ -222,9 +222,9 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     // Seed detail for the selected series (movie-second, the row the
     // component cursor sits on after Down) and Enter it so the component
     // enters the Episodes pane (episode_cursor becomes Some(0)).
-    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    let mut season = mbv_emby_model::test_support::make_item("Season 1", "Season");
     season.id = "season-1".into();
-    let mut episode = crate::app::tests::make_item("Episode 1", "Episode");
+    let mut episode = mbv_emby_model::test_support::make_item("Episode 1", "Episode");
     episode.id = "episode-1".into();
     episode.series_id = "movie-second".into();
     let mut episodes = std::collections::HashMap::new();

@@ -1,6 +1,6 @@
 use super::*;
-use crate::app::tests::make_item;
 use crate::app::SeriesDetail;
+use mbv_emby_model::test_support::make_item;
 
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {

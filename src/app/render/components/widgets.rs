@@ -1,6 +1,7 @@
 use super::chrome::thin_vertical_thumb;
 use crate::app::components::media_list::queue_row_background;
 use crate::app::palette;
+use mbv_core::service_runtime::ServiceState;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -12,6 +13,15 @@ use unicode_width::UnicodeWidthStr;
 // Configured music albums need the image worker's child-audio lookup; their
 // album containers do not reliably expose usable Primary images.
 pub(in crate::app) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
+
+/// Resolve the glyph colour from the service's connection state.
+pub(crate) fn service_state_color(state: ServiceState, ready: Color) -> Color {
+    match state {
+        ServiceState::Ready => ready,
+        ServiceState::NotConfigured => palette::TEXT_MUTED,
+        _ => palette::STATUS_ERROR,
+    }
+}
 
 /// Columns of empty space between the left and right panels.
 pub(in crate::app) const COLUMN_GAP: u16 = 0;

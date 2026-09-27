@@ -45,7 +45,7 @@ mod tests {
     use mbv_queue::QueueItem;
 
     use super::*;
-    use crate::app::tests::make_item;
+    use mbv_emby_model::test_support::make_item;
 
     fn continue_owner(ids: &[&str]) -> HomeContent {
         let mut owner = HomeContent::new();

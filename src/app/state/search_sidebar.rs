@@ -121,7 +121,7 @@ impl SearchSidebar {
 #[cfg(test)]
 mod tests {
     use super::SearchSidebar;
-    use crate::app::tests::make_item;
+    use mbv_emby_model::test_support::make_item;
 
     #[test]
     fn global_drain_replaces_results_and_resets_state() {

@@ -1,11 +1,7 @@
 use std::fmt::Write as _;
 
-use mbv_core::service_runtime::ServiceState;
 use mbv_emby_model::EmbyItem;
-use ratatui::style::Color;
 use unicode_width::UnicodeWidthStr;
-
-use crate::app::palette;
 
 /// Tab-bar label for the Continue tab: Nerd Font's house glyph (\u{f015})
 /// when Nerd Fonts are enabled, otherwise the Unicode house character.
@@ -14,19 +10,6 @@ pub fn continue_tab_title(use_nerd_fonts: bool) -> &'static str {
         "\u{f015}"
     } else {
         "⌂"
-    }
-}
-
-/// Glyph colour for a Remote Service: `ready` when connected, red when
-/// configured but not connected, grey when not configured. Shared by the
-/// status bar and the sessions panel so both paint the same service glyph.
-/// (Moved here from `render::components::chrome` so Interactive Components,
-/// which cannot see `pub(in render)` items, can reuse it.)
-pub fn service_state_color(state: ServiceState, ready: Color) -> Color {
-    match state {
-        ServiceState::Ready => ready,
-        ServiceState::NotConfigured => palette::TEXT_MUTED,
-        _ => palette::STATUS_ERROR,
     }
 }
 

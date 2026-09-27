@@ -1,10 +1,11 @@
 use super::*;
 use crate::app::tests::{
-    install_test_emby, make_app_stub, make_audio_only_remote_app_stub_with_cmd_rx, make_item,
-    make_items, make_session,
+    install_test_emby, make_app_stub, make_audio_only_remote_app_stub_with_cmd_rx, make_items,
 };
 use crate::app::{BrowseLevel, ConfirmAction, ContextAction, LibraryTab, PanelFocus};
 use mbv_ctrl::CtrlCmd;
+use mbv_emby::test_support::make_session;
+use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use rstest::rstest;
 

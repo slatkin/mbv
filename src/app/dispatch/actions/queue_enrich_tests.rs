@@ -7,7 +7,7 @@ use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 #[test]
 fn handle_loaded_level_replaces_the_matching_loading_level() {
     let mut app = crate::app::tests::make_app_stub();
-    let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
+    let mut library = mbv_emby_model::test_support::make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
@@ -64,11 +64,11 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
 #[test]
 fn normalize_current_browse_level_items_sorts_episode_lists() {
     let mut app = crate::app::tests::make_app_stub();
-    let mut second = crate::app::tests::make_item("Episode 2", "Episode");
+    let mut second = mbv_emby_model::test_support::make_item("Episode 2", "Episode");
     second.index_number = 2;
-    let mut first = crate::app::tests::make_item("Episode 1", "Episode");
+    let mut first = mbv_emby_model::test_support::make_item("Episode 1", "Episode");
     first.index_number = 1;
-    let mut library = crate::app::tests::make_item("TV", "CollectionFolder");
+    let mut library = mbv_emby_model::test_support::make_item("TV", "CollectionFolder");
     library.id = "lib-tv".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {

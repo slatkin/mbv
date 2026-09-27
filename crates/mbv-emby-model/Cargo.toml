@@ -10,6 +10,9 @@ categories.workspace = true
 description = "Emby item models and playback-position units for mbv."
 readme = "../../README.md"
 
+[features]
+test = []
+
 [lints]
 workspace = true
 

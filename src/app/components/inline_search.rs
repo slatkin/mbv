@@ -451,7 +451,7 @@ pub(in crate::app) trait InlineSearchHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_item;
+    use mbv_emby_model::test_support::make_item;
     use tuirealm::event::KeyEvent;
 
     fn pool(ids: &[&str]) -> SearchPool {

@@ -11,11 +11,12 @@ use crate::app::state::types::context_menu::{
 };
 use crate::app::state::types::daemon_lost::DaemonLostModal;
 use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
-use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+use mbv_emby_model::test_support::make_item;
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
 // rung 1), not by message discarding. A mounted Search sidebar painted with

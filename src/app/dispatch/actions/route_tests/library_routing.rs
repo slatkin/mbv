@@ -56,7 +56,7 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
     let stale_item = make_item("Stale", "Movie");
     let (remote, remote_rx, command_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
-    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
+    let sess = mbv_emby::test_support::make_session("remote-mbv", "mbv");
     app.switch_to_direct_remote(
         &sess,
         remote,

@@ -446,7 +446,7 @@ impl LibraryContentOwner for HomeContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_item;
+    use mbv_emby_model::test_support::make_item;
 
     fn owner_with_items(items: Vec<QueueItem>) -> HomeContent {
         let mut owner = HomeContent::new();

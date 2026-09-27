@@ -13,5 +13,8 @@ pub use client_playlists::*;
 pub use client_reporting::ProgressReport;
 mod client_sessions;
 
+#[cfg(any(test, feature = "test"))]
+pub mod test_support;
+
 #[cfg(test)]
 mod tests;

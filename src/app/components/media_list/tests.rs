@@ -142,7 +142,7 @@ fn from_progress_is_the_one_state_derivation() {
 #[test]
 fn item_level_derivation_makes_music_rows_ordinary() {
     let played_music = |item_type: &str| {
-        let mut item = crate::app::tests::make_item("Music", item_type);
+        let mut item = mbv_emby_model::test_support::make_item("Music", item_type);
         item.played = true;
         item.runtime_ticks = 1000;
         item.playback_position_ticks = 500;
@@ -162,7 +162,7 @@ fn item_level_derivation_makes_music_rows_ordinary() {
         );
     }
 
-    let mut film = crate::app::tests::make_item("The Film", "Movie");
+    let mut film = mbv_emby_model::test_support::make_item("The Film", "Movie");
     film.played = true;
     assert_eq!(
         MediaSemanticState::from_emby(&film),

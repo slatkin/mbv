@@ -11,6 +11,8 @@
 #[cfg(test)]
 use crate::app::TabSelection;
 use crate::app::{App, Duration, Instant, PanelFocus};
+#[cfg(test)]
+use mbv_emby_model::test_support::make_item;
 
 /// How long a `library_route_cache` entry (#223) stays trusted before a
 /// repeat lookup re-resolves from scratch, so a mid-session library
@@ -229,7 +231,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::tests::make_app_stub;
     use crate::app::LibraryTab;
 
     #[test]

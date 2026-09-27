@@ -8,9 +8,10 @@ use crate::app::components::{
     TerminalObserverEvent, UserEvent,
 };
 use crate::app::dispatch::action::Command;
+use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
-use crate::app::tests::{make_app_stub, make_item};
 use crate::app::PanelFocus;
+use mbv_emby_model::test_support::make_item;
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

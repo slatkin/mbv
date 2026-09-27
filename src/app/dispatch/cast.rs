@@ -621,7 +621,7 @@ mod tests {
 
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".to_string());
-        app.connected_session_state = Some(crate::app::tests::make_session("tv", "mbv"));
+        app.connected_session_state = Some(mbv_emby::test_support::make_session("tv", "mbv"));
 
         let receiver = mbv_cast::discovery::CastReceiver {
             id: "device-1".to_string(),

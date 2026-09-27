@@ -117,7 +117,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::msg::HomeRowTarget;
-    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::tests::{make_app_stub, make_items};
+    use mbv_emby_model::test_support::make_item;
 
     fn target(id: &str) -> HomeRowTarget {
         HomeRowTarget {

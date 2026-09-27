@@ -516,7 +516,9 @@ mod tests {
                 generation,
                 artist_id: "artist-alpha".into(),
                 revision: 6,
-                result: Ok(vec![crate::app::tests::make_item("Stale", "Audio")]),
+                result: Ok(vec![mbv_emby_model::test_support::make_item(
+                    "Stale", "Audio",
+                )]),
             });
         model.push_music_workspace_content();
         assert!(
@@ -524,7 +526,7 @@ mod tests {
             "a replaced snapshot's completion paints nothing"
         );
 
-        let mut track = crate::app::tests::make_item("Song", "Audio");
+        let mut track = mbv_emby_model::test_support::make_item("Song", "Audio");
         track.id = "track-1".into();
         track.album_id = "album-1".into();
         model
