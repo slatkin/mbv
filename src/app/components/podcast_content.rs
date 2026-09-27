@@ -19,14 +19,14 @@ use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput};
-use crate::app::render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
-};
-use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::render::current_time_secs;
 use crate::app::ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
+use mbv_render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
+};
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_render::current_time_secs;
 use mbv_ui_model::audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,

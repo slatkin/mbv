@@ -23,12 +23,12 @@ use mbv_queue::QueueItem;
 
 use super::inline_search::InlineSearch;
 use super::media_list::{letter_grouped_rows, MediaListCarrier};
-use crate::app::render::components::media_list::{
+use crate::app::ui_msg::{Msg, ShellRequest};
+use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::render::{effective_sort_str, LetterFilter};
-use crate::app::ui_msg::{Msg, ShellRequest};
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_render::{effective_sort_str, LetterFilter};
 use mbv_ui_model::library::LibraryKind;
 
 mod input;

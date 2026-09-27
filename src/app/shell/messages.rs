@@ -202,7 +202,7 @@ impl Model {
             ShellRequest::ResizeListPaneLive(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
                     self.app.list_pane_width =
-                        crate::app::render::arrangements::wide_hero::normalize_list_pane_width(
+                        mbv_render::arrangements::wide_hero::normalize_list_pane_width(
                             Some(width),
                             content_area.width,
                         );
@@ -212,7 +212,7 @@ impl Model {
             ShellRequest::ResizeListPaneEnd(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
                     self.app.list_pane_width =
-                        crate::app::render::arrangements::wide_hero::normalize_list_pane_width(
+                        mbv_render::arrangements::wide_hero::normalize_list_pane_width(
                             Some(width),
                             content_area.width,
                         );

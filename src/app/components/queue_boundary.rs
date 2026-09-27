@@ -1,7 +1,7 @@
 use crate::app::components::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::render::arrangements::queue::normalize_queue_column_width;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, QueueRequest};
+use mbv_render::arrangements::queue::normalize_queue_column_width;
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};

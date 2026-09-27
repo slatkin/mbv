@@ -1,5 +1,5 @@
-use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use crate::app::{App, LocalPlaybackTarget, RemotePlaybackTarget};
+use mbv_render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use mbv_ui_model::ui_util::take_chars;
 
 impl RemotePlaybackTarget {

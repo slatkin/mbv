@@ -23,13 +23,13 @@ use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
 use crate::app::components::list::tree_browser::{TreeBrowser, TreeConsumed, TreeOperation};
-use crate::app::render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
-};
-use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_msg::LeafKeyResult;
 use crate::app::ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
+use mbv_render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::msg::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
@@ -44,7 +44,7 @@ use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 pub(in crate::app) fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (String, u32) {
     let display_name = album.display_name();
     if let Some((parsed_artist, parsed_year, title)) =
-        crate::app::render::parse_album_folder_name(&display_name)
+        mbv_render::parse_album_folder_name(&display_name)
     {
         let year_matches = album.production_year == 0 || album.production_year == parsed_year;
         if parsed_artist == artist && year_matches {
@@ -139,7 +139,7 @@ impl MusicContent {
     pub(in crate::app) fn new() -> Self {
         Self {
             context: MusicWideRenderCtx::new(
-                crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0),
+                mbv_render::LibraryListRenderCtx::from_items(Vec::new(), 0),
                 None,
                 String::new(),
                 Vec::new(),

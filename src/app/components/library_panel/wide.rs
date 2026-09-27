@@ -14,11 +14,9 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::render::arrangements::library::{
-    wide_library_panes_with_selector, WideLibraryPanes,
-};
-use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
-use crate::app::render::{
+use mbv_render::arrangements::library::{wide_library_panes_with_selector, WideLibraryPanes};
+use mbv_render::arrangements::wide_hero::WideHeroBrowserPane;
+use mbv_render::{
     render_placeholder, render_search_box, wide_hero_hero_pane, PillBarWindow, PANE_PAD_X,
     PANE_PAD_Y,
 };
@@ -255,7 +253,7 @@ pub(in crate::app) fn paint_browser_pane(
 
     // List box: fill, then the slot's content in the inset row-flow rect.
     let list_panel = pane.list_panel;
-    crate::app::render::components::widgets::fill_surface(
+    mbv_render::components::widgets::fill_surface(
         f,
         list_panel,
         palette::Surface::LibraryPanel,

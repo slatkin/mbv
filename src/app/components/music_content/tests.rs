@@ -1,8 +1,8 @@
 use self::artist_workspace::artist_workspace_owner;
 use self::tree_fixtures::{press, tree_owner};
 use super::*;
-use crate::app::render::LibraryListRenderCtx;
 use mbv_emby_model::test_support::make_item;
+use mbv_render::LibraryListRenderCtx;
 
 #[test]
 fn filter_escape_closes_search_and_tree_navigation_returns_selection() {

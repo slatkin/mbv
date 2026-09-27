@@ -1,11 +1,11 @@
-use crate::app::render::components::card::{queue_card_reserved_rect, render_card_painting};
-use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use crate::app::App;
 use mbv_emby_model::EmbyItem;
 use mbv_images::{
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
 };
 use mbv_queue::QueueItem;
+use mbv_render::components::card::{queue_card_reserved_rect, render_card_painting};
+use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 

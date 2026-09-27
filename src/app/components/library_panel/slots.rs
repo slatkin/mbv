@@ -9,7 +9,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::render::{render_pill_bar, PillBar, PillBarWindow};
+use mbv_render::{render_pill_bar, PillBar, PillBarWindow};
 use mbv_theme as palette;
 
 use super::content::SelectorRow;

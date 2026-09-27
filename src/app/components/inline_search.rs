@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use tuirealm::event::{Key, KeyModifiers};
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
-use crate::app::render::components::media_list::{
+use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 

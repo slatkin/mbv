@@ -21,9 +21,9 @@ use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, PlaybackRequest, ShellRequest};
+use mbv_render::{render_status_bar, StatusBarModel, StatusBarRegions};
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::volume::VOLUME_STEP;
 

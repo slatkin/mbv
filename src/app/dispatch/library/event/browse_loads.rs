@@ -90,7 +90,7 @@ impl App {
         }
         if is_tv {
             let mode = mbv_ui_model::sort_filter::resolve_tv_content_mode(total, None);
-            let large = total > crate::app::render::LIBRARY_PILL_THRESHOLD;
+            let large = total > mbv_render::LIBRARY_PILL_THRESHOLD;
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 lib.tv_content_mode = Some(mode.clone());
                 if let Some(level) = lib.nav_stack.last_mut() {
@@ -107,7 +107,7 @@ impl App {
             }
             return;
         }
-        if total <= crate::app::render::LIBRARY_PILL_THRESHOLD {
+        if total <= mbv_render::LIBRARY_PILL_THRESHOLD {
             return;
         }
         let filter = mbv_ui_model::sort_filter::LetterFilter::default_filter_for_kind(filter_kind);

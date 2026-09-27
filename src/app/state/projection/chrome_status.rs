@@ -9,10 +9,10 @@
 //! The Local/Remote queue-scope pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
-use crate::app::render::components::chrome::daemon_endpoint_label;
-use crate::app::render::components::widgets::service_state_color;
-use crate::app::render::indicators;
 use crate::app::{App, PanelFocus, RemoteSlotState};
+use mbv_render::components::chrome::daemon_endpoint_label;
+use mbv_render::components::widgets::service_state_color;
+use mbv_render::indicators;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 

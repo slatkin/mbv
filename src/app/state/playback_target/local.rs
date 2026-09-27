@@ -1,8 +1,8 @@
 use super::LocalPlaybackTarget;
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use crate::app::App;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {

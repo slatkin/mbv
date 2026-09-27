@@ -11,10 +11,10 @@ use crate::app::components::list::{
 };
 // The full-width bar is paint policy, so its predicate lives with the shared
 // tree painter and is imported through the app-level render seam.
-use crate::app::render::components::tree_browser::{
+use mbv_render::components::tree_browser::{
     TreeAggregateMark, TreePaintRow, TreePaintRowKind, TreeTitleRole,
 };
-use crate::app::render::tree_row_is_full_width;
+use mbv_render::tree_row_is_full_width;
 
 use super::{
     StructuralRow, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary,
@@ -665,7 +665,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                         marked: false,
                         aggregate_mark: TreeAggregateMark::None,
                         semantic_state:
-                            crate::app::render::components::media_list::MediaSemanticState::Ordinary,
+                            mbv_render::components::media_list::MediaSemanticState::Ordinary,
                     });
                 }
                 continue;

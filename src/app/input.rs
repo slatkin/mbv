@@ -50,7 +50,7 @@ impl App {
         // The shared tab-window computation (task 2.1): the same one the tab
         // bar painter resolves the painted window and hit regions from, so
         // the keyboard scroll anchor and the painted bar cannot drift.
-        crate::app::render::components::chrome_tabs::visible_tab_range(
+        mbv_render::components::chrome_tabs::visible_tab_range(
             &self.tab_title_widths(),
             self.tab_scroll,
             avail_w,
@@ -74,12 +74,10 @@ impl App {
         let area = ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height);
         let chrome = self.compute_chrome_geometry(area);
         let tab_w = if chrome.right_visible {
-            crate::app::render::arrangements::chrome::tab_strip_text_width(
-                chrome.tab_bar_area.width,
-            )
+            mbv_render::arrangements::chrome::tab_strip_text_width(chrome.tab_bar_area.width)
         } else {
             self.terminal_width
-                .saturating_sub(crate::app::TABBAR_LEFT_RESERVE)
+                .saturating_sub(mbv_render::layout::TABBAR_LEFT_RESERVE)
         };
         loop {
             let (_, end) = self.visible_tab_range(tab_w);

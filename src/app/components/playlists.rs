@@ -8,10 +8,10 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use mbv_emby_model::EmbyItem;
+use mbv_render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 
 pub struct PlaylistsComponent {
     playlists: Vec<EmbyItem>,

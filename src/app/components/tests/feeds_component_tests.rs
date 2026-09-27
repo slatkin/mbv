@@ -6,7 +6,6 @@
 
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryPanel};
-use crate::app::render::components::media_list::MediaListRow;
 use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
@@ -14,6 +13,7 @@ use mbv_config::{
 };
 use mbv_queue::FeedEntry;
 use mbv_queue::FeedKind;
+use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::feed_tab::WatchedFilter;
 use mbv_ui_model::library::LibraryKey;
 use ratatui::backend::TestBackend;
@@ -666,7 +666,7 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
 
     assert_eq!(canonical_cursor(&owner), 0);
     let mut panel = panel_with(owner, true);
-    let _ = paint(&mut panel, crate::app::TWO_COLUMN_THRESHOLD, 30);
+    let _ = paint(&mut panel, mbv_render::layout::TWO_COLUMN_THRESHOLD, 30);
     assert!(panel
         .test_wide_geometry()
         .expect("wide skeleton")
@@ -685,7 +685,7 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
     }
     assert_eq!(canonical_cursor(&owner), 15);
 
-    let wide = crate::app::TWO_COLUMN_THRESHOLD;
+    let wide = mbv_render::layout::TWO_COLUMN_THRESHOLD;
     let mut panel = panel_with(owner, true);
     let _ = paint(&mut panel, wide, 10);
 

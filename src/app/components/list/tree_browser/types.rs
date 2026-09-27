@@ -1,5 +1,5 @@
-use crate::app::render::components::media_list::MediaSemanticState;
-use crate::app::render::components::tree_browser::TreeTitleRole;
+use mbv_render::components::media_list::MediaSemanticState;
+use mbv_render::components::tree_browser::TreeTitleRole;
 use ratatui::layout::Position;
 /// Provider-neutral trailing metadata in a tree row's right gutter.
 #[derive(Clone, Debug, PartialEq, Eq)]

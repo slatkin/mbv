@@ -25,13 +25,13 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
-use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
-use crate::app::render::components::chrome_player::TransportAvailability;
-use crate::app::render::components::widgets::queue_panel_inset;
-use crate::app::render::PlaybackStripAreas;
-use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, PlaybackRequest};
+use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use mbv_render::components::chrome_player::TransportAvailability;
+use mbv_render::components::widgets::queue_panel_inset;
+use mbv_render::PlaybackStripAreas;
+use mbv_render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
@@ -244,7 +244,7 @@ impl Component for QueuePlaybackPanel {
                 area: transport_area,
                 playback: &mut playback,
                 player_h,
-                controls: crate::app::render::PlaybackControls {
+                controls: mbv_render::PlaybackControls {
                     show: self.transport.show_controls,
                     use_nerd_fonts: self.transport.use_nerd_fonts,
                     availability: self.transport.availability,

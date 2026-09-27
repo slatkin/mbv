@@ -2,15 +2,9 @@ pub mod components;
 mod dispatch;
 mod infra;
 mod input;
-pub mod render;
 pub(in crate::app) mod state;
 pub(crate) mod ui_msg;
 
-pub(crate) use self::infra::layout;
-pub(in crate::app) use self::infra::layout::{
-    LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,
-    TWO_COLUMN_THRESHOLD,
-};
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     install_signal_handlers, start_quit_watchdog, QUIT_REQUESTED,
@@ -50,9 +44,7 @@ use mbv_ui_model::browse::{
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]
 use mbv_ui_model::context_menu::MultiSelectKind;
-use mbv_ui_model::context_menu::{
-    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage,
-};
+use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::events::{LibEvent, SessionEvent};
 use mbv_ui_model::feed::{

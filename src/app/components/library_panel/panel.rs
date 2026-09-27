@@ -15,10 +15,10 @@ use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
-use crate::app::render::arrangements::wide_hero::normalize_list_pane_width;
-use crate::app::render::wide_hero_fits;
 use crate::app::ui_msg::SelectionSummary;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use mbv_render::arrangements::wide_hero::normalize_list_pane_width;
+use mbv_render::wide_hero_fits;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 
@@ -32,7 +32,7 @@ use super::wide::{
     WideSkeletonPaintParams,
 };
 use crate::app::components::inline_search::InlineSearchHost;
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old
@@ -293,18 +293,18 @@ impl LibraryPanel {
     /// to publish; task 12.3: this no longer round-trips through the
     /// shell's legacy chrome geometry).
     #[cfg(test)]
-    pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::PaintedRowGeometry {
+    pub(in crate::app) fn test_painted_layout(&self) -> mbv_render::layout::PaintedRowGeometry {
         if let Some(wide) = self.wide_geometry.as_ref() {
-            return crate::app::layout::PaintedRowGeometry {
+            return mbv_render::layout::PaintedRowGeometry {
                 selected_item_rect: wide.selected,
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
-            return crate::app::layout::PaintedRowGeometry {
+            return mbv_render::layout::PaintedRowGeometry {
                 selected_item_rect: narrow.selected,
             };
         }
-        crate::app::layout::PaintedRowGeometry::default()
+        mbv_render::layout::PaintedRowGeometry::default()
     }
 
     /// The last painted Narrow skeleton geometry (the shared

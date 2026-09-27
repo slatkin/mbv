@@ -8,7 +8,7 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{MediaListOperation, MediaListTransition, SelectionSummary, WideMediaList};
-use crate::app::render::components::media_list::{MediaListRow, MediaListTitleReveal};
+use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal};
 use mbv_ui_model::media_list::SelectionOrigin;
 
 /// One logical row flow's destination-side carrier over one canonical owner.

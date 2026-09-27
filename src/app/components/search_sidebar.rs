@@ -310,8 +310,7 @@ impl Default for SearchSidebarComponent {
 impl Component for SearchSidebarComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         let _ = area;
-        let geometry =
-            crate::app::render::render_search_sidebar(frame, self.panel_area, &mut self.sidebar);
+        let geometry = mbv_render::render_search_sidebar(frame, self.panel_area, &mut self.sidebar);
         // Adopt the rects the painter just produced into the irregular-
         // chrome registries (task 5.1, design.md D6).
         self.frame = geometry.frame;

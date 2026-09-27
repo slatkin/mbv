@@ -58,7 +58,7 @@ struct QueueProjectionUpdate {
     slots: Option<Vec<mbv_queue::QueueSlot>>,
     patch: Option<(
         QueueSlotId,
-        crate::app::render::components::media_list::MediaListRow<QueueSlotId>,
+        mbv_render::components::media_list::MediaListRow<QueueSlotId>,
     )>,
 }
 

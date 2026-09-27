@@ -1,7 +1,7 @@
 //! Provider-neutral embedded media-list controls (design.md D1/D2/D3).
 //!
 //! [`WideMediaList`] is the fixed-row presentation over one [`MediaList`]
-//! owner. Painting lives in `crate::app::render::components::media_list`.
+//! owner. Painting lives in `mbv_render::components::media_list`.
 
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported,
@@ -23,11 +23,11 @@ mod tests;
 mod types;
 mod wide;
 
-use crate::app::render::components::media_list::{
-    MediaListRow, MediaListTitleReveal, WideMediaListPaintPolicy,
-};
 pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
+use mbv_render::components::media_list::{
+    MediaListRow, MediaListTitleReveal, WideMediaListPaintPolicy,
+};
 pub use types::{
     MediaListDisposition, MediaListOperation, MediaListSurfaceInput, MediaListTransition,
     RowIntent, WideViewport,

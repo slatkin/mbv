@@ -332,7 +332,7 @@ impl App {
     fn cycle_panel_mode(&mut self) {
         // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
         // exactly two states, library-only ⇄ queue-only.
-        if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
+        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
             self.mini_view_focus = match self.mini_view_focus {
                 mbv_ui_model::settings::PanelFocus::Library => {
                     mbv_ui_model::settings::PanelFocus::Queue

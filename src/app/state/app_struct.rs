@@ -1,11 +1,11 @@
-use crate::app::infra::layout;
-use crate::app::render;
 use crate::app::state::types::cast::CastAttachment;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
+use mbv_render as render;
+use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
 use mbv_ui_model::confirm::ConfirmModal;
 use mbv_ui_model::events::{PendingSeriesHandoff, PendingSeriesLanding};
@@ -456,7 +456,7 @@ pub struct App {
 
 impl App {
     pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
-        let normalized = crate::app::render::arrangements::queue::normalize_queue_column_width(
+        let normalized = mbv_render::arrangements::queue::normalize_queue_column_width(
             self.queue_column_width,
             self.terminal_width,
         );

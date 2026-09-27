@@ -4,7 +4,7 @@ use super::{
     LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg,
     Pane, SelectorIdentity, SelectorRow, TvContent, TvDisplayMode, TvTreeTarget, Workspace,
 };
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 impl TvContent {
     /// This frame's typed Library panel content (design D3, task 8.2): the
@@ -86,7 +86,7 @@ impl TvContent {
             .context
             .list
             .library_total
-            .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+            .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
         let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
         if large {
             pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));

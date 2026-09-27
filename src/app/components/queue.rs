@@ -11,20 +11,16 @@ use tuirealm::state::State;
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
-use crate::app::render::arrangements::queue::{
-    queue_footer_row, queue_list_box, queue_panel_subareas,
-};
-use crate::app::render::components::media_list::MediaListRow;
-#[cfg(test)]
-use crate::app::render::components::media_list::MediaSemanticState;
-use crate::app::render::components::media_list::{
-    queue_row_zebra_stripe, WideMediaListPaintPolicy,
-};
-use crate::app::render::components::queue::render_queue_status;
-use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, QueueRequest};
 use mbv_queue::{QueueSlot, QueueSlotId};
+use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box, queue_panel_subareas};
+use mbv_render::components::media_list::MediaListRow;
+#[cfg(test)]
+use mbv_render::components::media_list::MediaSemanticState;
+use mbv_render::components::media_list::{queue_row_zebra_stripe, WideMediaListPaintPolicy};
+use mbv_render::components::queue::render_queue_status;
+use mbv_render::components::widgets::render_queue_panel_frame;
 use mbv_theme as palette;
 use mbv_ui_model::playback::{PlaybackState, QueueScope};
 

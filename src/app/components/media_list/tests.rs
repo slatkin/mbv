@@ -1,5 +1,5 @@
 use super::{MediaListCarrier, WideMediaList};
-use crate::app::render::components::media_list::{
+use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaSemanticState, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;

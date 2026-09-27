@@ -6,7 +6,7 @@ use super::{
     MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest, TreeConsumed,
     TreeOperation,
 };
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {

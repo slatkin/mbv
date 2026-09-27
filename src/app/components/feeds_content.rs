@@ -28,12 +28,12 @@ use mbv_queue::{FeedEntry, QueueItem};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition, RowIntent};
-use crate::app::render::components::media_list::{
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::render::{current_time_secs, feed_display_rows, FeedDisplayRow};
-use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_render::{current_time_secs, feed_display_rows, FeedDisplayRow};
 use mbv_ui_model::feed_tab::WatchedFilter;
 use mbv_ui_model::ui_util::trunc_str;
 

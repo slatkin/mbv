@@ -2,7 +2,6 @@ use super::*;
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
 };
-use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_movie_app;
 use crate::app::SessionEvent;
@@ -12,6 +11,7 @@ use mbv_audiobookshelf::{
 };
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_images::series_image_cache_key;
+use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_ui_model::events::LibEvent;
 use rstest::rstest;
 use std::collections::HashMap;

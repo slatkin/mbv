@@ -109,12 +109,11 @@ fn paint_library_hero_overlay(
     if !state.open {
         return;
     }
-    let Some(overlay_rect) =
-        crate::app::render::arrangements::library::library_hero_overlay(overlay_area)
+    let Some(overlay_rect) = mbv_render::arrangements::library::library_hero_overlay(overlay_area)
     else {
         return;
     };
-    let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(
+    let inner = mbv_render::components::library_hero_overlay::paint_library_hero_overlay(
         frame,
         overlay_area,
         overlay_rect,
@@ -130,7 +129,7 @@ fn paint_library_hero_overlay(
             &mut state.hit_regions.links,
             &mut state.hit_regions.workspace_selector,
             &mut state.windows.workspace_selector,
-            crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
+            mbv_render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
             state.terminal_height,
         )
     });

@@ -1,6 +1,6 @@
-use crate::app::render::arrangements::wide_hero;
-use crate::app::render::components::widgets;
 use crate::app::{App, PanelMode};
+use mbv_render::arrangements::wide_hero;
+use mbv_render::components::widgets;
 use ratatui::layout::Rect;
 
 impl App {
@@ -19,8 +19,8 @@ impl App {
     /// (e.g. Queue-only panel mode). Factored out of `wide_tv_library_area`
     /// so every paint-free breakpoint consumer shares one pipeline.
     fn right_panel_lib_area(&self) -> Option<Rect> {
-        let chrome = crate::app::render::arrangements::chrome::chrome_geometry(
-            crate::app::render::arrangements::chrome::ChromeGeometryInput {
+        let chrome = mbv_render::arrangements::chrome::chrome_geometry(
+            mbv_render::arrangements::chrome::ChromeGeometryInput {
                 area: Rect::new(0, 0, self.terminal_width, self.terminal_height),
                 panel_mode: self.effective_panel_mode(),
                 panel_focus: self.effective_panel_focus(),

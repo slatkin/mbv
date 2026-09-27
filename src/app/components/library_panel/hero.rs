@@ -9,14 +9,12 @@
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
 
-use crate::app::render::components::hero_model::{
-    emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
-};
-use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
+use mbv_render::components::hero_model::{emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES};
+use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
 use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink};
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the

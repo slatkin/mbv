@@ -22,13 +22,13 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
-use crate::app::render::components::chrome_player::TransportAvailability;
-use crate::app::render::PlaybackStripAreas;
-use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 use mbv_queue::PlaybackTitleParts;
+use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use mbv_render::components::chrome_player::TransportAvailability;
+use mbv_render::PlaybackStripAreas;
+use mbv_render::{render_player_panel, PlaybackRenderContext};
 use mbv_theme as palette;
 use mbv_ui_model::playback::PlaybackState;
 
@@ -200,7 +200,7 @@ impl Component for LibraryPlaybackPanel {
                 area,
                 playback: &mut playback,
                 player_h,
-                controls: crate::app::render::PlaybackControls {
+                controls: mbv_render::PlaybackControls {
                     show: self.projection.show_controls,
                     use_nerd_fonts: self.projection.use_nerd_fonts,
                     availability: self.projection.availability,

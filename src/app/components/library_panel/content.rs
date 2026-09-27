@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task

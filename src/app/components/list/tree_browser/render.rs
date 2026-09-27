@@ -17,7 +17,7 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         self.paint.begin();
         let visible_rows = self.visible_flow_rows();
         let rows = self.visible_rows(&visible_rows);
-        crate::app::render::render_tree_browser(
+        mbv_render::render_tree_browser(
             frame,
             claim_rect,
             content_rect,

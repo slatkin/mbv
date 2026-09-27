@@ -118,10 +118,10 @@ impl App {
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
                 Some(mbv_queue::TvContentMode::All) => root
                     .library_total
-                    .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD),
                 Some(mbv_queue::TvContentMode::Range(_)) => root
                     .library_total
-                    .is_some_and(|total| total <= crate::app::render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total <= mbv_render::LIBRARY_PILL_THRESHOLD),
                 _ => false,
             })
     }

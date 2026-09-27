@@ -21,17 +21,17 @@ use super::library_panel::{
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
-};
-use crate::app::render::{
-    effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
-};
 use crate::app::ui_msg::TvTreeTarget;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::QueueItem;
+use mbv_render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use mbv_render::{
+    effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
+};
 use mbv_ui_model::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use ratatui::layout::Position;
 use time::Date;
@@ -110,7 +110,7 @@ pub(in crate::app) struct TvContent {
 impl TvContent {
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
-            crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0),
+            mbv_render::LibraryListRenderCtx::from_items(Vec::new(), 0),
             None,
             None,
             0,

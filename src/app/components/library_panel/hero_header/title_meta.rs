@@ -9,7 +9,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
+use mbv_render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
 use mbv_theme as palette;
 use mbv_ui_model::ui_util::trunc_str;
 
@@ -46,7 +46,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     );
     let image_ready = matches!(
         content.facts.artwork.image,
-        crate::app::render::components::tv_wide::HeroImageState::Ready { .. }
+        mbv_render::components::tv_wide::HeroImageState::Ready { .. }
     );
     if artwork.width > 0 && artwork.height > 0 && !image_ready {
         // Placeholder at full box size while loading or imageless (spec: the

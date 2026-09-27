@@ -637,7 +637,8 @@ impl Model {
         let cfg = self.app.config.lock().unwrap().clone();
         self.app.library_routes = cfg.library_routes.clone();
         log::info!(target: "library_route", "runtime route table synchronized count={}", self.app.library_routes.len());
-        let save_result = crate::app::render::save_route_config(&cfg);
+        let save_result =
+            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes);
         if !self.finish_route_config_save(save_result) {
             return;
         }

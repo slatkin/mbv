@@ -10,7 +10,7 @@ use super::{
     LeafKeyResult, LibraryItemIdentity, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity,
     ShellRequest, TerminalObserverEvent, WatchedFilter, MAX_GROUP_LABEL,
 };
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 impl FeedsContent {
     fn on_selector_picked(&mut self, index: usize) -> Option<Msg> {

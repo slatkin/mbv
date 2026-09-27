@@ -7,7 +7,7 @@
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_selector;
+use mbv_render::arrangements::wide_hero::wide_hero_browser_pane_with_selector;
 
 use super::content::LibraryPanelContent;
 use super::wide::{

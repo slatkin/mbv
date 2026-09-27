@@ -1,7 +1,7 @@
 use super::super::{App, LibEvent, PAGE_SIZE};
-use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
 use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
 use mbv_images::{audiobookshelf_hero_book_cover_cache_key, audiobookshelf_hero_cover_cache_key};
+use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use std::time::{Duration, Instant};
 
 pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
@@ -12,7 +12,7 @@ fn wide_landscape_hero_eligible(
     panel_area: ratatui::layout::Rect,
 ) -> bool {
     artwork.shape == crate::app::components::library_panel::ArtworkShape::Landscape
-        && crate::app::render::wide_hero_fits(panel_area)
+        && mbv_render::wide_hero_fits(panel_area)
 }
 impl App {
     /// One panel hero's projected image state (task 5.10, design D9): the
@@ -57,9 +57,9 @@ impl App {
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
-    ) -> crate::app::render::components::tv_wide::HeroImageState {
+    ) -> mbv_render::components::tv_wide::HeroImageState {
         use crate::app::components::library_panel::content::ArtworkSource;
-        use crate::app::render::components::tv_wide::HeroImageState as State;
+        use mbv_render::components::tv_wide::HeroImageState as State;
         let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
             return State::None;
@@ -128,8 +128,8 @@ impl App {
                     entry.protocols.clear();
                 }
             }
-        } else if crate::app::render::wide_hero_fits(panel_area) {
-            if let Some(panes) = crate::app::render::arrangements::library::wide_library_panes(
+        } else if mbv_render::wide_hero_fits(panel_area) {
+            if let Some(panes) = mbv_render::arrangements::library::wide_library_panes(
                 panel_area,
                 PANE_PAD_X,
                 PANE_PAD_Y,

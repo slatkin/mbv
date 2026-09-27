@@ -1722,6 +1722,7 @@ dependencies = [
  "mbv-player",
  "mbv-queue",
  "mbv-remote-player",
+ "mbv-render",
  "mbv-text",
  "mbv-theme",
  "mbv-ui-model",
@@ -1967,6 +1968,25 @@ dependencies = [
  "mbv-net",
  "mbv-queue",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-render"
+version = "0.21.2"
+dependencies = [
+ "mbv-config",
+ "mbv-core",
+ "mbv-emby-model",
+ "mbv-images",
+ "mbv-keybinds",
+ "mbv-queue",
+ "mbv-theme",
+ "mbv-ui-model",
+ "ratatui",
+ "ratatui-image",
+ "textwrap",
+ "tui-scrollbar",
+ "unicode-width",
 ]
 
 [[package]]

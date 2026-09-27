@@ -22,14 +22,14 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
-use crate::app::render::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
-};
-use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
     ShellRequest,
 };
+use mbv_render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
@@ -232,7 +232,7 @@ impl BookContent {
     /// owner before view (design.md D6). An unchanged projection keeps the
     /// retained frame valid.
     fn set_book_rows(&mut self) {
-        let rows = crate::app::render::book_rows(&self.state, self.selected_bucket);
+        let rows = mbv_render::book_rows(&self.state, self.selected_bucket);
         if self.carrier.rows() != rows.as_slice() {
             self.carrier.set_content(rows);
         }

@@ -18,13 +18,11 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::render::{
-    help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
-};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::{PanelFocus, TabSelection};
 use mbv_keybinds::Keybinds;
+use mbv_render::{help_destination, render_help_panel, HelpDestination, HelpRenderGeometry};
 
 /// The Interactive Component for the Help sidebar.
 ///

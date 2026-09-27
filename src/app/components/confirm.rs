@@ -13,9 +13,9 @@ use tuirealm::event::{Event, Key};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::render::render_confirm_modal_content;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
+use mbv_render::render_confirm_modal_content;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 
 /// The Interactive Component for the Confirm modal.

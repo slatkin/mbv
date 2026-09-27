@@ -21,8 +21,8 @@ use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
 };
-use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};

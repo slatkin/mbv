@@ -4,7 +4,7 @@ use super::{
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, Viewported,
 };
-use crate::app::render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
+use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -303,7 +303,7 @@ impl<Target: Clone + Eq> Component for WideMediaList<Target> {
             .then_some(geometry.selected_row())
             .flatten()
             .and_then(|row| self.rows().get(row))
-            .and_then(crate::app::render::components::media_list::row_marquee_key);
+            .and_then(mbv_render::components::media_list::row_marquee_key);
         let marquee_key = key;
         if let Some(key) = marquee_key.as_deref() {
             self.marquee_state(key);
@@ -326,9 +326,9 @@ impl<Target: Clone + Eq> Component for WideMediaList<Target> {
             .as_deref()
             .zip(marquee_state)
             .map(|(key, (text, started_at))| (key, text, started_at));
-        let paint = crate::app::render::render_wide_media_list_component(
+        let paint = mbv_render::render_wide_media_list_component(
             frame,
-            crate::app::render::components::media_list::WideMediaListPaintInput {
+            mbv_render::components::media_list::WideMediaListPaintInput {
                 rows,
                 row_geometry: geometry,
                 multi_selection,

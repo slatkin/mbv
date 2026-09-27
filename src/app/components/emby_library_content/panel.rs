@@ -13,9 +13,9 @@ use crate::app::components::library_panel::owner::{
 };
 use crate::app::components::library_panel::HeroContentData;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::sort_filter::LetterFilter;
 
 impl InlineSearchHost for EmbyLibraryContent {

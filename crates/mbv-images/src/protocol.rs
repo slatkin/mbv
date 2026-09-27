@@ -46,6 +46,7 @@ impl ImageCache {
     }
 
     /// The picker that encodes the given protocol suffix.
+    #[must_use]
     pub fn picker_for_suffix(&self, suffix: &'static str) -> Option<&Picker> {
         if suffix == "halfblock" {
             self.halfblock_picker
@@ -61,6 +62,7 @@ impl ImageCache {
     /// (#451), and encodes the protocol for the active suffix.
     /// `img: None` records a resolved-but-empty fetch (the "no art" marker
     /// renderers branch on).
+    #[must_use]
     pub fn build_cached_image(
         &self,
         bare_key: &str,
@@ -82,6 +84,7 @@ impl ImageCache {
         entry
     }
 
+    #[must_use]
     pub fn build_protocol(
         &self,
         bare_key: &str,
@@ -98,6 +101,7 @@ impl ImageCache {
         ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
+    #[must_use]
     pub fn is_halfblock_configured(&self) -> bool {
         self.image_protocol
             .as_deref()
@@ -117,6 +121,7 @@ impl ImageCache {
         }
     }
 
+    #[must_use]
     pub fn images_enabled(&self) -> bool {
         self.image_protocol_enabled
     }
@@ -136,6 +141,7 @@ impl ImageCache {
 
     /// Paint the ready Logo at `logo_cache_key` over `img`, or return `img`
     /// unchanged when there is none (design D3).
+    #[must_use]
     pub fn decorate_with_logo(
         &self,
         img: image::DynamicImage,

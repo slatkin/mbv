@@ -4,12 +4,12 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
-use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
+use mbv_render::components::widgets::render_right_scrollbar_with_viewport;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
+use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use mbv_theme as palette;
 use mbv_ui_model::ui_util::trunc_str;
 
@@ -124,7 +124,7 @@ pub(in crate::app) fn paint_overview_box(
         // The separator follows the overview in the same flow; the blank row
         // below it is the flow's next row.
         if let Some(y) = visible_overview_row(inner, text_rows, offset) {
-            crate::app::render::components::widgets::render_block_separator(
+            mbv_render::components::widgets::render_block_separator(
                 f,
                 Rect {
                     x: inner.x,

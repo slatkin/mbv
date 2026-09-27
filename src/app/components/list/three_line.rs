@@ -1,5 +1,5 @@
 use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
-use crate::app::render::components::three_line_flat_list::ThreeLineItem;
+use mbv_render::components::three_line_flat_list::ThreeLineItem;
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -168,11 +168,11 @@ impl<Target: Clone + Eq> ThreeLineFlatList<Target> {
             return;
         }
         let (offset, visible, gap) = self.painting_parts(content_rect);
-        let painted = crate::app::render::render_three_line_flat_list(
+        let painted = mbv_render::render_three_line_flat_list(
             frame,
             claim_rect,
             content_rect,
-            &crate::app::render::components::three_line_flat_list::ThreeLineFlatListPaintInput {
+            &mbv_render::components::three_line_flat_list::ThreeLineFlatListPaintInput {
                 items: &self.items,
                 selected: self.selected.as_ref(),
                 focused: self.focused,

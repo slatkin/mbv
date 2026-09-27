@@ -18,8 +18,8 @@ use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
-use crate::app::render::MusicWideRenderCtx;
 use crate::app::{App, LibEvent};
+use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 use mbv_ui_model::msg::MusicArtistTarget;
 use mbv_ui_model::music_artist_detail::track_matches_album;

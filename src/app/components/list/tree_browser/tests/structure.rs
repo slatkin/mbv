@@ -2,7 +2,7 @@ use super::super::{
     TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation, TreeReconciliationError,
 };
 use super::{node, paint, Target};
-use crate::app::render::components::media_list::MediaSemanticState;
+use mbv_render::components::media_list::MediaSemanticState;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;

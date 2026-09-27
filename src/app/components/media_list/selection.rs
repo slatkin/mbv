@@ -96,7 +96,7 @@ impl<Target: Clone + Eq> MediaList<Target> {
 #[cfg(test)]
 mod tests {
     use super::super::MediaList;
-    use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 
     fn list() -> MediaList<u8> {
         let mut list = MediaList::new();

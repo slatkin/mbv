@@ -1,4 +1,5 @@
-use crate::app::{App, LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP};
+use crate::app::App;
+use mbv_render::layout::{LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP};
 use std::time::{Duration, Instant};
 
 /// How long a queue navigation gesture (Up/Down/click) holds the cursor

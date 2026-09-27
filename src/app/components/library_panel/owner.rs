@@ -21,7 +21,7 @@ use mbv_ui_model::library::LibraryKey;
 
 use super::content::LibraryPanelContent;
 use super::hero::HeroContentData;
-use crate::app::render::components::tv_wide::HeroImageState;
+use mbv_render::components::tv_wide::HeroImageState;
 
 #[cfg(test)]
 mod library_kind_tests {

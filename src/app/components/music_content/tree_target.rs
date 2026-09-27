@@ -2,7 +2,7 @@
 use super::workspace::track_row_label;
 use super::{MusicContent, MusicTreeTarget};
 use crate::app::components::list::tree_browser::{TreeMarkPolicy, TreeNode};
-use crate::app::render::components::media_list::MediaSemanticState;
+use mbv_render::components::media_list::MediaSemanticState;
 use std::collections::HashMap;
 
 // The destination's stable-target translation layer (design D6): Music
@@ -184,9 +184,7 @@ impl MusicContent {
                         MediaSemanticState::Ordinary,
                         TreeMarkPolicy::Aggregate,
                     )
-                    .with_title_role(
-                        crate::app::render::components::tree_browser::TreeTitleRole::Heading,
-                    )
+                    .with_title_role(mbv_render::components::tree_browser::TreeTitleRole::Heading)
                     .with_expandable(true),
                 );
                 target
@@ -215,7 +213,7 @@ impl MusicContent {
                 semantic_state,
                 TreeMarkPolicy::Direct,
             )
-            .with_title_role(crate::app::render::components::tree_browser::TreeTitleRole::Secondary)
+            .with_title_role(mbv_render::components::tree_browser::TreeTitleRole::Secondary)
             .with_expandable(
                 self.tree_tracks
                     .get(album_target)

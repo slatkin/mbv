@@ -2,8 +2,8 @@ mod cast;
 mod local;
 mod remote;
 
-use crate::app::render::indicators::IndicatorData;
 use crate::app::App;
+use mbv_render::indicators::IndicatorData;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 #[derive(Clone, Copy)]

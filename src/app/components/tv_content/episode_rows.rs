@@ -2,7 +2,7 @@ use super::{
     fmt_duration_gutter, fmt_publish_date_short, Date, EmbyItem, MediaKind, MediaListRow,
     MediaListTrailing, MediaSemanticState, Pane, QueueItem, TvContent, TICKS_PER_SECOND,
 };
-use crate::app::render::effective_sort_str;
+use mbv_render::effective_sort_str;
 use mbv_ui_model::ui_util::natural_sort_key;
 
 pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {

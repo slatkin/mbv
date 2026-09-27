@@ -158,7 +158,7 @@ mod strip_hits {
 
 #[test]
 fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints() {
-    use crate::app::render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
+    use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
 
     for width in [80, 120] {
         let mut app = active_app(PanelMode::QueueOnly);
@@ -440,8 +440,8 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
 #[test]
 fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     use crate::app::components::queue::queue_media_rows;
-    use crate::app::render::components::media_list::MediaSemanticState;
     use crate::app::tests::make_audio_items;
+    use mbv_render::components::media_list::MediaSemanticState;
 
     let mut app = make_app_stub();
     app.player_tab.set_items(make_audio_items(2), 0);
@@ -465,14 +465,14 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[0],
-        crate::app::render::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::NowPlaying { .. },
             ..
         }
     ));
     assert!(matches!(
         &rows[1],
-        crate::app::render::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }
@@ -508,7 +508,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[1],
-        crate::app::render::components::media_list::MediaListRow::Item {
+        mbv_render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }

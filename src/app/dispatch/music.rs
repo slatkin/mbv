@@ -265,7 +265,7 @@ impl App {
         }
         let large = self.libs[lib_idx]
             .library_total
-            .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+            .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
         let Some(mode) = Self::tv_mode_for_pill(pill_index, large) else {
             return;
         };
@@ -457,7 +457,7 @@ impl App {
             }
             let large = self.libs[lib_idx]
                 .library_total
-                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+                .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
             let count = if large { 5 } else { 3 };
             let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
                 Some(mbv_queue::TvContentMode::Latest) => 0,

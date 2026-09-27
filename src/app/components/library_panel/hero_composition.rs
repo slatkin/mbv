@@ -22,9 +22,9 @@ use super::content::{
 use super::hero_header::paint_hero_pane_content;
 use super::slots::paint_pill_bar_row;
 use crate::app::components::mouse::hit::HitRegions;
-use crate::app::render::arrangements::padded_rect;
-use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::render::{place_media_list_below, PillBarWindow, PANE_PAD_X, PANE_PAD_Y};
+use mbv_render::arrangements::padded_rect;
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_render::{place_media_list_below, PillBarWindow, PANE_PAD_X, PANE_PAD_Y};
 use mbv_theme as palette;
 
 /// Blank rows between the header/overview content's painted bottom edge and
@@ -126,7 +126,7 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader)
             ..content
         },
     );
-    crate::app::render::components::widgets::render_block_separator(
+    mbv_render::components::widgets::render_block_separator(
         f,
         Rect {
             y: content.y.saturating_add(1),

@@ -223,7 +223,7 @@ impl Model {
         key: &LibraryKey,
         index: usize,
         cursor: Option<usize>,
-    ) -> crate::app::render::MusicWideRenderCtx {
+    ) -> mbv_render::MusicWideRenderCtx {
         let base_context = self.app.wide_music_render_ctx(index, cursor);
         // The artist detail projection (design D7, tasks 6.1–6.3): read the
         // owner's component-resolved artist target, re-bind it to this push's
@@ -248,10 +248,7 @@ impl Model {
         }
     }
 
-    fn fetch_music_workspace_album_tracks(
-        &mut self,
-        context: &crate::app::render::MusicWideRenderCtx,
-    ) {
+    fn fetch_music_workspace_album_tracks(&mut self, context: &mbv_render::MusicWideRenderCtx) {
         // Album fetch follows the tree owner's resolved album; an artist root
         // has no album and never starts an album-track fetch.
         let owner_selection_is_artist = self
@@ -270,7 +267,7 @@ impl Model {
 
     fn push_music_workspace_owner(
         &mut self,
-        context: crate::app::render::MusicWideRenderCtx,
+        context: mbv_render::MusicWideRenderCtx,
         reanchor: Option<(usize, usize)>,
         wide: bool,
         focused: bool,
@@ -504,7 +501,7 @@ mod tests {
     /// result projects its grouped rows on the next push.
     #[test]
     fn only_a_completion_matching_the_pushed_identity_reaches_the_workspace() {
-        use crate::app::render::components::media_list::MediaListRow;
+        use mbv_render::components::media_list::MediaListRow;
 
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();

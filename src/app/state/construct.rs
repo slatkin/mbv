@@ -1,9 +1,9 @@
 use crate::app::state::service_setup::StartupRequest;
-use crate::app::{
-    layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
-};
+use crate::app::{spawn_resize_worker, App, AppInit, SuspendedLocalSession};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_player::{Player, PlayerProxy};
+use mbv_render::layout;
+use mbv_render::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::playback::QueueScope;
 use mbv_ui_model::player_tab::PlayerTab;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

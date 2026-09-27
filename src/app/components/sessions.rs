@@ -17,12 +17,10 @@ use unicode_width::UnicodeWidthStr;
 
 use super::list::{ThreeLineFlatList, Viewported};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::render::components::three_line_flat_list::{
-    ThreeLineItem, ThreeLineRole, ThreeLineSpan,
-};
-use crate::app::render::components::widgets::service_state_color;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use mbv_render::components::three_line_flat_list::{ThreeLineItem, ThreeLineRole, ThreeLineSpan};
+use mbv_render::components::widgets::service_state_color;
 use mbv_theme as palette;
 use mbv_ui_model::panel_targets::{PanelTarget, SessionTargetKey};
 
@@ -346,14 +344,13 @@ impl Default for SessionsComponent {
 
 impl Component for SessionsComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
-        let (panel_area, content_area, has_content) =
-            crate::app::render::render_sessions_overlay_content(
-                frame,
-                self.requested_panel_area,
-                self.targets.len(),
-                self.loading,
-                self.can_disconnect,
-            );
+        let (panel_area, content_area, has_content) = mbv_render::render_sessions_overlay_content(
+            frame,
+            self.requested_panel_area,
+            self.targets.len(),
+            self.loading,
+            self.can_disconnect,
+        );
         self.painted_panel_area = Some(panel_area);
         #[cfg(test)]
         {
@@ -367,7 +364,7 @@ impl Component for SessionsComponent {
                 self.content_dirty = false;
             }
             self.list.view_in(frame, panel_area, content_area);
-            crate::app::render::render_sessions_scrollbar(
+            mbv_render::render_sessions_scrollbar(
                 frame,
                 content_area,
                 self.list.items().len(),

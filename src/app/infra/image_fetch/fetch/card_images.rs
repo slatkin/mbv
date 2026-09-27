@@ -167,7 +167,7 @@ impl App {
                 format!("{album_id}:P"),
                 album_id.to_string(),
                 String::new(),
-                crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
+                mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
             );
         }
     }

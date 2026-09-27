@@ -193,7 +193,7 @@ pub(crate) fn make_built_app() -> App {
         library_routes: std::collections::BTreeMap::new(),
         music_levels: Vec::new(),
         use_nerd_fonts: false,
-        indicator_style: render::indicators::IndicatorStyle::default(),
+        indicator_style: mbv_render::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
         card_image_tx,

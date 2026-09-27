@@ -14,13 +14,13 @@
 
 use super::components::library_panel::LibraryPanel;
 use super::components::tv_content::TvContent;
-use super::render::TvWideRenderCtx;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
 use crate::app::ui_msg::ComponentId;
 use crate::app::ui_msg::ShellRequest;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
+use mbv_render::components::tv_wide::TvWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 
 impl Model {
@@ -321,7 +321,7 @@ impl Model {
     #[cfg(test)]
     pub(in crate::app) fn test_painted_library_layout(
         &self,
-    ) -> crate::app::layout::PaintedRowGeometry {
+    ) -> mbv_render::layout::PaintedRowGeometry {
         self.application
             .get_component(&ComponentId::Library)
             .expect("library panel mounted")
@@ -395,7 +395,7 @@ impl Model {
     /// after the panel points at the active owner, so opening it never targets
     /// the previous tab's owner.
     pub(in crate::app) fn sync_tv_mini_view_hero(&mut self) {
-        let mini_view = self.app.terminal_width < crate::app::MINI_VIEW_THRESHOLD
+        let mini_view = self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
             && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         if let Some(panel) = self
             .application

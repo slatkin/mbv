@@ -1,8 +1,8 @@
 use super::components::PlaybackProjection;
 use super::Model;
 use super::{palette, PanelFocus};
-use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::ui_msg::PlaybackRequest;
+use mbv_render::components::chrome_player::TransportAvailability;
 
 impl Model {
     /// The shared transport projection both playback panels consume (task

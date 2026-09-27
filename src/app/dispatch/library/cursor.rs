@@ -1,8 +1,6 @@
-use crate::app::render::{
-    effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD,
-};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
+use mbv_render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
 use mbv_ui_model::events::{PendingSeriesHandoff, PendingSeriesLanding};
 
 impl App {
@@ -365,9 +363,7 @@ impl App {
         {
             if !last.items.is_empty() {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| {
-                    crate::app::render::initial_group_artist_sort_key(&last.items[i])
-                });
+                order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
                 last.set_resting_cursor(order[0]);
             }
         }

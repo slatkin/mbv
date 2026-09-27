@@ -419,7 +419,7 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     );
 }
 
-fn tab_panel_status_regions(harness: &TickHarness) -> crate::app::render::StatusBarRegions {
+fn tab_panel_status_regions(harness: &TickHarness) -> mbv_render::StatusBarRegions {
     harness
         .model()
         .application

@@ -8,12 +8,12 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use crate::app::render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
-use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{
     LeafKeyResult, Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
+use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
+use mbv_render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use mbv_ui_model::settings::SettingsDestination;
 
 mod setup;

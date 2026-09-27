@@ -4,8 +4,8 @@ use std::time::Duration;
 use super::components::{QueueBoundaryComponent, UiRootComponent};
 use super::ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use super::{
-    components, render, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed,
-    LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
+    components, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent,
+    PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
     SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
 };
 use super::{

@@ -6,7 +6,7 @@
 //! Provider-neutral (design.md line 21): the caller projects each item to a
 //! `(sort_str, MediaListRow::Item{..})` pair; no `EmbyItem` enters here.
 
-use crate::app::render::components::media_list::MediaListRow;
+use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::ui_util::{letter_bucket_label, natural_sort_key};
 
 /// Sort `items` by `natural_sort_key(sort_str)`, then emit one
@@ -51,7 +51,7 @@ pub fn letter_grouped_rows<Target>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::render::components::media_list::{MediaKind, MediaSemanticState};
+    use mbv_render::components::media_list::{MediaKind, MediaSemanticState};
 
     fn item(target: &str, primary: &str) -> MediaListRow<String> {
         MediaListRow::Item {

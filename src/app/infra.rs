@@ -1,6 +1,5 @@
 pub(crate) mod image_fetch;
 
-pub(crate) mod layout;
 pub(crate) mod paging;
 pub(in crate::app) mod render_cadence;
 pub(in crate::app) mod signals;

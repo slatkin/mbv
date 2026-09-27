@@ -16,9 +16,9 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
-use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_msg::ComponentId;
 use mbv_queue::ServiceKind;
+use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 use mbv_ui_model::playback::DestinationLatestSource;
 
@@ -458,7 +458,9 @@ impl Model {
     pub(in crate::app) fn library_panel_content_area(&self) -> Option<Rect> {
         let area = self.app.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
-        Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
+        Some(mbv_render::components::widgets::right_panel_content_area(
+            area, collapsed,
+        ))
     }
 
     /// The Library column's body fill: the placement's own back, painted with

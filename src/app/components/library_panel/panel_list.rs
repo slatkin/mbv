@@ -12,7 +12,7 @@ use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::MediaListCarrier;
-use crate::app::render::components::media_list::{WideMediaListPaintPolicy, ZebraStripe};
+use mbv_render::components::media_list::{WideMediaListPaintPolicy, ZebraStripe};
 use mbv_theme as palette;
 use mbv_theme::Surface;
 
@@ -139,7 +139,7 @@ impl PanelList for InlineSearch {
 #[cfg(test)]
 mod panel_list_tests {
     use super::*;
-    use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
     use ratatui::Terminal;
