@@ -1,4 +1,3 @@
-use crate::app::components::list::ThreeLineFlatList;
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -9,7 +8,17 @@ use ratatui::Frame;
 
 /// Borrowed data needed to paint a three-line flat list.
 pub(crate) struct ThreeLineFlatListPaintInput<'a, Target> {
-    pub(crate) list: &'a mut ThreeLineFlatList<Target>,
+    pub(crate) items: &'a [ThreeLineItem<Target>],
+    pub(crate) selected: Option<&'a Target>,
+    pub(crate) focused: bool,
+    pub(crate) offset: usize,
+    pub(crate) visible: usize,
+    pub(crate) gap: usize,
+}
+
+pub(crate) struct ThreeLineFlatListPaintResult<Target> {
+    pub(crate) hits: Vec<(Rect, Target)>,
+    pub(crate) selected_rect: Option<Rect>,
 }
 
 /// `claim_rect` is the owning panel's full-width span (so the selected row's
@@ -21,25 +30,27 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
     frame: &mut Frame,
     claim_rect: Rect,
     content_rect: Rect,
-    input: ThreeLineFlatListPaintInput<'_, Target>,
-) {
-    let list = input.list;
-    list.begin_paint();
-    if content_rect.is_empty() {
-        return;
-    }
+    input: &ThreeLineFlatListPaintInput<'_, Target>,
+) -> ThreeLineFlatListPaintResult<Target> {
     let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
     frame.render_widget(
         Paragraph::new(" ").style(Style::default().bg(surface)),
         content_rect,
     );
     let left_inset = content_rect.x.saturating_sub(claim_rect.x);
-    let (offset, visible, gap) = list.painting_parts(content_rect);
-    let mut hits = Vec::with_capacity(visible);
+    let ThreeLineFlatListPaintInput {
+        items,
+        selected: selected_target,
+        focused,
+        offset,
+        visible,
+        gap,
+    } = input;
+    let mut hits = Vec::with_capacity(*visible);
     let mut selected_rect = None;
-    for index in offset..offset + visible {
+    for (index, item) in items.iter().enumerate().skip(*offset).take(*visible) {
         let y = content_rect.y + u16::try_from((index - offset) * (3 + gap)).unwrap_or(u16::MAX);
-        let selected = list.focused() && list.selected() == Some(&list.item(index).target);
+        let selected = *focused && *selected_target == Some(&item.target);
         let (row_x, row_width) = if selected {
             (claim_rect.x, claim_rect.width)
         } else {
@@ -60,7 +71,7 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
                 spans.push(Span::raw(" ".repeat(left_inset as usize)));
             }
             spans.extend(
-                list.item(index).lines[line_index as usize]
+                item.lines[line_index as usize]
                     .iter()
                     .map(|span| {
                         let fg = if selected
@@ -86,12 +97,15 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
                 line_area,
             );
         }
-        hits.push((rect, list.item(index).target.clone()));
+        hits.push((rect, item.target.clone()));
         if selected {
             selected_rect = Some(rect);
         }
     }
-    list.publish(claim_rect, content_rect, hits, selected_rect);
+    ThreeLineFlatListPaintResult {
+        hits,
+        selected_rect,
+    }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum ThreeLineRole {
@@ -105,4 +119,33 @@ pub(crate) enum ThreeLineRole {
     /// resolves the color shell-side, and the painter preserves it on the
     /// selected row like `Accent`.
     Badge(Color),
+}
+
+/// One styled text span in a three-line item's presentation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThreeLineSpan {
+    pub text: String,
+    pub role: ThreeLineRole,
+}
+
+impl ThreeLineSpan {
+    pub fn new(text: impl Into<String>, role: ThreeLineRole) -> Self {
+        Self {
+            text: text.into(),
+            role,
+        }
+    }
+}
+
+/// Target identity and presentation are independent of Service objects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThreeLineItem<Target> {
+    pub target: Target,
+    pub lines: [Vec<ThreeLineSpan>; 3],
+}
+
+impl<Target> ThreeLineItem<Target> {
+    pub fn new(target: Target, lines: [Vec<ThreeLineSpan>; 3]) -> Self {
+        Self { target, lines }
+    }
 }

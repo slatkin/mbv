@@ -1,8 +1,10 @@
 use ratatui::layout::Position;
 use rstest::rstest;
 
-use super::{ThreeLineFlatList, ThreeLineItem, ThreeLineSpan};
-use crate::app::render::components::three_line_flat_list::ThreeLineRole;
+use super::ThreeLineFlatList;
+use crate::app::render::components::three_line_flat_list::{
+    ThreeLineItem, ThreeLineRole, ThreeLineSpan,
+};
 
 fn item(target: u8) -> ThreeLineItem<u8> {
     ThreeLineItem::new(

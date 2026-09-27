@@ -15,12 +15,14 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use unicode_width::UnicodeWidthStr;
 
-use super::list::{ThreeLineFlatList, ThreeLineItem, ThreeLineSpan, Viewported};
+use super::list::{ThreeLineFlatList, Viewported};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::palette;
-use crate::app::render::components::three_line_flat_list::ThreeLineRole;
+use crate::app::render::components::three_line_flat_list::{
+    ThreeLineItem, ThreeLineRole, ThreeLineSpan,
+};
 use crate::app::render::components::widgets::service_state_color;
 use crate::app::ui_model::panel_targets::{PanelTarget, SessionTargetKey};
 

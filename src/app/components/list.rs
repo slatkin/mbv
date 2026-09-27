@@ -22,7 +22,7 @@ pub use self::expandable::{AggregateMarkState, Expandable};
 pub use self::marks::{MarkSelection, MarkSelectionState};
 pub use self::paint::{PaintRetained, PaintRetainedState};
 pub use self::row_flow::{Row, RowFlow};
-pub use self::three_line::{ThreeLineFlatList, ThreeLineItem, ThreeLineSpan};
+pub use self::three_line::ThreeLineFlatList;
 pub use self::viewport::{PagingPolicy, Viewported};
 
 #[cfg(test)]

@@ -1,40 +1,11 @@
 use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
-use crate::app::render::components::three_line_flat_list::ThreeLineRole;
+use crate::app::render::components::three_line_flat_list::ThreeLineItem;
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
-
-/// One styled text span in a three-line item's presentation.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ThreeLineSpan {
-    pub text: String,
-    pub role: ThreeLineRole,
-}
-
-impl ThreeLineSpan {
-    pub fn new(text: impl Into<String>, role: ThreeLineRole) -> Self {
-        Self {
-            text: text.into(),
-            role,
-        }
-    }
-}
-
-/// Target identity and presentation are independent of Service objects.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ThreeLineItem<Target> {
-    pub target: Target,
-    pub lines: [Vec<ThreeLineSpan>; 3],
-}
-
-impl<Target> ThreeLineItem<Target> {
-    pub fn new(target: Target, lines: [Vec<ThreeLineSpan>; 3]) -> Self {
-        Self { target, lines }
-    }
-}
 
 /// Embedded selectable three-line item flow. It is not independently mounted.
 pub struct ThreeLineFlatList<Target> {
@@ -64,10 +35,6 @@ impl<Target> ThreeLineFlatList<Target> {
 
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
-    }
-
-    pub(in crate::app) fn focused(&self) -> bool {
-        self.focused
     }
 
     pub fn items(&self) -> &[ThreeLineItem<Target>] {
@@ -196,13 +163,29 @@ impl<Target: Clone + Eq> ThreeLineFlatList<Target> {
         claim_rect: Rect,
         content_rect: Rect,
     ) {
-        crate::app::render::render_three_line_flat_list(
+        self.begin_paint();
+        if content_rect.is_empty() {
+            return;
+        }
+        let (offset, visible, gap) = self.painting_parts(content_rect);
+        let painted = crate::app::render::render_three_line_flat_list(
             frame,
             claim_rect,
             content_rect,
-            crate::app::render::components::three_line_flat_list::ThreeLineFlatListPaintInput {
-                list: self,
+            &crate::app::render::components::three_line_flat_list::ThreeLineFlatListPaintInput {
+                items: &self.items,
+                selected: self.selected.as_ref(),
+                focused: self.focused,
+                offset,
+                visible,
+                gap,
             },
+        );
+        self.publish(
+            claim_rect,
+            content_rect,
+            painted.hits,
+            painted.selected_rect,
         );
     }
 }
@@ -232,12 +215,6 @@ impl<Target> ThreeLineFlatList<Target> {
         PaintRetained::finish(self, claim_rect, content_rect, rows, selected);
     }
 
-    pub(in crate::app) fn selected(&self) -> Option<&Target> {
-        self.selected.as_ref()
-    }
-    pub(in crate::app) fn item(&self, index: usize) -> &ThreeLineItem<Target> {
-        &self.items[index]
-    }
     pub(in crate::app) fn begin_paint(&mut self) {
         self.begin();
     }
