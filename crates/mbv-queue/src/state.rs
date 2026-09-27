@@ -190,6 +190,7 @@ pub struct LibraryPositionLevel {
     pub fetched_rows: Option<usize>,
     #[serde(default)]
     pub cursor_index: usize,
+    #[serde(default)]
     pub item_types: Option<String>,
     #[serde(default)]
     pub unplayed_only: bool,
