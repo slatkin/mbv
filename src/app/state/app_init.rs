@@ -1,9 +1,9 @@
 use crate::app::state::types::feed::IdleFeed;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
-use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
+use mbv_player::PlayerProxy;
 use mbv_ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -16,7 +16,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
+        mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,

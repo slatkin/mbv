@@ -9,8 +9,8 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfBookPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfBookPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     ) {
         if !self.audiobookshelf_runtime.accepts(generation) {
@@ -57,10 +57,10 @@ impl App {
         library_item_id: &str,
         result: Result<
             (
-                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
-                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
+                Vec<mbv_audiobookshelf::AudiobookshelfChapter>,
+                Vec<mbv_audiobookshelf::AudiobookshelfAudioFile>,
             ),
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     ) {
         if !self.audiobookshelf_runtime.accepts(generation) {
@@ -107,8 +107,8 @@ impl App {
         request: u64,
         library_item_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     ) {
         let index = self.audiobookshelf_browse.iter().position(|state| {
@@ -157,8 +157,8 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfShowPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfShowPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     ) {
         if !self.audiobookshelf_runtime.accepts(generation) {
@@ -200,8 +200,8 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     ) {
         if !self.audiobookshelf_runtime.accepts(generation) {
@@ -215,7 +215,7 @@ impl App {
 
     pub(super) fn handle_audiobookshelf_progress_acknowledged(
         &mut self,
-        update: &mbv_core::player::AudiobookshelfProgressUpdate,
+        update: &mbv_player::AudiobookshelfProgressUpdate,
     ) {
         if self.audiobookshelf_runtime.accepts(update.generation) {
             let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
@@ -233,7 +233,7 @@ impl App {
 
     pub(super) fn handle_audiobookshelf_book_progress_acknowledged(
         &mut self,
-        update: &mbv_core::player::AudiobookshelfBookProgressUpdate,
+        update: &mbv_player::AudiobookshelfBookProgressUpdate,
     ) {
         if self.audiobookshelf_runtime.accepts(update.generation) {
             let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
@@ -252,7 +252,7 @@ impl App {
 mod tests {
     use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
     use crate::app::state::types::events::LibEvent;
-    use mbv_core::audiobookshelf::{
+    use mbv_audiobookshelf::{
         AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage, AudiobookshelfChapter,
         AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,
     };

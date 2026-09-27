@@ -11,10 +11,10 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
 use crate::app::App;
-use mbv_core::api::EmbyClient;
-use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::cast::client::CastMediaItem;
-use mbv_core::cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
+use mbv_audiobookshelf::AudiobookshelfClient;
+use mbv_cast::client::CastMediaItem;
+use mbv_cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 use std::sync::mpsc::Sender;
@@ -105,8 +105,7 @@ impl App {
     pub(in crate::app) fn spawn_cast_discovery(&mut self) {
         let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
-            let receivers =
-                mbv_core::cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
+            let receivers = mbv_cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
     }
@@ -198,7 +197,7 @@ impl App {
         Some(AbsCastContext {
             client,
             credential,
-            device_id: mbv_core::api::device_id(),
+            device_id: mbv_emby::device_id(),
         })
     }
 
@@ -343,10 +342,10 @@ fn resolve_and_connect_cast_receiver(
     id: &str,
     timeout: Duration,
 ) -> Result<Sender<CastJob>, String> {
-    let receiver = mbv_core::cast::discovery::resolve_cast_receiver(id, timeout)
+    let receiver = mbv_cast::discovery::resolve_cast_receiver(id, timeout)
         .ok_or_else(|| "receiver not found".to_string())?;
     crate::app::state::types::cast::spawn_cast_worker(move || {
-        mbv_core::cast::client::CastClient::connect(&receiver.host, receiver.port)
+        mbv_cast::client::CastClient::connect(&receiver.host, receiver.port)
     })
 }
 
@@ -557,7 +556,7 @@ mod tests {
             .map(|s| s.item.id().to_string())
             .collect();
 
-        let receiver = mbv_core::cast::discovery::CastReceiver {
+        let receiver = mbv_cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
@@ -588,7 +587,7 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
 
         let mut app = make_app_stub();
-        let receiver = mbv_core::cast::discovery::CastReceiver {
+        let receiver = mbv_cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
@@ -624,7 +623,7 @@ mod tests {
         app.connected_session_id = Some("sess-1".to_string());
         app.connected_session_state = Some(crate::app::tests::make_session("tv", "mbv"));
 
-        let receiver = mbv_core::cast::discovery::CastReceiver {
+        let receiver = mbv_cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),

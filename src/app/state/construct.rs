@@ -6,8 +6,8 @@ use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::{
     layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
-use mbv_core::player::{Player, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
+use mbv_player::{Player, PlayerProxy};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -50,7 +50,7 @@ fn independent_audiobookshelf_runtime(
 
 /// A detached Audiobookshelf socket receiver: sessions that do not host the
 /// ABS socket loop still need the channel `App` carries.
-fn detached_socket_rx() -> mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent> {
+fn detached_socket_rx() -> mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent> {
     let (_, rx) = mpsc::channel();
     rx
 }
@@ -124,7 +124,7 @@ impl App {
                     .and_then(|position| usize::try_from(position).ok())
             })
             .flatten();
-        let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
+        let bare_owner = mbv_player::owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
             mbv_queue::QueueSource::Unknown,
         );

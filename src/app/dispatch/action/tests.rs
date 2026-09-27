@@ -285,7 +285,7 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_ite
     ));
 }
 
-// Same unique-tempdir convention as api.rs's test-only `make_temp_data_dir`
+// Same unique-tempdir convention as `crates/mbv-emby/src/types_parsing.rs`'s test-only `make_temp_data_dir`
 // (uuid-suffixed, under the OS tempdir).
 fn tempfile_dir() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));

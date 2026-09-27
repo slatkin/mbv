@@ -128,7 +128,7 @@ fn legacy_audiobookshelf_podcast_item_is_not_migrated() {
     app.legacy_launch_tab = Some(1);
     app.audiobookshelf_catalog_ready = true;
     app.audiobookshelf_libraries
-        .push(mbv_core::audiobookshelf::AudiobookshelfLibrary {
+        .push(mbv_audiobookshelf::AudiobookshelfLibrary {
             id: "abs-podcasts".into(),
             name: "Podcasts".into(),
             media_type: "podcast".into(),

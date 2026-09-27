@@ -349,8 +349,8 @@ impl Model {
 mod tests {
     use crate::app::render::make_music_group_app;
     use crate::app::shell::Model;
-    use mbv_core::api::{EmbyClient, EmbyCredentialExchange};
     use mbv_core::service_runtime::EmbyRuntime;
+    use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
 
     /// A configured-but-unroutable `EmbyClient` (design mirrors the retired

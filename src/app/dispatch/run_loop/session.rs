@@ -65,7 +65,7 @@ impl App {
         }
     }
 
-    fn handle_sessions_loaded(&mut self, sessions: Vec<mbv_core::api::SessionInfo>) {
+    fn handle_sessions_loaded(&mut self, sessions: Vec<mbv_emby::SessionInfo>) {
         self.sessions = sessions;
         self.sessions_loading = false;
         self.remote.last_session_poll = Instant::now();
@@ -191,7 +191,7 @@ impl App {
     /// The found-connected-session half of `SessionEvent::Loaded`: maintain
     /// the monotonic position estimate, stamp the canonical queue's active
     /// slot, and arm the fast repoll while runtime is still zero.
-    fn reconcile_connected_session_position(&mut self, s: &mbv_core::api::SessionInfo) {
+    fn reconcile_connected_session_position(&mut self, s: &mbv_emby::SessionInfo) {
         // Maintain a monotonic position estimate within a single video.
         // Reset the anchor only when the playing item ID changes.
         // Avoid keying on runtime or title — the API occasionally returns

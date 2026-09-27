@@ -5,11 +5,11 @@ use crate::app::state::bootstrap::{bootstrap_legacy_queue, LocalDaemonBootstrap}
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::{bootstrap_unified_queue, AppInit};
-use mbv_core::api::EmbyClient;
-use mbv_core::player::PlayerProxy;
-use mbv_core::remote_player::DaemonEndpoint;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
+use mbv_emby::EmbyClient;
+use mbv_player::PlayerProxy;
+use mbv_remote_player::DaemonEndpoint;
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
@@ -25,7 +25,7 @@ use std::sync::{mpsc, Arc, Mutex};
 /// (issue #757). Tests that exercise rebind inject `mpris::test_handle`
 /// themselves.
 #[cfg(not(test))]
-fn start_mpris(remote: &mbv_core::remote_player::RemotePlayer) -> crate::mpris::MprisHandle {
+fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> crate::mpris::MprisHandle {
     let mpris_remote = remote.clone();
     crate::mpris::start(
         std::sync::Arc::clone(&mpris_remote.status),
@@ -45,7 +45,7 @@ struct RemoteSnapshot {
 }
 
 impl RemoteSnapshot {
-    fn take(remote: &mbv_core::remote_player::RemotePlayer) -> Self {
+    fn take(remote: &mbv_remote_player::RemotePlayer) -> Self {
         Self {
             items: remote.items.lock().unwrap().clone(),
             cursor: remote.status.lock().unwrap().current_idx,
@@ -157,7 +157,7 @@ impl App {
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,
-        remote: mbv_core::remote_player::RemotePlayer,
+        remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &DaemonEndpoint,
         config: crate::config::Config,
@@ -167,7 +167,7 @@ impl App {
 
     pub fn new_remote_optional_with_config(
         client: Option<EmbyClient>,
-        remote: mbv_core::remote_player::RemotePlayer,
+        remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &DaemonEndpoint,
         app_config: crate::config::Config,

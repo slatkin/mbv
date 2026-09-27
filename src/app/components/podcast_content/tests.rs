@@ -1,5 +1,5 @@
 use super::*;
-use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow};
+use mbv_audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
 use ratatui::Terminal;

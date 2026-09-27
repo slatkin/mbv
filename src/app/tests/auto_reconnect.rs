@@ -45,9 +45,9 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     // auto-reconnect target during construction itself, without a separate
     // manual `try_auto_reconnect()` call -- mirrors bare mode's `App::new`.
     fn route_connect_success(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-        let (remote, events) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let (remote, events) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
         crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
     let _guard = crate::config::TestStateDirGuard::new();
@@ -66,14 +66,14 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config.clone());
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let client = mbv_emby::EmbyClient::new(config.clone());
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     let app = App::new_remote_with_config(
         client,
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_remote_player::DaemonEndpoint::Local,
         config,
     );
 
@@ -102,14 +102,14 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config.clone());
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let client = mbv_emby::EmbyClient::new(config.clone());
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     let app = App::new_remote_with_config(
         client,
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
 

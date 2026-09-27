@@ -1,0 +1,39 @@
+[package]
+name = "mbv-emby"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Emby provider client for mbv."
+readme = "../../README.md"
+
+[features]
+test = ["mbv-net/test", "mbv-config/test"]
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-cast = { path = "../mbv-cast" }
+mbv-config = { path = "../mbv-config" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-text = { path = "../mbv-text" }
+mbv-net = { path = "../mbv-net" }
+mbv-ws = { path = "../mbv-ws" }
+mbv-ids = { path = "../mbv-ids" }
+ureq.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+rand.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+mbv-net = { path = "../mbv-net", features = ["test"] }
+mbv-queue = { path = "../mbv-queue" }
+mbv-config = { path = "../mbv-config", features = ["test"] }

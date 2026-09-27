@@ -1,7 +1,8 @@
+use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config::{load_service_secret, EmbySetup};
-use mbv_core::api::EmbyClient;
-use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
+use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_emby::EmbyClient;
+use mbv_emby::{EmbyFailure, EmbyFailureClass};
 use mbv_queue::ServiceKind;
 use std::sync::mpsc;
 
@@ -13,15 +14,13 @@ pub(in crate::app) enum AudiobookshelfCompletionKind {
 pub(in crate::app) struct AudiobookshelfCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) kind: AudiobookshelfCompletionKind,
-    pub(in crate::app) result: Result<
-        mbv_core::audiobookshelf::AudiobookshelfUser,
-        mbv_core::audiobookshelf::AudiobookshelfError,
-    >,
+    pub(in crate::app) result:
+        Result<mbv_audiobookshelf::AudiobookshelfUser, mbv_audiobookshelf::AudiobookshelfError>,
 }
 
 pub(in crate::app) struct AudiobookshelfValidatedCandidate {
     pub(in crate::app) setup: mbv_config::AudiobookshelfSetup,
-    pub(in crate::app) user: mbv_core::audiobookshelf::AudiobookshelfUser,
+    pub(in crate::app) user: mbv_audiobookshelf::AudiobookshelfUser,
     pub(in crate::app) api_key: String,
 }
 
@@ -34,7 +33,7 @@ pub(in crate::app) struct AudiobookshelfSetupCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) previous_state: ServiceState,
     pub(in crate::app) result:
-        Result<AudiobookshelfValidatedCandidate, mbv_core::audiobookshelf::AudiobookshelfError>,
+        Result<AudiobookshelfValidatedCandidate, mbv_audiobookshelf::AudiobookshelfError>,
 }
 
 pub(in crate::app) struct AudiobookshelfStartupReceiver {
@@ -43,20 +42,20 @@ pub(in crate::app) struct AudiobookshelfStartupReceiver {
 }
 
 type AudiobookshelfProgressMap =
-    std::collections::HashMap<(String, String), mbv_core::audiobookshelf::AudiobookshelfProgress>;
+    std::collections::HashMap<(String, String), mbv_audiobookshelf::AudiobookshelfProgress>;
 
 type AudiobookshelfBookProgressMap =
-    std::collections::HashMap<String, mbv_core::audiobookshelf::AudiobookshelfBookProgress>;
+    std::collections::HashMap<String, mbv_audiobookshelf::AudiobookshelfBookProgress>;
 
 pub(in crate::app) struct AudiobookshelfCatalogCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) result: Result<
         (
-            Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+            Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
             AudiobookshelfProgressMap,
             AudiobookshelfBookProgressMap,
         ),
-        mbv_core::audiobookshelf::AudiobookshelfError,
+        mbv_audiobookshelf::AudiobookshelfError,
     >,
 }
 
@@ -70,15 +69,17 @@ pub(in crate::app) struct AudiobookshelfCatalogReceiver {
 /// established precedent (`Protocol` / `Unavailable`).
 fn audiobookshelf_client(
     config: &crate::config::Config,
-) -> Result<(AudiobookshelfClient, String), mbv_core::audiobookshelf::AudiobookshelfError> {
-    let setup = config.audiobookshelf_setup.as_ref().ok_or(
-        mbv_core::audiobookshelf::AudiobookshelfError {
-            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
-        },
-    )?;
+) -> Result<(AudiobookshelfClient, String), mbv_audiobookshelf::AudiobookshelfError> {
+    let setup =
+        config
+            .audiobookshelf_setup
+            .as_ref()
+            .ok_or(mbv_audiobookshelf::AudiobookshelfError {
+                class: mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol,
+            })?;
     let key = load_service_secret(ServiceKind::Audiobookshelf).ok_or(
-        mbv_core::audiobookshelf::AudiobookshelfError {
-            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
+        mbv_audiobookshelf::AudiobookshelfError {
+            class: mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable,
         },
     )?;
     let client = AudiobookshelfClient::new(&setup.server_url)?;
@@ -224,10 +225,10 @@ pub(in crate::app) fn start_audiobookshelf_setup(
 ) -> mpsc::Receiver<AudiobookshelfSetupCompletion> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+        let result = mbv_audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
             &server_url,
             &api_key,
-            mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
         )
         .map(|candidate| {
             let (setup, user, api_key) = candidate.into_parts();
@@ -258,10 +259,10 @@ pub(in crate::app) fn audiobookshelf_initial_state(
 }
 
 pub(in crate::app) fn classify_audiobookshelf_failure(
-    error: mbv_core::audiobookshelf::AudiobookshelfError,
+    error: mbv_audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
-        mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
+        mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
             ServiceState::NeedsAuthentication
         }
         _ => ServiceState::Unavailable,
@@ -275,7 +276,7 @@ pub(in crate::app) struct Completion {
 
 pub(in crate::app) struct Startup {
     pub(in crate::app) client: EmbyClient,
-    pub(in crate::app) bootstrap: mbv_core::service_runtime::EmbyBootstrap,
+    pub(in crate::app) bootstrap: mbv_emby::EmbyBootstrap,
     pub(in crate::app) setup: EmbySetup,
 }
 

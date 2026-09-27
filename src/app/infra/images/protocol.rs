@@ -481,13 +481,13 @@ fn fetch_audiobookshelf_image(
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
         return Some(cached);
     }
-    let client = mbv_core::audiobookshelf::AudiobookshelfClient::new(server_url).ok();
+    let client = mbv_audiobookshelf::AudiobookshelfClient::new(server_url).ok();
     let result = client.and_then(|client| {
         client
             .cover_bounded(
                 api_key,
                 item_id,
-                mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
             )
             .ok()
     });

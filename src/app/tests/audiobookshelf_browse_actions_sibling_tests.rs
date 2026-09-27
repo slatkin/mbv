@@ -3,7 +3,7 @@ fn podcast_episode_targets_include_parent_show_identity() {
     let mut app = super::podcast::audiobookshelf_app();
     app.audiobookshelf_browse[0].detail_cache.insert(
         "show-a".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-1".into(),
             title: "A".into(),
@@ -14,7 +14,7 @@ fn podcast_episode_targets_include_parent_show_identity() {
     );
     app.audiobookshelf_browse[0].detail_cache.insert(
         "show-b".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-b".into(),
             episode_id: "episode-1".into(),
             title: "B".into(),

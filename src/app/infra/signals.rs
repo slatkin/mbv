@@ -60,7 +60,7 @@ fn stdin_has_hup() -> bool {
 // never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
 // TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
 pub(in crate::app) fn start_quit_watchdog(
-    quit_handle: Option<mbv_core::player::QuitHandle>,
+    quit_handle: Option<mbv_player::QuitHandle>,
     quit_timeout: Duration,
 ) {
     std::thread::spawn(move || {

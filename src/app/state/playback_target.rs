@@ -320,12 +320,12 @@ mod now_playing_status_tests {
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Paused);
     }
 
-    fn idle_cast_status() -> mbv_core::cast::client::CastStatus {
-        mbv_core::cast::client::CastStatus {
+    fn idle_cast_status() -> mbv_cast::client::CastStatus {
+        mbv_cast::client::CastStatus {
             position_seconds: None,
             duration_seconds: None,
             playback_rate: 1.0,
-            state: mbv_core::cast::client::CastPlaybackState::Idle,
+            state: mbv_cast::client::CastPlaybackState::Idle,
             playing_content_id: None,
         }
     }
@@ -383,11 +383,11 @@ mod now_playing_status_tests {
         app.attach_cast("device-1".to_string());
         app.apply_cast_status(
             "device-1",
-            Ok(mbv_core::cast::client::CastStatus {
+            Ok(mbv_cast::client::CastStatus {
                 position_seconds: Some(1.0),
                 duration_seconds: Some(100.0),
                 playback_rate: 1.0,
-                state: mbv_core::cast::client::CastPlaybackState::Playing,
+                state: mbv_cast::client::CastPlaybackState::Playing,
                 playing_content_id: None,
             }),
         );

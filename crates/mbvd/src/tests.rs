@@ -64,7 +64,7 @@ fn connect_diagnostics_redact_candidate_and_remote_material() {
 
 #[test]
 fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
-    use mbv_core::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
+    use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
     let auth = classified_abs_error(AudiobookshelfError {
         class: AudiobookshelfFailureClass::AuthenticationRejected,

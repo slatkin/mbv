@@ -6,8 +6,8 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
 use crate::app::App;
-use mbv_core::audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
-use mbv_core::cast::client::{CastPlaybackState, CastStatus};
+use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
+use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_emby_model::seconds_to_ticks;
 use std::time::{Duration, Instant};
 
@@ -186,7 +186,7 @@ impl App {
                 let media_source_id = media_source_id.clone();
                 let session_id = session_id.clone();
                 let is_paused = report.is_paused;
-                let progress = mbv_core::api::ProgressReport {
+                let progress = mbv_emby::ProgressReport {
                     item_id,
                     media_source_id,
                     position_ticks,

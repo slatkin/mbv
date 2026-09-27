@@ -1,5 +1,5 @@
 use mbv_config as config;
-use mbv_core::{applog, daemon};
+use mbv_core::applog;
 use mimalloc::MiMalloc;
 use std::io::{self, BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
@@ -27,7 +27,7 @@ fn print_usage() {
 }
 
 fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else {
+    let Ok(s) = std::fs::read_to_string(mbv_daemon::pid_file()) else {
         return false;
     };
     let Ok(pid) = s.trim().parse::<u32>() else {
@@ -37,7 +37,7 @@ fn daemon_running() -> bool {
 }
 
 fn stop_daemon() -> Result<String, String> {
-    let path = daemon::pid_file();
+    let path = mbv_daemon::pid_file();
     let pid = std::fs::read_to_string(&path)
         .map_err(|error| format!("mbvd: no daemon running: {error}"))?
         .trim()
@@ -207,11 +207,11 @@ fn classified_auth_error(error: &str) -> String {
 }
 
 fn exchange_emby_credentials(
-    client: &mbv_core::api::EmbyClient,
+    client: &mbv_emby::EmbyClient,
     server_url: &str,
     username: &str,
     password: &str,
-) -> Result<mbv_core::api::EmbyCredentialExchange, String> {
+) -> Result<mbv_emby::EmbyCredentialExchange, String> {
     client
         .exchange_credentials_bounded(server_url, username, password, Duration::from_secs(10))
         .map_err(|error| classified_auth_error(&error))
@@ -219,7 +219,7 @@ fn exchange_emby_credentials(
 
 fn commit_emby_setup(
     existing: Option<&config::EmbySetup>,
-    exchange: mbv_core::api::EmbyCredentialExchange,
+    exchange: mbv_emby::EmbyCredentialExchange,
 ) -> Result<config::EmbySetup, String> {
     let mut setup = config::EmbySetup::new(exchange.server_url.clone(), exchange.user_id);
     setup.revision = match existing.as_ref() {
@@ -255,7 +255,7 @@ fn connect_emby() -> Result<(), String> {
     let config = config::load_config()
         .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.emby_setup.clone();
-    let client = mbv_core::api::EmbyClient::new(config);
+    let client = mbv_emby::EmbyClient::new(config);
     let exchange = exchange_emby_credentials(&client, &server_url, &username, &password)?;
     let setup = commit_emby_setup(existing.as_ref(), exchange)?;
     if daemon_running() {
@@ -273,8 +273,8 @@ fn connect_emby() -> Result<(), String> {
     Ok(())
 }
 
-fn classified_abs_error(error: mbv_core::audiobookshelf::AudiobookshelfError) -> String {
-    use mbv_core::audiobookshelf::AudiobookshelfFailureClass;
+fn classified_abs_error(error: mbv_audiobookshelf::AudiobookshelfError) -> String {
+    use mbv_audiobookshelf::AudiobookshelfFailureClass;
     match error.class {
         AudiobookshelfFailureClass::AuthenticationRejected => {
             "mbvd: Audiobookshelf authentication rejected".into()
@@ -305,7 +305,7 @@ fn connect_abs() -> Result<(), String> {
         .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.audiobookshelf_setup.clone();
     let old_queue = config::load_queue_state();
-    let validated = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+    let validated = mbv_audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
         &server_url,
         &api_key,
         Duration::from_secs(10),
@@ -541,16 +541,16 @@ fn run() -> Result<(), String> {
     applog::init(is_system, log_path, log_level);
     log::info!(target: "startup", "mbvd starting");
 
-    daemon::run_with_options(
-        daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Packaged),
+    mbv_daemon::run_with_options(
+        mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
-        daemon::DaemonRuntimeHooks {
+        mbv_daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(|_| {}),
             // Deliberately a stub: mbvd runs as a system service with no
             // user session, so there's no tray to spawn into.
             on_tray_ready: Box::new(|_| None),
         },
-    );
+    )
 }
 
 fn main() {

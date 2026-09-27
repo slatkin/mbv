@@ -1706,15 +1706,21 @@ dependencies = [
  "ksni",
  "libc",
  "log",
+ "mbv-audiobookshelf",
+ "mbv-cast",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-daemon",
+ "mbv-emby",
  "mbv-emby-model",
  "mbv-feed",
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-player",
  "mbv-queue",
+ "mbv-remote-player",
  "mbv-text",
  "mbv-visualizer",
  "mbv-ws",
@@ -1738,6 +1744,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-audiobookshelf"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "rstest",
+ "serde",
+ "serde_json",
+ "time",
+ "tungstenite",
+ "ureq",
+]
+
+[[package]]
+name = "mbv-cast"
+version = "0.21.2"
+dependencies = [
+ "flume",
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-queue",
+ "mdns-sd",
+ "rstest",
+ "rust_cast",
+ "serde_json",
+]
+
+[[package]]
 name = "mbv-config"
 version = "0.21.2"
 dependencies = [
@@ -1755,29 +1793,17 @@ dependencies = [
 name = "mbv-core"
 version = "0.21.2"
 dependencies = [
- "flume",
  "libc",
  "libmpv2",
- "libmpv2-sys",
  "log",
+ "mbv-audiobookshelf",
  "mbv-config",
- "mbv-ctrl",
- "mbv-emby-model",
- "mbv-ids",
- "mbv-net",
+ "mbv-emby",
  "mbv-queue",
- "mbv-text",
- "mbv-ws",
- "mdns-sd",
- "rand 0.10.2",
  "rstest",
  "rust_cast",
- "serde",
  "serde_json",
- "time",
- "tungstenite",
  "ureq",
- "uuid",
 ]
 
 [[package]]
@@ -1790,6 +1816,50 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-daemon"
+version = "0.21.2"
+dependencies = [
+ "libc",
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-net",
+ "mbv-player",
+ "mbv-queue",
+ "mbv-ws",
+ "rstest",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "mbv-emby"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-cast",
+ "mbv-config",
+ "mbv-ctrl",
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "mbv-ws",
+ "rand 0.10.2",
+ "rstest",
+ "serde",
+ "serde_json",
+ "ureq",
+ "uuid",
 ]
 
 [[package]]
@@ -1839,12 +1909,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-player"
+version = "0.21.2"
+dependencies = [
+ "libc",
+ "libmpv2",
+ "libmpv2-sys",
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-remote-player",
+ "mbv-ws",
+ "rstest",
+ "serde_json",
+]
+
+[[package]]
 name = "mbv-queue"
 version = "0.21.2"
 dependencies = [
  "mbv-emby-model",
  "rstest",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mbv-remote-player"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
  "serde_json",
 ]
 
@@ -1880,9 +1987,12 @@ version = "0.21.2"
 dependencies = [
  "libc",
  "log",
+ "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-daemon",
+ "mbv-emby",
  "mbv-queue",
  "mimalloc",
  "nix 0.31.3",

@@ -557,7 +557,7 @@ impl Model {
             return;
         };
         let local_device_name = client.lock().unwrap().device_name.clone();
-        let mut devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)> = sessions
+        let mut devices: Vec<(String, Option<mbv_remote_player::DaemonEndpoint>)> = sessions
             .iter()
             .filter(|s| s.client.eq_ignore_ascii_case("mbv"))
             .filter(|s| !s.device_name.eq_ignore_ascii_case(&local_device_name))
@@ -582,7 +582,7 @@ impl Model {
             .unwrap()
             .library_routes
             .get(&library_lower)
-            .and_then(|raw| mbv_core::remote_player::DaemonEndpoint::parse(raw).ok());
+            .and_then(|raw| mbv_remote_player::DaemonEndpoint::parse(raw).ok());
         let cursor = current_endpoint
             .and_then(|current| {
                 devices

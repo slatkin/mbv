@@ -1,6 +1,6 @@
-fn make_remote_session(audio_only: bool) -> mbv_core::api::SessionInfo {
-    mbv_core::api::SessionInfo {
-        media_info: mbv_core::api::SessionMediaInfo {
+fn make_remote_session(audio_only: bool) -> mbv_emby::SessionInfo {
+    mbv_emby::SessionInfo {
+        media_info: mbv_emby::SessionMediaInfo {
             audio_only,
             ..Default::default()
         },

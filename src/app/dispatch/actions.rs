@@ -35,13 +35,13 @@ fn playback_request_message(label: &str, mixed_unplayable: Option<usize>) -> Str
     }
 }
 
-fn daemon_endpoint_name(endpoint: &mbv_core::remote_player::DaemonEndpoint) -> String {
+fn daemon_endpoint_name(endpoint: &mbv_remote_player::DaemonEndpoint) -> String {
     match endpoint {
-        mbv_core::remote_player::DaemonEndpoint::Local => "the local daemon".into(),
-        mbv_core::remote_player::DaemonEndpoint::Unix(path) => {
+        mbv_remote_player::DaemonEndpoint::Local => "the local daemon".into(),
+        mbv_remote_player::DaemonEndpoint::Unix(path) => {
             format!("the Unix socket {}", path.display())
         }
-        mbv_core::remote_player::DaemonEndpoint::Tcp(address) => address.to_string(),
+        mbv_remote_player::DaemonEndpoint::Tcp(address) => address.to_string(),
     }
 }
 

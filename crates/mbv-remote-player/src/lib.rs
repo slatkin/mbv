@@ -1,0 +1,548 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
+
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
+use mbv_emby::EmbyClient;
+use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
+
+/// Response from a bounded shutdown request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShutdownResponse {
+    /// The daemon accepted the request after persisting its queue.
+    Accepted,
+    /// The daemon rejected the request (e.g. TCP transport, persistence failure).
+    Rejected { reason: String },
+    /// The connection closed before a response arrived.
+    Disconnected,
+    /// The bounded wait timed out without receiving a response.
+    TimedOut,
+    /// The peer daemon does not advertise the lifecycle-shutdown capability.
+    Unsupported,
+}
+
+#[derive(Clone, Debug)]
+pub struct RemotePlayer {
+    pub status: Arc<Mutex<PlayerStatus>>,
+    pub subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
+    pub items: Arc<Mutex<Vec<EmbyItem>>>,
+    pub unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
+    pub queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
+    pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
+    pub(crate) disconnected: Arc<AtomicBool>,
+    /// Set when the connection closed after the daemon announced a
+    /// deliberate shutdown, as opposed to closing with no warning.
+    pub(crate) shutdown_announced: Arc<AtomicBool>,
+    pub(crate) ctrl_compatibility: CtrlCompatibility,
+    /// A kept clone of the control socket, used only by `disconnect()`
+    /// (#233) to shut the connection down on demand rather than relying
+    /// on `Drop` -- which only closes this clone's own fd duplicate, not
+    /// the reader/writer threads' separate duplicates of the same
+    /// underlying socket. `Arc<Mutex<..>>` so every `RemotePlayer` clone
+    /// shares one handle and `disconnect()` is safe to call from any of
+    /// them; `Option` so a second call is a no-op instead of a double
+    /// shutdown.
+    pub(crate) control_stream: Arc<Mutex<Option<SocketStream>>>,
+    pub(crate) next_playback_id: Arc<std::sync::atomic::AtomicU64>,
+    pub(crate) pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    /// Completer for a pending shutdown request.
+    pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
+}
+
+pub(crate) mod connect;
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(any(test, feature = "test"))]
+pub use connect::connect_stub_daemon_pair;
+pub use connect::signal_local_daemon_service_setup;
+pub use connect::{resolve_library_route, DaemonEndpoint};
+pub(crate) use mbv_net::stream::SocketStream;
+
+impl RemotePlayer {
+    pub fn connect_endpoint(
+        endpoint: &DaemonEndpoint,
+    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
+        connect::connect_endpoint(endpoint)
+    }
+
+    #[must_use]
+    pub fn is_disconnected(&self) -> bool {
+        self.disconnected.load(Ordering::SeqCst)
+    }
+
+    /// Whether the connection closed after the daemon announced a deliberate
+    /// shutdown, as opposed to closing with no warning. Only meaningful once
+    /// `is_disconnected()` is true.
+    #[must_use]
+    pub fn is_shutdown_announced(&self) -> bool {
+        self.shutdown_announced.load(Ordering::SeqCst)
+    }
+
+    /// Shared handle to the disconnect flag, cloneable independent of the
+    /// rest of `RemotePlayer` (#160): the root `mbv` crate's MPRIS polling
+    /// loop holds this alongside `status` so it can stop advertising a
+    /// live/active track the moment the daemon connection drops, even
+    /// though `status` itself isn't guaranteed to be updated synchronously
+    /// with the disconnect (an "expected" disconnect, e.g. an Emby Remote
+    /// takeover, never sends a `Stopped` event -- see the reader thread in
+    /// `connect_endpoint`).
+    #[must_use]
+    pub fn disconnected_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.disconnected)
+    }
+
+    #[must_use]
+    pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
+        !self.is_disconnected() && self.cmd_tx.send(cmd).is_ok()
+    }
+
+    /// Bounded lifecycle shutdown request.
+    ///
+    /// Sends `RequestShutdown` and waits for the daemon's response with a
+    /// bounded timeout. Returns `Accepted` only when the daemon has durably
+    /// persisted its queue and acknowledged the request; enqueue success
+    /// alone is never returned as `Accepted`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `shutdown_request_tx` mutex is poisoned: a previous owner
+    /// panicked while holding it. The early `Unsupported` return takes no lock.
+    #[must_use]
+    pub fn request_shutdown(&self, timeout: Duration) -> ShutdownResponse {
+        if !self.supports_lifecycle_shutdown() {
+            return ShutdownResponse::Unsupported;
+        }
+
+        let (response_tx, response_rx) = mpsc::channel();
+
+        // Register the completer before sending the command so the reader
+        // thread can resolve it immediately when the response arrives.
+        {
+            let mut guard = self.shutdown_request_tx.lock().unwrap();
+            if guard.is_some() {
+                // Another request is already in flight; reject immediately.
+                return ShutdownResponse::Rejected {
+                    reason: "shutdown request already in flight".to_string(),
+                };
+            }
+            *guard = Some(response_tx);
+        };
+
+        // Send the request.
+        if self.cmd_tx.send(CtrlCmd::RequestShutdown).is_err() {
+            // Channel closed; daemon is disconnected.
+            let mut guard = self.shutdown_request_tx.lock().unwrap();
+            *guard = None;
+            return ShutdownResponse::Disconnected;
+        }
+
+        // Wait for the response with the bounded timeout.
+        match response_rx.recv_timeout(timeout) {
+            Ok(response) => response,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let mut guard = self.shutdown_request_tx.lock().unwrap();
+                *guard = None;
+                ShutdownResponse::TimedOut
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // Reader thread dropped the sender (disconnect).
+                let mut guard = self.shutdown_request_tx.lock().unwrap();
+                *guard = None;
+                ShutdownResponse::Disconnected
+            }
+        }
+    }
+
+    /// Send a guarded playback intent through its dedicated protocol
+    /// envelope. There is deliberately no conversion to `PlayerCmd` here:
+    /// callers that need lifecycle correlation must use this boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[must_use]
+    pub fn send_playback_intent(&self, intent: PlaybackIntent) -> bool {
+        let request_id = intent.request_id;
+        self.pending_playback
+            .lock()
+            .unwrap()
+            .insert(request_id, intent.clone());
+        if self.cmd_tx.send(CtrlCmd::PlaybackIntent(intent)).is_ok() {
+            true
+        } else {
+            self.pending_playback.lock().unwrap().remove(&request_id);
+            false
+        }
+    }
+
+    #[must_use]
+    pub fn new_playback_intent(&self, action: mbv_ctrl::PlaybackIntentAction) -> PlaybackIntent {
+        let id = self.next_playback_id.fetch_add(1, Ordering::Relaxed);
+        PlaybackIntent {
+            request_id: id,
+            generation: id,
+            action,
+        }
+    }
+
+    #[must_use]
+    pub fn send_command(&self, cmd: PlayerCommand) -> bool {
+        let wire_cmd = match cmd {
+            // Queue mutation has no legacy wire form; it crosses ctrl
+            // exclusively as `CtrlCmd::UnifiedQueue*`. Callers use the unified
+            // path (`RemotePlayer::queue_append`/`queue_remove_slot`/
+            // `queue_move_slot`, `PlayerProxy::submit_queue_slots`).
+            PlayerCommand::QueueAppend { .. }
+            | PlayerCommand::QueueRemove(_)
+            | PlayerCommand::QueueMove(..) => {
+                log::warn!(
+                    target: "remote",
+                    "queue mutation not sendable over legacy ctrl; caller must use a unified queue command"
+                );
+                return false;
+            }
+            cmd => match WireCommand::try_from_player_command(cmd) {
+                Ok(wire) => wire,
+                Err(refused) => {
+                    log::warn!(
+                        target: "remote",
+                        "command has no ctrl wire form; refused without delivery: {refused:?}"
+                    );
+                    return false;
+                }
+            },
+        };
+        self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
+    }
+
+    /// # Panics
+    ///
+    /// Panics if any of the projection mutexes is poisoned — `status`, `items`
+    /// or `queue_source` — i.e. a previous owner panicked while holding one of
+    /// them.
+    #[must_use]
+    pub fn adopt_queue(
+        &self,
+        items: Vec<QueueItem>,
+        cursor: usize,
+        source: mbv_queue::QueueSource,
+    ) -> bool {
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        {
+            let mut status = self.status.lock().unwrap();
+            status.current_idx = cursor;
+            status.queue_len = items.len();
+            status.active = false;
+        };
+        let emby_items: Vec<EmbyItem> = items
+            .iter()
+            .filter_map(|item| item.as_emby().cloned())
+            .collect();
+        self.items.lock().unwrap().clone_from(&emby_items);
+        *self.queue_source.lock().unwrap() = source.clone();
+        self.cmd_tx
+            .send(CtrlCmd::UnifiedAdoptQueue {
+                items,
+                cursor,
+                source,
+            })
+            .is_ok()
+    }
+
+    /// # Panics
+    ///
+    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
+    /// i.e. a previous owner panicked while holding it. Those locks are only
+    /// taken once the queue replace was sent.
+    #[must_use]
+    pub fn play(
+        &self,
+        item: &EmbyItem,
+        source: mbv_queue::QueueSource,
+        _client: Arc<EmbyClient>,
+        _initial_volume: u8,
+    ) -> bool {
+        let queue_item = QueueItem::Emby(Box::new(item.clone()));
+        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+            vec![mbv_ctrl::UnifiedQueueSlot {
+                slot_id: 1,
+                item: queue_item,
+            }],
+            Some(0),
+            source.clone(),
+        ));
+        if sent {
+            *self.items.lock().unwrap() = vec![item.clone()];
+            *self.queue_source.lock().unwrap() = source;
+        }
+        sent
+    }
+
+    /// # Panics
+    ///
+    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
+    /// i.e. a previous owner panicked while holding it. Those locks are only
+    /// taken once the queue replace was sent.
+    #[must_use]
+    pub fn play_queue(
+        &self,
+        items: Vec<EmbyItem>,
+        start_idx: usize,
+        source: mbv_queue::QueueSource,
+        _client: Arc<EmbyClient>,
+        _initial_volume: u8,
+    ) -> bool {
+        let slots: Vec<_> = items
+            .iter()
+            .cloned()
+            .map(|i| QueueItem::Emby(Box::new(i)))
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: (index + 1) as u64,
+                item,
+            })
+            .collect();
+        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+            slots,
+            Some(start_idx),
+            source.clone(),
+        ));
+        if sent {
+            *self.items.lock().unwrap() = items;
+            *self.queue_source.lock().unwrap() = source;
+        }
+        sent
+    }
+
+    pub fn stop(&self) {
+        let _ = self
+            .send_playback_intent(self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop));
+    }
+
+    /// Actively tears down the control-socket connection (#233): shuts
+    /// down the shared underlying socket so the reader thread's blocking
+    /// `read()` (inside `reader.lines()` in `connect_endpoint`) observes
+    /// EOF/an error and exits, instead of leaking forever the way it did
+    /// when the only teardown was an implicit `Drop` of one fd duplicate.
+    /// Idempotent: the stored handle is taken out on first use, so a
+    /// second call is a no-op rather than a double `shutdown()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `control_stream` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    pub fn disconnect(&self) {
+        if let Some(stream) = self.control_stream.lock().unwrap().take() {
+            if let Err(e) = stream.shutdown() {
+                log::warn!(target: "remote", "control-socket shutdown failed: {e}");
+            }
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_ctrl_compatibility_for_test(&mut self, compatibility: CtrlCompatibility) {
+        self.ctrl_compatibility = compatibility;
+    }
+
+    #[must_use]
+    pub fn supports_audiobookshelf_queue(&self) -> bool {
+        self.ctrl_compatibility.audiobookshelf.queue
+    }
+
+    #[must_use]
+    pub fn supports_audiobookshelf_book_queue(&self) -> bool {
+        self.ctrl_compatibility.audiobookshelf.book_queue
+    }
+
+    #[must_use]
+    pub fn supports_queue_append(&self) -> bool {
+        self.ctrl_compatibility.supports_queue_append
+    }
+
+    #[must_use]
+    pub fn supports_lifecycle_shutdown(&self) -> bool {
+        self.ctrl_compatibility.supports_lifecycle_shutdown
+    }
+
+    #[must_use]
+    pub fn supports_audio_only(&self) -> bool {
+        self.ctrl_compatibility.supports_audio_only
+    }
+
+    #[must_use]
+    pub fn supports_owner_queue_load(&self) -> bool {
+        self.ctrl_compatibility.supports_owner_queue_load
+    }
+
+    /// Send a correlated idle load without changing the Client's queue
+    /// projection. A peer without the additive capability is refused locally.
+    pub fn update_queue_source(
+        &self,
+        source: mbv_queue::QueueSource,
+        lineage: mbv_queue::QueueLineage,
+    ) -> Result<(), String> {
+        if !self.supports_owner_queue_load() {
+            return Err("daemon does not support owner queue source updates".to_string());
+        }
+        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate { source, lineage }) {
+            return Err("could not send queue source update to Player owner".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn load_queue_idle(
+        &self,
+        request_id: mbv_ctrl::QueueLoadRequestId,
+        slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
+        cursor: usize,
+        source: mbv_queue::QueueSource,
+    ) -> Result<(), String> {
+        if !self.supports_owner_queue_load() {
+            return Err("daemon does not support owner-authoritative idle queue loads".to_string());
+        }
+        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueLoadIdle {
+            request_id,
+            slots,
+            cursor,
+            source,
+        }) {
+            return Err("could not send idle queue load to Player owner".to_string());
+        }
+        Ok(())
+    }
+
+    /// # Panics
+    ///
+    /// Panics if the `unified_queue` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[must_use]
+    pub fn unified_queue_state(&self) -> Option<mbv_ctrl::UnifiedQueueStateData> {
+        self.unified_queue.lock().unwrap().clone()
+    }
+
+    #[must_use]
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        if items.is_empty() {
+            return true;
+        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
+    }
+
+    /// Remove a slot by its stable identity.
+    #[must_use]
+    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
+    }
+
+    /// Remove several slots in one owner edit, so the owner publishes one
+    /// queue snapshot instead of one per slot.
+    #[must_use]
+    pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
+        if slot_ids.is_empty() {
+            return true;
+        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids })
+    }
+
+    /// Move a slot by its stable identity to `to_index`.
+    #[must_use]
+    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
+    }
+
+    /// Begin playback of an existing slot by its stable identity.
+    #[must_use]
+    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
+        PlayerStatus {
+            current_idx,
+            queue_len,
+            active: true,
+            ..Default::default()
+        }
+    }
+
+    /// Test helper for root-crate integration tests that need a remote-player
+    /// stand-in without a live daemon connection.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub(items: Vec<EmbyItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        (remote, event_rx)
+    }
+
+    /// Test helper variant that also exposes commands sent to the daemon.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let queue_len = items.len();
+        let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
+        let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
+        let items = Arc::new(Mutex::new(items));
+        let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
+        let disconnected = Arc::new(AtomicBool::new(false));
+        let shutdown_announced = Arc::new(AtomicBool::new(false));
+        let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
+        let pending_playback = Arc::new(Mutex::new(HashMap::new()));
+        let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
+        let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
+        let compat = CtrlCompatibility::current();
+        (
+            RemotePlayer {
+                status,
+                subtitle_prefs,
+                items,
+                unified_queue: Arc::new(Mutex::new(None)),
+                queue_source,
+                cmd_tx,
+                disconnected,
+                shutdown_announced,
+                ctrl_compatibility: compat,
+                control_stream: Arc::new(Mutex::new(None)),
+                next_playback_id,
+                pending_playback,
+                shutdown_request_tx: Arc::new(Mutex::new(None)),
+            },
+            event_rx,
+            cmd_rx,
+        )
+    }
+
+    /// Test-support stub that advertises owner-authoritative idle queue loads.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub_owner_queue_load_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_owner_queue_load = true;
+        (remote, event_rx, cmd_rx)
+    }
+
+    /// Test-support stub whose advertised ctrl capability identifies an
+    /// audio-only playback owner.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub_audio_only_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_audio_only = true;
+        (remote, event_rx, cmd_rx)
+    }
+}

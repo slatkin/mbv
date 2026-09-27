@@ -1,0 +1,27 @@
+[package]
+name = "mbv-remote-player"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Remote Player owner control connections for mbv."
+readme = "../../README.md"
+
+[features]
+test = []
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-config = { path = "../mbv-config" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-emby = { path = "../mbv-emby" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-net = { path = "../mbv-net" }
+serde_json.workspace = true
+log.workspace = true

@@ -1,0 +1,41 @@
+[package]
+name = "mbv-player"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "mpv-backed player runtime for mbv."
+readme = "../../README.md"
+
+[features]
+test = ["mbv-remote-player/test"]
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-remote-player = { path = "../mbv-remote-player" }
+mbv-core = { path = "../mbv-core" }
+mbv-emby = { path = "../mbv-emby" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-config = { path = "../mbv-config" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-ids = { path = "../mbv-ids" }
+mbv-net = { path = "../mbv-net" }
+mbv-ws = { path = "../mbv-ws" }
+libmpv2.workspace = true
+libmpv2-sys.workspace = true
+libc.workspace = true
+serde_json.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+mbv-remote-player = { path = "../mbv-remote-player", features = ["test"] }
+mbv-config = { path = "../mbv-config", features = ["test"] }
+mbv-net = { path = "../mbv-net", features = ["test"] }

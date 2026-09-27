@@ -1,4 +1,4 @@
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 
 use crate::app::App;
 
@@ -216,7 +216,7 @@ impl App {
         let limit = loaded_count.max(PAGE_SIZE);
         let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
-            match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+            match client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                 parent_id: &parent_id,
                 item_types: item_types.as_deref(),
                 unplayed_only,

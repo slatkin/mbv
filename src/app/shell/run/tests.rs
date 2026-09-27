@@ -8,7 +8,7 @@ use crate::app::render::make_movie_app;
 use crate::app::state::types::events::LibEvent;
 use crate::app::tests::{make_app_stub, make_session};
 use crate::app::SessionEvent;
-use mbv_core::audiobookshelf::{
+use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
 };

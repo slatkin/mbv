@@ -1,6 +1,6 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent};
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 
 type BrowseRefresh = (
@@ -288,7 +288,7 @@ mod tv_latest_tests {
             ..crate::config::Config::default()
         };
         let http = mbv_net::mock_http::MockHttp::new();
-        let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
+        let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
         app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
             std::sync::Mutex::new(client),
         ));

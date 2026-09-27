@@ -18,10 +18,10 @@ use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode, SettingsDestination};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::SidebarId;
-use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
+use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
@@ -83,8 +83,7 @@ pub struct App {
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
-    pub(in crate::app) audiobookshelf_libraries:
-        Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+    pub(in crate::app) audiobookshelf_libraries: Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
     /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
     /// fetch, Task 6.2), keyed by library id. `fetch_home()` rebuilds Home's
     /// Audiobookshelf Latest pills from this cache — never a blocking network
@@ -99,7 +98,7 @@ pub struct App {
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps
     /// receive the same request identity semantics.
-    pub(in crate::app) bare_owner: mbv_core::player_owner_state::PlayerOwnerState,
+    pub(in crate::app) bare_owner: mbv_player::owner_state::PlayerOwnerState,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test
     /// construction via `build()` does not). `None` in tests so they never
@@ -114,7 +113,7 @@ pub struct App {
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
+        mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,
@@ -139,7 +138,7 @@ pub struct App {
     /// daemon. Replaces the mutable `is_local_daemon` boolean so every
     /// transition records its source of truth rather than projecting it
     /// down to a bool that must be manually kept in sync.
-    pub(in crate::app) player_endpoint: Option<mbv_core::remote_player::DaemonEndpoint>,
+    pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
     /// The one-time, launch-time launch classification: `true` only for
     /// `App::new_remote` instances constructed for the managed local
     /// daemon, and never updated afterward. Kept independent of
@@ -156,7 +155,7 @@ pub struct App {
         crate::app::state::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
-    /// lookup -- see `mbv_core::remote_player::resolve_library_route`.
+    /// lookup -- see `mbv_remote_player::resolve_library_route`.
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
@@ -273,10 +272,10 @@ pub struct App {
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
     /// overlay is active (task 3.2).
-    pub(in crate::app) sessions: Vec<mbv_core::api::SessionInfo>,
+    pub(in crate::app) sessions: Vec<mbv_emby::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
-    pub(in crate::app) cast_receivers: Vec<mbv_core::cast::discovery::CastReceiver>,
+    pub(in crate::app) cast_receivers: Vec<mbv_cast::discovery::CastReceiver>,
     /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
     pub(in crate::app) panel_targets: Vec<PanelTarget>,
@@ -316,7 +315,7 @@ pub struct App {
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
     pub(in crate::app) connected_session_id: Option<String>,
-    pub(in crate::app) connected_session_state: Option<mbv_core::api::SessionInfo>,
+    pub(in crate::app) connected_session_state: Option<mbv_emby::SessionInfo>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.

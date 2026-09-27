@@ -4,8 +4,8 @@
 // separately, since each is refreshed on its own channel/cadence; this
 // module's job is only the merge.
 
-use mbv_core::api::SessionInfo;
-use mbv_core::cast::discovery::CastReceiver;
+use mbv_cast::discovery::CastReceiver;
+use mbv_emby::SessionInfo;
 
 /// One row in the F3 target panel. The channel that produced a target
 /// determines how mbv controls it (design.md "Discovery is a second channel
@@ -102,7 +102,7 @@ mod tests {
             sub_index: -1,
             audio_index: 0,
             muted: false,
-            media_info: mbv_core::api::SessionMediaInfo::default(),
+            media_info: mbv_emby::SessionMediaInfo::default(),
         }
     }
 

@@ -2,10 +2,10 @@ use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 
 pub(in crate::app) type DirectConnectFn = fn(
-    &mbv_core::remote_player::DaemonEndpoint,
+    &mbv_remote_player::DaemonEndpoint,
 ) -> Result<
     (
-        mbv_core::remote_player::RemotePlayer,
+        mbv_remote_player::RemotePlayer,
         mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
     String,
@@ -31,7 +31,7 @@ pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlaye
 // never conflated, per #223's explicit "must not be conflated" rule.
 pub(in crate::app) enum DaemonRouteConnectOutcome {
     Connected(
-        mbv_core::remote_player::RemotePlayer,
+        mbv_remote_player::RemotePlayer,
         mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
     Failed(String),
@@ -42,7 +42,7 @@ impl DaemonRouteConnectOutcome {
         self,
     ) -> Result<
         (
-            mbv_core::remote_player::RemotePlayer,
+            mbv_remote_player::RemotePlayer,
             mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
         ),
         String,
@@ -55,7 +55,7 @@ impl DaemonRouteConnectOutcome {
 }
 
 pub(in crate::app) type DaemonRouteConnectFn =
-    fn(&mbv_core::remote_player::DaemonEndpoint) -> DaemonRouteConnectOutcome;
+    fn(&mbv_remote_player::DaemonEndpoint) -> DaemonRouteConnectOutcome;
 pub(in crate::app) static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DaemonRouteConnectFn>> =
     Mutex::new(None);
 pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -66,7 +66,7 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 // `try_auto_reconnect`'s `DirectSession` lookup (#236) and the F2
 // "Library Routes" device picker (`enter_device_stage`, #256).
 pub(in crate::app) type SessionsLoadFn =
-    fn(&mbv_core::api::EmbyClient) -> Result<Vec<mbv_core::api::SessionInfo>, String>;
+    fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, String>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 
 // Test seam for `App::connect_cast_receiver`'s resolve-and-connect step

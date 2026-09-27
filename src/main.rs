@@ -26,9 +26,10 @@ mod tray;
 
 use app::{capture_launch_window, current_launch_secs, App, Model};
 use config::load_config;
-use mbv_core::api::EmbyClient;
-use mbv_core::{applog, remote_player};
+use mbv_core::applog;
 use mbv_ctrl::player::PlayerEvent;
+use mbv_emby::EmbyClient;
+use mbv_remote_player as remote_player;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
 /// with the launch window available to the model.

@@ -1,5 +1,5 @@
 use crate::app::{App, SessionEvent};
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::TICKS_PER_SECOND;
 impl App {
     pub(in crate::app) fn submit_attached_sequence(

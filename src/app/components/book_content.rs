@@ -70,13 +70,11 @@ pub struct BookContent {
 impl BookContent {
     pub(in crate::app) fn new() -> Self {
         Self {
-            state: AudiobookshelfBookBrowseState::new(
-                mbv_core::audiobookshelf::AudiobookshelfLibrary {
-                    id: String::new(),
-                    name: String::new(),
-                    media_type: "book".into(),
-                },
-            ),
+            state: AudiobookshelfBookBrowseState::new(mbv_audiobookshelf::AudiobookshelfLibrary {
+                id: String::new(),
+                name: String::new(),
+                media_type: "book".into(),
+            }),
             initialized: false,
             chapter_focused: false,
             selected_bucket: 0,

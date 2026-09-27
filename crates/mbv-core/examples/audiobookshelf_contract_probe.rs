@@ -3,8 +3,8 @@
 //! Run only against a disposable/controlled Audiobookshelf Service.
 
 use libmpv2::{events::Event, Mpv};
+use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config as config;
-use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_queue::ServiceKind;
 use serde_json::{json, Map, Value};
 use std::{
@@ -387,7 +387,7 @@ struct PlaybackProbe {
 
 fn first_podcast_episode(
     live: &LiveClient,
-) -> Result<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode, String> {
+) -> Result<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode, String> {
     let catalog = AudiobookshelfClient::new(&live.base).map_err(|error| error.to_string())?;
     let library = catalog
         .libraries_bounded(&live.token, REQUEST_BOUND)
@@ -412,7 +412,7 @@ fn first_podcast_episode(
 
 fn probe_playback(
     live: &mut LiveClient,
-    episode: &mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode,
+    episode: &mbv_audiobookshelf::AudiobookshelfDownloadedEpisode,
 ) -> Result<PlaybackProbe, String> {
     let direct = live.play(&episode.library_item_id, &episode.episode_id, false)?;
     let direct_session = direct["id"]

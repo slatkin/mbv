@@ -1,12 +1,12 @@
 use super::*;
-use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
-use mbv_core::audiobookshelf::socket::SocketEvent;
+use mbv_audiobookshelf::socket::AudiobookshelfProgress;
+use mbv_audiobookshelf::socket::SocketEvent;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::QueueItem;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
-    let context = mbv_core::player::AudiobookshelfPlayerContext::new(
+    let context = mbv_player::AudiobookshelfPlayerContext::new(
         mbv_core::service_runtime::SetupGeneration::new(1),
         mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
@@ -89,7 +89,7 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
     let stale = app.audiobookshelf_runtime.generation();
     app.audiobookshelf_runtime.begin_validation();
     app.handle_lib_event(LibEvent::AudiobookshelfProgressAcknowledged(
-        mbv_core::player::AudiobookshelfProgressUpdate {
+        mbv_player::AudiobookshelfProgressUpdate {
             generation: stale,
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
@@ -127,7 +127,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     app.audiobookshelf_browse[0].detail_cache.insert(
         "show-a".into(),
         vec![
-            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
                 library_item_id: "show-a".into(),
                 episode_id: "episode-a".into(),
                 title: "Episode A".into(),
@@ -135,7 +135,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
                 published_at: None,
                 duration_seconds: Some(120.0),
             },
-            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
                 library_item_id: "show-a".into(),
                 episode_id: "episode-b".into(),
                 title: "Episode B".into(),
@@ -223,7 +223,7 @@ fn make_socket_merge_ready_app() -> App {
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
     app.audiobookshelf_browse[0].progress.insert(
         ("show-a".into(), "episode-a".into()),
-        mbv_core::audiobookshelf::AudiobookshelfProgress {
+        mbv_audiobookshelf::AudiobookshelfProgress {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             current_time_seconds: 0.0,

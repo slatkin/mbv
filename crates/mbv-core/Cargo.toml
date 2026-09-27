@@ -7,43 +7,23 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Core runtime, service providers, and playback engine for mbv."
+description = "Service runtime state and application logging for mbv."
 readme = "../../README.md"
-
-[features]
-test = ["mbv-net/test", "mbv-config/test"]
 
 [lints]
 workspace = true
 
 [dependencies]
-mbv-ids = { path = "../mbv-ids" }
-mbv-net = { path = "../mbv-net" }
-mbv-text = { path = "../mbv-text" }
-mbv-emby-model = { path = "../mbv-emby-model" }
-mbv-queue = { path = "../mbv-queue" }
-mbv-ctrl = { path = "../mbv-ctrl" }
-mbv-config = { path = "../mbv-config" }
-mbv-ws = { path = "../mbv-ws" }
-ureq.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-libmpv2.workspace = true
-libmpv2-sys.workspace = true
-rand.workspace = true
-uuid.workspace = true
-tungstenite.workspace = true
+mbv-emby = { path = "../mbv-emby" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 log.workspace = true
 libc.workspace = true
-time.workspace = true
-rust_cast = "0.21"
-mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
 
 [dev-dependencies]
-# mdns-sd's `Receiver<ServiceEvent>` is a `flume` channel; tests construct one
-# directly to feed synthetic events into cast_discovery's pure collection
-# logic without a real mDNS browse.
-flume = "0.12"
 rstest.workspace = true
-mbv-net = { path = "../mbv-net", features = ["test"] }
-mbv-config = { path = "../mbv-config", features = ["test"] }
+mbv-config = { path = "../mbv-config" }
+mbv-queue = { path = "../mbv-queue" }
+ureq.workspace = true
+serde_json.workspace = true
+libmpv2.workspace = true
+rust_cast = "0.21"

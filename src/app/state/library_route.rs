@@ -58,7 +58,7 @@ impl App {
     pub(in crate::app) fn resolve_route_for_library(
         &mut self,
         library_name: &str,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         let name = library_name.trim();
         if name.is_empty() {
             log::info!(target: "library_route", "route resolution skipped: empty library name");
@@ -68,8 +68,8 @@ impl App {
             log::info!(target: "library_route", "configured library missing library={name:?}");
             return None;
         };
-        let Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) =
-            mbv_core::remote_player::DaemonEndpoint::parse(raw)
+        let Ok(endpoint @ mbv_remote_player::DaemonEndpoint::Tcp(_)) =
+            mbv_remote_player::DaemonEndpoint::parse(raw)
         else {
             log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
             return None;
@@ -85,7 +85,7 @@ impl App {
     pub(in crate::app) fn route_for_active_library_view(
         &mut self,
         lib_idx: usize,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         let name = self.libs.get(lib_idx)?.library.name.clone();
         self.resolve_route_for_library(&name)
     }
@@ -103,7 +103,7 @@ impl App {
     pub(in crate::app) fn route_for_item_via_ancestors(
         &mut self,
         item_id: &str,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         // No routes configured at all -- this must be a true no-op for the
         // common case (no `[library_routes]` in config.toml), not just "no
         // match": every other resolver in this file is a synchronous,
@@ -187,7 +187,7 @@ impl App {
     pub(in crate::app) fn resolve_route_for_play(
         &mut self,
         item: &mbv_emby_model::EmbyItem,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.tab.to_position_with_counts(self.libs.len(), self.feeds_tab_pos()));
         if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
             log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
@@ -246,7 +246,7 @@ mod tests {
             resolved,
             Some((
                 "music".to_string(),
-                mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap())
+                mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap())
             ))
         );
     }

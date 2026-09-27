@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-visualizer", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-visualizer", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -108,6 +108,12 @@ path = "src/main.rs"
 
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
+mbv-emby = { path = "crates/mbv-emby" }
+mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }
+mbv-cast = { path = "crates/mbv-cast" }
+mbv-remote-player = { path = "crates/mbv-remote-player" }
+mbv-daemon = { path = "crates/mbv-daemon" }
+mbv-player = { path = "crates/mbv-player" }
 mbv-ctrl = { path = "crates/mbv-ctrl" }
 mbv-config = { path = "crates/mbv-config" }
 mbv-ids = { path = "crates/mbv-ids" }
@@ -141,7 +147,9 @@ time.workspace = true
 mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
-mbv-core = { path = "crates/mbv-core", features = ["test"] }
+mbv-core = { path = "crates/mbv-core" }
+mbv-remote-player = { path = "crates/mbv-remote-player", features = ["test"] }
+mbv-player = { path = "crates/mbv-player", features = ["test"] }
 mbv-config = { path = "crates/mbv-config", features = ["test"] }
 mbv-net = { path = "crates/mbv-net", features = ["test"] }
 uuid.workspace = true

@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, RemoteSlotState};
-use mbv_core::remote_player::DaemonEndpoint;
+use mbv_remote_player::DaemonEndpoint;
 
 impl App {
     pub(in crate::app) fn is_local_daemon(&self) -> bool {

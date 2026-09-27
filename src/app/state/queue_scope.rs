@@ -316,7 +316,7 @@ impl App {
     /// queue position: `(prev_available, next_available)`.
     ///
     /// A connected remote session exposes no queue-position/length fields in
-    /// `SessionInfo` (see `mbv_core::api::SessionInfo`), so there is no way to
+    /// `SessionInfo` (see `mbv_emby::SessionInfo`), so there is no way to
     /// tell whether it's at a queue boundary; both remain available there,
     /// mirroring `Command::PreviousTrack`/`Command::NextTrack`'s dispatch, which
     /// calls `session_jump_track` unconditionally for a connected session with

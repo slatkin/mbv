@@ -254,13 +254,13 @@ impl App {
         &self,
         quit_timeout: Duration,
         should_request_shutdown: bool,
-    ) -> Option<mbv_core::remote_player::ShutdownResponse> {
+    ) -> Option<mbv_remote_player::ShutdownResponse> {
         if !should_request_shutdown {
             return None;
         }
         let current_is_local = matches!(
             self.player_endpoint,
-            Some(mbv_core::remote_player::DaemonEndpoint::Local)
+            Some(mbv_remote_player::DaemonEndpoint::Local)
         );
         let current_connected = self.player.is_remote() && !self.player.is_remote_disconnected();
         if current_is_local && current_connected {
@@ -280,11 +280,8 @@ impl App {
     /// After a failed shutdown request (Rejected, Disconnected, `TimedOut`,
     /// Unsupported, or no response at all), set a post-terminal message that
     /// the local daemon may still be running and names `mbv -q`.
-    fn record_shutdown_failure(
-        &mut self,
-        response: Option<mbv_core::remote_player::ShutdownResponse>,
-    ) {
-        use mbv_core::remote_player::ShutdownResponse;
+    fn record_shutdown_failure(&mut self, response: Option<mbv_remote_player::ShutdownResponse>) {
+        use mbv_remote_player::ShutdownResponse;
         let Some(response) = response else {
             // Failed to connect or invoke the request.
             log::warn!(target: "daemon_shutdown", "failed to invoke shutdown request via Local connection");
@@ -331,8 +328,8 @@ impl App {
     /// None if the connection cannot be established.
     fn invoke_shutdown_via_short_lived_local(
         quit_timeout: Duration,
-    ) -> Option<mbv_core::remote_player::ShutdownResponse> {
-        use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+    ) -> Option<mbv_remote_player::ShutdownResponse> {
+        use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
         match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local) {
             Ok((remote, _event_rx)) => {
                 log::info!(target: "daemon_shutdown", "short-lived Local connection established");

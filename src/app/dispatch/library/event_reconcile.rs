@@ -38,7 +38,7 @@ impl App {
         for state in &mut self.audiobookshelf_browse {
             state.progress.insert(
                 (library_item_id.to_string(), episode_id.to_string()),
-                mbv_core::audiobookshelf::AudiobookshelfProgress {
+                mbv_audiobookshelf::AudiobookshelfProgress {
                     library_item_id: library_item_id.to_string(),
                     episode_id: episode_id.to_string(),
                     current_time_seconds,
@@ -82,7 +82,7 @@ impl App {
         for state in &mut self.audiobookshelf_book_browse {
             state.progress.insert(
                 library_item_id.to_string(),
-                mbv_core::audiobookshelf::AudiobookshelfBookProgress {
+                mbv_audiobookshelf::AudiobookshelfBookProgress {
                     library_item_id: library_item_id.to_string(),
                     current_time_seconds,
                     is_finished,

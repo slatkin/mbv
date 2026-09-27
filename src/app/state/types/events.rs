@@ -196,32 +196,32 @@ pub(in crate::app) enum LibEvent {
         request: u64,
         library_item_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfShowsFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfShowPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfShowPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfBooksFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfBookPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfBookPage,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfShelfFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
     AudiobookshelfBookDetailFetched {
@@ -229,14 +229,14 @@ pub(in crate::app) enum LibEvent {
         library_item_id: String,
         result: Result<
             (
-                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
-                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
+                Vec<mbv_audiobookshelf::AudiobookshelfChapter>,
+                Vec<mbv_audiobookshelf::AudiobookshelfAudioFile>,
             ),
-            mbv_core::audiobookshelf::AudiobookshelfError,
+            mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),
-    AudiobookshelfBookProgressAcknowledged(mbv_core::player::AudiobookshelfBookProgressUpdate),
+    AudiobookshelfProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
+    AudiobookshelfBookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).
     NavigateTo {
@@ -285,7 +285,7 @@ pub(in crate::app) enum LibEvent {
 
 pub(in crate::app) enum SessionEvent {
     Loaded {
-        sessions: Vec<mbv_core::api::SessionInfo>,
+        sessions: Vec<mbv_emby::SessionInfo>,
     },
     CommandError {
         error: String,

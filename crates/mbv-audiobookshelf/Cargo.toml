@@ -1,0 +1,32 @@
+[package]
+name = "mbv-audiobookshelf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Audiobookshelf provider client and playback protocol for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-config = { path = "../mbv-config" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-text = { path = "../mbv-text" }
+mbv-net = { path = "../mbv-net" }
+ureq.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tungstenite.workspace = true
+log.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+mbv-net = { path = "../mbv-net", features = ["test"] }
+mbv-config = { path = "../mbv-config", features = ["test"] }

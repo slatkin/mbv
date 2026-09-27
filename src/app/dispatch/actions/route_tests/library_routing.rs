@@ -22,8 +22,8 @@ fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
 #[test]
 fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     let mut app = make_app_stub();
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.player = mbv_core::player::PlayerProxy::remote(remote, false);
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.player = mbv_player::PlayerProxy::remote(remote, false);
     app.player_rx = remote_rx;
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
@@ -55,13 +55,13 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
     let mut app = make_app_stub();
     let stale_item = make_item("Stale", "Movie");
     let (remote, remote_rx, command_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
     let sess = crate::app::tests::make_session("remote-mbv", "mbv");
     app.switch_to_direct_remote(
         &sess,
         remote,
         remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
 
     let mut selected = make_item("Selected", "Movie");
