@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND;
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
@@ -52,6 +53,50 @@ impl QueueRevision {
 
     fn bump(&mut self) {
         self.0 = self.0.saturating_add(1);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgressObservation {
+    Completed { position_ticks: i64, played: bool },
+    Stopped { position_ticks: i64, played: bool },
+}
+
+impl ProgressObservation {
+    #[must_use]
+    pub fn position_to_record(self, item: &QueueItem) -> i64 {
+        let (position_ticks, played) = match self {
+            Self::Completed {
+                position_ticks,
+                played,
+            } => {
+                if played {
+                    return 0;
+                }
+                if position_ticks >= MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS && !item.is_audio() {
+                    return position_ticks;
+                }
+                return item.playback_position_ticks();
+            }
+            Self::Stopped {
+                position_ticks,
+                played,
+            } => (position_ticks, played),
+        };
+        if played {
+            0
+        } else if position_ticks > 0 && !item.is_audio() {
+            position_ticks
+        } else {
+            item.playback_position_ticks()
+        }
+    }
+
+    #[must_use]
+    pub fn played(self) -> bool {
+        match self {
+            Self::Completed { played, .. } | Self::Stopped { played, .. } => played,
+        }
     }
 }
 

@@ -12,8 +12,7 @@ use mbv_emby::{mbv_direct_tcp_port_command, EmbyClient};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
-use mbv_queue::PlaybackQueue;
-use mbv_queue::QueueSlotId;
+use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -57,20 +56,15 @@ pub(super) fn apply_track_completed_observation(
         return false;
     }
     if let Some(slot) = owner.core.queue.slot(slot_id) {
-        // Completion observations ignore small progress changes; stopped observations below
-        // retain any positive position so an interrupted item can resume precisely.
-        let position = if was_played {
-            0
-        } else if position_ticks >= mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
-            && !slot.item.is_audio()
-        {
-            position_ticks
-        } else {
-            slot.item.playback_position_ticks()
+        let observation = ProgressObservation::Completed {
+            position_ticks,
+            played: was_played,
         };
-        owner
-            .core
-            .apply_completion_progress(slot_id, position, was_played);
+        owner.core.apply_completion_progress(
+            slot_id,
+            observation.position_to_record(&slot.item),
+            observation.played(),
+        );
     }
     if owner.core.consume_completed_slot(
         slot_id,
@@ -101,16 +95,15 @@ pub(super) fn apply_stopped_observation(
     let Some(slot) = owner.core.queue.slot(slot_id) else {
         return Some(false);
     };
-    let position = if was_played {
-        0
-    } else if position_ticks > 0 && !slot.item.is_audio() {
-        position_ticks
-    } else {
-        slot.item.playback_position_ticks()
+    let observation = ProgressObservation::Stopped {
+        position_ticks,
+        played: was_played,
     };
-    owner
-        .core
-        .apply_completion_progress(slot_id, position, was_played);
+    owner.core.apply_completion_progress(
+        slot_id,
+        observation.position_to_record(&slot.item),
+        observation.played(),
+    );
     Some(true)
 }
 
