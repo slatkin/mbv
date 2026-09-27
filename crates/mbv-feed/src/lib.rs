@@ -1,11 +1,10 @@
-use crate::app::state::types::feed::IdleFeedItem;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::FeedEntry;
 use mbv_queue::FeedKind;
 use mbv_text::html::decode_entities;
 
 mod date;
-pub(in crate::app) use self::date::parse_pub_date_secs;
+pub use self::date::parse_pub_date_secs;
 
 fn fetch_feed_body(url: &str) -> Result<String, String> {
     tls_agent(None)
@@ -21,10 +20,10 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 /// automatically from the `native-tls` feature flag — it must be selected
 /// explicitly on the agent's config, or `https://` requests fail with "no
 /// TLS backend is configured".
-pub(in crate::app) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
+fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
     mbv_net::native_tls_agent(None, global_timeout)
 }
-pub(in crate::app) fn normalize_feed_url(input: &str) -> Result<String, String> {
+pub fn normalize_feed_url(input: &str) -> Result<String, String> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {
         return Ok(input.to_string());
     };
@@ -107,7 +106,7 @@ fn extract_rss_link(body: &str) -> Option<String> {
     })
 }
 
-pub(in crate::app) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
+pub fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
     let body = fetch_feed_body(url)?;
 
     let mut items = Vec::new();
@@ -149,7 +148,7 @@ pub(in crate::app) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>
 /// canonical fallback when enclosure MIME is absent or unrecognized.
 /// `feed_id` is the stable identity for the keyed feed-entry state store
 /// (#492); typically the normalized subscription URL.
-pub(in crate::app) fn fetch_and_parse_entries(
+pub fn fetch_and_parse_entries(
     url: &str,
     subscription_kind: FeedKind,
     feed_id: &str,
@@ -384,6 +383,15 @@ fn strip_control_chars(text: &str) -> String {
         .filter(|ch| !mbv_text::text_safety::is_control_char(*ch))
         .collect()
 }
+
+#[derive(Debug)]
+pub struct IdleFeedItem {
+    pub title: String,
+    pub link: Option<String>,
+}
+
+mod entry_state;
+pub use entry_state::*;
 
 #[cfg(test)]
 mod tests;

@@ -39,9 +39,7 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
 /// Normalize the provider timestamp carried by a destination Latest item.
 pub(in crate::app) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
-        QueueItem::Emby(item) => {
-            crate::app::infra::feed_parse::parse_pub_date_secs(&item.date_added)
-        }
+        QueueItem::Emby(item) => mbv_feed::parse_pub_date_secs(&item.date_added),
         QueueItem::Feed(entry) => entry.pub_date_secs,
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
             episode.pub_date_secs

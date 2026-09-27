@@ -1710,6 +1710,7 @@ dependencies = [
  "mbv-core",
  "mbv-ctrl",
  "mbv-emby-model",
+ "mbv-feed",
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
@@ -1798,6 +1799,22 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-feed"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "serde",
+ "serde_json",
+ "time",
+ "ureq",
 ]
 
 [[package]]

@@ -3,7 +3,6 @@ pub mod applog;
 pub mod audiobookshelf;
 pub mod cast;
 pub mod daemon;
-pub mod feed_entry_state;
 pub mod player;
 /// Compatibility re-export for callers that used the former flat module path.
 pub mod player_owner_state {

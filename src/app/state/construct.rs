@@ -317,7 +317,7 @@ impl App {
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
             feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
-            feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
+            feed_entry_state: mbv_feed::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();
         app

@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-visualizer", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-visualizer", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -30,6 +30,7 @@ pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 rstest = { version = "0.27", default-features = false }
 fuzzy-matcher = "0.3"
+time = { version = "0.3", features = ["parsing"] }
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
@@ -136,7 +137,8 @@ libc.workspace = true
 mimalloc.workspace = true
 nix.workspace = true
 tui-scrollbar = "0.2.7"
-time = { version = "0.3", features = ["parsing"] }
+time.workspace = true
+mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
 mbv-core = { path = "crates/mbv-core", features = ["test"] }

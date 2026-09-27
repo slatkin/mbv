@@ -448,7 +448,7 @@ pub struct App {
     /// Local, machine-scoped feed-entry playback state (resume position and
     /// watched flag) for every configured subscription's entries. Loaded once
     /// at startup; rewritten on each playback lifecycle write. Replaces the
-    pub(in crate::app) feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore,
+    pub(in crate::app) feed_entry_state: mbv_feed::FeedEntryStore,
     /// When a seek was issued during Feed playback, the `slot_id` is stored
     /// here. The next `OutputStarted` clears it and persists the resulting
     /// position. This prevents ordinary output restarts (buffering,

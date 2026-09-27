@@ -147,7 +147,7 @@ pub(crate) fn make_app_stub() -> App {
     // Never start with a session poll already due.
     app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.
-    app.feed_entry_state = mbv_core::feed_entry_state::FeedEntryStore::default();
+    app.feed_entry_state = mbv_feed::FeedEntryStore::default();
     // Default to "focused, past grace window" so existing mouse tests dispatch
     // without arming focus explicitly. The refocus guard itself is tested
     // directly in input_music_track_focus_tests.
