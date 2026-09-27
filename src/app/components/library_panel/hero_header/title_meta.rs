@@ -46,7 +46,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     );
     let image_ready = matches!(
         content.facts.artwork.image,
-        super::super::content::HeroImageState::Ready { .. }
+        crate::app::render::components::tv_wide::HeroImageState::Ready { .. }
     );
     if artwork.width > 0 && artwork.height > 0 && !image_ready {
         // Placeholder at full box size while loading or imageless (spec: the

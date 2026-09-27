@@ -14,19 +14,18 @@ use mbv_config::{
 use mbv_emby_model::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 
-use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
-};
+use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
 use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
-};
+use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput};
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
+};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::current_time_secs;
 use crate::app::ui_model::audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,

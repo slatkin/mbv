@@ -16,20 +16,21 @@ use mbv_config::{
 };
 
 use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
+    HeroContent, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState,
-};
+use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
     ShellRequest,
 };
 use crate::app::dispatch::audiobookshelf::browse::audiobookshelf_book_queue_item;
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 

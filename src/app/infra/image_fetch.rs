@@ -59,9 +59,9 @@ impl App {
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
-    ) -> crate::app::components::library_panel::HeroImageState {
+    ) -> crate::app::render::components::tv_wide::HeroImageState {
         use crate::app::components::library_panel::content::ArtworkSource;
-        use crate::app::components::library_panel::content::HeroImageState as State;
+        use crate::app::render::components::tv_wide::HeroImageState as State;
         let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
             return State::None;

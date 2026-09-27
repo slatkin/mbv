@@ -95,7 +95,8 @@ impl<Target: Clone + Eq> MediaList<Target> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{MediaList, MediaListRow};
+    use super::super::MediaList;
+    use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 
     fn list() -> MediaList<u8> {
         let mut list = MediaList::new();
@@ -110,8 +111,8 @@ mod tests {
             secondary: None,
             trailing: None,
             duration: None,
-            kind: super::super::MediaKind::Media,
-            semantic_state: super::super::MediaSemanticState::Ordinary,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
         }
     }
 

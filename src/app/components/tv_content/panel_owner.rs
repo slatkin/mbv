@@ -1,10 +1,10 @@
 use super::{
     hero_content_emby, EmbyItem, EmbyLetterBucket, EmbySelectorKey, HeroContent, HeroContentData,
-    HeroImageState, InlineSearch, InlineSearchHost, KeyEvent, LeafKeyResult, LetterFilter,
-    LetterFilterKind, LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent,
-    LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow, TvContent, TvDisplayMode,
-    TvTreeTarget, Workspace,
+    InlineSearch, InlineSearchHost, KeyEvent, LeafKeyResult, LetterFilter, LetterFilterKind,
+    LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg,
+    Pane, SelectorIdentity, SelectorRow, TvContent, TvDisplayMode, TvTreeTarget, Workspace,
 };
+use crate::app::render::components::tv_wide::HeroImageState;
 
 impl TvContent {
     /// This frame's typed Library panel content (design D3, task 8.2): the

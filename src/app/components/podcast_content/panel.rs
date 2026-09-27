@@ -5,7 +5,8 @@ use super::{
     PodcastContent, PodcastEpisodeIntent, PodcastEpisodeTarget, SelectorIdentity, ShellRequest,
     TerminalObserverEvent, STATE_PILL_COUNT,
 };
-use crate::app::components::library_panel::{HeroContentData, HeroImageState};
+use crate::app::components::library_panel::HeroContentData;
+use crate::app::render::components::tv_wide::HeroImageState;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 impl LibraryContentOwner for PodcastContent {

@@ -16,16 +16,16 @@
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
-    hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
-    LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
+    hero_content_emby, HeroContent, HeroContentData, LibraryContentOwner, LibraryPanelContent,
+    LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaSemanticState, RowIntent,
-};
+use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_tree_target::TvTreeTarget;
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
 use crate::app::render::{
     effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
 };

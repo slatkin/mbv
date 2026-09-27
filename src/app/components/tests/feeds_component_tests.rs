@@ -6,8 +6,8 @@
 
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryPanel};
-use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
+use crate::app::render::components::media_list::MediaListRow;
 use crate::app::ui_model::feed_tab::WatchedFilter;
 use crate::app::ui_model::library::LibraryKey;
 use mbv_config::{

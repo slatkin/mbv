@@ -1,7 +1,8 @@
-use crate::app::components::media_list::{
-    queue_row_zebra_stripe, WideMediaList, WideMediaListPaintPolicy,
-};
+use crate::app::components::media_list::WideMediaList;
 use crate::app::palette;
+use crate::app::render::components::media_list::{
+    queue_row_zebra_stripe, WideMediaListPaintPolicy,
+};
 use mbv_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

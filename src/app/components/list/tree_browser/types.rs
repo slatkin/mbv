@@ -1,4 +1,5 @@
-use crate::app::components::media_list::MediaSemanticState;
+use crate::app::render::components::media_list::MediaSemanticState;
+use crate::app::render::components::tree_browser::TreeTitleRole;
 use ratatui::layout::Position;
 /// Provider-neutral trailing metadata in a tree row's right gutter.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,18 +11,6 @@ impl TreeTrailing {
     pub fn new(text: impl Into<String>) -> Self {
         Self { text: text.into() }
     }
-}
-
-/// Semantic title emphasis supplied by the destination for one tree row.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TreeTitleRole {
-    /// A group or section title.
-    Heading,
-    /// A nested title with secondary emphasis.
-    Secondary,
-    /// A regular row title.
-    #[default]
-    Standard,
 }
 
 /// Closed per-node marking policy.

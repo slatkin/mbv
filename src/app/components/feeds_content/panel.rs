@@ -6,10 +6,11 @@ use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::super::library_panel::HeroContentData;
 use super::super::media_list::MediaListOperation;
 use super::{
-    trunc_str, FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, HeroImageState, Key,
-    KeyEvent, LeafKeyResult, LibraryItemIdentity, MediaListSurfaceInput, Msg, RowIntent,
-    SelectorIdentity, ShellRequest, TerminalObserverEvent, WatchedFilter, MAX_GROUP_LABEL,
+    trunc_str, FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, Key, KeyEvent,
+    LeafKeyResult, LibraryItemIdentity, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity,
+    ShellRequest, TerminalObserverEvent, WatchedFilter, MAX_GROUP_LABEL,
 };
+use crate::app::render::components::tv_wide::HeroImageState;
 
 impl FeedsContent {
     fn on_selector_picked(&mut self, index: usize) -> Option<Msg> {

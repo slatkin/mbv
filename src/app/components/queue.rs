@@ -9,11 +9,7 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-#[cfg(test)]
-use super::media_list::MediaSemanticState;
-use super::media_list::{
-    MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
-};
+use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{Msg, QueueRequest};
 use super::user_event::UserEvent;
@@ -21,6 +17,9 @@ use crate::app::palette;
 use crate::app::render::arrangements::queue::{
     queue_footer_row, queue_list_box, queue_panel_subareas,
 };
+use crate::app::render::components::media_list::MediaListRow;
+#[cfg(test)]
+use crate::app::render::components::media_list::MediaSemanticState;
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};

@@ -440,8 +440,8 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
 
 #[test]
 fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
-    use crate::app::components::media_list::MediaSemanticState;
     use crate::app::components::queue::queue_media_rows;
+    use crate::app::render::components::media_list::MediaSemanticState;
     use crate::app::tests::make_audio_items;
 
     let mut app = make_app_stub();
@@ -466,14 +466,14 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[0],
-        crate::app::components::media_list::MediaListRow::Item {
+        crate::app::render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::NowPlaying { .. },
             ..
         }
     ));
     assert!(matches!(
         &rows[1],
-        crate::app::components::media_list::MediaListRow::Item {
+        crate::app::render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }
@@ -509,7 +509,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     );
     assert!(matches!(
         &rows[1],
-        crate::app::components::media_list::MediaListRow::Item {
+        crate::app::render::components::media_list::MediaListRow::Item {
             semantic_state: MediaSemanticState::Ordinary,
             ..
         }

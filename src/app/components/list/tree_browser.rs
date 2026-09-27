@@ -15,11 +15,10 @@ use std::time::Instant;
 use ratatui::layout::{Position, Rect};
 
 use crate::app::components::list::{MarkSelectionState, PaintRetainedState};
-use crate::app::components::media_list::MediaSemanticState;
 
 pub use types::{
     TreeConsumed, TreeEntry, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode,
-    TreeOperation, TreeSelectionChange, TreeTitleRole, TreeTransition,
+    TreeOperation, TreeSelectionChange, TreeTransition,
 };
 
 /// A typed failure from an attempted tree projection replacement.
@@ -43,41 +42,6 @@ impl<Target> std::fmt::Debug for TreeReconciliationError<Target> {
             Self::Cycle { .. } => "Cycle",
         })
     }
-}
-
-/// The derived aggregate-mark state of one aggregate-policy row.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum TreeAggregateMark {
-    /// No visible direct descendant is marked.
-    None,
-    /// Some, but not all, visible direct descendants are marked.
-    Partial,
-    /// Every visible direct descendant is marked.
-    Full,
-}
-
-/// A row prepared for the destination-neutral render component.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TreePaintRowKind {
-    Node,
-    Heading,
-    Spacer,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct TreePaintRow {
-    pub(crate) kind: TreePaintRowKind,
-    pub(crate) title: String,
-    pub(crate) title_role: TreeTitleRole,
-    pub(crate) trailing: Option<String>,
-    pub(crate) depth: usize,
-    pub(crate) root_index: usize,
-    pub(crate) group_root_index: usize,
-    pub(crate) zebra_striped: bool,
-    pub(crate) selected: bool,
-    pub(crate) marked: bool,
-    pub(crate) aggregate_mark: TreeAggregateMark,
-    pub(crate) semantic_state: MediaSemanticState,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

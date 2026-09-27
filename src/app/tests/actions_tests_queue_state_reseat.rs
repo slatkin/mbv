@@ -65,8 +65,8 @@ fn queue_cursor_on_replaced_generation_submits_new_slots_without_stale_jump() {
 
 #[test]
 fn replaced_queue_while_playing_claims_no_row_until_confirmed() {
-    use crate::app::components::media_list::MediaSemanticState;
     use crate::app::components::{ComponentId, QueueComponent};
+    use crate::app::render::components::media_list::MediaSemanticState;
     use crate::app::tests::tick_integration::harness::TickHarness;
 
     fn projected_states(harness: &mut TickHarness) -> Vec<MediaSemanticState> {

@@ -29,6 +29,7 @@ use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::render::components::widgets::queue_panel_inset;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
@@ -83,7 +84,7 @@ impl QueuePlaybackPanel {
                 status_indicators: None,
                 use_nerd_fonts: false,
                 idle_feed_title: None,
-                availability: super::library_playback_panel::TransportAvailability::default(),
+                availability: TransportAvailability::default(),
             },
             transport_area: None,
             play_pause_area: Rect::default(),

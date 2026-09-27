@@ -1,6 +1,6 @@
-use super::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListTitleReveal, MediaSemanticState,
-    WideMediaList, WideMediaListPaintPolicy,
+use super::{MediaListCarrier, WideMediaList};
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTitleReveal, MediaSemanticState, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};

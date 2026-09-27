@@ -1,26 +1,11 @@
 use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
+use crate::app::render::components::three_line_flat_list::ThreeLineRole;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::Color;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
-
-/// A closed semantic text role for one span in a three-line item.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ThreeLineRole {
-    #[default]
-    Name,
-    Kind,
-    Detail,
-    Status,
-    Accent,
-    /// Explicit-color badge (e.g. a nerd-font service glyph): the component
-    /// resolves the color shell-side, and the painter preserves it on the
-    /// selected row like `Accent`.
-    Badge(Color),
-}
 
 /// One styled text span in a three-line item's presentation.
 #[derive(Clone, Debug, PartialEq, Eq)]

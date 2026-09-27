@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::inline_search::InlineSearch;
+use crate::app::render::components::tv_wide::HeroImageState;
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task
@@ -87,27 +88,6 @@ impl HeroArtwork {
             ArtworkShape::Portrait
         }
     }
-}
-
-/// The projection's image state for one hero (task 5.10, design D9): the
-/// fetch/encode runs in the shell projection; painting reads this state only.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::app) enum HeroImageState {
-    /// No image will arrive (no artwork source, images disabled, or a fetch
-    /// that resolved empty): the shared placeholder is final.
-    None,
-    /// A fetch/encode for the artwork source is in flight: the painters
-    /// reserve the box with the shared placeholder.
-    Loading,
-    /// The image is cached under `cache_key` (cover-fit keyed by the Wide
-    /// header's projected box); the painters reserve the box and the shell
-    /// paints the protocol into it after view, showing the placeholder at
-    /// most one frame while an encode completes. `decoded` is the cached
-    /// cached source image's pixel size for aspect-aware artwork placement.
-    Ready {
-        cache_key: String,
-        decoded: Option<(u32, u32)>,
-    },
 }
 
 /// Plain hero facts (design D3): one title, ordered plain-text meta rows

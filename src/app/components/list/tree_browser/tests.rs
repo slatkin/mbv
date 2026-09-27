@@ -1,5 +1,5 @@
 use super::{TreeBrowser, TreeMarkPolicy, TreeNode};
-use crate::app::components::media_list::MediaSemanticState;
+use crate::app::render::components::media_list::MediaSemanticState;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;

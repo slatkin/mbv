@@ -14,20 +14,21 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
-    ListSlot, SelectorRow, Workspace, WorkspaceHeader,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot, SelectorRow,
+    Workspace, WorkspaceHeader,
 };
 use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState, RowIntent,
-};
+use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::msg::LeafKeyResult;
 use super::msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 use super::music_tree_target::MusicTreeTarget;
 use crate::app::components::list::tree_browser::{TreeBrowser, TreeConsumed, TreeOperation};
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_model::media_list::SelectionOrigin;
 use crate::app::ui_model::msg::MusicArtistTarget;

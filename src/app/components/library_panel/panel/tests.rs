@@ -9,9 +9,8 @@ use tuirealm::props::{AttrValue, Attribute};
 use crate::app::components::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
 };
-use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
-};
+use crate::app::components::media_list::MediaListCarrier;
+use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -99,7 +98,7 @@ impl LibraryContentOwner for FixtureOwner {
                         shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                         source: None,
                         decoration: None,
-                        image: crate::app::components::library_panel::content::HeroImageState::None,
+                        image: crate::app::render::components::tv_wide::HeroImageState::None,
                     },
                 },
                 overview: None,

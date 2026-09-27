@@ -18,8 +18,9 @@ use crate::app::components::msg::{LeafKeyResult, Msg};
 use crate::app::ui_model::library::LibraryKey;
 use mbv_config::{LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
 
-use super::content::{HeroImageState, LibraryPanelContent};
+use super::content::LibraryPanelContent;
 use super::hero::HeroContentData;
+use crate::app::render::components::tv_wide::HeroImageState;
 
 #[cfg(test)]
 mod library_kind_tests {

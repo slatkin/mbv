@@ -1,11 +1,12 @@
 // The module's documentation and shared imports live in the parent module.
 use super::{
-    AlbumCursorKind, EmbyItem, EmbySelectorKey, HeroContentData, HeroImageState, InlineSearch,
-    InlineSearchHost, Key, KeyEvent, KeyModifiers, LeafKeyResult, LibraryContentOwner,
-    LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg,
-    MusicContent, MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest,
-    TreeConsumed, TreeOperation,
+    AlbumCursorKind, EmbyItem, EmbySelectorKey, HeroContentData, InlineSearch, InlineSearchHost,
+    Key, KeyEvent, KeyModifiers, LeafKeyResult, LibraryContentOwner, LibraryItemIdentity,
+    LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent,
+    MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest, TreeConsumed,
+    TreeOperation,
 };
+use crate::app::render::components::tv_wide::HeroImageState;
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {

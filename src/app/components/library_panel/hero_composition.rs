@@ -17,14 +17,14 @@ use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 use super::content::{
-    HeroContent, HeroImageState, PanelHeroImagePaint, PanelListPaintPolicy, Workspace,
-    WorkspaceHeader,
+    HeroContent, PanelHeroImagePaint, PanelListPaintPolicy, Workspace, WorkspaceHeader,
 };
 use super::hero_header::paint_hero_pane_content;
 use super::slots::paint_pill_bar_row;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::padded_rect;
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::{place_media_list_below, PillBarWindow, PANE_PAD_X, PANE_PAD_Y};
 
 /// Blank rows between the header/overview content's painted bottom edge and

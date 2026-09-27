@@ -1,6 +1,7 @@
-use crate::app::components::list::{ThreeLineFlatList, ThreeLineRole};
+use crate::app::components::list::ThreeLineFlatList;
 use crate::app::palette;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -85,4 +86,17 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
         }
     }
     list.publish(claim_rect, content_rect, hits, selected_rect);
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ThreeLineRole {
+    #[default]
+    Name,
+    Kind,
+    Detail,
+    Status,
+    Accent,
+    /// Explicit-color badge (e.g. a nerd-font service glyph): the component
+    /// resolves the color shell-side, and the painter preserves it on the
+    /// selected row like `Accent`.
+    Badge(Color),
 }

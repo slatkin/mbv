@@ -73,9 +73,7 @@ pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::sessions::SessionsComponent;
-pub(in crate::app) use self::settings::{
-    ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
-};
+pub(in crate::app) use self::settings::{SettingsComponent, SettingsSnapshot};
 pub use self::status_bar_panel::StatusBarPanel;
 pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;

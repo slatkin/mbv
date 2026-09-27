@@ -15,9 +15,9 @@ use std::time::{Duration, Instant};
 
 use tuirealm::event::{Key, KeyModifiers};
 
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState,
+use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 
 /// Quiet period after a query edit before the scored results re-fire (the

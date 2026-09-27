@@ -1,4 +1,3 @@
-use crate::app::components::library_playback_panel::TransportAvailability;
 use crate::app::palette;
 use crate::app::render::arrangements::playback_transport::transport_rows;
 use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
@@ -219,4 +218,10 @@ pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
         PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
         PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG,
     }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TransportAvailability {
+    pub stop: bool,
+    pub next: bool,
+    pub previous: bool,
 }

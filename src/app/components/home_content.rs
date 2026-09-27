@@ -14,14 +14,15 @@
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use super::library_panel::content::{HeroContent, HeroImageState, LibraryPanelContent, ListSlot};
+use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot};
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
 };
+use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};

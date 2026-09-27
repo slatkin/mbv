@@ -1,7 +1,8 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use super::{SettingsComponent, SetupDraft};
+use super::SettingsComponent;
 use crate::app::components::msg::{Msg, ServiceRequest};
+use crate::app::render::components::settings_component::SetupDraft;
 
 impl SettingsComponent {
     pub(super) fn service_key(&self, key: &KeyEvent) -> Option<Msg> {

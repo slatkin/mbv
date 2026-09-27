@@ -1,9 +1,9 @@
 use super::row::media_list_row;
-use crate::app::components::media_list::{
-    row_marquee_key, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList,
-    WideMediaListPaintPolicy,
-};
+use crate::app::components::media_list::WideMediaList;
 use crate::app::palette;
+use crate::app::render::components::media_list::{
+    row_marquee_key, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaListPaintPolicy,
+};
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::widgets::{List, ListItem};

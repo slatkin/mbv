@@ -504,7 +504,7 @@ mod tests {
     /// result projects its grouped rows on the next push.
     #[test]
     fn only_a_completion_matching_the_pushed_identity_reaches_the_workspace() {
-        use crate::app::components::media_list::MediaListRow;
+        use crate::app::render::components::media_list::MediaListRow;
 
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();

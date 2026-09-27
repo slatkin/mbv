@@ -22,16 +22,16 @@ mod tests;
 mod types;
 mod wide;
 
+use crate::app::render::components::media_list::{
+    MediaListRow, MediaListTitleReveal, WideMediaListPaintPolicy,
+};
 pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
 pub use types::{
-    ActiveProgress, MediaKind, MediaListDisposition, MediaListOperation, MediaListRow,
-    MediaListSurfaceInput, MediaListTitleReveal, MediaListTrailing, MediaListTransition,
-    MediaSemanticState, RowGeometry, RowIntent, SelectedRowSurface, SelectionSummary,
-    WideMediaListPaintPolicy, WideViewport, ZebraStripe,
+    MediaListDisposition, MediaListOperation, MediaListSurfaceInput, MediaListTransition,
+    RowIntent, SelectionSummary, WideViewport,
 };
 pub use wide::WideMediaList;
-pub(crate) use wide::{queue_row_background, queue_row_zebra_stripe, row_marquee_key};
 
 /// The single canonical owner for one logical provider-neutral media-row flow.
 ///

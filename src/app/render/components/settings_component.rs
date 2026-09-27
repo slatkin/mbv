@@ -1,4 +1,3 @@
-use crate::app::components::settings::{ServiceRow, SettingsRow, SetupDraft};
 use crate::app::palette;
 use crate::app::ui_model::settings::SettingsDestination;
 use ratatui::layout::Rect;
@@ -249,4 +248,33 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
         }),
     )));
     frame.render_widget(Paragraph::new(lines), content);
+}
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SettingsRow {
+    pub label: String,
+    pub value: String,
+    pub section: bool,
+    pub cursor: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ServiceRow {
+    pub name: String,
+    pub detail: String,
+    pub muted: bool,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum SetupDraft {
+    Emby {
+        fields: [String; 3],
+        focus: usize,
+        busy: bool,
+        error: String,
+    },
+    Audiobookshelf {
+        fields: [String; 2],
+        focus: usize,
+        busy: bool,
+        error: String,
+    },
 }

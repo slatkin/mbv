@@ -11,11 +11,14 @@ use crate::app::components::list::{
 };
 // The full-width bar is paint policy, so its predicate lives with the shared
 // tree painter and is imported through the app-level render seam.
+use crate::app::render::components::tree_browser::{
+    TreeAggregateMark, TreePaintRow, TreePaintRowKind, TreeTitleRole,
+};
 use crate::app::render::tree_row_is_full_width;
 
 use super::{
-    StructuralRow, TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent,
-    TreeMarkPolicy, TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition, VisibleRow,
+    StructuralRow, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary,
+    TreeSelectionChange, TreeTransition, VisibleRow,
 };
 
 /// The shared list traits are implemented only for this private adapter.
@@ -644,15 +647,15 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     StructuralRow::Heading(title) => {
                         group_root_index = entry.root_index;
                         group_item_index = 0;
-                        (super::TreePaintRowKind::Heading, title.clone())
+                        (TreePaintRowKind::Heading, title.clone())
                     }
-                    StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
+                    StructuralRow::Spacer => (TreePaintRowKind::Spacer, String::new()),
                 };
                 if flow_index >= self.viewport_offset {
                     rows.push(TreePaintRow {
                         kind,
                         title,
-                        title_role: super::TreeTitleRole::Standard,
+                        title_role: TreeTitleRole::Standard,
                         trailing: None,
                         depth: 0,
                         root_index: entry.root_index,
@@ -662,7 +665,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                         marked: false,
                         aggregate_mark: TreeAggregateMark::None,
                         semantic_state:
-                            crate::app::components::media_list::MediaSemanticState::Ordinary,
+                            crate::app::render::components::media_list::MediaSemanticState::Ordinary,
                     });
                 }
                 continue;
@@ -695,7 +698,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 TreeAggregateMark::None
             };
             rows.push(TreePaintRow {
-                kind: super::TreePaintRowKind::Node,
+                kind: TreePaintRowKind::Node,
                 title: entry.node.title.clone(),
                 title_role: entry.node.title_role,
                 trailing: entry

@@ -5,7 +5,7 @@ use tuirealm::event::{Key, KeyEvent};
 use super::EmbyLibraryContent;
 use crate::app::components::inline_search::{InlineSearch, InlineSearchHost};
 use crate::app::components::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use crate::app::components::library_panel::hero::hero_content_emby;
 use crate::app::components::library_panel::owner::{
@@ -14,6 +14,7 @@ use crate::app::components::library_panel::owner::{
 use crate::app::components::library_panel::HeroContentData;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::sort_filter::LetterFilter;
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 

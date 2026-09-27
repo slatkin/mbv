@@ -26,8 +26,8 @@ pub mod wide;
 #[cfg(test)]
 pub(in crate::app) use content::HeroLink;
 pub(in crate::app) use content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
-    ListSlot, PanelHeroImagePaint, SelectorRow, Workspace,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot,
+    PanelHeroImagePaint, SelectorRow, Workspace,
 };
 pub(in crate::app) use hero::{hero_content_emby, HeroContentData};
 pub(in crate::app) use overview_box::sanitize_url;

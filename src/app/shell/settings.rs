@@ -1,8 +1,8 @@
 use super::components::{
-    ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
-    SettingsRow, SettingsSnapshot, SetupDraft,
+    ComponentId, PopupId, ServiceRequest, SettingsComponent, SettingsIntent, SettingsSnapshot,
 };
 use super::Model;
+use crate::app::render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use crate::app::ui_model::settings;
 use crate::app::ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};

@@ -11,8 +11,9 @@ use std::hash::Hash;
 use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
+use crate::app::components::media_list::MediaListCarrier;
 use crate::app::palette::{self, Surface};
+use crate::app::render::components::media_list::{WideMediaListPaintPolicy, ZebraStripe};
 
 use super::content::{PanelList, PanelListPaintPolicy};
 
@@ -137,7 +138,7 @@ impl PanelList for InlineSearch {
 #[cfg(test)]
 mod panel_list_tests {
     use super::*;
-    use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
     use ratatui::Terminal;

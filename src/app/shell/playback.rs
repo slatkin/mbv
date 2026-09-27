@@ -1,6 +1,7 @@
 use super::components::{PlaybackProjection, PlaybackRequest};
 use super::Model;
 use super::{palette, PanelFocus};
+use crate::app::render::components::chrome_player::TransportAvailability;
 
 impl Model {
     /// The shared transport projection both playback panels consume (task
@@ -76,7 +77,7 @@ impl Model {
                 })
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
-            availability: super::components::library_playback_panel::TransportAvailability {
+            availability: TransportAvailability {
                 stop: self.app.connected_session_id.is_some() || state.active,
                 previous: prev_available,
                 next: next_available,

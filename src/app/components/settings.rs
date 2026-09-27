@@ -12,6 +12,7 @@ use super::msg::{
     LeafKeyResult, Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 use super::user_event::UserEvent;
+use crate::app::render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::ui_model::settings::SettingsDestination;
 
@@ -26,36 +27,6 @@ fn settings_intent_for_key(code: Key) -> Option<SettingsIntent> {
         Key::Char('q') => Some(SettingsIntent::Quit),
         _ => None,
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct SettingsRow {
-    pub label: String,
-    pub value: String,
-    pub section: bool,
-    pub cursor: Option<usize>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ServiceRow {
-    pub name: String,
-    pub detail: String,
-    pub muted: bool,
-}
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum SetupDraft {
-    Emby {
-        fields: [String; 3],
-        focus: usize,
-        busy: bool,
-        error: String,
-    },
-    Audiobookshelf {
-        fields: [String; 2],
-        focus: usize,
-        busy: bool,
-        error: String,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

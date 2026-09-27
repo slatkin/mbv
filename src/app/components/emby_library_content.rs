@@ -22,12 +22,12 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
 use super::inline_search::InlineSearch;
-use super::library_panel::content::HeroImageState;
-use super::media_list::{
-    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaListTrailing,
-    MediaSemanticState,
-};
+use super::media_list::{letter_grouped_rows, MediaListCarrier};
 use super::msg::{Msg, ShellRequest};
+use crate::app::render::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
+use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::{effective_sort_str, LetterFilter};
 use crate::app::ui_model::library::LibraryKind;
 

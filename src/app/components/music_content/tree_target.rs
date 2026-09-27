@@ -1,7 +1,8 @@
 // The module's documentation and shared imports live in the parent module.
 use super::workspace::track_row_label;
-use super::{MediaSemanticState, MusicContent, MusicTreeTarget};
+use super::{MusicContent, MusicTreeTarget};
 use crate::app::components::list::tree_browser::{TreeMarkPolicy, TreeNode};
+use crate::app::render::components::media_list::MediaSemanticState;
 use std::collections::HashMap;
 
 // The destination's stable-target translation layer (design D6): Music
@@ -186,7 +187,7 @@ impl MusicContent {
                         TreeMarkPolicy::Aggregate,
                     )
                     .with_title_role(
-                        crate::app::components::list::tree_browser::TreeTitleRole::Heading,
+                        crate::app::render::components::tree_browser::TreeTitleRole::Heading,
                     )
                     .with_expandable(true),
                 );
@@ -216,7 +217,7 @@ impl MusicContent {
                 semantic_state,
                 TreeMarkPolicy::Direct,
             )
-            .with_title_role(crate::app::components::list::tree_browser::TreeTitleRole::Secondary)
+            .with_title_role(crate::app::render::components::tree_browser::TreeTitleRole::Secondary)
             .with_expandable(
                 self.tree_tracks
                     .get(album_target)

@@ -21,7 +21,7 @@ use crate::app::render::wide_hero_fits;
 use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 
-use super::content::{HeroImageState, PanelHeroImagePaint};
+use super::content::PanelHeroImagePaint;
 use super::hero::HeroContentData;
 use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::render_narrow_skeleton;
@@ -31,6 +31,7 @@ use super::wide::{
     WideSkeletonPaintParams,
 };
 use crate::app::components::inline_search::InlineSearchHost;
+use crate::app::render::components::tv_wide::HeroImageState;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old

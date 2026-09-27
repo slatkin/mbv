@@ -15,9 +15,8 @@ use crate::app::render::components::hero_model::{
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use crate::app::ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
-use super::content::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,
-};
+use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroLink};
+use crate::app::render::components::tv_wide::HeroImageState;
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the

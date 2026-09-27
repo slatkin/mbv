@@ -1,4 +1,4 @@
-use crate::app::components::media_list::{
+use crate::app::render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;

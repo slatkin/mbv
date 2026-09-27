@@ -13,12 +13,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::{
-    TreeAggregateMark, TreePaintRow, TreePaintRowKind, TreeTitleRole,
-};
-use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
+use crate::app::render::components::media_list::MediaSemanticState;
 
 /// The pinned trailing-metadata slot (design D8): a fixed six-column
 /// right-aligned date cell, plus the two-column gap between it and the row's
@@ -281,4 +278,49 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
             },
         },
     }
+}
+/// The derived aggregate-mark state of one aggregate-policy row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum TreeAggregateMark {
+    /// No visible direct descendant is marked.
+    None,
+    /// Some, but not all, visible direct descendants are marked.
+    Partial,
+    /// Every visible direct descendant is marked.
+    Full,
+}
+
+/// A row prepared for the destination-neutral render component.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TreePaintRowKind {
+    Node,
+    Heading,
+    Spacer,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TreePaintRow {
+    pub(crate) kind: TreePaintRowKind,
+    pub(crate) title: String,
+    pub(crate) title_role: TreeTitleRole,
+    pub(crate) trailing: Option<String>,
+    pub(crate) depth: usize,
+    pub(crate) root_index: usize,
+    pub(crate) group_root_index: usize,
+    pub(crate) zebra_striped: bool,
+    pub(crate) selected: bool,
+    pub(crate) marked: bool,
+    pub(crate) aggregate_mark: TreeAggregateMark,
+    pub(crate) semantic_state: MediaSemanticState,
+}
+/// Semantic title emphasis supplied by the destination for one tree row.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum TreeTitleRole {
+    /// A group or section title.
+    Heading,
+    /// A nested title with secondary emphasis.
+    Secondary,
+    /// A regular row title.
+    #[default]
+    Standard,
 }
