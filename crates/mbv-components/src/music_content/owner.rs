@@ -131,13 +131,29 @@ impl LibraryContentOwner for MusicContent {
         } else {
             match state.item.as_ref() {
                 Some(LibraryItemIdentity::Emby { id }) => {
-                    self.browser
+                    let album_selected = self
+                        .browser
                         .apply(TreeOperation::AnchorSelection {
                             target: MusicTreeTarget::Album(id.clone()),
                             flow_offset: 0,
                         })
                         .disposition
-                        == TreeConsumed::Consumed
+                        == TreeConsumed::Consumed;
+                    // The saved id may instead name an artist root left
+                    // selected at teardown (`launch_snapshot`'s artist
+                    // fallback): retry against the artist target before
+                    // giving up and falling back to the default album below.
+                    album_selected
+                        || self
+                            .browser
+                            .apply(TreeOperation::AnchorSelection {
+                                target: MusicTreeTarget::Artist(
+                                    mbv_ui_model::music_grouping::ArtistKey::Service(id.clone()),
+                                ),
+                                flow_offset: 0,
+                            })
+                            .disposition
+                            == TreeConsumed::Consumed
                 }
                 _ => false,
             }
@@ -164,8 +180,14 @@ impl LibraryContentOwner for MusicContent {
             .map(|group| SelectorIdentity::Emby {
                 key: EmbySelectorKey::Group(group.id),
             });
+        // An artist root never writes the ordinary album-persistence request
+        // (task 2.2), so without this fallback a teardown while an artist
+        // row is focused would save no item at all and restore would revert
+        // to the default first album instead of the artist the user left
+        // selected.
         let item = self
             .selected_album_target()
+            .or_else(|| self.selected_artist_launch_id())
             .map(|id| LibraryItemIdentity::Emby { id });
         (selector, item)
     }

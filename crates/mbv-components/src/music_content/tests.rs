@@ -70,6 +70,99 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
     );
 }
 
+// Regression for the music-tree-reverts-on-restart bug: an artist root
+// never writes the ordinary album-persistence request (task 2.2), so
+// without the artist fallback in `launch_snapshot`, quitting while an
+// artist row is focused saved no item at all, and the next launch's
+// `reanchor_launch_state` fell back to the group's default first album
+// instead of the artist the user actually left selected.
+#[test]
+fn grouped_music_launch_snapshot_falls_back_to_focused_artist_when_no_album_selected() {
+    let mut album = make_item("Album", "Folder");
+    album.id = "album-stable".into();
+    let mut group = make_item("Artist", "MusicArtist");
+    group.id = "group-stable".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album], 0),
+        None,
+        String::new(),
+        vec![group],
+        0,
+        vec![("Artist".into(), "2024".into(), "Album".into())],
+        vec![mbv_ui_model::music_grouping::ArtistKey::Service(
+            "artist-service-id".into(),
+        )],
+        vec![0],
+        None,
+    ));
+    assert_eq!(
+        owner
+            .browser
+            .apply(TreeOperation::AnchorSelection {
+                target: MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(
+                    "artist-service-id".into(),
+                )),
+                flow_offset: 0,
+            })
+            .disposition,
+        TreeConsumed::Consumed
+    );
+
+    assert_eq!(
+        owner.launch_snapshot(),
+        (
+            Some(mbv_config::SelectorIdentity::Emby {
+                key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
+            }),
+            Some(mbv_config::LibraryItemIdentity::Emby {
+                id: "artist-service-id".into(),
+            }),
+        )
+    );
+}
+
+// Companion restore side of the regression above: a saved artist id
+// reselects the artist root itself (collapsed, no album expanded), instead
+// of the pre-fix behaviour of falling through to the default first album.
+#[test]
+fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album() {
+    let mut album = make_item("Album", "Folder");
+    album.id = "album-stable".into();
+    let mut group = make_item("Artist", "MusicArtist");
+    group.id = "group-stable".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album], 0),
+        None,
+        String::new(),
+        vec![group],
+        0,
+        vec![("Artist".into(), "2024".into(), "Album".into())],
+        vec![mbv_ui_model::music_grouping::ArtistKey::Service(
+            "artist-service-id".into(),
+        )],
+        vec![0],
+        None,
+    ));
+    let state = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
+        selector: Some(mbv_config::SelectorIdentity::Emby {
+            key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
+        }),
+        item: Some(mbv_config::LibraryItemIdentity::Emby {
+            id: "artist-service-id".into(),
+        }),
+    };
+
+    assert!(owner.reanchor_launch_state(&state));
+
+    assert!(owner.selected_is_artist());
+    assert_eq!(owner.selected_album_target(), None);
+}
+
 #[test]
 fn saved_music_latest_selector_falls_back_to_normal_default() {
     let mut album = make_item("Album", "Folder");

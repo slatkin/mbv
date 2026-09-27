@@ -86,6 +86,19 @@ impl App {
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
             .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
+        // Grouped Music owns its tree selection/expansion locally in its
+        // retained content owner (destination components stay mounted and
+        // keep local state across tab changes). The legacy nav_stack
+        // `LibraryPosition` restore below exists for the flat browse
+        // libraries and has no way to represent an artist-row selection
+        // (an artist focus never writes it, by design): restoring it here
+        // would revert the tree to a stale saved album on every ordinary
+        // tab re-entry. Music activation only ever needs the one-time
+        // initial load.
+        if self.libs[lib_idx].library.collection_type == "music" {
+            self.activate_unchanged_library_position(lib_idx, current.is_none());
+            return;
+        }
         let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
         let mut saved = self.saved_library_position(lib_idx);
         let saved_mode_is_stale = Self::saved_tv_mode_is_stale(saved.as_ref());

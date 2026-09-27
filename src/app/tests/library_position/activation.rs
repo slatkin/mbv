@@ -60,6 +60,69 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     );
 }
 
+// Regression for the music-tree-reverts-on-tab-return bug: Grouped Music's
+// tree owns its selection/expansion locally and keeps it across tab
+// switches (destination components stay mounted), but the legacy
+// nav_stack `LibraryPosition` restore below is built for flat browse
+// libraries and cannot represent an artist-row focus, so it goes stale the
+// moment the user leaves an artist selected. Before the fix, activating
+// Music with a stale saved position here reimposed it over the tree's
+// live nav_stack on every ordinary tab re-entry, reverting an intentional
+// collapse and reselecting a fixed row.
+#[test]
+fn activate_library_position_leaves_music_nav_stack_untouched_on_tab_reentry() {
+    let mut app = make_app_stub();
+    let mut library = make_item("Music", "MusicAlbum");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
+            parent_id: "lib-music".into(),
+            title: "Live Group".into(),
+            items: make_items(2),
+            total_count: 2,
+            resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app.library_position_state.libraries.insert(
+        "lib-music".into(),
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
+                fetched_rows: None,
+                parent_id: "lib-music".into(),
+                title: "Stale Group".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                tv_content_mode: None,
+                library_total: None,
+            }],
+            ..Default::default()
+        },
+    );
+
+    app.activate_library_position(0);
+
+    assert_eq!(app.libs[0].nav_stack.len(), 1);
+    assert_eq!(app.libs[0].nav_stack[0].title, "Live Group");
+    assert_eq!(app.libs[0].nav_stack[0].resting().cursor(), 1);
+}
+
 // #361: `set_tab` (the Standard tab-switch entry point) is gone; the
 // scope-isolation premise this test exercised ("default scope survives
 // a power-scope write") no longer applies -- there is one saved
