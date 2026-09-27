@@ -1,6 +1,9 @@
 use mbv_queue::QueueItem;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(test)]
+mod tests;
+
 /// The launch-relative interval used by destination Latest markers.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

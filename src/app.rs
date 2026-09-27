@@ -60,8 +60,6 @@ use self::ui_model::player_tab::PlayerTab;
 #[cfg(test)]
 use self::ui_model::settings::SettingKey;
 use self::ui_model::settings::{PanelFocus, PanelMode};
-#[cfg(test)]
-pub(in crate::app) use self::ui_model::sidebar::SidebarId;
 use self::ui_model::tab_selection::TabSelection;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;

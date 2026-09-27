@@ -21,6 +21,7 @@ use mbv_queue::ServiceKind;
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_model::library::{LibraryKey, LibraryKind};
 use crate::app::ui_model::msg::MusicArtistTarget;
+use crate::app::ui_model::music_artist_detail::track_matches_album;
 use crate::app::ui_model::music_artist_detail::{
     ArtistArtworkStatus, ArtistDetailCacheEntry, ArtistDetailKey, ArtistDetailProjection,
     ArtistSummary, ArtistTrackGroup,
@@ -141,17 +142,6 @@ fn current_album_ids(
             Some((index, row_target.clone(), item.id.clone(), title))
         })
         .collect()
-}
-
-/// Whether one artist-track result belongs to the settled album carrying
-/// `album_id`. Only the Service album ID may match: the `ArtistIds` Audio
-/// query this cache holds is user-scoped and never requests `AlbumId`, so a
-/// track with no album ID is a live payload shape, and a title match would
-/// admit another same-titled album's tracks as playable rows. A track the
-/// Service omitted an album ID for can still reach the Workspace through the
-/// fallback path's per-album fetches, which carry real album IDs.
-pub(in crate::app) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
-    !album_id.is_empty() && track.album_id == album_id
 }
 
 impl App {

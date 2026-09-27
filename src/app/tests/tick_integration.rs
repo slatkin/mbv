@@ -17,12 +17,13 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::ui_model::confirm::{ConfirmAction, ConfirmModal};
 use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_model::sidebar::SidebarId;
 use crate::app::ui_msg::{
     ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
     UserEvent,
 };
 use crate::app::ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
-use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

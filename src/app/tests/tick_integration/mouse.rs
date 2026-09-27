@@ -15,8 +15,9 @@ use crate::app::ui_model::context_menu::{
 };
 use crate::app::ui_model::daemon_lost::DaemonLostModal;
 use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_model::sidebar::SidebarId;
 use crate::app::ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
-use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_emby_model::test_support::make_item;
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2

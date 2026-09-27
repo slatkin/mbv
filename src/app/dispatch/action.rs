@@ -21,11 +21,6 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 use std::sync::Arc;
 
-/// The volume step the `-`/`+` keys dispatch and the `StatusBarPanel`
-/// volume pill's wheel mapping mirrors (single definition, review of
-/// tasks 2.1-2.2).
-pub(crate) const VOLUME_STEP: i64 = 5;
-
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum Command {
     OpenIdleFeedLink,
