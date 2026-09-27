@@ -14,10 +14,10 @@
 //! `shell/messages.rs`'s dispatch are keyed only by the active tab, not by
 //! which component or owner sent the message.
 
-use super::components::emby_library_content::EmbyLibraryIdentity;
-use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
 use super::Model;
 use super::TabSelection;
+use mbv_components::emby_library_content::EmbyLibraryIdentity;
+use mbv_components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
@@ -128,11 +128,11 @@ impl Model {
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
         let show_letter_pills = self.app.should_show_letter_pills(index);
         let selector_mode = if feed_group_view {
-            super::components::emby_library_content::EmbySelectorMode::FeedGroups
+            mbv_components::emby_library_content::EmbySelectorMode::FeedGroups
         } else if show_letter_pills {
-            super::components::emby_library_content::EmbySelectorMode::Letters
+            mbv_components::emby_library_content::EmbySelectorMode::Letters
         } else {
-            super::components::emby_library_content::EmbySelectorMode::None
+            mbv_components::emby_library_content::EmbySelectorMode::None
         };
         let (items, total_count, library_total, letter_filter, loading, cursor, scroll) =
             if feed_group_view {
@@ -236,7 +236,7 @@ impl Model {
             .and_then(|component| {
                 component
                     .as_any()
-                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
             })
             .and_then(|panel| panel.owner(&key))
             .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())

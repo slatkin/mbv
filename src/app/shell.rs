@@ -1,19 +1,19 @@
 use mbv_theme as palette;
 use std::time::Duration;
 
-use super::components::{QueueBoundaryComponent, UiRootComponent};
-use super::{
-    components, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent,
-    PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
-    SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
-};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
+};
+use super::{
+    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
+    PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage,
+    SidebarId, TabSelection, ToastSeverity,
 };
 #[cfg(test)]
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
+use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
 #[cfg(test)]
 use mbv_ui_model::home_latest::current_launch_secs;
@@ -315,14 +315,14 @@ impl Model {
         // panel from the first sync (tasks 5.11, 7.3). The other destinations
         // install owners in their conversion slices (tasks 8+).
         {
-            let mut panel = super::components::library_panel::LibraryPanel::new();
+            let mut panel = mbv_components::library_panel::LibraryPanel::new();
             panel.insert_owner(
                 mbv_ui_model::library::LibraryKey::Home,
-                Box::new(super::components::home_content::HomeContent::new()),
+                Box::new(mbv_components::home_content::HomeContent::new()),
             );
             panel.insert_owner(
                 mbv_ui_model::library::LibraryKey::Feeds,
-                Box::new(super::components::feeds_content::FeedsContent::new()),
+                Box::new(mbv_components::feeds_content::FeedsContent::new()),
             );
             model
                 .application

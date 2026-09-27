@@ -1,7 +1,7 @@
-use super::components::{QueueComponent, QueueCursorUpdate};
 use super::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
+use mbv_components::{QueueComponent, QueueCursorUpdate};
 use mbv_queue::QueueSlotId;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 
@@ -207,7 +207,7 @@ impl Model {
                         .map(|(index, slot)| {
                             (
                                 target,
-                                crate::app::components::queue::queue_media_row(
+                                mbv_components::queue::queue_media_row(
                                     slot,
                                     index,
                                     update.playback,

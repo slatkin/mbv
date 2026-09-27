@@ -1,11 +1,11 @@
 //! Shell-side Continue Watching projection and destination Latest marker state.
 
-#[cfg(test)]
-use super::components::home_content::HomeContent as HomeOwner;
-#[cfg(test)]
-use super::components::library_panel::LibraryPanel;
 use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
+#[cfg(test)]
+use mbv_components::home_content::HomeContent as HomeOwner;
+#[cfg(test)]
+use mbv_components::library_panel::LibraryPanel;
 use mbv_queue::QueueItem;
 #[cfg(test)]
 use mbv_ui_model::library::LibraryKey;

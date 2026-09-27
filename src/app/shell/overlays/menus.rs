@@ -1,8 +1,8 @@
-use super::super::components::library_panel::LibraryPanel;
-use super::super::components::{
+use super::super::Model;
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
 };
-use super::super::Model;
 use mbv_ui_model::context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
@@ -532,10 +532,8 @@ impl Model {
     }
 
     fn library_routes_cursor(&self) -> usize {
-        self.with_library_routes(
-            crate::app::components::library_routes::LibraryRoutesComponent::cursor,
-        )
-        .unwrap_or(0)
+        self.with_library_routes(mbv_components::library_routes::LibraryRoutesComponent::cursor)
+            .unwrap_or(0)
     }
 
     pub(in crate::app) fn enter_device_stage(&mut self, library_lower: String) {

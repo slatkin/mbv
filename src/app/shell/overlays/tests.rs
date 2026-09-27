@@ -1,6 +1,6 @@
 use super::*;
-use crate::app::components::MultiselectComponent;
 use crate::app::tests::make_app_stub;
+use mbv_components::MultiselectComponent;
 use mbv_ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
 use mbv_ui_msg::{Msg, ShellRequest, UserEvent};
 use tuirealm::component::AppComponent;
@@ -73,7 +73,7 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
 /// through the sweep.
 #[test]
 fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
-    use crate::app::components::SearchSidebarComponent;
+    use mbv_components::SearchSidebarComponent;
     use mbv_ui_msg::ServiceRequest;
     use std::time::Instant;
 
@@ -184,7 +184,7 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
 /// *and* close the menu (the shell owns the dismissal, task 5.3c).
 #[test]
 fn context_menu_click_select_executes_and_closes_the_menu() {
-    use crate::app::components::ContextMenuComponent;
+    use mbv_components::ContextMenuComponent;
     use mbv_ui_model::context_menu::{
         ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
     };

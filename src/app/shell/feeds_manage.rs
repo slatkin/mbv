@@ -7,7 +7,7 @@
 //! dialog, config persistence — and the background add-feed channel that
 //! cannot live in the component (`Model::feeds_manage`).
 
-use super::components::FeedsManageComponent;
+use mbv_components::FeedsManageComponent;
 use mbv_config::FeedSubscription;
 use mbv_ui_model::feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
 use mbv_ui_msg::FeedsManageIntent;

@@ -3,13 +3,13 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::QueueComponent;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::QueueComponent;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry};
@@ -177,14 +177,14 @@ fn drawn_tab_harness() -> TickHarness {
     harness
 }
 
-fn tab_panel_component(harness: &TickHarness) -> &crate::app::components::TabPanel {
+fn tab_panel_component(harness: &TickHarness) -> &mbv_components::TabPanel {
     harness
         .model()
         .application
         .get_component(&ComponentId::TabPanel)
         .expect("TabPanel mounted when the library column is visible")
         .as_any()
-        .downcast_ref::<crate::app::components::TabPanel>()
+        .downcast_ref::<mbv_components::TabPanel>()
         .expect("TabPanel component")
 }
 
@@ -426,7 +426,7 @@ fn tab_panel_status_regions(harness: &TickHarness) -> mbv_render::StatusBarRegio
         .get_component(&ComponentId::StatusBarPanel)
         .expect("StatusBarPanel mounted when the library column is visible")
         .as_any()
-        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .downcast_ref::<mbv_components::StatusBarPanel>()
         .expect("StatusBarPanel component")
         .regions()
 }

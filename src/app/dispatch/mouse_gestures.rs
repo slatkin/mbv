@@ -189,7 +189,7 @@ impl App {
                 .iter()
                 .find(|item| {
                     if item.id.is_empty() {
-                        crate::app::components::tv_content::upcoming_episode_target(item) == target
+                        mbv_components::tv_content::upcoming_episode_target(item) == target
                     } else {
                         item.id == target
                     }

@@ -2,10 +2,10 @@
 //! Music is retained by the `LibraryPanel` under `LibraryKey::Service(Music)`;
 //! it is not a mounted destination component.
 
-use super::components::music_content::MusicContent;
 use super::BrowseLevel;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
+use mbv_components::music_content::MusicContent;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::library::LibraryKind;
@@ -419,7 +419,7 @@ mod tests {
         model
             .test_music_owner_mut()
             .browser
-            .apply(crate::app::components::list::tree_browser::TreeOperation::First);
+            .apply(mbv_components::list::tree_browser::TreeOperation::First);
         assert!(model.test_music_owner().selected_is_artist());
         model.push_music_workspace_content();
         let generation = model.app.emby_runtime.generation();

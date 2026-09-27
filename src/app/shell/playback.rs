@@ -1,6 +1,6 @@
-use super::components::PlaybackProjection;
 use super::Model;
 use super::{palette, PanelFocus};
+use mbv_components::PlaybackProjection;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_ui_msg::PlaybackRequest;
 

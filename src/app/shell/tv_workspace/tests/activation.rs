@@ -63,7 +63,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
     assert_eq!(
@@ -131,7 +131,7 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
         .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
 }

@@ -1,6 +1,6 @@
-use super::components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use super::Model;
 use crossterm::event::{KeyCode, KeyEvent};
+use mbv_components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_msg::{ComponentId, ModalId};
 use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};

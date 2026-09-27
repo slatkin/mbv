@@ -1,5 +1,5 @@
-use super::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::Model;
+use mbv_components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use mbv_ui_model::library::LibraryKey;
 
 impl Model {
@@ -18,7 +18,7 @@ impl Model {
             .and_then(|component| {
                 component
                     .as_any()
-                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
             })
             .and_then(|panel| panel.owner(&LibraryKey::Feeds))
             .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
@@ -59,8 +59,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::library_panel::LibraryContentOwner;
     use crate::app::tests::make_app_stub;
+    use mbv_components::library_panel::LibraryContentOwner;
     use mbv_config::FeedSubscription;
     use mbv_queue::FeedKind;
     use mbv_ui_model::feed_tab::WatchedFilter;

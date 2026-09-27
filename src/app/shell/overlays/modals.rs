@@ -1,7 +1,7 @@
-use super::super::components::{
+use super::super::Model;
+use mbv_components::{
     ConfirmComponent, ContextMenuComponent, DaemonLostComponent, SavePlaylistComponent,
 };
-use super::super::Model;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{ComponentId, ModalId, OverlayId};
 

@@ -78,7 +78,7 @@ impl super::super::Model {
             ShellRequest::MusicAlbumActivate { item } => {
                 let owner_has_target = self
                     .music_owner()
-                    .and_then(crate::app::components::music_content::MusicContent::selected_item)
+                    .and_then(mbv_components::music_content::MusicContent::selected_item)
                     .is_some_and(|selected| selected.id == item.id);
                 if self.app.tab.emby_library_index().is_some()
                     && !self.app.is_right_panel_wide()

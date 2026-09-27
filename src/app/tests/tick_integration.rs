@@ -9,13 +9,13 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::SearchSidebarComponent;
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_components::SearchSidebarComponent;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::sidebar::SidebarId;

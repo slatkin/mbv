@@ -2,11 +2,11 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{HelpComponent, PlaylistsComponent, QueueComponent};
 use crate::app::dispatch::action::Command;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::{HelpComponent, PlaylistsComponent, QueueComponent};
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, TerminalObserverEvent, UserEvent};
@@ -153,9 +153,9 @@ fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
         .and_then(|owner| {
             owner
                 .as_any()
-                .downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>()
+                .downcast_ref::<mbv_components::emby_library_content::EmbyLibraryContent>()
         })
-        .map(crate::app::components::emby_library_content::EmbyLibraryContent::cursor)
+        .map(mbv_components::emby_library_content::EmbyLibraryContent::cursor)
         .expect("browser owner installed")
 }
 

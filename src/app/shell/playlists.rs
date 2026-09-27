@@ -1,5 +1,5 @@
-use super::components::{PlaylistsComponent, PlaylistsContent};
 use super::Model;
+use mbv_components::{PlaylistsComponent, PlaylistsContent};
 use mbv_ui_msg::{ComponentId, ModalId, OverlayId, ShellRequest};
 
 impl Model {

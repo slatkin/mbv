@@ -11,11 +11,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
-use super::components::{
+use super::{App, DestinationLatestSource, Model, PanelFocus};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::{
     LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
-use super::{App, DestinationLatestSource, Model, PanelFocus};
-use crate::app::components::library_panel::LibraryPanel;
 use mbv_render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
     QUEUE_PLAYBACK_HEADER_ROWS,
@@ -226,14 +226,12 @@ impl Model {
             self.application
                 .get_component(&ComponentId::Queue)
                 .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
-                .map(super::super::components::queue::QueueComponent::selection_summary)
+                .map(mbv_components::queue::QueueComponent::selection_summary)
         } else {
             self.application
                 .get_component_mut(&ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-                .and_then(
-                    super::super::components::library_panel::panel::LibraryPanel::focused_summary,
-                )
+                .and_then(mbv_components::library_panel::panel::LibraryPanel::focused_summary)
         };
         let visual_origin = focused_summary
             .as_ref()

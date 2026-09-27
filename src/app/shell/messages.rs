@@ -5,7 +5,7 @@ mod selection;
 mod tests;
 
 use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
-use crate::app::components::library_panel::LibraryPanel;
+use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::playback::DestinationLatestSource;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use std::time::Instant;
@@ -263,7 +263,7 @@ impl Model {
     }
 
     fn handle_open_url_request(&mut self, url: &str) {
-        if crate::app::components::library_panel::sanitize_url(url).is_some() {
+        if mbv_components::library_panel::sanitize_url(url).is_some() {
             if let Err(error) = crate::app::open_url(url) {
                 log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
                 self.app.flash(

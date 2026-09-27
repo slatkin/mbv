@@ -1708,6 +1708,7 @@ dependencies = [
  "log",
  "mbv-audiobookshelf",
  "mbv-cast",
+ "mbv-components",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
@@ -1778,6 +1779,31 @@ dependencies = [
  "rstest",
  "rust_cast",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-components"
+version = "0.21.2"
+dependencies = [
+ "mbv-audiobookshelf",
+ "mbv-config",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-images",
+ "mbv-keybinds",
+ "mbv-queue",
+ "mbv-render",
+ "mbv-text",
+ "mbv-theme",
+ "mbv-ui-model",
+ "mbv-ui-msg",
+ "ratatui",
+ "ratatui-image",
+ "rstest",
+ "textwrap",
+ "time",
+ "tuirealm",
+ "unicode-width",
 ]
 
 [[package]]

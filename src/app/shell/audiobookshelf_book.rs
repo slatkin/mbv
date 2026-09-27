@@ -1,6 +1,6 @@
-use super::components::book_content::BookContent;
 use super::Model;
 use super::TabSelection;
+use mbv_components::book_content::BookContent;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
@@ -97,7 +97,9 @@ impl Model {
                 }
                 AudiobookshelfBookIntent::FocusChapters => {
                     if self.app.is_right_panel_wide() {
-                        self.update_abs_book_owner(super::super::components::book_content::BookContent::enter_chapter_focus);
+                        self.update_abs_book_owner(
+                            mbv_components::book_content::BookContent::enter_chapter_focus,
+                        );
                     } else {
                         self.open_library_hero_overlay();
                     }

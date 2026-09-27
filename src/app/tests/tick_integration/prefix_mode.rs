@@ -9,13 +9,13 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::components::home_content::HomeContent;
-use crate::app::components::library_panel::LibraryPanel;
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, TabSelection};
+use mbv_components::home_content::HomeContent;
+use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::test_support::make_item;
 use mbv_keybinds::{RawKeybinds, RawSection};
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};

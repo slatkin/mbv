@@ -10,12 +10,12 @@
 
 use ratatui::layout::Rect;
 
-use super::components::book_content::BookContent;
-use super::components::library_panel::owner::LaunchSelector;
-use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
-use super::components::podcast_content::PodcastContent;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
+use mbv_components::book_content::BookContent;
+use mbv_components::library_panel::owner::LaunchSelector;
+use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
+use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
@@ -105,7 +105,7 @@ impl Model {
             .and_then(|owner| {
                 owner
                     .as_any_mut()
-                    .downcast_mut::<super::components::emby_library_content::EmbyLibraryContent>()
+                    .downcast_mut::<mbv_components::emby_library_content::EmbyLibraryContent>()
             })
         {
             owner.set_latest_mode(latest);

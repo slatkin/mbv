@@ -12,10 +12,10 @@
 //! the shell's dispatch is keyed by the active tab, not by which owner sent
 //! it.
 
-use super::components::library_panel::LibraryPanel;
-use super::components::tv_content::TvContent;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
+use mbv_components::library_panel::LibraryPanel;
+use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
@@ -71,7 +71,7 @@ impl Model {
                 // authoritative selection to lazily fetch uncached episodes.
                 let selected_season = self
                     .tv_owner()
-                    .and_then(super::super::components::tv_content::TvContent::selected_season);
+                    .and_then(mbv_components::tv_content::TvContent::selected_season);
                 if let Some((series_id, season_id)) = selected_season {
                     self.app.fetch_series_season_episodes(series_id, season_id);
                     self.push_tv_workspace_content();
@@ -355,7 +355,7 @@ impl Model {
     pub(in crate::app) fn test_paint_library_panel(
         &mut self,
         area: ratatui::layout::Rect,
-    ) -> Option<crate::app::components::library_panel::PanelHeroImagePaint> {
+    ) -> Option<mbv_components::library_panel::PanelHeroImagePaint> {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
                 .expect("test terminal");

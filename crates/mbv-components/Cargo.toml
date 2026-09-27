@@ -1,0 +1,46 @@
+[package]
+name = "mbv-components"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Interactive components for mbv's terminal UI."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[features]
+test = ["mbv-ui-msg/test", "mbv-render/test"]
+
+[dependencies]
+mbv-ui-msg = { path = "../mbv-ui-msg" }
+mbv-render = { path = "../mbv-render" }
+mbv-ui-model = { path = "../mbv-ui-model" }
+mbv-images = { path = "../mbv-images" }
+mbv-theme = { path = "../mbv-theme" }
+mbv-text = { path = "../mbv-text" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-config = { path = "../mbv-config" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-keybinds = { path = "../mbv-keybinds" }
+textwrap.workspace = true
+time.workspace = true
+tuirealm.workspace = true
+ratatui.workspace = true
+ratatui-image.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+mbv-queue = { path = "../mbv-queue" }
+mbv-config = { path = "../mbv-config" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }
+mbv-emby = { path = "../mbv-emby", features = ["test"] }
+mbv-ui-msg = { path = "../mbv-ui-msg", features = ["test"] }
+mbv-render = { path = "../mbv-render", features = ["test"] }

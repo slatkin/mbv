@@ -8,10 +8,10 @@ pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_m
 const MAX_IMAGE_FETCHES: usize = 6;
 
 fn wide_landscape_hero_eligible(
-    artwork: &crate::app::components::library_panel::HeroArtwork,
+    artwork: &mbv_components::library_panel::HeroArtwork,
     panel_area: ratatui::layout::Rect,
 ) -> bool {
-    artwork.shape == crate::app::components::library_panel::ArtworkShape::Landscape
+    artwork.shape == mbv_components::library_panel::ArtworkShape::Landscape
         && mbv_render::wide_hero_fits(panel_area)
 }
 impl App {
@@ -24,10 +24,10 @@ impl App {
     /// and the placeholder shows for at most that one frame.
     fn fetch_hero_logo(
         &mut self,
-        artwork: &crate::app::components::library_panel::HeroArtwork,
+        artwork: &mbv_components::library_panel::HeroArtwork,
         panel_area: ratatui::layout::Rect,
     ) -> Option<String> {
-        use crate::app::components::library_panel::content::ArtworkSource;
+        use mbv_components::library_panel::content::ArtworkSource;
         if !wide_landscape_hero_eligible(artwork, panel_area) {
             return None;
         }
@@ -52,13 +52,13 @@ impl App {
 
     pub(in crate::app) fn project_hero_image(
         &mut self,
-        facts: &crate::app::components::library_panel::HeroFacts,
+        facts: &mbv_components::library_panel::HeroFacts,
         workspace_present: bool,
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
     ) -> mbv_render::components::tv_wide::HeroImageState {
-        use crate::app::components::library_panel::content::ArtworkSource;
+        use mbv_components::library_panel::content::ArtworkSource;
         use mbv_render::components::tv_wide::HeroImageState as State;
         let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
@@ -119,8 +119,8 @@ impl App {
         // it — the Wide Hero pane's or the Library Hero overlay's;
         // Portrait/Square artwork fit-resizes (the whole image, aspect
         // preserved) through the plain protocol.
-        let landscape = artwork.painted_shape()
-            == crate::app::components::library_panel::ArtworkShape::Landscape;
+        let landscape =
+            artwork.painted_shape() == mbv_components::library_panel::ArtworkShape::Landscape;
         if !landscape {
             // Drop any stale cover crop so the plain fit protocol rebuilds.
             if let Some(entry) = self.images.card_image_states.get_mut(&cache_key) {
@@ -136,13 +136,12 @@ impl App {
                 list_pane_width,
                 true,
             ) {
-                let box_cells =
-                    crate::app::components::library_panel::hero_header::hero_artwork_box(
-                        panes.hero_area,
-                        facts,
-                        workspace_present,
-                        self.terminal_height,
-                    );
+                let box_cells = mbv_components::library_panel::hero_header::hero_artwork_box(
+                    panes.hero_area,
+                    facts,
+                    workspace_present,
+                    self.terminal_height,
+                );
                 // The optional Logo never delays the base image: it is
                 // reserved only here, once a decoded base exists to decorate,
                 // and only for a Movie Landscape hero at Wide geometry. A base

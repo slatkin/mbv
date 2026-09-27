@@ -224,7 +224,7 @@ impl App {
     pub(in crate::app) fn paint_panel_hero_image(
         &mut self,
         f: &mut ratatui::Frame,
-        paint: &crate::app::components::library_panel::PanelHeroImagePaint,
+        paint: &mbv_components::library_panel::PanelHeroImagePaint,
     ) {
         if paint.area.width == 0 || paint.area.height == 0 {
             return;

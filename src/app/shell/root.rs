@@ -1,5 +1,5 @@
-use super::components::UiRootComponent;
 use super::Model;
+use mbv_components::UiRootComponent;
 use mbv_ui_msg::{ComponentId, ModalId, OverlayId, PopupId};
 
 impl Model {
@@ -68,8 +68,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::HelpComponent;
     use crate::app::tests::make_app_stub;
+    use mbv_components::HelpComponent;
 
     #[test]
     fn root_ui_uses_native_lifo_focus_restoration() {
@@ -86,7 +86,7 @@ mod tests {
             .application
             .mount(
                 confirm.clone(),
-                Box::new(crate::app::components::ConfirmComponent::new()),
+                Box::new(mbv_components::ConfirmComponent::new()),
                 vec![],
             )
             .unwrap();

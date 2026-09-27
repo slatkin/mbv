@@ -77,7 +77,7 @@ impl Model {
         // `OVERLAY_IDS` is canonical bottom-to-top, so the last mounted one is
         // topmost. No blocking overlay is mounted at this point, so every
         // remaining match is a non-blocking panel-covering overlay.
-        if let Some(id) = super::components::UiRootComponent::overlay_ids()
+        if let Some(id) = mbv_components::UiRootComponent::overlay_ids()
             .iter()
             .rev()
             .find(|id| self.application.mounted(id))
@@ -143,7 +143,7 @@ impl Model {
             self.application
                 .mount(
                     id.clone(),
-                    Box::new(super::components::QueueBoundaryComponent::new()),
+                    Box::new(mbv_components::QueueBoundaryComponent::new()),
                     vec![],
                 )
                 .expect("mount QueueBoundary");
@@ -161,7 +161,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(boundary) = comp
                 .as_any_mut()
-                .downcast_mut::<super::components::QueueBoundaryComponent>()
+                .downcast_mut::<mbv_components::QueueBoundaryComponent>()
             {
                 boundary.sync(
                     area,
@@ -199,14 +199,14 @@ impl Model {
         {
             let _ = self
                 .application
-                .unsubscribe(&anchor, super::components::mouse_event_clause());
+                .unsubscribe(&anchor, mbv_components::mouse_event_clause());
         }
         self.mouse_subscribed.clear();
         for id in eligible {
             if self.application.mounted(&id)
                 && self
                     .application
-                    .subscribe(&id, super::components::mouse_sub())
+                    .subscribe(&id, mbv_components::mouse_sub())
                     .is_ok()
             {
                 self.mouse_subscribed.insert(id);

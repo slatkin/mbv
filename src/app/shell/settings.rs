@@ -1,5 +1,5 @@
-use super::components::{SettingsComponent, SettingsSnapshot};
 use super::Model;
+use mbv_components::{SettingsComponent, SettingsSnapshot};
 use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use mbv_ui_model::settings;

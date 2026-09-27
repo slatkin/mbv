@@ -5,10 +5,10 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::SessionsComponent;
 use crate::app::dispatch::action::Command;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use mbv_components::SessionsComponent;
 use mbv_ui_model::panel_targets::{PanelTarget, SessionTargetKey};
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 

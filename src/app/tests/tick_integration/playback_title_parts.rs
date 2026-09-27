@@ -6,10 +6,10 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{App, PanelFocus, PanelMode};
+use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 use mbv_ui_msg::ComponentId;

@@ -21,8 +21,8 @@
 //! split episode rows, Workspace-free Wide hero, one painter per surface).
 
 use super::*;
-use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
-use crate::app::components::library_panel::LibraryPanel;
+use mbv_components::emby_library_content::EmbyLibraryContent as BrowserOwner;
+use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 

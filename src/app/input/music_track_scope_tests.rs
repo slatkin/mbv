@@ -1,6 +1,6 @@
 use super::music_track_test_support::*;
-use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::shell::Model;
+use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_ui_msg::Msg;
 use mbv_ui_msg::{ComponentId, ShellRequest};
 use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers};

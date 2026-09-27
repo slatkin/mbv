@@ -1,7 +1,7 @@
 //! Home Continue Watching sync and typed effects for the shell `Model`.
 
-use super::components::home_content::HomeContent;
 use super::Model;
+use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_msg::ShellRequest;

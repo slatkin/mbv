@@ -1,4 +1,3 @@
-pub mod components;
 mod dispatch;
 mod infra;
 mod input;
