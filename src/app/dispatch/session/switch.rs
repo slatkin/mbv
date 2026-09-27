@@ -107,11 +107,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        // Connected to an mbv daemon/client: the peer's queue is the
-        // displayed queue, empty or not. A Local-endpoint attach has no
-        // remote tab, so the scope resolution lands back on the adopted
-        // unified Local view.
-        self.set_queue_scope(QueueScope::Remote);
+        self.display_peer_queue_on_connect();
         self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
@@ -223,11 +219,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        // Connected to an mbv daemon/client: the peer's queue is the
-        // displayed queue, empty or not. A Local-endpoint attach has no
-        // remote tab, so the scope resolution lands back on the adopted
-        // unified Local view.
-        self.set_queue_scope(QueueScope::Remote);
+        self.display_peer_queue_on_connect();
         log::info!(
             target: "library_route",
             "switched playback route previous={previous_route:?} next={library_name:?}"

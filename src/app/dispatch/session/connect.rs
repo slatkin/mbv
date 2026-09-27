@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PlayerTab, QueueScope};
+use crate::app::{App, PlayerTab};
 use mbv_core::api::parse_mbv_direct_tcp_port;
 use mbv_core::player::PlayerProxy;
 use mbv_ctrl::player::PlayerEvent;
@@ -249,11 +249,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        // Connected to an mbv daemon/client: the peer's queue is the
-        // displayed queue, empty or not. A Local-endpoint attach has no
-        // remote tab, so the scope resolution lands back on the adopted
-        // unified Local view.
-        self.set_queue_scope(QueueScope::Remote);
+        self.display_peer_queue_on_connect();
         self.sync_subtitle_prefs_to_player();
         self.flash(
             format!("Reconnected to daemon (attempt {})", attempt + 1),
