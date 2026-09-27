@@ -29,7 +29,7 @@ cargo nextest run --workspace
 
 ## 1. Service runtime structs leave `mbv-core` (design D4)
 
-- [ ] 1.1 Move `EmbyRuntime` and `AudiobookshelfRuntime` (with their `impl`s,
+- [x] 1.1 Move `EmbyRuntime` and `AudiobookshelfRuntime` (with their `impl`s,
   and the tests in `crates/mbv-core/src/service_runtime.rs` that exercise
   them) to a new `src/app/state/service_runtime.rs`, declared from
   `src/app/state.rs`. Keep `ServiceState` and `SetupGeneration` in `mbv-core`,
@@ -38,7 +38,7 @@ cargo nextest run --workspace
   `src/` to `crate::app::state::service_runtime::…`. Verify with
   `rg "service_runtime::(EmbyRuntime|AudiobookshelfRuntime)" crates` (no
   hits).
-- [ ] 1.2 Remove `mbv-emby` and `mbv-audiobookshelf` from
+- [x] 1.2 Remove `mbv-emby` and `mbv-audiobookshelf` from
   `crates/mbv-core/Cargo.toml` `[dependencies]`. Remove each
   `[dev-dependencies]` entry that no remaining `mbv-core` source names. Verify
   that `cargo tree -p mbv-core -e normal --depth 1` lists no `mbv-*` crate,
