@@ -45,7 +45,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 0. Groundwork
 
-- [ ] 0.1 Check sequencing: `enforce-audiobookshelf-both-shapes` must be merged
+- [x] 0.1 Check sequencing: `enforce-audiobookshelf-both-shapes` must be merged
   to `main` before group 4 (it rewrites `QueueItem`). Run `openspec list` and
   `git log --oneline -20`. Verify: `rg 'AudiobookshelfBook\(' crates/mbv-core/src/playback/queue/items.rs`
   returns nothing (the variant is gone), or else stop before group 4 and ask.
