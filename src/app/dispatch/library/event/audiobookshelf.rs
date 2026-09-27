@@ -50,7 +50,7 @@ impl App {
         }
     }
 
-    /// The `AudiobookshelfBooksFetched` body: append the fetched page to the
+    /// The `AudiobookshelfEvent::BooksFetched` body: append the fetched page to the
     /// library's book browse state, fetch the selected book's detail, and
     /// chain the next page when one is needed.
     pub(super) fn handle_audiobookshelf_books_fetched(
@@ -98,7 +98,7 @@ impl App {
         }
     }
 
-    /// The `AudiobookshelfBookDetailFetched` body: retire the in-flight mark
+    /// The `AudiobookshelfEvent::BookDetailFetched` body: retire the in-flight mark
     /// on the owning browse state and cache the detail on success.
     pub(super) fn handle_audiobookshelf_book_detail_fetched(
         &mut self,
