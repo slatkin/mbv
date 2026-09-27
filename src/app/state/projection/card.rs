@@ -9,12 +9,7 @@ use mbv_queue::QueueItem;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(in crate::app) struct QueueCardProjection {
-    pub(in crate::app) cache_key: Option<String>,
-    pub(in crate::app) images_enabled: bool,
-    pub(in crate::app) visualizer: bool,
-}
+use crate::app::ui_model::queue_card::QueueCardProjection;
 
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {

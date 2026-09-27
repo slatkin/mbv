@@ -20,6 +20,7 @@ pub(crate) mod panel_targets;
 pub(crate) mod playback;
 pub(crate) mod playback_target;
 pub(crate) mod player_tab;
+pub(crate) mod queue_card;
 pub(crate) mod queue_owner;
 pub(crate) mod search_sidebar;
 pub(crate) mod settings;

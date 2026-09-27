@@ -1,6 +1,6 @@
 use crate::app::infra::images::RENDER_FILTER;
 use crate::app::palette;
-use crate::app::state::projection::card::QueueCardProjection;
+use crate::app::ui_model::queue_card::QueueCardProjection;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;

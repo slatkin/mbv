@@ -1,43 +1,10 @@
-use crate::app::components::media_list::WideMediaList;
 use crate::app::palette;
-use crate::app::render::components::media_list::{
-    queue_row_zebra_stripe, WideMediaListPaintPolicy,
-};
-use mbv_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
-use tuirealm::component::Component;
 use unicode_width::UnicodeWidthStr;
-
-/// The media-list Queue hands to the render layer this frame (design.md
-/// D1/D2). Queue keeps the Wide presentation in every panel mode; the closed
-/// handoff keeps its body paint behind the carrier's surface instead of
-/// reaching into one adapter.
-pub(in crate::app) enum QueuePresentation<'a> {
-    Wide(&'a mut WideMediaList<QueueSlotId>),
-}
-
-/// Paint the Queue body through the handed-over presentation once: configure
-/// the closed paint policy, paint the rows, and retain the current frame's
-/// point-resolution facts. This is the sole Queue body painter.
-pub(in crate::app) fn render_queue_body(
-    frame: &mut Frame,
-    area: Rect,
-    presentation: QueuePresentation<'_>,
-    focused: bool,
-) {
-    match presentation {
-        QueuePresentation::Wide(list) => {
-            list.set_paint_policy(
-                WideMediaListPaintPolicy::for_queue(focused).with_zebra(queue_row_zebra_stripe()),
-            );
-            Component::view(list, frame, area);
-        }
-    }
-}
 
 /// The remote-attachment indicator the queue footer paints: `Some` names
 /// the playback target while a remote owner (daemon or session) owns

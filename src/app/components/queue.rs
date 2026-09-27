@@ -20,9 +20,11 @@ use crate::app::render::arrangements::queue::{
 use crate::app::render::components::media_list::MediaListRow;
 #[cfg(test)]
 use crate::app::render::components::media_list::MediaSemanticState;
+use crate::app::render::components::media_list::{
+    queue_row_zebra_stripe, WideMediaListPaintPolicy,
+};
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
-use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::ui_model::playback::{PlaybackState, QueueScope};
 use mbv_queue::{QueueSlot, QueueSlotId};
 
@@ -286,12 +288,11 @@ impl Component for QueueComponent {
             );
         }
         self.ensure_carrier();
-        render_queue_body(
-            frame,
-            content_area,
-            QueuePresentation::Wide(self.carrier.wide_mut()),
-            self.focused,
+        let list = self.carrier.wide_mut();
+        list.set_paint_policy(
+            WideMediaListPaintPolicy::for_queue(self.focused).with_zebra(queue_row_zebra_stripe()),
         );
+        Component::view(list, frame, content_area);
         if content_area.height < 1 {
             return;
         }
