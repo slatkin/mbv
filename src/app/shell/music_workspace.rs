@@ -3,9 +3,11 @@
 //! it is not a mounted destination component.
 
 use super::BrowseLevel;
+use super::PendingMusicReanchor;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
 use mbv_components::music_content::MusicContent;
+use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::library::LibraryKind;
@@ -172,7 +174,7 @@ impl Model {
         let cursor = self.music_workspace_cursor(index);
         let context = self.project_music_workspace_context(&key, index, cursor);
         self.fetch_music_workspace_album_tracks(&context);
-        let reanchor = self.pending_music_reanchor.take();
+        let reanchor = self.resolve_pending_music_reanchor(index);
         let wide = self.app.is_right_panel_wide();
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
@@ -192,13 +194,42 @@ impl Model {
     /// One-shot target-id selection re-anchor for the mounted Music owner
     /// (mirrors [`Model::reanchor_tv_owner_selection`]): consumed at the next
     /// `push_music_workspace_content`, after the owner has reconciled that
-    /// push's content. Set only for a discrete navigation the shell performed
-    /// that names a stable tree target.
-    pub(in crate::app) fn reanchor_music_owner_selection(
-        &mut self,
-        target: mbv_components::music_tree_target::MusicTreeTarget,
-    ) {
-        self.pending_music_reanchor = Some(target);
+    /// push's content. Set only for a discrete navigation the shell performed.
+    pub(in crate::app) fn reanchor_music_owner_selection(&mut self, target: MusicTreeTarget) {
+        self.pending_music_reanchor = Some(PendingMusicReanchor::Target(target));
+    }
+
+    /// Re-anchor the tree to the current album level's first album (a
+    /// pill/group switch replaces the level wholesale). Resolves a stable
+    /// album id from the landed level and leaves the pending re-anchor armed
+    /// while that level is still loading, so the re-point happens on the push
+    /// that first has content.
+    pub(in crate::app) fn reanchor_music_owner_to_level_start(&mut self) {
+        self.pending_music_reanchor = Some(PendingMusicReanchor::FirstAlbumOfLevel);
+    }
+
+    /// Resolve and consume the pending Music re-anchor, if it is resolvable on
+    /// this push. A `FirstAlbumOfLevel` whose level has not landed stays armed
+    /// for a later push.
+    fn resolve_pending_music_reanchor(&mut self, index: usize) -> Option<MusicTreeTarget> {
+        match self.pending_music_reanchor.as_ref()? {
+            PendingMusicReanchor::Target(target) => {
+                let target = target.clone();
+                self.pending_music_reanchor = None;
+                Some(target)
+            }
+            PendingMusicReanchor::FirstAlbumOfLevel => {
+                let album_id = self.app.libs.get(index).and_then(|lib| {
+                    let level = lib.nav_stack.last()?;
+                    level
+                        .items
+                        .get(level.resting().cursor())
+                        .map(|item| item.id.clone())
+                })?;
+                self.pending_music_reanchor = None;
+                Some(MusicTreeTarget::Album(album_id))
+            }
+        }
     }
 
     /// The shell-projected album snapshot cursor: the mounted owner's own

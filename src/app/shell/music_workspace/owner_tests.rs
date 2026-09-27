@@ -563,3 +563,37 @@ fn recursive_album_activation_reanchors_the_tree_to_the_activated_album() {
         "the shell's discrete landing target re-points the retained tree",
     );
 }
+
+#[test]
+fn music_group_switch_reanchors_to_the_new_levels_first_album() {
+    let mut model = Model::new(music_two_artist_app());
+    model.sync_mounted_surfaces();
+    model.test_music_owner_mut().select_tree_target(
+        mbv_components::music_tree_target::MusicTreeTarget::Artist(
+            mbv_ui_model::music_grouping::ArtistKey::Fallback("Pizzicato Five".into()),
+        ),
+    );
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Pizzicato Five"),
+    );
+
+    // A pill/group switch pops the album level and pushes a fresh one whose
+    // resting cursor names its first album; the typed level-start re-anchor
+    // resolves that to a stable album id once the content is present.
+    model.app.libs[0].nav_stack[1].set_resting_cursor(0);
+    model.reanchor_music_owner_to_level_start();
+    model.push_music_workspace_content();
+
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+        "a group switch re-points the owner at the new level's first album",
+    );
+}

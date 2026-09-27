@@ -62,10 +62,10 @@ impl super::super::Model {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     self.app.switch_music_group(lib_idx, delta);
                 }
-                // A group switch replaces the album level; the component
-                // reconciles the new projection and selects its first visible
-                // root when its prior target does not survive. No shell
-                // re-anchor is issued.
+                // A group switch replaces the album level; re-point the
+                // mounted owner at that new level's first album (a stable
+                // target), resolved once the level's content lands.
+                self.reanchor_music_owner_to_level_start();
                 self.push_music_workspace_content();
             }
             _ => return Some(request),
