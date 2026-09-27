@@ -80,7 +80,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
+    let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
@@ -129,7 +129,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = crate::api::seconds_to_ticks(update.current_time_seconds);
+    let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()

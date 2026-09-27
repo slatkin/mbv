@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn episode_rows_project_runtime_in_the_green_gutter() {
     let mut episode = make_item("Episode", "Episode");
-    episode.runtime_ticks = 3_661 * mbv_core::api::TICKS_PER_SECOND;
+    episode.runtime_ticks = 3_661 * mbv_emby_model::TICKS_PER_SECOND;
     let rows = build_episode_rows(&[episode]);
     let MediaListRow::Item {
         trailing, duration, ..

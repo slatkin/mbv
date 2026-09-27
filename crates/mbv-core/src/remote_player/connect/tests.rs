@@ -1,7 +1,7 @@
 use super::*;
-use crate::api::EmbyImageTags;
 use crate::config::QueueSource;
 use crate::playback_queue::{FeedEntry, QueueItem};
+use mbv_emby_model::EmbyImageTags;
 use std::net::SocketAddr;
 
 fn make_media_item(id: &str) -> EmbyItem {

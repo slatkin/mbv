@@ -1,7 +1,7 @@
 use super::super::*;
 
-fn stub_media_item() -> crate::api::EmbyItem {
-    crate::api::EmbyItem {
+fn stub_media_item() -> mbv_emby_model::EmbyItem {
+    mbv_emby_model::EmbyItem {
         id: "item1".into(),
         name: "Test Item".into(),
         item_type: "Episode".into(),
@@ -36,7 +36,7 @@ fn stub_media_item() -> crate::api::EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: crate::api::EmbyImageTags::default(),
+        image_tags: mbv_emby_model::EmbyImageTags::default(),
     }
 }
 
@@ -49,7 +49,7 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         enclosure_url: Some("https://example.com/ep1.mp3".into()),
         link: None,
         mime_type: Some("audio/mpeg".into()),
-        duration_ticks: Some((3_600 * crate::api::TICKS_PER_SECOND) as u64),
+        duration_ticks: Some((3_600 * mbv_emby_model::TICKS_PER_SECOND) as u64),
         pub_date_secs: Some(1_700_000_000),
         feed_kind: Some(crate::config::FeedKind::Audio),
         feed_id: None,

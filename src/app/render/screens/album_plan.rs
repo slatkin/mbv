@@ -19,7 +19,7 @@ pub(crate) fn sorted_group_album_order(album_info: &[(String, String, String)]) 
 /// `App::resolve_group_album_artist` without borrowing `App`.
 fn resolve_group_album_artist(
     album_artist_cache: &HashMap<String, String>,
-    item: &mbv_core::api::EmbyItem,
+    item: &mbv_emby_model::EmbyItem,
 ) -> String {
     derive_album_artist(item, album_artist_cache.get(&item.id).map(String::as_str))
 }
@@ -30,7 +30,7 @@ fn resolve_group_album_artist(
 /// `add-grouped-music-tree-browser`).
 fn resolve_group_album(
     album_artist_cache: &HashMap<String, String>,
-    albums: &[mbv_core::api::EmbyItem],
+    albums: &[mbv_emby_model::EmbyItem],
     catalog: Option<&GroupedAlbumCatalog>,
     index: usize,
 ) -> (String, String, String, ArtistKey) {
@@ -58,7 +58,7 @@ fn resolve_group_album(
 /// falling back to a synchronous best-effort chain otherwise.
 pub(in crate::app::render) fn group_album_plan(
     album_artist_cache: &HashMap<String, String>,
-    albums: &[mbv_core::api::EmbyItem],
+    albums: &[mbv_emby_model::EmbyItem],
     catalog: Option<&GroupedAlbumCatalog>,
 ) -> (Vec<(String, String, String)>, Vec<ArtistKey>) {
     let mut info = Vec::with_capacity(albums.len());

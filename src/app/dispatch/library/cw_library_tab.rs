@@ -1,10 +1,10 @@
 use crate::app::{App, PanelFocus, TabSelection};
-use mbv_core::api::EmbyItem;
 use mbv_core::config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
     LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity,
     TuiLaunchState, TUI_LAUNCH_STATE_VERSION,
 };
+use mbv_emby_model::EmbyItem;
 
 impl App {
     /// Resolve the one startup launch intent against the current live

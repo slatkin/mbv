@@ -78,7 +78,7 @@ impl PlaybackRun {
         let Some(ticks) = self.forced_resume_ticks.take() else {
             return;
         };
-        let seconds = crate::api::ticks_to_seconds(ticks);
+        let seconds = mbv_emby_model::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
             log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
             return;

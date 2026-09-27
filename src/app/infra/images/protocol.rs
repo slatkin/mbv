@@ -11,7 +11,7 @@ impl App {
     /// surrounding prefetch.
     pub(in crate::app) fn fetch_nearby_movie_posters(
         &mut self,
-        items: &[mbv_core::api::EmbyItem],
+        items: &[mbv_emby_model::EmbyItem],
         cursor: usize,
     ) {
         const PREFETCH_AHEAD: usize = 3;

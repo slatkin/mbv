@@ -3,8 +3,8 @@ use crate::app::components::media_list::{
 };
 use crate::app::state::types::playback::PlaybackState;
 use crate::app::ui_util::fmt_duration_short;
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};
+use mbv_emby_model::TICKS_PER_SECOND;
 
 /// Project Queue slots into the canonical provider-neutral row vocabulary
 /// (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the

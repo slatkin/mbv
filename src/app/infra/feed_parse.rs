@@ -1,7 +1,7 @@
 use crate::app::state::types::feed::IdleFeedItem;
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_text::html::decode_entities;
 
 mod date;

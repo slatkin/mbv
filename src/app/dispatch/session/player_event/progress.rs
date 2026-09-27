@@ -5,7 +5,7 @@ impl App {
     pub(super) fn handle_audiobookshelf_progress(&mut self, ev: &AudiobookshelfProgressEvent) {
         // No client-side generation gate: the daemon drops stale updates before emitting, and its
         // generation counter is unrelated to this client's runtime generation.
-        let current_time_seconds = mbv_core::api::ticks_to_seconds(ev.position_ticks);
+        let current_time_seconds = mbv_emby_model::ticks_to_seconds(ev.position_ticks);
         self.reconcile_audiobookshelf_progress(
             &ev.library_item_id,
             &ev.episode_id,

@@ -9,12 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::EmbyItem;
 use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
     UnifiedQueueStateData,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
+use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 
 use crate::remote_player::RemotePlayer;

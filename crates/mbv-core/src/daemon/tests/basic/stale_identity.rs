@@ -230,7 +230,7 @@ fn stale_completed_run_observation_is_rejected() {
         &shared_queue,
         old_run,
         completed_slot,
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         true,
         true,
         ConsumePolicy {
@@ -252,7 +252,7 @@ fn stale_completed_run_observation_is_rejected() {
         &shared_queue,
         current_run,
         completed_slot,
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         false,
         false,
         ConsumePolicy {
@@ -268,7 +268,7 @@ fn stale_completed_run_observation_is_rejected() {
             .unwrap()
             .item
             .playback_position_ticks(),
-        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
+        mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
     );
     assert!(apply_track_completed_observation(
         &mut completed_owner,

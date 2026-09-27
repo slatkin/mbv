@@ -1,7 +1,5 @@
-use super::types::{
-    EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson, SessionAudioStream,
-    SessionMediaInfo, SessionSubtitleStream,
-};
+use super::types::{SessionAudioStream, SessionMediaInfo, SessionSubtitleStream};
+use mbv_emby_model::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
 use mbv_text::html::decode_entities;
 use serde_json::Value;
 

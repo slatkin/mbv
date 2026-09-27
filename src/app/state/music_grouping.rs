@@ -2,7 +2,7 @@ use crate::app::render::{parse_album_folder_name, strip_article};
 use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
 use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 

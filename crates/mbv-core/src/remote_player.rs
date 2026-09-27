@@ -3,10 +3,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::{EmbyClient, EmbyItem};
+use crate::api::EmbyClient;
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
 use crate::playback_queue::QueueItem;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+use mbv_emby_model::EmbyItem;
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]

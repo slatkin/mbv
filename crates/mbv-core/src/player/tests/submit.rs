@@ -220,7 +220,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
-        runtime_ticks: 30 * crate::api::TICKS_PER_SECOND,
+        runtime_ticks: 30 * mbv_emby_model::TICKS_PER_SECOND,
         played: false,
         playback_position_ticks: 0,
         series_id: String::new(),
@@ -247,7 +247,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: crate::api::EmbyImageTags::default(),
+        image_tags: mbv_emby_model::EmbyImageTags::default(),
     })));
     let feed_slot = queue.append(QueueItem::Feed(make_feed_entry("podcast-ep", "Podcast Ep")));
     let other = queue.append(QueueItem::Feed(make_feed_entry("other-ep", "Other Ep")));

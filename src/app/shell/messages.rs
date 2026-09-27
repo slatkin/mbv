@@ -11,9 +11,9 @@ use crate::app::state::types::playback::DestinationLatestSource;
 use std::time::Instant;
 
 fn matching_context_items(
-    items: &[mbv_core::api::EmbyItem],
+    items: &[mbv_emby_model::EmbyItem],
     targets: &[String],
-) -> Vec<mbv_core::api::EmbyItem> {
+) -> Vec<mbv_emby_model::EmbyItem> {
     targets
         .iter()
         .filter_map(|target| items.iter().find(|item| item.id == *target).cloned())
@@ -528,7 +528,7 @@ impl Model {
     /// re-project all destination owners.
     fn open_emby_context_item(
         &mut self,
-        item: mbv_core::api::EmbyItem,
+        item: mbv_emby_model::EmbyItem,
         anchor: Option<(u16, u16)>,
     ) {
         self.focus_emby_context_item(&item);
@@ -680,7 +680,7 @@ impl Model {
     /// and pins the persistence-facing cursor to that row. This is shared by
     /// keyboard and pointer requests so actions cannot fall back to a stale
     /// cursor in another panel.
-    fn focus_emby_context_item(&mut self, item: &mbv_core::api::EmbyItem) {
+    fn focus_emby_context_item(&mut self, item: &mbv_emby_model::EmbyItem) {
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
             return;

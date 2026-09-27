@@ -1,6 +1,6 @@
 use crate::app::components::library_panel::LibraryKey;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 

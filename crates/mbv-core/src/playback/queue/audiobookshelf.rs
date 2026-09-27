@@ -51,11 +51,11 @@ impl AudiobookshelfQueueItem {
 
     #[must_use]
     pub fn resume_seconds(&self) -> f64 {
-        if crate::api::should_resume(
+        if mbv_emby_model::should_resume(
             self.position_ticks,
             duration_ticks_as_i64(self.duration_ticks.unwrap_or(0)),
         ) {
-            crate::api::ticks_to_seconds(self.position_ticks)
+            mbv_emby_model::ticks_to_seconds(self.position_ticks)
         } else {
             0.0
         }
@@ -101,11 +101,11 @@ impl AudiobookshelfBookQueueItem {
 
     #[must_use]
     pub fn resume_seconds(&self) -> f64 {
-        if crate::api::should_resume(
+        if mbv_emby_model::should_resume(
             self.position_ticks,
             duration_ticks_as_i64(self.duration_ticks.unwrap_or(0)),
         ) {
-            crate::api::ticks_to_seconds(self.position_ticks)
+            mbv_emby_model::ticks_to_seconds(self.position_ticks)
         } else {
             0.0
         }

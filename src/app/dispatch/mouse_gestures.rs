@@ -3,8 +3,8 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::api::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use mbv_core::player::PlayerCommand;
+use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use std::time::{Duration, Instant};
 
 impl App {
@@ -38,7 +38,7 @@ impl App {
         if runtime_ticks == 0 {
             return;
         }
-        let target_secs = fraction * mbv_core::api::ticks_to_seconds(runtime_ticks);
+        let target_secs = fraction * mbv_emby_model::ticks_to_seconds(runtime_ticks);
         self.player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists

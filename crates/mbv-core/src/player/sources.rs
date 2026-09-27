@@ -154,8 +154,8 @@ impl PreparedSource {
 
     pub(super) fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
-            lifecycle.close(crate::api::saturating_i64_from_f64(
-                current_time.max(0.0) * crate::api::TICKS_PER_SECOND_F64,
+            lifecycle.close(mbv_emby_model::saturating_i64_from_f64(
+                current_time.max(0.0) * mbv_emby_model::TICKS_PER_SECOND_F64,
             ));
         }
         self.lifecycle = None;

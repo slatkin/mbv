@@ -3,7 +3,7 @@ use crate::app::state::types::browse::BrowseResting;
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{BrowseLevel, LibraryTab};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use rstest::rstest;
 
 fn lib_tab(collection_type: &str) -> LibraryTab {

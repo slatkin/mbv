@@ -30,9 +30,9 @@ use crate::app::render::{
     effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
 };
 use crate::app::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use ratatui::layout::Position;
 use time::Date;
 #[cfg(test)]

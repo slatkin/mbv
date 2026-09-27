@@ -4,12 +4,13 @@ use super::{
     ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext, DaemonPlayerOwner,
     PendingIdleQueueLoad, SharedQueueState,
 };
-use crate::api::{EmbyClient, EmbyItem};
+use crate::api::EmbyClient;
 use crate::ctrl::{CtrlCmd, CtrlEvent};
 use crate::playback::QueueSlotId;
 use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerCommand, PlayerOwnerState};
+use mbv_emby_model::EmbyItem;
 use std::sync::{mpsc, Arc, Mutex};
 
 use super::control_queue::{

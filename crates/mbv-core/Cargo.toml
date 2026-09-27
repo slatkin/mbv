@@ -21,6 +21,7 @@ mbv-ids = { path = "../mbv-ids" }
 mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-net = { path = "../mbv-net" }
 mbv-text = { path = "../mbv-text" }
+mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true

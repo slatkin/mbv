@@ -48,7 +48,7 @@ impl QueueState {
     /// Used by the UI layer (`PlayerTab`) and ctrl boundary, which only
     /// operate on Emby items. Skips both Feed and Audiobookshelf items.
     #[must_use]
-    pub fn emby_items(&self) -> Vec<crate::api::EmbyItem> {
+    pub fn emby_items(&self) -> Vec<mbv_emby_model::EmbyItem> {
         self.items
             .iter()
             .filter_map(|qi| match qi {
@@ -70,7 +70,7 @@ impl QueueState {
     /// deal with Emby items.
     #[must_use]
     pub fn from_emby_items(
-        items: Vec<crate::api::EmbyItem>,
+        items: Vec<mbv_emby_model::EmbyItem>,
         cursor: usize,
         source: QueueSource,
     ) -> Self {

@@ -8,9 +8,9 @@ use super::super::{
     DaemonLoop, DaemonOwnerContext, DaemonRole,
 };
 use super::EventOutcome;
-use crate::api::EmbyItem;
 use crate::ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use crate::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise

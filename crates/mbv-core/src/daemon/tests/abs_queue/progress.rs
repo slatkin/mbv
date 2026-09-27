@@ -242,7 +242,7 @@ fn acknowledged_progress_advances_through_play_pause_seek_and_completion() {
             &registry,
         );
 
-        let expected_ticks = i64::from(secs) * crate::api::TICKS_PER_SECOND;
+        let expected_ticks = i64::from(secs) * mbv_emby_model::TICKS_PER_SECOND;
         let ep = queue.slots()[0].item.as_audiobookshelf().unwrap();
         assert_eq!(
             ep.position_ticks, expected_ticks,

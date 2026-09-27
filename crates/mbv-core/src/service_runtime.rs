@@ -1,6 +1,6 @@
 use crate::api::EmbyClient;
-use crate::api::EmbyItem;
 use crate::audiobookshelf::AudiobookshelfUser;
+use mbv_emby_model::EmbyItem;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

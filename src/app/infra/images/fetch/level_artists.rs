@@ -77,7 +77,7 @@ fn path_within(path: &str, root: &str) -> bool {
 /// first-seen tie-break is stable across runs.
 pub(super) fn bucket_tracks_by_album<'a>(
     tracks: &'a [serde_json::Value],
-    albums: &[mbv_core::api::EmbyItem],
+    albums: &[mbv_emby_model::EmbyItem],
 ) -> std::collections::HashMap<String, Vec<&'a serde_json::Value>> {
     let album_ids: std::collections::HashSet<&str> = albums.iter().map(|a| a.id.as_str()).collect();
     let album_paths: Vec<(&str, &str)> = albums
@@ -175,7 +175,7 @@ fn attribute_by_path<'a>(
 /// are ordered by album id. `tracks` must be in request order.
 pub(super) fn level_artists_from_items(
     tracks: &[serde_json::Value],
-    albums: &[mbv_core::api::EmbyItem],
+    albums: &[mbv_emby_model::EmbyItem],
 ) -> Vec<(String, String)> {
     let mut artists: Vec<(String, String)> = bucket_tracks_by_album(tracks, albums)
         .into_iter()

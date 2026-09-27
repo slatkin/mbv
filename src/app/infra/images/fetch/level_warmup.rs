@@ -135,7 +135,7 @@ impl App {
     pub(in crate::app) fn spawn_level_artist_fetch(
         &mut self,
         level_id: String,
-        albums: Vec<mbv_core::api::EmbyItem>,
+        albums: Vec<mbv_emby_model::EmbyItem>,
     ) {
         // Each group child gets one `Recursive=true` request (about 15 on the
         // reference library); the queue permits at most

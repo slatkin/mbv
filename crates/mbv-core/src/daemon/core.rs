@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
-use crate::api::{EmbyClient, EmbyItem};
+use crate::api::EmbyClient;
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
@@ -14,6 +14,7 @@ use crate::ctrl::{
 use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
+use mbv_emby_model::EmbyItem;
 use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {

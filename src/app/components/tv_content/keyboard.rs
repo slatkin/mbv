@@ -6,7 +6,7 @@ use super::{
     Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent, TvDisplayMode, TvTreeTarget,
 };
 use crate::app::components::media_list::MediaListSurfaceInput;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl TvContent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary

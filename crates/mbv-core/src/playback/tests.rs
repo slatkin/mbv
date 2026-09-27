@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::{EmbyImageTags, EmbyItem, TICKS_PER_SECOND};
+use mbv_emby_model::{EmbyImageTags, EmbyItem, TICKS_PER_SECOND};
 use title_parts::emby_item_of_type;
 
 fn item(id: &str) -> EmbyItem {

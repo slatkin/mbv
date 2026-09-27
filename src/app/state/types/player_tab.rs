@@ -1,9 +1,9 @@
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_execution_sequence::ExecSlot;
 use mbv_core::playback_queue::{
     PlaybackQueue, QueueItem, QueueMutationResult, QueueSlot, QueueSlotId, RefreshMergeResult,
     RemoveSlotResult,
 };
+use mbv_emby_model::EmbyItem;
 
 #[derive(Clone, Default)]
 pub(in crate::app) struct PlayerTab {

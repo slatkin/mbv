@@ -1,6 +1,6 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent, PAGE_SIZE};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 fn restored_tv_content_mode(
     is_tv_library: bool,

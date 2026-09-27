@@ -57,8 +57,8 @@ fn remote_command_app() -> (App, MockHttp) {
     session.now_playing_item_id = Some("a".into());
     session.position_s = 60;
     session.runtime_s = 300;
-    session.position_ticks = 60 * mbv_core::api::TICKS_PER_SECOND;
-    session.runtime_ticks = 300 * mbv_core::api::TICKS_PER_SECOND;
+    session.position_ticks = 60 * mbv_emby_model::TICKS_PER_SECOND;
+    session.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
     app.connected_session_state = Some(session);
     (app, http)
 }

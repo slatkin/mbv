@@ -164,16 +164,16 @@ impl App {
                 } else {
                     self.remote.remote_pos_at.elapsed().as_secs_f64()
                 };
-                let remote_pos_s = mbv_core::api::i64_to_f64_saturating(self.remote.remote_pos_s);
-                let runtime_s = mbv_core::api::i64_to_f64_saturating(remote.runtime_s);
+                let remote_pos_s = mbv_emby_model::i64_to_f64_saturating(self.remote.remote_pos_s);
+                let runtime_s = mbv_emby_model::i64_to_f64_saturating(remote.runtime_s);
                 let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
-                mbv_core::api::seconds_to_ticks(pos_s)
+                mbv_emby_model::seconds_to_ticks(pos_s)
             };
             crate::app::PlaybackState {
                 active: remote.now_playing.is_some(),
                 active_idx: maybe_active_idx,
                 position_ticks: pos_ticks,
-                runtime_ticks: remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
+                runtime_ticks: remote.runtime_s * mbv_emby_model::TICKS_PER_SECOND,
                 paused: remote.is_paused,
             }
         } else {

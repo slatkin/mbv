@@ -3,8 +3,8 @@ use crate::app::images::{
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
 };
 use crate::app::{palette, App};
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;

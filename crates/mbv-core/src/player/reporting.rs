@@ -4,7 +4,7 @@ use crate::playback_queue::AudiobookshelfItem;
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn seconds_from_ticks(ticks: i64) -> f64 {
-    let seconds = crate::api::ticks_to_seconds(ticks.max(0));
+    let seconds = mbv_emby_model::ticks_to_seconds(ticks.max(0));
     (seconds * 1_000_000.0).round() / 1_000_000.0
 }
 
@@ -216,8 +216,8 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
 
 impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     fn drop(&mut self) {
-        self.close(crate::api::saturating_i64_from_f64(
-            (self.current_position * crate::api::TICKS_PER_SECOND_F64).round(),
+        self.close(mbv_emby_model::saturating_i64_from_f64(
+            (self.current_position * mbv_emby_model::TICKS_PER_SECOND_F64).round(),
         ));
     }
 }
@@ -300,10 +300,10 @@ impl ActiveItemLifecycle {
 #[cfg(test)]
 mod reporting_tests {
     use super::{ActiveItemLifecycle, ListeningTime};
-    use crate::api::EmbyItem;
     use crate::playback_queue::{
         AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
     };
+    use mbv_emby_model::EmbyItem;
     use std::time::{Duration, Instant};
 
     fn emby() -> QueueItem {
@@ -342,7 +342,7 @@ mod reporting_tests {
             people: Vec::new(),
             external_urls: Vec::new(),
             playlist_item_id: String::new(),
-            image_tags: crate::api::EmbyImageTags::default(),
+            image_tags: mbv_emby_model::EmbyImageTags::default(),
         }))
     }
 
@@ -460,9 +460,9 @@ mod reporting_tests {
         lifecycle.generation = crate::service_runtime::SetupGeneration::new(10);
         lifecycle.observe(start, true);
         let failed_at = start + Duration::from_secs(11);
-        lifecycle.sync(2 * crate::api::TICKS_PER_SECOND, failed_at, true);
+        lifecycle.sync(2 * mbv_emby_model::TICKS_PER_SECOND, failed_at, true);
         lifecycle.sync(
-            3 * crate::api::TICKS_PER_SECOND,
+            3 * mbv_emby_model::TICKS_PER_SECOND,
             failed_at + Duration::from_secs(1),
             false,
         );

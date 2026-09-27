@@ -1,8 +1,8 @@
 use super::*;
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::socket::SocketEvent;
 use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::TICKS_PER_SECOND;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
@@ -158,7 +158,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     );
 
     let generation = app.audiobookshelf_runtime.generation();
-    let position_ticks = 120 * mbv_core::api::TICKS_PER_SECOND;
+    let position_ticks = 120 * mbv_emby_model::TICKS_PER_SECOND;
 
     // (a)(b)(c): completion via daemon route.
     app.handle_player_event(PlayerEvent::AudiobookshelfProgress(

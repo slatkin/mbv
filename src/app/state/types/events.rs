@@ -1,8 +1,8 @@
 use crate::app::state::types::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use crate::app::state::types::feed::FeedHomeVideoGroup;
 use crate::app::state::types::playback::HomeContent;
-use mbv_core::api::EmbyItem;
 use mbv_core::service_runtime::SetupGeneration;
+use mbv_emby_model::EmbyItem;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the

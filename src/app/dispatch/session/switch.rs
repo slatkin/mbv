@@ -427,7 +427,7 @@ impl App {
     /// `restore_local_mode` when we were already on a *different* route
     /// and must actually swap the player back to local, not just show a
     /// warning while silently staying connected to the old route.
-    pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_emby_model::EmbyItem) {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
             (Some((name, _)), Some(current)) if name == current => {

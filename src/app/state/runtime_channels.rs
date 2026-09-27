@@ -1,6 +1,6 @@
 use crate::app::state::types::cast::CastEvent;
 use crate::app::state::types::events::{LibEvent, SessionEvent};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::sync::mpsc;
 
 pub(in crate::app) struct RuntimeChannels {

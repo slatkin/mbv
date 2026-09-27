@@ -354,8 +354,8 @@ impl App {
                     .filter(|&&saved_pos| saved_pos > item.playback_position_ticks)
                 {
                     log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
-                        saved_pos / mbv_core::api::TICKS_PER_SECOND,
-                        item.playback_position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                        saved_pos / mbv_emby_model::TICKS_PER_SECOND,
+                        item.playback_position_ticks / mbv_emby_model::TICKS_PER_SECOND,
                         item.id);
                     item.playback_position_ticks = saved_pos;
                 }

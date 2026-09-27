@@ -70,7 +70,7 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: mbv_core::api::EmbyImageTags::default(),
+        image_tags: mbv_emby_model::EmbyImageTags::default(),
     }
 }
 

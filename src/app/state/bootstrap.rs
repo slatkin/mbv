@@ -1,7 +1,7 @@
 use crate::app::state::types::player_tab::PlayerTab;
 
 pub(in crate::app) fn bootstrap_legacy_queue(
-    items: Vec<mbv_core::api::EmbyItem>,
+    items: Vec<mbv_emby_model::EmbyItem>,
     cursor: usize,
     source: crate::config::QueueSource,
 ) -> LocalDaemonBootstrap {

@@ -1,4 +1,5 @@
-use super::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use super::EmbyClient;
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 
 /// One progress report for both progress transports. The two transports

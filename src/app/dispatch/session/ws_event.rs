@@ -1,7 +1,7 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
-#[cfg(test)]
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
+#[cfg(test)]
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;
 
 impl App {
@@ -34,7 +34,7 @@ impl App {
             }
             WsEvent::Seek(ticks) => {
                 self.player.send_command(PlayerCommand::SeekAbsolute(
-                    mbv_core::api::ticks_to_seconds(ticks),
+                    mbv_emby_model::ticks_to_seconds(ticks),
                 ));
             }
             WsEvent::SeekRelative(secs) => {

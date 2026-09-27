@@ -88,7 +88,7 @@ impl SearchSidebarComponent {
     pub(in crate::app) fn apply_drain(
         &mut self,
         query: &str,
-        result: Result<Vec<mbv_core::api::EmbyItem>, String>,
+        result: Result<Vec<mbv_emby_model::EmbyItem>, String>,
     ) {
         self.sidebar.apply_drain(query, result);
     }

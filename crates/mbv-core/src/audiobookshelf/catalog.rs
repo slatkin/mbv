@@ -229,8 +229,8 @@ pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShel
             .as_deref()
             .map(mbv_text::html::html_to_text),
         duration_ticks: duration_seconds.map(|seconds| {
-            let ticks = crate::api::saturating_i64_from_f64(
-                (seconds * crate::api::TICKS_PER_SECOND_F64).trunc(),
+            let ticks = mbv_emby_model::saturating_i64_from_f64(
+                (seconds * mbv_emby_model::TICKS_PER_SECOND_F64).trunc(),
             );
             u64::try_from(ticks).unwrap_or(0)
         }),

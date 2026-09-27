@@ -1,6 +1,6 @@
 use crate::app::state::types::browse::BrowseLevel;
 use crate::app::state::types::feed::FeedHomeVideoState;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub(in crate::app) struct LibraryTab {
     pub(in crate::app) library: EmbyItem,

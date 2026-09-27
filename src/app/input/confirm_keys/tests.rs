@@ -2,7 +2,7 @@ use super::*;
 use crate::app::state::types::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;
 use crossterm::event::KeyModifiers;
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path

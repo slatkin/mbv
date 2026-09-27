@@ -3,8 +3,8 @@ use crate::app::{
     dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+use mbv_emby_model::EmbyItem;
 use std::collections::HashMap;
 
 impl App {

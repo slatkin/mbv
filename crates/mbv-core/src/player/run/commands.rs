@@ -5,11 +5,11 @@ use super::{
     start_queue_playback, volume_decision, LoadState, PlaybackOrigin, PlaybackRun, ProgressGuard,
     StopReport,
 };
-use crate::api::EmbyItem;
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 use crate::playback_queue::{QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent};
 use libmpv2::Mpv;
+use mbv_emby_model::EmbyItem;
 use std::time::Instant;
 
 impl PlaybackRun {
@@ -135,7 +135,7 @@ impl PlaybackRun {
             PlayerCommand::SetVolume(volume) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
                 let (volume, raw) = volume_decision(volume, vol_max);
-                let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
+                let _ = mpv.set_property("volume", mbv_emby_model::i64_to_f64_saturating(raw));
                 self.status.lock().unwrap().volume = volume;
                 let _ = mpv.command("show-text", &[&format!("Volume: {volume}%"), "1500"]);
             }

@@ -1,5 +1,5 @@
 use crate::app::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub(super) type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), String> + 'a;

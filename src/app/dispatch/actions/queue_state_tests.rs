@@ -1,10 +1,10 @@
 use super::*;
 use crate::app::tests::{confirm_replace_queue, make_item};
 use crate::app::ContextAction;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
+use mbv_emby_model::EmbyItem;
 use rstest::{fixture, rstest};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;

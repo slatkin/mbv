@@ -1,10 +1,11 @@
 use crate::app::{App, SessionEvent};
-use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
+use mbv_core::api::EmbyClient;
+use mbv_emby_model::TICKS_PER_SECOND;
 impl App {
     pub(in crate::app) fn submit_attached_sequence(
         &mut self,
         conn_id: &str,
-        items: &[mbv_core::api::EmbyItem],
+        items: &[mbv_emby_model::EmbyItem],
         start_idx: usize,
     ) {
         let id = conn_id.to_string();

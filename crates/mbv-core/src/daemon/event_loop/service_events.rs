@@ -6,10 +6,10 @@ use super::super::{
     handle_ws, DaemonLoop,
 };
 use super::EventOutcome;
-use crate::api::EmbyItem;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
 use crate::service_runtime::SetupGeneration;
+use mbv_emby_model::EmbyItem;
 use mbv_ws::WsEvent;
 
 impl DaemonLoop {

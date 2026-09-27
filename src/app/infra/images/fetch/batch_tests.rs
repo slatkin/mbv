@@ -15,7 +15,7 @@ fn track(
     t
 }
 
-fn album(id: &str, path: &str) -> mbv_core::api::EmbyItem {
+fn album(id: &str, path: &str) -> mbv_emby_model::EmbyItem {
     let mut a = make_item(id, "Folder");
     a.id = id.into();
     a.path = path.into();

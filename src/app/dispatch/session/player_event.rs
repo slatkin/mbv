@@ -214,7 +214,7 @@ impl App {
         // config, so this client's own `always_skip_intro` is the
         // only thing that decides whether to skip.
         if self.config.lock().unwrap().always_skip_intro {
-            let secs = mbv_core::api::ticks_to_seconds(intro_end_ticks);
+            let secs = mbv_emby_model::ticks_to_seconds(intro_end_ticks);
             self.player.send_command(PlayerCommand::SeekAbsolute(secs));
             self.player.send_command(PlayerCommand::SkipIntroDismiss);
         }
@@ -248,7 +248,7 @@ impl App {
             return false;
         };
         log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
-            position_ticks / mbv_core::api::TICKS_PER_SECOND);
+            position_ticks / mbv_emby_model::TICKS_PER_SECOND);
         if self.player.is_remote_disconnected() {
             return self.handle_stopped_remote_disconnected();
         }
@@ -356,7 +356,7 @@ impl App {
         if played {
             log::info!(target: "player", "Stopped: marked played, position reset to 0");
         } else if position_ticks > 0 {
-            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_core::api::TICKS_PER_SECOND);
+            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_emby_model::TICKS_PER_SECOND);
         } else {
             log::info!(target: "player", "Stopped: position not saved (position_ticks={position_ticks})");
         }
@@ -434,7 +434,7 @@ impl App {
         } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
             // Only record meaningful progress for video; audio and
             // startup noise keep the prior value.
-            if position_ticks >= mbv_core::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+            if position_ticks >= mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
                 && !slot.item.is_audio()
             {
                 position_ticks

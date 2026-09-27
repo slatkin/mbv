@@ -3,7 +3,7 @@ use crate::app::render::{
 };
 use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {

@@ -1,6 +1,6 @@
 use super::*;
-use crate::api::EmbyImageTags;
 use crate::player::PlayerOwnerState;
+use mbv_emby_model::EmbyImageTags;
 
 pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
     EmbyItem {

@@ -196,8 +196,8 @@ mod tests {
         );
     }
 
-    fn item(id: &str) -> crate::api::EmbyItem {
-        crate::api::EmbyItem {
+    fn item(id: &str) -> mbv_emby_model::EmbyItem {
+        mbv_emby_model::EmbyItem {
             id: id.to_string(),
             name: format!("Item {id}"),
             item_type: "Episode".to_string(),
@@ -205,7 +205,7 @@ mod tests {
             child_count: None,
             media_type: "Video".to_string(),
             collection_type: String::new(),
-            runtime_ticks: 100 * crate::api::TICKS_PER_SECOND,
+            runtime_ticks: 100 * mbv_emby_model::TICKS_PER_SECOND,
             played: false,
             playback_position_ticks: 0,
             series_id: String::new(),
@@ -232,7 +232,7 @@ mod tests {
             people: Vec::new(),
             external_urls: Vec::new(),
             playlist_item_id: String::new(),
-            image_tags: crate::api::EmbyImageTags::default(),
+            image_tags: mbv_emby_model::EmbyImageTags::default(),
         }
     }
 
@@ -247,7 +247,7 @@ mod tests {
         let before_revision = queue.revision();
         let mut owner = PlayerOwnerState::new(queue, crate::config::QueueSource::default());
 
-        let watched_ticks = 86 * crate::api::TICKS_PER_SECOND;
+        let watched_ticks = 86 * mbv_emby_model::TICKS_PER_SECOND;
         owner.apply_completion_progress(slot_id, watched_ticks, false);
 
         let slot = owner.queue.slot(slot_id).expect("slot still present");

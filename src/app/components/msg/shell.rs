@@ -7,8 +7,8 @@
 //! Home, Queue, TV, and Browser. The component owns the cursor and resolves
 //! the click region; the shell owns the matching `App` side effect.
 
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::FeedEntry;
+use mbv_emby_model::EmbyItem;
 
 use super::hit_regions::TvHit;
 use super::intents::{

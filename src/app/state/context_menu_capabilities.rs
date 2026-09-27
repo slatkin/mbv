@@ -33,7 +33,7 @@ pub(crate) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
     }
 }
 
-pub(crate) fn emby_item_capabilities(item: &mbv_core::api::EmbyItem) -> ItemCapabilities {
+pub(crate) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
     let playable = crate::app::ui_util::is_playable(item) && !item.is_folder;
     let played_state_capable = item.media_type != "Audio" && item.item_type != "Audio";
     ItemCapabilities {

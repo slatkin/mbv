@@ -1,6 +1,6 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(super) fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {

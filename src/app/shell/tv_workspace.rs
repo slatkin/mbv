@@ -19,8 +19,8 @@ use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
-use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
+use mbv_emby_model::EmbyItem;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {

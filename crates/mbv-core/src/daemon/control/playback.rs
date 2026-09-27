@@ -3,10 +3,11 @@ use super::{
     broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
 };
-use crate::api::{EmbyClient, EmbyItem};
+use crate::api::EmbyClient;
 use crate::ctrl::CtrlEvent;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{PlayerCommand, PlayerOwnerState};
+use mbv_emby_model::EmbyItem;
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the

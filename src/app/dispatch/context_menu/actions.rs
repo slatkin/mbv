@@ -4,7 +4,7 @@ use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
 };
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {

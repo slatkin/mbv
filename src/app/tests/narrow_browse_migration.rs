@@ -26,7 +26,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_core::api::EmbyItem> {
+fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_emby_model::EmbyItem> {
     (0..n)
         .map(|i| {
             let mut item = make_item(&format!("{prefix} {i}"), item_type);

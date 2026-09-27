@@ -50,7 +50,7 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     second_library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(second_library));
 
-    let views: Vec<mbv_core::api::EmbyItem> =
+    let views: Vec<mbv_emby_model::EmbyItem> =
         app.libs.iter().map(|lib| lib.library.clone()).collect();
     app.rebuild_library_tabs_from_views(&views);
     assert!(

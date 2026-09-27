@@ -64,9 +64,9 @@ pub(in crate::app) fn is_new_in_launch_window(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::api::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
     use mbv_core::config::FeedKind;
     use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry};
+    use mbv_emby_model::{EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson};
     use rstest::rstest;
 
     fn emby(date_added: &str) -> QueueItem {

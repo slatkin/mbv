@@ -78,7 +78,7 @@ impl App {
                 .queue
                 .apply_progress(slot_id, position_ticks, is_finished);
         }
-        let current_time_seconds = mbv_core::api::ticks_to_seconds(position_ticks);
+        let current_time_seconds = mbv_emby_model::ticks_to_seconds(position_ticks);
         for state in &mut self.audiobookshelf_book_browse {
             state.progress.insert(
                 library_item_id.to_string(),

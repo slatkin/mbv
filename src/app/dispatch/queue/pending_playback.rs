@@ -1,8 +1,8 @@
 use super::{App, QueueScope, ToastSeverity};
 use crate::app::state::queue_owner::LocalQueueOwner;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(super) fn execute_pending_play_items(
@@ -77,7 +77,7 @@ impl App {
         // Playlist Enter populates the queue; Space/Enter starts it.
         let loaded = items
             .get(start_idx)
-            .map(mbv_core::api::EmbyItem::playback_label);
+            .map(mbv_emby_model::EmbyItem::playback_label);
         if !direct_remote {
             self.replace_playback_queue(items.to_vec(), start_idx);
         }
@@ -104,7 +104,7 @@ impl App {
             let id = conn_id.clone();
             let label = items
                 .get(start_idx)
-                .map(mbv_core::api::EmbyItem::playback_label)
+                .map(mbv_emby_model::EmbyItem::playback_label)
                 .unwrap_or_default();
             self.flash(
                 format!("Requesting playback: {label}"),

@@ -14,7 +14,7 @@ pub(in crate::player) fn make_feed_entry(
         enclosure_url: Some(format!("https://example.com/{guid}.mp3")),
         link: None,
         mime_type: Some("audio/mpeg".into()),
-        duration_ticks: Some(300 * crate::api::TICKS_PER_SECOND as u64),
+        duration_ticks: Some(300 * mbv_emby_model::TICKS_PER_SECOND as u64),
         pub_date_secs: None,
         feed_kind: Some(crate::config::FeedKind::Audio),
         feed_id: None,

@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::api::{seconds_to_ticks, ticks_to_seconds, EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use crate::api::EmbyClient;
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 #[cfg(test)]
 use crate::playback_queue::QueueMutationResult;
@@ -19,6 +19,7 @@ use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
 };
+use mbv_emby_model::{seconds_to_ticks, ticks_to_seconds, EmbyItem, TICKS_PER_SECOND};
 
 fn mpv_err_str(e: &libmpv2::Error) -> String {
     if let libmpv2::Error::Raw(code) = e {
@@ -45,7 +46,7 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
         QueueItem::Emby(_) => 0.0,
         QueueItem::Feed(entry) => {
             let runtime = i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            if crate::api::should_resume(entry.position_ticks, runtime) {
+            if mbv_emby_model::should_resume(entry.position_ticks, runtime) {
                 ticks_to_seconds(entry.position_ticks)
             } else {
                 0.0
@@ -244,7 +245,7 @@ fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
     }
 }
 
-fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
+fn send_ep_info(mpv: &Mpv, item: &mbv_emby_model::EmbyItem) {
     let val =
         if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {
             format!(

@@ -16,9 +16,9 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::input::resolver::KeyChord;
 use crate::app::App;
 use crossterm::event::KeyCode;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
 use std::sync::Arc;
 
 /// The volume step the `-`/`+` keys dispatch and the `StatusBarPanel`

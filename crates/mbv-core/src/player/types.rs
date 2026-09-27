@@ -1,7 +1,7 @@
-use crate::api::EmbyItem;
 use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use libmpv2::Mpv;
+use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use std::sync::{Arc, Mutex};
 

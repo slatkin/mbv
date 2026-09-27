@@ -5,12 +5,13 @@ use super::{
     DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner, DaemonRole, DaemonRuntimeHooks,
     DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
 };
-use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
+use crate::api::{mbv_direct_tcp_port_command, EmbyClient};
 use crate::ctrl::{CtrlEvent, PlaybackGeneration};
 use crate::daemon::{ClientRegistry, CtrlClients};
 use crate::playback::PlaybackQueue;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{Player, PlayerEvent, PlayerOwnerState};
+use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use std::net::TcpListener;
 use std::sync::mpsc;
@@ -59,7 +60,7 @@ pub(super) fn apply_track_completed_observation(
         // retain any positive position so an interrupted item can resume precisely.
         let position = if was_played {
             0
-        } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+        } else if position_ticks >= mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
             && !slot.item.is_audio()
         {
             position_ticks

@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
-use mbv_core::api::EmbyItem;
 use mbv_core::service_runtime::ServiceState;
+use mbv_emby_model::EmbyItem;
 use ratatui::style::Color;
 use unicode_width::UnicodeWidthStr;
 

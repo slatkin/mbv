@@ -2,7 +2,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::feed_parse::fetch_and_parse_rss;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 

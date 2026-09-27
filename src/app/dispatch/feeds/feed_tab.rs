@@ -224,7 +224,7 @@ impl App {
                 "hydrated feed entry guid={} feed_id={} pos={}s played={}",
                 entry.guid,
                 feed_id,
-                state.position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                state.position_ticks / mbv_emby_model::TICKS_PER_SECOND,
                 state.played,
             );
         }
@@ -290,7 +290,7 @@ impl App {
                 "wrote feed entry state guid={} feed_id={} pos={}s played={}",
                 entry_guid,
                 feed_id,
-                position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                position_ticks / mbv_emby_model::TICKS_PER_SECOND,
                 played,
             ),
             Err(error) => log::warn!(

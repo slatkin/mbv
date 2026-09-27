@@ -3,10 +3,10 @@ use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_execution_sequence::ExecSlot;
 use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {

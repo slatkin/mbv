@@ -8,7 +8,7 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -22,7 +22,7 @@ pub fn make_movie_app() -> App {
     let mut focused = make_item("Focused Movie", "Movie");
     focused.id = "movie-focused".into();
     focused.overview = "This overview should appear in the compact movie banner while the list remains visible underneath.".into();
-    focused.people = vec![mbv_core::api::EmbyPerson {
+    focused.people = vec![mbv_emby_model::EmbyPerson {
         name: "Director Hidden".into(),
         role: String::new(),
         kind: "Director".into(),

@@ -19,8 +19,8 @@ use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryConte
 use super::components::{LibraryKey, LibraryKind};
 use super::Model;
 use super::TabSelection;
-use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
+use mbv_emby_model::EmbyItem;
 
 impl Model {
     /// The active tab's migrated-owner identity, when the active Emby

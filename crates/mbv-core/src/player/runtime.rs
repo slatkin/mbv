@@ -463,10 +463,10 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
-    let raw = crate::api::saturating_i64_from_f64(
-        (10.0 * crate::api::i64_to_f64_saturating(v).sqrt()).round(),
+    let raw = mbv_emby_model::saturating_i64_from_f64(
+        (10.0 * mbv_emby_model::i64_to_f64_saturating(v).sqrt()).round(),
     );
-    let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
+    let _ = mpv.set_property("volume", mbv_emby_model::i64_to_f64_saturating(raw));
     st.volume = v;
 }
 
@@ -520,7 +520,7 @@ pub(super) fn handle_intro(
     if intro_state.is_pending() && ticks >= start {
         intro_state.shown();
         if ticks < end {
-            let end_secs = crate::api::ticks_to_seconds(end);
+            let end_secs = mbv_emby_model::ticks_to_seconds(end);
             if always_skip {
                 let _ = mpv.set_property("time-pos", end_secs);
             } else {

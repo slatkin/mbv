@@ -6,10 +6,10 @@
 //! plain `meta_rows` (no `Span`/`Style`/width — the header painter colours,
 //! truncates and wraps).
 
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
 };
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
 use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
@@ -416,8 +416,8 @@ fn abs_book_meta_rows(
         if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
             let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
             let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
-            let percent = (mbv_core::api::ticks_to_seconds(numerator)
-                / mbv_core::api::ticks_to_seconds(denominator))
+            let percent = (mbv_emby_model::ticks_to_seconds(numerator)
+                / mbv_emby_model::ticks_to_seconds(denominator))
             .floor()
             .clamp(1.0, 99.0);
             #[expect(

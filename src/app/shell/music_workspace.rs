@@ -387,7 +387,7 @@ mod tests {
         {
             let level = app.libs[0].nav_stack.last_mut().unwrap();
             for item in &mut level.items {
-                item.artist_items = vec![mbv_core::api::EmbyArtistRef {
+                item.artist_items = vec![mbv_emby_model::EmbyArtistRef {
                     name: "Alpha".into(),
                     id: "artist-alpha".into(),
                 }];

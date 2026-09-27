@@ -18,9 +18,9 @@ use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
 
-#[cfg(not(test))]
-use mbv_core::api::{saturating_i64_from_f64, TICKS_PER_SECOND};
 use mbv_core::player::{PlayerCommand, PlayerStatus};
+#[cfg(not(test))]
+use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND};
 
 #[cfg(not(test))]
 struct MediaPlayer2;
@@ -380,7 +380,7 @@ impl MediaPlayer2Player {
     #[zbus(property)]
     fn volume(&self) -> f64 {
         let volume = self.snapshot.lock().unwrap().volume;
-        mbv_core::api::i64_to_f64_saturating(volume) / 100.0
+        mbv_emby_model::i64_to_f64_saturating(volume) / 100.0
     }
 
     #[zbus(property)]

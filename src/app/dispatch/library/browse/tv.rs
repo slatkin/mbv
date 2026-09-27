@@ -1,6 +1,7 @@
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent};
-use mbv_core::api::{EmbyClient, EmbyItem};
+use mbv_core::api::EmbyClient;
+use mbv_emby_model::EmbyItem;
 
 type BrowseRefresh = (
     usize,

@@ -6,7 +6,7 @@ impl App {
         &self,
         lib_idx: usize,
         cursor: usize,
-    ) -> Option<mbv_core::api::EmbyItem> {
+    ) -> Option<mbv_emby_model::EmbyItem> {
         let ctx = self.library_list_render_ctx(lib_idx, cursor);
         self.selected_series_item_with_ctx(lib_idx, &ctx)
     }
@@ -15,7 +15,7 @@ impl App {
         &self,
         lib_idx: usize,
         ctx: &LibraryListRenderCtx,
-    ) -> Option<mbv_core::api::EmbyItem> {
+    ) -> Option<mbv_emby_model::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.library.collection_type != "tvshows" {
             return None;

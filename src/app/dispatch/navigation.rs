@@ -3,7 +3,7 @@ use crate::app::state::types::browse::BrowseResting;
 use crate::app::{
     App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
-use mbv_core::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 use crate::app::dispatch::notify::ToastSeverity;
 

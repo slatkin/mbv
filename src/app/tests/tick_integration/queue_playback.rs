@@ -38,8 +38,8 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
         status.active = true;
         status.queue_len = 3;
         status.current_idx = 0;
-        status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
-        status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
+        status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
     };
     app
 }

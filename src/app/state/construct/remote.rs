@@ -38,7 +38,7 @@ fn start_mpris(remote: &mbv_core::remote_player::RemotePlayer) -> crate::mpris::
 /// The daemon-side queue snapshot an attaching session seeds its queue
 /// scope, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
-    items: Vec<mbv_core::api::EmbyItem>,
+    items: Vec<mbv_emby_model::EmbyItem>,
     cursor: usize,
     unified_state: Option<mbv_core::ctrl::UnifiedQueueStateData>,
 }

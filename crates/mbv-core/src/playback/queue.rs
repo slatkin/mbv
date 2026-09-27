@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::api::{EmbyItem, TICKS_PER_SECOND};
 use crate::playback_execution_sequence::ExecSlot;
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 

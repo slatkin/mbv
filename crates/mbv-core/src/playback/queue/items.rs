@@ -1,4 +1,4 @@
-use crate::api::EmbyItem;
+use mbv_emby_model::EmbyItem;
 
 pub use super::audiobookshelf::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem,

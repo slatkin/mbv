@@ -5,9 +5,9 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
+use mbv_emby_model::EmbyItem;
 
 mod pending_playback;
 mod playlist;
