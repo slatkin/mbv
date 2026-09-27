@@ -131,7 +131,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 3. `mbv-cast`
 
-- [ ] 3.1 Create `crates/mbv-cast`. Deps: `mbv-audiobookshelf`, `mbv-queue`,
+- [x] 3.1 Create `crates/mbv-cast`. Deps: `mbv-audiobookshelf`, `mbv-queue`,
   `serde_json`, `rust_cast`, `mdns-sd`, `log`, plus others only if the
   compiler asks. Dev-deps: `flume` (copy the comment from `mbv-core`'s
   manifest), `rstest`. `git mv` the following:
@@ -140,7 +140,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
   Rewrite `crate::cast::` → `crate::` and `crate::audiobookshelf::` →
   `mbv_audiobookshelf::`. Verify: `cargo nextest run -p mbv-cast` passes.
-- [ ] 3.2 Delete `pub mod cast;` from `mbv-core/src/lib.rs`. Add `mbv-cast` to
+- [x] 3.2 Delete `pub mod cast;` from `mbv-core/src/lib.rs`. Add `mbv-cast` to
   the `[dependencies]` of `mbv-core` and the TUI. Rewrite `crate::cast::` and
   `mbv_core::cast::` → `mbv_cast::`. Remove `rust_cast`, `mdns-sd`, and
   `flume` from `crates/mbv-core/Cargo.toml` if `cargo check` passes without
