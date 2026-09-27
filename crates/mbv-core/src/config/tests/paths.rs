@@ -299,17 +299,17 @@ fn failed_audiobookshelf_transaction_leaves_working_state() {
         "working-secret",
     )
     .unwrap();
-    let before = std::fs::read(config_path()).unwrap();
+    let config_before = std::fs::read(config_path()).unwrap();
 
-    let result = audiobookshelf_transaction(|config, _secret| {
+    let transaction_result = audiobookshelf_transaction(|config, _secret| {
         save_audiobookshelf_setup_at(
             &AudiobookshelfSetup::new("https://candidate.example"),
             config,
         )?;
         Err("candidate persistence rejected".into())
     });
-    assert!(result.is_err());
-    assert_eq!(std::fs::read(config_path()).unwrap(), before);
+    assert!(transaction_result.is_err());
+    assert_eq!(std::fs::read(config_path()).unwrap(), config_before);
     assert_eq!(
         load_service_secret(ServiceKind::Audiobookshelf),
         Some("working-secret".into())

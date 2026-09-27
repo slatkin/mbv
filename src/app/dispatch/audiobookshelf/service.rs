@@ -99,14 +99,14 @@ impl App {
                 }
                 let user = candidate.user.clone();
                 let setup = candidate.setup.clone();
-                let result = mbv_core::audiobookshelf::commit_audiobookshelf_candidate(
+                let commit_result = mbv_core::audiobookshelf::commit_audiobookshelf_candidate(
                     mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                         candidate.setup,
                         candidate.user,
                         candidate.api_key,
                     ),
                 );
-                if let Ok((_, revision)) = result {
+                if let Ok((_, revision)) = commit_result {
                     let mut committed = setup.clone();
                     committed.revision = revision;
                     self.config.lock().unwrap().audiobookshelf_setup = Some(committed);
@@ -272,7 +272,7 @@ impl App {
             .as_ref()
             .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
 
-        let result = mbv_core::audiobookshelf::replace_audiobookshelf_candidate(
+        let replacement_result = mbv_core::audiobookshelf::replace_audiobookshelf_candidate(
             mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
                 candidate.user,
@@ -293,7 +293,7 @@ impl App {
                 }
             },
         );
-        match result {
+        match replacement_result {
             Ok((_, revision)) => {
                 self.audiobookshelf_runtime
                     .cancel_setup(generation, previous_state);
