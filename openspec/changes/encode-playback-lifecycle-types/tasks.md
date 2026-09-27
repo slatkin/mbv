@@ -31,9 +31,9 @@ Gate for every group: `cargo check --workspace`,
 
 ## 5. MPRIS and Bare senders
 
-- [ ] 5.1 Change `mbv_desktop::mpris::{start, rebind}` to take `Fn(TransportCommand)`. Update the remote closures in `src/app/state/construct/remote.rs`, `src/app/dispatch/session/{switch,connect,daemon_restart}.rs` to map `Step(d)` to `send_playback_intent` and `Player(c)` to `send_command`. Add a test that the remote transport mapping turns `Step(Next)` into a playback intent. Verify: the test passes.
-- [ ] 5.2 Add `App::request_relative_step(Direction)` next to `request_slot_jump` in `src/app/dispatch/action.rs` (design D4, Bare route). Route `jump_track` (`src/app/state/playback_target/local.rs`) and Bare websocket `NextTrack`/`PreviousTrack` (`src/app/dispatch/session/ws_event.rs`) to it when the player is local. Delete the `ws_event.rs` `PlayerCommand::Next` test case. Verify: `cargo nextest run -p mbv` passes.
-- [ ] 5.3 Replace `PlayerProxy::command_sender` with `transport_sender`. The Local branch sends into a new App-owned `transport_rx`, drained on the shell tick next to `ws_rx`, and `Step` goes to `request_relative_step`. Update `rebind_mpris_to_current_player` in `switch.rs`. Verify: a shell test sends `Step(Next)` on the channel and observes a Bare slot jump.
+- [x] 5.1 Change `mbv_desktop::mpris::{start, rebind}` to take `Fn(TransportCommand)`. Update the remote closures in `src/app/state/construct/remote.rs`, `src/app/dispatch/session/{switch,connect,daemon_restart}.rs` to map `Step(d)` to `send_playback_intent` and `Player(c)` to `send_command`. Add a test that the remote transport mapping turns `Step(Next)` into a playback intent. Verify: the test passes.
+- [x] 5.2 Add `App::request_relative_step(Direction)` next to `request_slot_jump` in `src/app/dispatch/action.rs` (design D4, Bare route). Route `jump_track` (`src/app/state/playback_target/local.rs`) and Bare websocket `NextTrack`/`PreviousTrack` (`src/app/dispatch/session/ws_event.rs`) to it when the player is local. Delete the `ws_event.rs` `PlayerCommand::Next` test case. Verify: `cargo nextest run -p mbv` passes.
+- [x] 5.3 Replace `PlayerProxy::command_sender` with `transport_sender`. The Local branch sends into a new App-owned `transport_rx`, drained on the shell tick next to `ws_rx`, and `Step` goes to `request_relative_step`. Update `rebind_mpris_to_current_player` in `switch.rs`. Verify: a shell test sends `Step(Next)` on the channel and observes a Bare slot jump.
 
 ## 6. Run loses relative navigation and its progress copy
 
