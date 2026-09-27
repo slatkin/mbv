@@ -67,8 +67,8 @@ impl PlaybackRun {
     /// Reports the current item as stopped either synchronously (real quit,
     /// where the report must complete before the process exits) or on a
     /// background thread (ordinary stop, kept off the critical path so the
-    /// UI/mpv can proceed immediately). Callers must still guard on
-    /// `self.stop_report` before calling this.
+    /// UI/mpv can proceed immediately). Callers must still guard with
+    /// `self.is_unreported()` before calling this.
     pub(crate) fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
         let _ = progress.stop_tx.send(());
         if self.is_quit_shutdown() {

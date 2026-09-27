@@ -1,4 +1,4 @@
-use super::super::{EndFileReason, QueueItem};
+use super::super::{EndFileReason, ForcedJump, QueueItem};
 use libmpv2::mpv_end_file_reason;
 
 pub(crate) fn is_clocked_audio_error(
@@ -15,22 +15,22 @@ pub(crate) fn is_clocked_audio_error(
 /// Whether an `EndFile` is debris from a superseded `JumpTo`.
 ///
 /// Pressing Enter on two queue rows in quick succession sends two
-/// `PlayerCommand::JumpTo`s; both are drained before any mpv event, so
-/// The forced-jump state holds the *second* target. mpv, meanwhile, may have
-/// briefly started the first target before the second `playlist-pos` write
-/// landed, and emits a `Stop` `EndFile` for it. The real target's own
-/// `EndFile` already consumed the forced-jump state and advanced the queue, so
-/// this stray one has no forced marker. Falling through to the
+/// `PlayerCommand::JumpTo`s; both are drained before any mpv event, so the
+/// pending transition marks the *second* target. mpv may briefly start the
+/// first target before the second `playlist-pos` write lands, and emit a
+/// `Stop` `EndFile` for it. The real target's own `EndFile` already consumed
+/// the pending transition marker, so this stray one has no forced marker.
+/// Falling through to the
 /// `current_idx + 1` advance would step the active index one past the row
 /// the user actually selected, desyncing the UI from what mpv is playing.
 /// mpv's upcoming `start-file` / `playlist-pos` change is authoritative
 /// instead.
 pub(crate) fn is_superseded_jump_end_file(
     reason: EndFileReason,
-    has_forced_slot: bool,
+    forced_jump: Option<ForcedJump>,
     track_finished: bool,
 ) -> bool {
-    !has_forced_slot
+    forced_jump.is_none_or(|jump| jump.transition.is_none())
         && !track_finished
         && (reason == mpv_end_file_reason::Stop || reason == mpv_end_file_reason::Redirect)
 }

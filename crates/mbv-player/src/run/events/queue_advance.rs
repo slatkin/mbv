@@ -97,7 +97,7 @@ impl PlaybackRun {
             });
         if is_superseded_jump_end_file(
             reason,
-            !self.active_file && self.forced_jump.is_some(),
+            self.forced_jump.filter(|_| !self.active_file),
             track_finished,
         ) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
@@ -474,5 +474,39 @@ impl PlaybackRun {
         // (if any) becomes a no-op.  The old item's report_stopped has
         // already been sent above with the original IDs.
         self.reporter.clear_session();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::run::{ExecutionSequence, ForcedJump};
+    use crate::tests::{abs_item, make_queue_session_for_pos_tests};
+
+    #[test]
+    fn active_file_jump_then_natural_end_advances_after_target() {
+        let (mut run, _) = make_queue_session_for_pos_tests(0);
+        let (a, b, c) = (
+            QueueSlotId::from_raw(1),
+            QueueSlotId::from_raw(2),
+            QueueSlotId::from_raw(3),
+        );
+        run.queue = ExecutionSequence::from_slot_items(
+            vec![(a, abs_item()), (b, abs_item()), (c, abs_item())],
+            Some(b),
+        );
+        run.current_idx = 1;
+        run.active_file = true;
+        run.set_pending_playlist_jump(ForcedJump {
+            slot_id: b,
+            transition: Some(crate::transition::Transition::new(42, 1, b)),
+            resume_ticks: None,
+            from_idle: false,
+        });
+
+        let (next_idx, transition) = run.settle_forced_jump();
+
+        assert_eq!(run.slot_id_at(next_idx), Some(c));
+        assert_eq!(transition, None);
     }
 }

@@ -286,41 +286,54 @@ fn end_file_quit_uses_shutdown_aware_stop_report_context() {
 }
 
 #[test]
-fn superseded_jump_end_file_is_dropped_only_without_a_forced_slot() {
-    // Rapid Enter on two queue rows: the second JumpTo's slot is the live
-    // the pending jump; the first target's stray `Stop` EndFile arrives with
-    // none. Only that stray one must be dropped — a `Stop` while a forced
-    // jump is still pending is the real target landing and must advance.
+fn superseded_jump_end_file_is_dropped_without_a_pending_transition() {
+    let slot_id = QueueSlotId::from_raw(2);
+    let rearmed_jump = ForcedJump {
+        slot_id,
+        transition: None,
+        resume_ticks: Some(42),
+        from_idle: false,
+    };
+    let in_flight_jump = ForcedJump {
+        transition: Some(crate::transition::Transition::new(42, 1, slot_id)),
+        ..rearmed_jump
+    };
+
     assert!(is_superseded_jump_end_file(
         mpv_end_file_reason::Stop,
-        false,
+        None,
         false
     ));
     assert!(is_superseded_jump_end_file(
         mpv_end_file_reason::Redirect,
-        false,
+        None,
+        false
+    ));
+    assert!(is_superseded_jump_end_file(
+        mpv_end_file_reason::Stop,
+        Some(rearmed_jump),
         false
     ));
     assert!(!is_superseded_jump_end_file(
         mpv_end_file_reason::Stop,
-        true,
+        Some(in_flight_jump),
         false
     ));
     // A finished track (EOF/near-end/next-up) always advances.
     assert!(!is_superseded_jump_end_file(
         mpv_end_file_reason::Stop,
-        false,
+        None,
         true
     ));
     // A playback error still skips the broken track forward.
     assert!(!is_superseded_jump_end_file(
         mpv_end_file_reason::Error,
-        false,
+        None,
         false
     ));
     assert!(!is_superseded_jump_end_file(
         mpv_end_file_reason::Eof,
-        false,
+        None,
         false
     ));
 }
