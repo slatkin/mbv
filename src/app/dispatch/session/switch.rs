@@ -18,9 +18,6 @@ impl App {
         self.player_endpoint = Some(endpoint.clone());
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let has_initial_items = initial_unified_state
-            .as_ref()
-            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let initial_queue_source = remote.queue_source.lock().unwrap().clone();
         let always_play_next = self.config.lock().unwrap().always_play_next;
@@ -110,11 +107,11 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        if !endpoint.is_local() && has_initial_items {
-            self.set_queue_scope(QueueScope::Remote);
-        } else {
-            self.set_queue_scope(QueueScope::Local);
-        }
+        // Connected to an mbv daemon/client: the peer's queue is the
+        // displayed queue, empty or not. A Local-endpoint attach has no
+        // remote tab, so the scope resolution lands back on the adopted
+        // unified Local view.
+        self.set_queue_scope(QueueScope::Remote);
         self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
@@ -148,9 +145,6 @@ impl App {
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let has_initial_items = initial_unified_state
-            .as_ref()
-            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let initial_queue_source = remote.queue_source.lock().unwrap().clone();
         let always_play_next = self.config.lock().unwrap().always_play_next;
@@ -229,11 +223,11 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        if !endpoint.is_local() && has_initial_items {
-            self.set_queue_scope(QueueScope::Remote);
-        } else {
-            self.set_queue_scope(QueueScope::Local);
-        }
+        // Connected to an mbv daemon/client: the peer's queue is the
+        // displayed queue, empty or not. A Local-endpoint attach has no
+        // remote tab, so the scope resolution lands back on the adopted
+        // unified Local view.
+        self.set_queue_scope(QueueScope::Remote);
         log::info!(
             target: "library_route",
             "switched playback route previous={previous_route:?} next={library_name:?}"

@@ -36,8 +36,12 @@ fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconn
     assert!(!app.can_disconnect_remote());
 }
 
+// Connected to an mbv daemon: the peer's queue is the displayed queue,
+// empty or not — a connect must never leave the client's own queue on
+// screen (that was the behavior that hid the daemon's queue until the
+// client pushed content).
 #[test]
-fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
+fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
     let mut app = make_app_stub();
     app.player_tab
         .set_items(make_items(2), app.player_tab.queue_cursor);
@@ -46,8 +50,8 @@ fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_scope, QueueScope::Local);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
+    assert_eq!(app.queue_scope, QueueScope::Remote);
+    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
     assert!(app
         .remote_player_tab
         .as_ref()
@@ -120,6 +124,25 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
     assert!(app.has_direct_remote_queue());
+}
+
+#[test]
+fn library_route_connect_shows_the_peer_queue_even_when_empty() {
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+
+    assert_eq!(app.queue_scope, QueueScope::Remote);
+    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert!(app
+        .remote_player_tab
+        .as_ref()
+        .unwrap()
+        .emby_items()
+        .is_empty());
 }
 
 #[test]
