@@ -219,7 +219,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 4. `mbv-ui-model`
 
-- [ ] 4.1 Create `crates/mbv-ui-model`. Deps: `mbv-core` (for
+- [x] 4.1 Create `crates/mbv-ui-model`. Deps: `mbv-core` (for
   `ServiceState`/`SetupGeneration`), `mbv-emby-model`, `mbv-queue`,
   `mbv-feed`, `mbv-config`, and `mbv-audiobookshelf` as the compiler asks,
   plus `unicode-width`. `git mv` the following:
@@ -229,7 +229,7 @@ Each task below is its own commit, and the full gate passes after each.
   Rewrite `crate::app::ui_model::` → `crate::`. Verify:
   `cargo nextest run -p mbv-ui-model` passes, and
   `rg 'crate::app' crates/mbv-ui-model` is empty.
-- [ ] 4.2 Delete `mod ui_model;` from `src/app.rs`. Add `mbv-ui-model` to the
+- [x] 4.2 Delete `mod ui_model;` from `src/app.rs`. Add `mbv-ui-model` to the
   root `[dependencies]`. Rewrite `crate::app::ui_model::` → `mbv_ui_model::`.
   Verify: gate passes, and `rg 'app::ui_model' src` is empty.
 
