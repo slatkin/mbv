@@ -102,6 +102,7 @@ pub struct UnifiedQueueStateData {
     pub slots: Vec<UnifiedQueueSlot>,
     /// `None` when nothing is playing.
     pub active_slot: Option<u64>,
+    /// Owner-local diagnostic value; clients never compare this across processes.
     pub revision: u64,
     #[serde(default)]
     pub source: QueueSource,
