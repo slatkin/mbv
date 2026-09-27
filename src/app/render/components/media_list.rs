@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Color;
 
 pub(in crate::app) use wide::render_wide_media_list_component;
+pub(crate) use wide::WideMediaListPaintInput;
 /// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ActiveProgress(u8);

@@ -173,13 +173,20 @@ fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> C
     palette::SELECTED_ROW_BG
 }
 
+/// Borrowed data needed to paint a wide media list.
+pub(crate) struct WideMediaListPaintInput<'a, Target> {
+    pub(crate) list: &'a mut crate::app::components::media_list::WideMediaList<Target>,
+    pub(crate) policy: WideMediaListPaintPolicy,
+}
+
 /// Component-view adapter for the retained-result seam.
 pub(in crate::app) fn render_wide_media_list_component<Target: Clone + Eq>(
     f: &mut Frame,
     area: Rect,
-    list: &mut WideMediaList<Target>,
-    policy: WideMediaListPaintPolicy,
+    input: WideMediaListPaintInput<'_, Target>,
 ) {
+    let list = input.list;
+    let policy = input.policy;
     list.begin_view();
     let (claim_rect, content_rect) = list.view_geometry(area);
     if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {

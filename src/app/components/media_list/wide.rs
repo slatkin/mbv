@@ -301,7 +301,15 @@ impl<Target> PaintRetained<Target> for WideMediaList<Target> {
 
 impl<Target: Clone + Eq> Component for WideMediaList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        crate::app::render::render_wide_media_list_component(frame, area, self, self.policy);
+        let policy = self.policy;
+        crate::app::render::render_wide_media_list_component(
+            frame,
+            area,
+            crate::app::render::components::media_list::WideMediaListPaintInput {
+                list: self,
+                policy,
+            },
+        );
     }
 
     fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {

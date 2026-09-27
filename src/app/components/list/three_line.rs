@@ -196,7 +196,14 @@ impl<Target: Clone + Eq> ThreeLineFlatList<Target> {
         claim_rect: Rect,
         content_rect: Rect,
     ) {
-        crate::app::render::render_three_line_flat_list(frame, claim_rect, content_rect, self);
+        crate::app::render::render_three_line_flat_list(
+            frame,
+            claim_rect,
+            content_rect,
+            crate::app::render::components::three_line_flat_list::ThreeLineFlatListPaintInput {
+                list: self,
+            },
+        );
     }
 }
 

@@ -7,6 +7,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+/// Borrowed data needed to paint a three-line flat list.
+pub(crate) struct ThreeLineFlatListPaintInput<'a, Target> {
+    pub(crate) list: &'a mut ThreeLineFlatList<Target>,
+}
+
 /// `claim_rect` is the owning panel's full-width span (so the selected row's
 /// bar reaches the panel edges like every other selected-row paint);
 /// `content_rect` is the inset row-flow span that owns text and hit geometry.
@@ -16,8 +21,9 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
     frame: &mut Frame,
     claim_rect: Rect,
     content_rect: Rect,
-    list: &mut ThreeLineFlatList<Target>,
+    input: ThreeLineFlatListPaintInput<'_, Target>,
 ) {
+    let list = input.list;
     list.begin_paint();
     if content_rect.is_empty() {
         return;
