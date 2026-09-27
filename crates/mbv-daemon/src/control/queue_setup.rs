@@ -303,7 +303,6 @@ pub(super) fn handle_queue_replace(
     // already coherent; the owner-core clear happens before that
     // publish too, so both copies of the observation are gone by the
     // time a client can read the new snapshot.
-    *ctx.shared_queue.observed_active_slot.lock().unwrap() = None;
     // `send_command` alone only reaches an already-running mpv
     // thread; on a freshly started daemon no thread exists yet, so
     // route through `submit_queue_slots`, which cold-starts one when
@@ -315,6 +314,7 @@ pub(super) fn handle_queue_replace(
     ctx.player
         .submit_queue_slots(queue_slots, next_cursor, Some(c), headless, 100);
     ctx.owner.core.note_observed_active_slot(None);
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
     // Publish after the submit, not before: the snapshot resolves its
     // active slot from the queue marker only while the player reports
     // active, and a cold-start submit is what flips that flag and seeds

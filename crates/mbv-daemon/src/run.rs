@@ -74,7 +74,7 @@ pub(super) fn apply_track_completed_observation(
     ) {
         log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
     }
-    *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+    shared_queue.publish_observed(&owner.core);
     true
 }
 

@@ -98,7 +98,7 @@ fn stale_stopped_run_observation_is_rejected() {
     stopped_owner
         .core
         .note_observed_active_slot(Some(stopped_slot));
-    *shared_queue.observed_active_slot.lock().unwrap() = Some(stopped_slot);
+    shared_queue.publish_observed(&stopped_owner.core);
     let original_position = stopped_owner
         .core
         .queue
@@ -214,7 +214,7 @@ fn stale_completed_run_observation_is_rejected() {
     completed_owner
         .core
         .note_observed_active_slot(Some(completed_slot));
-    *shared_queue.observed_active_slot.lock().unwrap() = Some(completed_slot);
+    shared_queue.publish_observed(&completed_owner.core);
     let original_len = completed_owner.core.queue.len();
     let original_position = completed_owner
         .core

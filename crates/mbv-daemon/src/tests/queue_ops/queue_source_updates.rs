@@ -76,7 +76,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
         owner.core.observe_track_change(old_slot),
         Some((1, old_slot))
     );
-    *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+    shared_queue.publish_observed(&owner.core);
     assert_eq!(owner.core.observed_active_slot(), Some(old_slot));
 
     run_queue_cmd_with_shared(

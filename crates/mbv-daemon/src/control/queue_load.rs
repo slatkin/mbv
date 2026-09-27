@@ -36,7 +36,7 @@ fn install_idle_queue_load(
     owner.core.source = source;
     mint_queue_lineage(shared_queue);
     owner.core.note_observed_active_slot(None);
-    *shared_queue.observed_active_slot.lock().unwrap() = None;
+    shared_queue.publish_observed(&owner.core);
     broadcast_queue_state(
         ctrl_clients,
         player,

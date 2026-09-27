@@ -201,7 +201,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
                 .observe_track_change(slot_id)
                 .expect("the run reports a slot the canonical queue still holds");
             super::settle_and_redispatch(&mut owner, &player, request_id, resolved);
-            *shared.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+            shared.publish_observed(&owner.core);
             Some((1, resolved))
         }
         _ => panic!("expected a TrackChanged confirmation for slot B"),

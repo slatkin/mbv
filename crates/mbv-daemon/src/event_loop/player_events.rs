@@ -54,8 +54,7 @@ impl DaemonLoop {
                 resolved_slot_id,
             );
         }
-        *self.shared_queue.observed_active_slot.lock().unwrap() =
-            self.owner.core.observed_active_slot();
+        self.shared_queue.publish_observed(&self.owner.core);
         self.broadcast_owner_queue_state();
         // Settle playback intent if the reported slot matches.
         if let Some((connection_id, request_id, generation)) = self

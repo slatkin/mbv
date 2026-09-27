@@ -572,6 +572,12 @@ pub(crate) struct SharedQueueState {
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
+impl SharedQueueState {
+    pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
+        *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
+    }
+}
+
 #[derive(Debug)]
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
