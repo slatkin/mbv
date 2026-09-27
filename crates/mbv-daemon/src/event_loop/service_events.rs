@@ -15,7 +15,7 @@ use mbv_ws::WsEvent;
 impl DaemonLoop {
     /// `DaemonEvent::Ws`: apply the service socket event when it belongs to
     /// the generation this daemon is running.
-    pub(super) fn handle_ws_event(
+    pub(crate) fn handle_ws_event(
         &mut self,
         generation: SetupGeneration,
         event: WsEvent,
@@ -25,6 +25,17 @@ impl DaemonLoop {
             .as_ref()
             .is_some_and(|runtime| runtime.generation == generation)
         {
+            match event {
+                WsEvent::NextTrack => {
+                    self.handle_ws_step(mbv_ctrl::Direction::Next);
+                    return EventOutcome::DIRTY;
+                }
+                WsEvent::PreviousTrack => {
+                    self.handle_ws_step(mbv_ctrl::Direction::Previous);
+                    return EventOutcome::DIRTY;
+                }
+                _ => {}
+            }
             handle_ws(
                 event,
                 Some(&self.client),

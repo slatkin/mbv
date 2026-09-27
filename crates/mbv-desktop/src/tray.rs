@@ -1,5 +1,6 @@
 use ksni::blocking::TrayMethods;
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
+use mbv_ctrl::{Direction, TransportCommand};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 
@@ -28,21 +29,14 @@ struct MbvTray {
     /// Snapshot of the in-process `Player`'s status, shared with the app's
     /// main loop (and mpris) -- read fresh each time the menu is opened.
     status: Arc<Mutex<PlayerStatus>>,
-    /// The in-process `Player`'s own command channel, captured once while
-    /// `PlayerProxy` was known to be local (see
-    /// `PlayerProxy::local_cmd_tx`). Transport actions send directly into
-    /// this channel -- never through `PlayerProxy`/the ctrl socket -- so
-    /// they keep working, and stay local-only, across any later
-    /// local/remote `PlayerProxy` swap on the app side.
-    cmd_tx: Arc<Mutex<Option<Sender<PlayerCommand>>>>,
+    /// Owner transport channel; relative steps are resolved by the daemon owner.
+    transport_tx: Sender<TransportCommand>,
 }
 
 impl MbvTray {
     fn send_command(&self, cmd: PlayerCommand) {
-        if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
-            if let Err(e) = tx.send(cmd) {
-                log::debug!(target: "tray", "player command dropped: {e}");
-            }
+        if let Err(e) = self.transport_tx.send(TransportCommand::Player(cmd)) {
+            log::debug!(target: "tray", "player command dropped: {e}");
         }
     }
 
@@ -53,7 +47,9 @@ impl MbvTray {
 
     #[cfg(test)]
     fn next(&self) {
-        self.send_command(PlayerCommand::Next);
+        let _ = self
+            .transport_tx
+            .send(TransportCommand::Step(Direction::Next));
     }
 }
 
@@ -93,14 +89,22 @@ impl ksni::Tray for MbvTray {
             StandardItem {
                 label: "Next".into(),
                 icon_name: "media-skip-forward".into(),
-                activate: Box::new(|tray: &mut Self| tray.send_command(PlayerCommand::Next)),
+                activate: Box::new(|tray: &mut Self| {
+                    let _ = tray
+                        .transport_tx
+                        .send(TransportCommand::Step(Direction::Next));
+                }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: "Previous".into(),
                 icon_name: "media-skip-backward".into(),
-                activate: Box::new(|tray: &mut Self| tray.send_command(PlayerCommand::Previous)),
+                activate: Box::new(|tray: &mut Self| {
+                    let _ = tray
+                        .transport_tx
+                        .send(TransportCommand::Step(Direction::Previous));
+                }),
                 ..Default::default()
             }
             .into(),
@@ -148,8 +152,7 @@ impl ksni::Tray for MbvTray {
 
 /// Spawns the stay-alive tray (#156 T7 / #168 T-phase-2).
 ///
-/// `status`/`cmd_tx` must come from the in-process `Player` (see
-/// `PlayerProxy::local_cmd_tx`), never from a `RemotePlayer` -- the tray
+/// `transport_tx` routes controls through the local daemon owner; the tray
 /// must stay on the local-daemon side of the architecture and must not
 /// become a ctrl-socket client. `shutdown_tx` keeps the existing real-quit
 /// behavior (equivalent to `mbv -q` / graceful shutdown), now driven by the
@@ -158,12 +161,12 @@ impl ksni::Tray for MbvTray {
 pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,
-    cmd_tx: Arc<Mutex<Option<Sender<PlayerCommand>>>>,
+    transport_tx: Sender<TransportCommand>,
 ) -> Option<Box<dyn Send>> {
     MbvTray {
         shutdown_tx,
         status,
-        cmd_tx,
+        transport_tx,
     }
     .spawn()
     .map(|tray| Box::new(tray) as Box<dyn Send>)
@@ -198,13 +201,13 @@ mod tests {
     /// on what `toggle_play_pause`/`next`/`previous` actually send without a
     /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
     /// (crates/mbv-player/src/proxy.rs).
-    fn spy_tray(st: PlayerStatus) -> (MbvTray, std::sync::mpsc::Receiver<PlayerCommand>) {
-        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
+    fn spy_tray(st: PlayerStatus) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
+        let (transport_tx, cmd_rx) = std::sync::mpsc::channel();
         let (shutdown_tx, _shutdown_rx) = std::sync::mpsc::sync_channel(1);
         let tray = MbvTray {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
-            cmd_tx: Arc::new(Mutex::new(Some(cmd_tx))),
+            transport_tx,
         };
         (tray, cmd_rx)
     }
@@ -218,13 +221,19 @@ mod tests {
     fn toggle_play_pause_sends_toggle_pause_while_playing() {
         let (tray, rx) = spy_tray(status(true, false, "A Song"));
         tray.toggle_play_pause();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(TransportCommand::Player(PlayerCommand::TogglePause))
+        ));
     }
 
     #[test]
     fn next_emits_relative_next_command() {
         let (tray, rx) = spy_tray(status(true, false, "A Song"));
         tray.next();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::Next)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(TransportCommand::Step(Direction::Next))
+        ));
     }
 }

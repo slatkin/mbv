@@ -141,6 +141,17 @@ struct DaemonStarted {
     _tray: Option<Box<dyn Send>>,
 }
 
+fn forward_transport(
+    transport_rx: mpsc::Receiver<mbv_ctrl::TransportCommand>,
+    tx: mpsc::Sender<DaemonEvent>,
+) {
+    std::thread::spawn(move || {
+        for command in transport_rx {
+            let _ = tx.send(DaemonEvent::Transport(command));
+        }
+    });
+}
+
 fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
     let role = startup.role;
     let config = startup.config;
@@ -203,15 +214,16 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         client_locked.config.audio_pipe_samplerate,
         client_locked.config.audio_pipe_bitdepth,
     );
+    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let player_status = Arc::clone(&player.status);
-    let player_cmd_tx = Arc::clone(&player.cmd_tx);
+    let (transport_tx, transport_rx) = mpsc::channel();
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
-        command_tx: player_cmd_tx,
+        transport_tx,
     });
 
     let tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
-    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
+    forward_transport(transport_rx, merged_tx.clone());
 
     let tx = merged_tx.clone();
     std::thread::spawn(move || {

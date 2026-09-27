@@ -200,10 +200,17 @@ pub struct PlaybackIntent {
     pub action: PlaybackIntentAction,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Direction {
     Next,
     Previous,
+}
+
+/// A transport action resolved by the Player owner before reaching the run.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum TransportCommand {
+    Step(Direction),
+    Player(crate::player::PlayerCommand),
 }
 
 impl From<&PlaybackIntentAction> for Option<Direction> {

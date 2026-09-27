@@ -212,7 +212,7 @@ fn step_to_neighbor_slot(
                 shared_queue: ctx.shared_queue,
                 ctrl_clients: ctx.ctrl_clients,
             },
-            ctx.client_id,
+            super::super::core::JumpOrigin::Ctrl(ctx.client_id),
             mbv_player::transition::Transition::with_cause(
                 request_id,
                 generation,

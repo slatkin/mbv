@@ -25,7 +25,7 @@ pub(crate) enum LoopFlow {
 /// loop keeps running, and whether the handler changed the canonical owner
 /// queue (persisted once by the dispatcher, `DaemonRole::Local` only).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct EventOutcome {
+pub(crate) struct EventOutcome {
     flow: LoopFlow,
     owner_queue_dirty: bool,
 }
@@ -144,6 +144,7 @@ impl DaemonLoop {
                 self.handle_track_completed(pe)
             }
             DaemonEvent::Player(pe) => self.handle_player_event(pe),
+            DaemonEvent::Transport(command) => self.handle_transport(command),
             DaemonEvent::Ws { generation, event } => self.handle_ws_event(generation, event),
             DaemonEvent::QueueEnriched(items) => self.handle_queue_enriched(items),
             DaemonEvent::AudiobookshelfProgress(update) => {
@@ -187,6 +188,41 @@ impl DaemonLoop {
 }
 
 impl DaemonLoop {
+    fn handle_transport(&mut self, command: mbv_ctrl::TransportCommand) -> EventOutcome {
+        match command {
+            mbv_ctrl::TransportCommand::Player(command) => {
+                self.player.send_command(command);
+            }
+            mbv_ctrl::TransportCommand::Step(direction) => {
+                let target = self.owner.core.relative_step_target(direction);
+                if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {
+                    let (request_id, generation) = self.owner.core.transitions.mint_local_id();
+                    super::core::dispatch_slot_jump(
+                        &mut super::core::DaemonOwnerContext {
+                            player: &self.player,
+                            client: &self.client,
+                            owner: &mut self.owner,
+                            shared_queue: &self.shared_queue,
+                            ctrl_clients: &self.ctrl_clients,
+                        },
+                        super::core::JumpOrigin::Transport,
+                        mbv_player::transition::Transition::with_cause(
+                            request_id,
+                            generation,
+                            slot_id,
+                            mbv_player::transition::TransitionCause::Step(direction),
+                        ),
+                    );
+                }
+            }
+        }
+        EventOutcome::CONTINUE
+    }
+
+    pub(super) fn handle_ws_step(&mut self, direction: mbv_ctrl::Direction) {
+        self.handle_transport(mbv_ctrl::TransportCommand::Step(direction));
+    }
+
     /// Broadcasts the canonical owner queue to every ctrl peer.
     pub(super) fn broadcast_owner_queue_state(&self) {
         broadcast_queue_state(

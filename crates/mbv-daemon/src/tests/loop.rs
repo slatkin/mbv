@@ -78,6 +78,64 @@ fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
 }
 
 #[test]
+fn transport_next_dispatches_owner_resolved_canonical_jump() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            emby_qi("current", "Video", "Movie"),
+            emby_qi("next", "Video", "Movie"),
+        ],
+        0,
+    );
+    let commands = t.event_loop.player.spy_on_commands();
+    let next = t.event_loop.owner.core.queue.slots()[1].slot_id;
+    let resume = mbv_player::resume_ticks_for_slot(&t.event_loop.owner.core.queue, next);
+
+    t.event_loop
+        .handle_event(DaemonEvent::Transport(mbv_ctrl::TransportCommand::Step(
+            mbv_ctrl::Direction::Next,
+        )));
+
+    let command = commands.try_recv();
+    assert!(
+        matches!(
+            command,
+            Ok(mbv_ctrl::player::PlayerCommand::JumpTo { slot_id, resume_ticks, .. })
+                if slot_id == next && resume_ticks == resume
+        ),
+        "unexpected command: {command:?}"
+    );
+}
+
+#[test]
+fn websocket_next_dispatches_owner_resolved_jump_not_run_step() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            emby_qi("current", "Video", "Movie"),
+            emby_qi("next", "Video", "Movie"),
+        ],
+        0,
+    );
+    let commands = t.event_loop.player.spy_on_commands();
+    let generation = mbv_core::service_runtime::SetupGeneration::default();
+    t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
+        t.event_loop.client.lock().unwrap().clone(),
+        1,
+    ));
+    let next = t.event_loop.owner.core.queue.slots()[1].slot_id;
+    let resume = mbv_player::resume_ticks_for_slot(&t.event_loop.owner.core.queue, next);
+
+    t.event_loop.handle_ws_event(generation, WsEvent::NextTrack);
+
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(mbv_ctrl::player::PlayerCommand::JumpTo { slot_id, resume_ticks, .. })
+            if slot_id == next && resume_ticks == resume
+    ));
+}
+
+#[test]
 fn track_completed_current_run_consumes_slot_and_persists_once() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
