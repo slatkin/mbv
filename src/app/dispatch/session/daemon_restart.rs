@@ -1,6 +1,6 @@
 use crate::app::state::bootstrap::{bootstrap_legacy_queue, bootstrap_unified_queue};
 use crate::app::{App, QueueScope};
-use mbv_core::player::PlayerProxy;
+use mbv_player::PlayerProxy;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {

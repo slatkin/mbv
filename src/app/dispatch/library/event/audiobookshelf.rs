@@ -215,7 +215,7 @@ impl App {
 
     pub(super) fn handle_audiobookshelf_progress_acknowledged(
         &mut self,
-        update: &mbv_core::player::AudiobookshelfProgressUpdate,
+        update: &mbv_player::AudiobookshelfProgressUpdate,
     ) {
         if self.audiobookshelf_runtime.accepts(update.generation) {
             let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
@@ -233,7 +233,7 @@ impl App {
 
     pub(super) fn handle_audiobookshelf_book_progress_acknowledged(
         &mut self,
-        update: &mbv_core::player::AudiobookshelfBookProgressUpdate,
+        update: &mbv_player::AudiobookshelfBookProgressUpdate,
     ) {
         if self.audiobookshelf_runtime.accepts(update.generation) {
             let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(

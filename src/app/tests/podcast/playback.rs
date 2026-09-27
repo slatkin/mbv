@@ -6,7 +6,7 @@ use mbv_queue::QueueItem;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
-    let context = mbv_core::player::AudiobookshelfPlayerContext::new(
+    let context = mbv_player::AudiobookshelfPlayerContext::new(
         mbv_core::service_runtime::SetupGeneration::new(1),
         mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
@@ -89,7 +89,7 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
     let stale = app.audiobookshelf_runtime.generation();
     app.audiobookshelf_runtime.begin_validation();
     app.handle_lib_event(LibEvent::AudiobookshelfProgressAcknowledged(
-        mbv_core::player::AudiobookshelfProgressUpdate {
+        mbv_player::AudiobookshelfProgressUpdate {
             generation: stale,
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),

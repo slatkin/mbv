@@ -95,14 +95,14 @@ fn settle_dispatches_the_promoted_transition_unchanged() {
     let slot_b = app.player_tab.slot_id_at(1).unwrap();
     let (request_id_a, generation_a) = app.bare_owner.mint_local_transition();
     app.bare_owner
-        .accept_local_transition(mbv_core::player::transition::Transition::new(
+        .accept_local_transition(mbv_player::transition::Transition::new(
             request_id_a,
             generation_a,
             slot_a,
         ));
     let (request_id_b, generation_b) = app.bare_owner.mint_local_transition();
     app.bare_owner
-        .accept_local_transition(mbv_core::player::transition::Transition::new(
+        .accept_local_transition(mbv_player::transition::Transition::new(
             request_id_b,
             generation_b,
             slot_b,

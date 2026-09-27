@@ -6,9 +6,9 @@ use super::super::{
     handle_ws, DaemonLoop,
 };
 use super::EventOutcome;
-use mbv_core::player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
 use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
+use mbv_player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
 use mbv_queue::QueueSlotId;
 use mbv_ws::WsEvent;
 

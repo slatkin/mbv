@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 mbv-core = { path = "../mbv-core" }
+mbv-player = { path = "../mbv-player" }
 mbv-emby = { path = "../mbv-emby" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
@@ -32,5 +33,6 @@ log.workspace = true
 [dev-dependencies]
 mbv-core = { path = "../mbv-core", features = ["test"] }
 rstest.workspace = true
+mbv-player = { path = "../mbv-player", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }
 mbv-net = { path = "../mbv-net", features = ["test"] }

@@ -2,9 +2,9 @@ use super::{
     audio_only_rejection, broadcast_queue_state, take_authority_for_emby_remote, ClientRegistry,
     SharedQueueState,
 };
-use mbv_core::player::Player;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby::EmbyClient;
+use mbv_player::Player;
 use mbv_queue::{PlaybackQueue, QueueItem};
 use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex};
@@ -77,7 +77,7 @@ struct WsPlayContext<'a> {
     audio_only: bool,
     queue: &'a mut PlaybackQueue,
     source: &'a mut mbv_queue::QueueSource,
-    transitions: &'a mut mbv_core::player::transition::OwnerTransitionState,
+    transitions: &'a mut mbv_player::transition::OwnerTransitionState,
     shared_queue: &'a SharedQueueState,
     ctrl_clients: &'a ClientRegistry,
     playback: &'a dyn RemotePlayback,
@@ -212,7 +212,7 @@ pub(crate) fn handle_ws(
     audio_only: bool,
     queue: &mut PlaybackQueue,
     source: &mut mbv_queue::QueueSource,
-    transitions: &mut mbv_core::player::transition::OwnerTransitionState,
+    transitions: &mut mbv_player::transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
@@ -247,11 +247,11 @@ mod tests {
     use super::{handle_ws_play, websocket_play_start_index, RemotePlayback, WsPlayContext};
     use crate::{CtrlClients, SharedQueueState};
     use mbv_config::Config;
-    use mbv_core::player::transition::OwnerTransitionState;
-    use mbv_core::player::Player;
     use mbv_emby::EmbyClient;
     use mbv_emby_model::EmbyItem;
     use mbv_net::mock_http::MockHttp;
+    use mbv_player::transition::OwnerTransitionState;
+    use mbv_player::Player;
     use mbv_queue::QueueSource;
     use mbv_queue::{PlaybackQueue, QueueItem};
     use mbv_ws::WsEvent;

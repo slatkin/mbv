@@ -212,8 +212,8 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn make_built_app() -> App {
-    use mbv_core::player::PlayerProxy;
     use mbv_ctrl::player::PlayerStatus;
+    use mbv_player::PlayerProxy;
     use std::sync::Mutex;
 
     let status = Arc::new(Mutex::new(PlayerStatus {

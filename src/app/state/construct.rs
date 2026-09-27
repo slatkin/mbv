@@ -6,8 +6,8 @@ use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::{
     layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
-use mbv_core::player::{Player, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
+use mbv_player::{Player, PlayerProxy};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -122,7 +122,7 @@ impl App {
                     .and_then(|position| usize::try_from(position).ok())
             })
             .flatten();
-        let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
+        let bare_owner = mbv_player::owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
             mbv_queue::QueueSource::Unknown,
         );

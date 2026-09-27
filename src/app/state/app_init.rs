@@ -1,9 +1,9 @@
 use crate::app::state::types::feed::IdleFeed;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
-use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
+use mbv_player::PlayerProxy;
 use mbv_ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 

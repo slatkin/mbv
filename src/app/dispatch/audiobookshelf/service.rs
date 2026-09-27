@@ -21,7 +21,7 @@ fn forward_audiobookshelf_updates<T, F>(
 impl App {
     fn update_local_audiobookshelf_context(
         &self,
-        context: Option<mbv_core::player::AudiobookshelfPlayerContext>,
+        context: Option<mbv_player::AudiobookshelfPlayerContext>,
     ) {
         self.player.update_audiobookshelf_context(context.clone());
         if let Some(suspended) = &self.suspended_local {
@@ -332,7 +332,7 @@ impl App {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
         let credential = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
         let context = setup.zip(credential).and_then(|(setup, credential)| {
-            mbv_core::player::AudiobookshelfPlayerContext::new(
+            mbv_player::AudiobookshelfPlayerContext::new(
                 generation,
                 setup,
                 credential,

@@ -19,7 +19,7 @@ impl App {
         if self.player.is_remote() {
             return false;
         }
-        let mbv_core::player::transition::ExpireOutcome::Expired {
+        let mbv_player::transition::ExpireOutcome::Expired {
             dispatch_next: Some(next),
             ..
         } = self.bare_owner.expire_local_transition(now)
@@ -507,7 +507,7 @@ impl App {
                 .sync_canonical_queue(self.playback_queue().queue.clone());
             let _ = self.bare_owner.observe_track_change(target_slot_id);
             if let Some((request_id, _generation)) = transition {
-                if let mbv_core::player::transition::SettleOutcome::Settled {
+                if let mbv_player::transition::SettleOutcome::Settled {
                     dispatch_next: Some(next),
                 } = self
                     .bare_owner

@@ -3,10 +3,10 @@ use super::{
     expire_pending_idle_queue_load, persist_stay_alive_owner_queue, AudiobookshelfOwnerContext,
     ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole, EmbyOwnerContext, SharedQueueState,
 };
-use mbv_core::player::Player;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::CtrlEvent;
 use mbv_emby::EmbyClient;
+use mbv_player::Player;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

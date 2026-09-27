@@ -5,10 +5,10 @@ use crate::app::state::bootstrap::{bootstrap_legacy_queue, LocalDaemonBootstrap}
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::{bootstrap_unified_queue, AppInit};
-use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
+use mbv_player::PlayerProxy;
 use mbv_remote_player::DaemonEndpoint;
 use std::sync::{mpsc, Arc, Mutex};
 

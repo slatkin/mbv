@@ -3,11 +3,11 @@ use super::{
     broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
 };
-use mbv_core::player::PlayerOwnerState;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::CtrlEvent;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_player::PlayerOwnerState;
 use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -223,7 +223,7 @@ fn step_to_neighbor_slot(
                 ctrl_clients: ctx.ctrl_clients,
             },
             ctx.client_id,
-            mbv_core::player::transition::Transition::new(request_id, generation, slot_id),
+            mbv_player::transition::Transition::new(request_id, generation, slot_id),
         );
     }
 }

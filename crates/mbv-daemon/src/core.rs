@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
-use mbv_core::player::Player;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
@@ -15,6 +14,7 @@ use mbv_ctrl::{
 };
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_player::Player;
 use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 
@@ -49,10 +49,10 @@ pub(super) enum DaemonEvent {
     /// Acknowledged Audiobookshelf progress from the daemon player's
     /// progress sender, routed here so the event loop can update the Bound
     /// queue and broadcast redacted progress to capable clients.
-    AudiobookshelfProgress(mbv_core::player::AudiobookshelfProgressUpdate),
+    AudiobookshelfProgress(mbv_player::AudiobookshelfProgressUpdate),
     /// Book-shaped counterpart to `AudiobookshelfProgress`, keyed by
     /// `library_item_id` only.
-    AudiobookshelfBookProgress(mbv_core::player::AudiobookshelfBookProgressUpdate),
+    AudiobookshelfBookProgress(mbv_player::AudiobookshelfBookProgressUpdate),
     /// Carries freshly fetched Emby progress for a queue adopted from a
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),
@@ -343,7 +343,7 @@ impl PlaybackIntentState {
     }
 }
 
-use mbv_core::player::PlayerOwnerState;
+use mbv_player::PlayerOwnerState;
 
 /// The daemon's Player owner: the reusable [`PlayerOwnerState`] core plus the
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
@@ -396,7 +396,7 @@ pub(super) struct DaemonOwnerContext<'a> {
 pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
     client_id: CtrlClientId,
-    transition: mbv_core::player::transition::Transition,
+    transition: mbv_player::transition::Transition,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -413,15 +413,15 @@ pub(super) fn dispatch_slot_jump(
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
     match transitions.accept(transition) {
-        mbv_core::player::transition::DispatchDecision::DispatchNow(t) => {
+        mbv_player::transition::DispatchDecision::DispatchNow(t) => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=DispatchNow target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
             );
-            let resume_ticks = mbv_core::player::resume_ticks_for_slot(queue, transition_target);
+            let resume_ticks = mbv_player::resume_ticks_for_slot(queue, transition_target);
             ctx.player.send_command(t.into_jump(resume_ticks));
         }
-        mbv_core::player::transition::DispatchDecision::Queued { superseded } => {
+        mbv_player::transition::DispatchDecision::Queued { superseded } => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
@@ -459,7 +459,7 @@ pub(super) fn dispatch_slot_jump(
 /// Drop any in-flight/queued transition: the caller is issuing a
 /// queue-replacing playback command, which deliberately interrupts them.
 pub(super) fn reset_slot_jumps(
-    transitions: &mut mbv_core::player::transition::OwnerTransitionState,
+    transitions: &mut mbv_player::transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
 ) {
     transitions.reset();
@@ -474,7 +474,7 @@ pub(super) fn settle_and_redispatch(
     observed_request_id: PlaybackRequestId,
     observed_slot: QueueSlotId,
 ) {
-    let mbv_core::player::transition::SettleOutcome::Settled { dispatch_next } = owner
+    let mbv_player::transition::SettleOutcome::Settled { dispatch_next } = owner
         .core
         .transitions
         .settle(observed_request_id, observed_slot)
@@ -494,7 +494,7 @@ pub(super) fn settle_and_redispatch(
     );
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
-        let resume_ticks = mbv_core::player::resume_ticks_for_slot(&owner.core.queue, next.target);
+        let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);
         player.send_command(next.into_jump(resume_ticks));
     }
 }
@@ -510,7 +510,7 @@ pub(super) fn expire_and_redispatch(
     ctrl_clients: &ClientRegistry,
     shared_queue: &SharedQueueState,
 ) {
-    let mbv_core::player::transition::ExpireOutcome::Expired {
+    let mbv_player::transition::ExpireOutcome::Expired {
         expired,
         dispatch_next,
     } = owner.core.transitions.expire(Instant::now())
@@ -547,7 +547,7 @@ pub(super) fn expire_and_redispatch(
         }
     }
     if let Some(next) = dispatch_next {
-        let resume_ticks = mbv_core::player::resume_ticks_for_slot(&owner.core.queue, next.target);
+        let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);
         player.send_command(next.into_jump(resume_ticks));
     }
     // Abandoning / promoting a transition changed desired state; republish.

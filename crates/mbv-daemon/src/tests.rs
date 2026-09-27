@@ -2,9 +2,6 @@ use super::*;
 
 // External crate imports needed across test files
 use mbv_config::{Config, StayAliveQueueState};
-use mbv_core::player::{
-    AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerOwnerState,
-};
 use mbv_core::service_runtime::SetupGeneration;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_ctrl::DisconnectReason;
@@ -16,6 +13,9 @@ use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_net::mock_http::MockHttp;
 use mbv_net::stream::SocketStream;
+use mbv_player::{
+    AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerOwnerState,
+};
 use mbv_queue::QueueSource;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, PlaybackQueue, QueueItem,

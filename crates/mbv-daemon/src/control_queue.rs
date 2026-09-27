@@ -1,6 +1,6 @@
 use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
-use mbv_core::player::Player;
 use mbv_ctrl::CtrlEvent;
+use mbv_player::Player;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
@@ -133,7 +133,7 @@ pub(crate) fn broadcast_queue_state(
     shared_queue: &SharedQueueState,
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
-    transitions: &mbv_core::player::transition::OwnerTransitionState,
+    transitions: &mbv_player::transition::OwnerTransitionState,
 ) {
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();

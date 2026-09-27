@@ -4,11 +4,11 @@ use super::{
     ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext, DaemonPlayerOwner,
     PendingIdleQueueLoad, SharedQueueState,
 };
-use mbv_core::player::{Player, PlayerOwnerState};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{CtrlCmd, CtrlEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::ExecSlot;
 use mbv_queue::QueueSlotId;
 use mbv_queue::{PlaybackQueue, QueueItem};

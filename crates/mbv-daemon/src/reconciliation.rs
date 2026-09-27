@@ -3,8 +3,8 @@ use super::{
     DaemonPlayerOwner, EmbyOwnerContext,
 };
 use mbv_config::EmbySetup;
-use mbv_core::player::{Player, PlayerOwnerState};
 use mbv_ctrl::ServiceSetupRejection;
+use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::ExecSlot;
 use mbv_queue::QueueSource;
 use mbv_queue::{PlaybackQueue, QueueItem};

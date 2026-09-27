@@ -299,7 +299,7 @@ fn assert_no_pending_message<T>(rx: &mpsc::Receiver<T>) {
 /// inactive, and the old run identity no longer current.
 fn assert_idle_load_committed(
     owner: &crate::DaemonPlayerOwner,
-    player: &mbv_core::player::Player,
+    player: &mbv_player::Player,
     old_run: u64,
 ) {
     assert_eq!(owner.core.queue.slots()[0].item.id(), "new");

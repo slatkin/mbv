@@ -1,7 +1,2 @@
 pub mod applog;
-pub mod player;
-/// Compatibility re-export for callers that used the former flat module path.
-pub mod player_owner_state {
-    pub use crate::player::owner_state::*;
-}
 pub mod service_runtime;

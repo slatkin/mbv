@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope};
-use mbv_core::player::PlayerProxy;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
+use mbv_player::PlayerProxy;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

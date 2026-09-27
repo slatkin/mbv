@@ -481,7 +481,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
 
     let confirmed_transition = {
         let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-        mbv_core::player::transition::Transition::new(request_id, generation, confirmed)
+        mbv_player::transition::Transition::new(request_id, generation, confirmed)
     };
     harness
         .model_mut()
@@ -490,7 +490,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
         .accept_local_transition(confirmed_transition);
     let target = harness.model().app.player_tab.slot_id_at(1).unwrap();
     let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-    let transition = mbv_core::player::transition::Transition::new(request_id, generation, target);
+    let transition = mbv_player::transition::Transition::new(request_id, generation, target);
     harness
         .model_mut()
         .app

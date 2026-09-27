@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn stop_resets_bare_transitions_and_sends_no_transport_command() {
-        use mbv_core::player::transition::Transition;
+        use mbv_player::transition::Transition;
         use mbv_queue::QueueSlotId;
 
         let mut app = make_app_stub();

@@ -6,12 +6,12 @@ use super::{
     DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
 };
 use crate::{ClientRegistry, CtrlClients};
-use mbv_core::player::{Player, PlayerOwnerState};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
 use mbv_emby::{mbv_direct_tcp_port_command, EmbyClient};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
+use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::PlaybackQueue;
 use mbv_queue::QueueSlotId;
 use std::net::TcpListener;

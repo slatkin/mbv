@@ -2,7 +2,7 @@ use super::core::{
     broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress, DaemonEvent,
 };
 use super::{AudiobookshelfOwnerContext, ClientRegistry};
-use mbv_core::player::Player;
+use mbv_player::Player;
 use mbv_queue::PlaybackQueue;
 use std::sync::mpsc;
 
@@ -23,7 +23,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
         player.update_audiobookshelf_context(None);
         return;
     };
-    let Some(context) = mbv_core::player::AudiobookshelfPlayerContext::new(
+    let Some(context) = mbv_player::AudiobookshelfPlayerContext::new(
         runtime.generation,
         runtime.setup.clone(),
         api_key,
@@ -68,7 +68,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
 /// progress to capable clients. Drops updates from a stale setup generation
 /// without either side effect.
 pub(crate) fn apply_audiobookshelf_progress(
-    update: &mbv_core::player::AudiobookshelfProgressUpdate,
+    update: &mbv_player::AudiobookshelfProgressUpdate,
     current_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,
@@ -117,7 +117,7 @@ pub(crate) fn apply_audiobookshelf_progress(
 /// redacted book progress to capable clients. Drops updates from a stale
 /// setup generation without either side effect.
 pub(crate) fn apply_audiobookshelf_book_progress(
-    update: &mbv_core::player::AudiobookshelfBookProgressUpdate,
+    update: &mbv_player::AudiobookshelfBookProgressUpdate,
     current_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,

@@ -46,7 +46,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &shared_queue,
         &owner.queue,
         &owner.source,
-        &mbv_core::player::transition::OwnerTransitionState::default(),
+        &mbv_player::transition::OwnerTransitionState::default(),
     );
 
     // A later Client receives the shortened owner snapshot.
@@ -60,7 +60,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &shared_queue,
         &owner.queue,
         &owner.source,
-        &mbv_core::player::transition::OwnerTransitionState::default(),
+        &mbv_player::transition::OwnerTransitionState::default(),
     );
     assert_eq!(owner.queue.len(), 1);
     assert_eq!(owner.queue.slots()[0].item.id(), "feed-2");

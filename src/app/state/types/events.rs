@@ -235,8 +235,8 @@ pub(in crate::app) enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),
-    AudiobookshelfBookProgressAcknowledged(mbv_core::player::AudiobookshelfBookProgressUpdate),
+    AudiobookshelfProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
+    AudiobookshelfBookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).
     NavigateTo {

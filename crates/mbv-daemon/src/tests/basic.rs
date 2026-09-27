@@ -1,6 +1,6 @@
 use super::*;
-use mbv_core::player::PlayerOwnerState;
 use mbv_emby_model::EmbyImageTags;
+use mbv_player::PlayerOwnerState;
 
 pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
     EmbyItem {

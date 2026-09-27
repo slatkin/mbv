@@ -221,7 +221,7 @@ pub(super) fn handle_queue_play_slot(
             ctrl_clients: ctx.ctrl_clients,
         },
         ctx.client_id,
-        mbv_core::player::transition::Transition::new(request_id, generation, sid),
+        mbv_player::transition::Transition::new(request_id, generation, sid),
     );
 }
 

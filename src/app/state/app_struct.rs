@@ -18,10 +18,10 @@ use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode, SettingsDestination};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::SidebarId;
-use mbv_core::player::PlayerProxy;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
+use mbv_player::PlayerProxy;
 use mbv_queue::QueueSlotId;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
@@ -98,7 +98,7 @@ pub struct App {
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps
     /// receive the same request identity semantics.
-    pub(in crate::app) bare_owner: mbv_core::player_owner_state::PlayerOwnerState,
+    pub(in crate::app) bare_owner: mbv_player::owner_state::PlayerOwnerState,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test
     /// construction via `build()` does not). `None` in tests so they never
