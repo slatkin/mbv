@@ -249,7 +249,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 - [x] 8.2 Run `make check-code-file-lines` before pushing; split any file it
   flags (e.g. `mbv-ctrl/src/lib.rs`, from the 837-line `ctrl.rs`) along a
   responsibility seam per the `splitting-files` skill. Verify: the check passes.
-- [ ] 8.3 Comment on issue #814 summarising the Tier 2 crates and the final
+- [x] 8.3 Comment on issue #814 summarising the Tier 2 crates and the final
   dependency graph (`mbv-emby-model → mbv-queue → {mbv-ctrl, mbv-config} →
   mbv-feed`), and noting the D2 `mbv-feed → mbv-emby-model` tick edge. Verify:
   `gh issue view 814 --comments` shows the comment.
