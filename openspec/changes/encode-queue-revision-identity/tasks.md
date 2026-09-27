@@ -29,4 +29,4 @@ touches `control/queue_setup.rs` and `control/queue_load.rs`.
   - Clients apply snapshots in arrival order and rely on one connection being ordered.
 
   Point to `QueueRevision` minting for the revision rule. Remove the stale claims (`slots_mut()`, non-bumping active/progress changes, "revision unread"). Verify: `rg -l "05-queue-revision-unread|invariants/05|Invariant 5" docs openspec/specs AGENTS.md CONTEXT.md` is empty (fix any references it finds).
-- [ ] 4.2 Tick invariants 01 and 05 on #810 with a pointer to #836 (`gh issue edit 810` body). Final gate: `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace` pass.
+- [x] 4.2 Tick invariants 01 and 05 on #810 with a pointer to #836 (`gh issue edit 810` body). Final gate: `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace` pass.
