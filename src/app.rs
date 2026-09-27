@@ -7,6 +7,7 @@ pub(in crate::app) mod state;
 pub(crate) mod ui_model;
 pub(crate) mod ui_msg;
 
+pub(crate) use self::infra::layout;
 pub(in crate::app) use self::infra::layout::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,
     TWO_COLUMN_THRESHOLD,
@@ -17,7 +18,6 @@ pub(in crate::app) use self::infra::signals::{
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
-pub(crate) use self::infra::{images, layout};
 pub use self::state::app_struct::App;
 #[cfg(test)]
 mod test_seams;
@@ -29,7 +29,6 @@ pub(in crate::app) use self::test_seams::{
 };
 mod shell;
 use self::dispatch::notify::ToastSeverity;
-use self::infra::images::resize::spawn_resize_worker;
 pub use self::shell::Model;
 use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;
@@ -65,6 +64,7 @@ use self::ui_model::tab_selection::TabSelection;
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
 use mbv_emby_model::EmbyItem;
+pub(crate) use mbv_images::resize::spawn_resize_worker;
 #[cfg(test)]
 use mbv_queue::RemoveSlotResult;
 #[cfg(test)]

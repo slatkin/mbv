@@ -439,7 +439,7 @@ pub struct App {
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
-    pub(in crate::app) images: crate::app::infra::images::cache::ImageCache,
+    pub(in crate::app) images: mbv_images::cache::ImageCache,
     pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
     pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,

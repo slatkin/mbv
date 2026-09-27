@@ -154,7 +154,7 @@ impl App {
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
             system_notifications: init.system_notifications,
-            images: crate::app::infra::images::cache::ImageCache::new(
+            images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,
                 init.image_protocol,
                 init.image_protocol_enabled,

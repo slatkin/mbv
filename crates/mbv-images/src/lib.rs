@@ -1,38 +1,32 @@
-pub(in crate::app) mod cache;
+pub mod cache;
 mod protocol;
-pub(in crate::app) mod resize;
-pub(in crate::app) const RENDER_FILTER: ratatui_image::FilterType =
-    ratatui_image::FilterType::Triangle;
-pub(in crate::app) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
-pub(in crate::app) static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
+pub mod resize;
+pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
+pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
+pub static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../../assets/power-card-placeholder.webp");
 
-pub(in crate::app) fn mem_key(cache_key: &str, suffix: &str) -> String {
+#[must_use]
+pub fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")
 }
 
 /// Prefix shared by every Audiobookshelf-sourced cache key, used to filter
 /// or clear Audiobookshelf entries from the image caches.
-pub(in crate::app) const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
+pub const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
 
 /// Cache key for an Audiobookshelf cover under `server`, keyed by the
 /// library item's `id` and the active protocol `suffix`.
-pub(in crate::app) fn audiobookshelf_cover_cache_key(
-    server: &str,
-    id: &str,
-    suffix: &str,
-) -> String {
+#[must_use]
+pub fn audiobookshelf_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:cover:{id}:{suffix}")
 }
 
 /// Cache key for an Audiobookshelf book cover. Distinct from the podcast
 /// cover key (`:book:`, not `:cover:`) so a book and a podcast sharing an
 /// id never share artwork state (book-browsing spec).
-pub(in crate::app) fn audiobookshelf_book_cover_cache_key(
-    server: &str,
-    id: &str,
-    suffix: &str,
-) -> String {
+#[must_use]
+pub fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
@@ -48,41 +42,36 @@ pub(in crate::app) fn audiobookshelf_book_cover_cache_key(
 /// hero fell back to the placeholder block and flashed. Emby's hero and card
 /// keys are already distinct for the same reason (`{id}:Backdrop,Primary` vs
 /// `{id}:P`).
-pub(in crate::app) fn audiobookshelf_hero_cover_cache_key(
-    server: &str,
-    id: &str,
-    suffix: &str,
-) -> String {
+#[must_use]
+pub fn audiobookshelf_hero_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:cover:{id}:{suffix}")
 }
 
 /// Hero-scoped sibling of [`audiobookshelf_book_cover_cache_key`], with the
 /// same crop-vs-plain isolation as [`audiobookshelf_hero_cover_cache_key`].
-pub(in crate::app) fn audiobookshelf_hero_book_cover_cache_key(
-    server: &str,
-    id: &str,
-    suffix: &str,
-) -> String {
+#[must_use]
+pub fn audiobookshelf_hero_book_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:bookcover:{id}:{suffix}")
 }
 
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.
-pub(in crate::app) const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+pub const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
 
 /// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
 /// Shared by the panel's Emby artwork projection and shell-side
 /// prefetch/loading lookups so they cannot format the key differently and
 /// silently miss each other's cache entries. Formats only;
 /// chain ownership stays with the callers.
-pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
+#[must_use]
+pub fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
     format!(
         "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
         image_types.join(",")
     )
 }
-pub(in crate::app) struct CachedImage {
+pub struct CachedImage {
     /// `None` marks a fetch that resolved without artwork.
     pub img: Option<image::DynamicImage>,
     pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
@@ -100,8 +89,9 @@ pub(in crate::app) struct CachedImage {
 
 impl CachedImage {
     /// An entry for a fetch that resolved with no image.
-    #[cfg(test)]
-    pub(in crate::app) fn empty() -> Self {
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn empty() -> Self {
         Self {
             img: None,
             protocols: std::collections::HashMap::new(),
@@ -112,7 +102,7 @@ impl CachedImage {
 }
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.
-pub(in crate::app) struct ImageFetchReq {
+pub struct ImageFetchReq {
     pub cache_key: String,
     pub item_id: String,
     pub series_id: String,
@@ -121,7 +111,7 @@ pub(in crate::app) struct ImageFetchReq {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::app) enum ImageSource {
+pub enum ImageSource {
     Emby,
     Audiobookshelf { server_url: String, api_key: String },
 }
@@ -132,7 +122,8 @@ pub(in crate::app) enum ImageSource {
 /// `Resize::Scale`. The box's size comes from the panel's paint-free
 /// `hero_artwork_box` (task 5.5); the shell projection that calls this is
 /// keyed by the box (task 5.10, the hero protocol projection).
-pub(in crate::app) fn cover_fill_hero_box(
+#[must_use]
+pub fn cover_fill_hero_box(
     source: &image::DynamicImage,
     box_w: u32,
     box_h: u32,
@@ -155,7 +146,8 @@ fn rounded_dimension(value: f32) -> u32 {
 /// Decorate an already cover-fitted landscape bitmap with a transparent Logo.
 /// The Logo is contain-fitted into the prescribed bounds, then source-over
 /// composited at the rounded, clamped inset.
-pub(in crate::app) fn composite_landscape_logo(
+#[must_use]
+pub fn composite_landscape_logo(
     base: &image::DynamicImage,
     logo: &image::DynamicImage,
 ) -> image::DynamicImage {
@@ -180,4 +172,16 @@ pub(in crate::app) fn composite_landscape_logo(
         i64::from(inset_y),
     );
     image::DynamicImage::ImageRgba8(base)
+}
+
+impl std::fmt::Debug for CachedImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CachedImage").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ImageFetchReq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageFetchReq").finish_non_exhaustive()
+    }
 }

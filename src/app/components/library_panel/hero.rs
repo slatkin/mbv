@@ -235,7 +235,7 @@ fn landscape_image_chain(item: &EmbyItem) -> &'static [&'static str] {
 fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
     let image_types = chain.iter().map(ToString::to_string).collect();
     let cache_key = if item.item_type == "Series" {
-        crate::app::images::series_image_cache_key(&item.id, chain)
+        mbv_images::series_image_cache_key(&item.id, chain)
     } else {
         format!("{}:{}", item.id, chain.join(","))
     };

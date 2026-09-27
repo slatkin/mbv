@@ -1,0 +1,24 @@
+[package]
+name = "mbv-images"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Image caching and terminal image protocol support for mbv."
+readme = "../../README.md"
+
+[features]
+test = []
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-theme = { path = "../mbv-theme" }
+ratatui.workspace = true
+ratatui-image.workspace = true
+image.workspace = true
+log.workspace = true

@@ -8,7 +8,7 @@ use super::{
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
 use super::App;
-use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
+use mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {

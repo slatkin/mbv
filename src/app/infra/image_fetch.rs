@@ -1,9 +1,7 @@
 use super::super::{App, LibEvent, PAGE_SIZE};
-use crate::app::infra::images::{
-    audiobookshelf_hero_book_cover_cache_key, audiobookshelf_hero_cover_cache_key,
-};
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
 use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
+use mbv_images::{audiobookshelf_hero_book_cover_cache_key, audiobookshelf_hero_cover_cache_key};
 use std::time::{Duration, Instant};
 
 pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
@@ -229,8 +227,8 @@ mod protocol;
 
 #[cfg(test)]
 mod tests {
-    use crate::app::infra::images::{composite_landscape_logo, series_image_cache_key};
     use crate::app::tests::make_app_stub;
+    use mbv_images::{composite_landscape_logo, series_image_cache_key};
     use std::time::Instant;
 
     /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design

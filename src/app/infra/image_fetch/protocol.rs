@@ -1,5 +1,5 @@
 use super::super::super::App;
-use crate::app::infra::images::{
+use mbv_images::{
     cover_fill_hero_box, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
     QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER,
 };
@@ -430,8 +430,8 @@ fn fetch_url(url: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod protocol_tests {
     use super::super::App;
-    use crate::app::infra::images::CachedImage;
     use crate::app::tests::make_app_stub;
+    use mbv_images::CachedImage;
     use ratatui_image::picker::{Picker, ProtocolType};
 
     const BASE_KEY: &str = "hero-base";

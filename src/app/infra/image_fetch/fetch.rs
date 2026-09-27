@@ -2,10 +2,8 @@ use super::{
     App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES,
     NAV_IMAGE_FETCH_IDLE_DELAY, PAGE_SIZE,
 };
-use crate::app::infra::images::{
-    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key,
-};
-use crate::app::infra::images::{ImageFetchReq, ImageSource};
+use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
+use mbv_images::{ImageFetchReq, ImageSource};
 
 mod card_images;
 mod level_artists;

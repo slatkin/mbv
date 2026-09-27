@@ -293,7 +293,7 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
     // status is terminal for this source identity.
     app.images.card_image_states.insert(
         cache_key.clone(),
-        crate::app::images::CachedImage {
+        mbv_images::CachedImage {
             img: Some(image::DynamicImage::ImageRgba8(
                 image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
             )),

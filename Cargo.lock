@@ -1716,6 +1716,7 @@ dependencies = [
  "mbv-emby-model",
  "mbv-feed",
  "mbv-ids",
+ "mbv-images",
  "mbv-keybinds",
  "mbv-net",
  "mbv-player",
@@ -1893,6 +1894,17 @@ name = "mbv-ids"
 version = "0.21.2"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "mbv-images"
+version = "0.21.2"
+dependencies = [
+ "image",
+ "log",
+ "mbv-theme",
+ "ratatui",
+ "ratatui-image",
 ]
 
 [[package]]
