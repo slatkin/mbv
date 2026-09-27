@@ -549,6 +549,10 @@ async fn poll_status(
 /// `restore_local_mode` swap which `Player`/`RemotePlayer` owns playback
 /// at runtime, and MPRIS must follow whichever one is current rather than
 /// staying wired to whatever was live when `start` was first called.
+///
+/// # Panics
+///
+/// Panics if `status`'s mutex is poisoned.
 #[cfg(not(test))]
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
@@ -616,6 +620,10 @@ pub fn start(
 /// MPRIS stayed wired to whatever was live when `start` was first called
 /// (almost always the initial local `Player`), so local desktop MPRIS never
 /// picked up a remote daemon's playback after a mid-session takeover.
+///
+/// # Panics
+///
+/// Panics if `handle`'s mutex is poisoned.
 pub fn rebind(
     handle: &MprisHandle,
     status: Arc<Mutex<PlayerStatus>>,
