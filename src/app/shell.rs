@@ -112,6 +112,19 @@ pub(in crate::app) struct MusicTrackSelection {
     pub(in crate::app) track_id: String,
 }
 
+/// A pending Music tree selection re-anchor. Every discrete navigation that
+/// names a stable row (recursive-album activation, `NavigateTo` landing,
+/// Inline Search activation) carries a [`MusicTreeTarget`]; a pill/group
+/// switch replaces the album level wholesale, so its target is that new
+/// level's first album, resolved once the level's content has landed.
+///
+/// [`MusicTreeTarget`]: mbv_components::music_tree_target::MusicTreeTarget
+#[derive(Clone, Debug)]
+pub(in crate::app) enum PendingMusicReanchor {
+    Target(mbv_components::music_tree_target::MusicTreeTarget),
+    FirstAlbumOfLevel,
+}
+
 /// Shell model holding the legacy `App` and the `TuiRealm` `Application`.
 pub struct Model {
     pub app: App,
@@ -138,14 +151,13 @@ pub struct Model {
     pub(in crate::app) pending_music_track_selection: Option<MusicTrackSelection>,
     /// One-shot shell→component selection re-anchor for the mounted Music
     /// owner, consumed at the next `push_music_workspace_content`. Set only
-    /// at a discrete navigation event that names a stable tree target
-    /// (recursive-album activation, `NavigateTo` landing, Inline Search
-    /// activation). Ordinary content pushes never re-point the tree: the
-    /// mounted owner's local selection is authoritative across refreshes, tab
+    /// at a discrete navigation event (recursive-album activation,
+    /// `NavigateTo` landing, Inline Search activation, or a pill/group
+    /// switch). Ordinary content pushes never re-point the tree: the mounted
+    /// owner's local selection is authoritative across refreshes, tab
     /// changes, and async completions, and startup restores only through
     /// `reanchor_launch_state`.
-    pub(in crate::app) pending_music_reanchor:
-        Option<mbv_components::music_tree_target::MusicTreeTarget>,
+    pub(in crate::app) pending_music_reanchor: Option<PendingMusicReanchor>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`

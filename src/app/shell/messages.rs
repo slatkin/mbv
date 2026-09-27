@@ -299,11 +299,12 @@ impl Model {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     self.app.handle_mouse_selector_click_emby(lib_idx, target);
                 }
-                // A music-group pill switch replaces the album level; the
-                // component reconciles the new projection and selects its
-                // first visible root when its prior target does not survive.
-                // No shell re-anchor is issued (the owner's local selection is
-                // authoritative; only a named landing target re-points it).
+                // A music-group pill switch replaces the album level; re-point
+                // the mounted owner at that new level's first album (a stable
+                // target), resolved once the level's content lands.
+                if self.music_owner_key().is_some() {
+                    self.reanchor_music_owner_to_level_start();
+                }
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::EmbyLibraryLatestSelected => {
