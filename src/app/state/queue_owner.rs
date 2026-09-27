@@ -4,8 +4,8 @@
 
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
-use mbv_core::remote_player::DaemonEndpoint;
 use mbv_queue::QueueLineage;
+use mbv_remote_player::DaemonEndpoint;
 
 /// Which process holds the authoritative Local queue. Derived from
 /// `player_endpoint`, never stored: an owner-kind change always goes through

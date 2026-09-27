@@ -21,12 +21,12 @@ fn folder(id: &str, name: &str) -> EmbyItem {
 fn remote_playback_app() -> App {
     let config = crate::config::Config::default();
     let (remote, player_rx, _cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     App::new_remote_with_config(
         mbv_emby::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     )
 }

@@ -11,7 +11,7 @@ use super::{
 #[derive(Debug)]
 enum PlayerProxyInner {
     Local(Player),
-    Remote(crate::remote_player::RemotePlayer),
+    Remote(mbv_remote_player::RemotePlayer),
 }
 
 #[derive(Debug)]
@@ -117,8 +117,8 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(player) => player.can_admit_audiobookshelf(),
             PlayerProxyInner::Remote(remote) => {
-                remote.ctrl_compatibility.audiobookshelf.queue
-                    && remote.ctrl_compatibility.audiobookshelf.book_queue
+                remote.supports_audiobookshelf_queue()
+                    && remote.supports_audiobookshelf_book_queue()
             }
         }
     }
@@ -150,7 +150,7 @@ impl PlayerProxy {
     }
 
     #[must_use]
-    pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
+    pub fn remote(remote: mbv_remote_player::RemotePlayer, always_play_next: bool) -> Self {
         let status = Arc::clone(&remote.status);
         let subtitle_prefs = Arc::clone(&remote.subtitle_prefs);
         PlayerProxy {
@@ -220,14 +220,14 @@ impl PlayerProxy {
                 if slots
                     .iter()
                     .any(|slot| slot.item.as_audiobookshelf().is_some())
-                    && !r.ctrl_compatibility.audiobookshelf.queue
+                    && !r.supports_audiobookshelf_queue()
                 {
                     return false;
                 }
                 if slots
                     .iter()
                     .any(|slot| slot.item.as_audiobookshelf_book().is_some())
-                    && !r.ctrl_compatibility.audiobookshelf.book_queue
+                    && !r.supports_audiobookshelf_book_queue()
                 {
                     return false;
                 }
@@ -333,14 +333,14 @@ impl PlayerProxy {
                 if slots
                     .iter()
                     .any(|slot| slot.item.as_audiobookshelf().is_some())
-                    && !r.ctrl_compatibility.audiobookshelf.queue
+                    && !r.supports_audiobookshelf_queue()
                 {
                     return false;
                 }
                 if slots
                     .iter()
                     .any(|slot| slot.item.as_audiobookshelf_book().is_some())
-                    && !r.ctrl_compatibility.audiobookshelf.book_queue
+                    && !r.supports_audiobookshelf_book_queue()
                 {
                     return false;
                 }
@@ -437,7 +437,7 @@ impl PlayerProxy {
     /// one, or None for a local player. Used by the coordinated shutdown
     /// path to invoke `request_shutdown` on the current player
     /// when it is a live Local connection.
-    pub fn as_remote(&self) -> Option<crate::remote_player::RemotePlayer> {
+    pub fn as_remote(&self) -> Option<mbv_remote_player::RemotePlayer> {
         match &self.inner {
             PlayerProxyInner::Remote(r) => Some(r.clone()),
             PlayerProxyInner::Local(_) => None,

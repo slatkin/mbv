@@ -1718,6 +1718,7 @@ dependencies = [
  "mbv-keybinds",
  "mbv-net",
  "mbv-queue",
+ "mbv-remote-player",
  "mbv-text",
  "mbv-visualizer",
  "mbv-ws",
@@ -1802,6 +1803,7 @@ dependencies = [
  "mbv-ids",
  "mbv-net",
  "mbv-queue",
+ "mbv-remote-player",
  "mbv-text",
  "mbv-ws",
  "rand 0.10.2",
@@ -1902,6 +1904,20 @@ dependencies = [
  "mbv-emby-model",
  "rstest",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mbv-remote-player"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-config",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-net",
+ "mbv-queue",
  "serde_json",
 ]
 

@@ -11,7 +11,7 @@ description = "Core runtime, service providers, and playback engine for mbv."
 readme = "../../README.md"
 
 [features]
-test = ["mbv-net/test", "mbv-config/test"]
+test = ["mbv-net/test", "mbv-config/test", "mbv-remote-player/test"]
 
 [lints]
 workspace = true
@@ -26,6 +26,7 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-remote-player = { path = "../mbv-remote-player" }
 mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true
@@ -44,3 +45,4 @@ rust_cast = "0.21"
 rstest.workspace = true
 mbv-net = { path = "../mbv-net", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }
+mbv-remote-player = { path = "../mbv-remote-player", features = ["test"] }

@@ -274,13 +274,13 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
     use crate::config::Config;
     use mbv_emby::EmbyClient;
 
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(remote_items, 0);
     let config = Config::default();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
@@ -299,13 +299,13 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
+        mbv_remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
     let config = Config::default();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
@@ -324,13 +324,13 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
     let config = Config::default();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
@@ -356,7 +356,7 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
     let config = Config {
         stay_alive: true,
         ..Default::default()
@@ -367,7 +367,7 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_remote_player::DaemonEndpoint::Local,
         config,
     );
     (app, cmd_rx)

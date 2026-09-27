@@ -1,5 +1,5 @@
 use super::*;
-use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 fn remote_tcp_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:1".parse().unwrap())

@@ -30,7 +30,7 @@ impl App {
     }
 
     fn signal_running_local_daemon(&mut self, revision: u64) {
-        if let Err(error) = mbv_core::remote_player::signal_local_daemon_service_setup(
+        if let Err(error) = mbv_remote_player::signal_local_daemon_service_setup(
             mbv_queue::ServiceKind::Audiobookshelf,
             revision,
         ) {

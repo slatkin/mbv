@@ -1,8 +1,8 @@
 use super::*;
 
-use crate::remote_player::RemotePlayer;
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility};
 use mbv_queue::AudiobookshelfQueueItem;
+use mbv_remote_player::RemotePlayer;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
     QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
@@ -66,14 +66,16 @@ fn owner_audio_only_reflects_remote_capability_and_local_player_is_capable() {
 
     let (mut remote, _event_rx, _cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     assert!(!PlayerProxy::remote(remote.clone(), false).owner_is_audio_only());
-    remote.ctrl_compatibility.supports_audio_only = true;
+    let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+    compatibility.supports_audio_only = true;
+    remote.set_ctrl_compatibility_for_test(compatibility);
     assert!(PlayerProxy::remote(remote, false).owner_is_audio_only());
 }
 
 #[test]
 fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
-    remote.ctrl_compatibility = capability_abs_disabled();
+    remote.set_ctrl_compatibility_for_test(capability_abs_disabled());
     let proxy = PlayerProxy::remote(remote, false);
 
     let paired = |item: QueueItem| ExecSlot {

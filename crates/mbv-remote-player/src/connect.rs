@@ -17,7 +17,7 @@ use mbv_ctrl::{
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 
-use crate::remote_player::RemotePlayer;
+use crate::RemotePlayer;
 
 // Hard wall-clock bound on the post-connect protocol handshake (hello
 // exchange + initial state), independent of `endpoint::DAEMON_TCP_CONNECT_TIMEOUT`
@@ -371,7 +371,7 @@ struct ReaderThreadState {
     disconnected: Arc<AtomicBool>,
     disconnect_notified: Arc<AtomicBool>,
     shutdown_announced: Arc<AtomicBool>,
-    shutdown_request: Arc<Mutex<Option<mpsc::Sender<crate::remote_player::ShutdownResponse>>>>,
+    shutdown_request: Arc<Mutex<Option<mpsc::Sender<crate::ShutdownResponse>>>>,
     event_tx: mpsc::Sender<PlayerEvent>,
 }
 
@@ -397,9 +397,8 @@ fn connect_stream(
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
-    let shutdown_request_tx: Arc<
-        Mutex<Option<mpsc::Sender<crate::remote_player::ShutdownResponse>>>,
-    > = Arc::new(Mutex::new(None));
+    let shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<crate::ShutdownResponse>>>> =
+        Arc::new(Mutex::new(None));
 
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -505,12 +504,12 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
                 match &ev {
                     CtrlEvent::ShutdownAccepted => {
                         if let Some(tx) = shutdown_request.lock().unwrap().take() {
-                            let _ = tx.send(crate::remote_player::ShutdownResponse::Accepted);
+                            let _ = tx.send(crate::ShutdownResponse::Accepted);
                         }
                     }
                     CtrlEvent::ShutdownRejected { reason } => {
                         if let Some(tx) = shutdown_request.lock().unwrap().take() {
-                            let _ = tx.send(crate::remote_player::ShutdownResponse::Rejected {
+                            let _ = tx.send(crate::ShutdownResponse::Rejected {
                                 reason: reason.clone(),
                             });
                         }
@@ -548,7 +547,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
 
     // Resolve any pending shutdown request with Disconnected.
     if let Some(tx) = shutdown_request.lock().unwrap().take() {
-        let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
+        let _ = tx.send(crate::ShutdownResponse::Disconnected);
     }
 
     log::info!(target: "remote", "daemon disconnected");

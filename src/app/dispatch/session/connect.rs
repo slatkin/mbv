@@ -10,13 +10,13 @@ impl App {
     pub(in crate::app) fn session_direct_endpoint(
         &self,
         sess: &mbv_emby::SessionInfo,
-    ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
+    ) -> Option<mbv_remote_player::DaemonEndpoint> {
         if !sess.client.eq_ignore_ascii_case("mbv") {
             return None;
         }
         if let Some(port) = parse_mbv_direct_tcp_port(&sess.supported_commands) {
             if let Ok(ip) = sess.host.parse::<std::net::Ipv4Addr>() {
-                return Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+                return Some(mbv_remote_player::DaemonEndpoint::Tcp(
                     std::net::SocketAddr::from((ip, port)),
                 ));
             }
@@ -32,7 +32,7 @@ impl App {
         let client = client.lock().unwrap();
         sess.device_name
             .eq_ignore_ascii_case(&client.device_name)
-            .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
+            .then_some(mbv_remote_player::DaemonEndpoint::Local)
     }
 
     /// Blocking `GET /Sessions` (unfiltered), factored out only so tests
@@ -59,20 +59,14 @@ impl App {
     }
 
     pub(in crate::app) fn connect_direct_endpoint(
-        endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint);
         }
 
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
+        mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -86,14 +80,8 @@ impl App {
     /// lifecycle (ADR 0014 supersedes ADR 0003).
     ///
     fn connect_daemon_route_endpoint(
-        endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint).into_result();
@@ -103,7 +91,7 @@ impl App {
             target: "daemon_route",
             "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
+        mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named
@@ -126,15 +114,9 @@ impl App {
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
     pub(in crate::app) fn try_daemon_route_connect(
-        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
         route_label: &str,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
+    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
         log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
         Self::connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
@@ -172,7 +154,7 @@ impl App {
         let Some(endpoint) = self.player_endpoint.clone() else {
             return false;
         };
-        if matches!(endpoint, mbv_core::remote_player::DaemonEndpoint::Local) {
+        if matches!(endpoint, mbv_remote_player::DaemonEndpoint::Local) {
             return false;
         }
         if !self.config.lock().unwrap().auto_reconnect {
@@ -204,9 +186,9 @@ impl App {
 
     fn attach_reattached_daemon(
         &mut self,
-        remote: mbv_core::remote_player::RemotePlayer,
+        remote: mbv_remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
-        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
         attempt: usize,
     ) {
         let initial_items = remote.items.lock().unwrap().clone();

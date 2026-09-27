@@ -73,7 +73,7 @@ fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
     app.config.lock().unwrap().auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = false;
-    app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
         "127.0.0.1:0".parse().unwrap(),
     ));
     app.active_route = None;

@@ -26,14 +26,14 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     crate::config::save_queue_state(&saved).expect("save queue state");
 
     let (remote, player_rx, command_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(Vec::new(), 0);
+        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(Vec::new(), 0);
     *remote.unified_queue.lock().unwrap() = Some(emby_unified_state(&[], 0));
     let config = crate::config::Config::default();
     let mut app = App::new_remote_with_config(
         mbv_emby::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_remote_player::DaemonEndpoint::Local,
         config,
     );
     assert!(app.player_tab.emby_items().is_empty());

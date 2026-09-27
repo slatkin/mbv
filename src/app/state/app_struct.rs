@@ -138,7 +138,7 @@ pub struct App {
     /// daemon. Replaces the mutable `is_local_daemon` boolean so every
     /// transition records its source of truth rather than projecting it
     /// down to a bool that must be manually kept in sync.
-    pub(in crate::app) player_endpoint: Option<mbv_core::remote_player::DaemonEndpoint>,
+    pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
     /// The one-time, launch-time launch classification: `true` only for
     /// `App::new_remote` instances constructed for the managed local
     /// daemon, and never updated afterward. Kept independent of
@@ -155,7 +155,7 @@ pub struct App {
         crate::app::state::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
-    /// lookup -- see `mbv_core::remote_player::resolve_library_route`.
+    /// lookup -- see `mbv_remote_player::resolve_library_route`.
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,

@@ -8,7 +8,7 @@ fn session_direct_endpoint_prefers_advertised_tcp_port() {
     sess.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
     assert_eq!(
         app.session_direct_endpoint(&sess),
-        Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+        Some(mbv_remote_player::DaemonEndpoint::Tcp(
             "192.168.1.20:47788".parse().unwrap()
         ))
     );

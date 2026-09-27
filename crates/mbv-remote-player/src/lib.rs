@@ -345,6 +345,21 @@ impl RemotePlayer {
         }
     }
 
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_ctrl_compatibility_for_test(&mut self, compatibility: CtrlCompatibility) {
+        self.ctrl_compatibility = compatibility;
+    }
+
+    #[must_use]
+    pub fn supports_audiobookshelf_queue(&self) -> bool {
+        self.ctrl_compatibility.audiobookshelf.queue
+    }
+
+    #[must_use]
+    pub fn supports_audiobookshelf_book_queue(&self) -> bool {
+        self.ctrl_compatibility.audiobookshelf.book_queue
+    }
+
     #[must_use]
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
@@ -447,6 +462,7 @@ impl RemotePlayer {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
     }
 
+    #[cfg(any(test, feature = "test"))]
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -458,6 +474,7 @@ impl RemotePlayer {
 
     /// Test helper for root-crate integration tests that need a remote-player
     /// stand-in without a live daemon connection.
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn stub(items: Vec<EmbyItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
         let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
@@ -465,6 +482,7 @@ impl RemotePlayer {
     }
 
     /// Test helper variant that also exposes commands sent to the daemon.
+    #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn stub_with_command_rx(
         items: Vec<EmbyItem>,

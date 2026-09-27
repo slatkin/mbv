@@ -11,10 +11,10 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     // eager-connect behavior #222 replaces.
     static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     fn counting_connect(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
         CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let (remote, events) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        let (remote, events) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
         crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
 
@@ -63,7 +63,7 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     // wrong when the Local daemon is also unreachable. `restore_local_mode`
     // must strip that claim so the final warning is accurate.
     fn always_fail(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
         crate::app::test_seams::DaemonRouteConnectOutcome::Failed("connection refused".to_string())
     }
@@ -75,12 +75,12 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
     app.library_routes
         .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
     app.switch_to_library_route(
         "music",
         remote,
         remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     assert_eq!(app.active_route.as_deref(), Some("music"));
 

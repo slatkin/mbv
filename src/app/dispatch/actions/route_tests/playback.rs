@@ -74,9 +74,9 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
 #[test]
 fn local_preparation_restores_a_suspended_player_before_detach() {
     let mut app = make_app_stub();
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     let session = make_session("audio-owner", "mbv");
-    let endpoint = mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
+    let endpoint = mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
     app.switch_to_direct_remote(&session, remote, player_rx, &endpoint);
     assert!(app.suspended_local.is_some());
 

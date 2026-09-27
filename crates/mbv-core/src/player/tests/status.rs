@@ -209,7 +209,7 @@ fn disconnect_remote_is_a_no_op_for_a_local_player() {
 
 #[test]
 fn disconnect_remote_disconnects_a_remote_player() {
-    let (remote, _event_rx) = crate::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let (remote, _event_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     let proxy = PlayerProxy::remote(remote, false);
     assert!(proxy.is_remote());
 
