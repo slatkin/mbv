@@ -263,8 +263,7 @@ fn make_reporter(
             info.session_id,
         )
     });
-    let client =
-        client.unwrap_or_else(|| Arc::new(EmbyClient::new(crate::config::Config::default())));
+    let client = client.unwrap_or_else(|| Arc::new(EmbyClient::new(mbv_config::Config::default())));
     let has_session = session.is_some();
     let (item_id, media_source_id, session_id) = session.unwrap_or_else(|| {
         (

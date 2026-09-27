@@ -1,5 +1,5 @@
 use crate::app::{App, PanelFocus, TabSelection};
-use mbv_core::config::{
+use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
     LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, TabIdentity, TuiLaunchState,
     TUI_LAUNCH_STATE_VERSION,

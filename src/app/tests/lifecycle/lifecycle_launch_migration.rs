@@ -49,30 +49,30 @@ fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
         .expect("legacy state migrated once");
     assert_eq!(
         state.tab,
-        mbv_core::config::TabIdentity::ServiceLibrary {
+        mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
             library_id: "lib-movies".into(),
         }
     );
     assert_eq!(
         state.item,
-        Some(mbv_core::config::LibraryItemIdentity::Emby {
+        Some(mbv_config::LibraryItemIdentity::Emby {
             id: "movie-focused".into()
         })
     );
     assert_ne!(
         state.item,
-        Some(mbv_core::config::LibraryItemIdentity::Emby { id: "99".into() })
+        Some(mbv_config::LibraryItemIdentity::Emby { id: "99".into() })
     );
     assert_ne!(
         state.item,
-        Some(mbv_core::config::LibraryItemIdentity::Emby {
+        Some(mbv_config::LibraryItemIdentity::Emby {
             id: "deep-item-must-not-migrate".into()
         })
     );
     assert!(!matches!(
         state.item,
-        Some(mbv_core::config::LibraryItemIdentity::Emby { ref id })
+        Some(mbv_config::LibraryItemIdentity::Emby { ref id })
             if id == "unselected-library-item"
     ));
     assert!(state.selector.is_none());
@@ -88,10 +88,10 @@ fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
 #[test]
 fn versioned_launch_state_takes_precedence_over_legacy_migration() {
     let mut app = crate::app::render::make_movie_app();
-    let saved = mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::Home,
-        panel_focus: mbv_core::config::LaunchPanelFocus::Queue,
+    let saved = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Queue,
         selector: None,
         item: None,
     };
@@ -133,9 +133,8 @@ fn legacy_audiobookshelf_podcast_item_is_not_migrated() {
             name: "Podcasts".into(),
             media_type: "podcast".into(),
         });
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://abs.example"),
-    );
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(mbv_config::AudiobookshelfSetup::new("https://abs.example"));
     app.library_position_state.libraries.insert(
         "audiobookshelf:https://abs.example:abs-podcasts".into(),
         mbv_queue::LibraryPosition {
@@ -156,7 +155,7 @@ fn legacy_audiobookshelf_podcast_item_is_not_migrated() {
         .expect("legacy state migrated once");
     assert_eq!(
         state.tab,
-        mbv_core::config::TabIdentity::ServiceLibrary {
+        mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Audiobookshelf,
             library_id: "abs-podcasts".into(),
         }

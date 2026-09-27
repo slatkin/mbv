@@ -110,7 +110,7 @@ impl App {
         #[cfg(test)]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
-        let pending_launch_state = mbv_core::config::load_tui_launch_state();
+        let pending_launch_state = mbv_config::load_tui_launch_state();
         // The legacy selected-tab preference is only a migration input. Never
         // let it compete with a versioned launch snapshot that already exists.
         let legacy_launch_tab = pending_launch_state
@@ -336,11 +336,11 @@ impl App {
         let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
         let configured = app_config.emby_setup.is_some();
         let credential_present =
-            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
+            mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
         let generation = mbv_core::service_runtime::SetupGeneration::default();
         let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
         let audiobookshelf_credential_present =
-            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
+            mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
         let raw_player = Player::new(
             String::new(),
             String::new(),

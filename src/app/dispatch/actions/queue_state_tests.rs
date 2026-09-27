@@ -184,17 +184,16 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     let _xdg = XdgHomeGuard::new();
     let mixed = mixed_audiobookshelf_queue();
     let mut app = crate::app::tests::make_app_stub();
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://old-books.example"),
-    );
-    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret")
-        .unwrap();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://old-books.example",
+    ));
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
     app.remote_player_tab = Some(crate::app::state::types::player_tab::PlayerTab::new(
         mixed.clone(),
         3,
     ));
-    mbv_core::config::save_queue_state(&mbv_queue::QueueState {
+    mbv_config::save_queue_state(&mbv_queue::QueueState {
         source: mbv_queue::QueueSource::Unknown,
         items: mixed.clone(),
         cursor: 3,
@@ -210,19 +209,16 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_core::config::load_queue_state().unwrap().items);
+    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
 
     // Refill the projections and make the local slot active: this is the
     // local Bound replacement path, while remote_player_tab remains remote Bound.
     let mixed = mixed_audiobookshelf_queue();
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://replacement-books.example"),
-    );
-    mbv_core::config::save_service_secret(
-        mbv_queue::ServiceKind::Audiobookshelf,
-        "replacement-secret",
-    )
-    .unwrap();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://replacement-books.example",
+    ));
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "replacement-secret")
+        .unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
     let active_slot = app.player_tab.slot_id_at(2).unwrap();
     assert!(matches!(
@@ -234,7 +230,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         mixed.clone(),
         3,
     ));
-    mbv_core::config::save_queue_state(&mbv_queue::QueueState {
+    mbv_config::save_queue_state(&mbv_queue::QueueState {
         source: mbv_queue::QueueSource::Unknown,
         items: mixed,
         cursor: 3,
@@ -249,7 +245,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
             candidate:
                 crate::app::dispatch::session::service_startup::AudiobookshelfValidatedCandidate {
-                    setup: mbv_core::config::AudiobookshelfSetup::new(
+                    setup: mbv_config::AudiobookshelfSetup::new(
                         "https://replacement-books.example",
                     ),
                     user: mbv_core::audiobookshelf::AudiobookshelfUser {
@@ -266,7 +262,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_core::config::load_queue_state().unwrap().items);
+    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
 }
 
 #[rstest]

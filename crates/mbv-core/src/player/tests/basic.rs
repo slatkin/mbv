@@ -129,9 +129,9 @@ pub(in crate::player) fn make_queue_session_for_pos_tests_with_mock(
 ) {
     let http = mbv_net::mock_http::MockHttp::new();
     let agent = http.agent();
-    let cfg = crate::config::Config {
+    let cfg = mbv_config::Config {
         server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
+        ..mbv_config::Config::default()
     };
     let client = Arc::new(EmbyClient::new(cfg).with_test_agent(agent));
     let (session, status, events) = queue_session_for_pos_tests_with_client(start_idx, client);

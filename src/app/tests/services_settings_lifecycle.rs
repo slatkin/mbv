@@ -2,7 +2,7 @@ use super::*;
 use crate::app::state::types::settings::ServiceEntry;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::EmbySetup;
+use mbv_config::EmbySetup;
 use mbv_core::service_runtime::ServiceState;
 
 #[test]
@@ -10,7 +10,7 @@ fn unavailable_emby_retry_is_one_bounded_generation() {
     let _guard = TestStateDirGuard::new();
     let mut app = tests::make_app_stub();
     app.config.lock().unwrap().emby_setup = Some(EmbySetup::new("http://127.0.0.1:1", "user-id"));
-    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Emby, "token").unwrap();
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "token").unwrap();
     app.emby_runtime.state = ServiceState::Unavailable;
     app.open_services_settings();
     let generation = app.emby_runtime.generation();
@@ -81,7 +81,7 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
         mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
     app.player
         .update_emby_credentials("https://emby.example".into(), "valid-token".into());
-    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Emby, "valid-token").unwrap();
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "valid-token").unwrap();
     let generation = app.emby_runtime.generation();
 
     app.handle_emby_runtime_failure_with_secret_deleter(
@@ -99,7 +99,7 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
         Some(("https://emby.example".into(), "valid-token".into()))
     );
     assert_eq!(
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby),
         Some("valid-token".into())
     );
     assert_eq!(app.config.lock().unwrap().emby_setup, config.emby_setup);
@@ -125,7 +125,7 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     ));
     app.player
         .update_emby_credentials("https://emby.example".into(), "new-token".into());
-    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Emby, "new-token").unwrap();
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "new-token").unwrap();
     let stale = app.emby_runtime.generation();
     let newer = app.emby_runtime.begin_retry();
     app.emby_runtime.state = ServiceState::Ready;
@@ -147,7 +147,7 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     );
     assert!(content.is_none());
     assert_eq!(
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby),
         Some("new-token".into())
     );
 }
@@ -163,7 +163,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     let mut app = tests::make_app_stub();
     *app.config.lock().unwrap() = config.clone();
     app.emby_runtime.state = ServiceState::Ready;
-    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Emby, "old-token").unwrap();
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "old-token").unwrap();
     app.open_services_settings();
     app.activate_service_entry(ServiceEntry::Emby);
     let generation = app.emby_runtime.begin_setup();
@@ -198,7 +198,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     ));
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(old_setup));
     assert_eq!(
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby),
         Some("old-token".into())
     );
     let action = match app.pending_overlay.as_ref() {
@@ -212,7 +212,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     assert!(app.setup.pending_emby_replacement.is_none());
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby),
         Some("old-token".into())
     );
 }

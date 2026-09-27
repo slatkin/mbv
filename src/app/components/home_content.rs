@@ -25,7 +25,7 @@ use super::media_list::{
 use crate::app::state::types::context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
-use mbv_core::config::{LibraryItemIdentity, SelectorIdentity};
+use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
 
 mod launch_state;
@@ -410,7 +410,7 @@ impl LibraryContentOwner for HomeContent {
     }
 
     /// Bounded read-only Continue Watching launch state.
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         self.reanchor_launch_state_impl(state)
     }
 

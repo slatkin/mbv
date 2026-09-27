@@ -21,11 +21,15 @@ workspace = true
 mbv-core = { path = "../mbv-core" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-config = { path = "../mbv-config" }
 libc.workspace = true
 log.workspace = true
 mimalloc.workspace = true
 nix.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+mbv-config = { path = "../mbv-config", features = ["test"] }
 
 [package.metadata.deb]
 maintainer = "slatkin <slatkin@gmail.com>"

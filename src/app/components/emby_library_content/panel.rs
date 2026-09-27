@@ -15,7 +15,7 @@ use crate::app::components::library_panel::HeroContentData;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::render::LetterFilter;
-use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
 impl InlineSearchHost for EmbyLibraryContent {
     fn inline_search(&self) -> &InlineSearch {
@@ -191,7 +191,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// and the unfiltered letter view use an explicit unfiltered identity;
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
-    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+    fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
         if matches!(
             state.selector.as_ref(),
             Some(SelectorIdentity::Emby {
@@ -235,7 +235,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         None
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.items().is_empty() {
             return false;
         }

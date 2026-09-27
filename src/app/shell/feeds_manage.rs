@@ -12,7 +12,7 @@ use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use crate::app::state::types::feeds_manage::{
     FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
 };
-use mbv_core::config::FeedSubscription;
+use mbv_config::FeedSubscription;
 
 fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {
     result.and_then(|entries| {

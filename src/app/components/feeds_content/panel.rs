@@ -90,7 +90,7 @@ impl FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
             return false;
         }

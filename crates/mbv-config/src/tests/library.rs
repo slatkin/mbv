@@ -1,7 +1,7 @@
 #[cfg(test)]
-use crate::config::tests::SYS_ENV_LOCK;
+use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
-use crate::config::{
+use crate::{
     config_path, load_config, load_queue_state, parse_config, save_config_settings,
     save_emby_setup, EmbySetup, FeedKind, TestStateDirGuard,
 };

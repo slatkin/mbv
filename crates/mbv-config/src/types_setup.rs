@@ -1,5 +1,5 @@
 // Service setup types for `Config`. Included into `config`'s module scope
-// (see `config.rs`), so callers reach them as `crate::config::…`.
+// (see `config.rs`), so callers reach them as `crate::…`.
 
 /// Emby-specific setup (server URL + user ID) stored in config.toml `[server]`.
 ///

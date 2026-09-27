@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::config::{
+use crate::{
     cache_dir, config_path, control_socket_path, data_dir_system_or_local, home_latest_launch_path,
     is_system_instance, load_home_latest_launch, load_last_remote_connection,
     load_last_remote_connection_at, load_queue_state, mpv_ipc_path, parse_config, queue_state_path,
@@ -23,7 +23,7 @@ use mbv_queue::{QueueSource, QueueState};
 // one shared lock, not just tests that happen to touch the same variable
 // name. This is THE single shared lock for that: src/app/action.rs,
 // src/app/actions.rs, and src/api.rs all reference this same
-// `SYS_ENV_LOCK` (via `crate::config::tests::SYS_ENV_LOCK`) rather than
+// `SYS_ENV_LOCK` (via `crate::tests::SYS_ENV_LOCK`) rather than
 // defining their own — independent per-file mutexes don't exclude each
 // other and previously caused flaky cross-test env-var races (e.g. one
 // test's queue_state.json read intermittently coming back empty because

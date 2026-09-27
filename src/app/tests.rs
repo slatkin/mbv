@@ -170,7 +170,7 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
                     continue_items: vec![item],
                     views: Vec::new(),
                 },
-                setup: mbv_core::config::EmbySetup::default(),
+                setup: mbv_config::EmbySetup::default(),
             }),
         })
         .expect("Ok startup must bootstrap the Returned Home content");
@@ -197,7 +197,7 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
                 bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
-                setup: mbv_core::config::EmbySetup::default(),
+                setup: mbv_config::EmbySetup::default(),
             }),
         });
     assert_eq!(

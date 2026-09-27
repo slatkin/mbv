@@ -7,10 +7,10 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
-use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
-use mbv_core::config::{
+use mbv_config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
+use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_emby_model::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 

@@ -6,8 +6,8 @@ use crate::audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
-use crate::config::AudiobookshelfSetup;
 use crate::service_runtime::SetupGeneration;
+use mbv_config::AudiobookshelfSetup;
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, MpvUrlSource};
 use mbv_queue::{AudiobookshelfItem, QueueItem};
 

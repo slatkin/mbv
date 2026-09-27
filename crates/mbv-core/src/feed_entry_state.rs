@@ -47,7 +47,7 @@ pub struct FeedEntryStore {
 /// under `state_dir()`.
 #[must_use]
 pub fn feed_entry_state_path() -> PathBuf {
-    crate::config::state_dir().join("feed_entry_state.json")
+    mbv_config::state_dir().join("feed_entry_state.json")
 }
 
 impl FeedEntryStore {
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn round_trip_through_the_file() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = mbv_config::TestStateDirGuard::new();
         let mut store = FeedEntryStore::default();
         store.put(
             "user-1",
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn scan_returns_only_that_users_feed() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = mbv_config::TestStateDirGuard::new();
         let mut store = FeedEntryStore::default();
         store.put("user-1", "feed-1", "guid-1", state(10, false));
         store.put("user-1", "feed-1", "guid-2", state(20, true));
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn unreadable_state_loads_empty() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = mbv_config::TestStateDirGuard::new();
 
         // Absent file.
         assert!(FeedEntryStore::load().is_empty());
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn failed_save_preserves_the_previous_file() {
-        let _guard = crate::config::TestStateDirGuard::new();
+        let _guard = mbv_config::TestStateDirGuard::new();
         let mut original = FeedEntryStore::default();
         original.put("user-1", "feed-1", "guid-1", state(120, false));
         original.save().unwrap();

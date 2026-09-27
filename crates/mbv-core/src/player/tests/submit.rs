@@ -317,7 +317,7 @@ fn audiobookshelf_book_item() -> QueueItem {
 fn audiobookshelf_context() -> AudiobookshelfPlayerContext {
     AudiobookshelfPlayerContext::new(
         crate::service_runtime::SetupGeneration::new(7),
-        crate::config::AudiobookshelfSetup::new("https://books.example"),
+        mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
         "device".into(),
     )

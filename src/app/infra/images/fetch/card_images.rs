@@ -98,8 +98,7 @@ impl App {
         {
             return;
         }
-        let Some(api_key) =
-            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+        let Some(api_key) = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
         else {
             return;
         };

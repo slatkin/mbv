@@ -414,8 +414,8 @@ impl LibraryPanel {
         &self,
         key: &LibraryKey,
     ) -> Option<(
-        Option<mbv_core::config::SelectorIdentity>,
-        Option<mbv_core::config::LibraryItemIdentity>,
+        Option<mbv_config::SelectorIdentity>,
+        Option<mbv_config::LibraryItemIdentity>,
     )> {
         self.owners
             .get(key)
@@ -427,7 +427,7 @@ impl LibraryPanel {
     pub(in crate::app) fn launch_selector(
         &self,
         key: &LibraryKey,
-        state: &mbv_core::config::TuiLaunchState,
+        state: &mbv_config::TuiLaunchState,
     ) -> Option<super::owner::LaunchSelector> {
         self.owners
             .get(key)
@@ -437,7 +437,7 @@ impl LibraryPanel {
     pub(in crate::app) fn reanchor_launch_state(
         &mut self,
         key: &LibraryKey,
-        state: &mbv_core::config::TuiLaunchState,
+        state: &mbv_config::TuiLaunchState,
     ) -> bool {
         self.owners
             .get_mut(key)

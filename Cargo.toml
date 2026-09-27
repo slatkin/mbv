@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-visualizer", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-visualizer", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -108,6 +108,7 @@ path = "src/main.rs"
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
 mbv-ctrl = { path = "crates/mbv-ctrl" }
+mbv-config = { path = "crates/mbv-config" }
 mbv-ids = { path = "crates/mbv-ids" }
 mbv-keybinds = { path = "crates/mbv-keybinds" }
 mbv-net = { path = "crates/mbv-net" }
@@ -139,6 +140,7 @@ time = { version = "0.3", features = ["parsing"] }
 
 [dev-dependencies]
 mbv-core = { path = "crates/mbv-core", features = ["test"] }
+mbv-config = { path = "crates/mbv-config", features = ["test"] }
 mbv-net = { path = "crates/mbv-net", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true

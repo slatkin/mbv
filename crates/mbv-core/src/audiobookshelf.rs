@@ -24,7 +24,7 @@ pub struct AudiobookshelfUser {
 /// Its Debug implementation redacts the candidate API key, which this type
 /// retains until the commit seam consumes it.
 pub struct AudiobookshelfValidatedSetup {
-    pub setup: crate::config::AudiobookshelfSetup,
+    pub setup: mbv_config::AudiobookshelfSetup,
     pub user: AudiobookshelfUser,
     api_key: String,
 }
@@ -42,7 +42,7 @@ impl std::fmt::Debug for AudiobookshelfValidatedSetup {
 impl AudiobookshelfValidatedSetup {
     #[must_use]
     pub fn new(
-        setup: crate::config::AudiobookshelfSetup,
+        setup: mbv_config::AudiobookshelfSetup,
         user: AudiobookshelfUser,
         api_key: String,
     ) -> Self {
@@ -54,13 +54,7 @@ impl AudiobookshelfValidatedSetup {
     }
 
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (
-        crate::config::AudiobookshelfSetup,
-        AudiobookshelfUser,
-        String,
-    ) {
+    pub fn into_parts(self) -> (mbv_config::AudiobookshelfSetup, AudiobookshelfUser, String) {
         (self.setup, self.user, self.api_key)
     }
 }
@@ -71,7 +65,7 @@ pub fn commit_audiobookshelf_candidate(
     candidate: AudiobookshelfValidatedSetup,
 ) -> Result<(AudiobookshelfUser, u64), String> {
     let (setup, user, api_key) = candidate.into_parts();
-    let revision = crate::config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
+    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
     Ok((user, revision))
 }
 
@@ -94,7 +88,7 @@ where
     R: FnOnce(),
 {
     let (setup, user, api_key) = candidate.into_parts();
-    let revision = crate::config::replace_audiobookshelf_setup_and_secret(
+    let revision = mbv_config::replace_audiobookshelf_setup_and_secret(
         &setup,
         &api_key,
         clear_owned_state,
@@ -217,7 +211,7 @@ impl AudiobookshelfClient {
         api_key: &str,
         hard_bound: Duration,
     ) -> Result<AudiobookshelfValidatedSetup, AudiobookshelfError> {
-        let setup = crate::config::AudiobookshelfSetup::new(server_url);
+        let setup = mbv_config::AudiobookshelfSetup::new(server_url);
         if setup.server_url.is_empty() || api_key.trim().is_empty() {
             return Err(AudiobookshelfError::protocol());
         }

@@ -20,7 +20,7 @@
 
 use ratatui::layout::Position;
 
-use mbv_core::config::{
+use mbv_config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
 };

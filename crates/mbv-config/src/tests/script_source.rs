@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::config::{checkout_fonts_dir, checkout_scripts_entry, resolve_script_source};
+use crate::{checkout_fonts_dir, checkout_scripts_entry, resolve_script_source};
 
 // Hermetic tests for the mpv overlay script/font source resolution
 // (openspec change fix-next-up-accept-and-mpv-script-source, B1-B3).

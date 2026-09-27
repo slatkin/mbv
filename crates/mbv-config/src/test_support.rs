@@ -1,5 +1,5 @@
 // Test-only scratch-directory helper. Included into `config`'s module scope
-// (see `config.rs`) so callers reach it as `crate::config::TestTempDir`, next
+// (see `config.rs`) so callers reach it as `crate::TestTempDir`, next
 // to `TestStateDirGuard` in `config_types_paths.rs`.
 
 #[cfg(any(test, feature = "test"))]

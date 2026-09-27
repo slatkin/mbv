@@ -210,7 +210,7 @@ impl LibraryContentOwner for TvContent {
 
     fn launch_selector(
         &self,
-        state: &mbv_core::config::TuiLaunchState,
+        state: &mbv_config::TuiLaunchState,
     ) -> Option<super::super::library_panel::owner::LaunchSelector> {
         if !self.context.show_letter_pills {
             return None;
@@ -239,7 +239,7 @@ impl LibraryContentOwner for TvContent {
         }
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }

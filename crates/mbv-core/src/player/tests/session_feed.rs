@@ -31,7 +31,7 @@ fn make_feed_entry_no_source(guid: &str, title: &str) -> mbv_queue::FeedEntry {
 fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
+    let client = Arc::new(EmbyClient::new(mbv_config::Config::default()));
     let reporter = SessionReporter::new(
         client,
         None,
@@ -369,7 +369,7 @@ fn feed_queue_quit_path_does_not_mark_played_with_empty_id() {
 #[rstest::fixture]
 fn make_no_session_reporter() -> SessionReporter {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
+    let client = Arc::new(EmbyClient::new(mbv_config::Config::default()));
     SessionReporter::new(
         client,
         None,
@@ -413,9 +413,9 @@ fn make_no_session_reporter_with_ids() -> (SessionReporter, mbv_net::mock_http::
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let http = mbv_net::mock_http::MockHttp::new();
     let agent = http.agent();
-    let cfg = crate::config::Config {
+    let cfg = mbv_config::Config {
         server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
+        ..mbv_config::Config::default()
     };
     let client = Arc::new(EmbyClient::new(cfg).with_test_agent(agent));
     (

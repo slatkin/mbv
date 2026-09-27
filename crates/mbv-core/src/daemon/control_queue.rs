@@ -10,9 +10,9 @@ pub(in crate::daemon) fn persist_stay_alive_owner_queue(
     owner: &DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
-    store: &mut dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>,
+    store: &mut dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), String>,
 ) -> Result<(), String> {
-    store(&crate::config::StayAliveQueueState {
+    store(&mbv_config::StayAliveQueueState {
         queue: project_queue_state(
             &owner.core.queue,
             &owner.core.source,

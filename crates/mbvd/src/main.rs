@@ -1,4 +1,5 @@
-use mbv_core::{applog, config, daemon};
+use mbv_config as config;
+use mbv_core::{applog, daemon};
 use mimalloc::MiMalloc;
 use std::io::{self, BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;

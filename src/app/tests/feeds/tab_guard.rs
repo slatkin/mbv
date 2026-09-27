@@ -51,7 +51,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     });
 
     // Configure a feed subscription and select the Feeds tab.
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
         kind: mbv_queue::FeedKind::Audio,
@@ -234,7 +234,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     );
     app.audiobookshelf_libraries.push(abs_library);
     app.audiobookshelf_browse.push(abs_state);
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
         kind: mbv_queue::FeedKind::Audio,

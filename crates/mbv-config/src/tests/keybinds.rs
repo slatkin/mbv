@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::config::{config_path, parse_config, save_config_settings, Config};
+use crate::{config_path, parse_config, save_config_settings, Config};
 
 // ── `[keys]` config parse + save (change add-configurable-keybinds, U2) ──
 //
@@ -109,7 +109,7 @@ volume_up = "w"
 
 #[test]
 fn keys_round_trip_preserves_unrelated_sections_and_keys() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::TestStateDirGuard::new();
     let original = r#"
 [server]
 url = "http://localhost:8096/"
@@ -155,7 +155,7 @@ search_open = "s"
 
 #[test]
 fn keys_default_configuration_prunes_the_keys_table() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::TestStateDirGuard::new();
     std::fs::write(
         config_path(),
         "[keys]\nprefix = \"Ctrl+b\"\n\n[keys.global]\nhelp_open = \"F9\"\n",
@@ -177,7 +177,7 @@ fn keys_default_configuration_prunes_the_keys_table() {
 
 #[test]
 fn keys_saved_section_names_are_lowercase_file_shape() {
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = crate::TestStateDirGuard::new();
     let cfg = Config {
         keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: Some("Ctrl+b".into()),

@@ -21,7 +21,7 @@ impl App {
         self.transition_emby_failure(
             Some(completion.generation),
             completion.result,
-            mbv_core::config::clear_service_secret_result,
+            mbv_config::clear_service_secret_result,
         )
     }
 
@@ -125,7 +125,7 @@ impl App {
         error: mbv_core::service_runtime::EmbyFailure,
     ) {
         self.transition_emby_failure(None, Err(error), |kind| {
-            mbv_core::config::clear_service_secret_result(kind)
+            mbv_config::clear_service_secret_result(kind)
         });
     }
 
@@ -147,7 +147,7 @@ impl App {
         }
         let config = self.config.lock().unwrap().clone();
         self.emby_runtime.state = if config.emby_setup.is_some()
-            && mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
+            && mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
         {
             mbv_core::service_runtime::ServiceState::Unavailable
         } else if config.emby_setup.is_some() {
@@ -214,7 +214,7 @@ impl App {
                 }
                 let token = startup.client.token.clone();
                 if let Err(error) =
-                    mbv_core::config::persist_emby_setup_and_secret(&startup.setup, &token)
+                    mbv_config::persist_emby_setup_and_secret(&startup.setup, &token)
                 {
                     self.emby_runtime.state = completion.previous_state;
                     if let Some(form) = self.setup.emby_setup_form.as_mut() {

@@ -2,8 +2,8 @@ use super::{
     broadcast_queue_state, AudiobookshelfOwnerContext, DaemonEvent, DaemonOwnerContext,
     DaemonPlayerOwner, EmbyOwnerContext,
 };
-use crate::config::EmbySetup;
 use crate::player::{Player, PlayerOwnerState};
+use mbv_config::EmbySetup;
 use mbv_ctrl::ServiceSetupRejection;
 use mbv_queue::ExecSlot;
 use mbv_queue::QueueSource;
@@ -94,7 +94,7 @@ pub(super) fn reconcile_packaged_emby(
             },
         ..
     } = &mut *ctx.owner;
-    let owner_config = crate::config::load_config().map_err(|error| {
+    let owner_config = mbv_config::load_config().map_err(|error| {
         log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
         ServiceSetupRejection::StorageUnavailable
     })?;
@@ -202,7 +202,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
             },
         ..
     } = &mut *ctx.owner;
-    let owner_config = crate::config::load_config().map_err(|error| {
+    let owner_config = mbv_config::load_config().map_err(|error| {
         log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
         ServiceSetupRejection::StorageUnavailable
     })?;
@@ -284,7 +284,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
 
 fn same_audiobookshelf_server(
     old: &AudiobookshelfOwnerContext,
-    new_setup: &crate::config::AudiobookshelfSetup,
+    new_setup: &mbv_config::AudiobookshelfSetup,
 ) -> bool {
     normalized_server_url(&old.setup.server_url) == normalized_server_url(&new_setup.server_url)
 }

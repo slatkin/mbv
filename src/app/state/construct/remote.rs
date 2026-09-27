@@ -124,10 +124,10 @@ fn remote_services(
 ) -> RemoteServices {
     let emby_configured = app_config.emby_setup.is_some();
     let emby_credential_present =
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
     let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
     let audiobookshelf_credential_present =
-        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
     let emby_runtime = client_arc.map_or_else(
         || independent_emby_runtime(emby_configured, emby_credential_present),
         |client| EmbyRuntime::ready(std::sync::Arc::clone(client)),

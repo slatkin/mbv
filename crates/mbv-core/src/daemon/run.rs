@@ -135,7 +135,7 @@ pub(super) fn apply_queue_enriched(
 }
 
 struct DaemonStarted {
-    config: crate::config::Config,
+    config: mbv_config::Config,
     role: DaemonRole,
     emby_runtime: Option<EmbyOwnerContext>,
     audiobookshelf_runtime: Option<AudiobookshelfOwnerContext>,
@@ -165,7 +165,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         None
     } else {
         Some(
-            crate::config::load_or_create_control_credential()
+            mbv_config::load_or_create_control_credential()
                 .expect("mbv daemon: failed to load Control credential"),
         )
     };
@@ -269,13 +269,13 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     // Shared state for ctrl socket initial-state snapshots — stores the
     // canonical queue so all ctrl peers are seeded from one source.
     let owner_state = if role == DaemonRole::Local {
-        let owner_path = crate::config::stay_alive_queue_state_path();
-        crate::config::load_stay_alive_queue_state().or_else(|| {
+        let owner_path = mbv_config::stay_alive_queue_state_path();
+        mbv_config::load_stay_alive_queue_state().or_else(|| {
             (!owner_path.exists())
-                .then(crate::config::load_queue_state)
+                .then(mbv_config::load_queue_state)
                 .flatten()
                 .and_then(|queue| {
-                    crate::config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
+                    mbv_config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
                 })
         })
     } else {
@@ -297,7 +297,7 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     );
     if role == DaemonRole::Local {
         if let Err(error) =
-            crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
+            mbv_config::save_stay_alive_queue_state(&mbv_config::StayAliveQueueState {
                 queue: project_queue_state(
                     &initial_queue,
                     &initial_source,
@@ -530,7 +530,7 @@ pub fn run_with_options(
         audio_only,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
-        store: Box::new(crate::config::save_stay_alive_queue_state),
+        store: Box::new(mbv_config::save_stay_alive_queue_state),
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

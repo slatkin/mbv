@@ -9,7 +9,7 @@ use crate::app::components::library_panel::{HeroContentData, HeroImageState};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 impl LibraryContentOwner for PodcastContent {
-    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+    fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
         let target = match state.selector.as_ref() {
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::Latest,
@@ -30,7 +30,7 @@ impl LibraryContentOwner for PodcastContent {
         (!same).then_some(target)
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         // The shell applies the selector through App before this item-level
         // re-anchor. Restore the saved pill here so the component scopes its
         // rows before selecting the saved item.

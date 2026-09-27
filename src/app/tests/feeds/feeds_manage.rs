@@ -1,7 +1,7 @@
 use crate::app::state::types::feeds_manage::{FeedAddResult, FeedsManagePopup};
 use crate::app::tests::make_app_stub;
 use crate::app::Model;
-use mbv_core::config::FeedSubscription;
+use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 
 fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {

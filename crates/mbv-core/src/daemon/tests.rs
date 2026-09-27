@@ -2,11 +2,11 @@ use super::*;
 
 // External crate imports needed across test files
 use crate::api::EmbyClient;
-use crate::config::{Config, StayAliveQueueState};
 use crate::player::{
     AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerOwnerState,
 };
 use crate::service_runtime::SetupGeneration;
+use mbv_config::{Config, StayAliveQueueState};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_ctrl::DisconnectReason;
 use mbv_ctrl::{

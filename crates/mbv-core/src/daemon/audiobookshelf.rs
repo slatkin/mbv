@@ -18,7 +18,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
         player.update_audiobookshelf_context(None);
         return;
     };
-    let Some(api_key) = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+    let Some(api_key) = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
     else {
         player.update_audiobookshelf_context(None);
         return;

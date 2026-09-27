@@ -24,12 +24,12 @@ impl EmbyOwnerContext {
         }
     }
 
-    pub fn from_packaged_storage_result(config: &crate::config::Config) -> Result<Self, String> {
+    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
         let setup = config
             .emby_setup
             .as_ref()
             .ok_or_else(|| "Emby setup is missing from owner storage".to_string())?;
-        let token = crate::config::load_service_secret(mbv_queue::ServiceKind::Emby)
+        let token = mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby)
             .ok_or_else(|| "Emby Service secret is unavailable".to_string())?;
         if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
             return Err("Emby setup is incomplete in owner storage".to_string());
@@ -47,18 +47,18 @@ impl EmbyOwnerContext {
 /// unavailable.
 #[derive(Clone, Debug)]
 pub struct AudiobookshelfOwnerContext {
-    pub setup: crate::config::AudiobookshelfSetup,
+    pub setup: mbv_config::AudiobookshelfSetup,
     pub device_id: String,
     pub generation: crate::service_runtime::SetupGeneration,
 }
 
 impl AudiobookshelfOwnerContext {
-    pub fn from_packaged_storage_result(config: &crate::config::Config) -> Result<Self, String> {
+    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
         let setup = config
             .audiobookshelf_setup
             .clone()
             .ok_or_else(|| "Audiobookshelf setup is missing from owner storage".to_string())?;
-        let api_key = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+        let api_key = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
             .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
         if setup.server_url.trim().is_empty() || api_key.trim().is_empty() {
             return Err("Audiobookshelf setup is incomplete in owner storage".to_string());
@@ -75,14 +75,14 @@ impl AudiobookshelfOwnerContext {
 #[derive(Clone, Debug)]
 pub struct DaemonStartupContext {
     pub role: DaemonRole,
-    pub config: crate::config::Config,
+    pub config: mbv_config::Config,
     pub emby: Option<EmbyOwnerContext>,
     pub audiobookshelf: Option<AudiobookshelfOwnerContext>,
 }
 
 impl DaemonStartupContext {
     #[must_use]
-    pub fn new(config: crate::config::Config, role: DaemonRole) -> Self {
+    pub fn new(config: mbv_config::Config, role: DaemonRole) -> Self {
         let emby = EmbyOwnerContext::from_packaged_storage_result(&config).ok();
         let audiobookshelf = AudiobookshelfOwnerContext::from_packaged_storage_result(&config).ok();
         Self {

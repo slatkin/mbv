@@ -116,7 +116,7 @@ impl DaemonEndpoint {
     pub(crate) fn connect_stream(&self) -> Result<SocketStream, String> {
         match self {
             Self::Local => {
-                let path = PathBuf::from(crate::config::control_socket_path());
+                let path = PathBuf::from(mbv_config::control_socket_path());
                 let start = std::time::Instant::now();
                 loop {
                     match UnixStream::connect(&path) {
@@ -150,7 +150,7 @@ impl DaemonEndpoint {
 impl std::fmt::Display for DaemonEndpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Local => write!(f, "local ({})", crate::config::control_socket_path()),
+            Self::Local => write!(f, "local ({})", mbv_config::control_socket_path()),
             Self::Unix(path) => write!(f, "unix://{}", path.display()),
             Self::Tcp(addr) => write!(f, "tcp://{addr}"),
         }

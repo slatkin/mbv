@@ -204,14 +204,14 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     );
 
     if ctx.role != crate::daemon::DaemonRole::Local && queue_state.items.is_empty() {
-        if let Some(existing) = crate::config::load_queue_state() {
+        if let Some(existing) = mbv_config::load_queue_state() {
             if !existing.items.is_empty() {
                 queue_state = existing;
             }
         }
     }
 
-    if let Err(e) = crate::config::save_queue_state(&queue_state) {
+    if let Err(e) = mbv_config::save_queue_state(&queue_state) {
         log::error!(
             target: "daemon",
             "coordinated shutdown rejected: queue persistence failed: {e}"

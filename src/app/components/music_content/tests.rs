@@ -60,10 +60,10 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
     assert_eq!(
         owner.launch_snapshot(),
         (
-            Some(mbv_core::config::SelectorIdentity::Emby {
-                key: mbv_core::config::EmbySelectorKey::Group("group-stable".into()),
+            Some(mbv_config::SelectorIdentity::Emby {
+                key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
             }),
-            Some(mbv_core::config::LibraryItemIdentity::Emby {
+            Some(mbv_config::LibraryItemIdentity::Emby {
                 id: "album-stable".into(),
             }),
         )
@@ -90,14 +90,14 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
         vec![0],
         None,
     ));
-    let state = mbv_core::config::TuiLaunchState {
-        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_core::config::TabIdentity::Home,
-        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
-        selector: Some(mbv_core::config::SelectorIdentity::Emby {
-            key: mbv_core::config::EmbySelectorKey::Latest,
+    let state = mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
+        selector: Some(mbv_config::SelectorIdentity::Emby {
+            key: mbv_config::EmbySelectorKey::Latest,
         }),
-        item: Some(mbv_core::config::LibraryItemIdentity::Emby {
+        item: Some(mbv_config::LibraryItemIdentity::Emby {
             id: "stale-latest-item".into(),
         }),
     };
@@ -105,10 +105,10 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
     assert_eq!(
         owner.launch_snapshot(),
         (
-            Some(mbv_core::config::SelectorIdentity::Emby {
-                key: mbv_core::config::EmbySelectorKey::Group("group-stable".into()),
+            Some(mbv_config::SelectorIdentity::Emby {
+                key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
             }),
-            Some(mbv_core::config::LibraryItemIdentity::Emby {
+            Some(mbv_config::LibraryItemIdentity::Emby {
                 id: "album-stable".into()
             }),
         )

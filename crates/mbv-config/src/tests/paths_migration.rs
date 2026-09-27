@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::config::{
+use crate::{
     config_path, load_config, load_service_secret, migrate_legacy_emby_token, save_emby_setup,
     save_service_secret, service_secret_path, state_dir, token_cache_path, EmbySetup, ServiceKind,
     TestStateDirGuard,

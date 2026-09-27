@@ -1,7 +1,7 @@
 //! Home launch-state extraction and restoration. Legacy Latest selectors
 //! decode but resolve to Continue Watching.
 
-use mbv_core::config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
+use mbv_config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
 
 use super::HomeContent;
 
@@ -82,9 +82,9 @@ mod tests {
     fn saved_latest_section_falls_back_to_continue_watching() {
         let mut owner = continue_owner(&["continue-1"]);
         let state = TuiLaunchState {
-            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_core::config::TabIdentity::Home,
-            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::Home,
+            panel_focus: mbv_config::LaunchPanelFocus::Library,
             selector: Some(SelectorIdentity::Home {
                 key: HomeSelectorKey::Section("emby:removed-latest".into()),
             }),

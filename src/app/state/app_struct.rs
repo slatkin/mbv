@@ -156,7 +156,7 @@ pub struct App {
         crate::app::state::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
-    /// lookup -- see `mbv_core::config::resolve_library_route`.
+    /// lookup -- see `mbv_config::resolve_library_route`.
     pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
@@ -207,7 +207,7 @@ pub struct App {
     /// the sole source for tab restoration; `pending_launch_tab_resolved`
     /// consumes only that level while selector/item identities remain pending
     /// for the selected destination's discrete re-anchor.
-    pub(in crate::app) pending_launch_state: Option<mbv_core::config::TuiLaunchState>,
+    pub(in crate::app) pending_launch_state: Option<mbv_config::TuiLaunchState>,
     pub(in crate::app) pending_launch_tab_resolved: bool,
     /// Legacy selected-tab preference retained only until its stable identity
     /// can be recovered from the current catalogs. It is never used as a

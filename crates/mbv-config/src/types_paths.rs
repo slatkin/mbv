@@ -247,7 +247,7 @@ pub fn cache_dir() -> PathBuf {
     base.join("mbv")
 }
 
-pub(crate) fn state_dir() -> PathBuf {
+pub fn state_dir() -> PathBuf {
     #[cfg(any(test, feature = "test"))]
     if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
         return dir;

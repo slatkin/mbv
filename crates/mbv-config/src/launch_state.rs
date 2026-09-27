@@ -1,7 +1,7 @@
 // Versioned TUI launch-state snapshot: the one coherent launch location a
 // completed TUI session leaves for the next launch. Included into `config`'s
 // module scope (see `config.rs`), so callers reach these items as
-// `crate::config::…`.
+// `crate::…`.
 //
 // Delta spec: `openspec/changes/persist-tui-launch-state-on-exit/specs/
 // tui-launch-state/spec.md`. The snapshot holds exactly the selected tab

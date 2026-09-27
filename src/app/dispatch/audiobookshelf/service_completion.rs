@@ -115,8 +115,7 @@ impl App {
         }
         let config = self.config.lock().unwrap().clone();
         let state = if config.audiobookshelf_setup.is_some()
-            && mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
-                .is_some()
+            && mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some()
         {
             mbv_core::service_runtime::ServiceState::Unavailable
         } else if config.audiobookshelf_setup.is_some() {

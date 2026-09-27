@@ -246,10 +246,10 @@ pub(crate) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> b
 mod tests {
     use super::{handle_ws_play, websocket_play_start_index, RemotePlayback, WsPlayContext};
     use crate::api::EmbyClient;
-    use crate::config::Config;
     use crate::daemon::{CtrlClients, SharedQueueState};
     use crate::player::transition::OwnerTransitionState;
     use crate::player::Player;
+    use mbv_config::Config;
     use mbv_emby_model::EmbyItem;
     use mbv_net::mock_http::MockHttp;
     use mbv_queue::QueueSource;

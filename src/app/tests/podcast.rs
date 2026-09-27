@@ -159,9 +159,9 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
 #[test]
 fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
     let mut app = audiobookshelf_app();
-    app.config.lock().unwrap().audiobookshelf_setup = Some(
-        mbv_core::config::AudiobookshelfSetup::new("https://podcasts.example"),
-    );
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://podcasts.example",
+    ));
 
     // A selected show is still not recorded as the position's focused item.
     assert_eq!(

@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::config::{
+use crate::{
     config_path, load_config, load_queue_state, load_service_secret, persist_emby_setup_and_secret,
     replace_emby_setup_and_secret, save_config_settings, save_queue_state, save_service_secret,
     Config, EmbySetup, FeedSubscription, TestStateDirGuard,

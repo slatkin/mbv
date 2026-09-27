@@ -1,5 +1,5 @@
 use super::{clear_cached_token, device_id, device_name, load_cached_token, EmbyClient};
-use crate::config::Config;
+use mbv_config::Config;
 use serde_json::Value;
 
 fn user_matches_username(user: &Value, username: &str) -> bool {
@@ -228,7 +228,7 @@ impl EmbyClient {
     pub fn authenticate_service_setup_bounded(
         &self,
         token: String,
-        setup: &crate::config::EmbySetup,
+        setup: &mbv_config::EmbySetup,
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
         let mut clone = self.clone();

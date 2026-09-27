@@ -8,7 +8,7 @@ use rstest::{fixture, rstest};
 fn enable_audiobookshelf_owner(app: &App) {
     let context = mbv_core::player::AudiobookshelfPlayerContext::new(
         mbv_core::service_runtime::SetupGeneration::new(1),
-        mbv_core::config::AudiobookshelfSetup::new("https://books.example"),
+        mbv_config::AudiobookshelfSetup::new("https://books.example"),
         "secret".into(),
         "device".into(),
     )

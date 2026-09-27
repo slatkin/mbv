@@ -62,7 +62,7 @@ fn mixed_services_app() -> App {
     );
     app.audiobookshelf_libraries.push(abs_library);
     app.audiobookshelf_browse.push(abs_state);
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+    app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
         kind: mbv_queue::FeedKind::Audio,

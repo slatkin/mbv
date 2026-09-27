@@ -1,7 +1,7 @@
 use mbv_net::mock_http::MockHttp;
 
 fn emby_client(http: &MockHttp) -> super::EmbyClient {
-    let config = crate::config::Config {
+    let config = mbv_config::Config {
         server_url: "http://127.0.0.1:1".into(),
         ..Default::default()
     };
@@ -92,7 +92,7 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
         let client = emby_client(&http);
         let Err(failure) = client.authenticate_service_setup_bounded(
             "persisted-token".into(),
-            &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
+            &mbv_config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
             std::time::Duration::from_secs(1),
         ) else {
             panic!("rejected token unexpectedly authenticated");
@@ -111,7 +111,7 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let client = emby_client(&http);
     let Err(failure) = client.authenticate_service_setup_bounded(
         "persisted-token".into(),
-        &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
+        &mbv_config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
         std::time::Duration::from_secs(1),
     ) else {
         panic!("availability failure unexpectedly succeeded");
@@ -137,7 +137,7 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let client = emby_client(&http);
     let Err(failure) = client.authenticate_service_setup_bounded(
         "persisted-token".into(),
-        &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
+        &mbv_config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
         std::time::Duration::from_secs(1),
     ) else {
         panic!("dead endpoint unexpectedly authenticated");

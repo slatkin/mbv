@@ -43,16 +43,16 @@ impl App {
     /// untested end-to-end (unchanged status quo, not a regression; it has
     /// never had test coverage since it unconditionally calls
     /// `enable_raw_mode()`).
-    fn current_auto_reconnect_target(&self) -> Option<mbv_core::config::LastRemoteConnection> {
+    fn current_auto_reconnect_target(&self) -> Option<mbv_config::LastRemoteConnection> {
         if let Some(library) = self.active_route.clone() {
-            Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
+            Some(mbv_config::LastRemoteConnection::LibraryRoute { library })
         } else if let Some(sess) = self.connected_session_state.as_ref() {
-            Some(mbv_core::config::LastRemoteConnection::DirectSession {
+            Some(mbv_config::LastRemoteConnection::DirectSession {
                 device_name: sess.device_name.clone(),
             })
         } else {
             self.remote.direct_remote_label.as_ref().map(|device_name| {
-                mbv_core::config::LastRemoteConnection::DirectSession {
+                mbv_config::LastRemoteConnection::DirectSession {
                     device_name: device_name.clone(),
                 }
             })
@@ -63,7 +63,7 @@ impl App {
         let Some(last) = self.current_auto_reconnect_target() else {
             return;
         };
-        if let Err(e) = mbv_core::config::save_last_remote_connection(Some(&last)) {
+        if let Err(e) = mbv_config::save_last_remote_connection(Some(&last)) {
             log::warn!(target: "auto_reconnect", "current target persistence failed: {e}");
         }
     }
@@ -74,10 +74,10 @@ impl App {
     pub(in crate::app) fn teardown(
         &mut self,
         quit_timeout: Duration,
-        launch_state: Option<mbv_core::config::TuiLaunchState>,
+        launch_state: Option<mbv_config::TuiLaunchState>,
     ) {
         if let Some(state) = launch_state {
-            if let Err(error) = mbv_core::config::save_tui_launch_state(&state) {
+            if let Err(error) = mbv_config::save_tui_launch_state(&state) {
                 log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
             }
         }
@@ -198,14 +198,14 @@ impl App {
                 target: "auto_reconnect",
                 "teardown decision={}",
                 match &last {
-                    Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library }) =>
+                    Some(mbv_config::LastRemoteConnection::LibraryRoute { library }) =>
                         format!("save-library-route library={library:?}"),
-                    Some(mbv_core::config::LastRemoteConnection::DirectSession { device_name }) =>
+                    Some(mbv_config::LastRemoteConnection::DirectSession { device_name }) =>
                         format!("save-direct-session device={device_name:?}"),
                     None => "clear".to_string(),
                 }
             );
-            match mbv_core::config::save_last_remote_connection(last.as_ref()) {
+            match mbv_config::save_last_remote_connection(last.as_ref()) {
                 Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
                 Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
             }

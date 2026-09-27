@@ -1,4 +1,4 @@
-use mbv_core::config::FeedSubscription;
+use mbv_config::FeedSubscription;
 use mbv_queue::FeedEntry;
 use std::sync::mpsc;
 

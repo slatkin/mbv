@@ -19,7 +19,7 @@ use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
-    let path = crate::config::control_socket_path();
+    let path = mbv_config::control_socket_path();
     let _ = std::fs::remove_file(&path);
     match UnixListener::bind(&path) {
         Ok(listener) => {
@@ -598,7 +598,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
 
 #[must_use]
 pub fn pid_file() -> std::path::PathBuf {
-    let dir = crate::config::data_dir_system_or_local();
+    let dir = mbv_config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
     dir.join("mbv.pid")
 }

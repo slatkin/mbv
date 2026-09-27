@@ -480,7 +480,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     );
     // A real state dir would receive the install path's removed production
     // write; point it at a tempdir and assert that file never appears.
-    let _guard = crate::config::TestStateDirGuard::new();
+    let _guard = mbv_config::TestStateDirGuard::new();
     t.event_loop.client.lock().unwrap().token = "test-token".to_string();
     let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -507,7 +507,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     assert_eq!(t.persisted.borrow().len(), 1);
     assert_eq!(t.persisted.borrow()[0].item_ids, vec!["new".to_string()]);
     assert!(
-        !crate::config::stay_alive_queue_state_path().exists(),
+        !mbv_config::stay_alive_queue_state_path().exists(),
         "install path must not write the production store directly"
     );
     assert!(matches!(

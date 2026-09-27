@@ -6,7 +6,7 @@
 //! `MusicWorkspaceComponent` temporarily borrows this owner for its existing
 //! painters until the later Music panel slices move painting and registration.
 
-use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use std::collections::HashMap;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};

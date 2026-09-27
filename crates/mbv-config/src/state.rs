@@ -51,7 +51,7 @@ pub struct StayAliveQueueState {
     pub lineage: mbv_queue::QueueLineage,
 }
 
-pub(crate) fn save_stay_alive_queue_state_at(
+pub fn save_stay_alive_queue_state_at(
     path: &std::path::Path,
     state: &StayAliveQueueState,
 ) -> Result<(), String> {
@@ -62,9 +62,8 @@ pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), St
     save_stay_alive_queue_state_at(&stay_alive_queue_state_path(), state)
 }
 
-pub(crate) fn load_stay_alive_queue_state_at(
-    path: &std::path::Path,
-) -> Option<StayAliveQueueState> {
+#[must_use]
+pub fn load_stay_alive_queue_state_at(path: &std::path::Path) -> Option<StayAliveQueueState> {
     load_json(path, "owner queue state")
 }
 
@@ -73,7 +72,8 @@ pub fn load_stay_alive_queue_state() -> Option<StayAliveQueueState> {
     load_stay_alive_queue_state_at(&stay_alive_queue_state_path())
 }
 
-pub(crate) fn legacy_queue_for_owner_if_absent(
+#[must_use]
+pub fn legacy_queue_for_owner_if_absent(
     owner_path: &std::path::Path,
     legacy: Option<QueueState>,
 ) -> Option<StayAliveQueueState> {

@@ -6,14 +6,14 @@ mod playback;
 
 #[test]
 fn invalid_setup_candidate_does_not_change_persisted_setup() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    crate::config::persist_audiobookshelf_setup_and_secret(
-        &crate::config::AudiobookshelfSetup::new("https://working.example"),
+    let _guard = mbv_config::TestStateDirGuard::new();
+    mbv_config::persist_audiobookshelf_setup_and_secret(
+        &mbv_config::AudiobookshelfSetup::new("https://working.example"),
         "working-secret",
     )
     .unwrap();
-    let config_before = std::fs::read(crate::config::config_path()).unwrap();
-    let secret_before = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
+    let config_before = std::fs::read(mbv_config::config_path()).unwrap();
+    let secret_before = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
 
     AudiobookshelfClient::validate_setup_bounded(
         "",
@@ -23,11 +23,11 @@ fn invalid_setup_candidate_does_not_change_persisted_setup() {
     .unwrap_err();
 
     assert_eq!(
-        std::fs::read(crate::config::config_path()).unwrap(),
+        std::fs::read(mbv_config::config_path()).unwrap(),
         config_before
     );
     assert_eq!(
-        crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf),
+        mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf),
         secret_before
     );
 }
@@ -35,7 +35,7 @@ fn invalid_setup_candidate_does_not_change_persisted_setup() {
 #[test]
 fn validated_setup_debug_redacts_api_key() {
     let setup = AudiobookshelfValidatedSetup::new(
-        crate::config::AudiobookshelfSetup::new("http://abs:13378"),
+        mbv_config::AudiobookshelfSetup::new("http://abs:13378"),
         AudiobookshelfUser {
             id: "user-id".to_string(),
             username: "user".to_string(),

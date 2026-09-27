@@ -50,7 +50,7 @@ impl EventOutcome {
 
 /// Injected owner-queue persistence hook.
 pub(crate) type OwnerQueueStore =
-    Box<dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>>;
+    Box<dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), String>>;
 
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).

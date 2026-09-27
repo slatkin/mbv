@@ -1706,6 +1706,7 @@ dependencies = [
  "ksni",
  "libc",
  "log",
+ "mbv-config",
  "mbv-core",
  "mbv-ctrl",
  "mbv-emby-model",
@@ -1736,6 +1737,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-config"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-keybinds",
+ "mbv-queue",
+ "rstest",
+ "serde",
+ "serde_json",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "mbv-core"
 version = "0.21.2"
 dependencies = [
@@ -1744,10 +1759,10 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-config",
  "mbv-ctrl",
  "mbv-emby-model",
  "mbv-ids",
- "mbv-keybinds",
  "mbv-net",
  "mbv-queue",
  "mbv-text",
@@ -1759,7 +1774,6 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
- "toml",
  "tungstenite",
  "ureq",
  "uuid",
@@ -1849,6 +1863,7 @@ version = "0.21.2"
 dependencies = [
  "libc",
  "log",
+ "mbv-config",
  "mbv-core",
  "mbv-ctrl",
  "mbv-queue",

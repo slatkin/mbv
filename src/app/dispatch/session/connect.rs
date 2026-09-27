@@ -284,7 +284,7 @@ impl App {
             return;
         }
         log::info!(target: "auto_reconnect", "auto-reconnect enabled; loading state");
-        let last = match mbv_core::config::load_last_remote_connection() {
+        let last = match mbv_config::load_last_remote_connection() {
             Ok(Some(last)) => last,
             Ok(None) => {
                 log::info!(target: "auto_reconnect", "state missing; staying local");
@@ -296,7 +296,7 @@ impl App {
             }
         };
         match last {
-            mbv_core::config::LastRemoteConnection::LibraryRoute { library } => {
+            mbv_config::LastRemoteConnection::LibraryRoute { library } => {
                 log::info!(target: "auto_reconnect", "state loaded variant=library-route library={library:?}");
                 let Some((name, endpoint)) = self.resolve_route_for_library(&library) else {
                     log::info!(
@@ -312,7 +312,7 @@ impl App {
                     Err(message) => self.flash(message, ToastSeverity::Warning),
                 }
             }
-            mbv_core::config::LastRemoteConnection::DirectSession { device_name } => {
+            mbv_config::LastRemoteConnection::DirectSession { device_name } => {
                 log::info!(target: "auto_reconnect", "state loaded variant=direct-session device={device_name:?}");
                 let sessions = match self.fetch_sessions_blocking() {
                     Ok(sessions) => sessions,
