@@ -50,7 +50,7 @@ impl EmbyClient {
         self.get_views_classified().map_err(|e| e.to_string())
     }
 
-    pub fn get_views_classified(&self) -> Result<Vec<EmbyItem>, crate::api::EmbyFailure> {
+    pub fn get_views_classified(&self) -> Result<Vec<EmbyItem>, crate::EmbyFailure> {
         let vfolders: Value = self
             .get("/Library/VirtualFolders")
             .call()
@@ -58,7 +58,7 @@ impl EmbyClient {
             .body_mut()
             .read_json()
             .map_err(|e| {
-                crate::api::EmbyFailure::unavailable(format!("Emby views response failed: {e}"))
+                crate::EmbyFailure::unavailable(format!("Emby views response failed: {e}"))
             })?;
 
         let user_views: Value = self
@@ -71,9 +71,7 @@ impl EmbyClient {
             .body_mut()
             .read_json()
             .map_err(|e| {
-                crate::api::EmbyFailure::unavailable(format!(
-                    "Emby user views response failed: {e}"
-                ))
+                crate::EmbyFailure::unavailable(format!("Emby user views response failed: {e}"))
             })?;
 
         let mut items: Vec<EmbyItem> = Vec::new();

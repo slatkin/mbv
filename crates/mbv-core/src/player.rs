@@ -10,12 +10,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::api::EmbyClient;
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
 };
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
+use mbv_emby::EmbyClient;
 use mbv_emby_model::{seconds_to_ticks, ticks_to_seconds, EmbyItem, TICKS_PER_SECOND};
 #[cfg(test)]
 use mbv_queue::QueueMutationResult;

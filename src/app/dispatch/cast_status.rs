@@ -186,7 +186,7 @@ impl App {
                 let media_source_id = media_source_id.clone();
                 let session_id = session_id.clone();
                 let is_paused = report.is_paused;
-                let progress = mbv_core::api::ProgressReport {
+                let progress = mbv_emby::ProgressReport {
                     item_id,
                     media_source_id,
                     position_ticks,

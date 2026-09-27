@@ -74,8 +74,8 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
     }
 }
 
-pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::SessionInfo {
-    mbv_core::api::SessionInfo {
+pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_emby::SessionInfo {
+    mbv_emby::SessionInfo {
         id: "sess-1".into(),
         device_name: device_name.into(),
         client: client.into(),
@@ -94,7 +94,7 @@ pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::Se
         sub_index: -1,
         audio_index: 1,
         muted: false,
-        media_info: mbv_core::api::SessionMediaInfo::default(),
+        media_info: mbv_emby::SessionMediaInfo::default(),
     }
 }
 
@@ -158,7 +158,7 @@ pub(crate) fn make_app_stub() -> App {
 #[test]
 fn emby_completion_applies_bootstrap_and_ready_state() {
     let mut app = make_app_stub();
-    let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    let client = mbv_emby::EmbyClient::new(crate::config::Config::default());
     let item = make_item("Ready item", "Audio");
     // Completion computes the Continue Watching snapshot; the shell assigns it.
     let content = app
@@ -166,7 +166,7 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
             generation: app.emby_runtime.generation(),
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client,
-                bootstrap: mbv_core::api::EmbyBootstrap {
+                bootstrap: mbv_emby::EmbyBootstrap {
                     continue_items: vec![item],
                     views: Vec::new(),
                 },
@@ -195,8 +195,8 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
         app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
             generation: stale_generation,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
-                client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
-                bootstrap: mbv_core::api::EmbyBootstrap::default(),
+                client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
+                bootstrap: mbv_emby::EmbyBootstrap::default(),
                 setup: mbv_config::EmbySetup::default(),
             }),
         });
@@ -266,13 +266,13 @@ pub(crate) fn make_built_app() -> App {
 
 pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(mbv_core::api::EmbyClient::new(config)),
+        std::sync::Mutex::new(mbv_emby::EmbyClient::new(config)),
     ));
 }
 
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
+    use mbv_emby::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
     let config = Config::default();
@@ -296,7 +296,7 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
+    use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
@@ -321,7 +321,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
+    use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
@@ -353,7 +353,7 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
+    use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);

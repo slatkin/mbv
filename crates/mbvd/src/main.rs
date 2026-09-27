@@ -207,11 +207,11 @@ fn classified_auth_error(error: &str) -> String {
 }
 
 fn exchange_emby_credentials(
-    client: &mbv_core::api::EmbyClient,
+    client: &mbv_emby::EmbyClient,
     server_url: &str,
     username: &str,
     password: &str,
-) -> Result<mbv_core::api::EmbyCredentialExchange, String> {
+) -> Result<mbv_emby::EmbyCredentialExchange, String> {
     client
         .exchange_credentials_bounded(server_url, username, password, Duration::from_secs(10))
         .map_err(|error| classified_auth_error(&error))
@@ -219,7 +219,7 @@ fn exchange_emby_credentials(
 
 fn commit_emby_setup(
     existing: Option<&config::EmbySetup>,
-    exchange: mbv_core::api::EmbyCredentialExchange,
+    exchange: mbv_emby::EmbyCredentialExchange,
 ) -> Result<config::EmbySetup, String> {
     let mut setup = config::EmbySetup::new(exchange.server_url.clone(), exchange.user_id);
     setup.revision = match existing.as_ref() {
@@ -255,7 +255,7 @@ fn connect_emby() -> Result<(), String> {
     let config = config::load_config()
         .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.emby_setup.clone();
-    let client = mbv_core::api::EmbyClient::new(config);
+    let client = mbv_emby::EmbyClient::new(config);
     let exchange = exchange_emby_credentials(&client, &server_url, &username, &password)?;
     let setup = commit_emby_setup(existing.as_ref(), exchange)?;
     if daemon_running() {

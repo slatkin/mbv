@@ -1,4 +1,3 @@
-pub mod api;
 pub mod applog;
 pub mod daemon;
 pub mod player;

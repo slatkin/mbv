@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
-use crate::api::EmbyClient;
 use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
 use crate::player::Player;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
@@ -14,6 +13,7 @@ use mbv_ctrl::{
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;

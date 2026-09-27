@@ -185,7 +185,7 @@ impl App {
                         .as_ref()
                         .map_or((None, None), |f| (f.name_ge, f.name_lt));
                     let (items, total_count) =
-                        client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                        client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                             parent_id: &saved_level.parent_id,
                             item_types: saved_level.item_types.as_deref(),
                             unplayed_only: saved_level.unplayed_only,
@@ -199,7 +199,7 @@ impl App {
                     let fetched_rows = items.len();
                     if total_count > fetched_rows {
                         let (items, total_count) =
-                            client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                            client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                                 parent_id: &saved_level.parent_id,
                                 item_types: saved_level.item_types.as_deref(),
                                 unplayed_only: saved_level.unplayed_only,
@@ -316,7 +316,7 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
-            match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+            match client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                 parent_id: &parent_id,
                 item_types: item_types.as_deref(),
                 unplayed_only,

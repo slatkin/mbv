@@ -336,7 +336,7 @@ impl App {
                 generation,
                 setup,
                 credential,
-                mbv_core::api::device_id(),
+                mbv_emby::device_id(),
             )
             .map(|context| {
                 let (sender, receiver) = std::sync::mpsc::channel();

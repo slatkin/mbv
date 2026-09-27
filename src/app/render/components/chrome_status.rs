@@ -65,7 +65,7 @@ impl App {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
-            None => format!("{gap}{}", mbv_core::api::device_name()),
+            None => format!("{gap}{}", mbv_emby::device_name()),
         };
         let label_style = Style::default()
             .fg(if remote_on {
@@ -139,7 +139,7 @@ impl App {
         };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
-            None => format!("{gap}{}", mbv_core::api::device_name()),
+            None => format!("{gap}{}", mbv_emby::device_name()),
         };
         (icon, label)
     }

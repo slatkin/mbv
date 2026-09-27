@@ -4,8 +4,8 @@ use super::{
     send_to, CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue,
     PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
 };
-use crate::api::EmbyClient;
 use mbv_ctrl::CtrlEvent;
+use mbv_emby::EmbyClient;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.

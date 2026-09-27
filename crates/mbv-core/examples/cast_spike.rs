@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config as config;
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use rust_cast::channels::media::{Media, MediaQueue, QueueItem, QueueType, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::CastDevice;

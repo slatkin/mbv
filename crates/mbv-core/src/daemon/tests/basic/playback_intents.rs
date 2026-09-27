@@ -11,7 +11,7 @@ use super::*;
 fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (client_id, client_rx) = {
         let mut clients = registry.lock().unwrap();
@@ -131,7 +131,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
 fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_changed() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (client_id, _client_rx) = {
         let mut clients = registry.lock().unwrap();

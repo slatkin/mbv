@@ -6,7 +6,7 @@ use super::{
     is_playable, App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity,
 };
 use crate::app::state::queue_owner::QueueOrigin;
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {

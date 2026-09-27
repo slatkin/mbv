@@ -30,7 +30,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     *remote.unified_queue.lock().unwrap() = Some(emby_unified_state(&[], 0));
     let config = crate::config::Config::default();
     let mut app = App::new_remote_with_config(
-        mbv_core::api::EmbyClient::new(config.clone()),
+        mbv_emby::EmbyClient::new(config.clone()),
         remote,
         player_rx,
         &mbv_core::remote_player::DaemonEndpoint::Local,

@@ -9,14 +9,14 @@ pub enum DaemonRole {
 /// daemon may start even when the configured server is unavailable.
 #[derive(Clone, Debug)]
 pub struct EmbyOwnerContext {
-    pub client: std::sync::Arc<std::sync::Mutex<crate::api::EmbyClient>>,
+    pub client: std::sync::Arc<std::sync::Mutex<mbv_emby::EmbyClient>>,
     pub generation: crate::service_runtime::SetupGeneration,
     pub revision: u64,
 }
 
 impl EmbyOwnerContext {
     #[must_use]
-    pub fn from_client(client: crate::api::EmbyClient, revision: u64) -> Self {
+    pub fn from_client(client: mbv_emby::EmbyClient, revision: u64) -> Self {
         Self {
             client: std::sync::Arc::new(std::sync::Mutex::new(client)),
             generation: crate::service_runtime::SetupGeneration::default(),
@@ -34,7 +34,7 @@ impl EmbyOwnerContext {
         if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
             return Err("Emby setup is incomplete in owner storage".to_string());
         }
-        let mut client = crate::api::EmbyClient::new(config.clone());
+        let mut client = mbv_emby::EmbyClient::new(config.clone());
         client.config.server_url.clone_from(&setup.server_url);
         client.user_id.clone_from(&setup.user_id);
         client.token = token;
@@ -65,7 +65,7 @@ impl AudiobookshelfOwnerContext {
         }
         Ok(Self {
             setup,
-            device_id: crate::api::device_id(),
+            device_id: mbv_emby::device_id(),
             generation: crate::service_runtime::SetupGeneration::default(),
         })
     }

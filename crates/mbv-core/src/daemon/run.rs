@@ -5,11 +5,11 @@ use super::{
     DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner, DaemonRole, DaemonRuntimeHooks,
     DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
 };
-use crate::api::{mbv_direct_tcp_port_command, EmbyClient};
 use crate::daemon::{ClientRegistry, CtrlClients};
 use crate::player::{Player, PlayerOwnerState};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
+use mbv_emby::{mbv_direct_tcp_port_command, EmbyClient};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_queue::PlaybackQueue;

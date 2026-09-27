@@ -1,4 +1,4 @@
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::app::state::types::playback::HomeContent;
@@ -39,7 +39,7 @@ impl App {
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
         result: Result<
             crate::app::dispatch::session::service_startup::Startup,
-            mbv_core::api::EmbyFailure,
+            mbv_emby::EmbyFailure,
         >,
         delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
@@ -120,10 +120,7 @@ impl App {
 
     /// Central boundary for an authenticated Emby request made after startup.
     /// Only classified failures reach this path; ordinary empty results do not.
-    pub(in crate::app) fn handle_emby_runtime_failure(
-        &mut self,
-        error: mbv_core::api::EmbyFailure,
-    ) {
+    pub(in crate::app) fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
         self.transition_emby_failure(None, Err(error), |kind| {
             mbv_config::clear_service_secret_result(kind)
         });
@@ -132,7 +129,7 @@ impl App {
     #[cfg(test)]
     pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
         &mut self,
-        error: mbv_core::api::EmbyFailure,
+        error: mbv_emby::EmbyFailure,
         delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
     ) {
         self.transition_emby_failure(None, Err(error), delete);
@@ -283,7 +280,7 @@ impl App {
     /// Compute Continue Watching content from an Emby bootstrap.
     pub(in crate::app) fn apply_emby_bootstrap(
         &mut self,
-        bootstrap: mbv_core::api::EmbyBootstrap,
+        bootstrap: mbv_emby::EmbyBootstrap,
     ) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);

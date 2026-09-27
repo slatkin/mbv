@@ -60,7 +60,7 @@ fn update_player_queue(
     player: &Player,
     items: Vec<ExecSlot>,
     active_index: Option<usize>,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
+    client: &Arc<Mutex<mbv_emby::EmbyClient>>,
 ) {
     let Some(active_index) = active_index else {
         return;

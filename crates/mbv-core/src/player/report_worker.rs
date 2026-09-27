@@ -1,5 +1,5 @@
-use crate::api::EmbyClient;
 use mbv_ctrl::player::PlayerStatus;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{
@@ -253,7 +253,7 @@ impl SessionReporter {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
-        let report = crate::api::ProgressReport {
+        let report = mbv_emby::ProgressReport {
             item_id: id,
             media_source_id: msid,
             position_ticks: pos,

@@ -1711,6 +1711,7 @@ dependencies = [
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-emby",
  "mbv-emby-model",
  "mbv-feed",
  "mbv-ids",
@@ -1794,9 +1795,9 @@ dependencies = [
  "libmpv2-sys",
  "log",
  "mbv-audiobookshelf",
- "mbv-cast",
  "mbv-config",
  "mbv-ctrl",
+ "mbv-emby",
  "mbv-emby-model",
  "mbv-ids",
  "mbv-net",
@@ -1824,6 +1825,28 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-emby"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-cast",
+ "mbv-config",
+ "mbv-ctrl",
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-text",
+ "mbv-ws",
+ "rand 0.10.2",
+ "rstest",
+ "serde",
+ "serde_json",
+ "ureq",
+ "uuid",
 ]
 
 [[package]]
@@ -1918,6 +1941,7 @@ dependencies = [
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-emby",
  "mbv-queue",
  "mimalloc",
  "nix 0.31.3",

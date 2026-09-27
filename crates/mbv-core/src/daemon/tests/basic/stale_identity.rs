@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (driver_id, driver_rx) = {
         let mut clients = registry.lock().unwrap();
@@ -36,7 +36,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
 #[test]
 fn stale_client_jump_to_index_is_rejected_visibly() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, reply_rx) = mpsc::channel();
     let queue = queue_from_items(

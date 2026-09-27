@@ -2,9 +2,9 @@ use super::{
     audio_only_rejection, broadcast_queue_state, take_authority_for_emby_remote, ClientRegistry,
     SharedQueueState,
 };
-use crate::api::EmbyClient;
 use crate::player::Player;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_emby::EmbyClient;
 use mbv_queue::{PlaybackQueue, QueueItem};
 use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex};
@@ -245,11 +245,11 @@ pub(crate) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> b
 #[cfg(test)]
 mod tests {
     use super::{handle_ws_play, websocket_play_start_index, RemotePlayback, WsPlayContext};
-    use crate::api::EmbyClient;
     use crate::daemon::{CtrlClients, SharedQueueState};
     use crate::player::transition::OwnerTransitionState;
     use crate::player::Player;
     use mbv_config::Config;
+    use mbv_emby::EmbyClient;
     use mbv_emby_model::EmbyItem;
     use mbv_net::mock_http::MockHttp;
     use mbv_queue::QueueSource;

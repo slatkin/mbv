@@ -80,7 +80,7 @@ fn replace_queue_succeeds_unconditionally() {
     // succeeds.
     let player = cold_player();
     let _player_cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     client.lock().unwrap().token = "test-token".into();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (sender_id, _sender_rx) = {

@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn cold_ctrl_player_command_keeps_connection_as_driver() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (_sender_id, sender_rx) = {
         let mut clients = registry.lock().unwrap();
@@ -307,7 +307,7 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
 #[test]
 fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (_sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();

@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::EmbyClient;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 

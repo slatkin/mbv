@@ -5,8 +5,8 @@
 
 use super::*;
 
-fn queue_op_client(token: &str) -> Arc<Mutex<crate::api::EmbyClient>> {
-    let mut client = crate::api::EmbyClient::new(Config::default());
+fn queue_op_client(token: &str) -> Arc<Mutex<mbv_emby::EmbyClient>> {
+    let mut client = mbv_emby::EmbyClient::new(Config::default());
     client.token = token.to_string();
     Arc::new(Mutex::new(client))
 }
@@ -15,7 +15,7 @@ fn run_queue_cmd(
     cmd: CtrlCmd,
     client_id: u64,
     reply_tx: &mpsc::Sender<CtrlOutbound>,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
+    client: &Arc<Mutex<mbv_emby::EmbyClient>>,
     player: &Player,
     owner: &mut DaemonPlayerOwner,
     registry: &Arc<Mutex<CtrlClients>>,
@@ -46,7 +46,7 @@ fn run_queue_cmd_with_shared(
     cmd: CtrlCmd,
     client_id: u64,
     reply_tx: &mpsc::Sender<CtrlOutbound>,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
+    client: &Arc<Mutex<mbv_emby::EmbyClient>>,
     player: &Player,
     owner: &mut DaemonPlayerOwner,
     shared_queue: &SharedQueueState,

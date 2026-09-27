@@ -23,7 +23,7 @@ fn remote_playback_app() -> App {
     let (remote, player_rx, _cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     App::new_remote_with_config(
-        mbv_core::api::EmbyClient::new(config.clone()),
+        mbv_emby::EmbyClient::new(config.clone()),
         remote,
         player_rx,
         &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),

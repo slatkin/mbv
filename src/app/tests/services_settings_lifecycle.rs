@@ -48,8 +48,8 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
     let content = app.apply_emby_completion_with_secret_deleter(
         crate::app::dispatch::session::service_startup::Completion {
             generation,
-            result: Err(mbv_core::api::EmbyFailure {
-                class: mbv_core::api::EmbyFailureClass::AuthenticationRejected,
+            result: Err(mbv_emby::EmbyFailure {
+                class: mbv_emby::EmbyFailureClass::AuthenticationRejected,
                 message: "HTTP 401".into(),
             }),
         },
@@ -70,8 +70,8 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
     };
     let mut app = tests::make_app_stub();
     *app.config.lock().unwrap() = config.clone();
-    let mut client = mbv_core::api::EmbyClient::new(config.clone());
-    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+    let mut client = mbv_emby::EmbyClient::new(config.clone());
+    client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "https://emby.example".into(),
         user_id: "user-id".into(),
         token: "valid-token".into(),
@@ -85,7 +85,7 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
     let generation = app.emby_runtime.generation();
 
     app.handle_emby_runtime_failure_with_secret_deleter(
-        mbv_core::api::EmbyFailure::unavailable("HTTP 503"),
+        mbv_emby::EmbyFailure::unavailable("HTTP 503"),
         |_| panic!("unavailable must not delete a secret"),
     );
     assert_eq!(app.emby_runtime.state, ServiceState::Unavailable);
@@ -114,8 +114,8 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
         ..Default::default()
     };
     *app.config.lock().unwrap() = config;
-    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
-    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "https://emby.example".into(),
         user_id: "user-id".into(),
         token: "new-token".into(),
@@ -134,8 +134,8 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     let content =
         app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
             generation: stale,
-            result: Err(mbv_core::api::EmbyFailure {
-                class: mbv_core::api::EmbyFailureClass::AuthenticationRejected,
+            result: Err(mbv_emby::EmbyFailure {
+                class: mbv_emby::EmbyFailureClass::AuthenticationRejected,
                 message: "HTTP 401".into(),
             }),
         });
@@ -169,8 +169,8 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     let generation = app.emby_runtime.begin_setup();
     app.setup.emby_setup_form.as_mut().unwrap().generation = Some(generation);
     app.setup.emby_setup_form.as_mut().unwrap().busy = true;
-    let mut candidate = mbv_core::api::EmbyClient::new(config);
-    candidate.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+    let mut candidate = mbv_emby::EmbyClient::new(config);
+    candidate.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "https://new.example".into(),
         user_id: "new-user".into(),
         token: "new-token".into(),
@@ -183,7 +183,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
             previous_state: ServiceState::Ready,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: candidate,
-                bootstrap: mbv_core::api::EmbyBootstrap::default(),
+                bootstrap: mbv_emby::EmbyBootstrap::default(),
                 setup: EmbySetup::new("https://new.example/", "new-user"),
             }),
         },

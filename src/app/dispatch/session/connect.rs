@@ -1,15 +1,15 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope};
-use mbv_core::api::parse_mbv_direct_tcp_port;
 use mbv_core::player::PlayerProxy;
 use mbv_ctrl::player::PlayerEvent;
+use mbv_emby::parse_mbv_direct_tcp_port;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 impl App {
     pub(in crate::app) fn session_direct_endpoint(
         &self,
-        sess: &mbv_core::api::SessionInfo,
+        sess: &mbv_emby::SessionInfo,
     ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
         if !sess.client.eq_ignore_ascii_case("mbv") {
             return None;
@@ -43,7 +43,7 @@ impl App {
     /// library-route *resolution* itself no longer calls this (#256).
     pub(in crate::app) fn fetch_sessions_blocking(
         &self,
-    ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+    ) -> Result<Vec<mbv_emby::SessionInfo>, String> {
         #[cfg(test)]
         if let Some(f) = *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
             let Some(client) = self.emby_client() else {

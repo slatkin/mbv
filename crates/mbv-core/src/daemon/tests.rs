@@ -1,7 +1,6 @@
 use super::*;
 
 // External crate imports needed across test files
-use crate::api::EmbyClient;
 use crate::player::{
     AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerOwnerState,
 };
@@ -13,6 +12,7 @@ use mbv_ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome,
     WireCommand,
 };
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_net::mock_http::MockHttp;
 use mbv_net::stream::SocketStream;

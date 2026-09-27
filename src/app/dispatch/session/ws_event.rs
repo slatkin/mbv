@@ -307,7 +307,7 @@ mod tests {
             server_url: "http://127.0.0.1:1".into(),
             ..crate::config::Config::default()
         };
-        let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
+        let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
         app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
             std::sync::Mutex::new(client),
         ));

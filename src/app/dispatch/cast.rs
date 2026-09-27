@@ -14,7 +14,7 @@ use crate::app::App;
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_cast::client::CastMediaItem;
 use mbv_cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 use std::sync::mpsc::Sender;
@@ -197,7 +197,7 @@ impl App {
         Some(AbsCastContext {
             client,
             credential,
-            device_id: mbv_core::api::device_id(),
+            device_id: mbv_emby::device_id(),
         })
     }
 

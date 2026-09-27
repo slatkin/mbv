@@ -1,5 +1,5 @@
 [package]
-name = "mbv-core"
+name = "mbv-emby"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Core runtime, service providers, and playback engine for mbv."
+description = "Emby provider client for mbv."
 readme = "../../README.md"
 
 [features]
@@ -17,30 +17,23 @@ test = ["mbv-net/test", "mbv-config/test"]
 workspace = true
 
 [dependencies]
-mbv-emby = { path = "../mbv-emby" }
-mbv-ids = { path = "../mbv-ids" }
-mbv-net = { path = "../mbv-net" }
-mbv-text = { path = "../mbv-text" }
-mbv-emby-model = { path = "../mbv-emby-model" }
-mbv-queue = { path = "../mbv-queue" }
-mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-cast = { path = "../mbv-cast" }
 mbv-config = { path = "../mbv-config" }
-mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-text = { path = "../mbv-text" }
+mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
+mbv-ids = { path = "../mbv-ids" }
 ureq.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-libmpv2.workspace = true
-libmpv2-sys.workspace = true
-rand.workspace = true
 uuid.workspace = true
-tungstenite.workspace = true
+rand.workspace = true
 log.workspace = true
-libc.workspace = true
-time.workspace = true
 
 [dev-dependencies]
-rust_cast = "0.21"
 rstest.workspace = true
 mbv-net = { path = "../mbv-net", features = ["test"] }
+mbv-queue = { path = "../mbv-queue" }
 mbv-config = { path = "../mbv-config", features = ["test"] }

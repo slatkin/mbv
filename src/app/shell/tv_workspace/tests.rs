@@ -156,8 +156,8 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
 #[test]
 fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     let mut model = mounted_tv_model();
-    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
-    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
         user_id: "user-id".into(),
         token: "token".into(),

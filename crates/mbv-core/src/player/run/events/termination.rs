@@ -127,7 +127,7 @@ impl PlaybackRun {
     fn shutdown_standalone(
         &mut self,
         stopped_slot: Option<QueueSlotId>,
-        client: &Arc<crate::api::EmbyClient>,
+        client: &Arc<mbv_emby::EmbyClient>,
     ) {
         // Retry mark_played in a detached thread so Shutdown never blocks.
         if let Some(mid) = self.mark_played_id.take() {

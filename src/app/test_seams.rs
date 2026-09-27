@@ -66,7 +66,7 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 // `try_auto_reconnect`'s `DirectSession` lookup (#236) and the F2
 // "Library Routes" device picker (`enter_device_stage`, #256).
 pub(in crate::app) type SessionsLoadFn =
-    fn(&mbv_core::api::EmbyClient) -> Result<Vec<mbv_core::api::SessionInfo>, String>;
+    fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, String>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 
 // Test seam for `App::connect_cast_receiver`'s resolve-and-connect step

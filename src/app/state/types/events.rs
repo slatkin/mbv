@@ -285,7 +285,7 @@ pub(in crate::app) enum LibEvent {
 
 pub(in crate::app) enum SessionEvent {
     Loaded {
-        sessions: Vec<mbv_core::api::SessionInfo>,
+        sessions: Vec<mbv_emby::SessionInfo>,
     },
     CommandError {
         error: String,

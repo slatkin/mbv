@@ -3,7 +3,7 @@ use crate::app::infra::ui_util::sort_episodes;
 use crate::app::state::types::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
 use crate::app::state::types::events::NavigateLanding;
 use crate::app::{AlbumPathPart, App, BrowseLevel, LibEvent};
-use mbv_core::api::EmbyClient;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.

@@ -227,7 +227,7 @@ fn reconcile_abs_with_queue(
     let player = cold_player();
     let shared = shared_queue_state();
     let clients = Arc::new(Mutex::new(CtrlClients::default()));
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let mut owner = DaemonPlayerOwner::default();
     owner.core.queue = std::mem::take(queue);
     owner.core.source = std::mem::replace(source, QueueSource::Unknown);

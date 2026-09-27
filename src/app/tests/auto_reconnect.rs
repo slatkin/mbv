@@ -66,7 +66,7 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config.clone());
+    let client = mbv_emby::EmbyClient::new(config.clone());
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     let app = App::new_remote_with_config(
@@ -102,7 +102,7 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config.clone());
+    let client = mbv_emby::EmbyClient::new(config.clone());
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     let app = App::new_remote_with_config(

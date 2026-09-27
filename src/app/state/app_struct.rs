@@ -272,7 +272,7 @@ pub struct App {
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
     /// overlay is active (task 3.2).
-    pub(in crate::app) sessions: Vec<mbv_core::api::SessionInfo>,
+    pub(in crate::app) sessions: Vec<mbv_emby::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
     pub(in crate::app) cast_receivers: Vec<mbv_cast::discovery::CastReceiver>,
@@ -315,7 +315,7 @@ pub struct App {
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
     pub(in crate::app) connected_session_id: Option<String>,
-    pub(in crate::app) connected_session_state: Option<mbv_core::api::SessionInfo>,
+    pub(in crate::app) connected_session_state: Option<mbv_emby::SessionInfo>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.

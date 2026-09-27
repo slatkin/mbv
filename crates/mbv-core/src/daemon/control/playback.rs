@@ -3,10 +3,10 @@ use super::{
     broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
 };
-use crate::api::EmbyClient;
 use crate::player::PlayerOwnerState;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::CtrlEvent;
+use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};

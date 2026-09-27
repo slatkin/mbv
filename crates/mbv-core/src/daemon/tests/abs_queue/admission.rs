@@ -80,7 +80,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
 #[test]
 fn broadcast_projects_abs_slots_per_connection_capability() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (capable_id, capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (_old_id, old_rx) = connect_old_unified_peer(&mut registry.lock().unwrap());
@@ -151,7 +151,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
 #[test]
 fn old_peer_submitting_abs_items_is_transport_rejected() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (old_id, old_rx) = connect_old_unified_peer(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -214,7 +214,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
 #[test]
 fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let player = cold_player();
-    let mut emby_client = crate::api::EmbyClient::new(Config::default());
+    let mut emby_client = mbv_emby::EmbyClient::new(Config::default());
     emby_client.token = "test-token".to_string();
     let client = Arc::new(Mutex::new(emby_client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -273,7 +273,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
 #[test]
 fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -329,7 +329,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
 #[test]
 fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let player = cold_player();
-    let mut emby_client = crate::api::EmbyClient::new(Config::default());
+    let mut emby_client = mbv_emby::EmbyClient::new(Config::default());
     emby_client.token = "test-token".to_string();
     let client = Arc::new(Mutex::new(emby_client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));

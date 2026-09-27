@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 impl App {
     pub(in crate::app) fn switch_to_direct_remote(
         &mut self,
-        sess: &mbv_core::api::SessionInfo,
+        sess: &mbv_emby::SessionInfo,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -462,7 +462,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
+    pub(in crate::app) fn connect_to_session(&mut self, sess: &mbv_emby::SessionInfo) {
         // Connecting to a new target severs the current one (attachment
         // slots are mutually exclusive): tears down an active library
         // route, detaches any cast attachment, and clears a watched
