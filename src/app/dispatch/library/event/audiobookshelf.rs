@@ -299,7 +299,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::state::events::LibEvent;
+    use crate::app::state::events::{AudiobookshelfEvent, LibEvent};
     use mbv_audiobookshelf::{
         AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage, AudiobookshelfChapter,
         AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,
@@ -343,7 +343,7 @@ mod tests {
     fn books_fetched_appends_page_and_selects_first_book() {
         let mut app = app_with_book_state();
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::BooksFetched {
+            AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
                 library_id: "books".into(),
                 result: Ok(AudiobookshelfBookPage {
@@ -368,7 +368,7 @@ mod tests {
             app.audiobookshelf_runtime.begin_setup();
         }
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::BooksFetched {
+            AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
                 library_id: library_id.into(),
                 result: Ok(AudiobookshelfBookPage {
@@ -430,7 +430,7 @@ mod tests {
         state.detail_loading_ids.insert("book-a".into());
         state.detail_loading = true;
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailFetched {
                 generation: SetupGeneration::default(),
                 library_item_id: "book-a".into(),
                 result: detail_result(succeeds),
@@ -448,7 +448,7 @@ mod tests {
             app.audiobookshelf_runtime.begin_setup();
         }
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailFetched {
                 generation: SetupGeneration::default(),
                 library_item_id: if stale_generation {
                     "book-a"

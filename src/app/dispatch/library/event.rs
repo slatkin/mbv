@@ -1,6 +1,7 @@
 use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::events::{
-    LibEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent, SeriesEvent,
+    LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
+    SeriesEvent,
 };
 use crate::app::{
     dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
@@ -15,6 +16,24 @@ fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize
     (state.selected_group, state.video_cursor, state.video_scroll)
 }
 
+/// Each variant keeps its own documented no-op arm so a future
+/// `ModelContentEvent` variant that must reach the shell drain cannot
+/// silently fall through here.
+fn handle_model_content_event(ev: ModelContentEvent) {
+    match ev {
+        // The shell drain applies the Model-owned latest snapshot.
+        ModelContentEvent::EmbyLatestSnapshotFetched {
+            library_id,
+            title,
+            items,
+        } => drop((library_id, title, items)),
+        // The shell drain applies the Model-owned refreshed content.
+        ModelContentEvent::HomeContentRefreshed(content) => drop(content),
+        // Clearing Model-owned content is handled by the shell drain.
+        ModelContentEvent::HomeContentCleared => {}
+    }
+}
+
 impl App {
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
@@ -24,7 +43,7 @@ impl App {
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
             // The shell drain applies Model-owned content.
-            LibEvent::ModelContent(event) => drop(event),
+            LibEvent::ModelContent(event) => handle_model_content_event(event),
             LibEvent::QueueEnriched { items } => self.handle_queue_enriched(items),
             LibEvent::Error(error) => self.handle_error(&error),
         }

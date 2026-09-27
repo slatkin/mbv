@@ -193,7 +193,7 @@ impl Model {
             if let Some(entry) = entry {
                 // Enter on an album result returns to the standard library
                 // presentation. `activate_recursive_album` is fully async: it
-                // replaces the nav stack only once `LibEvent::Music(crate::app::MusicEvent::RecursiveAlbumActivated)`
+                // replaces the nav stack only once `LibEvent::Music(MusicEvent::RecursiveAlbumActivated)`
                 // drains, and that arm (shell/run.rs) solely owns the Music
                 // workspace re-anchor, the track-selection one-shot, and the
                 // content push -- all against the updated nav stack. Do the
@@ -252,7 +252,7 @@ impl Model {
         // content pushes read it. The re-anchor is kept for the Movie/generic
         // Chain arm (design D3); the show/album arms carry the reveal item and
         // the shell hand-off (task 3.1/3.2) subsumes it.
-        if let super::LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+        if let super::LibEvent::Browse(BrowseEvent::NavigateTo {
             lib_idx,
             landing: crate::app::state::events::NavigateLanding::Chain { ref nav_stack },
             switch_tab: true,
@@ -291,7 +291,7 @@ impl Model {
         }
         if matches!(
             &ev,
-            super::LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+            super::LibEvent::Browse(BrowseEvent::NavigateTo {
                 switch_tab: true,
                 ..
             })

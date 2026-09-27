@@ -89,16 +89,14 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
     let stale = app.audiobookshelf_runtime.generation();
     app.audiobookshelf_runtime.begin_validation();
     app.handle_lib_event(LibEvent::Audiobookshelf(
-        crate::app::AudiobookshelfEvent::ProgressAcknowledged(
-            mbv_player::AudiobookshelfProgressUpdate {
-                generation: stale,
-                library_item_id: "show-a".into(),
-                episode_id: "episode-a".into(),
-                current_time_seconds: 42.5,
-                duration_seconds: 120.0,
-                is_finished: true,
-            },
-        ),
+        AudiobookshelfEvent::ProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate {
+            generation: stale,
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 42.5,
+            duration_seconds: 120.0,
+            is_finished: true,
+        }),
     ));
 
     let after_queue = app

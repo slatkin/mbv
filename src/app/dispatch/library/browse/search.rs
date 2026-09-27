@@ -1,3 +1,4 @@
+use crate::app::BrowseEvent;
 use crate::app::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab};
 use mbv_emby_model::EmbyItem;
 
@@ -138,13 +139,11 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                let _ = tx.send(LibEvent::Browse(
-                    crate::app::BrowseEvent::AllItemsPrefetched {
-                        lib_idx,
-                        parent_id,
-                        items,
-                    },
-                ));
+                let _ = tx.send(LibEvent::Browse(BrowseEvent::AllItemsPrefetched {
+                    lib_idx,
+                    parent_id,
+                    items,
+                }));
             }
         });
     }
@@ -177,13 +176,11 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                let _ = tx.send(LibEvent::Browse(
-                    crate::app::BrowseEvent::SearchItemsLoaded {
-                        lib_idx,
-                        parent_id,
-                        items,
-                    },
-                ));
+                let _ = tx.send(LibEvent::Browse(BrowseEvent::SearchItemsLoaded {
+                    lib_idx,
+                    parent_id,
+                    items,
+                }));
             }
         });
     }

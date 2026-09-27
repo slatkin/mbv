@@ -1,3 +1,4 @@
+use crate::app::AudiobookshelfEvent;
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config::{load_service_secret, EmbySetup};
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
@@ -136,7 +137,7 @@ pub(in crate::app) fn start_audiobookshelf_shows(
             )
         });
         let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::ShowsFetched {
+            AudiobookshelfEvent::ShowsFetched {
                 generation,
                 library_id,
                 result,
@@ -146,7 +147,7 @@ pub(in crate::app) fn start_audiobookshelf_shows(
 }
 
 /// Book-shaped sibling of `start_audiobookshelf_shows`: pages a book library's
-/// catalog through `books_bounded` and reports `LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::BooksFetched)`.
+/// catalog through `books_bounded` and reports `LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched)`.
 pub(in crate::app) fn start_audiobookshelf_books(
     config: crate::config::Config,
     generation: SetupGeneration,
@@ -166,7 +167,7 @@ pub(in crate::app) fn start_audiobookshelf_books(
             )
         });
         let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::BooksFetched {
+            AudiobookshelfEvent::BooksFetched {
                 generation,
                 library_id,
                 result,
@@ -176,7 +177,7 @@ pub(in crate::app) fn start_audiobookshelf_books(
 }
 
 /// Fetches one podcast library's `/personalized` shelves and reports
-/// `LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::ShelfFetched)`. The Podcasts destination's Latest
+/// `LibEvent::Audiobookshelf(AudiobookshelfEvent::ShelfFetched)`. The Podcasts destination's Latest
 /// snapshot is built from the `Newest Episodes` shelf in the result.
 pub(in crate::app) fn start_audiobookshelf_shelves(
     config: crate::config::Config,
@@ -189,7 +190,7 @@ pub(in crate::app) fn start_audiobookshelf_shelves(
             client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
         });
         let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-            crate::app::AudiobookshelfEvent::ShelfFetched {
+            AudiobookshelfEvent::ShelfFetched {
                 generation,
                 library_id,
                 result,

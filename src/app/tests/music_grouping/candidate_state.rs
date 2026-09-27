@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::MusicEvent;
 
 #[test]
 fn start_or_supersede_creates_candidate_for_music_group_level() {
@@ -183,15 +184,13 @@ fn level_event_bulk_fills_cache_and_settles_candidate() {
         LevelFillState::Loading { orphan_risk: false },
     );
 
-    app.handle_lib_event(LibEvent::Music(
-        crate::app::MusicEvent::AlbumArtistLevelFetched {
-            level_id: "level-1".into(),
-            artists: vec![
-                ("album-1".into(), "Artist One".into()),
-                ("album-2".into(), "Artist Two".into()),
-            ],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
+        level_id: "level-1".into(),
+        artists: vec![
+            ("album-1".into(), "Artist One".into()),
+            ("album-2".into(), "Artist Two".into()),
+        ],
+    }));
 
     assert_eq!(
         app.album_artist_levels.get("level-1"),
@@ -229,12 +228,10 @@ fn level_event_empty_artists_marks_failed_without_filling() {
         LevelFillState::Loading { orphan_risk: false },
     );
 
-    app.handle_lib_event(LibEvent::Music(
-        crate::app::MusicEvent::AlbumArtistLevelFetched {
-            level_id: "level-1".into(),
-            artists: vec![],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
+        level_id: "level-1".into(),
+        artists: vec![],
+    }));
 
     assert_eq!(
         app.album_artist_levels.get("level-1"),
@@ -277,15 +274,13 @@ fn level_event_empty_artist_pair_fills_only_non_empty_pair() {
         LevelFillState::Loading { orphan_risk: false },
     );
 
-    app.handle_lib_event(LibEvent::Music(
-        crate::app::MusicEvent::AlbumArtistLevelFetched {
-            level_id: "group-0".into(),
-            artists: vec![
-                ("album-1".into(), String::new()),
-                ("album-2".into(), "Artist Two".into()),
-            ],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![
+            ("album-1".into(), String::new()),
+            ("album-2".into(), "Artist Two".into()),
+        ],
+    }));
 
     // The empty-artist pair must not poison the cache with an empty
     // tombstone; only the non-empty pair fills.
@@ -380,12 +375,10 @@ fn warmup_orphan_risk_gets_one_browse_upgrade_then_stays_terminal() {
         "group-0".into(),
         LevelFillState::Loading { orphan_risk: false },
     );
-    app.handle_lib_event(LibEvent::Music(
-        crate::app::MusicEvent::AlbumArtistLevelFetched {
-            level_id: "group-0".into(),
-            artists: vec![("album-1".into(), String::new())],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![("album-1".into(), String::new())],
+    }));
     assert_eq!(
         app.album_artist_levels.get("group-0"),
         Some(&LevelFillState::Filled { orphan_risk: false })

@@ -1,3 +1,4 @@
+use crate::app::{BrowseEvent, MusicEvent};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -194,7 +195,7 @@ impl Model {
                     .artist_artwork_requests
                     .remove(&cache_key)
                     .map(|identity| {
-                        crate::app::LibEvent::Music(crate::app::MusicEvent::ArtistArtworkFetched {
+                        crate::app::LibEvent::Music(MusicEvent::ArtistArtworkFetched {
                             destination: identity.destination,
                             generation: mbv_core::service_runtime::SetupGeneration::new(
                                 identity.generation,
@@ -226,9 +227,8 @@ impl Model {
         ev: super::super::LibEvent,
     ) {
         let lib_idx = match &ev {
-            super::super::LibEvent::Browse(crate::app::BrowseEvent::RestoreLibraryPosition {
-                lib_idx,
-                ..
+            super::super::LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
+                lib_idx, ..
             }) => *lib_idx,
             _ => unreachable!("restore handler called with a different library event"),
         };

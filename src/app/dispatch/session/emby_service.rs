@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, LibEvent};
+use crate::app::{App, LibEvent, ModelContentEvent};
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_queue::QueueItem;
 use mbv_queue::{QueueState, ServiceKind};
@@ -71,7 +71,7 @@ impl App {
         // latest — the `loading` flag is intentionally left alone, matching
         // the legacy clear) and re-projects.
         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-            crate::app::ModelContentEvent::HomeContentCleared,
+            ModelContentEvent::HomeContentCleared,
         ));
         self.libs.clear();
         self.sessions.clear();
@@ -187,7 +187,7 @@ impl App {
         // wiped the pills (task 5.3d).
         let content = self.apply_emby_bootstrap(candidate.bootstrap);
         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-            crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
         ));
         let mut config = self.config.lock().unwrap();
         config.emby_setup = Some(replacement.clone());

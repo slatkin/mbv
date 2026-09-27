@@ -6,6 +6,7 @@ use super::BrowseLevel;
 use super::PendingMusicReanchor;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
+use crate::app::MusicEvent;
 use mbv_components::music_content::MusicContent;
 use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
@@ -76,7 +77,7 @@ impl Model {
     }
 
     /// The shell's reaction to a completed recursive album activation
-    /// (`LibEvent::Music(crate::app::MusicEvent::RecursiveAlbumActivated)`): install the landed path through
+    /// (`LibEvent::Music(MusicEvent::RecursiveAlbumActivated)`): install the landed path through
     /// App, bind the one-shot inline track-focus request to the activated
     /// album, and re-anchor the workspace regardless of any prior local move.
     /// Sole owner of the return to the standard Music presentation, shared by
@@ -102,7 +103,7 @@ impl Model {
         }
         let library_id_lookup = library_id.clone();
         self.app.handle_lib_event(super::LibEvent::Music(
-            crate::app::MusicEvent::RecursiveAlbumActivated {
+            MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
             },
@@ -381,6 +382,7 @@ mod tests {
     use crate::app::shell::Model;
     use crate::app::state::service_runtime::EmbyRuntime;
     use crate::app::tests::render_fixtures::make_music_group_app;
+    use crate::app::MusicEvent;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
 
@@ -541,7 +543,7 @@ mod tests {
         let (mut model, generation) = artist_focused_model();
 
         model.app.handle_lib_event(crate::app::LibEvent::Music(
-            crate::app::MusicEvent::ArtistTracksFetched {
+            MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
@@ -561,7 +563,7 @@ mod tests {
         track.id = "track-1".into();
         track.album_id = "album-1".into();
         model.app.handle_lib_event(crate::app::LibEvent::Music(
-            crate::app::MusicEvent::ArtistTracksFetched {
+            MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),

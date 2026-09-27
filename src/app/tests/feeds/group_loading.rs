@@ -52,7 +52,7 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     active.is_folder = true;
     active.path = "/videos/active".into();
 
-    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::Loaded {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         level: Box::new(BrowseLevel {
@@ -85,17 +85,15 @@ fn feed_home_video_aggregated_populates_groups_and_all_items(make_home_video_app
     let mut video = make_item("Episode 1", "Movie");
     video.path = "/videos/active/ep1.mp4".into();
 
-    app.handle_lib_event(LibEvent::Browse(
-        crate::app::BrowseEvent::FeedHomeVideoAggregated {
-            lib_idx: 0,
-            parent_id: "lib-youtube".into(),
-            all_items: vec![video.clone()],
-            groups: vec![FeedHomeVideoGroup {
-                folder: active,
-                items: vec![video],
-            }],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        all_items: vec![video.clone()],
+        groups: vec![FeedHomeVideoGroup {
+            folder: active,
+            items: vec![video],
+        }],
+    }));
 
     assert_eq!(
         app.libs[0]
@@ -132,17 +130,15 @@ fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_sele
     let mut video = make_item("Episode 1", "Movie");
     video.path = "/videos/active/ep1.mp4".into();
 
-    app.handle_lib_event(LibEvent::Browse(
-        crate::app::BrowseEvent::FeedHomeVideoAggregated {
-            lib_idx: 0,
-            parent_id: "lib-youtube".into(),
-            all_items: vec![video.clone()],
-            groups: vec![FeedHomeVideoGroup {
-                folder: active,
-                items: vec![video],
-            }],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        all_items: vec![video.clone()],
+        groups: vec![FeedHomeVideoGroup {
+            folder: active,
+            items: vec![video],
+        }],
+    }));
 
     app.ensure_feed_home_video_group_level(0);
     assert_eq!(app.libs[0].nav_stack.len(), 1);

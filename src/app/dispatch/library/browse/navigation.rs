@@ -1,6 +1,6 @@
 use super::search::build_album_index_with;
 use crate::app::state::events::NavigateLanding;
-use crate::app::{AlbumPathPart, App, BrowseLevel, LibEvent};
+use crate::app::{AlbumPathPart, App, BrowseEvent, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
@@ -347,7 +347,7 @@ impl App {
                 &music_levels,
                 cached_album_index.as_deref(),
             ) {
-                Ok(landing) => LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+                Ok(landing) => LibEvent::Browse(BrowseEvent::NavigateTo {
                     lib_idx,
                     landing,
                     switch_tab: true,

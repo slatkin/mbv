@@ -1,4 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::ModelContentEvent;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
@@ -320,9 +321,7 @@ impl App {
                             // Delivered to Model-owned `home_content` via the
                             // lib_tx/ lib_rx drain (task 5.3d).
                             let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                                crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(
-                                    content,
-                                )),
+                                ModelContentEvent::HomeContentRefreshed(Box::new(content)),
                             ));
                         }
                         Err(e) => {
@@ -382,7 +381,7 @@ impl App {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                            crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
                         ));
                     }
                     Err(e) => {
@@ -419,7 +418,7 @@ impl App {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                            crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
                         ));
                     }
                     Err(e) => {

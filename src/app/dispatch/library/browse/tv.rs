@@ -1,4 +1,4 @@
-use crate::app::{App, BrowseLevel, LibEvent};
+use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, ModelContentEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::BrowseResting;
@@ -102,7 +102,7 @@ impl App {
             // effects); the computed content travels to Model-owned
             // `home_content` via lib_tx (task 5.3d).
             let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                ModelContentEvent::HomeContentRefreshed(Box::new(content)),
             ));
         }
         if self.last_played_completed {
@@ -164,7 +164,7 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match build(&client, parent_id.clone(), title) {
             Ok(level) => {
-                let _ = tx.send(LibEvent::Browse(crate::app::BrowseEvent::Loaded {
+                let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
                     parent_id,
                     level: Box::new(level),
@@ -208,7 +208,7 @@ impl App {
             match items {
                 Ok(items) => {
                     let _ = tx.send(LibEvent::ModelContent(
-                        crate::app::ModelContentEvent::EmbyLatestSnapshotFetched {
+                        ModelContentEvent::EmbyLatestSnapshotFetched {
                             library_id,
                             title,
                             items,
@@ -346,18 +346,18 @@ mod tv_latest_tests {
                 .recv()
                 .expect("selected TV refresh must complete");
             if let event @ LibEvent::Browse(
-                crate::app::BrowseEvent::Loaded { .. } | crate::app::BrowseEvent::Refreshed { .. },
+                BrowseEvent::Loaded { .. } | BrowseEvent::Refreshed { .. },
             ) = event
             {
                 break event;
             }
         };
         match event {
-            LibEvent::Browse(crate::app::BrowseEvent::Loaded { level, .. }) => {
+            LibEvent::Browse(BrowseEvent::Loaded { level, .. }) => {
                 assert_eq!(level.item_types.as_deref(), Some("Episode"));
                 assert_eq!(level.items[0].id, "new-episode");
             }
-            LibEvent::Browse(crate::app::BrowseEvent::Refreshed { .. }) => {
+            LibEvent::Browse(BrowseEvent::Refreshed { .. }) => {
                 panic!("Latest/Upcoming stop refresh must not use the generic ranged fetch")
             }
             _ => unreachable!(),

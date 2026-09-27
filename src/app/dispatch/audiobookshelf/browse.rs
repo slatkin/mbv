@@ -1,5 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::AudiobookshelfEvent;
 use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 #[cfg(test)]
@@ -75,7 +76,7 @@ impl App {
                 },
             );
             let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-                crate::app::AudiobookshelfEvent::DetailFetched {
+                AudiobookshelfEvent::DetailFetched {
                     generation,
                     request,
                     library_item_id,
@@ -126,7 +127,7 @@ impl App {
                 },
             );
             let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-                crate::app::AudiobookshelfEvent::BookDetailFetched {
+                AudiobookshelfEvent::BookDetailFetched {
                     generation,
                     library_item_id,
                     result,

@@ -2,6 +2,7 @@ use super::{
     App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES,
     NAV_IMAGE_FETCH_IDLE_DELAY, PAGE_SIZE,
 };
+use crate::app::{MusicEvent, SeriesEvent};
 use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
 use mbv_images::{ImageFetchReq, ImageSource};
 
@@ -43,9 +44,10 @@ impl App {
                 )
                 .map(|(items, _total)| items)
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::Music(
-                crate::app::MusicEvent::AlbumTracksFetched { album_id, tracks },
-            ));
+            let _ = tx.send(LibEvent::Music(MusicEvent::AlbumTracksFetched {
+                album_id,
+                tracks,
+            }));
         });
     }
 
@@ -74,7 +76,7 @@ impl App {
                 .map(|(items, _total)| items)
                 .map(|seasons| (seasons, std::collections::HashMap::new()))
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::Series(crate::app::SeriesEvent::DetailFetched {
+            let _ = tx.send(LibEvent::Series(SeriesEvent::DetailFetched {
                 series_id: sid,
                 seasons,
                 episodes,
@@ -124,13 +126,11 @@ impl App {
                 )
                 .map(|(items, _)| items)
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::Series(
-                crate::app::SeriesEvent::SeasonEpisodesFetched {
-                    series_id,
-                    season_id,
-                    episodes,
-                },
-            ));
+            let _ = tx.send(LibEvent::Series(SeriesEvent::SeasonEpisodesFetched {
+                series_id,
+                season_id,
+                episodes,
+            }));
         });
     }
 }

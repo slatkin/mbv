@@ -24,7 +24,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
@@ -44,7 +44,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
     assert!(
         matches!(
             ev,
-            LibEvent::Music(crate::app::MusicEvent::RecursiveAlbumActivated { .. })
+            LibEvent::Music(MusicEvent::RecursiveAlbumActivated { .. })
         ),
         "expected RecursiveAlbumActivated"
     );
@@ -91,7 +91,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
@@ -144,7 +144,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),

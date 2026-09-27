@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::MusicEvent;
 
 fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
@@ -110,7 +111,7 @@ fn failed_album_index_becomes_unavailable() {
             rebuild_pending: false,
         },
     );
-    app.handle_lib_event(LibEvent::Music(crate::app::MusicEvent::AlbumIndexBuilt {
+    app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumIndexBuilt {
         library_id: "music-lib".into(),
         result: Err("index failed".into()),
     }));
@@ -167,12 +168,10 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         music_grouping: None,
     };
 
-    app.handle_lib_event(LibEvent::Music(
-        crate::app::MusicEvent::RecursiveAlbumActivated {
-            library_id: "music-lib".into(),
-            nav_stack: vec![level],
-        },
-    ));
+    app.handle_lib_event(LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
+        library_id: "music-lib".into(),
+        nav_stack: vec![level],
+    }));
 
     // The App handler installs the path and persists the position; entering
     // inline track focus for the activated album is the shell's trigger into
