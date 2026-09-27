@@ -40,7 +40,7 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         vec![group],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::ui_model::music_grouping::ArtistKey::Fallback(
+        vec![mbv_ui_model::music_grouping::ArtistKey::Fallback(
             "Artist".into(),
         )],
         vec![0],
@@ -84,7 +84,7 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
         vec![group],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::ui_model::music_grouping::ArtistKey::Fallback(
+        vec![mbv_ui_model::music_grouping::ArtistKey::Fallback(
             "Artist".into(),
         )],
         vec![0],
@@ -143,7 +143,7 @@ fn music_selector_contains_only_groups_and_switches_by_group_index() {
 /// absent rather than stale.
 #[test]
 fn a_stale_artist_detail_never_paints_under_the_new_root() {
-    use crate::app::ui_model::music_artist_detail::{
+    use mbv_ui_model::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 

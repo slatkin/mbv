@@ -17,26 +17,7 @@ pub mod tests {
     pub use mbv_config::tests::SYS_ENV_LOCK;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UiConfig {
-    pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
-    pub image_cache_size: usize,
-    pub use_nerd_fonts: bool,
-    pub indicator_style: String, // chips|brackets|outlined|dots|pipes|keyvalue|powerline
-    pub visualizer_glyph: String,
-}
-
-impl Default for UiConfig {
-    fn default() -> Self {
-        Self {
-            image_protocol: None,
-            image_cache_size: 50,
-            use_nerd_fonts: false,
-            indicator_style: "keyvalue".into(),
-            visualizer_glyph: DEFAULT_VISUALIZER_GLYPH.into(),
-        }
-    }
-}
+pub use mbv_ui_model::UiConfig;
 
 pub fn load_config() -> Result<Config, String> {
     mbv_config::load_config()

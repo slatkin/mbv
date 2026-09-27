@@ -9,7 +9,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{MediaListOperation, MediaListTransition, SelectionSummary, WideMediaList};
 use crate::app::render::components::media_list::{MediaListRow, MediaListTitleReveal};
-use crate::app::ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::media_list::SelectionOrigin;
 
 /// One logical row flow's destination-side carrier over one canonical owner.
 pub struct MediaListCarrier<Target> {

@@ -9,7 +9,7 @@ use mbv_queue::QueueItem;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::app::ui_model::queue_card::QueueCardProjection;
+use mbv_ui_model::queue_card::QueueCardProjection;
 
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
@@ -123,7 +123,7 @@ impl App {
 
     fn queue_card_emby_source(
         &self,
-        playback: crate::app::ui_model::playback::PlaybackState,
+        playback: mbv_ui_model::playback::PlaybackState,
     ) -> Option<(usize, EmbyItem)> {
         let slotless_active = playback.active && playback.active_idx.is_none();
         let active = if playback.active {
@@ -166,7 +166,7 @@ impl App {
     /// The active/selected slot holds a non-Emby item (or the queue is empty).
     fn project_audiobookshelf_cover(
         &mut self,
-        playback: crate::app::ui_model::playback::PlaybackState,
+        playback: mbv_ui_model::playback::PlaybackState,
         projection: &mut QueueCardProjection,
     ) -> bool {
         let slotless_active = playback.active && playback.active_idx.is_none();

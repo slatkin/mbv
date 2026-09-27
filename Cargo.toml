@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -131,6 +131,7 @@ mbv-ws = { path = "crates/mbv-ws" }
 mbv-text = { path = "crates/mbv-text" }
 mbv-theme = { path = "crates/mbv-theme" }
 mbv-images = { path = "crates/mbv-images" }
+mbv-ui-model = { path = "crates/mbv-ui-model" }
 mbv-emby-model = { path = "crates/mbv-emby-model" }
 mbv-queue = { path = "crates/mbv-queue" }
 mbv-visualizer = { path = "crates/mbv-visualizer" }
@@ -165,6 +166,7 @@ mbv-config = { path = "crates/mbv-config", features = ["test"] }
 mbv-net = { path = "crates/mbv-net", features = ["test"] }
 mbv-emby-model = { path = "crates/mbv-emby-model", features = ["test"] }
 mbv-emby = { path = "crates/mbv-emby", features = ["test"] }
+mbv-ui-model = { path = "crates/mbv-ui-model", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

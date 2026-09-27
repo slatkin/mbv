@@ -20,10 +20,10 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use crate::app::render::render_context_menu_content;
-use crate::app::ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
-use crate::app::ui_model::settings::PanelFocus;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
+use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
+use mbv_ui_model::settings::PanelFocus;
 
 /// The Interactive Component for the Context menu.
 ///

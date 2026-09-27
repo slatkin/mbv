@@ -4,9 +4,9 @@
 // separately, since each is refreshed on its own channel/cadence; this
 // module's job is only the merge.
 
-use crate::app::ui_model::panel_targets::PanelTarget;
 use mbv_cast::discovery::CastReceiver;
 use mbv_emby::SessionInfo;
+use mbv_ui_model::panel_targets::PanelTarget;
 
 /// Concatenates Emby sessions and discovered cast receivers into one list,
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived

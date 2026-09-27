@@ -18,9 +18,9 @@ use super::components::emby_library_content::EmbyLibraryIdentity;
 use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
 use super::Model;
 use super::TabSelection;
-use crate::app::ui_model::library::{LibraryKey, LibraryKind};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
 
 impl Model {
     /// The active tab's migrated-owner identity, when the active Emby
@@ -78,7 +78,7 @@ impl Model {
             feed_group: lib
                 .feed_home_video
                 .as_ref()
-                .map(super::super::ui_model::feed::FeedHomeVideoState::selected_group_index),
+                .map(mbv_ui_model::feed::FeedHomeVideoState::selected_group_index),
         }
     }
 

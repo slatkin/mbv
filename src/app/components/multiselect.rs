@@ -11,9 +11,9 @@ use tuirealm::state::State;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
-use crate::app::ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg};
+use mbv_ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 
 pub struct MultiselectComponent {
     kind: Option<MultiSelectKind>,

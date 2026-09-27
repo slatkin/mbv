@@ -26,11 +26,11 @@ use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
-use crate::app::ui_model::playback::PlaybackState;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 use mbv_queue::PlaybackTitleParts;
 use mbv_theme as palette;
+use mbv_ui_model::playback::PlaybackState;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {

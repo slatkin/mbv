@@ -116,7 +116,7 @@ impl super::super::Model {
             }
             ShellRequest::ContextMenuDismiss => {
                 self.app.pending_overlay =
-                    Some(crate::app::ui_model::overlay::OverlayRequest::DismissContextMenu);
+                    Some(mbv_ui_model::overlay::OverlayRequest::DismissContextMenu);
             }
             // Search sidebar: dismiss (Esc/Backspace-on-empty).
             // The component owns the state; the shell unmounts it.
@@ -159,7 +159,7 @@ impl super::super::Model {
                 self.app.spawn_cast_discovery();
             }
             ShellRequest::SelectSession(key) => {
-                if let Some(target) = crate::app::ui_model::panel_targets::resolve_session_target(
+                if let Some(target) = mbv_ui_model::panel_targets::resolve_session_target(
                     &self.app.panel_targets,
                     &key,
                 ) {
@@ -205,7 +205,7 @@ impl super::super::Model {
                 // resolved and selected the row; the shell pulls panel
                 // focus to the Library (task 4.5, mirrors `HomeRowClick`).
                 self.app
-                    .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.sync_feeds();
             }
             ShellRequest::FeedsEnqueue(entries) => {

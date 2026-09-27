@@ -1,9 +1,9 @@
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
-use crate::app::ui_model::context_menu::BulkRemoveTarget;
-use crate::app::ui_model::context_menu::ContextMenu;
-use crate::app::ui_model::overlay::OverlayRequest;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::BulkRemoveTarget;
+use mbv_ui_model::context_menu::ContextMenu;
+use mbv_ui_model::overlay::OverlayRequest;
 
 impl App {
     // --- Context menu framing (formerly `input_context_menu.rs`) -----------
@@ -60,7 +60,7 @@ impl App {
         let mut entries = Vec::new();
         let cw_focused = matches!(
             self.effective_panel_focus(),
-            crate::app::ui_model::settings::PanelFocus::Library
+            mbv_ui_model::settings::PanelFocus::Library
         ) && self.tab.is_home();
         let (current_item, queue_cursor) =
             self.resolve_context_menu_target(tracked_item, cw_item)?;
@@ -84,11 +84,11 @@ impl App {
         }
 
         let anchor = match self.effective_panel_focus() {
-            crate::app::ui_model::settings::PanelFocus::Library => {
-                ContextMenuAnchor::SelectedItem(crate::app::ui_model::settings::PanelFocus::Library)
+            mbv_ui_model::settings::PanelFocus::Library => {
+                ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library)
             }
-            crate::app::ui_model::settings::PanelFocus::Queue => {
-                ContextMenuAnchor::SelectedItem(crate::app::ui_model::settings::PanelFocus::Queue)
+            mbv_ui_model::settings::PanelFocus::Queue => {
+                ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Queue)
             }
         };
         Some(ContextMenu {
@@ -117,12 +117,12 @@ impl App {
         let mut queue_cursor = None;
         let current_item = match (self.effective_panel_focus(), self.tab) {
             (
-                crate::app::ui_model::settings::PanelFocus::Library,
-                crate::app::ui_model::tab_selection::TabSelection::Home,
+                mbv_ui_model::settings::PanelFocus::Library,
+                mbv_ui_model::tab_selection::TabSelection::Home,
             ) => cw_item,
             (
-                crate::app::ui_model::settings::PanelFocus::Library,
-                crate::app::ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx),
+                mbv_ui_model::settings::PanelFocus::Library,
+                mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx),
             ) => tracked_item.or_else(|| {
                 let cursor = self
                     .libs
@@ -132,11 +132,11 @@ impl App {
                 self.current_lib_item(lib_idx, cursor)
             }),
             (
-                crate::app::ui_model::settings::PanelFocus::Library,
-                crate::app::ui_model::tab_selection::TabSelection::AudiobookshelfLibrary(_)
-                | crate::app::ui_model::tab_selection::TabSelection::Feeds,
+                mbv_ui_model::settings::PanelFocus::Library,
+                mbv_ui_model::tab_selection::TabSelection::AudiobookshelfLibrary(_)
+                | mbv_ui_model::tab_selection::TabSelection::Feeds,
             ) => return None,
-            (crate::app::ui_model::settings::PanelFocus::Queue, _) => {
+            (mbv_ui_model::settings::PanelFocus::Queue, _) => {
                 let cursor = self.displayed_queue().queue_cursor;
                 queue_cursor = Some(cursor);
                 self.displayed_queue().clone_emby_item_at(cursor)
@@ -198,7 +198,7 @@ impl App {
             || self.context_menu_lib_idx().is_some()
             || !matches!(
                 self.effective_panel_focus(),
-                crate::app::ui_model::settings::PanelFocus::Queue
+                mbv_ui_model::settings::PanelFocus::Queue
             )
         {
             Self::push_context_action(entries, "Add to Queue", ContextAction::Enqueue);
@@ -225,7 +225,7 @@ impl App {
         if !cw_focused
             && matches!(
                 self.effective_panel_focus(),
-                crate::app::ui_model::settings::PanelFocus::Queue
+                mbv_ui_model::settings::PanelFocus::Queue
             )
         {
             let pos = self.displayed_queue().queue_cursor;
@@ -237,7 +237,7 @@ impl App {
         }
         if matches!(
             self.effective_panel_focus(),
-            crate::app::ui_model::settings::PanelFocus::Queue
+            mbv_ui_model::settings::PanelFocus::Queue
         ) {
             Self::push_context_action(
                 entries,

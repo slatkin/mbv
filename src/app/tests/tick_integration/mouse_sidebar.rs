@@ -7,11 +7,11 @@ use crate::app::components::{HelpComponent, PlaylistsComponent, QueueComponent};
 use crate::app::dispatch::action::Command;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
-use crate::app::ui_model::settings::PanelFocus;
 use crate::app::ui_msg::{
     ComponentId, Msg, OverlayId, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::settings::PanelFocus;
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

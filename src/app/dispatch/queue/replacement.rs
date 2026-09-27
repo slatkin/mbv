@@ -1,7 +1,8 @@
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, ReplacementExecutor,
-    RoutedReplacementPrep, SidebarId,
+    RoutedReplacementPrep,
 };
+use crate::app::SidebarId;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
@@ -16,7 +17,7 @@ impl App {
             && self.queue_is_saved_playlist()
         {
             self.pending_queue_action = Some(action);
-            let name = crate::app::ui_model::ui_util::trunc_str(self.queue_playlist_name(), 36);
+            let name = mbv_ui_model::ui_util::trunc_str(self.queue_playlist_name(), 36);
             self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{name}\"?"),

@@ -1,0 +1,39 @@
+[package]
+name = "mbv-ui-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Presentation state models for mbv's terminal UI."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-core = { path = "../mbv-core" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-queue = { path = "../mbv-queue" }
+mbv-feed = { path = "../mbv-feed" }
+mbv-config = { path = "../mbv-config" }
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+unicode-width.workspace = true
+time.workspace = true
+ratatui.workspace = true
+log.workspace = true
+mbv-cast = { path = "../mbv-cast" }
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-emby = { path = "../mbv-emby" }
+mbv-player = { path = "../mbv-player" }
+mbv-remote-player = { path = "../mbv-remote-player" }
+mbv-ws = { path = "../mbv-ws" }
+
+[features]
+test = []
+
+[dev-dependencies]
+rstest.workspace = true
+mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }

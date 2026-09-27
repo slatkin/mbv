@@ -5,12 +5,12 @@ use super::*;
 fn artist_cache_key(
     app: &App,
     artist_id: &str,
-) -> crate::app::ui_model::music_artist_detail::ArtistDetailKey {
-    crate::app::ui_model::music_artist_detail::ArtistDetailKey {
-        destination: crate::app::ui_model::library::LibraryKey::Service {
+) -> mbv_ui_model::music_artist_detail::ArtistDetailKey {
+    mbv_ui_model::music_artist_detail::ArtistDetailKey {
+        destination: mbv_ui_model::library::LibraryKey::Service {
             service: mbv_queue::ServiceKind::Emby,
             library_id: "lib-music".into(),
-            kind: crate::app::ui_model::library::LibraryKind::Music,
+            kind: mbv_ui_model::library::LibraryKind::Music,
         },
         generation: app.emby_runtime.generation().value(),
         artist_id: artist_id.into(),
@@ -37,7 +37,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
     other_album.album_id = "album-2".into();
     app.artist_detail_cache.insert(
         artist_cache_key(&app, "artist-alpha"),
-        crate::app::ui_model::music_artist_detail::ArtistDetailCacheEntry {
+        mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![first, second.clone(), other_album],
             failed: false,
         },
@@ -71,7 +71,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     extra.album_id = "album-1".into();
     app.artist_detail_cache.insert(
         artist_cache_key(&app, "artist-alpha"),
-        crate::app::ui_model::music_artist_detail::ArtistDetailCacheEntry {
+        mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![only.clone(), extra],
             failed: false,
         },

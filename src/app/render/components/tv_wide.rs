@@ -8,8 +8,8 @@
 //! read.
 
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
-use crate::app::ui_model::browse::SeriesDetail;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::SeriesDetail;
 
 /// All App-derived data needed to paint the wide TV workspace.
 #[derive(Clone)]

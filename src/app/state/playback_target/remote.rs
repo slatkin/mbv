@@ -1,6 +1,6 @@
 use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
-use crate::app::ui_model::ui_util::take_chars;
 use crate::app::{App, LocalPlaybackTarget, RemotePlaybackTarget};
+use mbv_ui_model::ui_util::take_chars;
 
 impl RemotePlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {

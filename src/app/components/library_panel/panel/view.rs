@@ -10,9 +10,9 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::ui_model::library::LibraryKind;
 use crate::app::ui_msg::Msg;
 use crate::app::ui_msg::UserEvent;
+use mbv_ui_model::library::LibraryKind;
 
 impl Default for LibraryPanel {
     fn default() -> Self {

@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::render_fixtures::make_music_group_app;
-use crate::app::ui_model::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyArtistRef;
+use mbv_ui_model::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
 use std::collections::HashMap;
 
 fn destination() -> LibraryKey {

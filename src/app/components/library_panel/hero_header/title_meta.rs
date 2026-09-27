@@ -10,8 +10,8 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
-use crate::app::ui_model::ui_util::trunc_str;
 use mbv_theme as palette;
+use mbv_ui_model::ui_util::trunc_str;
 
 use super::super::content::{HeroContent, HeroFacts, HeroHeader};
 use super::super::overview_box;

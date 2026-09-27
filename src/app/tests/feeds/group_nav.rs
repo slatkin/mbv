@@ -1,5 +1,5 @@
 use crate::app::tests::*;
-use crate::app::ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::BrowseResting;
 
 #[test]
 fn feed_home_video_group_view_requires_homevideos_and_feed_config() {

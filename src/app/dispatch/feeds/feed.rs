@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
+use mbv_ui_model::browse::BrowseResting;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -46,7 +46,7 @@ impl App {
             .and_then(|lib| lib.feed_home_video.as_ref())
             .map_or(
                 0,
-                crate::app::ui_model::feed::FeedHomeVideoState::selected_group_index,
+                mbv_ui_model::feed::FeedHomeVideoState::selected_group_index,
             )
     }
 

@@ -7,8 +7,6 @@
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::render::components::media_list::MediaListRow;
-use crate::app::ui_model::feed_tab::WatchedFilter;
-use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
@@ -16,6 +14,8 @@ use mbv_config::{
 };
 use mbv_queue::FeedEntry;
 use mbv_queue::FeedKind;
+use mbv_ui_model::feed_tab::WatchedFilter;
+use mbv_ui_model::library::LibraryKey;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
@@ -741,7 +741,7 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     assert!(matches!(
         click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
-            crate::app::ui_model::context_menu::ContextMenuTargets::Feeds(entries),
+            mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries),
             Some(_),
         ) if entries.len() == 1)));
 }

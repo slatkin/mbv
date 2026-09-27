@@ -24,14 +24,14 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::current_time_secs;
-use crate::app::ui_model::audiobookshelf_browse::{
-    podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
-    PodcastDisplayRow,
-};
-use crate::app::ui_model::ui_util::{fmt_publish_date_short, trunc_str};
 use crate::app::ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
+use mbv_ui_model::audiobookshelf_browse::{
+    podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
+    PodcastDisplayRow,
+};
+use mbv_ui_model::ui_util::{fmt_publish_date_short, trunc_str};
 
 /// Shared max pill label length (`feeds_content.rs`): this owner is the one
 /// producer of the Selector row's labels, and show pills truncate like the

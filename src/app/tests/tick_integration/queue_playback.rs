@@ -10,11 +10,11 @@ use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use crate::app::components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::ui_model::playback::PlaybackState;
 use crate::app::ui_msg::PlaybackRequest;
 use crate::app::ui_msg::{ComponentId, Msg};
 use crate::app::{PanelFocus, PanelMode};
 use mbv_ctrl::player::PlayerEvent;
+use mbv_ui_model::playback::PlaybackState;
 
 fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::ui_msg::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {

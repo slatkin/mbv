@@ -11,11 +11,11 @@ use tuirealm::state::State;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
-use crate::app::ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
+use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 
 pub struct FeedsManageComponent {
     feeds: Vec<FeedSubscription>,

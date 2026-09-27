@@ -19,7 +19,7 @@ fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         item.id = id.into();
         item
     };
-    let detail = crate::app::ui_model::browse::SeriesDetail {
+    let detail = mbv_ui_model::browse::SeriesDetail {
         seasons: vec![season],
         episodes: [(
             "season-1".into(),
@@ -72,7 +72,7 @@ fn tv_workspace_series_change_resets_local_selection() {
     season_one.id = "season-1".into();
     let mut season_two = make_item("Season 2", "Season");
     season_two.id = "season-2".into();
-    let detail = crate::app::ui_model::browse::SeriesDetail {
+    let detail = mbv_ui_model::browse::SeriesDetail {
         seasons: vec![season_one, season_two],
         episodes: std::collections::HashMap::new(),
     };

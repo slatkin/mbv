@@ -2,9 +2,9 @@
 
 use super::components::home_content::HomeContent;
 use super::Model;
-use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_msg::ShellRequest;
 use mbv_queue::QueueItem;
+use mbv_ui_model::library::LibraryKey;
 
 impl Model {
     pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {
@@ -20,28 +20,26 @@ impl Model {
                 }
             }
             ShellRequest::RowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Home(targets),
+                mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
-                let origin = crate::app::ui_model::media_list::SelectionOrigin::Library(
-                    crate::app::ui_model::media_list::LibrarySelectionOrigin::Home,
+                let origin = mbv_ui_model::media_list::SelectionOrigin::Library(
+                    mbv_ui_model::media_list::LibrarySelectionOrigin::Home,
                 );
                 self.context_menu_origin = Some(origin.clone());
                 self.context_action_snapshot =
-                    Some(crate::app::ui_model::context_menu::ContextActionSnapshot {
+                    Some(mbv_ui_model::context_menu::ContextActionSnapshot {
                         origin,
-                        values: vec![
-                            crate::app::ui_model::context_menu::ContextMenuTargets::Home(
-                                targets.clone(),
-                            ),
-                        ],
+                        values: vec![mbv_ui_model::context_menu::ContextMenuTargets::Home(
+                            targets.clone(),
+                        )],
                     });
                 let mut items = Vec::new();
                 let mut removes = Vec::new();
                 for target in &targets {
                     if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
                         removes.push(
-                            crate::app::ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
+                            mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
                                 item.clone(),
                             ),
                         );
@@ -56,7 +54,7 @@ impl Model {
                     self.app.open_context_menu_for_selection(
                         &items,
                         anchor,
-                        crate::app::ui_model::settings::PanelFocus::Library,
+                        mbv_ui_model::settings::PanelFocus::Library,
                         capabilities,
                         removes,
                     );
@@ -116,8 +114,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
-    use crate::app::ui_model::msg::HomeRowTarget;
     use mbv_emby_model::test_support::make_item;
+    use mbv_ui_model::msg::HomeRowTarget;
 
     fn target(id: &str) -> HomeRowTarget {
         HomeRowTarget {
@@ -147,10 +145,10 @@ mod tests {
         let item = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
+            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
             None,
         ));
-        let Some(crate::app::ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
+        let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
             panic!("Home context-menu request must open a menu");

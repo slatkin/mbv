@@ -110,7 +110,7 @@ impl LibraryContentOwner for PodcastContent {
         self.episodes.clear_owner_selection();
     }
 
-    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
+    fn set_selection_origin(&mut self, origin: mbv_ui_model::media_list::SelectionOrigin) {
         self.episodes.set_selection_origin(origin);
     }
 

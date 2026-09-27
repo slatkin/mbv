@@ -21,7 +21,7 @@ fn context_played_mark_uses_the_requested_remote_mutation() {
     let http = MockHttp::new();
     http.respond(200, "");
     let mut app = app_with_mock_emby(&http);
-    app.tab = crate::app::ui_model::tab_selection::TabSelection::Feeds;
+    app.tab = mbv_ui_model::tab_selection::TabSelection::Feeds;
 
     app.execute_context_action(Some(ContextAction::MarkPlayed("movie".into())), None);
 

@@ -123,7 +123,7 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
         crate::app::ui_msg::ShellRequest::SelectionProjection(
             crate::app::ui_msg::SelectionSummary {
                 count: 99,
-                origin: crate::app::ui_model::media_list::SelectionOrigin::Queue,
+                origin: mbv_ui_model::media_list::SelectionOrigin::Queue,
             },
         ),
     ));

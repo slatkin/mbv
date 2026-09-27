@@ -53,7 +53,7 @@ impl App {
         if self.tab.emby_library_index() != Some(lib_idx)
             || !matches!(
                 self.effective_panel_focus(),
-                crate::app::ui_model::settings::PanelFocus::Library
+                mbv_ui_model::settings::PanelFocus::Library
             )
             || !self.is_viewing_album_folders(lib_idx)
         {

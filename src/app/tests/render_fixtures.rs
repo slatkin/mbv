@@ -6,10 +6,10 @@
 //! issue #801 section 2; only the fixtures with surviving callers remain.
 
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::BrowseResting;
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();

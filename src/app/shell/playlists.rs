@@ -85,7 +85,7 @@ impl Model {
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
                     self.app.request_queue_replacement(
-                        crate::app::ui_model::playback::PendingQueueAction::PlayItems {
+                        mbv_ui_model::playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
                             source: mbv_queue::QueueSource::Playlist {
@@ -94,7 +94,7 @@ impl Model {
                             },
                             autostart: false,
                         },
-                        crate::app::ui_model::playback::ReplacementExecutor::Pending,
+                        mbv_ui_model::playback::ReplacementExecutor::Pending,
                     );
                     // No sidebar dismiss here: `run_replacement` raises it once
                     // the replacement actually runs (immediately on an empty
@@ -121,7 +121,7 @@ impl Model {
                         title: " Delete Playlist ".into(),
                         message: format!(
                             "Delete playlist '{}'?",
-                            crate::app::ui_model::ui_util::trunc_str(&playlist.name, 40)
+                            mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
                         ),
                         hint: "[y] Confirm    [Esc] Cancel".into(),
                         on_confirm: crate::app::ConfirmAction::DeletePlaylist {
@@ -161,8 +161,8 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.pending_overlay = Some(crate::app::ui_model::overlay::OverlayRequest::OpenSidebar(
-            crate::app::ui_model::sidebar::SidebarId::Playlists,
+        app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
+            mbv_ui_model::sidebar::SidebarId::Playlists,
         ));
         let mut model = Model::new(app);
         model.sync_modal_requests();

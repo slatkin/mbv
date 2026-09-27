@@ -7,7 +7,7 @@
 //! `(sort_str, MediaListRow::Item{..})` pair; no `EmbyItem` enters here.
 
 use crate::app::render::components::media_list::MediaListRow;
-use crate::app::ui_model::ui_util::{letter_bucket_label, natural_sort_key};
+use mbv_ui_model::ui_util::{letter_bucket_label, natural_sort_key};
 
 /// Sort `items` by `natural_sort_key(sort_str)`, then emit one
 /// `MediaListRow::Heading` per non-empty bucket in bucket order, each preceded

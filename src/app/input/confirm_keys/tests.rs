@@ -1,9 +1,9 @@
 use super::*;
 use crate::app::tests::*;
-use crate::app::ui_model::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crossterm::event::KeyModifiers;
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::playback::{ReplacementExecutor, RoutedReplacementPrep};
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path
@@ -32,14 +32,14 @@ fn key(code: KeyCode) -> KeyEvent {
 fn confirm_pending(app: &App) -> bool {
     matches!(
         app.pending_overlay,
-        Some(crate::app::ui_model::overlay::OverlayRequest::Confirm(_))
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(_))
     )
 }
 
 /// The pending overlay's confirm action, when a confirm modal is up.
 fn pending_confirm_action(app: &App) -> Option<ConfirmAction> {
     match &app.pending_overlay {
-        Some(crate::app::ui_model::overlay::OverlayRequest::Confirm(modal)) => {
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => {
             Some(modal.on_confirm.clone())
         }
         _ => None,
@@ -241,7 +241,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         .playlist_mutations
         .get("playlist-1")
         .and_then(|state| state.active.as_ref())
-        .map(crate::app::ui_model::playback::PlaylistMutation::mutation_id)
+        .map(mbv_ui_model::playback::PlaylistMutation::mutation_id)
         .expect("the save is tracked as an in-flight mutation");
 
     // Second activation while that save is still in flight: it gates on the
@@ -258,7 +258,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: save_mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::ui_model::queue_owner::QueueOrigin::ThisProcess {
+        origin: mbv_ui_model::queue_owner::QueueOrigin::ThisProcess {
             epoch: app.queue_epoch,
         },
         source_playlist_id: "playlist-1".into(),

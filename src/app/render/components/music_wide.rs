@@ -1,8 +1,8 @@
 //! Grouped Music's wide Wide hero component.
 
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
-use crate::app::ui_model::music_grouping::ArtistKey;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::music_grouping::ArtistKey;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ pub(in crate::app) struct MusicWideRenderCtx {
     /// The focused artist's projected summary and grouped track Workspace
     /// (tasks 6.2/6.3), when the tree owner is on an artist root.
     pub(in crate::app) artist_detail:
-        Option<crate::app::ui_model::music_artist_detail::ArtistDetailProjection>,
+        Option<mbv_ui_model::music_artist_detail::ArtistDetailProjection>,
 }
 
 impl MusicWideRenderCtx {

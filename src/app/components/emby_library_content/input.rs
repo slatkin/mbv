@@ -5,9 +5,9 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use super::EmbyLibraryContent;
 use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::ui_model::sort_filter::LetterFilter;
 use crate::app::ui_msg::{Msg, ShellRequest, TerminalObserverEvent};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::sort_filter::LetterFilter;
 
 impl EmbyLibraryContent {
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
@@ -93,9 +93,7 @@ impl EmbyLibraryContent {
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
                         Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                            crate::app::ui_model::context_menu::ContextMenuTargets::Browser(vec![
-                                target,
-                            ]),
+                            mbv_ui_model::context_menu::ContextMenuTargets::Browser(vec![target]),
                             None,
                         ))))
                     }
@@ -211,7 +209,7 @@ impl EmbyLibraryContent {
                     _ => return None,
                 };
                 Some(ShellRequest::RowContextMenu(
-                    crate::app::ui_model::context_menu::ContextMenuTargets::Browser(targets),
+                    mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets),
                     None,
                 ))
             }
@@ -262,7 +260,7 @@ impl EmbyLibraryContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::ui_model::library::LibraryKind;
+    use mbv_ui_model::library::LibraryKind;
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {

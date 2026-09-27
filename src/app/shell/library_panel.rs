@@ -17,10 +17,10 @@ use super::components::podcast_content::PodcastContent;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::ui_model::library::{LibraryKey, LibraryKind};
-use crate::app::ui_model::playback::DestinationLatestSource;
 use crate::app::ui_msg::ComponentId;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::playback::DestinationLatestSource;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
@@ -88,10 +88,10 @@ impl Model {
     /// route to the list that produced it, never the dispatch-time focus.
     pub(in crate::app) fn active_library_selection_origin(
         &self,
-    ) -> Option<crate::app::ui_model::media_list::SelectionOrigin> {
+    ) -> Option<mbv_ui_model::media_list::SelectionOrigin> {
         self.active_library_key().map(|key| {
-            crate::app::ui_model::media_list::SelectionOrigin::Library(
-                crate::app::ui_model::media_list::LibrarySelectionOrigin::from(key),
+            mbv_ui_model::media_list::SelectionOrigin::Library(
+                mbv_ui_model::media_list::LibrarySelectionOrigin::from(key),
             )
         })
     }
@@ -201,7 +201,7 @@ impl Model {
         if level.letter_filter.is_none() {
             return;
         }
-        let mut key = crate::app::ui_model::browse::LevelFetchKey::from_level(level);
+        let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
         key.letter_filter = None;
         if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
             level.letter_filter = None;
@@ -574,4 +574,4 @@ impl Model {
     }
 }
 
-use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;

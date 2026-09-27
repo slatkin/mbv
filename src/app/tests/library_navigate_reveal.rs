@@ -5,9 +5,9 @@
 
 use super::*;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::browse::BrowseResting;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
+use mbv_ui_model::browse::BrowseResting;
 
 /// App stub with a scripted in-memory Emby transport installed.
 fn app_with_mock_emby(http: &MockHttp) -> App {

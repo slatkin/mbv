@@ -1,9 +1,9 @@
 use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
-use crate::app::ui_model::music_grouping::{
-    build_grouped_album_catalog, MusicGroupCandidate, MusicGroupingState,
-};
 use crate::app::App;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::music_grouping::{
+    build_grouped_album_catalog, MusicGroupCandidate, MusicGroupingState,
+};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 

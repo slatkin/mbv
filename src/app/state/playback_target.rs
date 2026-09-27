@@ -3,10 +3,26 @@ mod local;
 mod remote;
 
 use crate::app::render::indicators::IndicatorData;
-use crate::app::ui_model::playback_target::NowPlayingStatus;
-use crate::app::{
-    App, CastPlaybackTarget, LocalPlaybackTarget, PlaybackTarget, RemotePlaybackTarget,
-};
+use crate::app::App;
+use mbv_ui_model::playback_target::NowPlayingStatus;
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct LocalPlaybackTarget;
+
+#[derive(Clone)]
+pub(in crate::app) struct RemotePlaybackTarget {
+    pub session_id: String,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct CastPlaybackTarget;
+
+#[derive(Clone)]
+pub(in crate::app) enum PlaybackTarget {
+    Local(LocalPlaybackTarget),
+    Remote(RemotePlaybackTarget),
+    Cast(CastPlaybackTarget),
+}
 
 impl PlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
@@ -116,9 +132,7 @@ impl PlaybackTarget {
 
 impl App {
     /// Returns the observed playback state for rendering.
-    pub(in crate::app) fn effective_playback_state(
-        &self,
-    ) -> crate::app::ui_model::playback::PlaybackState {
+    pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         // The attached cast target wins only while it actually reports (or is
         // optimistically awaiting) media. An attached receiver that is idle
         // must not shadow real playback: attach-on-selection attaches
@@ -133,7 +147,7 @@ impl App {
         }
     }
 
-    fn non_cast_playback_state(&self) -> crate::app::ui_model::playback::PlaybackState {
+    fn non_cast_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             // The observed item is only a *local* playhead when the queue
             // holds it. A watched remote Session may be playing anything
@@ -158,7 +172,7 @@ impl App {
                 let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
                 mbv_emby_model::seconds_to_ticks(pos_s)
             };
-            crate::app::ui_model::playback::PlaybackState {
+            mbv_ui_model::playback::PlaybackState {
                 active: remote.now_playing.is_some(),
                 active_idx: maybe_active_idx,
                 position_ticks: pos_ticks,
@@ -173,7 +187,7 @@ impl App {
                 .active_index()
                 .unwrap_or(s.current_idx);
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
-            crate::app::ui_model::playback::PlaybackState {
+            mbv_ui_model::playback::PlaybackState {
                 active: s.active,
                 active_idx: Some(active_idx),
                 position_ticks,
@@ -210,9 +224,7 @@ impl App {
     /// The playback projection the queue ROWS are painted from. Bare mode
     /// blanks a queue fenced ahead of its local Player; out-of-process owner
     /// snapshots reconcile queue slots and playback coordinates together.
-    pub(in crate::app) fn queue_row_playback_state(
-        &self,
-    ) -> crate::app::ui_model::playback::PlaybackState {
+    pub(in crate::app) fn queue_row_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let mut state = self.displayed_queue_playback_state();
         if state.active && !self.local_queue_is_owner_queue(self.viewed_queue_scope()) {
             state.active = false;
@@ -224,9 +236,7 @@ impl App {
     /// while a selected slot awaits the playback owner's report -- that slot
     /// with no progress. Presentation only: authority consumers (transport
     /// gates, effects, reporting) keep `effective_playback_state`.
-    pub(in crate::app) fn displayed_playback_state(
-        &self,
-    ) -> crate::app::ui_model::playback::PlaybackState {
+    pub(in crate::app) fn displayed_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let state = self.effective_playback_state();
         let Some(index) = self.predicted_active_index() else {
             return state;
@@ -234,7 +244,7 @@ impl App {
         if state.active && state.active_idx == Some(index) {
             return state;
         }
-        crate::app::ui_model::playback::PlaybackState {
+        mbv_ui_model::playback::PlaybackState {
             active: true,
             active_idx: Some(index),
             // The owner is still playing the outgoing item, so its position
@@ -273,11 +283,11 @@ impl App {
 
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
-    ) -> crate::app::ui_model::playback::PlaybackState {
+    ) -> mbv_ui_model::playback::PlaybackState {
         if self.queue_scope_is_playback(self.viewed_queue_scope()) {
             self.effective_playback_state()
         } else {
-            crate::app::ui_model::playback::PlaybackState::default()
+            mbv_ui_model::playback::PlaybackState::default()
         }
     }
 }

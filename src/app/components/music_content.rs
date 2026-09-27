@@ -28,11 +28,11 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::MusicWideRenderCtx;
-use crate::app::ui_model::media_list::SelectionOrigin;
-use crate::app::ui_model::msg::MusicArtistTarget;
-use crate::app::ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 use crate::app::ui_msg::LeafKeyResult;
 use crate::app::ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
+use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::msg::MusicArtistTarget;
+use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 
 /// Strips the `Artist (Year) ` folder-name prefix from an album's display
 /// name, returning the bare title and resolved release year. Rehomed from the
@@ -104,7 +104,7 @@ pub struct MusicContent {
     /// artist-track request (design D7). Moving onto a different root emits;
     /// returning to the last reported one relies on the shell's projection
     /// push, which re-derives the same component-resolved target.
-    last_artist_request: Option<crate::app::ui_model::music_grouping::ArtistKey>,
+    last_artist_request: Option<mbv_ui_model::music_grouping::ArtistKey>,
     pub(in crate::app) inline_search: InlineSearch,
     /// Stable identity of the tree/list that produced a direct artist action.
     /// The Library panel supplies it on activation. It stays absent until that
@@ -274,10 +274,8 @@ impl MusicContent {
         // detail fetches; the shell dedupes repeat identities by cache key.
         let target = self.artist_detail_target()?;
         let identity = match &target.artist_id {
-            Some(id) => crate::app::ui_model::music_grouping::ArtistKey::Service(id.clone()),
-            None => crate::app::ui_model::music_grouping::ArtistKey::Fallback(
-                target.artist_name.clone(),
-            ),
+            Some(id) => mbv_ui_model::music_grouping::ArtistKey::Service(id.clone()),
+            None => mbv_ui_model::music_grouping::ArtistKey::Fallback(target.artist_name.clone()),
         };
         if self.last_artist_request.as_ref() == Some(&identity) {
             return None;

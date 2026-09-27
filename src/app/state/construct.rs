@@ -1,13 +1,13 @@
 use crate::app::state::service_setup::StartupRequest;
-use crate::app::ui_model::playback::QueueScope;
-use crate::app::ui_model::player_tab::PlayerTab;
-use crate::app::ui_model::settings::{PanelFocus, PanelMode};
-use crate::app::ui_model::tab_selection::TabSelection;
 use crate::app::{
     layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_player::{Player, PlayerProxy};
+use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::player_tab::PlayerTab;
+use mbv_ui_model::settings::{PanelFocus, PanelMode};
+use mbv_ui_model::tab_selection::TabSelection;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -166,7 +166,7 @@ impl App {
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            home_latest_launch_window: crate::app::ui_model::home_latest::HomeLatestLaunchWindow {
+            home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow {
                 previous: None,
                 current: 0,
             },
@@ -242,9 +242,9 @@ impl App {
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
-            queue_card_projection: crate::app::ui_model::queue_card::QueueCardProjection::default(),
+            queue_card_projection: mbv_ui_model::queue_card::QueueCardProjection::default(),
             dim_backdrop_active: false,
-            settings_destination: crate::app::ui_model::settings::SettingsDestination::Main,
+            settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,
             mouse_capture_pending: None,
             confirm_logout: false,
@@ -277,7 +277,7 @@ impl App {
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
             cast_status_loading: false,
-            queue_epoch: crate::app::ui_model::queue_owner::QueueEpoch::default(),
+            queue_epoch: mbv_ui_model::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,
@@ -317,7 +317,7 @@ impl App {
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
-            feed_tab: crate::app::ui_model::feed_tab::FeedTabState::default(),
+            feed_tab: mbv_ui_model::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_feed::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();

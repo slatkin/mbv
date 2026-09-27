@@ -1,7 +1,7 @@
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel, LibrarySlotEvent};
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_msg::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
+use mbv_ui_model::library::LibraryKey;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute};

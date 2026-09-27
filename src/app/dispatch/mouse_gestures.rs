@@ -53,7 +53,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: &str) {
-        self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
@@ -70,7 +70,7 @@ impl App {
         &mut self,
         slot_id: Option<mbv_queue::QueueSlotId>,
     ) -> Option<usize> {
-        self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Queue);
+        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         let slot_id = slot_id?;
         let index = self
             .displayed_queue()
@@ -208,10 +208,10 @@ impl App {
     pub(in crate::app) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
-                self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
             }
             TvHit::SeriesRow(target) => {
-                self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 // The component resolved the stable ID from its painted row;
                 // persist that resolved nav index rather than re-reading the
                 // shell's previous cursor. A stale target is a no-op.
@@ -231,7 +231,7 @@ impl App {
             // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
             // letter-pill arm.
             TvHit::LetterPill(index) => {
-                self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.select_letter_pill(lib_idx, index);
             }
         }

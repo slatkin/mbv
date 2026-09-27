@@ -1,10 +1,10 @@
 use super::{BrowseLevel, LibraryTab, TabSelection};
 use crate::app::state::app_struct::LevelFillState;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::browse::BrowseResting;
-use crate::app::ui_model::events::LibEvent;
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::events::LibEvent;
 use std::time::{Duration, Instant};
 
 fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {

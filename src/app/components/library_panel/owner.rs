@@ -14,10 +14,10 @@ use tuirealm::event::KeyEvent;
 
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_msg::SelectionSummary;
 use crate::app::ui_msg::{LeafKeyResult, Msg};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
+use mbv_ui_model::library::LibraryKey;
 
 use super::content::LibraryPanelContent;
 use super::hero::HeroContentData;
@@ -25,9 +25,9 @@ use crate::app::render::components::tv_wide::HeroImageState;
 
 #[cfg(test)]
 mod library_kind_tests {
-    use crate::app::ui_model::library::LibraryKind;
     use mbv_config::TabIdentity;
     use mbv_queue::ServiceKind;
+    use mbv_ui_model::library::LibraryKind;
 
     #[test]
     fn maps_known_collection_types() {
@@ -283,8 +283,7 @@ pub(in crate::app) trait LibraryContentOwner {
         None
     }
 
-    fn set_selection_origin(&mut self, _origin: crate::app::ui_model::media_list::SelectionOrigin) {
-    }
+    fn set_selection_origin(&mut self, _origin: mbv_ui_model::media_list::SelectionOrigin) {}
 
     /// The owner-resolved cursor and resting scroll after local movement.
     /// `None` is used by owners whose position is not persisted by App.

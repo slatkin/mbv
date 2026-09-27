@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use crate::app::ui_model::tab_selection::TabSelection;
 use mbv_queue::AudiobookshelfBookQueueItem;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use mbv_ui_model::tab_selection::TabSelection;
 
 fn library() -> mbv_audiobookshelf::AudiobookshelfLibrary {
     mbv_audiobookshelf::AudiobookshelfLibrary {

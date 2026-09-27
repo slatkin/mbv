@@ -1,5 +1,5 @@
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::ui_model::settings::PanelFocus;
+use mbv_ui_model::settings::PanelFocus;
 
 impl super::super::Model {
     pub(super) fn refresh_visual_selection(&mut self) {

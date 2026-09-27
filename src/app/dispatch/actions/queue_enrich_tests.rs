@@ -1,6 +1,6 @@
 use super::queue_state_tests::XdgHomeGuard;
-use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{BrowseLevel, LibEvent, LibraryTab};
+use mbv_ui_model::browse::BrowseResting;
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 

@@ -11,9 +11,9 @@ use tuirealm::state::State;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use crate::app::render::{render_library_routes_content, LibraryRoutesRenderModel};
-use crate::app::ui_model::context_menu::{LibraryRoutePopup, LibraryRouteStage};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
+use mbv_ui_model::context_menu::{LibraryRoutePopup, LibraryRouteStage};
 
 pub struct LibraryRoutesComponent {
     stage: Option<LibraryRouteStage>,

@@ -1,10 +1,10 @@
 use crate::app::render::components::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaSemanticState,
 };
-use crate::app::ui_model::playback::PlaybackState;
-use crate::app::ui_model::ui_util::fmt_duration_short;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
+use mbv_ui_model::playback::PlaybackState;
+use mbv_ui_model::ui_util::fmt_duration_short;
 
 /// Project Queue slots into the canonical provider-neutral row vocabulary
 /// (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the

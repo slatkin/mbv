@@ -1,0 +1,238 @@
+use crate::ui_util::natural_sort_key;
+
+/// For folder-based music libraries where albums are stored as directories named
+/// "Artist (YYYY) Album Title", parse out the three components.
+/// Returns `(artist, year, album_title)` on success.
+#[must_use]
+pub fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
+    let mut search_from = 0;
+    while let Some(rel) = name[search_from..].find(" (") {
+        let sp_pos = search_from + rel; // position of the space before '('
+        if let Some(album) = parse_album_folder_candidate(name, sp_pos) {
+            return Some(album);
+        }
+        search_from = sp_pos + 2;
+    }
+    None
+}
+
+fn parse_album_folder_candidate(name: &str, sp_pos: usize) -> Option<(String, u32, String)> {
+    let after_open = sp_pos + 2; // position of first char after '('
+    let close_rel = name[after_open..].find(')')?;
+    let year_str = &name[after_open..after_open + close_rel];
+    if year_str.len() != 4 {
+        return None;
+    }
+    let year = year_str.parse::<u32>().ok()?;
+    let close_pos = after_open + close_rel; // position of ')'
+    if !name[close_pos..].starts_with(") ") {
+        return None;
+    }
+    Some((
+        name[..sp_pos].to_string(),
+        year,
+        name[close_pos + 2..].to_string(),
+    ))
+}
+
+/// Strips a leading article ("The ", "A ", "An ") from `s` (case-insensitive).
+/// Returns a slice of the original string starting after the article.
+#[must_use]
+pub fn strip_article(s: &str) -> &str {
+    for prefix in &["the ", "a ", "an "] {
+        // `s.get(..prefix.len())` returns `None` (rather than panicking, as a
+        // byte-index slice would) when `prefix.len()` doesn't land on a UTF-8
+        // char boundary — e.g. an accented artist name where the boundary
+        // falls inside a multi-byte character.
+        if let Some(head) = s.get(..prefix.len()) {
+            if head.eq_ignore_ascii_case(prefix) {
+                return &s[prefix.len()..];
+            }
+        }
+    }
+    s
+}
+
+/// Best-effort natural sort key for an album's display artist, computed
+/// synchronously (Emby tag or folder-name heuristic only — no network fetch,
+/// no cache lookup). Used to pick a sane initial cursor position when a
+/// music-group album level first loads (see `handle_lib_event`'s
+/// `LibEvent::Loaded` arm in `actions.rs`), before its grouping candidate
+/// has settled. Mirrors `derive_album_artist`'s synchronous fallback chain
+/// (Emby tag → folder-name-parsed artist → literal "Unknown Artist"), minus
+/// the cache/fetch steps, since nothing is cached yet at initial load.
+#[must_use]
+pub fn initial_group_artist_sort_key(item: &mbv_emby_model::EmbyItem) -> String {
+    let artist = if !item.artist.is_empty() {
+        item.artist.clone()
+    } else if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
+        artist
+    } else {
+        "Unknown Artist".to_string()
+    };
+    natural_sort_key(strip_article(&artist))
+}
+
+/// Returns the effective sort key for an item: `sort_name` when Emby provides it,
+/// otherwise the item's display name with any leading article stripped.
+#[must_use]
+pub fn effective_sort_str(item: &mbv_emby_model::EmbyItem) -> &str {
+    if item.sort_name.is_empty() {
+        strip_article(&item.name)
+    } else {
+        &item.sort_name
+    }
+}
+
+/// Returns the letter-group bucket label for `item` given `total` items in the list.
+/// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
+/// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
+/// individual letters for 250+ items.
+#[must_use]
+pub fn letter_bucket(item: &mbv_emby_model::EmbyItem, total: usize) -> String {
+    crate::ui_util::letter_bucket_label(effective_sort_str(item), total)
+}
+
+/// Library size above which the library list shows the
+/// letter-range pill row (see `LetterFilter`), scoping the server fetch to
+/// one range at a time. Unrelated to the 50-item in-list header threshold
+/// used by `use_letter_groups` in `list.rs`.
+pub const LIBRARY_PILL_THRESHOLD: usize = 300;
+
+#[must_use]
+pub fn resolve_tv_content_mode(
+    total: usize,
+    restored: Option<&mbv_queue::TvContentMode>,
+) -> mbv_queue::TvContentMode {
+    let large = total > LIBRARY_PILL_THRESHOLD;
+    match restored {
+        Some(mbv_queue::TvContentMode::All) | None if large => mbv_queue::TvContentMode::Latest,
+        Some(mbv_queue::TvContentMode::Range(_)) if !large => mbv_queue::TvContentMode::All,
+        Some(mode) => mode.clone(),
+        None => mbv_queue::TvContentMode::All,
+    }
+}
+
+/// The letter-range pill buckets, in display order. Single source of truth
+/// for both the pill labels and the Emby `NameStartsWithOrGreater` /
+/// `NameLessThan` fetch bounds, so they can't drift apart. Mirrors the range
+/// boundaries used by `letter_bucket` above.
+///
+/// KNOWN LIMITATION (see `letter_bucket`'s doc comment): the `"#"` pill's
+/// bounds (`NameLessThan("A")`) only reach titles that sort *before* "A".
+/// An accented title whose `SortName` starts with a codepoint after 'Z'
+/// (e.g. "Æon Flux") is fetched by the `V–Z` pill but rendered under a
+/// `"#"` in-list header, and so is unreachable from the `"#"` pill itself.
+const LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
+    ("A\u{2013}C", Some("A"), Some("D")),
+    ("D\u{2013}F", Some("D"), Some("G")),
+    ("G\u{2013}I", Some("G"), Some("J")),
+    ("J\u{2013}L", Some("J"), Some("M")),
+    ("M\u{2013}O", Some("M"), Some("P")),
+    ("P\u{2013}R", Some("P"), Some("S")),
+    ("S\u{2013}U", Some("S"), Some("V")),
+    ("V\u{2013}Z", Some("V"), None),
+    ("#", None, Some("A")),
+];
+
+/// The TV library's coarser alphabet ranges. The first range intentionally
+/// has no lower bound so digits and other names sorting before `J` are
+/// reachable; the last range has no upper bound for the same reason.
+const TV_LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
+    ("A-I", None, Some("J")),
+    ("J-R", Some("J"), Some("S")),
+    ("S-Z", Some("S"), None),
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LetterFilterKind {
+    Movie,
+    Tv,
+}
+
+impl LetterFilterKind {
+    #[must_use]
+    pub fn from_collection_type(collection_type: &str) -> Self {
+        if collection_type == "tvshows" {
+            Self::Tv
+        } else {
+            Self::Movie
+        }
+    }
+}
+
+/// A selected letter-range pill: which bucket, its display label, and the
+/// Emby name-range bounds to fetch. Constructed only via the kind-aware
+/// constructors so it always matches the selected library's table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LetterFilter {
+    pub index: usize,
+    pub label: &'static str,
+    pub name_ge: Option<&'static str>,
+    pub name_lt: Option<&'static str>,
+}
+
+impl LetterFilter {
+    fn buckets(
+        kind: LetterFilterKind,
+    ) -> &'static [(&'static str, Option<&'static str>, Option<&'static str>)] {
+        match kind {
+            LetterFilterKind::Movie => LETTER_FILTER_BUCKETS,
+            LetterFilterKind::Tv => TV_LETTER_FILTER_BUCKETS,
+        }
+    }
+
+    /// Number of movie pill buckets (`A–C` … `V–Z`, `#`).
+    #[must_use]
+    pub fn count_for_kind(kind: LetterFilterKind) -> usize {
+        Self::buckets(kind).len()
+    }
+
+    #[must_use]
+    pub fn for_index_for_kind(index: usize, kind: LetterFilterKind) -> Option<Self> {
+        Self::buckets(kind)
+            .get(index)
+            .map(|&(label, name_ge, name_lt)| LetterFilter {
+                index,
+                label,
+                name_ge,
+                name_lt,
+            })
+    }
+
+    /// The default pill selected when a large library is first opened:
+    /// the first range, `A–C`.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the built-in bucket table for `kind` is empty.
+    #[must_use]
+    pub fn default_filter_for_kind(kind: LetterFilterKind) -> Self {
+        Self::for_index_for_kind(0, kind).expect("letter filter bucket table is non-empty")
+    }
+
+    #[must_use]
+    pub fn for_sort_key_for_kind(key: &str, kind: LetterFilterKind) -> Option<Self> {
+        Self::buckets(kind)
+            .iter()
+            .enumerate()
+            .find(|&(_, &(_, name_ge, name_lt))| {
+                name_ge.is_none_or(|ge| key >= ge) && name_lt.is_none_or(|lt| key < lt)
+            })
+            .and_then(|(index, _)| Self::for_index_for_kind(index, kind))
+    }
+
+    /// All movie pill labels in bucket order, for building a `PillBar`.
+    #[must_use]
+    pub fn labels() -> Vec<String> {
+        Self::labels_for_kind(LetterFilterKind::Movie)
+    }
+
+    #[must_use]
+    pub fn labels_for_kind(kind: LetterFilterKind) -> Vec<String> {
+        Self::buckets(kind)
+            .iter()
+            .map(|&(label, _, _)| label.to_string())
+            .collect()
+    }
+}

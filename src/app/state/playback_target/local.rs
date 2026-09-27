@@ -1,8 +1,9 @@
+use super::LocalPlaybackTarget;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
-use crate::app::ui_model::ui_util::take_chars;
-use crate::app::{App, LocalPlaybackTarget};
+use crate::app::App;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::ui_model::events::NavigateLanding;
+use mbv_ui_model::events::NavigateLanding;
 
 #[test]
 fn series_landing_applies_the_searched_series_activation_on_the_root_level() {

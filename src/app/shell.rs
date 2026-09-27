@@ -4,9 +4,9 @@ use std::time::Duration;
 use super::components::{QueueBoundaryComponent, UiRootComponent};
 use super::ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use super::{
-    components, render, ui_model::sidebar::SidebarId, AlbumIndexState, App, BrowseLevel,
-    ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState,
-    PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage, TabSelection, ToastSeverity,
+    components, render, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed,
+    LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
+    SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
 };
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
@@ -15,16 +15,14 @@ use super::{
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
-use crate::app::ui_model::feeds_manage::FeedsManagePopup;
-#[cfg(test)]
-use crate::app::ui_model::home_latest::current_launch_secs;
-use crate::app::ui_model::home_latest::HomeLatestLaunchWindow;
-use crate::app::ui_model::playback::{
-    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
-};
 use crate::app::ui_msg::AlbumCursorKind;
 #[cfg(test)]
 pub(in crate::app) use crate::app::ui_msg::OverlayId;
+use mbv_ui_model::feeds_manage::FeedsManagePopup;
+#[cfg(test)]
+use mbv_ui_model::home_latest::current_launch_secs;
+use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
+use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -179,13 +177,11 @@ pub struct Model {
     /// progress-% bucket + paused + the title model.
     pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
-    pub(in crate::app) visual_selection:
-        Option<(crate::app::ui_model::settings::PanelFocus, usize)>,
-    pub(in crate::app) context_menu_origin:
-        Option<crate::app::ui_model::media_list::SelectionOrigin>,
+    pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
+    pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
     pub(in crate::app) context_action_snapshot: Option<
-        crate::app::ui_model::context_menu::ContextActionSnapshot<
-            crate::app::ui_model::context_menu::ContextMenuTargets,
+        mbv_ui_model::context_menu::ContextActionSnapshot<
+            mbv_ui_model::context_menu::ContextMenuTargets,
         >,
     >,
     /// The last Esc press, for the double-Esc playback stop. Shell-owned
@@ -321,11 +317,11 @@ impl Model {
         {
             let mut panel = super::components::library_panel::LibraryPanel::new();
             panel.insert_owner(
-                crate::app::ui_model::library::LibraryKey::Home,
+                mbv_ui_model::library::LibraryKey::Home,
                 Box::new(super::components::home_content::HomeContent::new()),
             );
             panel.insert_owner(
-                crate::app::ui_model::library::LibraryKey::Feeds,
+                mbv_ui_model::library::LibraryKey::Feeds,
                 Box::new(super::components::feeds_content::FeedsContent::new()),
             );
             model

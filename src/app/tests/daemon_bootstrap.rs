@@ -78,9 +78,8 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
         name: "ABS Podcasts".into(),
         media_type: "podcast".into(),
     };
-    let mut browse = crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(
-        library.clone(),
-    );
+    let mut browse =
+        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
     browse.detail_cache.insert(
         "show-a".into(),
         vec![mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {

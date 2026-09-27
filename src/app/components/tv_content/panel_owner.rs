@@ -156,7 +156,7 @@ impl LibraryContentOwner for TvContent {
         Some(self)
     }
 
-    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
+    fn set_selection_origin(&mut self, origin: mbv_ui_model::media_list::SelectionOrigin) {
         self.carrier.set_selection_origin(origin);
     }
 

@@ -17,9 +17,9 @@ use super::intents::{
     SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
-use crate::app::ui_model::context_menu::ContextMenuTargets;
-use crate::app::ui_model::media_list::SelectionOrigin;
-use crate::app::ui_model::msg::{HomeRowTarget, MusicArtistTarget};
+use mbv_ui_model::context_menu::ContextMenuTargets;
+use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::msg::{HomeRowTarget, MusicArtistTarget};
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -126,7 +126,7 @@ pub enum ShellRequest {
     /// Project the focused list's count-only summary to the Status bar.
     SelectionProjection(crate::app::ui_msg::SelectionSummary),
     /// Clear the active list's Visual selection from the status indicator.
-    ClearMultiSelection(crate::app::ui_model::media_list::SelectionOrigin),
+    ClearMultiSelection(mbv_ui_model::media_list::SelectionOrigin),
     /// Select the left-panel tab at the position the mounted `TabPanel`
     /// resolved from its own painted hit regions (task 2.1). The shell owns
     /// the tab switch and its side effects; the panel only reports which tab
@@ -179,7 +179,7 @@ pub enum ShellRequest {
     /// Refresh the Emby session and Cast receiver snapshots.
     RefreshSessions,
     /// Activate the selected session/cast target by kind-qualified identity.
-    SelectSession(crate::app::ui_model::panel_targets::SessionTargetKey),
+    SelectSession(mbv_ui_model::panel_targets::SessionTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
     /// Refresh the Feeds subscriptions through the shell-owned worker.
@@ -198,7 +198,7 @@ pub enum ShellRequest {
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
     MultiselectCommit {
-        kind: crate::app::ui_model::context_menu::MultiSelectKind,
+        kind: mbv_ui_model::context_menu::MultiSelectKind,
         items: Vec<(String, String, bool)>,
     },
     /// Advance or leave the nested Library-routes picker through App's
@@ -490,7 +490,7 @@ pub enum ShellRequest {
     /// boundary; the shell retains the legacy migration snapshot in memory
     /// without re-reading the component cursor.
     LibraryScroll {
-        key: crate::app::ui_model::library::LibraryKey,
+        key: mbv_ui_model::library::LibraryKey,
         index: usize,
         scroll: usize,
     },

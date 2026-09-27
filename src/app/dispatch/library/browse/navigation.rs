@@ -1,10 +1,10 @@
 use super::search::build_album_index_with;
-use crate::app::ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
-use crate::app::ui_model::events::NavigateLanding;
-use crate::app::ui_model::ui_util::sort_episodes;
 use crate::app::{AlbumPathPart, App, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
+use mbv_ui_model::events::NavigateLanding;
+use mbv_ui_model::ui_util::sort_episodes;
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
 /// `Chain` keeps the built ancestor-chain nav stack (Movie/generic);

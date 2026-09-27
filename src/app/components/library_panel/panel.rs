@@ -17,10 +17,10 @@ use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::render::arrangements::wide_hero::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
-use crate::app::ui_model::library::LibraryKey;
-use crate::app::ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use crate::app::ui_msg::SelectionSummary;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 
 use super::content::PanelHeroImagePaint;
 use super::hero::HeroContentData;
@@ -120,26 +120,6 @@ pub struct LibraryPanel {
     /// Explicit series overlays are never closed by that pass.
     mini_view_hero_auto_open: bool,
     overlay_geometry: Option<OverlayGeometry>,
-}
-
-impl From<LibraryKey> for LibrarySelectionOrigin {
-    fn from(key: LibraryKey) -> Self {
-        match key {
-            LibraryKey::Home => Self::Home,
-            LibraryKey::Feeds => Self::Feeds,
-            key @ LibraryKey::Service { .. } => Self::Service(key),
-        }
-    }
-}
-
-impl From<LibrarySelectionOrigin> for LibraryKey {
-    fn from(origin: LibrarySelectionOrigin) -> Self {
-        match origin {
-            LibrarySelectionOrigin::Home => Self::Home,
-            LibrarySelectionOrigin::Feeds => Self::Feeds,
-            LibrarySelectionOrigin::Service(key) => key,
-        }
-    }
 }
 
 impl LibraryPanel {

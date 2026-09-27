@@ -1,9 +1,9 @@
-use crate::app::ui_model::browse::BrowseResting;
-use crate::app::ui_model::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use crate::app::{
     App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 
 use crate::app::dispatch::notify::ToastSeverity;
 
@@ -177,9 +177,7 @@ impl App {
                         .tracks
                         .iter()
                         .filter(|track| {
-                            crate::app::ui_model::music_artist_detail::track_matches_album(
-                                track, album_id,
-                            )
+                            mbv_ui_model::music_artist_detail::track_matches_album(track, album_id)
                         })
                         .cloned()
                         .collect();

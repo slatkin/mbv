@@ -7,13 +7,11 @@ use super::components::library_panel::LibraryPanel;
 use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
-use crate::app::ui_model::library::LibraryKey;
-use crate::app::ui_model::playback::{
-    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
-};
-#[cfg(test)]
 use crate::app::ui_msg::ComponentId;
 use mbv_queue::QueueItem;
+#[cfg(test)]
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 use std::time::Instant;
 
 impl Model {
@@ -78,7 +76,7 @@ impl Model {
 
     pub(in crate::app) fn home_stable_target(
         &self,
-        target: &crate::app::ui_model::msg::HomeRowTarget,
+        target: &mbv_ui_model::msg::HomeRowTarget,
     ) -> Option<(QueueItem, bool)> {
         if !target.from_continue_watching {
             return None;
@@ -176,7 +174,7 @@ impl Model {
                 .get(library_id)
                 .is_some_and(|items| {
                     items.iter().any(|item| {
-                        crate::app::ui_model::home_latest::is_new_in_launch_window(
+                        mbv_ui_model::home_latest::is_new_in_launch_window(
                             item,
                             self.app.home_latest_launch_window,
                         )
@@ -200,7 +198,7 @@ impl Model {
 
 fn recompute_destination_latest_marker(
     snapshot: &mut DestinationLatestSnapshot,
-    launch_window: crate::app::ui_model::home_latest::HomeLatestLaunchWindow,
+    launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
     acknowledged: &std::collections::HashSet<DestinationLatestSource>,
 ) {
     snapshot.recompute_new_content(launch_window);

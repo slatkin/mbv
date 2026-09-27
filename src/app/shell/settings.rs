@@ -1,10 +1,10 @@
 use super::components::{SettingsComponent, SettingsSnapshot};
 use super::Model;
 use crate::app::render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
-use crate::app::ui_model::settings;
-use crate::app::ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use crate::app::ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
 use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
+use mbv_ui_model::settings;
+use mbv_ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
 
@@ -68,8 +68,7 @@ impl Model {
             }
         }
         rows.push(SettingsRow {
-            label: settings::setting_label(crate::app::ui_model::settings::SettingKey::LogOut)
-                .into(),
+            label: settings::setting_label(mbv_ui_model::settings::SettingKey::LogOut).into(),
             value: String::new(),
             section: false,
             cursor: Some(cursor),
@@ -93,10 +92,7 @@ impl Model {
                             action
                         )
                     },
-                    muted: matches!(
-                        *entry,
-                        crate::app::ui_model::settings::ServiceEntry::Audiobookshelf
-                    ),
+                    muted: matches!(*entry, mbv_ui_model::settings::ServiceEntry::Audiobookshelf),
                 }
             })
             .collect();
@@ -209,7 +205,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    crate::app::ui_model::settings::ServiceActionIntent::ReplaceAudiobookshelf,
+                    mbv_ui_model::settings::ServiceActionIntent::ReplaceAudiobookshelf,
                 );
                 false
             }
@@ -217,7 +213,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    crate::app::ui_model::settings::ServiceActionIntent::RemoveAudiobookshelf,
+                    mbv_ui_model::settings::ServiceActionIntent::RemoveAudiobookshelf,
                 );
                 false
             }
@@ -295,9 +291,10 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                self.app.handle_settings_activate(
-                    crate::app::ui_model::settings::settings_cursor_to_key(cursor),
-                );
+                self.app
+                    .handle_settings_activate(mbv_ui_model::settings::settings_cursor_to_key(
+                        cursor,
+                    ));
                 false
             }
         }
@@ -335,8 +332,8 @@ mod tests {
     /// actions whose router binding deviates from the declared default.
     #[test]
     fn keys_row_summary_follows_the_loaded_configuration() {
-        use crate::app::ui_model::settings;
         use crate::app::SettingKey;
+        use mbv_ui_model::settings;
         let app = crate::app::tests::make_app_stub();
         let cfg = app.config.lock().unwrap().clone();
         let ui = app.ui_config_snapshot();

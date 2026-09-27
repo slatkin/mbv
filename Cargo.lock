@@ -1724,6 +1724,7 @@ dependencies = [
  "mbv-remote-player",
  "mbv-text",
  "mbv-theme",
+ "mbv-ui-model",
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
@@ -1980,6 +1981,29 @@ name = "mbv-theme"
 version = "0.21.2"
 dependencies = [
  "ratatui",
+]
+
+[[package]]
+name = "mbv-ui-model"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-cast",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-feed",
+ "mbv-player",
+ "mbv-queue",
+ "mbv-remote-player",
+ "mbv-ws",
+ "ratatui",
+ "rstest",
+ "time",
+ "unicode-width",
 ]
 
 [[package]]

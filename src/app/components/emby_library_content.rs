@@ -28,8 +28,8 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::render::{effective_sort_str, LetterFilter};
-use crate::app::ui_model::library::LibraryKind;
 use crate::app::ui_msg::{Msg, ShellRequest};
+use mbv_ui_model::library::LibraryKind;
 
 mod input;
 mod panel;
@@ -62,8 +62,8 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
         Some(context) => (context.text, Some(parts.title.text)),
         None => (parts.title.text, None),
     };
-    let trailing = crate::app::ui_model::home_latest::provider_timestamp_secs(&item)
-        .map(crate::app::ui_model::ui_util::fmt_publish_date_short)
+    let trailing = mbv_ui_model::home_latest::provider_timestamp_secs(&item)
+        .map(mbv_ui_model::ui_util::fmt_publish_date_short)
         .filter(|date| !date.is_empty())
         .map(MediaListTrailing::Gutter);
     (primary, secondary, trailing)

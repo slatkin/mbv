@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::components::MultiselectComponent;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
 use crate::app::ui_msg::{Msg, ShellRequest, UserEvent};
+use mbv_ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
 use tuirealm::component::AppComponent;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -185,18 +185,16 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
 #[test]
 fn context_menu_click_select_executes_and_closes_the_menu() {
     use crate::app::components::ContextMenuComponent;
-    use crate::app::ui_model::context_menu::{
+    use mbv_ui_model::context_menu::{
         ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
     };
     use ratatui::layout::Rect;
     use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
     let mut model = Model::new(make_app_stub());
-    model.app.pending_overlay = Some(crate::app::ui_model::overlay::OverlayRequest::ContextMenu(
+    model.app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(
         ContextMenu {
-            anchor: ContextMenuAnchor::SelectedItem(
-                crate::app::ui_model::settings::PanelFocus::Library,
-            ),
+            anchor: ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library),
             entries: vec![ContextMenuEntry {
                 label: "Play",
                 action: Some(ContextAction::Play),

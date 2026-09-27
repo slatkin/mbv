@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_model::browse::BrowseResting;
 use crate::app::{BrowseLevel, LibraryTab};
 use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::browse::BrowseResting;
 
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",

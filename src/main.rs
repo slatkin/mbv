@@ -24,15 +24,13 @@ mod mpris;
 mod single_instance;
 mod tray;
 
-use app::{
-    ui_model::home_latest::{capture_launch_window, current_launch_secs},
-    App, Model,
-};
+use app::{App, Model};
 use config::load_config;
 use mbv_core::applog;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_remote_player as remote_player;
+use mbv_ui_model::home_latest::{capture_launch_window, current_launch_secs};
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
 /// with the launch window available to the model.

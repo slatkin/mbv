@@ -1,7 +1,7 @@
-use crate::app::ui_model::browse::BrowseLevel;
-use crate::app::ui_model::browse::BrowseResting;
-use crate::app::ui_model::feed::FeedHomeVideoState;
 use crate::app::App;
+use mbv_ui_model::browse::BrowseLevel;
+use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::feed::FeedHomeVideoState;
 impl App {
     /// Keeps the legacy browse snapshot current in memory for the migration
     /// reader. It deliberately never writes the legacy per-library document;
@@ -85,7 +85,7 @@ impl App {
             .libs
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
-            .map(crate::app::ui_model::library_tab::LibraryTab::library_position_snapshot);
+            .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
         let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
         let mut saved = self.saved_library_position(lib_idx);
         let saved_mode_is_stale = Self::saved_tv_mode_is_stale(saved.as_ref());
@@ -129,7 +129,7 @@ impl App {
     fn normalize_saved_tv_mode(saved: Option<&mut mbv_queue::LibraryPosition>) {
         if let Some(position) = saved {
             if let Some(root) = position.levels.first_mut() {
-                let mode = crate::app::ui_model::sort_filter::resolve_tv_content_mode(
+                let mode = mbv_ui_model::sort_filter::resolve_tv_content_mode(
                     root.library_total.unwrap_or_default(),
                     root.tv_content_mode.as_ref(),
                 );
@@ -196,22 +196,15 @@ impl App {
             loading: true,
             all_items: None,
             letter_filter: root.letter_filter_index.and_then(|index| {
-                let filter_kind =
-                    crate::app::ui_model::sort_filter::LetterFilterKind::from_collection_type(
-                        self.libs[lib_idx].library.collection_type.as_str(),
-                    );
-                if filter_kind == crate::app::ui_model::sort_filter::LetterFilterKind::Tv
-                    && index
-                        >= crate::app::ui_model::sort_filter::LetterFilter::count_for_kind(
-                            filter_kind,
-                        )
+                let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
+                    self.libs[lib_idx].library.collection_type.as_str(),
+                );
+                if filter_kind == mbv_ui_model::sort_filter::LetterFilterKind::Tv
+                    && index >= mbv_ui_model::sort_filter::LetterFilter::count_for_kind(filter_kind)
                 {
                     None
                 } else {
-                    crate::app::ui_model::sort_filter::LetterFilter::for_index_for_kind(
-                        index,
-                        filter_kind,
-                    )
+                    mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(index, filter_kind)
                 }
             }),
             tv_content_mode: root.tv_content_mode.clone(),

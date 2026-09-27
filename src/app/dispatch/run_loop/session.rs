@@ -2,8 +2,9 @@
 //! file within the repository's file-size limit.
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::ui_model::queue_owner::QueueOrigin;
-use crate::app::{ui_model::sidebar::SidebarId, App, PanelFocus, SessionEvent};
+use crate::app::SidebarId;
+use crate::app::{App, PanelFocus, SessionEvent};
+use mbv_ui_model::queue_owner::QueueOrigin;
 use std::time::{Duration, Instant};
 
 impl App {

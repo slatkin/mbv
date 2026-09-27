@@ -1,8 +1,8 @@
 use crate::app::render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use crate::app::ui_model::ui_util::fmt_duration_gutter;
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use mbv_ui_model::ui_util::fmt_duration_gutter;
 
 /// Canonical row projection for the book catalog: one selectable `Item` per
 /// book in the selected surname bucket, keyed by its stable `library_item_id`.

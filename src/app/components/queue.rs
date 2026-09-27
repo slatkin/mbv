@@ -22,11 +22,11 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
-use crate::app::ui_model::playback::{PlaybackState, QueueScope};
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, QueueRequest};
 use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_theme as palette;
+use mbv_ui_model::playback::{PlaybackState, QueueScope};
 
 mod keys;
 mod pointer;

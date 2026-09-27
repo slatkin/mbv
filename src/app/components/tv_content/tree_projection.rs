@@ -3,10 +3,10 @@ use super::episode_rows::upcoming_episode_target;
 use super::TvContent;
 use crate::app::render::components::media_list::MediaSemanticState;
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
-use crate::app::ui_model::ui_util::natural_sort_key;
 use crate::app::ui_msg::TvTreeTarget;
 use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::ui_util::natural_sort_key;
 
 impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.
@@ -80,7 +80,7 @@ impl TvContent {
     pub(super) fn detail_for_projection<'a>(
         context: &'a TvWideRenderCtx,
         show: &EmbyItem,
-    ) -> Option<&'a crate::app::ui_model::browse::SeriesDetail> {
+    ) -> Option<&'a mbv_ui_model::browse::SeriesDetail> {
         context.series_details.get(&show.id).or_else(|| {
             context
                 .selected_series
@@ -96,7 +96,7 @@ impl TvContent {
     pub(super) fn detail_for_show(
         &self,
         show: &EmbyItem,
-    ) -> Option<&crate::app::ui_model::browse::SeriesDetail> {
+    ) -> Option<&mbv_ui_model::browse::SeriesDetail> {
         self.context
             .series_details
             .get(&show.id)

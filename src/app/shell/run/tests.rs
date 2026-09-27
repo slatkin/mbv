@@ -5,7 +5,6 @@ use crate::app::dispatch::session::service_startup::{
 use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_movie_app;
-use crate::app::ui_model::events::LibEvent;
 use crate::app::SessionEvent;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
@@ -13,6 +12,7 @@ use mbv_audiobookshelf::{
 };
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_images::series_image_cache_key;
+use mbv_ui_model::events::LibEvent;
 use rstest::rstest;
 use std::collections::HashMap;
 
@@ -107,7 +107,7 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     assert!(
         matches!(
             app.pending_overlay,
-            Some(crate::app::ui_model::overlay::OverlayRequest::DismissConfirm)
+            Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm)
         ),
         "clear:yes must dismiss the confirmation modal"
     );

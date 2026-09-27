@@ -29,10 +29,10 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use crate::app::ui_model::search_sidebar::SearchSidebar;
-use crate::app::ui_model::ui_util::move_cursor;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ServiceRequest, ShellRequest};
+use mbv_ui_model::search_sidebar::SearchSidebar;
+use mbv_ui_model::ui_util::move_cursor;
 
 const SEARCH_DEBOUNCE_MS: u64 = 300;
 

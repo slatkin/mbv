@@ -1,4 +1,4 @@
-use crate::app::ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::BrowseResting;
 
 use crate::app::App;
 use rstest::rstest;
@@ -20,7 +20,7 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
     // clicked slot, passed straight through (D2), not recovered from
     // `queue_cursor`: a follow cursor pointing elsewhere must not redirect.
     let mut app = crate::app::tests::make_app_stub();
-    app.panel_focus = crate::app::ui_model::settings::PanelFocus::Queue;
+    app.panel_focus = mbv_ui_model::settings::PanelFocus::Queue;
     app.player_tab
         .set_items(vec![make_item("A", "Movie"), make_item("B", "Movie")], 0);
     // Follow cursor points at row A (index 0).

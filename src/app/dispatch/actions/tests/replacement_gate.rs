@@ -20,15 +20,15 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
 
     assert!(matches!(
         &app.pending_overlay,
-        Some(crate::app::ui_model::overlay::OverlayRequest::Confirm(modal))
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
             if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
     ));
     assert!(matches!(
         app.pending_queue_replacement,
         Some((
             _,
-            crate::app::ui_model::playback::ReplacementExecutor::Routed(
-                crate::app::ui_model::playback::RoutedReplacementPrep::Album
+            mbv_ui_model::playback::ReplacementExecutor::Routed(
+                mbv_ui_model::playback::RoutedReplacementPrep::Album
             )
         ))
     ));
@@ -119,8 +119,8 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
                 source: mbv_queue::QueueSource::Collection { collection_type },
                 ..
             },
-            crate::app::ui_model::playback::ReplacementExecutor::Routed(
-                crate::app::ui_model::playback::RoutedReplacementPrep::Folder
+            mbv_ui_model::playback::ReplacementExecutor::Routed(
+                mbv_ui_model::playback::RoutedReplacementPrep::Folder
             )
         )) if collection_type == "music"
     ));

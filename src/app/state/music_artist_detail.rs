@@ -19,16 +19,16 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
 use crate::app::render::MusicWideRenderCtx;
-use crate::app::ui_model::library::{LibraryKey, LibraryKind};
-use crate::app::ui_model::msg::MusicArtistTarget;
-use crate::app::ui_model::music_artist_detail::track_matches_album;
-use crate::app::ui_model::music_artist_detail::{
+use crate::app::{App, LibEvent};
+use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_model::msg::MusicArtistTarget;
+use mbv_ui_model::music_artist_detail::track_matches_album;
+use mbv_ui_model::music_artist_detail::{
     ArtistArtworkStatus, ArtistDetailCacheEntry, ArtistDetailKey, ArtistDetailProjection,
     ArtistSummary, ArtistTrackGroup,
 };
-use crate::app::ui_model::music_grouping::ArtistKey;
-use crate::app::ui_model::ui_util::sort_audio_tracks;
-use crate::app::{App, LibEvent};
+use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::ui_util::sort_audio_tracks;
 
 /// At most this many fallback artist per-album track fetches run at once. A
 /// fallback root's scope can be the whole settled catalog, so arming every

@@ -15,15 +15,15 @@ use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::ui_model::confirm::{ConfirmAction, ConfirmModal};
-use crate::app::ui_model::overlay::OverlayRequest;
-use crate::app::ui_model::sidebar::SidebarId;
 use crate::app::ui_msg::{
     ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
     UserEvent,
 };
 use crate::app::ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::sidebar::SidebarId;
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -566,10 +566,10 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     // Locate the MouseSupport row ordinal instead of hardcoding Down presses:
     // the flat row order is SETTING_SECTIONS order, and rows shift whenever a
     // section is added (the Keys entry moved this row once already).
-    let mouse_support_downs = crate::app::ui_model::settings::SETTING_SECTIONS
+    let mouse_support_downs = mbv_ui_model::settings::SETTING_SECTIONS
         .iter()
         .flat_map(|(_, keys)| keys.iter())
-        .position(|key| *key == crate::app::ui_model::settings::SettingKey::MouseSupport)
+        .position(|key| *key == mbv_ui_model::settings::SettingKey::MouseSupport)
         .expect("MouseSupport row exists in SETTING_SECTIONS");
     for _ in 0..mouse_support_downs {
         harness.inject(key(Key::Down));

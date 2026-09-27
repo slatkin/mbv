@@ -8,7 +8,7 @@ use super::*;
 /// `selected_album`/`album_tracks`), so row behaviours must resolve the track
 /// and its owning album from that projection, not the empty album snapshot.
 pub(super) fn artist_workspace_owner() -> MusicContent {
-    use crate::app::ui_model::music_artist_detail::{
+    use mbv_ui_model::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -107,7 +107,7 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
     match press(&mut owner, Key::Char('.')) {
         Some(Msg::Shell(shell_boxed)) => {
             let ShellRequest::MusicRowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
+                mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
                 None,
             ) = *shell_boxed
             else {

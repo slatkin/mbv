@@ -103,7 +103,7 @@ impl MusicContent {
                     _ => vec![item],
                 };
                 Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                    crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
+                    mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
                 ))))
             }
@@ -183,9 +183,7 @@ impl MusicContent {
                     Some(RowIntent::Context(target)) => {
                         search.item_for_target(&target).map(|item| {
                             Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                                crate::app::ui_model::context_menu::ContextMenuTargets::Emby(vec![
-                                    item,
-                                ]),
+                                mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
                                 None,
                             )))
                         })
@@ -304,7 +302,7 @@ impl MusicContent {
             return None;
         }
         Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
+            mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
             Some((at.x, at.y)),
         ))))
     }
@@ -319,7 +317,7 @@ impl MusicContent {
             return None;
         }
         Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(items),
+            mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
             Some((at.x, at.y)),
         ))))
     }

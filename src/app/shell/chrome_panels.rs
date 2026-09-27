@@ -24,8 +24,8 @@ use crate::app::render::arrangements::chrome::{
 use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
 use crate::app::render::{StatusBarModel, VisualModeIndicator};
-use crate::app::ui_model::playback_target::NowPlayingStatus;
 use crate::app::ui_msg::{ComponentId, Msg, UserEvent};
+use mbv_ui_model::playback_target::NowPlayingStatus;
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
     let area = app
@@ -165,7 +165,7 @@ impl Model {
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
         let (titles, markers): (Vec<String>, Vec<bool>) = std::iter::once((
-            crate::app::ui_model::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
+            mbv_ui_model::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
             false,
         ))
         .chain(self.app.libs.iter().map(|lib| {

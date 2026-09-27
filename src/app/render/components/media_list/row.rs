@@ -3,8 +3,8 @@ use crate::app::render::components::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing,
     MediaSemanticState,
 };
-use crate::app::ui_model::ui_util::trunc_str;
 use mbv_theme as palette;
+use mbv_ui_model::ui_util::trunc_str;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::ListItem;

@@ -1,9 +1,9 @@
 use super::super::super::App;
-use crate::app::ui_model::context_menu::MultiSelectKind;
-use crate::app::ui_model::overlay::OverlayRequest;
-use crate::app::ui_model::settings::SettingKey;
-use crate::app::ui_model::settings::SettingsDestination;
-use crate::app::ui_model::ui_util::{cycle_lang, next_subtitle_mode};
+use mbv_ui_model::context_menu::MultiSelectKind;
+use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::settings::SettingKey;
+use mbv_ui_model::settings::SettingsDestination;
+use mbv_ui_model::ui_util::{cycle_lang, next_subtitle_mode};
 use std::time::{Duration, Instant};
 
 impl App {
@@ -12,7 +12,7 @@ impl App {
             let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
-        self.request_sidebar_dismiss(crate::app::ui_model::sidebar::SidebarId::Settings);
+        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
 

@@ -3,9 +3,9 @@
 //! queue, and one fence value shaped by that owner.
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::ui_model::queue_owner::QueueOrigin;
 use crate::app::App;
 use mbv_remote_player::DaemonEndpoint;
+use mbv_ui_model::queue_owner::QueueOrigin;
 
 /// Which process holds the authoritative Local queue. Derived from
 /// `player_endpoint`, never stored: an owner-kind change always goes through

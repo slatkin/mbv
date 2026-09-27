@@ -3,13 +3,13 @@ use super::super::components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
 };
 use super::super::Model;
-use crate::app::ui_model::context_menu::{
+use crate::app::ui_msg::ContextMenuIntent;
+use crate::app::ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
+use mbv_ui_model::context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
-use crate::app::ui_model::settings::PanelFocus;
-use crate::app::ui_msg::ContextMenuIntent;
-use crate::app::ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
+use mbv_ui_model::settings::PanelFocus;
 use ratatui::layout::Rect;
 
 impl Model {
@@ -209,18 +209,18 @@ impl Model {
 
     pub(crate) fn clear_multi_selection_from_origin(
         &mut self,
-        origin: crate::app::ui_model::media_list::SelectionOrigin,
+        origin: mbv_ui_model::media_list::SelectionOrigin,
     ) {
         self.visual_selection = None;
         match origin {
-            crate::app::ui_model::media_list::SelectionOrigin::Queue => {
+            mbv_ui_model::media_list::SelectionOrigin::Queue => {
                 if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
                     if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                         queue.clear_selection();
                     }
                 }
             }
-            crate::app::ui_model::media_list::SelectionOrigin::Library(origin) => {
+            mbv_ui_model::media_list::SelectionOrigin::Library(origin) => {
                 if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
                     if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
                         panel.clear_selection_for_origin(&origin);

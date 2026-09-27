@@ -1,5 +1,5 @@
-use crate::app::ui_model::settings::SettingsDestination;
 use mbv_theme as palette;
+use mbv_ui_model::settings::SettingsDestination;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

@@ -6,10 +6,10 @@ use super::components::music_content::MusicContent;
 use super::BrowseLevel;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
-use crate::app::ui_model::library::LibraryKey;
-use crate::app::ui_model::library::LibraryKind;
-use crate::app::ui_model::msg::MusicArtistTarget;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::library::LibraryKind;
+use mbv_ui_model::msg::MusicArtistTarget;
 
 impl Model {
     pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {
@@ -392,13 +392,13 @@ mod tests {
                     id: "artist-alpha".into(),
                 }];
             }
-            let mut catalog = crate::app::ui_model::music_grouping::build_grouped_album_catalog(
+            let mut catalog = mbv_ui_model::music_grouping::build_grouped_album_catalog(
                 &level.items,
-                &std::collections::HashMap::default(),
+                &std::collections::HashMap::<String, String>::default(),
             );
             catalog.revision = 7;
             catalog.parent_id = level.parent_id.clone();
-            level.music_grouping = Some(crate::app::ui_model::music_grouping::MusicGroupingState {
+            level.music_grouping = Some(mbv_ui_model::music_grouping::MusicGroupingState {
                 revision: 7,
                 candidate: None,
                 settled: Some(catalog),
@@ -407,17 +407,17 @@ mod tests {
         app
     }
 
-    fn music_destination() -> crate::app::ui_model::library::LibraryKey {
-        crate::app::ui_model::library::LibraryKey::Service {
+    fn music_destination() -> mbv_ui_model::library::LibraryKey {
+        mbv_ui_model::library::LibraryKey::Service {
             service: mbv_queue::ServiceKind::Emby,
             library_id: "lib-music".into(),
-            kind: crate::app::ui_model::library::LibraryKind::Music,
+            kind: mbv_ui_model::library::LibraryKind::Music,
         }
     }
 
     fn artist_focused_model() -> (Model, mbv_core::service_runtime::SetupGeneration) {
         let mut model = Model::new(settled_service_artist_app());
-        model.app.panel_focus = crate::app::ui_model::settings::PanelFocus::Library;
+        model.app.panel_focus = mbv_ui_model::settings::PanelFocus::Library;
         model.sync_mounted_surfaces();
         model
             .test_music_owner_mut()
@@ -437,7 +437,7 @@ mod tests {
     fn artist_focus_dispatches_the_typed_requests_and_reuses_the_cache() {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
-        let key = crate::app::ui_model::music_artist_detail::ArtistDetailKey {
+        let key = mbv_ui_model::music_artist_detail::ArtistDetailKey {
             destination: destination.clone(),
             generation: generation.value(),
             artist_id: "artist-alpha".into(),
@@ -476,7 +476,7 @@ mod tests {
         model.app.artist_detail_loading.remove(&key);
         model.app.artist_detail_cache.insert(
             key,
-            crate::app::ui_model::music_artist_detail::ArtistDetailCacheEntry::default(),
+            mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry::default(),
         );
         let target = model
             .test_music_owner()

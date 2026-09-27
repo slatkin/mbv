@@ -1,5 +1,5 @@
 use super::{App, QueueItem, ToastSeverity};
-use crate::app::ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
+use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 
 // ---- Book browsing actions -----------------------------------------
 
@@ -225,9 +225,9 @@ impl App {
         self.set_queue_scope(scope);
         if !matches!(
             self.effective_panel_focus(),
-            crate::app::ui_model::settings::PanelFocus::Library
+            mbv_ui_model::settings::PanelFocus::Library
         ) {
-            self.set_panel_focus(crate::app::ui_model::settings::PanelFocus::Queue);
+            self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         }
     }
 

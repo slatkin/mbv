@@ -22,10 +22,10 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
-use crate::app::ui_model::media_list::SelectionOrigin;
-use crate::app::ui_model::volume::VOLUME_STEP;
 use crate::app::ui_msg::UserEvent;
 use crate::app::ui_msg::{Msg, PlaybackRequest, ShellRequest};
+use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::volume::VOLUME_STEP;
 
 /// The status row panel: paints the status row where `RootFrame` places it
 /// and retains its volume/mute/remote pill regions.

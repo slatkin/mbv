@@ -6,8 +6,8 @@ mod tests;
 
 use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::ui_model::playback::DestinationLatestSource;
 use crate::app::ui_msg::{ComponentId, Msg, ShellRequest};
+use mbv_ui_model::playback::DestinationLatestSource;
 use std::time::Instant;
 
 fn matching_context_items(
@@ -71,7 +71,7 @@ impl Model {
         match request {
             ShellRequest::LibraryPanelFocus => {
                 self.app
-                    .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
             }
             ShellRequest::SelectionProjection(summary) => {
                 self.visual_selection = (summary.count > 0)
@@ -181,11 +181,11 @@ impl Model {
         match request {
             ShellRequest::HomeRowClick { .. } => {
                 self.app
-                    .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
             }
             ShellRequest::HomeRowActivate { target } => {
                 self.app
-                    .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_play_target(item, from_cw);
                 }
@@ -231,14 +231,14 @@ impl Model {
     ) -> bool {
         match request {
             ShellRequest::RowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Home(_),
+                mbv_ui_model::context_menu::ContextMenuTargets::Home(_),
                 _,
             ) => {
                 self.handle_home_request(request);
                 false
             }
             ShellRequest::RowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Queue(slot_ids),
+                mbv_ui_model::context_menu::ContextMenuTargets::Queue(slot_ids),
                 anchor,
             ) => {
                 self.handle_queue_row_context_menu(slot_ids, anchor);
@@ -246,7 +246,7 @@ impl Model {
             }
             ShellRequest::MusicRowContextMenu(targets, anchor) => {
                 self.app
-                    .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 // Keep Music's focus policy before reusing the generic resolver.
                 self.handle_shell_request(
                     ShellRequest::RowContextMenu(targets, anchor),
@@ -389,7 +389,7 @@ impl Model {
         // focused keyboard) show move pulls panel focus to the
         // Library.
         self.app
-            .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(library_item_id) = library_item_id {
             self.app.select_audiobookshelf_show_target(library_item_id);
         } else {
@@ -415,7 +415,7 @@ impl Model {
     /// drain); `Some(())` continues normal flow.
     fn handle_library_scroll_request(
         &mut self,
-        key: &crate::app::ui_model::library::LibraryKey,
+        key: &mbv_ui_model::library::LibraryKey,
         index: usize,
         scroll: usize,
     ) -> Option<()> {
@@ -430,7 +430,7 @@ impl Model {
             .libs
             .iter()
             .position(|lib| {
-                matches!(key, crate::app::ui_model::library::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
+                matches!(key, mbv_ui_model::library::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
             })?;
         if self.app.tab.emby_library_index() != Some(lib_idx) {
             return None;
@@ -460,14 +460,13 @@ impl Model {
         slot_ids: Vec<mbv_queue::QueueSlotId>,
         anchor: Option<(u16, u16)>,
     ) {
-        self.context_menu_origin = Some(crate::app::ui_model::media_list::SelectionOrigin::Queue);
-        self.context_action_snapshot =
-            Some(crate::app::ui_model::context_menu::ContextActionSnapshot {
-                origin: crate::app::ui_model::media_list::SelectionOrigin::Queue,
-                values: vec![
-                    crate::app::ui_model::context_menu::ContextMenuTargets::Queue(slot_ids.clone()),
-                ],
-            });
+        self.context_menu_origin = Some(mbv_ui_model::media_list::SelectionOrigin::Queue);
+        self.context_action_snapshot = Some(mbv_ui_model::context_menu::ContextActionSnapshot {
+            origin: mbv_ui_model::media_list::SelectionOrigin::Queue,
+            values: vec![mbv_ui_model::context_menu::ContextMenuTargets::Queue(
+                slot_ids.clone(),
+            )],
+        });
         if slot_ids.len() > 1 {
             let scope = self.app.viewed_queue_scope();
             let (items, remove_targets, capabilities) = slot_ids
@@ -480,7 +479,7 @@ impl Model {
                         .iter()
                         .find(|s| s.slot_id == *sid)?;
                     let item = slot.item.as_emby().cloned();
-                    let remove = crate::app::ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
+                    let remove = mbv_ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
                     let capability =
                         crate::app::state::context_menu_capabilities::queue_item_capabilities(
                             &slot.item,
@@ -501,7 +500,7 @@ impl Model {
             self.app.open_context_menu_for_selection(
                 &items,
                 anchor,
-                crate::app::ui_model::settings::PanelFocus::Queue,
+                mbv_ui_model::settings::PanelFocus::Queue,
                 capabilities,
                 remove_targets,
             );
@@ -537,7 +536,7 @@ impl Model {
 
     fn handle_library_row_context_menu(
         &mut self,
-        targets: crate::app::ui_model::context_menu::ContextMenuTargets,
+        targets: mbv_ui_model::context_menu::ContextMenuTargets,
         anchor: Option<(u16, u16)>,
     ) {
         // The origin is the active library's stable identity
@@ -546,13 +545,13 @@ impl Model {
         if let Some(origin) = self.active_library_selection_origin() {
             self.context_menu_origin = Some(origin.clone());
             self.context_action_snapshot =
-                Some(crate::app::ui_model::context_menu::ContextActionSnapshot {
+                Some(mbv_ui_model::context_menu::ContextActionSnapshot {
                     origin,
                     values: vec![targets.clone()],
                 });
         }
         match targets {
-            crate::app::ui_model::context_menu::ContextMenuTargets::Emby(mut items) => {
+            mbv_ui_model::context_menu::ContextMenuTargets::Emby(mut items) => {
                 if items.len() > 1 {
                     let capabilities = items
                         .iter()
@@ -561,7 +560,7 @@ impl Model {
                     self.app.open_context_menu_for_selection(
                         &items,
                         anchor,
-                        crate::app::ui_model::settings::PanelFocus::Library,
+                        mbv_ui_model::settings::PanelFocus::Library,
                         capabilities,
                         Vec::new(),
                     );
@@ -569,7 +568,7 @@ impl Model {
                     self.open_emby_context_item(item, anchor);
                 }
             }
-            crate::app::ui_model::context_menu::ContextMenuTargets::Browser(targets) => {
+            mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets) => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     let items = self
                         .app
@@ -586,7 +585,7 @@ impl Model {
                         self.app.open_context_menu_for_selection(
                             &items,
                             anchor,
-                            crate::app::ui_model::settings::PanelFocus::Library,
+                            mbv_ui_model::settings::PanelFocus::Library,
                             capabilities,
                             Vec::new(),
                         );
@@ -595,7 +594,7 @@ impl Model {
                     }
                 }
             }
-            crate::app::ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {
+            mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {
                 self.app.open_feeds_context_menu(entries, anchor);
             }
             _ => {}
@@ -677,7 +676,7 @@ impl Model {
     /// cursor in another panel.
     fn focus_emby_context_item(&mut self, item: &mbv_emby_model::EmbyItem) {
         self.app
-            .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
             return;
         };

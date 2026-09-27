@@ -9,7 +9,7 @@ use crate::app::components::list::{
 use crate::app::ui_msg::SelectionSummary;
 use std::time::Instant;
 
-use crate::app::ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::media_list::SelectionOrigin;
 
 /// The flat shape's fixed selectable-row page distance (design D4). Flat
 /// lists keep a fixed row count per page; the tree owns its own policy.

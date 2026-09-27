@@ -14,9 +14,9 @@ use crate::app::components::library_panel::owner::{
 use crate::app::components::library_panel::HeroContentData;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::render::components::tv_wide::HeroImageState;
-use crate::app::ui_model::sort_filter::LetterFilter;
 use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_ui_model::sort_filter::LetterFilter;
 
 impl InlineSearchHost for EmbyLibraryContent {
     fn inline_search(&self) -> &InlineSearch {
@@ -44,7 +44,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         Some(self)
     }
 
-    fn set_selection_origin(&mut self, origin: crate::app::ui_model::media_list::SelectionOrigin) {
+    fn set_selection_origin(&mut self, origin: mbv_ui_model::media_list::SelectionOrigin) {
         self.carrier.set_selection_origin(origin);
     }
 
@@ -91,7 +91,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 .chain(
                     self.feed_groups
                         .iter()
-                        .map(|s| crate::app::ui_model::ui_util::trunc_str(s, 12)),
+                        .map(|s| mbv_ui_model::ui_util::trunc_str(s, 12)),
                 )
                 .collect();
             let markers = super::super::selector_markers(pills.len(), self.latest_marker);
@@ -381,7 +381,7 @@ impl EmbyLibraryContent {
                     _ => vec![target],
                 };
                 Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    crate::app::ui_model::context_menu::ContextMenuTargets::Browser(targets),
+                    mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets),
                     Some((at.x, at.y)),
                 ))))
             }

@@ -190,10 +190,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
-    app.remote_player_tab = Some(crate::app::ui_model::player_tab::PlayerTab::new(
-        mixed.clone(),
-        3,
-    ));
+    app.remote_player_tab = Some(mbv_ui_model::player_tab::PlayerTab::new(mixed.clone(), 3));
     mbv_config::save_queue_state(&mbv_queue::QueueState {
         source: mbv_queue::QueueSource::Unknown,
         items: mixed.clone(),
@@ -227,10 +224,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         mbv_queue::QueueMutationResult::Applied(())
     ));
     app.player.status.lock().unwrap().active = true;
-    app.remote_player_tab = Some(crate::app::ui_model::player_tab::PlayerTab::new(
-        mixed.clone(),
-        3,
-    ));
+    app.remote_player_tab = Some(mbv_ui_model::player_tab::PlayerTab::new(mixed.clone(), 3));
     mbv_config::save_queue_state(&mbv_queue::QueueState {
         source: mbv_queue::QueueSource::Unknown,
         items: mixed,

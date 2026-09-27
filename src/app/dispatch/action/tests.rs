@@ -21,12 +21,12 @@ fn focus_panel_keeps_the_card_checkpoint() {
     app.images.last_card_height = 17;
     app.images.last_card_width = 34;
     app.dispatch(&Command::FocusPanel(
-        crate::app::ui_model::settings::PanelFocus::Library,
+        mbv_ui_model::settings::PanelFocus::Library,
     ));
     assert_eq!(app.images.last_card_height, 17);
     assert_eq!(app.images.last_card_width, 34);
     app.dispatch(&Command::FocusPanel(
-        crate::app::ui_model::settings::PanelFocus::Queue,
+        mbv_ui_model::settings::PanelFocus::Queue,
     ));
     assert_eq!(app.images.last_card_height, 17);
     assert_eq!(app.images.last_card_width, 34);
