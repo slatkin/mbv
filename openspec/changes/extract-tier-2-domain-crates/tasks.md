@@ -187,7 +187,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 6. `mbv-config`
 
-- [ ] 6.1 Create `crates/mbv-config` (deps: `mbv-keybinds`, `mbv-queue`,
+- [x] 6.1 Create `crates/mbv-config` (deps: `mbv-keybinds`, `mbv-queue`,
   `serde`, `toml`, `log`, others only as the compiler asks; `[features] test = []`;
   dev-deps `rstest` and whatever `config/tests/` uses). `git mv
   crates/mbv-core/src/config.rs crates/mbv-config/src/lib.rs` and
@@ -196,7 +196,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `#[cfg(any(test, feature = "test"))]` exactly as today. Verify:
   `cargo nextest run -p mbv-config` passes and `rg 'mbv_core|crate::(ctrl|api|player|remote_player|audiobookshelf)' crates/mbv-config`
   is empty.
-- [ ] 6.2 Delete `pub mod config;` from `mbv-core/src/lib.rs`. Add `mbv-config`
+- [x] 6.2 Delete `pub mod config;` from `mbv-core/src/lib.rs`. Add `mbv-config`
   to `mbv-core`, `mbvd` and TUI `[dependencies]`; set `mbv-core`'s feature to
   `test = ["mbv-net/test", "mbv-config/test"]`; add
   `mbv-config = { path = …, features = ["test"] }` to the TUI and `mbvd`
