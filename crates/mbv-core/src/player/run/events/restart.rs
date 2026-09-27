@@ -8,7 +8,7 @@ impl PlaybackRun {
     pub(in crate::player) fn settle_idle_jump_on_restart(
         &mut self,
         position_ticks: i64,
-    ) -> Option<(QueueSlotId, Option<crate::playback_transition::Transition>)> {
+    ) -> Option<(QueueSlotId, Option<crate::player::transition::Transition>)> {
         if !self.forced_jump_from_idle {
             return None;
         }

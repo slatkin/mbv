@@ -76,7 +76,7 @@ struct WsPlayContext<'a> {
     audio_only: bool,
     queue: &'a mut PlaybackQueue,
     source: &'a mut crate::config::QueueSource,
-    transitions: &'a mut crate::playback_transition::OwnerTransitionState,
+    transitions: &'a mut crate::player::transition::OwnerTransitionState,
     shared_queue: &'a SharedQueueState,
     ctrl_clients: &'a ClientRegistry,
     playback: &'a dyn RemotePlayback,
@@ -211,7 +211,7 @@ pub(crate) fn handle_ws(
     audio_only: bool,
     queue: &mut PlaybackQueue,
     source: &mut crate::config::QueueSource,
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    transitions: &mut crate::player::transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
@@ -248,7 +248,7 @@ mod tests {
     use crate::config::{Config, QueueSource};
     use crate::daemon::{CtrlClients, SharedQueueState};
     use crate::playback_queue::{PlaybackQueue, QueueItem};
-    use crate::playback_transition::OwnerTransitionState;
+    use crate::player::transition::OwnerTransitionState;
     use crate::player::Player;
     use mbv_emby_model::EmbyItem;
     use mbv_net::mock_http::MockHttp;

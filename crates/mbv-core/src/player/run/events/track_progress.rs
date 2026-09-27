@@ -11,7 +11,7 @@ impl PlaybackRun {
     pub(in crate::player) fn emit_track_changed(
         &mut self,
         slot_id: QueueSlotId,
-        transition: Option<crate::playback_transition::Transition>,
+        transition: Option<crate::player::transition::Transition>,
     ) {
         let tag = transition
             .filter(|t| t.target == slot_id)

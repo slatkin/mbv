@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn stop_resets_bare_transitions_and_sends_no_transport_command() {
         use mbv_core::playback_queue::QueueSlotId;
-        use mbv_core::playback_transition::Transition;
+        use mbv_core::player::transition::Transition;
 
         let mut app = make_app_stub();
         let (request_id, generation) = app.bare_owner.mint_local_transition();

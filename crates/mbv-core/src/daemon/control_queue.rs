@@ -133,7 +133,7 @@ pub(crate) fn broadcast_queue_state(
     shared_queue: &SharedQueueState,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
-    transitions: &crate::playback_transition::OwnerTransitionState,
+    transitions: &crate::player::transition::OwnerTransitionState,
 ) {
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();

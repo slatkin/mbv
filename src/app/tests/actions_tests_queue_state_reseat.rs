@@ -43,10 +43,10 @@ fn queue_cursor_on_replaced_generation_submits_new_slots_without_stale_jump() {
     app.bare_owner
         .sync_canonical_queue(app.player_tab.queue.clone());
     let (request_id, generation) = app.bare_owner.mint_local_transition();
-    let transition = mbv_core::playback_transition::Transition::new(request_id, generation, target);
+    let transition = mbv_core::player::transition::Transition::new(request_id, generation, target);
     assert!(matches!(
         app.bare_owner.accept_local_transition(transition),
-        mbv_core::playback_transition::DispatchDecision::DispatchNow(_)
+        mbv_core::player::transition::DispatchDecision::DispatchNow(_)
     ));
     assert_eq!(app.pending_playback_slot(), Some(target));
     app.handle_player_event(PlayerEvent::TrackChanged {

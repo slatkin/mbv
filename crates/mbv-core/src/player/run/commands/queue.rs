@@ -29,7 +29,7 @@ impl PlaybackRun {
             reject_stale_jump(&self.event_tx, slot_id);
             return;
         };
-        self.forced_transition = Some(crate::playback_transition::Transition::new(
+        self.forced_transition = Some(crate::player::transition::Transition::new(
             request_id, generation, slot_id,
         ));
         if self.active_file {

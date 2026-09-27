@@ -7,7 +7,7 @@
 //! observation, never from accepting a command.
 
 use crate::playback_queue::{PlaybackQueue, QueueSlotId};
-use crate::playback_transition::OwnerTransitionState;
+use crate::player::transition::OwnerTransitionState;
 
 #[derive(Debug, Default)]
 pub struct PlayerOwnerState {
@@ -123,8 +123,8 @@ impl PlayerOwnerState {
 
     pub fn accept_local_transition(
         &mut self,
-        transition: crate::playback_transition::Transition,
-    ) -> crate::playback_transition::DispatchDecision {
+        transition: crate::player::transition::Transition,
+    ) -> crate::player::transition::DispatchDecision {
         self.transitions.accept(transition)
     }
 
@@ -132,14 +132,14 @@ impl PlayerOwnerState {
         &mut self,
         request_id: crate::ctrl::PlaybackRequestId,
         slot_id: QueueSlotId,
-    ) -> crate::playback_transition::SettleOutcome {
+    ) -> crate::player::transition::SettleOutcome {
         self.transitions.settle(request_id, slot_id)
     }
 
     pub fn expire_local_transition(
         &mut self,
         now: std::time::Instant,
-    ) -> crate::playback_transition::ExpireOutcome {
+    ) -> crate::player::transition::ExpireOutcome {
         self.transitions.expire(now)
     }
 
@@ -166,7 +166,7 @@ impl PlayerOwnerState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::playback_transition::{DispatchDecision, ExpireOutcome, Transition};
+    use crate::player::transition::{DispatchDecision, ExpireOutcome, Transition};
     use std::time::{Duration, Instant};
 
     #[test]

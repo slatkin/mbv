@@ -62,7 +62,7 @@ pub(in crate::player) struct PlaybackRun {
     /// `forced_slot_id`, so the settling `TrackChanged` observation can be
     /// tagged with the `(request_id, generation)` it satisfies (design D4).
     /// Cleared in lockstep with `forced_slot_id`.
-    pub(in crate::player) forced_transition: Option<crate::playback_transition::Transition>,
+    pub(in crate::player) forced_transition: Option<crate::player::transition::Transition>,
     /// Resume position for the target of an in-flight explicit jump on the
     /// playlist (non-active-file) path. mpv only honors a playlist entry's
     /// baked `start=` option the first time that entry loads; navigating back

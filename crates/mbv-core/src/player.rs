@@ -259,6 +259,7 @@ fn send_ep_info(mpv: &Mpv, item: &mbv_emby_model::EmbyItem) {
 }
 
 pub mod owner_state;
+pub mod transition;
 pub use owner_state::*;
 mod types;
 pub use types::*;

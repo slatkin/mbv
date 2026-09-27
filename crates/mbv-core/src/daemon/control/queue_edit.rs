@@ -221,7 +221,7 @@ pub(super) fn handle_queue_play_slot(
             ctrl_clients: ctx.ctrl_clients,
         },
         ctx.client_id,
-        crate::playback_transition::Transition::new(request_id, generation, sid),
+        crate::player::transition::Transition::new(request_id, generation, sid),
     );
 }
 

@@ -176,7 +176,7 @@ impl App {
 
     pub(in crate::app) fn dispatch_jump(
         &mut self,
-        transition: mbv_core::playback_transition::Transition,
+        transition: mbv_core::player::transition::Transition,
     ) -> bool {
         if self.player.is_remote() {
             return self.request_remote_slot_jump(transition.target);
@@ -203,12 +203,10 @@ impl App {
             .sync_canonical_queue(self.playback_queue().queue.clone());
         let (request_id, generation) = self.bare_owner.mint_local_transition();
         let transition =
-            mbv_core::playback_transition::Transition::new(request_id, generation, slot_id);
+            mbv_core::player::transition::Transition::new(request_id, generation, slot_id);
         match self.bare_owner.accept_local_transition(transition) {
-            mbv_core::playback_transition::DispatchDecision::DispatchNow(t) => {
-                self.dispatch_jump(t)
-            }
-            mbv_core::playback_transition::DispatchDecision::Queued { .. } => true,
+            mbv_core::player::transition::DispatchDecision::DispatchNow(t) => self.dispatch_jump(t),
+            mbv_core::player::transition::DispatchDecision::Queued { .. } => true,
         }
     }
 

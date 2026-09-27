@@ -225,7 +225,7 @@ fn step_to_neighbor_slot(
                 ctrl_clients: ctx.ctrl_clients,
             },
             ctx.client_id,
-            crate::playback_transition::Transition::new(request_id, generation, slot_id),
+            crate::player::transition::Transition::new(request_id, generation, slot_id),
         );
     }
 }

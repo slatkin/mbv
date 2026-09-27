@@ -89,7 +89,7 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
-    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
+    let mut transitions = crate::player::transition::OwnerTransitionState::default();
     handle_ws(
         WsEvent::TogglePause,
         None,

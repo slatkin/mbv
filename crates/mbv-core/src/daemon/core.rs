@@ -395,7 +395,7 @@ pub(super) struct DaemonOwnerContext<'a> {
 pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
     client_id: CtrlClientId,
-    transition: crate::playback_transition::Transition,
+    transition: crate::player::transition::Transition,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -412,7 +412,7 @@ pub(super) fn dispatch_slot_jump(
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
     match transitions.accept(transition) {
-        crate::playback_transition::DispatchDecision::DispatchNow(t) => {
+        crate::player::transition::DispatchDecision::DispatchNow(t) => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=DispatchNow target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
@@ -420,7 +420,7 @@ pub(super) fn dispatch_slot_jump(
             let resume_ticks = crate::player::resume_ticks_for_slot(queue, transition_target);
             ctx.player.send_command(t.into_jump(resume_ticks));
         }
-        crate::playback_transition::DispatchDecision::Queued { superseded } => {
+        crate::player::transition::DispatchDecision::Queued { superseded } => {
             log::info!(
                 target: "transition",
                 "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
@@ -458,7 +458,7 @@ pub(super) fn dispatch_slot_jump(
 /// Drop any in-flight/queued transition: the caller is issuing a
 /// queue-replacing playback command, which deliberately interrupts them.
 pub(super) fn reset_slot_jumps(
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    transitions: &mut crate::player::transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
 ) {
     transitions.reset();
@@ -473,7 +473,7 @@ pub(super) fn settle_and_redispatch(
     observed_request_id: PlaybackRequestId,
     observed_slot: QueueSlotId,
 ) {
-    let crate::playback_transition::SettleOutcome::Settled { dispatch_next } = owner
+    let crate::player::transition::SettleOutcome::Settled { dispatch_next } = owner
         .core
         .transitions
         .settle(observed_request_id, observed_slot)
@@ -509,7 +509,7 @@ pub(super) fn expire_and_redispatch(
     ctrl_clients: &ClientRegistry,
     shared_queue: &SharedQueueState,
 ) {
-    let crate::playback_transition::ExpireOutcome::Expired {
+    let crate::player::transition::ExpireOutcome::Expired {
         expired,
         dispatch_next,
     } = owner.core.transitions.expire(Instant::now())
