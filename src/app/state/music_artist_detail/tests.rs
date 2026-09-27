@@ -17,16 +17,16 @@ fn destination() -> LibraryKey {
 /// `fetch_album_tracks`/`fetch_card_image` performs happens synchronously
 /// before the doomed network attempt, so it is observable immediately
 /// without a live server.
-fn unroutable_emby_runtime() -> mbv_core::service_runtime::EmbyRuntime {
+fn unroutable_emby_runtime() -> crate::app::state::service_runtime::EmbyRuntime {
     let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
         user_id: "user-id".into(),
         token: "token".into(),
     });
-    mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(std::sync::Mutex::new(
-        client,
-    )))
+    crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ))
 }
 
 /// A settled one-album catalog whose only album carries a Service

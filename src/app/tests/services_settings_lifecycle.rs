@@ -78,7 +78,7 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
     });
     let current = std::sync::Arc::new(std::sync::Mutex::new(client));
     app.emby_runtime =
-        mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
+        crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
     app.player
         .update_emby_credentials("https://emby.example".into(), "valid-token".into());
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Emby, "valid-token").unwrap();
@@ -120,7 +120,7 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
         user_id: "user-id".into(),
         token: "new-token".into(),
     });
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(client),
     ));
     app.player

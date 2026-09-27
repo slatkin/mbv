@@ -1,4 +1,4 @@
-use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
+use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use mbv_ui_model::feed::IdleFeed;

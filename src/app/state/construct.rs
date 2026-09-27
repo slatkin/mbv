@@ -1,6 +1,6 @@
+use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::service_setup::StartupRequest;
 use crate::app::{spawn_resize_worker, App, AppInit, SuspendedLocalSession};
-use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_player::{Player, PlayerProxy};
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;

@@ -24,7 +24,7 @@ fn app_with_mock_emby(http: &MockHttp) -> App {
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(client),
     ));
     app
