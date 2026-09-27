@@ -24,12 +24,12 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     app.replace_saved_library_position(0, position.clone());
     // 2 items / 50 total: not fully loaded, so `spawn_all_items_prefetch` would do I/O.
     let level = BrowseLevel::from_position_level(&level, make_items(2), 50, 10);
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: position.clone(),
         position,
         nav_stack: vec![level],
-    });
+    }));
     assert_eq!(app.libs[0].nav_stack[0].title, "Power");
     assert!(app.libs[0].nav_stack[0].all_items.is_none());
 }
@@ -70,7 +70,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: pre_feature_position.clone(),
         position: pre_feature_position,
@@ -91,7 +91,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             tv_content_mode: None,
             music_grouping: None,
         }],
-    });
+    }));
 
     assert_eq!(app.libs[0].library_total, Some(673));
     assert!(app.should_show_letter_pills(0));
@@ -131,7 +131,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     app.replace_saved_library_position(0, requested.clone());
     app.clear_saved_library_position(0);
 
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: requested.clone(),
         position: requested,
@@ -152,7 +152,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             tv_content_mode: None,
             music_grouping: None,
         }],
-    });
+    }));
 
     assert!(app.libs[0].nav_stack.is_empty());
     assert!(!crate::config::load_library_position_state()

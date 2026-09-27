@@ -1,4 +1,5 @@
 use super::{App, LevelFillAction, LevelFillState, LibEvent, PAGE_SIZE};
+use crate::app::MusicEvent;
 
 use super::level_artists::level_artists_from_items;
 
@@ -50,10 +51,10 @@ impl App {
                     crate::app::dispatch::library::browse::retain_grouped_music_items(
                         &mut items, true,
                     );
-                    let _ = tx.send(LibEvent::MusicGroupWarmupListed {
+                    let _ = tx.send(LibEvent::Music(MusicEvent::GroupWarmupListed {
                         generation,
                         groups: items,
-                    });
+                    }));
                 }
                 // A failed listing fetch is silent: no level ids are known,
                 // so there is nothing to mark `Failed`.
@@ -124,7 +125,7 @@ impl App {
     /// (design D1 of `fix-music-artist-resolution-batching`): a single
     /// recursive Audio query over the whole level, bucketed per album and
     /// majority-voted per bucket, arriving as one
-    /// `LibEvent::AlbumArtistLevelFetched` that bulk-fills the cache.
+    /// `LibEvent::Music(MusicEvent::AlbumArtistLevelFetched)` that bulk-fills the cache.
     /// Deduped on the level-fill state (design D4) through the single
     /// shared decision (`LevelFillState::action_for`). `albums` (the
     /// level's album items already in hand from the listing) drive
@@ -192,7 +193,10 @@ impl App {
                 .unwrap_or_default();
 
             let artists = level_artists_from_items(&items, &albums);
-            let _ = tx.send(LibEvent::AlbumArtistLevelFetched { level_id, artists });
+            let _ = tx.send(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {
+                level_id,
+                artists,
+            }));
         });
     }
 }

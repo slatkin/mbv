@@ -6,6 +6,7 @@ use super::BrowseLevel;
 use super::PendingMusicReanchor;
 use super::TabSelection;
 use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
+use crate::app::MusicEvent;
 use mbv_components::music_content::MusicContent;
 use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
@@ -76,7 +77,7 @@ impl Model {
     }
 
     /// The shell's reaction to a completed recursive album activation
-    /// (`LibEvent::RecursiveAlbumActivated`): install the landed path through
+    /// (`LibEvent::Music(MusicEvent::RecursiveAlbumActivated)`): install the landed path through
     /// App, bind the one-shot inline track-focus request to the activated
     /// album, and re-anchor the workspace regardless of any prior local move.
     /// Sole owner of the return to the standard Music presentation, shared by
@@ -101,11 +102,12 @@ impl Model {
             return;
         }
         let library_id_lookup = library_id.clone();
-        self.app
-            .handle_lib_event(super::LibEvent::RecursiveAlbumActivated {
+        self.app.handle_lib_event(super::LibEvent::Music(
+            MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            });
+            },
+        ));
         // The activated album: the resting cursor of the replaced nav stack.
         let activated_album_id = self
             .app
@@ -380,6 +382,7 @@ mod tests {
     use crate::app::shell::Model;
     use crate::app::state::service_runtime::EmbyRuntime;
     use crate::app::tests::render_fixtures::make_music_group_app;
+    use crate::app::MusicEvent;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
 
@@ -539,9 +542,8 @@ mod tests {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
 
-        model
-            .app
-            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(crate::app::LibEvent::Music(
+            MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
@@ -549,7 +551,8 @@ mod tests {
                 result: Ok(vec![mbv_emby_model::test_support::make_item(
                     "Stale", "Audio",
                 )]),
-            });
+            },
+        ));
         model.push_music_workspace_content();
         assert!(
             model.test_music_owner().track_list.rows().is_empty(),
@@ -559,15 +562,15 @@ mod tests {
         let mut track = mbv_emby_model::test_support::make_item("Song", "Audio");
         track.id = "track-1".into();
         track.album_id = "album-1".into();
-        model
-            .app
-            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(crate::app::LibEvent::Music(
+            MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
                 revision: 7,
                 result: Ok(vec![track]),
-            });
+            },
+        ));
         model.push_music_workspace_content();
         let rows = model.test_music_owner().track_list.rows();
         assert!(

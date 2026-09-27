@@ -1,8 +1,72 @@
+use crate::app::state::events::BrowseEvent;
 use crate::app::{App, BrowseLevel};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::BrowseResting;
 
 impl App {
+    pub(super) fn handle_browse_event(&mut self, ev: BrowseEvent) {
+        match ev {
+            BrowseEvent::Loaded {
+                lib_idx,
+                parent_id,
+                level,
+            } => self.handle_lib_loaded(lib_idx, &parent_id, *level),
+            BrowseEvent::PageAppended {
+                lib_idx,
+                parent_id,
+                items,
+                total_count,
+            } => self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count),
+            BrowseEvent::Refreshed {
+                lib_idx,
+                parent_id,
+                item_types,
+                unplayed_only,
+                items,
+                total_count,
+            } => self.handle_lib_refreshed(
+                lib_idx,
+                &parent_id,
+                item_types.as_deref(),
+                unplayed_only,
+                items,
+                total_count,
+            ),
+            BrowseEvent::SearchItemsLoaded {
+                lib_idx,
+                parent_id,
+                items,
+            } => self.handle_search_items_loaded(lib_idx, &parent_id, items),
+            BrowseEvent::AllItemsPrefetched {
+                lib_idx,
+                parent_id,
+                items,
+            } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
+            BrowseEvent::FeedHomeVideoAggregated {
+                lib_idx,
+                parent_id,
+                all_items,
+                groups,
+            } => self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups),
+            BrowseEvent::NavigateTo {
+                lib_idx,
+                landing,
+                switch_tab,
+            } => self.handle_navigate_to_event(lib_idx, landing, switch_tab),
+            BrowseEvent::RestoreLibraryPosition {
+                lib_idx,
+                requested_position,
+                position,
+                nav_stack,
+            } => self.handle_restored_library_position(
+                lib_idx,
+                &requested_position,
+                position,
+                nav_stack,
+            ),
+        }
+    }
+
     pub(super) fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
         crate::app::dispatch::library::browse::retain_grouped_music_level_items(
             level,

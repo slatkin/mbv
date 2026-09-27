@@ -1,3 +1,4 @@
+use crate::app::{BrowseEvent, MusicEvent};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -193,15 +194,17 @@ impl Model {
                 self.app
                     .artist_artwork_requests
                     .remove(&cache_key)
-                    .map(|identity| crate::app::LibEvent::ArtistArtworkFetched {
-                        destination: identity.destination,
-                        generation: mbv_core::service_runtime::SetupGeneration::new(
-                            identity.generation,
-                        ),
-                        artist_id: identity.artist_id,
-                        revision: identity.revision,
-                        cache_key: cache_key.clone(),
-                        available: entry.img.is_some(),
+                    .map(|identity| {
+                        crate::app::LibEvent::Music(MusicEvent::ArtistArtworkFetched {
+                            destination: identity.destination,
+                            generation: mbv_core::service_runtime::SetupGeneration::new(
+                                identity.generation,
+                            ),
+                            artist_id: identity.artist_id,
+                            revision: identity.revision,
+                            cache_key: cache_key.clone(),
+                            available: entry.img.is_some(),
+                        })
                     });
             if entry.img.is_some() {
                 self.app.images.image_lru.retain(|k| k != &cache_key);
@@ -224,7 +227,9 @@ impl Model {
         ev: super::super::LibEvent,
     ) {
         let lib_idx = match &ev {
-            super::super::LibEvent::RestoreLibraryPosition { lib_idx, .. } => *lib_idx,
+            super::super::LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
+                lib_idx, ..
+            }) => *lib_idx,
             _ => unreachable!("restore handler called with a different library event"),
         };
         self.app.handle_lib_event(ev);

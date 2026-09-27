@@ -3,6 +3,7 @@ use crate::app::{
     dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
+use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use std::collections::HashMap;
@@ -112,10 +113,9 @@ impl App {
                                 // side effects are order-sensitive); the
                                 // computed content travels to Model-owned
                                 // `home_content` via lib_tx (task 5.3d).
-                                let _ = self
-                                    .channels
-                                    .lib_tx
-                                    .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                                let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                                    ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                                ));
                             }
                             Err(e) => {
                                 self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
@@ -149,12 +149,12 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match client.get_playlists() {
             Ok(items) => {
-                let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoaded(items)));
             }
             Err(e) => {
-                let _ = tx.send(LibEvent::PlaylistsLoadError(format!(
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoadError(format!(
                     "Playlist list failed: {e}"
-                )));
+                ))));
             }
         });
     }
@@ -168,11 +168,11 @@ impl App {
             if let Err(e) = client.rename_playlist(&playlist_id, &new_name) {
                 let _ = tx.send(LibEvent::Error(format!("Rename failed: {e}")));
             } else {
-                let _ = tx.send(LibEvent::PlaylistRenamed { new_name });
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::Renamed { new_name }));
             }
             match client.get_playlists() {
                 Ok(items) => {
-                    let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+                    let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoaded(items)));
                 }
                 Err(e) => {
                     let _ = tx.send(LibEvent::Error(e));
@@ -190,11 +190,11 @@ impl App {
             if let Err(e) = client.delete_playlist(&playlist_id) {
                 let _ = tx.send(LibEvent::Error(format!("Delete failed: {e}")));
             } else {
-                let _ = tx.send(LibEvent::PlaylistDeleted { name });
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::Deleted { name }));
             }
             match client.get_playlists() {
                 Ok(items) => {
-                    let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+                    let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoaded(items)));
                 }
                 Err(e) => {
                     let _ = tx.send(LibEvent::Error(e));
@@ -220,13 +220,16 @@ impl App {
         let playlist_id = playlist.id.clone();
         std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
             Ok(items) => {
-                let _ = tx.send(LibEvent::PlaylistItemsLoaded { playlist_id, items });
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ItemsLoaded {
+                    playlist_id,
+                    items,
+                }));
             }
             Err(e) => {
-                let _ = tx.send(LibEvent::PlaylistItemsLoadError {
+                let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ItemsLoadError {
                     playlist_id,
                     error: format!("Playlist load failed: {e}"),
-                });
+                }));
             }
         });
     }
@@ -370,7 +373,7 @@ impl App {
     /// from whatever local Sources exist (#543 Part 1). Returns the
     /// computed `HomeContent` instead of writing deleted `App.home`; the
     /// shell assigns it to `Model.home_content` (directly for shell-side
-    /// callers, via `LibEvent::HomeContentRefreshed` for App-internal ones)
+    /// callers, via `LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed)` for App-internal ones)
     /// and preserves the Continue Watching column cursor at the assignment.
     pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;

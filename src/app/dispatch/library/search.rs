@@ -1,4 +1,5 @@
 use crate::app::SidebarId;
+use crate::app::{BrowseEvent, MusicEvent};
 use mbv_emby::EmbyClient;
 
 use crate::app::App;
@@ -102,7 +103,10 @@ impl App {
                 )
             };
             let result = build_album_index_with(&library_id, &levels, &mut fetch);
-            let _ = tx.send(LibEvent::AlbumIndexBuilt { library_id, result });
+            let _ = tx.send(LibEvent::Music(MusicEvent::AlbumIndexBuilt {
+                library_id,
+                result,
+            }));
         });
     }
 
@@ -184,10 +188,10 @@ impl App {
                 level.resting = BrowseResting::new(cursor, 0);
                 nav_stack.push(level);
             }
-            let _ = tx.send(LibEvent::RecursiveAlbumActivated {
+            let _ = tx.send(LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            });
+            }));
         });
         true
     }
@@ -232,14 +236,14 @@ impl App {
                     log::info!(target: "browse", "Refreshed lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
                         items.len(),
                         items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
-                    let _ = tx.send(LibEvent::Refreshed {
+                    let _ = tx.send(LibEvent::Browse(BrowseEvent::Refreshed {
                         lib_idx,
                         parent_id,
                         item_types,
                         unplayed_only,
                         items,
                         total_count,
-                    });
+                    }));
                 }
                 Err(e) => {
                     let _ = tx.send(LibEvent::Error(e));
