@@ -85,10 +85,6 @@ impl<Target> MediaList<Target> {
         self.title_reveal = policy;
     }
 
-    pub(crate) fn title_reveal(&self) -> MediaListTitleReveal {
-        self.title_reveal
-    }
-
     pub(crate) fn marquee_state(&mut self, text: &str) -> (String, Instant) {
         if self.marquee_text != text {
             self.marquee_text.clear();

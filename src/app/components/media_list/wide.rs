@@ -136,16 +136,6 @@ impl<Target> WideMediaList<Target> {
         self.core.multi_selection()
     }
 
-    pub fn is_selected_target(&self, target: &Target) -> bool
-    where
-        Target: PartialEq,
-    {
-        self.core
-            .multi_selection()
-            .iter()
-            .any(|selected| selected == target)
-    }
-
     /// The resting scroll offset (pre height-aware clamp).
     pub fn scroll(&self) -> usize {
         self.core.scroll()
@@ -161,9 +151,9 @@ impl<Target> WideMediaList<Target> {
         self.core.marquee_state(text)
     }
 
-    /// The list's declared title-reveal policy, read by the painter.
+    #[cfg(test)]
     pub(crate) fn title_reveal(&self) -> MediaListTitleReveal {
-        self.core.title_reveal()
+        self.core.title_reveal
     }
 
     pub(crate) fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
@@ -301,14 +291,60 @@ impl<Target> PaintRetained<Target> for WideMediaList<Target> {
 
 impl<Target: Clone + Eq> Component for WideMediaList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        self.begin_view();
+        let (claim_rect, content_rect) = self.view_geometry(area);
+        if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || self.is_empty() {
+            return;
+        }
         let policy = self.policy;
-        crate::app::render::render_wide_media_list_component(
+        let geometry = self.row_geometry(content_rect.height as usize);
+        let key = policy
+            .focused()
+            .then_some(geometry.selected_row())
+            .flatten()
+            .and_then(|row| self.rows().get(row))
+            .and_then(crate::app::render::components::media_list::row_marquee_key);
+        let marquee_key = key;
+        if let Some(key) = marquee_key.as_deref() {
+            self.marquee_state(key);
+        }
+        let crate::app::components::media_list::MediaList {
+            rows: list_rows,
+            multi_selection,
+            title_reveal,
+            marquee_text,
+            marquee_started_at,
+            ..
+        } = &mut self.core;
+        let rows = &**list_rows;
+        let multi_selection = multi_selection.targets();
+        let title_reveal = *title_reveal;
+        let marquee_state = marquee_key
+            .as_ref()
+            .map(|_| (&mut *marquee_text, &mut *marquee_started_at));
+        let marquee = marquee_key
+            .as_deref()
+            .zip(marquee_state)
+            .map(|(key, (text, started_at))| (key, text, started_at));
+        let paint = crate::app::render::render_wide_media_list_component(
             frame,
-            area,
             crate::app::render::components::media_list::WideMediaListPaintInput {
-                list: self,
+                rows,
+                row_geometry: geometry,
+                multi_selection,
+                title_reveal,
+                marquee,
                 policy,
+                claim_rect,
+                content_rect,
             },
+        );
+        self.set_scroll(paint.row_geometry.offset());
+        self.finish_view(
+            claim_rect,
+            content_rect,
+            &paint.row_geometry,
+            paint.selected_row_rect.as_ref(),
         );
     }
 

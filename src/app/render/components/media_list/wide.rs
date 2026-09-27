@@ -1,8 +1,7 @@
 use super::row::media_list_row;
-use crate::app::components::media_list::WideMediaList;
 use crate::app::palette;
 use crate::app::render::components::media_list::{
-    row_marquee_key, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaListPaintPolicy,
+    MediaListRow, RowGeometry, SelectedRowSurface, WideMediaListPaintPolicy,
 };
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -15,9 +14,9 @@ use ratatui::Frame;
 /// itself, so no caller can forget to. This is internal to the media-list
 /// paint subsystem (design.md D6/D7): destinations receive rows only through
 /// the retained `Component::view` facts.
-pub(super) struct MediaListPaint<Target> {
-    pub row_geometry: RowGeometry<Target>,
-    pub selected_row_rect: Option<Rect>,
+pub(crate) struct MediaListPaint<Target> {
+    pub(crate) row_geometry: RowGeometry<Target>,
+    pub(crate) selected_row_rect: Option<Rect>,
 }
 
 /// Paint entry point for the embedded plain `WideMediaList` (design.md D1):
@@ -34,35 +33,25 @@ pub(super) struct MediaListPaint<Target> {
 /// against it. The title's text indent is applied per row in `media_list_row`,
 /// not by insetting either rect.
 ///
-/// The painter resolves the scroll offset and stores it back into `list` via
-/// [`WideMediaList::set_scroll`] before returning, so the offset persists across
-/// frames without the caller threading a `usize` back.
+/// The component resolves row geometry and persists the returned scroll offset.
 pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
-    list: &mut WideMediaList<Target>,
+    input: WideMediaListPaintInput<'_, Target>,
     focused: bool,
     selected_bg: Color,
     zebra_bg: Option<Color>,
 ) -> MediaListPaint<Target> {
-    let geometry = list.row_geometry(content_area.height as usize);
+    let geometry = input.row_geometry;
     let selected_row = geometry.selected_row();
     // The marquee clock keys on the full title text the row marquees (a split
     // row's context text and item title), so two rows sharing a context name
     // never share a clock position. `row_marquee_key` is the one formula the
     // painter receives its key from too.
-    let marquee_key: Option<String> = focused
-        .then_some(selected_row)
-        .flatten()
-        .and_then(|row| list.rows().get(row))
-        .and_then(row_marquee_key);
-    let title_reveal = list.title_reveal();
-    let mut marquee = marquee_key.map(|key| {
-        let (text, started_at) = list.marquee_state(&key);
-        (key, text, started_at)
-    });
-    let rows = list.rows();
+    let title_reveal = input.title_reveal;
+    let mut marquee = input.marquee;
+    let rows = input.rows;
     let offset = geometry.offset();
     let total_rows = geometry.len();
 
@@ -83,7 +72,12 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
         .take(content_area.height as usize)
         .map(|source_row| {
             let row_target = rows[source_row].selectable_target();
-            let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
+            let multi_selected = row_target.is_some_and(|target| {
+                input
+                    .multi_selection
+                    .iter()
+                    .any(|selected| selected == target)
+            });
             let alternate_bg = match rows[source_row] {
                 // A group's header is its surface-coloured label, and the
                 // separator above it sits outside the fill too: both keep the
@@ -110,7 +104,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
                 marquee
                     .as_mut()
                     .filter(|_| Some(source_row) == selected_row)
-                    .map(|(key, text, started_at)| (key.as_str(), text, started_at)),
+                    .map(|(key, text, started_at)| (*key, &mut **text, &mut **started_at)),
             )
         })
         .collect();
@@ -136,7 +130,6 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
     }
 
     let selected_row_rect = geometry.selected_row_rect(content_area);
-    list.set_scroll(offset);
     MediaListPaint {
         row_geometry: geometry,
         selected_row_rect,
@@ -175,36 +168,29 @@ fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> C
 
 /// Borrowed data needed to paint a wide media list.
 pub(crate) struct WideMediaListPaintInput<'a, Target> {
-    pub(crate) list: &'a mut crate::app::components::media_list::WideMediaList<Target>,
+    pub(crate) rows: &'a [MediaListRow<Target>],
+    pub(crate) row_geometry: RowGeometry<Target>,
+    pub(crate) multi_selection: &'a [Target],
+    pub(crate) title_reveal: super::MediaListTitleReveal,
+    pub(crate) marquee: Option<(&'a str, &'a mut String, &'a mut std::time::Instant)>,
     pub(crate) policy: WideMediaListPaintPolicy,
+    pub(crate) claim_rect: Rect,
+    pub(crate) content_rect: Rect,
 }
 
 /// Component-view adapter for the retained-result seam.
 pub(in crate::app) fn render_wide_media_list_component<Target: Clone + Eq>(
     f: &mut Frame,
-    area: Rect,
     input: WideMediaListPaintInput<'_, Target>,
-) {
-    let list = input.list;
+) -> MediaListPaint<Target> {
     let policy = input.policy;
-    list.begin_view();
-    let (claim_rect, content_rect) = list.view_geometry(area);
-    if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {
-        return;
-    }
-    let paint = render_wide_media_list_with_zebra(
+    render_wide_media_list_with_zebra(
         f,
-        claim_rect,
-        content_rect,
-        list,
+        input.claim_rect,
+        input.content_rect,
+        input,
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.zebra_bg(),
-    );
-    list.finish_view(
-        claim_rect,
-        content_rect,
-        &paint.row_geometry,
-        paint.selected_row_rect.as_ref(),
-    );
+    )
 }
