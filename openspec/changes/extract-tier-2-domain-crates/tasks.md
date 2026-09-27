@@ -52,7 +52,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 1. `mbv-text` gains the HTML/entity helpers
 
-- [ ] 1.1 Move `decode_entities`, `html_to_text` and their private helpers
+- [x] 1.1 Move `decode_entities`, `html_to_text` and their private helpers
   `is_block_tag`, `trim_blank_lines`, `extract_href` (the block from the
   `/// Decode common XML/HTML entities` doc comment through `extract_href`,
   `crates/mbv-core/src/api/types.rs` ~lines 37–163) into a new
@@ -61,7 +61,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `api/tests/parsing.rs` test whose subject is one of these two functions into
   `crates/mbv-text/src/html/tests.rs`. Verify: `cargo nextest run -p mbv-text`
   passes.
-- [ ] 1.2 Rewrite callers (`api/types_parsing.rs`, `audiobookshelf/catalog.rs`,
+- [x] 1.2 Rewrite callers (`api/types_parsing.rs`, `audiobookshelf/catalog.rs`,
   `src/app/infra/feed_parse.rs`, and any the compiler names) to
   `mbv_text::html::{decode_entities, html_to_text}`; add `mbv-text` to
   `mbv-core`'s `[dependencies]`. Verify: gate passes and
