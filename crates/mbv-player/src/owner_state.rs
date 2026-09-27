@@ -306,6 +306,64 @@ mod tests {
     }
 
     #[test]
+    fn step_and_direct_jump_dispatch_the_same_canonical_resume_issue_824() {
+        use crate::transition::{Transition, TransitionCause};
+        use mbv_queue::ProgressObservation;
+
+        let mut audio = item("audio");
+        audio.media_type = "Audio".to_string();
+        audio.playback_position_ticks = 8 * mbv_emby_model::TICKS_PER_SECOND;
+        let mut video = item("video");
+        video.playback_position_ticks = 20 * 60 * mbv_emby_model::TICKS_PER_SECOND;
+
+        for (target_item, observed_ticks) in [
+            (audio, 8 * mbv_emby_model::TICKS_PER_SECOND),
+            (video, 12 * mbv_emby_model::TICKS_PER_SECOND),
+        ] {
+            let mut queue = PlaybackQueue::from_items(vec![item("current"), target_item], Some(0));
+            let target = queue.slots()[1].slot_id;
+            let slot_item = &queue.slot(target).expect("target exists").item;
+            let recorded = ProgressObservation::Completed {
+                position_ticks: observed_ticks,
+                played: false,
+            }
+            .position_to_record(slot_item);
+            queue.apply_progress(target, recorded, false);
+
+            let step_jump = {
+                let mut owner =
+                    PlayerOwnerState::new(queue.clone(), mbv_queue::QueueSource::default());
+                let StepTarget::Jump(target) = owner.relative_step_target(Direction::Next) else {
+                    panic!("next step must resolve target");
+                };
+                let transition =
+                    Transition::with_cause(1, 1, target, TransitionCause::Step(Direction::Next));
+                let crate::transition::DispatchDecision::DispatchNow(transition) =
+                    owner.accept_local_transition(transition)
+                else {
+                    panic!("step transition must dispatch immediately");
+                };
+                transition.into_jump(crate::resume_ticks_for_slot(&owner.queue, target))
+            };
+            let direct_jump = {
+                let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+                let transition = Transition::new(2, 2, target);
+                let crate::transition::DispatchDecision::DispatchNow(transition) =
+                    owner.accept_local_transition(transition)
+                else {
+                    panic!("direct jump must dispatch immediately");
+                };
+                transition.into_jump(crate::resume_ticks_for_slot(&owner.queue, target))
+            };
+            let resume = |command| match command {
+                mbv_ctrl::player::PlayerCommand::JumpTo { resume_ticks, .. } => resume_ticks,
+                _ => panic!("transition dispatch must produce JumpTo"),
+            };
+            assert_eq!(resume(step_jump), resume(direct_jump));
+        }
+    }
+
+    #[test]
     fn apply_completion_progress_advances_canonical_queue_and_revision() {
         let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
         let slot_id = queue.slots()[0].slot_id;
