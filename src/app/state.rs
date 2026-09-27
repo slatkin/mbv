@@ -4,7 +4,6 @@ pub(in crate::app) mod app_struct;
 pub(in crate::app) mod bootstrap;
 pub(in crate::app) mod construct;
 pub(in crate::app) mod context_menu_capabilities;
-pub(in crate::app) mod home_latest;
 pub(in crate::app) mod library_position;
 pub(in crate::app) mod library_route;
 pub(in crate::app) mod music_artist_detail;
@@ -18,7 +17,6 @@ pub(in crate::app) mod queue_scope;
 pub(in crate::app) mod remote_slot;
 pub(in crate::app) mod remote_tracking;
 pub(in crate::app) mod runtime_channels;
-pub(in crate::app) mod search_sidebar;
 pub(in crate::app) mod service_setup;
 
 pub mod types;

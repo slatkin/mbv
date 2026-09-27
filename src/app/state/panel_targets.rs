@@ -4,17 +4,9 @@
 // separately, since each is refreshed on its own channel/cadence; this
 // module's job is only the merge.
 
-use crate::app::ui_model::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::ui_model::panel_targets::PanelTarget;
 use mbv_cast::discovery::CastReceiver;
 use mbv_emby::SessionInfo;
-
-/// Resolve an activation against the latest shell-owned target snapshot.
-pub(in crate::app) fn resolve_session_target(
-    targets: &[PanelTarget],
-    key: &SessionTargetKey,
-) -> Option<PanelTarget> {
-    targets.iter().find(|target| target.key() == *key).cloned()
-}
 
 /// Concatenates Emby sessions and discovered cast receivers into one list,
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived

@@ -2,15 +2,11 @@ use crate::app::ui_model::sort_filter::{parse_album_folder_name, strip_article};
 use crate::app::ui_model::ui_util::natural_sort_key;
 use mbv_emby_model::EmbyItem;
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Monotonic counter identifying a loaded source snapshot for a music album
 /// browse level. Bumped whenever the level's items change.
 pub(in crate::app) type SourceRevision = u64;
-
-/// How long a resolving candidate waits for in-flight artist lookups before
-/// its remaining unresolved albums are forced to the deterministic fallback.
-pub(in crate::app) const SETTLE_WINDOW: Duration = Duration::from_secs(3);
 
 /// A resolving snapshot of a music album level. Records which album IDs
 /// still need a terminal artist identity and which have already resolved.

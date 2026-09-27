@@ -71,18 +71,6 @@ pub(in crate::app) struct ArtistDetailProjection {
     pub(in crate::app) track_groups: Vec<ArtistTrackGroup>,
 }
 
-pub(in crate::app) fn artist_artwork_cache_key(
-    destination: &LibraryKey,
-    generation: u64,
-    artist_id: &str,
-) -> String {
-    let destination_id = match destination {
-        LibraryKey::Service { library_id, .. } => library_id.as_str(),
-        LibraryKey::Home => "home",
-        LibraryKey::Feeds => "feeds",
-    };
-    format!("artist:{generation}:{destination_id}:{artist_id}:Primary")
-}
 pub(in crate::app) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
     !album_id.is_empty() && track.album_id == album_id
 }

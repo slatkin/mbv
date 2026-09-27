@@ -40,19 +40,3 @@ pub(in crate::app) fn resolve_session_target(
 ) -> Option<PanelTarget> {
     targets.iter().find(|target| target.key() == *key).cloned()
 }
-
-/// Concatenates Emby sessions and discovered cast receivers into one list,
-/// Emby first: no dedup, no ordering decision beyond "which channel arrived
-/// first" (8.2). Pure and side-effect free so it is testable without a
-/// running panel or a network call (8.1).
-pub(in crate::app) fn build_panel_targets(
-    sessions: &[SessionInfo],
-    cast_receivers: &[CastReceiver],
-) -> Vec<PanelTarget> {
-    sessions
-        .iter()
-        .cloned()
-        .map(|s| PanelTarget::Emby(Box::new(s)))
-        .chain(cast_receivers.iter().cloned().map(PanelTarget::Cast))
-        .collect()
-}

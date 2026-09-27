@@ -449,7 +449,7 @@ mod tests {
         );
         assert!(
             model.app.images.card_image_loading.contains(
-                &crate::app::ui_model::music_artist_detail::artist_artwork_cache_key(
+                &crate::app::state::music_artist_detail::artist_artwork_cache_key(
                     &destination,
                     generation.value(),
                     "artist-alpha",
