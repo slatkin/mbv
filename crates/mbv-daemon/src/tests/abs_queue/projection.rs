@@ -11,6 +11,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
             emby_qi("b", "Video", "Movie"),
         ],
         Some(0),
+        crate::tests::revision_mint(),
     );
     let observed = queue.slots()[1].slot_id;
     let status = mbv_ctrl::player::PlayerStatus::default();
@@ -44,6 +45,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
             emby_qi("b", "Video", "Movie"),
         ],
         Some(0),
+        crate::tests::revision_mint(),
     );
     let start_slot = queue.slots()[0].slot_id;
     let source = mbv_queue::QueueSource::Unknown;

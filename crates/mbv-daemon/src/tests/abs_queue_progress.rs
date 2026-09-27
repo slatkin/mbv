@@ -19,7 +19,11 @@ pub fn book_qi(library_item_id: &str) -> QueueItem {
 // when the `library_item_id` collides — the two kinds share no identity.
 #[test]
 fn book_progress_update_does_not_touch_episode_slots() {
-    let mut queue = PlaybackQueue::from_queue_items(vec![abs_qi("li_1", "ep")], Some(0));
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep")],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
     let before = queue.slots()[0]
         .item
         .as_audiobookshelf()
@@ -51,7 +55,11 @@ fn book_progress_update_does_not_touch_episode_slots() {
 // colliding `library_item_id`.
 #[test]
 fn episode_progress_update_does_not_touch_book_slots() {
-    let mut queue = PlaybackQueue::from_queue_items(vec![book_qi("shared_1")], Some(0));
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![book_qi("shared_1")],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
     let before = queue.slots()[0]
         .item
         .as_audiobookshelf_book()

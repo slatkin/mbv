@@ -4,7 +4,8 @@ use super::*;
 fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
-    let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
+    let queue =
+        PlaybackQueue::from_queue_items(vec![abs, emby], Some(0), crate::tests::revision_mint());
     let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
 
@@ -50,7 +51,8 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
     // active index 0 = ABS
-    let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
+    let queue =
+        PlaybackQueue::from_queue_items(vec![abs, emby], Some(0), crate::tests::revision_mint());
     let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
 
@@ -91,6 +93,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let queue = PlaybackQueue::from_queue_items(
         vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
         Some(1),
+        crate::tests::revision_mint(),
     );
     let source = QueueSource::Unknown;
 
@@ -156,7 +159,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
     let (old_id, old_rx) = connect_old_unified_peer(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner {
@@ -221,7 +224,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, _reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner {
@@ -278,7 +281,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner {
@@ -336,7 +339,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, _reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner {

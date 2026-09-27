@@ -88,7 +88,7 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let mut queue = PlaybackQueue::default();
+    let mut queue = crate::tests::empty_queue();
     let mut source = QueueSource::Unknown;
     let mut transitions = mbv_player::transition::OwnerTransitionState::default();
     handle_ws(
@@ -229,7 +229,7 @@ fn reconcile_abs_with_queue(
     let clients = Arc::new(Mutex::new(CtrlClients::default()));
     let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let mut owner = DaemonPlayerOwner::default();
-    owner.core.queue = std::mem::take(queue);
+    owner.core.queue = std::mem::replace(queue, crate::tests::empty_queue());
     owner.core.source = std::mem::replace(source, QueueSource::Unknown);
     let result = reconcile_packaged_audiobookshelf(
         revision,
@@ -259,6 +259,7 @@ fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
     let mut queue = PlaybackQueue::from_queue_items(
         vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
         Some(0),
+        crate::tests::revision_mint(),
     );
     let mut source = QueueSource::Remote;
 
@@ -326,6 +327,7 @@ fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
             }),
         ],
         Some(0),
+        crate::tests::revision_mint(),
     );
     let mut source = QueueSource::Remote;
 
@@ -415,7 +417,7 @@ fn reconcile_abs(
     revision: u64,
     current: &mut Option<super::AudiobookshelfOwnerContext>,
 ) -> Result<(), ServiceSetupRejection> {
-    let mut queue = PlaybackQueue::default();
+    let mut queue = crate::tests::empty_queue();
     let mut source = QueueSource::Unknown;
     reconcile_abs_with_queue(revision, current, &mut queue, &mut source)
 }

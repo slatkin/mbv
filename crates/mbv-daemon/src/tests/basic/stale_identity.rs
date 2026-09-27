@@ -9,7 +9,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let mut queue = PlaybackQueue::default();
+    let mut queue = crate::tests::empty_queue();
     let mut source = QueueSource::Unknown;
     let mut transitions = mbv_player::transition::OwnerTransitionState::default();
 

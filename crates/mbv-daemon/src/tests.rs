@@ -37,7 +37,8 @@ use crate::{
 mod basic;
 // Re-export helper functions from basic so all test modules can use them
 pub(super) use basic::{
-    cold_player, connect_client, emby_qi, item, recv_event, shared_queue_state, video_feed_qi,
+    cold_player, connect_client, emby_qi, empty_queue, item, recv_event, revision_mint,
+    shared_queue_state, video_feed_qi,
 };
 
 mod abs_queue;

@@ -1,11 +1,12 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ExecSlot;
 use mbv_queue::{
-    PlaybackQueue, QueueItem, QueueMutationResult, QueueSlot, QueueSlotId, RefreshMergeResult,
-    RemoveSlotResult,
+    PlaybackQueue, QueueItem, QueueMutationResult, QueueRevisionMint, QueueSlot, QueueSlotId,
+    RefreshMergeResult, RemoveSlotResult,
 };
+use std::sync::Arc;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PlayerTab {
     pub queue_cursor: usize,
     pub queue: PlaybackQueue,
@@ -14,6 +15,13 @@ pub struct PlayerTab {
     /// Generation of the queue represented by this tab. Bare mode compares
     /// it with Player status before issuing slot-addressed playback commands.
     pub sequence_generation: u64,
+    revision_mint: Arc<QueueRevisionMint>,
+}
+
+impl Default for PlayerTab {
+    fn default() -> Self {
+        Self::new(Vec::new(), 0)
+    }
 }
 
 impl PlayerTab {
@@ -23,16 +31,26 @@ impl PlayerTab {
         // The cursor is presentation state; construction is not a playback
         // event, so the active slot starts unset.  Playback events and
         // explicit `set_active_slot` calls own the active-slot lifecycle.
-        let queue = PlaybackQueue::from_queue_items(items, None);
+        let revision_mint = Arc::new(QueueRevisionMint::default());
+        let queue = PlaybackQueue::from_queue_items(items, None, Arc::clone(&revision_mint));
         Self {
             queue_cursor,
             queue,
             pending_playback_slot: None,
             sequence_generation: 0,
+            revision_mint,
         }
     }
 
     pub fn from_unified_state(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
+        let revision_mint = Arc::new(QueueRevisionMint::default());
+        Self::from_unified_state_with_mint(state, revision_mint)
+    }
+
+    fn from_unified_state_with_mint(
+        state: &mbv_ctrl::UnifiedQueueStateData,
+        revision_mint: Arc<QueueRevisionMint>,
+    ) -> Self {
         let active_index = state
             .active_slot
             .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
@@ -41,8 +59,13 @@ impl PlayerTab {
             .iter()
             .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item.clone()))
             .collect();
-        let queue =
-            PlaybackQueue::from_slot_items(slots, state.active_slot.map(QueueSlotId::from_raw));
+        // The owner's revision is not comparable in this client process; #836
+        // gives each client its own revision sequence for projection identity.
+        let queue = PlaybackQueue::from_slot_items(
+            slots,
+            state.active_slot.map(QueueSlotId::from_raw),
+            Arc::clone(&revision_mint),
+        );
         Self {
             queue_cursor: active_index.unwrap_or(0),
             queue,
@@ -52,6 +75,7 @@ impl PlayerTab {
                 .or(state.in_flight_transition.as_ref())
                 .map(|transition| QueueSlotId::from_raw(transition.target_slot)),
             sequence_generation: 0,
+            revision_mint,
         }
     }
 
@@ -93,7 +117,7 @@ impl PlayerTab {
         state: &mbv_ctrl::UnifiedQueueStateData,
         queue_cursor: usize,
     ) {
-        *self = Self::from_unified_state(state);
+        *self = Self::from_unified_state_with_mint(state, Arc::clone(&self.revision_mint));
         self.queue_cursor = queue_cursor;
         self.clamp_cursor();
     }

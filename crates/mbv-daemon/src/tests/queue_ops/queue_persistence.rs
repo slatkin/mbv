@@ -64,7 +64,11 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
 
     // A daemon restart loads a fresh owner state from the state file.
     let restored = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
-    let queue = PlaybackQueue::from_queue_items(restored.queue.items, Some(restored.queue.cursor));
+    let queue = PlaybackQueue::from_queue_items(
+        restored.queue.items,
+        Some(restored.queue.cursor),
+        crate::tests::revision_mint(),
+    );
     assert_eq!(queue.len(), 2);
     assert_eq!(queue.slots()[0].item.id(), "persisted");
     assert_eq!(queue.slots()[1].item.id(), "persisted");

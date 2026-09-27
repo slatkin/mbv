@@ -27,6 +27,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
             QueueItem::Feed(feed_entry("feed-2")),
         ],
         Some(0),
+        crate::tests::revision_mint(),
     );
     let source = QueueSource::Unknown;
 
@@ -88,8 +89,11 @@ fn replace_queue_succeeds_unconditionally() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let queue =
-        PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
+    let queue = PlaybackQueue::from_queue_items(
+        vec![QueueItem::Feed(feed_entry("feed-1"))],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
     let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 

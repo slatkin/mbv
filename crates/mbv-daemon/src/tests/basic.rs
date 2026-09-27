@@ -78,9 +78,17 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
     (id, rx)
 }
 
+pub fn revision_mint() -> Arc<mbv_queue::QueueRevisionMint> {
+    Arc::new(mbv_queue::QueueRevisionMint::default())
+}
+
+pub fn empty_queue() -> PlaybackQueue {
+    PlaybackQueue::from_queue_items(Vec::new(), None, revision_mint())
+}
+
 pub fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
-        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
+        queue: Arc::new(Mutex::new(empty_queue())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
         lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
@@ -121,7 +129,7 @@ pub fn queue_from_items(items: &[EmbyItem], active: usize) -> PlaybackQueue {
         .cloned()
         .map(|i| QueueItem::Emby(Box::new(i)))
         .collect();
-    PlaybackQueue::from_queue_items(qi, Some(active))
+    PlaybackQueue::from_queue_items(qi, Some(active), revision_mint())
 }
 
 // Control-client authority and lifetime behavior.

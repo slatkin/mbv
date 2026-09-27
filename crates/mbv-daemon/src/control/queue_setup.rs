@@ -85,7 +85,8 @@ pub(super) fn handle_adopt_queue(
     );
     ctx.player.set_initial_queue(&items, next_cursor);
     reset_slot_jumps(transitions, queued_transition_origin);
-    *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
+    let mint = queue.revision_mint();
+    *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor), mint);
     *source = new_source;
     mint_queue_lineage(ctx.shared_queue);
     broadcast_queue_state(
@@ -289,7 +290,8 @@ pub(super) fn handle_queue_replace(
         ..
     } = &mut *ctx.owner;
     let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
-    *queue = PlaybackQueue::from_slot_items(slots, active_slot);
+    let mint = queue.revision_mint();
+    *queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
     *source = new_source;
     mint_queue_lineage(ctx.shared_queue);
     reset_slot_jumps(transitions, queued_transition_origin);

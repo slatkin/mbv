@@ -160,6 +160,7 @@ fn audiobookshelf_identity_and_mixed_queue_round_trip_are_typed() {
             second,
         ],
         Some(1),
+        std::sync::Arc::new(crate::QueueRevisionMint::default()),
     );
     assert_ne!(queue.slots()[1].slot_id, queue.slots()[3].slot_id);
     assert!(matches!(
@@ -195,6 +196,7 @@ fn refresh_preserves_inactive_audiobookshelf_book_slot() {
             QueueItem::Feed(feed("feed-1")),
         ],
         Some(0),
+        std::sync::Arc::new(crate::QueueRevisionMint::default()),
     );
     let episode_slot = queue.append(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(
         audiobookshelf_episode("library-a", "episode-1"),
