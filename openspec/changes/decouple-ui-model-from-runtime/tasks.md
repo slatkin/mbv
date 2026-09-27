@@ -117,14 +117,14 @@ cargo nextest run --workspace
 
 ## 6. Drop the edges and prove the boundary
 
-- [ ] 6.1 Remove `mbv-player`, `mbv-emby`, `mbv-remote-player`, `mbv-ws`,
+- [x] 6.1 Remove `mbv-player`, `mbv-emby`, `mbv-remote-player`, `mbv-ws`,
   `mbv-cast` and `mbv-ctrl` from `crates/mbv-ui-model/Cargo.toml`. Run the
   gate.
-- [ ] 6.2 For each of `mbv-ui-model`, `mbv-ui-msg`, `mbv-render` and
+- [x] 6.2 For each of `mbv-ui-model`, `mbv-ui-msg`, `mbv-render` and
   `mbv-components`, run `cargo tree -p <crate> -e normal --prefix none` and
   confirm that none of `mbv-player`, `mbv-ctrl`, `mbv-emby`, `mbv-ws`,
   `mbv-remote-player`, `mbv-cast` or `mbv-daemon` appears. Record the four
   results in the commit message.
-- [ ] 6.3 Update the `mbv-core` line in `AGENTS.md`'s repository map to "app
+- [x] 6.3 Update the `mbv-core` line in `AGENTS.md`'s repository map to "app
   logging + Service state/setup-generation types". Verify with
   `rg "mbv-core" AGENTS.md`.
