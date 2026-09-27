@@ -3,6 +3,12 @@
 Each numbered group is one commit and leaves the workspace green on its own.
 Groups run in order, because each extraction depends on the crates below it.
 
+Order amendment (2026-09-27, user-approved): group 7 runs BEFORE group 6.
+As written, 6.1 (mbv-player deps mbv-core for `SetupGeneration`) + 6.2
+(mbv-core deps mbv-player for daemon) form a cargo-forbidden dependency
+cycle. Daemon leaves mbv-core first, so mbv-core never depends on mbv-player
+and the final graph is unchanged.
+
 **The gate for every group** (group 0 excepted), run from the repo root after
 its tasks:
 
@@ -212,22 +218,25 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   is empty.
 - [ ] 6.2 In `mbv-core/src/lib.rs`, delete `pub mod player;` and the whole
   `pub mod player_owner_state { … }` alias block. Add `mbv-player` to
-  `[dependencies]` in `mbv-core` (daemon still lives there), the TUI, and
-  `mbvd` if the compiler asks. Add it with `features = ["test"]` to the
-  `[dev-dependencies]` of the TUI and `mbv-core`. Set `mbv-core`'s `test`
-  feature to forward to `mbv-player/test` in place of
-  `mbv-remote-player/test`. Rewrite `crate::player::` and
+  `[dependencies]` in `mbv-daemon`, the TUI, and `mbvd` if the compiler asks
+  (never in `mbv-core` — nothing there uses player once daemon has moved;
+  see order amendment). Add it with `features = ["test"]` to the
+  `[dev-dependencies]` of the TUI and `mbv-daemon`. Wire test features per
+  the compiler and D7 (`mbv-daemon` dev-deps enable `mbv-player/test`); drop
+  `mbv-remote-player/test` from `mbv-core`'s `test` feature if nothing there
+  uses it. Rewrite `crate::player::` and
   `mbv_core::player::` → `mbv_player::`, and
   `mbv_core::player_owner_state::` (2 TUI files) →
   `mbv_player::owner_state::`. Promote any `#[cfg(test)] pub(crate)` helper
   that `daemon/tests` calls (e.g. `Player::spy_on_commands`) per the
   test-gating rule. Verify: gate passes;
   `rg 'mbv_core::player|crate::player\b|player_owner_state' src crates` is
-  empty.
+  empty, and `cargo tree -p mbv-core --depth 1 -e normal` lists no
+  `mbv-player` (mbv-core must never depend on mbv-player — see amendment).
 
 ## 7. `mbv-daemon`
 
-- [ ] 7.1 Create `crates/mbv-daemon`. Deps: `mbv-player`, `mbv-core`,
+- [ ] 7.1 Create `crates/mbv-daemon`. Deps: `mbv-core`,
   `mbv-emby`, `mbv-emby-model`, `mbv-audiobookshelf`, `mbv-ctrl`,
   `mbv-config`, `mbv-queue`, `mbv-ids`, `mbv-net`, `mbv-ws`, `libc`, `uuid`,
   `serde_json`, `log`, plus others only if the compiler asks. Dev-deps:
@@ -237,12 +246,14 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   - `crates/mbv-core/src/daemon/*` → `src/`.
 
   Rewrite `crate::daemon::` → `crate::`, and rewrite the
-  `pub(in crate::daemon)` visibilities to `pub(crate)`. Verify:
+  `pub(in crate::daemon)` visibilities to `pub(crate)`. Leave `crate::player::`
+  paths rewritten as `mbv_core::player::` (player still lives in mbv-core;
+  group 6 rewires them to `mbv_player::`). Verify:
   `cargo nextest run -p mbv-daemon` passes.
 - [ ] 7.2 Delete `pub mod daemon;` from `mbv-core/src/lib.rs`. Add
   `mbv-daemon` to the `[dependencies]` of the TUI (`src/local_daemon.rs`) and
   `mbvd`. Rewrite `mbv_core::daemon::` / `mbv_core::{…, daemon}` →
-  `mbv_daemon`. Remove `mbv-player` from `mbv-core`'s dependencies. Verify:
+  `mbv_daemon`. Verify:
   gate passes; `rg 'mbv_core::daemon|crate::daemon' src crates --glob '!crates/mbv-daemon/**'`
   is empty; `cargo tree -p mbv-core --depth 1 -e normal` lists no
   `mbv-player`, `mbv-remote-player`, or `mbv-daemon`.
