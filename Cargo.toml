@@ -147,7 +147,7 @@ time.workspace = true
 mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
-mbv-core = { path = "crates/mbv-core", features = ["test"] }
+mbv-core = { path = "crates/mbv-core" }
 mbv-remote-player = { path = "crates/mbv-remote-player", features = ["test"] }
 mbv-player = { path = "crates/mbv-player", features = ["test"] }
 mbv-config = { path = "crates/mbv-config", features = ["test"] }
