@@ -99,7 +99,7 @@ impl App {
                 }
                 let user = candidate.user.clone();
                 let setup = candidate.setup.clone();
-                let result = mbv_core::config::commit_audiobookshelf_candidate(
+                let result = mbv_core::audiobookshelf::commit_audiobookshelf_candidate(
                     mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                         candidate.setup,
                         candidate.user,
@@ -272,7 +272,7 @@ impl App {
             .as_ref()
             .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
 
-        let result = mbv_core::config::replace_audiobookshelf_candidate(
+        let result = mbv_core::audiobookshelf::replace_audiobookshelf_candidate(
             mbv_core::audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
                 candidate.user,

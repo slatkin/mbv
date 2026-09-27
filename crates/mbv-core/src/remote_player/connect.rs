@@ -30,7 +30,7 @@ const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 mod endpoint;
 
-pub use endpoint::DaemonEndpoint;
+pub use endpoint::{resolve_library_route, DaemonEndpoint};
 
 /// Performs the daemon control-protocol handshake (hello exchange, then the
 /// initial state) on `stream`, returning a reader ready for the long-running

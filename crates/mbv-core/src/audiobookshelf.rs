@@ -65,6 +65,44 @@ impl AudiobookshelfValidatedSetup {
     }
 }
 
+/// Consume a validator result only after validation has succeeded. The
+/// returned identity is runtime-only and is never serialized by this seam.
+pub fn commit_audiobookshelf_candidate(
+    candidate: AudiobookshelfValidatedSetup,
+) -> Result<(AudiobookshelfUser, u64), String> {
+    let (setup, user, api_key) = candidate.into_parts();
+    let revision = crate::config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
+    Ok((user, revision))
+}
+
+pub fn repair_audiobookshelf_candidate(
+    candidate: AudiobookshelfValidatedSetup,
+) -> Result<(AudiobookshelfUser, u64), String> {
+    commit_audiobookshelf_candidate(candidate)
+}
+
+/// Confirmed different-server replacement. Validation is represented by the
+/// candidate type; confirmation belongs to the caller and must precede this
+/// destructive boundary.
+pub fn replace_audiobookshelf_candidate<C, R>(
+    candidate: AudiobookshelfValidatedSetup,
+    clear_owned_state: C,
+    restore_owned_state: R,
+) -> Result<(AudiobookshelfUser, u64), String>
+where
+    C: FnOnce() -> Result<(), String>,
+    R: FnOnce(),
+{
+    let (setup, user, api_key) = candidate.into_parts();
+    let revision = crate::config::replace_audiobookshelf_setup_and_secret(
+        &setup,
+        &api_key,
+        clear_owned_state,
+        restore_owned_state,
+    )?;
+    Ok((user, revision))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudiobookshelfFailureClass {
     AuthenticationRejected,

@@ -191,45 +191,6 @@ pub fn is_valid_audio_device(value: &str) -> bool {
     value == "alsa" || value.starts_with("alsa/")
 }
 
-/// Resolves the configured endpoint for a library name (#256). Matches
-/// case-insensitively (the query is lowercased before lookup; `routes`'
-/// keys are already lowercased by `parse_config`). No wildcard fallback --
-/// returns `None` if the library has no route, and the caller stays local.
-///
-/// Parses the stored string via `DaemonEndpoint::parse` and requires it to
-/// be `Tcp(_)` -- library routing is a remote-only feature (#239 addendum:
-/// "#222 and #223 are remote-connection features only"), so anything else
-/// is malformed: a bare pre-#256 device-name string (which `parse` would
-/// otherwise silently accept as a bogus `Unix(PathBuf)` socket path), a
-/// `unix://` value, or a bare `local`/empty value are all logged and
-/// skipped rather than routed. This is a pure, synchronous, no-network
-/// lookup -- the entire point of #256 is that route resolution on the
-/// play/enqueue path never touches `/Sessions` again.
-#[must_use]
-pub fn resolve_library_route(
-    routes: &std::collections::BTreeMap<String, String>,
-    library_name: &str,
-) -> Option<crate::remote_player::DaemonEndpoint> {
-    let raw = routes.get(&library_name.to_lowercase())?;
-    match crate::remote_player::DaemonEndpoint::parse(raw) {
-        Ok(endpoint @ crate::remote_player::DaemonEndpoint::Tcp(_)) => Some(endpoint),
-        Ok(other) => {
-            log::warn!(
-                target: "library_route",
-                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
-            );
-            None
-        }
-        Err(e) => {
-            log::warn!(
-                target: "library_route",
-                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
-            );
-            None
-        }
-    }
-}
-
 #[must_use]
 pub fn is_system_instance() -> bool {
     env::var("MBV_SYSTEM").ok().as_deref() == Some("1")

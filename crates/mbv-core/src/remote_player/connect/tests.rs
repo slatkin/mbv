@@ -255,6 +255,41 @@ fn daemon_endpoint_parses_local_and_unix_paths() {
 }
 
 #[test]
+fn resolve_library_route_has_no_wildcard_fallback() {
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "tcp://192.168.0.104:47788".to_string());
+    assert_eq!(
+        resolve_library_route(&routes, "Music"),
+        Some(DaemonEndpoint::Tcp("192.168.0.104:47788".parse().unwrap()))
+    );
+    assert_eq!(resolve_library_route(&routes, "movies"), None);
+}
+
+#[test]
+fn resolve_library_route_rejects_a_bare_device_name_as_malformed() {
+    // A stale pre-#256 config entry (device name, no scheme) must
+    // NOT silently resolve -- DaemonEndpoint::parse would otherwise
+    // accept it as a bogus Unix(PathBuf) socket path. Library routing
+    // is tcp://-only (#239 addendum), so anything that doesn't parse
+    // to Tcp(_) is treated as malformed: logged and skipped.
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "living-room-pc".to_string());
+    assert_eq!(resolve_library_route(&routes, "music"), None);
+}
+
+#[test]
+fn resolve_library_route_rejects_unix_and_local_endpoints() {
+    // Library routing is remote-only -- a unix:// or bare "local"
+    // value is well-formed as a DaemonEndpoint but not a valid
+    // library route, so it must still resolve to None.
+    let mut routes = std::collections::BTreeMap::new();
+    routes.insert("music".to_string(), "unix:///run/mbvd.sock".to_string());
+    routes.insert("movies".to_string(), "local".to_string());
+    assert_eq!(resolve_library_route(&routes, "music"), None);
+    assert_eq!(resolve_library_route(&routes, "movies"), None);
+}
+
+#[test]
 fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;

@@ -170,22 +170,6 @@ pub fn persist_audiobookshelf_setup_and_secret(
     Ok(revision)
 }
 
-/// Consume a validator result only after validation has succeeded. The
-/// returned identity is runtime-only and is never serialized by this seam.
-pub fn commit_audiobookshelf_candidate(
-    candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
-) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String> {
-    let (setup, user, api_key) = candidate.into_parts();
-    let revision = persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
-    Ok((user, revision))
-}
-
-pub fn repair_audiobookshelf_candidate(
-    candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
-) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String> {
-    commit_audiobookshelf_candidate(candidate)
-}
-
 /// Remove Audiobookshelf files without touching Emby, Feeds, or control state.
 pub fn remove_audiobookshelf_setup_and_secret() -> Result<(), String> {
     remove_audiobookshelf_setup_and_secret_with_owned_state(|| Ok(()), || {})
@@ -239,26 +223,4 @@ where
         restore_owned_state();
     }
     result.map(|()| revision)
-}
-
-/// Confirmed different-server replacement. Validation is represented by the
-/// candidate type; confirmation belongs to the caller and must precede this
-/// destructive boundary.
-pub fn replace_audiobookshelf_candidate<C, R>(
-    candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
-    clear_owned_state: C,
-    restore_owned_state: R,
-) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String>
-where
-    C: FnOnce() -> Result<(), String>,
-    R: FnOnce(),
-{
-    let (setup, user, api_key) = candidate.into_parts();
-    let revision = replace_audiobookshelf_setup_and_secret(
-        &setup,
-        &api_key,
-        clear_owned_state,
-        restore_owned_state,
-    )?;
-    Ok((user, revision))
 }

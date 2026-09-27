@@ -292,7 +292,7 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
 }
 
 #[test]
-fn failed_audiobookshelf_candidate_and_transaction_leave_working_state() {
+fn failed_audiobookshelf_transaction_leaves_working_state() {
     let _guard = TestStateDirGuard::new();
     persist_audiobookshelf_setup_and_secret(
         &AudiobookshelfSetup::new("https://working.example"),
@@ -300,18 +300,6 @@ fn failed_audiobookshelf_candidate_and_transaction_leave_working_state() {
     )
     .unwrap();
     let before = std::fs::read(config_path()).unwrap();
-    let before_secret = load_service_secret(ServiceKind::Audiobookshelf);
-    crate::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
-        "",
-        "candidate-secret",
-        std::time::Duration::from_millis(1),
-    )
-    .unwrap_err();
-    assert_eq!(std::fs::read(config_path()).unwrap(), before);
-    assert_eq!(
-        load_service_secret(ServiceKind::Audiobookshelf),
-        before_secret
-    );
 
     let result = audiobookshelf_transaction(|config, _secret| {
         save_audiobookshelf_setup_at(

@@ -57,7 +57,7 @@ pub(crate) mod connect;
 #[cfg(any(test, feature = "test"))]
 pub use connect::connect_stub_daemon_pair;
 pub use connect::signal_local_daemon_service_setup;
-pub use connect::DaemonEndpoint;
+pub use connect::{resolve_library_route, DaemonEndpoint};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {
