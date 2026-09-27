@@ -60,6 +60,7 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `crates/mbv-net/` — shared HTTP, TLS-agent, socket and retry primitives.
 * `crates/mbv-ws/` — Emby websocket client transport.
 * `crates/mbv-visualizer/` — PipeWire stereo audio capture worker for the visualizer.
+* `crates/mbv-desktop/` — MPRIS D-Bus server and system tray (owns zbus/tokio/ksni).
 * `crates/mbv-text/` — fuzzy-match acceptance and control-character predicates for text input.
 * `crates/mbv-theme/` — semantic theme roles and palette values.
 * `crates/mbv-images/` — shared image loading and image-processing primitives.
@@ -162,7 +163,7 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
   all reflow, never revert it; `cargo fmt --all -- --check` = read-only check.
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
 * module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files; a module with children is `foo.rs` plus a `foo/` directory holding them (tests as `foo/tests.rs`, or `foo/tests.rs` + `foo/tests/` when split); never `mod.rs`
-* async: sync-first; `tokio` is edge-only (`src/mpris.rs`, `zbus`) — do not spread it
+* async: sync-first; `tokio` is edge-only (`crates/mbv-desktop`, `zbus`) — do not spread it
 * sharing: prefer owned data + `Msg` identities over new `Arc`/`Rc`
 * anything web related: `ketch` not curl
 * docs/concept discovery (ADRs, openspec, CONTEXT.md): `qmd query "..."` (collection `mbv`); `rg` only for exact strings

@@ -1703,7 +1703,6 @@ version = "0.21.2"
 dependencies = [
  "crossterm",
  "image",
- "ksni",
  "libc",
  "log",
  "mbv-audiobookshelf",
@@ -1713,6 +1712,7 @@ dependencies = [
  "mbv-core",
  "mbv-ctrl",
  "mbv-daemon",
+ "mbv-desktop",
  "mbv-emby",
  "mbv-emby-model",
  "mbv-feed",
@@ -1739,14 +1739,12 @@ dependencies = [
  "serde_json",
  "textwrap",
  "time",
- "tokio",
  "toml",
  "tui-scrollbar",
  "tuirealm",
  "unicode-width",
  "ureq",
  "uuid",
- "zbus 4.4.0",
 ]
 
 [[package]]
@@ -1868,6 +1866,19 @@ dependencies = [
  "rstest",
  "serde_json",
  "uuid",
+]
+
+[[package]]
+name = "mbv-desktop"
+version = "0.21.2"
+dependencies = [
+ "ksni",
+ "log",
+ "mbv-ctrl",
+ "mbv-emby-model",
+ "mbv-images",
+ "tokio",
+ "zbus 4.4.0",
 ]
 
 [[package]]

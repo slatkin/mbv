@@ -109,7 +109,7 @@ pub struct App {
     /// `Player` and a `RemotePlayer` (#175): MPRIS must always publish
     /// whichever one currently owns playback, not whatever was live when
     /// the D-Bus service was first registered.
-    pub(in crate::app) mpris: Option<crate::mpris::MprisHandle>,
+    pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) audiobookshelf_socket_rx:

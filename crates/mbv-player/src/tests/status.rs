@@ -32,7 +32,7 @@ fn current_item_metadata_stores_art_item_id_never_a_token_url() {
     // image URL that would embed `token` as a query-string api_key and
     // leak it onto the session D-Bus via mpris:artUrl). mbv-core has no
     // access to the on-disk image cache, so it only records the raw item
-    // id; `src/mpris.rs::resolve_art_url` turns that into a file:// URI
+    // id; `mbv-desktop::mpris::resolve_art_url` turns that into a file:// URI
     // (or omits mpris:artUrl) using the cache.
     let mut item = make_media_item("track-1");
     item.artist = "Artist".to_string();

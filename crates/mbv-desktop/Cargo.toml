@@ -1,0 +1,23 @@
+[package]
+name = "mbv-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "MPRIS D-Bus server and system tray integrations for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-images = { path = "../mbv-images" }
+log.workspace = true
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
+ksni = { version = "0.3", features = ["blocking"] }

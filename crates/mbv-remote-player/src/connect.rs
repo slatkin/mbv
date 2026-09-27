@@ -557,7 +557,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
         // Stopped PlayerEvent, so nothing else clears `status`.
         // Clear it here, at the source, so
         // every consumer of `status` (not just MPRIS's separate
-        // `disconnected_flag()` check in src/mpris.rs) sees an
+        // `disconnected_flag()` check in mbv-desktop::mpris) sees an
         // inactive/no-track player immediately rather than stale
         // "still playing" data.
         if let Ok(mut s) = status.lock() {

@@ -188,7 +188,7 @@ pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
 
 /// Path to the on-disk cached image file for `key`, if one is already
 /// present -- without reading its bytes. Used to build `mpris:artUrl`
-/// `file://` URIs (see `src/mpris.rs::resolve_art_url`), which need the
+/// `file://` URIs (see `mbv-desktop::mpris::resolve_art_url`), which need the
 /// path itself, not the decoded image data.
 #[cfg(not(test))]
 pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
