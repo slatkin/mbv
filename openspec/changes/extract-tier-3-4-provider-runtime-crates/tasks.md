@@ -289,7 +289,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
   Verify: `rg 'mbv-audiobookshelf|mbv-cast|mbv-emby|mbv-remote-player|mbv-player|mbv-daemon' AGENTS.md`
   shows all six.
-- [ ] 9.2 Run `make check-code-file-lines` before pushing. Split any file it
+- [x] 9.2 Run `make check-code-file-lines` before pushing. Split any file it
   flags along a responsibility seam, following the `splitting-files` skill.
   Verify: the check passes.
 - [ ] 9.3 Comment on issue #814. Summarise the Tier 3–4 crates, the resulting
