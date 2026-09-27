@@ -74,14 +74,14 @@ impl App {
                     )
                 },
             );
-            let _ = tx.send(
-                crate::app::state::events::LibEvent::AudiobookshelfDetailFetched {
+            let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
+                crate::app::AudiobookshelfEvent::DetailFetched {
                     generation,
                     request,
                     library_item_id,
                     result,
                 },
-            );
+            ));
         });
     }
 
@@ -125,13 +125,13 @@ impl App {
                     )
                 },
             );
-            let _ = tx.send(
-                crate::app::state::events::LibEvent::AudiobookshelfBookDetailFetched {
+            let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
+                crate::app::AudiobookshelfEvent::BookDetailFetched {
                     generation,
                     library_item_id,
                     result,
                 },
-            );
+            ));
         });
     }
 

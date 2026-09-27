@@ -207,13 +207,15 @@ impl App {
         let artist_id = key.artist_id.clone();
         std::thread::spawn(move || {
             let result = client.get_artist_audio_tracks(&artist_id);
-            let _ = tx.send(LibEvent::ArtistTracksFetched {
-                destination,
-                generation,
-                artist_id,
-                revision,
-                result,
-            });
+            let _ = tx.send(LibEvent::Music(
+                crate::app::MusicEvent::ArtistTracksFetched {
+                    destination,
+                    generation,
+                    artist_id,
+                    revision,
+                    result,
+                },
+            ));
         });
     }
 

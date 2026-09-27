@@ -3,7 +3,7 @@
 //! adjacent feeds/hero work. All tests are live; none are `#[ignore]`d.
 //!
 //! Groups:
-//! - Saved-position restore seam (`LibEvent::RestoreLibraryPosition`): restore
+//! - Saved-position restore seam (`LibEvent::Browse(crate::app::BrowseEvent::RestoreLibraryPosition)`): restore
 //!   still writes the resting `BrowseLevel` cursor a later content projection
 //!   hands the owning component.
 //! - Painted-selection movement under `j`/`k` for TV.

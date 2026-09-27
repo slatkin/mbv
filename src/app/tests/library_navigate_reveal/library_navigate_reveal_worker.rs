@@ -31,11 +31,11 @@ fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {
         .recv_timeout(Duration::from_secs(2))
         .expect("navigate event");
     match ev {
-        LibEvent::NavigateTo {
+        LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
             lib_idx,
             landing,
             switch_tab,
-        } => {
+        }) => {
             assert_eq!(lib_idx, 0);
             assert!(switch_tab);
             let NavigateLanding::Series { reveal, episode_id } = landing else {
@@ -91,7 +91,7 @@ fn track_navigation_emits_the_album_landing_with_its_folder_chain() {
         .recv_timeout(Duration::from_secs(2))
         .expect("navigate event");
     match ev {
-        LibEvent::NavigateTo { landing, .. } => {
+        LibEvent::Browse(crate::app::BrowseEvent::NavigateTo { landing, .. }) => {
             let NavigateLanding::Album {
                 reveal,
                 ancestors,

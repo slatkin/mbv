@@ -355,29 +355,29 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
     let mut book_fetches = 0;
     for event in collect_library_events(app, 3) {
         match event {
-            LibEvent::AudiobookshelfShowsFetched {
+            LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::ShowsFetched {
                 generation: event_generation,
                 library_id,
                 ..
-            } => {
+            }) => {
                 assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shows += 1;
             }
-            LibEvent::AudiobookshelfShelfFetched {
+            LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::ShelfFetched {
                 generation: event_generation,
                 library_id,
                 ..
-            } => {
+            }) => {
                 assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shelves += 1;
             }
-            LibEvent::AudiobookshelfBooksFetched {
+            LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::BooksFetched {
                 generation: event_generation,
                 library_id,
                 ..
-            } => {
+            }) => {
                 assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "book-1");
                 book_fetches += 1;
@@ -516,15 +516,17 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
         .app
         .channels
         .lib_tx
-        .send(LibEvent::RestoreLibraryPosition {
-            lib_idx: 0,
-            requested_position: position.clone(),
-            position,
-            nav_stack: vec![
-                music_level("lib-music", "Music", groups, 0),
-                music_level("group-soul", "Soul", albums, 1),
-            ],
-        })
+        .send(LibEvent::Browse(
+            crate::app::BrowseEvent::RestoreLibraryPosition {
+                lib_idx: 0,
+                requested_position: position.clone(),
+                position,
+                nav_stack: vec![
+                    music_level("lib-music", "Music", groups, 0),
+                    music_level("group-soul", "Soul", albums, 1),
+                ],
+            },
+        ))
         .expect("lib event channel");
     model.drain_lib_events();
 }

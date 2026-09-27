@@ -347,11 +347,11 @@ impl App {
                 &music_levels,
                 cached_album_index.as_deref(),
             ) {
-                Ok(landing) => LibEvent::NavigateTo {
+                Ok(landing) => LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
                     lib_idx,
                     landing,
                     switch_tab: true,
-                },
+                }),
                 Err(e) => LibEvent::Error(e),
             };
             let _ = tx.send(event);

@@ -3,6 +3,22 @@ use crate::app::App;
 use mbv_core::service_runtime::ServiceState;
 use mbv_queue::QueueState;
 
+fn audiobookshelf_progress_event(
+    update: mbv_player::AudiobookshelfProgressUpdate,
+) -> crate::app::state::events::LibEvent {
+    crate::app::state::events::LibEvent::Audiobookshelf(
+        crate::app::state::events::AudiobookshelfEvent::ProgressAcknowledged(update),
+    )
+}
+
+fn audiobookshelf_book_progress_event(
+    update: mbv_player::AudiobookshelfBookProgressUpdate,
+) -> crate::app::state::events::LibEvent {
+    crate::app::state::events::LibEvent::Audiobookshelf(
+        crate::app::state::events::AudiobookshelfEvent::BookProgressAcknowledged(update),
+    )
+}
+
 fn forward_audiobookshelf_updates<T, F>(
     receiver: &std::sync::mpsc::Receiver<T>,
     sender: &std::sync::mpsc::Sender<crate::app::state::events::LibEvent>,
@@ -345,7 +361,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &receiver,
                         &lib_tx,
-                        crate::app::state::events::LibEvent::AudiobookshelfProgressAcknowledged,
+                        audiobookshelf_progress_event,
                     );
                 });
                 let (book_sender, book_receiver) = std::sync::mpsc::channel();
@@ -355,7 +371,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &book_receiver,
                         &lib_tx,
-                        crate::app::state::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
+                        audiobookshelf_book_progress_event,
                     );
                 });
                 context

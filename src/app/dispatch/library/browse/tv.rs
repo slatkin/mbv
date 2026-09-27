@@ -101,10 +101,9 @@ impl App {
             // The fetch runs synchronously (order-sensitive side
             // effects); the computed content travels to Model-owned
             // `home_content` via lib_tx (task 5.3d).
-            let _ = self
-                .channels
-                .lib_tx
-                .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+            let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                crate::app::ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+            ));
         }
         if self.last_played_completed {
             if let Some(item_id) = self.last_played_item_id.clone() {
@@ -165,11 +164,11 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match build(&client, parent_id.clone(), title) {
             Ok(level) => {
-                let _ = tx.send(LibEvent::Loaded {
+                let _ = tx.send(LibEvent::Browse(crate::app::BrowseEvent::Loaded {
                     lib_idx,
                     parent_id,
                     level: Box::new(level),
-                });
+                }));
             }
             Err(e) => {
                 let _ = tx.send(LibEvent::Error(e));
@@ -208,11 +207,13 @@ impl App {
             let items = client.get_latest(&library_id, 30);
             match items {
                 Ok(items) => {
-                    let _ = tx.send(LibEvent::EmbyLatestSnapshotFetched {
-                        library_id,
-                        title,
-                        items,
-                    });
+                    let _ = tx.send(LibEvent::ModelContent(
+                        crate::app::ModelContentEvent::EmbyLatestSnapshotFetched {
+                            library_id,
+                            title,
+                            items,
+                        },
+                    ));
                 }
                 Err(error) => {
                     let _ = tx.send(LibEvent::Error(error));
@@ -344,16 +345,19 @@ mod tv_latest_tests {
                 .lib_rx
                 .recv()
                 .expect("selected TV refresh must complete");
-            if let event @ (LibEvent::Loaded { .. } | LibEvent::Refreshed { .. }) = event {
+            if let event @ LibEvent::Browse(
+                crate::app::BrowseEvent::Loaded { .. } | crate::app::BrowseEvent::Refreshed { .. },
+            ) = event
+            {
                 break event;
             }
         };
         match event {
-            LibEvent::Loaded { level, .. } => {
+            LibEvent::Browse(crate::app::BrowseEvent::Loaded { level, .. }) => {
                 assert_eq!(level.item_types.as_deref(), Some("Episode"));
                 assert_eq!(level.items[0].id, "new-episode");
             }
-            LibEvent::Refreshed { .. } => {
+            LibEvent::Browse(crate::app::BrowseEvent::Refreshed { .. }) => {
                 panic!("Latest/Upcoming stop refresh must not use the generic ranged fetch")
             }
             _ => unreachable!(),

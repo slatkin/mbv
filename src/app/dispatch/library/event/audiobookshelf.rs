@@ -1,6 +1,55 @@
+use crate::app::state::events::AudiobookshelfEvent;
 use crate::app::App;
 
 impl App {
+    pub(super) fn handle_audiobookshelf_event(&mut self, ev: AudiobookshelfEvent) {
+        match ev {
+            AudiobookshelfEvent::DetailFetched {
+                generation,
+                request,
+                library_item_id,
+                result,
+            } => self.handle_audiobookshelf_podcast_detail_fetched(
+                generation,
+                request,
+                library_item_id,
+                result,
+            ),
+            AudiobookshelfEvent::ShowsFetched {
+                generation,
+                library_id,
+                result,
+            } => self.handle_audiobookshelf_shows_fetched(generation, library_id, result),
+            AudiobookshelfEvent::BooksFetched {
+                generation,
+                library_id,
+                result,
+            } => self.handle_audiobookshelf_books_fetched(generation, library_id, result),
+            AudiobookshelfEvent::ShelfFetched {
+                generation,
+                library_id,
+                result,
+            } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
+            AudiobookshelfEvent::BookDetailFetched {
+                generation,
+                library_item_id,
+                result,
+            } => {
+                self.handle_audiobookshelf_book_detail_fetched(
+                    generation,
+                    &library_item_id,
+                    result,
+                );
+            }
+            AudiobookshelfEvent::ProgressAcknowledged(update) => {
+                self.handle_audiobookshelf_progress_acknowledged(&update);
+            }
+            AudiobookshelfEvent::BookProgressAcknowledged(update) => {
+                self.handle_audiobookshelf_book_progress_acknowledged(&update);
+            }
+        }
+    }
+
     /// The `AudiobookshelfBooksFetched` body: append the fetched page to the
     /// library's book browse state, fetch the selected book's detail, and
     /// chain the next page when one is needed.
@@ -293,16 +342,18 @@ mod tests {
     #[test]
     fn books_fetched_appends_page_and_selects_first_book() {
         let mut app = app_with_book_state();
-        app.handle_lib_event(LibEvent::AudiobookshelfBooksFetched {
-            generation: SetupGeneration::default(),
-            library_id: "books".into(),
-            result: Ok(AudiobookshelfBookPage {
-                page: 0,
-                limit: 20,
-                total: 21,
-                items: vec![book("book-a")],
-            }),
-        });
+        app.handle_lib_event(LibEvent::Audiobookshelf(
+            crate::app::AudiobookshelfEvent::BooksFetched {
+                generation: SetupGeneration::default(),
+                library_id: "books".into(),
+                result: Ok(AudiobookshelfBookPage {
+                    page: 0,
+                    limit: 20,
+                    total: 21,
+                    items: vec![book("book-a")],
+                }),
+            },
+        ));
 
         let state = &app.audiobookshelf_book_browse[0];
         assert_eq!(state.books.len(), 1);
@@ -316,16 +367,18 @@ mod tests {
         if stale {
             app.audiobookshelf_runtime.begin_setup();
         }
-        app.handle_lib_event(LibEvent::AudiobookshelfBooksFetched {
-            generation: SetupGeneration::default(),
-            library_id: library_id.into(),
-            result: Ok(AudiobookshelfBookPage {
-                page: 0,
-                limit: 20,
-                total: 1,
-                items: vec![book("book-a")],
-            }),
-        });
+        app.handle_lib_event(LibEvent::Audiobookshelf(
+            crate::app::AudiobookshelfEvent::BooksFetched {
+                generation: SetupGeneration::default(),
+                library_id: library_id.into(),
+                result: Ok(AudiobookshelfBookPage {
+                    page: 0,
+                    limit: 20,
+                    total: 1,
+                    items: vec![book("book-a")],
+                }),
+            },
+        ));
     }
 
     #[rstest]
@@ -376,11 +429,13 @@ mod tests {
         state.selected_id = Some("book-a".into());
         state.detail_loading_ids.insert("book-a".into());
         state.detail_loading = true;
-        app.handle_lib_event(LibEvent::AudiobookshelfBookDetailFetched {
-            generation: SetupGeneration::default(),
-            library_item_id: "book-a".into(),
-            result: detail_result(succeeds),
-        });
+        app.handle_lib_event(LibEvent::Audiobookshelf(
+            crate::app::AudiobookshelfEvent::BookDetailFetched {
+                generation: SetupGeneration::default(),
+                library_item_id: "book-a".into(),
+                result: detail_result(succeeds),
+            },
+        ));
 
         let state = &app.audiobookshelf_book_browse[0];
         assert!(!state.detail_loading);
@@ -392,16 +447,18 @@ mod tests {
         if stale_generation {
             app.audiobookshelf_runtime.begin_setup();
         }
-        app.handle_lib_event(LibEvent::AudiobookshelfBookDetailFetched {
-            generation: SetupGeneration::default(),
-            library_item_id: if stale_generation {
-                "book-a"
-            } else {
-                "missing"
-            }
-            .into(),
-            result: Ok((Vec::new(), Vec::new())),
-        });
+        app.handle_lib_event(LibEvent::Audiobookshelf(
+            crate::app::AudiobookshelfEvent::BookDetailFetched {
+                generation: SetupGeneration::default(),
+                library_item_id: if stale_generation {
+                    "book-a"
+                } else {
+                    "missing"
+                }
+                .into(),
+                result: Ok((Vec::new(), Vec::new())),
+            },
+        ));
     }
 
     #[rstest]

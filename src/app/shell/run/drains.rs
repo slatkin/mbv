@@ -7,6 +7,7 @@ use super::super::{
 };
 use super::{Duration, IdleFeed, Instant, PollStrategy};
 use crate::app::dispatch::session::player_event::PlayerEventFlow;
+use crate::app::{BrowseEvent, LibEvent, ModelContentEvent, MusicEvent, SeriesEvent};
 
 /// Outcome of one `drain_worker` step.
 enum WorkerDrain {
@@ -98,11 +99,11 @@ impl Model {
         while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
             had_events = true;
             match ev {
-                crate::app::LibEvent::EmbyLatestSnapshotFetched {
+                LibEvent::ModelContent(ModelContentEvent::EmbyLatestSnapshotFetched {
                     library_id,
                     title,
                     items,
-                } => {
+                }) => {
                     self.update_emby_latest_snapshot(
                         &library_id,
                         title,
@@ -112,11 +113,11 @@ impl Model {
                             .collect(),
                     );
                 }
-                crate::app::LibEvent::Loaded {
+                LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
                     parent_id,
                     level,
-                } => {
+                }) => {
                     let latest = self
                         .app
                         .libs
@@ -140,11 +141,12 @@ impl Model {
                                     .collect(),
                             )
                         });
-                    self.app.handle_lib_event(crate::app::LibEvent::Loaded {
-                        lib_idx,
-                        parent_id,
-                        level,
-                    });
+                    self.app
+                        .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+                            lib_idx,
+                            parent_id,
+                            level,
+                        }));
                     if let Some((library_id, title, items)) = latest {
                         self.update_emby_latest_snapshot(&library_id, title, items);
                     }
@@ -154,16 +156,16 @@ impl Model {
                 // component owns the cursor now, so the shell delivers
                 // the same trigger as a one-shot request consumed at the
                 // next sync (wide only -- narrow keeps track focus off).
-                crate::app::LibEvent::RecursiveAlbumActivated {
+                LibEvent::Music(MusicEvent::RecursiveAlbumActivated {
                     library_id,
                     nav_stack,
-                } => {
+                }) => {
                     self.on_recursive_album_activated(library_id, nav_stack);
                 }
                 // Position restore used to clear the deleted track-focus
                 // field; route the same reset to the component at the
                 // next sync.
-                crate::app::LibEvent::RestoreLibraryPosition { .. } => {
+                LibEvent::Browse(BrowseEvent::RestoreLibraryPosition { .. }) => {
                     self.handle_restored_library_position_event(ev);
                     self.music_track_focus_request = Some(MusicTrackFocusRequest::Clear);
                     // A saved nav-stack position is not a Music selection
@@ -173,10 +175,10 @@ impl Model {
                     // event carries must never re-point the tree.
                     self.push_inline_search_content();
                 }
-                crate::app::LibEvent::HomeContentRefreshed(content) => {
+                LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed(content)) => {
                     self.assign_home_content(*content);
                 }
-                crate::app::LibEvent::SeriesDetailFetched { .. } => {
+                LibEvent::Series(SeriesEvent::DetailFetched { .. }) => {
                     self.app.handle_lib_event(ev);
                     self.push_tv_workspace_content();
                 }
@@ -184,11 +186,15 @@ impl Model {
                 // own the stale-guard and cache writes; the drain tail's
                 // Music re-push projects whatever is now current. Kept as
                 // explicit arms so the variants are never wildcard-hidden.
-                crate::app::LibEvent::ArtistTracksFetched { .. }
-                | crate::app::LibEvent::ArtistArtworkFetched { .. } => {
+                LibEvent::Music(
+                    MusicEvent::ArtistTracksFetched { .. }
+                    | MusicEvent::ArtistArtworkFetched { .. },
+                ) => {
                     self.app.handle_lib_event(ev);
                 }
-                crate::app::LibEvent::HomeContentCleared => self.clear_home_content(),
+                LibEvent::ModelContent(ModelContentEvent::HomeContentCleared) => {
+                    self.clear_home_content();
+                }
                 ev => self.handle_inline_search_lib_event(ev),
             }
             self.push_audiobookshelf_podcast_content();

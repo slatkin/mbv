@@ -138,11 +138,13 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                let _ = tx.send(LibEvent::AllItemsPrefetched {
-                    lib_idx,
-                    parent_id,
-                    items,
-                });
+                let _ = tx.send(LibEvent::Browse(
+                    crate::app::BrowseEvent::AllItemsPrefetched {
+                        lib_idx,
+                        parent_id,
+                        items,
+                    },
+                ));
             }
         });
     }
@@ -175,11 +177,13 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                let _ = tx.send(LibEvent::SearchItemsLoaded {
-                    lib_idx,
-                    parent_id,
-                    items,
-                });
+                let _ = tx.send(LibEvent::Browse(
+                    crate::app::BrowseEvent::SearchItemsLoaded {
+                        lib_idx,
+                        parent_id,
+                        items,
+                    },
+                ));
             }
         });
     }

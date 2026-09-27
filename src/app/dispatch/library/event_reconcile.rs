@@ -2,7 +2,7 @@ use crate::app::App;
 
 impl App {
     /// Shared acknowledged-progress reconcile used by both the bare owner
-    /// (`LibEvent::AudiobookshelfProgressAcknowledged`) and a Local-daemon
+    /// (`LibEvent::Audiobookshelf(crate::app::AudiobookshelfEvent::ProgressAcknowledged)`) and a Local-daemon
     /// client (`PlayerEvent::AudiobookshelfProgress`): matches queue slots by
     /// provider-qualified identity, applies position/completion, writes every
     /// browse state's progress map, and persists the queue. A no-match event

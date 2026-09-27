@@ -76,7 +76,7 @@ impl Model {
     }
 
     /// The shell's reaction to a completed recursive album activation
-    /// (`LibEvent::RecursiveAlbumActivated`): install the landed path through
+    /// (`LibEvent::Music(crate::app::MusicEvent::RecursiveAlbumActivated)`): install the landed path through
     /// App, bind the one-shot inline track-focus request to the activated
     /// album, and re-anchor the workspace regardless of any prior local move.
     /// Sole owner of the return to the standard Music presentation, shared by
@@ -101,11 +101,12 @@ impl Model {
             return;
         }
         let library_id_lookup = library_id.clone();
-        self.app
-            .handle_lib_event(super::LibEvent::RecursiveAlbumActivated {
+        self.app.handle_lib_event(super::LibEvent::Music(
+            crate::app::MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            });
+            },
+        ));
         // The activated album: the resting cursor of the replaced nav stack.
         let activated_album_id = self
             .app
@@ -539,9 +540,8 @@ mod tests {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
 
-        model
-            .app
-            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(crate::app::LibEvent::Music(
+            crate::app::MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
@@ -549,7 +549,8 @@ mod tests {
                 result: Ok(vec![mbv_emby_model::test_support::make_item(
                     "Stale", "Audio",
                 )]),
-            });
+            },
+        ));
         model.push_music_workspace_content();
         assert!(
             model.test_music_owner().track_list.rows().is_empty(),
@@ -559,15 +560,15 @@ mod tests {
         let mut track = mbv_emby_model::test_support::make_item("Song", "Audio");
         track.id = "track-1".into();
         track.album_id = "album-1".into();
-        model
-            .app
-            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+        model.app.handle_lib_event(crate::app::LibEvent::Music(
+            crate::app::MusicEvent::ArtistTracksFetched {
                 destination: destination.clone(),
                 generation,
                 artist_id: "artist-alpha".into(),
                 revision: 7,
                 result: Ok(vec![track]),
-            });
+            },
+        ));
         model.push_music_workspace_content();
         let rows = model.test_music_owner().track_list.rows();
         assert!(

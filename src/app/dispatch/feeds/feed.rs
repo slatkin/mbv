@@ -280,12 +280,14 @@ impl App {
                     }
                 })
                 .collect();
-            let _ = tx.send(LibEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            });
+            let _ = tx.send(LibEvent::Browse(
+                crate::app::BrowseEvent::FeedHomeVideoAggregated {
+                    lib_idx,
+                    parent_id,
+                    all_items,
+                    groups,
+                },
+            ));
         });
     }
 

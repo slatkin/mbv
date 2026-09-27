@@ -1,5 +1,5 @@
 // Unit tests for change `per-destination-item-navigation` tasks 1.1/1.2/4.2:
-// the D1 reveal-item table, the `LibEvent::NavigateTo` landing payload, and
+// the D1 reveal-item table, the `LibEvent::Browse(crate::app::BrowseEvent::NavigateTo)` landing payload, and
 // the drained resolve-failure error event. Mocked Emby boundary only
 // (`MockHttp`), per the AGENTS.md mocks-only policy.
 

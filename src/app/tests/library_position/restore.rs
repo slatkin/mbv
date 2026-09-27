@@ -24,12 +24,14 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     app.replace_saved_library_position(0, position.clone());
     // 2 items / 50 total: not fully loaded, so `spawn_all_items_prefetch` would do I/O.
     let level = BrowseLevel::from_position_level(&level, make_items(2), 50, 10);
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-        lib_idx: 0,
-        requested_position: position.clone(),
-        position,
-        nav_stack: vec![level],
-    });
+    app.handle_lib_event(LibEvent::Browse(
+        crate::app::BrowseEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            requested_position: position.clone(),
+            position,
+            nav_stack: vec![level],
+        },
+    ));
     assert_eq!(app.libs[0].nav_stack[0].title, "Power");
     assert!(app.libs[0].nav_stack[0].all_items.is_none());
 }
@@ -70,28 +72,30 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-        lib_idx: 0,
-        requested_position: pre_feature_position.clone(),
-        position: pre_feature_position,
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: make_items(2),
-            total_count: 673,
-            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-    });
+    app.handle_lib_event(LibEvent::Browse(
+        crate::app::BrowseEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            requested_position: pre_feature_position.clone(),
+            position: pre_feature_position,
+            nav_stack: vec![BrowseLevel {
+                fetched_rows: 0,
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(2),
+                total_count: 673,
+                resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: None,
+                music_grouping: None,
+            }],
+        },
+    ));
 
     assert_eq!(app.libs[0].library_total, Some(673));
     assert!(app.should_show_letter_pills(0));
@@ -131,28 +135,30 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     app.replace_saved_library_position(0, requested.clone());
     app.clear_saved_library_position(0);
 
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-        lib_idx: 0,
-        requested_position: requested.clone(),
-        position: requested,
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: make_items(2),
-            total_count: 2,
-            resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-    });
+    app.handle_lib_event(LibEvent::Browse(
+        crate::app::BrowseEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            requested_position: requested.clone(),
+            position: requested,
+            nav_stack: vec![BrowseLevel {
+                fetched_rows: 0,
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(2),
+                total_count: 2,
+                resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: None,
+                music_grouping: None,
+            }],
+        },
+    ));
 
     assert!(app.libs[0].nav_stack.is_empty());
     assert!(!crate::config::load_library_position_state()

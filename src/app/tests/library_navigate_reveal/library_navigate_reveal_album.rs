@@ -24,7 +24,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
@@ -32,7 +32,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
             track_id: None,
         },
         switch_tab: true,
-    });
+    }));
     // The landing is async: no tab change until the activation drains.
     assert_eq!(app.tab, TabSelection::Home, "switch deferred to the drain");
 
@@ -42,7 +42,10 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");
     assert!(
-        matches!(ev, LibEvent::RecursiveAlbumActivated { .. }),
+        matches!(
+            ev,
+            LibEvent::Music(crate::app::MusicEvent::RecursiveAlbumActivated { .. })
+        ),
         "expected RecursiveAlbumActivated"
     );
     app.handle_lib_event(ev);
@@ -88,7 +91,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
@@ -99,7 +102,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
             track_id: None,
         },
         switch_tab: true,
-    });
+    }));
 
     let ev = app
         .channels
@@ -141,7 +144,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
 
     let mut album = make_item("The Album", "MusicAlbum");
     album.id = "alb1".into();
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(crate::app::BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
@@ -149,7 +152,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
             track_id: None,
         },
         switch_tab: true,
-    });
+    }));
     assert_eq!(app.pending_navigate_tab_switch, Some(0));
 
     // The user moves on before the activation drains.

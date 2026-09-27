@@ -43,7 +43,9 @@ impl App {
                 )
                 .map(|(items, _total)| items)
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::AlbumTracksFetched { album_id, tracks });
+            let _ = tx.send(LibEvent::Music(
+                crate::app::MusicEvent::AlbumTracksFetched { album_id, tracks },
+            ));
         });
     }
 
@@ -72,11 +74,11 @@ impl App {
                 .map(|(items, _total)| items)
                 .map(|seasons| (seasons, std::collections::HashMap::new()))
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::SeriesDetailFetched {
+            let _ = tx.send(LibEvent::Series(crate::app::SeriesEvent::DetailFetched {
                 series_id: sid,
                 seasons,
                 episodes,
-            });
+            }));
         });
     }
 
@@ -122,11 +124,13 @@ impl App {
                 )
                 .map(|(items, _)| items)
                 .unwrap_or_default();
-            let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
-                series_id,
-                season_id,
-                episodes,
-            });
+            let _ = tx.send(LibEvent::Series(
+                crate::app::SeriesEvent::SeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes,
+                },
+            ));
         });
     }
 }

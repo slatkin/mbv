@@ -244,10 +244,12 @@ fn fallback_artist_scope_arms_only_the_bounded_fetch_window() {
         "the rest of the scope waits for a slot"
     );
 
-    app.handle_lib_event(LibEvent::AlbumTracksFetched {
-        album_id: "album-1".into(),
-        tracks: Vec::new(),
-    });
+    app.handle_lib_event(LibEvent::Music(
+        crate::app::MusicEvent::AlbumTracksFetched {
+            album_id: "album-1".into(),
+            tracks: Vec::new(),
+        },
+    ));
 
     assert!(app.album_tracks_cache.contains_key("album-1"));
     assert_eq!(
