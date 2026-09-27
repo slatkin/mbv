@@ -235,7 +235,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 5. `mbv-render`
 
-- [ ] 5.1 Create `crates/mbv-render`. Deps: `mbv-theme`, `mbv-images`,
+- [x] 5.1 Create `crates/mbv-render`. Deps: `mbv-theme`, `mbv-images`,
   `mbv-ui-model`, `ratatui`, `ratatui-image`, `textwrap`, `unicode-width`,
   `tui-scrollbar`, plus the Tier 1–4 crates the compiler asks for. `git mv`
   the following:
@@ -247,7 +247,7 @@ Each task below is its own commit, and the full gate passes after each.
   `crate::app::infra::layout::` → `crate::layout::`. Verify:
   `cargo nextest run -p mbv-render` passes, and
   `rg 'crate::app' crates/mbv-render` is empty.
-- [ ] 5.2 Delete `pub mod render;` from `src/app.rs`, the `layout` `mod` line
+- [x] 5.2 Delete `pub mod render;` from `src/app.rs`, the `layout` `mod` line
   in `infra.rs`, and the `layout` entry and the layout-constant re-exports in
   `src/app.rs`. Add `mbv-render` to the root `[dependencies]`. Rewrite
   `crate::app::render::` → `mbv_render::`, and `crate::app::layout::` /
