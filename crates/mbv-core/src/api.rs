@@ -1,3 +1,5 @@
+mod failure;
+pub use failure::*;
 mod types;
 pub use types::*;
 mod client_auth;

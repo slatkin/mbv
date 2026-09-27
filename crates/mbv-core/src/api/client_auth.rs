@@ -16,17 +16,14 @@ fn emby_agent(
 }
 
 impl EmbyClient {
-    pub(super) fn service_failure(
-        context: &str,
-        error: &ureq::Error,
-    ) -> crate::service_runtime::EmbyFailure {
+    pub(super) fn service_failure(context: &str, error: &ureq::Error) -> crate::api::EmbyFailure {
         let class = match error {
             ureq::Error::StatusCode(401 | 403) => {
-                crate::service_runtime::EmbyFailureClass::AuthenticationRejected
+                crate::api::EmbyFailureClass::AuthenticationRejected
             }
-            _ => crate::service_runtime::EmbyFailureClass::Unavailable,
+            _ => crate::api::EmbyFailureClass::Unavailable,
         };
-        crate::service_runtime::EmbyFailure {
+        crate::api::EmbyFailure {
             class,
             message: format!("{context}: {error}"),
         }
@@ -230,7 +227,7 @@ impl EmbyClient {
         token: String,
         setup: &mbv_config::EmbySetup,
         hard_bound: std::time::Duration,
-    ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
+    ) -> Result<EmbyClient, crate::api::EmbyFailure> {
         let mut clone = self.clone();
         clone.config.server_url.clone_from(&setup.server_url);
         clone.user_id.clone_from(&setup.user_id);
@@ -315,13 +312,13 @@ impl EmbyClient {
     pub fn load_startup_data_bounded(
         &self,
         hard_bound: std::time::Duration,
-    ) -> Result<crate::service_runtime::EmbyBootstrap, crate::service_runtime::EmbyFailure> {
+    ) -> Result<crate::api::EmbyBootstrap, crate::api::EmbyFailure> {
         let client = self.clone();
         mbv_net::bounded::run_with_hard_bound(
             move || {
                 let continue_items = client.get_continue_watching(20).unwrap_or_default();
                 let views = client.get_views_classified()?;
-                Ok(crate::service_runtime::EmbyBootstrap {
+                Ok(crate::api::EmbyBootstrap {
                     continue_items,
                     views,
                 })

@@ -1,7 +1,7 @@
 use mbv_config::{load_service_secret, EmbySetup};
 use mbv_core::api::EmbyClient;
+use mbv_core::api::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use mbv_queue::ServiceKind;
 use std::sync::mpsc;
 
@@ -275,7 +275,7 @@ pub(in crate::app) struct Completion {
 
 pub(in crate::app) struct Startup {
     pub(in crate::app) client: EmbyClient,
-    pub(in crate::app) bootstrap: mbv_core::service_runtime::EmbyBootstrap,
+    pub(in crate::app) bootstrap: mbv_core::api::EmbyBootstrap,
     pub(in crate::app) setup: EmbySetup,
 }
 

@@ -48,8 +48,8 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
     let content = app.apply_emby_completion_with_secret_deleter(
         crate::app::dispatch::session::service_startup::Completion {
             generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            result: Err(mbv_core::api::EmbyFailure {
+                class: mbv_core::api::EmbyFailureClass::AuthenticationRejected,
                 message: "HTTP 401".into(),
             }),
         },
@@ -85,7 +85,7 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
     let generation = app.emby_runtime.generation();
 
     app.handle_emby_runtime_failure_with_secret_deleter(
-        mbv_core::service_runtime::EmbyFailure::unavailable("HTTP 503"),
+        mbv_core::api::EmbyFailure::unavailable("HTTP 503"),
         |_| panic!("unavailable must not delete a secret"),
     );
     assert_eq!(app.emby_runtime.state, ServiceState::Unavailable);
@@ -134,8 +134,8 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     let content =
         app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
             generation: stale,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            result: Err(mbv_core::api::EmbyFailure {
+                class: mbv_core::api::EmbyFailureClass::AuthenticationRejected,
                 message: "HTTP 401".into(),
             }),
         });
@@ -183,7 +183,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
             previous_state: ServiceState::Ready,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: candidate,
-                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
+                bootstrap: mbv_core::api::EmbyBootstrap::default(),
                 setup: EmbySetup::new("https://new.example/", "new-user"),
             }),
         },

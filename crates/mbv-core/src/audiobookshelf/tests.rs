@@ -2,6 +2,7 @@ use super::*;
 use std::collections::HashMap;
 
 mod catalog;
+mod failure;
 mod playback;
 
 #[test]
