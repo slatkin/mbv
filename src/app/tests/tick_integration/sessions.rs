@@ -9,7 +9,7 @@ use crate::app::dispatch::action::Command;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use mbv_components::SessionsComponent;
-use mbv_ui_model::panel_targets::{PanelTarget, SessionTargetKey};
+use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 
 fn key(code: Key) -> Event<UserEvent> {
@@ -19,12 +19,12 @@ fn key(code: Key) -> Event<UserEvent> {
     })
 }
 
-fn sessions(ids: &[&str]) -> Vec<PanelTarget> {
+fn sessions(ids: &[&str]) -> Vec<crate::app::state::panel_targets::PanelTarget> {
     ids.iter()
         .map(|id| {
             let mut session = mbv_emby::test_support::make_session(id, "mbv");
             session.id = (*id).into();
-            PanelTarget::Emby(Box::new(session))
+            crate::app::state::panel_targets::PanelTarget::Emby(Box::new(session))
         })
         .collect()
 }

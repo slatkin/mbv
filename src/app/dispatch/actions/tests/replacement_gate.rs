@@ -27,8 +27,8 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
         app.pending_queue_replacement,
         Some((
             _,
-            mbv_ui_model::playback::ReplacementExecutor::Routed(
-                mbv_ui_model::playback::RoutedReplacementPrep::Album
+            crate::app::state::playback::ReplacementExecutor::Routed(
+                crate::app::state::playback::RoutedReplacementPrep::Album
             )
         ))
     ));
@@ -92,7 +92,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(client),
     ));
 
@@ -119,8 +119,8 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
                 source: mbv_queue::QueueSource::Collection { collection_type },
                 ..
             },
-            mbv_ui_model::playback::ReplacementExecutor::Routed(
-                mbv_ui_model::playback::RoutedReplacementPrep::Folder
+            crate::app::state::playback::ReplacementExecutor::Routed(
+                crate::app::state::playback::RoutedReplacementPrep::Folder
             )
         )) if collection_type == "music"
     ));

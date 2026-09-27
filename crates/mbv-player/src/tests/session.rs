@@ -507,7 +507,7 @@ fn near_end_requires_runtime_known() {
 #[test]
 fn near_end_verdict_is_identical_across_exit_paths() {
     // "Same completion, different exit path": the advance, quit and shutdown
-    // paths in player_run_events all reach the verdict through `is_near_end`
+    // paths in crates/mbv-player/src/run/events all reach the verdict through `is_near_end`
     // with the completed occurrence's runtime, so a single completion at a
     // single position cannot be judged near-end on one path and not another.
     let pos = 96 * RUNTIME / 100;

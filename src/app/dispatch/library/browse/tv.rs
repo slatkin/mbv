@@ -289,9 +289,9 @@ mod tv_latest_tests {
         };
         let http = mbv_net::mock_http::MockHttp::new();
         let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
-        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-            std::sync::Mutex::new(client),
-        ));
+        app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
+            std::sync::Arc::new(std::sync::Mutex::new(client)),
+        );
 
         let mut library = mbv_emby_model::test_support::make_item("Shows", "CollectionFolder");
         library.id = "tv-library".into();

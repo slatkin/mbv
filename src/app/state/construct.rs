@@ -1,11 +1,11 @@
+use crate::app::state::player_tab::PlayerTab;
+use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::service_setup::StartupRequest;
 use crate::app::{spawn_resize_worker, App, AppInit, SuspendedLocalSession};
-use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_player::{Player, PlayerProxy};
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::playback::QueueScope;
-use mbv_ui_model::player_tab::PlayerTab;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
 use std::sync::{mpsc, Arc, Mutex};
@@ -277,7 +277,7 @@ impl App {
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
             cast_status_loading: false,
-            queue_epoch: mbv_ui_model::queue_owner::QueueEpoch::default(),
+            queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,

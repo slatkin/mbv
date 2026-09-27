@@ -592,7 +592,10 @@ impl Model {
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {
                 library_lower,
-                devices,
+                devices: devices
+                    .into_iter()
+                    .map(|(name, endpoint)| (name, endpoint.map(|endpoint| endpoint.to_string())))
+                    .collect(),
             },
             cursor,
         });
@@ -628,7 +631,7 @@ impl Model {
                 log::info!(target: "library_route", "F2 route removed library={library_lower:?}");
             } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
                 c.library_routes
-                    .insert(library_lower.clone(), endpoint.to_string());
+                    .insert(library_lower.clone(), endpoint.clone());
                 log::info!(target: "library_route", "F2 endpoint persisted library={library_lower:?} endpoint={endpoint}");
             }
         }

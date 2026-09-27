@@ -207,7 +207,7 @@ mod panel_list_tests {
 
     /// The selected-row bar is intentionally identical across the browser
     /// arms; arm-specific stripe colours are owned by the Render Component
-    /// regressions in `src/app/render/components/media_list.rs` and its
+    /// regressions in `crates/mbv-render/src/components/media_list.rs` and its
     /// Wide-arm tests. Every arm uses the canonical Iris selected-row role.
     #[test]
     fn wide_selected_rows_paint_the_bar_in_both_slots() {

@@ -32,6 +32,16 @@ application crate that owns `App`, and a painter SHALL NOT take an Interactive
 Component type as input. A component or painter that names `App` therefore
 fails to compile, rather than relying on review.
 
+The UI crates (`mbv-ui-model`, `mbv-ui-msg`, `mbv-render`, `mbv-components`)
+SHALL NOT depend, directly or transitively through normal dependencies, on the
+Player runtime, the Player-owner protocol, or the Emby, websocket,
+remote-player, cast or daemon crates. The shell-only state that holds a Player
+handle, a protocol stream, a worker channel or a provider client SHALL live in
+the TUI application crate. Presentation models that the UI crates receive SHALL
+carry only the display fields they paint and opaque keys the shell resolves,
+not provider runtime values such as session records, discovered receivers or
+connectable endpoints.
+
 #### Scenario: An overlay is opened and dismissed
 
 - **WHEN** the user opens an overlay (Search, Settings, Sessions, Playlists,
@@ -52,6 +62,20 @@ fails to compile, rather than relying on review.
 - **WHEN** code in `mbv-components` or `mbv-render` names `App`, a shell
   module, or a dispatch module
 - **THEN** the workspace does not compile
+
+#### Scenario: A component cannot reach the Player runtime
+
+- **WHEN** code in any UI crate names a Player handle, a Player-owner protocol
+  type, a websocket sender, or an Emby or cast client type, or reaches one
+  through a field of a type it can name
+- **THEN** the workspace does not compile
+
+#### Scenario: A runtime edit does not recompile the UI crates
+
+- **WHEN** a source file in the Player, protocol, Emby, websocket,
+  remote-player, cast or daemon crate changes
+- **THEN** none of `mbv-ui-model`, `mbv-ui-msg`, `mbv-render` or
+  `mbv-components` is rebuilt
 
 ### Requirement: Interactive components own only presentation authority
 

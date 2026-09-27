@@ -75,7 +75,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                mbv_ui_model::events::LibEvent::AudiobookshelfDetailFetched {
+                crate::app::state::events::LibEvent::AudiobookshelfDetailFetched {
                     generation,
                     request,
                     library_item_id,
@@ -126,7 +126,7 @@ impl App {
                 },
             );
             let _ = tx.send(
-                mbv_ui_model::events::LibEvent::AudiobookshelfBookDetailFetched {
+                crate::app::state::events::LibEvent::AudiobookshelfBookDetailFetched {
                     generation,
                     library_item_id,
                     result,

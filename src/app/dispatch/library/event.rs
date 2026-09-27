@@ -1,9 +1,9 @@
 use crate::app::state::app_struct::LevelFillState;
+use crate::app::state::events::{NavigateLanding, PendingSeriesHandoff};
 use crate::app::{
     dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
     FeedHomeVideoState, LibEvent, QueueScope,
 };
-use mbv_ui_model::events::{NavigateLanding, PendingSeriesHandoff};
 use mbv_ui_model::ui_util::sort_audio_tracks;
 
 mod audiobookshelf;

@@ -2,7 +2,7 @@
 //!
 //! Ported from `relay::spawn_detached` / `run_relay_main`, minus everything
 //! pty-related: no pty, no winsize, no byte-pipe multiplexing, no eviction.
-//! The daemon here is just `crates/mbv-core/src/daemon.rs::run_with_options`
+//! The daemon here is just `crates/mbv-daemon/src/run.rs::run_with_options`
 //! running headless in a detached process; clients reach it exactly the way
 //! any other `DaemonEndpoint::Local` client does.
 //!

@@ -1,7 +1,7 @@
 //! Status-bar layout and painter.
 //!
 //! The mounted `StatusBarPanel` Interactive Component
-//! (`src/app/components/status_bar_panel.rs`) owns the status row's pill hit
+//! (`crates/mbv-components/src/status_bar_panel.rs`) owns the status row's pill hit
 //! regions, overflow drop-order and click/scroll resolution. This module owns
 //! its visual model, layout, and the single painter. The Local/Remote queue-
 //! scope pills are queue concern and paint in the `QueueColumn` footer

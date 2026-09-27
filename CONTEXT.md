@@ -380,7 +380,7 @@ _Avoid_: generic list, generic media list, two-column list
 **Row flow**:
 The one ordered sequence of rows a list presents, in paint order. Row position, viewport
 offset, and point resolution all address this same sequence; a list's ordering is the order
-its rows paint. Owned by the shared `src/app/components/list/` seam; cursor movement,
+its rows paint. Owned by the shared `crates/mbv-components/src/list/` seam; cursor movement,
 viewport resolution, retained paint geometry, and multi-selection each have one shared
 implementation over it.
 _Avoid_: item list, row list, flat list
@@ -417,14 +417,14 @@ _Avoid_: generic list, two-column list, Inline Search
 
 **TreeBrowser**:
 The one complete shared nesting browser Interactive Component
-(`src/app/components/list/tree_browser/`), the nesting counterpart to the flat
+(`crates/mbv-components/src/list/tree_browser/`), the nesting counterpart to the flat
 MediaList. Destinations supply only plain `TreeNode<Target>` values plus the
 closed per-node `TreeMarkPolicy`, and translate emitted stable-target intents;
 they supply no tree behavior of their own. Like MediaList it is embedded — never
 independently mounted, focused, subscribed, or given a ComponentId. Its
 `Component::view` is the only interactive view entry point and delegates
 painting to one shared destination-neutral Render Component under
-`src/app/render/components/tree_browser/`.
+`crates/mbv-render/src/components/tree_browser/`.
 
 **TV show tree**:
 The show-mode TV browser: one shared TreeBrowser projecting shows as selectable expandable roots, their seasons as expandable children, and loaded episodes as leaf children, with the established show group headings and between-group spacers as structural rows. Show modes (`All` and the alphabet ranges) use it in every Panel mode; `Latest`, `Upcoming`, Inline Search, and the Hero's season pills and episode Workspace remain flat and outside it, and inline tree episodes deliberately duplicate Workspace episode rows. Row identity is a closed `TvTreeTarget` that scopes seasons and episodes to their show and season. A season's children are loaded only when its branch is expanded.
@@ -713,7 +713,7 @@ when the content exceeds its height.
 _Avoid_: credits list, cast list, detail table
 
 **Render Component**:
-A `src/app/render/components/` unit that takes a typed content model plus a
+A `crates/mbv-render/src/components/` unit that takes a typed content model plus a
 `Rect` (and, for Ratatui, a `&mut Buffer`/`Frame`), paints, and computes its
 own geometry within that `Rect`. Components consume semantic theme roles or
 component style policies — never arbitrary `Color`/`Style` passed in from a
@@ -721,7 +721,7 @@ screen.
 _Avoid_: component (bare), interactive component, screen, arrangement
 
 **Interactive Component**:
-A TuiRealm `AppComponent` under `src/app/components/` that owns one independently
+A TuiRealm `AppComponent` under `crates/mbv-components/src/` that owns one independently
 routed surface's local presentation state, input interpretation, updates,
 rendering, and geometry, and returns typed requests for work outside its authority.
 _Avoid_: component (bare), controller, render component, widget
@@ -759,7 +759,7 @@ legacy input still forwards; `App` teardown remains pending group 5.
 _Avoid_: migrated (until the mirror and legacy handler are removed)
 
 **Arrangement**:
-A `src/app/render/arrangements/` unit that takes a typed content model plus a
+A `crates/mbv-render/src/arrangements/` unit that takes a typed content model plus a
 `Rect`, places one or more components, and owns breakpoints and rect
 splitting. Arrangements sit between screens and components in the render
 dependency order (`screens -> arrangements -> components`).

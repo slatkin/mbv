@@ -17,7 +17,7 @@
 //! snapshot/paint) was deleted with the show browser
 //! (reorganize-podcast-pill-navigation 4.3): the surname-bucket pills and
 //! show rows it pinned no longer exist, and the tab's paint ownership lives
-//! on in `src/app/render/tests_podcast_panel.rs` (one pill bar, grouped
+//! on in `crates/mbv-render/src/components/feeds_manage.rs` (one pill bar, grouped
 //! split episode rows, Workspace-free Wide hero, one painter per surface).
 
 use super::*;

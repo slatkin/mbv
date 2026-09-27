@@ -24,9 +24,9 @@ fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
+    model.app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
+        std::sync::Arc::new(std::sync::Mutex::new(client)),
+    );
     model
 }
 
@@ -160,9 +160,9 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
         user_id: "user-id".into(),
         token: "token".into(),
     });
-    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
+    model.app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
+        std::sync::Arc::new(std::sync::Mutex::new(client)),
+    );
 
     model.push_tv_workspace_content();
     assert!(model.app.series_detail_loading.contains("movie-focused"));

@@ -125,7 +125,7 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 #[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
-    app.emby_runtime.replace_setup();
+    app.emby_runtime.begin_setup();
     let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
     // Home content is Model-owned (task 5.3d): a stale completion returns no
     // snapshot, so the shell leaves `home_content` untouched — the invariance
@@ -171,8 +171,10 @@ pub(crate) fn make_built_app() -> App {
 
     App::build(AppInit {
         config: Arc::new(Mutex::new(config)),
-        emby_runtime: mbv_core::service_runtime::EmbyRuntime::default(),
-        audiobookshelf_runtime: mbv_core::service_runtime::AudiobookshelfRuntime::new(false),
+        emby_runtime: crate::app::state::service_runtime::EmbyRuntime::default(),
+        audiobookshelf_runtime: crate::app::state::service_runtime::AudiobookshelfRuntime::new(
+            false,
+        ),
         player,
         player_rx,
         ws_rx,
@@ -204,7 +206,7 @@ pub(crate) fn make_built_app() -> App {
 }
 
 pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(mbv_emby::EmbyClient::new(config)),
     ));
 }

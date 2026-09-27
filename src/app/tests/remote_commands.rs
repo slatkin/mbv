@@ -32,7 +32,7 @@ fn remote_command_app() -> (App, MockHttp) {
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(client),
     ));
     let mut item_a = app.player_tab.emby_items()[0].clone();

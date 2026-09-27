@@ -21,7 +21,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     let mut app = make_local_daemon_app_stub(local_items.clone());
     // This test covers the disconnect projection, not an unrelated failed
     // Emby refresh that `refresh_after_stop` may perform.
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::default();
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
     let (remote, _) = RemotePlayer::stub(make_items(3), 0);
     let (event_tx, event_rx) = mpsc::channel();
     let endpoint = DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());

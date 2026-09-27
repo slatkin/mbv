@@ -1,5 +1,13 @@
+use super::panel_targets::PanelTarget;
+use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
+use crate::app::state::playback::{
+    PendingQueueAction, PlaylistMutationState, ReplacementExecutor, SuspendedLocalSession,
+    UndoEntry,
+};
+use crate::app::state::player_tab::PlayerTab;
+use crate::app::state::queue_owner::QueueEpoch;
+use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::types::cast::CastAttachment;
-use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
@@ -8,18 +16,11 @@ use mbv_render as render;
 use mbv_render::layout;
 use mbv_ui_model::browse::{AlbumIndexState, SeriesDetail};
 use mbv_ui_model::confirm::ConfirmModal;
-use mbv_ui_model::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::feed::SavePlaylistDialog;
 use mbv_ui_model::feed_tab::FeedTabState;
 use mbv_ui_model::library_tab::LibraryTab;
-use mbv_ui_model::panel_targets::PanelTarget;
-use mbv_ui_model::playback::{
-    PendingQueueAction, PlaylistMutationState, QueueScope, ReplacementExecutor,
-    SuspendedLocalSession, UndoEntry,
-};
-use mbv_ui_model::player_tab::PlayerTab;
-use mbv_ui_model::queue_owner::QueueEpoch;
+use mbv_ui_model::playback::QueueScope;
 use mbv_ui_model::settings::{PanelFocus, PanelMode, SettingsDestination};
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};

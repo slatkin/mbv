@@ -85,7 +85,7 @@ impl Model {
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
                     self.app.request_queue_replacement(
-                        mbv_ui_model::playback::PendingQueueAction::PlayItems {
+                        crate::app::state::playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
                             source: mbv_queue::QueueSource::Playlist {
@@ -94,7 +94,7 @@ impl Model {
                             },
                             autostart: false,
                         },
-                        mbv_ui_model::playback::ReplacementExecutor::Pending,
+                        crate::app::state::playback::ReplacementExecutor::Pending,
                     );
                     // No sidebar dismiss here: `run_replacement` raises it once
                     // the replacement actually runs (immediately on an empty

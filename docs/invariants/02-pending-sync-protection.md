@@ -1,12 +1,12 @@
 # Invariant 2 — `pending_sync` must cover every accepted report, exactly once
 
 **Scope:** `ProgressState::{local, pending_sync}`
-(`crates/mbv-core/src/playback_queue.rs:84+`), `SlotProgress::from_queue_item`
+(`crates/mbv-queue/src/lib.rs`), `SlotProgress::from_queue_item`
 / `apply_to_item`, `PlaybackQueue::{apply_progress,
 mark_progress_sync_pending, merge_refresh, merge_fetched_slot,
 update_slot_item}`, the `PlayerEvent → mark_progress_sync_pending` coupling in
 `src/app/dispatch/session/player_event.rs` (`Stopped`, `TrackCompleted`), and `SessionReporter`
-(`crates/mbv-core/src/player_runtime.rs:210+`, `report_stopped*`).
+(`crates/mbv-player/src/report_worker.rs`, `report_stopped*`).
 
 ## The invariant
 
@@ -67,7 +67,7 @@ equality exists because position-within-3s with a flipped watched flag is
   flag comes from the player thread's `StopReport::is_accepted()`, so only
   reports Emby actually took (or the fire-and-forget background path
   deliberately treats as taken — `report_stop_now_or_background`,
-  `player_run_queue.rs:46+`) arm protection.
+  `crates/mbv-player/src/run/queue.rs`) arm protection.
 - **Protect path:** `should_protect_missing_slot` = active **or**
   `pending_sync.is_some()`; `merge_refresh` routes protected slots around
   pruning, and `merge_fetched_slot` holds stale-pending slots (`stale_pending
@@ -106,7 +106,7 @@ equality exists because position-within-3s with a flipped watched flag is
    invisible at the merge site.** `merge_fetched_slot` treats
    `pending_sync` as "the server has this (or will, within tolerance)". That
    holds only because the player thread upholds the "optimistic accept"
-   policy documented 400 lines away in `player_run_queue.rs`. A future
+   policy documented in `crates/mbv-player/src/run/queue.rs`. A future
    `report_stopped` caller that returns `true` loosely would silently widen
    phantom protection to unearned slots.
 4. **`set_slot_progress_by_index` / `set_item_at` (test helpers) bypass the

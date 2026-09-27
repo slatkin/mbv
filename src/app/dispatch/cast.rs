@@ -6,6 +6,7 @@
 // selection uses lives here too.
 
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
@@ -16,7 +17,6 @@ use mbv_cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
-use mbv_ui_model::panel_targets::PanelTarget;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 

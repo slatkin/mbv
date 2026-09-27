@@ -9,7 +9,7 @@ use ratatui::Frame;
 /// Paint the daemon-lost modal: centered 64×10 frame with diagnostics + hint.
 ///
 /// Extracted from `App::render_daemon_lost_modal` so the Interactive
-/// Component (`src/app/components/daemon_lost.rs`) can call it without an
+/// Component (`crates/mbv-components/src/daemon_lost.rs`) can call it without an
 /// `App` reference (design D9).
 //
 // `pub(crate)` so the Interactive Component can call it.

@@ -8,7 +8,7 @@ use crate::palette;
 
 /// Paint the context menu at the given rect.
 ///
-/// The Interactive Component (`src/app/components/context_menu.rs`) owns the
+/// The Interactive Component (`crates/mbv-components/src/context_menu.rs`) owns the
 /// menu's `entries`, `cursor`, and `menu_rect`; it calls this function from
 /// its `view()` (design D9). Placement is computed by the shell from
 /// `AppLayout` and passed in as `rect` (task 5.3c removed the

@@ -125,7 +125,12 @@ impl Model {
                     ),
                 );
                 sessions.set_content(
-                    &self.app.panel_targets,
+                    &self
+                        .app
+                        .panel_targets
+                        .iter()
+                        .map(crate::app::state::panel_targets::PanelTarget::row)
+                        .collect::<Vec<_>>(),
                     self.app.sessions_loading,
                     connected_session_id,
                     cast_attachment_id,

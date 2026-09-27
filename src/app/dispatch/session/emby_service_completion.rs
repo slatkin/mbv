@@ -1,8 +1,8 @@
 use mbv_emby::EmbyClient;
 use std::sync::{mpsc, Arc, Mutex};
 
+use crate::app::state::playback::HomeContent;
 use crate::app::App;
-use mbv_ui_model::playback::HomeContent;
 
 impl App {
     pub(in crate::app) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {

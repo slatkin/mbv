@@ -128,7 +128,7 @@ pub enum LibraryRouteStage {
     /// with a reason rather than silently omitted, and not committable.
     PickDevice {
         library_lower: String,
-        devices: Vec<(String, Option<mbv_remote_player::DaemonEndpoint>)>,
+        devices: Vec<(String, Option<String>)>,
     },
 }
 

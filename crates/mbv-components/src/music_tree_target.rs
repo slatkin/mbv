@@ -3,7 +3,7 @@
 //! `MusicTreeTarget` is the only row identity the shared
 //! [`TreeBrowser`](crate::list::tree_browser::TreeBrowser)
 //! boundary accepts: the shared owner's arena identifiers stay private to
-//! `src/app/components/list/tree_browser/`, so Music addresses rows through
+//! `crates/mbv-components/src/list/tree_browser/`, so Music addresses rows through
 //! these stable targets and never through a projection position.
 
 use mbv_ui_model::music_grouping::ArtistKey;

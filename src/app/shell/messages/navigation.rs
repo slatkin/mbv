@@ -159,7 +159,7 @@ impl super::super::Model {
                 self.app.spawn_cast_discovery();
             }
             ShellRequest::SelectSession(key) => {
-                if let Some(target) = mbv_ui_model::panel_targets::resolve_session_target(
+                if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
                     &self.app.panel_targets,
                     &key,
                 ) {

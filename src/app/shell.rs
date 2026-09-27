@@ -13,12 +13,14 @@ use super::{
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
+#[cfg(test)]
+use crate::app::state::home_latest::current_launch_secs;
+use crate::app::state::playback::{
+    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
+};
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
-#[cfg(test)]
-use mbv_ui_model::home_latest::current_launch_secs;
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
-use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 use mbv_ui_msg::AlbumCursorKind;
 #[cfg(test)]
 pub(in crate::app) use mbv_ui_msg::OverlayId;

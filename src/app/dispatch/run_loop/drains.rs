@@ -1,4 +1,4 @@
-use mbv_ui_model::playback::PendingQueueAction;
+use crate::app::state::playback::PendingQueueAction;
 
 use crate::app::App;
 

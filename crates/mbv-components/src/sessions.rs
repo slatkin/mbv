@@ -18,7 +18,7 @@ use super::list::{ThreeLineFlatList, Viewported};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use mbv_render::components::three_line_flat_list::{ThreeLineItem, ThreeLineRole, ThreeLineSpan};
 use mbv_theme as palette;
-use mbv_ui_model::panel_targets::{PanelTarget, SessionTargetKey};
+use mbv_ui_model::panel_targets::{SessionTargetKey, SessionTargetRow};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
@@ -31,7 +31,7 @@ struct SessionsDisplayContext {
 
 #[derive(Debug)]
 pub struct SessionsComponent {
-    targets: Vec<PanelTarget>,
+    targets: Vec<SessionTargetRow>,
     loading: bool,
     list: ThreeLineFlatList<SessionTargetKey>,
     content_dirty: bool,
@@ -78,7 +78,7 @@ impl SessionsComponent {
     /// when the next frame projects its presentation into the embedded list.
     pub fn set_content(
         &mut self,
-        targets: &[PanelTarget],
+        targets: &[SessionTargetRow],
         loading: bool,
         connected_session_id: Option<&str>,
         cast_attachment_id: Option<&str>,
@@ -89,8 +89,8 @@ impl SessionsComponent {
             || self
                 .targets
                 .iter()
-                .map(PanelTarget::key)
-                .ne(targets.iter().map(PanelTarget::key));
+                .map(SessionTargetRow::key)
+                .ne(targets.iter().map(SessionTargetRow::key));
         self.targets = targets.to_vec();
         self.loading = loading;
         self.connected_session_id = connected_session_id.map(str::to_owned);
@@ -203,52 +203,67 @@ impl SessionsComponent {
         }
     }
 
+    fn target_connected(&self, target: &SessionTargetRow) -> bool {
+        match target {
+            SessionTargetRow::Emby { id, .. } => {
+                self.connected_session_id.as_deref() == Some(id.as_str())
+            }
+            SessionTargetRow::Cast { id, .. } => {
+                self.cast_attachment_id.as_deref() == Some(id.as_str())
+            }
+        }
+    }
+
+    fn emby_state_icon(now_playing: bool, is_paused: bool) -> &'static str {
+        match (now_playing, is_paused) {
+            (true, true) => "⏸",
+            (true, false) => "▶",
+            (false, _) => "■",
+        }
+    }
+
     fn project_targets(&self, text_width: usize) -> Vec<ThreeLineItem<SessionTargetKey>> {
-        let emby_color = self.display.emby_color;
         self.targets
             .iter()
             .map(|target| {
                 let key = target.key();
-                let connected = match target {
-                    PanelTarget::Emby(session) => {
-                        self.connected_session_id.as_deref() == Some(session.id.as_str())
-                    }
-                    PanelTarget::Cast(receiver) => {
-                        self.cast_attachment_id.as_deref() == Some(receiver.id.as_str())
-                    }
-                };
+                let connected = self.target_connected(target);
                 let badge = if connected { " ✚" } else { "" };
                 let lines = match target {
-                    PanelTarget::Emby(session) => {
-                        let meta = format!(
-                            "{} · {}@{}",
-                            session.client, session.user_name, session.host
-                        );
-                        let state_icon = match (session.now_playing.is_some(), session.is_paused) {
-                            (true, true) => "⏸",
-                            (true, false) => "▶",
-                            (false, _) => "■",
-                        };
-                        let time = if session.now_playing.is_some() {
+                    SessionTargetRow::Emby {
+                        device_name,
+                        client,
+                        user_name,
+                        host,
+                        now_playing,
+                        is_paused,
+                        position_s,
+                        runtime_s,
+                        ..
+                    } => {
+                        let meta = format!("{client} · {user_name}@{host}");
+                        let state_icon = Self::emby_state_icon(now_playing.is_some(), *is_paused);
+                        let time = if now_playing.is_some() {
                             format!(
                                 " {}/{}",
-                                mbv_ui_model::ui_util::fmt_duration_short(session.position_s),
-                                mbv_ui_model::ui_util::fmt_duration_short(session.runtime_s)
+                                mbv_ui_model::ui_util::fmt_duration_short(*position_s),
+                                mbv_ui_model::ui_util::fmt_duration_short(*runtime_s)
                             )
                         } else {
                             String::new()
                         };
-                        let title = session.now_playing.as_deref().unwrap_or("idle");
+                        let title = now_playing.as_deref().unwrap_or("idle");
                         let title_width = text_width
                             .saturating_sub(state_icon.len() + 1)
                             .saturating_sub(time.len());
-                        let (kind, kind_w) = self.kind_span("[EMBY] ", "\u{f06b4} ", emby_color);
+                        let (kind, kind_w) =
+                            self.kind_span("[EMBY] ", "\u{f06b4} ", self.display.emby_color);
                         [
                             vec![
                                 kind,
                                 ThreeLineSpan::new(
                                     mbv_ui_model::ui_util::trunc_str(
-                                        &session.device_name,
+                                        device_name,
                                         text_width
                                             .saturating_sub(kind_w)
                                             .saturating_sub(badge.len()),
@@ -267,7 +282,12 @@ impl SessionsComponent {
                             )],
                         ]
                     }
-                    PanelTarget::Cast(receiver) => {
+                    SessionTargetRow::Cast {
+                        friendly_name,
+                        host,
+                        port,
+                        ..
+                    } => {
                         // Nerd Fonts: the cast glyph when unattached, the
                         // cast-connected glyph once attached; yellow either way.
                         let glyph = if connected {
@@ -282,7 +302,7 @@ impl SessionsComponent {
                                 kind,
                                 ThreeLineSpan::new(
                                     mbv_ui_model::ui_util::trunc_str(
-                                        &receiver.friendly_name,
+                                        friendly_name,
                                         text_width
                                             .saturating_sub(kind_w)
                                             .saturating_sub(badge.len()),
@@ -292,7 +312,7 @@ impl SessionsComponent {
                                 ThreeLineSpan::new(badge, ThreeLineRole::Accent),
                             ],
                             vec![ThreeLineSpan::new(
-                                format!("{}:{}", receiver.host, receiver.port),
+                                format!("{host}:{port}"),
                                 ThreeLineRole::Detail,
                             )],
                             Vec::new(),
@@ -458,15 +478,18 @@ mod tests {
     }
 
     fn painted_component() -> SessionsComponent {
-        use mbv_emby::test_support::make_session;
-        let mut first = make_session("a", "mbv");
-        first.id = "a".to_string();
-        let mut second = make_session("b", "mbv");
-        second.id = "b".to_string();
-        let targets = vec![
-            PanelTarget::Emby(Box::new(first)),
-            PanelTarget::Emby(Box::new(second)),
-        ];
+        let target = |id: &str| SessionTargetRow::Emby {
+            id: id.to_string(),
+            device_name: format!("device-{id}"),
+            client: "mbv".to_string(),
+            user_name: "user".to_string(),
+            host: "host".to_string(),
+            now_playing: None,
+            is_paused: false,
+            position_s: 0,
+            runtime_s: 0,
+        };
+        let targets = vec![target("a"), target("b")];
         let mut component = SessionsComponent::new();
         component.set_content(
             &targets,

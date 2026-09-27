@@ -14,13 +14,13 @@ readme = "../../README.md"
 workspace = true
 
 [dependencies]
-mbv-emby = { path = "../mbv-emby" }
-mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 log.workspace = true
 libc.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-emby = { path = "../mbv-emby" }
 mbv-config = { path = "../mbv-config" }
 mbv-queue = { path = "../mbv-queue" }
 ureq.workspace = true

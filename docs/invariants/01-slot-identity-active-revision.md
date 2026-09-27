@@ -1,10 +1,10 @@
 # Invariant 1 — Slot identity is stable; position is not
 
-**Scope:** `PlaybackQueue` (`crates/mbv-core/src/playback_queue.rs`) and its
+**Scope:** `PlaybackQueue` (`crates/mbv-queue/src/lib.rs`) and its
 two index-translation clients: the app model (`src/app/state/types/player_tab.rs`,
 `src/app/state/queue_scope.rs`, `src/app/dispatch/session/player_event.rs`) and the daemon/player
-mirror (`crates/mbv-core/src/daemon/control.rs`,
-`crates/mbv-core/src/player_run_*.rs`).
+mirror (`crates/mbv-daemon/src/control.rs`,
+`crates/mbv-player/src/run/`).
 
 ## The invariant
 
@@ -51,7 +51,7 @@ returns `None` and the player advances from a stale `current_idx`.
 - **Advance from a removed slot.** `on_end_file` resolves the completed slot
   by `active_slot_id → slot_index` with an H11 bounds-check fallback that
   stops playback rather than advancing from garbage
-  (`player_run_events.rs:383+`). Without the check, `completed_idx` could
+  (`crates/mbv-player/src/run/events/queue_advance.rs`). Without the check, `completed_idx` could
   index past the shrunken list.
 - **Cursor parked on an unrelated slot.** The local and remote `PlayerTab`
   queues each allocate slot ids from 1, so ids **collide across scopes**.

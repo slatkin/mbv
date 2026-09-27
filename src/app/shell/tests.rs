@@ -168,7 +168,8 @@ fn mocked_music_action_model(
         .unwrap()
         .clone()
         .with_test_agent(http.agent());
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+    app.emby_runtime =
+        crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
 
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "music-library".into();

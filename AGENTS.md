@@ -45,7 +45,7 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `crates/mbv-audiobookshelf/` — Audiobookshelf provider client.
 * `crates/mbv-cast/` — Google Cast client, discovery, per-provider dispatch.
 * `crates/mbv-emby/` — Emby provider client.
-* `crates/mbv-core/` — Service runtime state + app logging.
+* `crates/mbv-core/` — app logging + Service state/setup-generation types.
 * `crates/mbv-remote-player/` — Remote player runtime.
 * `crates/mbv-player/` — mpv-backed player.
 * `crates/mbv-daemon/` — Daemon library used by `mbvd` and the TUI in-process.

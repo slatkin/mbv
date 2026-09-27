@@ -5,11 +5,11 @@ use mbv_queue::QueueState;
 
 fn forward_audiobookshelf_updates<T, F>(
     receiver: &std::sync::mpsc::Receiver<T>,
-    sender: &std::sync::mpsc::Sender<mbv_ui_model::events::LibEvent>,
+    sender: &std::sync::mpsc::Sender<crate::app::state::events::LibEvent>,
     event: F,
 ) where
     T: Send + 'static,
-    F: Fn(T) -> mbv_ui_model::events::LibEvent + Send + 'static,
+    F: Fn(T) -> crate::app::state::events::LibEvent + Send + 'static,
 {
     for update in receiver {
         if sender.send(event(update)).is_err() {
@@ -345,7 +345,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &receiver,
                         &lib_tx,
-                        mbv_ui_model::events::LibEvent::AudiobookshelfProgressAcknowledged,
+                        crate::app::state::events::LibEvent::AudiobookshelfProgressAcknowledged,
                     );
                 });
                 let (book_sender, book_receiver) = std::sync::mpsc::channel();
@@ -355,7 +355,7 @@ impl App {
                     forward_audiobookshelf_updates(
                         &book_receiver,
                         &lib_tx,
-                        mbv_ui_model::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
+                        crate::app::state::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
                     );
                 });
                 context

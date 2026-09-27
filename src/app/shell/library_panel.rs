@@ -12,6 +12,7 @@ use ratatui::layout::Rect;
 
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
+use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::book_content::BookContent;
 use mbv_components::library_panel::owner::LaunchSelector;
 use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
@@ -19,7 +20,6 @@ use mbv_components::podcast_content::PodcastContent;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
-use mbv_ui_model::playback::DestinationLatestSource;
 use mbv_ui_msg::ComponentId;
 
 impl Model {

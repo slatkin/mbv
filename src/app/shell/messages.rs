@@ -5,8 +5,8 @@ mod selection;
 mod tests;
 
 use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
+use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_ui_model::playback::DestinationLatestSource;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use std::time::Instant;
 

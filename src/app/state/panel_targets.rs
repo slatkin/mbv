@@ -6,7 +6,56 @@
 
 use mbv_cast::discovery::CastReceiver;
 use mbv_emby::SessionInfo;
-use mbv_ui_model::panel_targets::PanelTarget;
+use mbv_ui_model::panel_targets::{SessionTargetKey, SessionTargetRow};
+
+/// Shell-owned target used for resolving an activation against live runtime data.
+#[derive(Clone, Debug)]
+pub(in crate::app) enum PanelTarget {
+    Emby(Box<SessionInfo>),
+    Cast(CastReceiver),
+}
+
+impl PanelTarget {
+    #[must_use]
+    pub(in crate::app) fn key(&self) -> SessionTargetKey {
+        match self {
+            Self::Emby(session) => SessionTargetKey::Emby(session.id.clone()),
+            Self::Cast(receiver) => SessionTargetKey::Cast(receiver.id.clone()),
+        }
+    }
+
+    #[must_use]
+    pub(in crate::app) fn row(&self) -> SessionTargetRow {
+        match self {
+            Self::Emby(session) => SessionTargetRow::Emby {
+                id: session.id.clone(),
+                device_name: session.device_name.clone(),
+                client: session.client.clone(),
+                user_name: session.user_name.clone(),
+                host: session.host.clone(),
+                now_playing: session.now_playing.clone(),
+                is_paused: session.is_paused,
+                position_s: session.position_s,
+                runtime_s: session.runtime_s,
+            },
+            Self::Cast(receiver) => SessionTargetRow::Cast {
+                id: receiver.id.clone(),
+                friendly_name: receiver.friendly_name.clone(),
+                host: receiver.host.clone(),
+                port: receiver.port,
+            },
+        }
+    }
+}
+
+/// Resolve an activation against the latest shell-owned target snapshot.
+#[must_use]
+pub(in crate::app) fn resolve_session_target(
+    targets: &[PanelTarget],
+    key: &SessionTargetKey,
+) -> Option<PanelTarget> {
+    targets.iter().find(|target| target.key() == *key).cloned()
+}
 
 /// Concatenates Emby sessions and discovered cast receivers into one list,
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived

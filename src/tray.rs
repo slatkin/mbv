@@ -197,7 +197,7 @@ mod tests {
     /// Builds a tray wired to a fresh command channel, so tests can assert
     /// on what `toggle_play_pause`/`next`/`previous` actually send without a
     /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
-    /// (crates/mbv-core/src/player.rs).
+    /// (crates/mbv-player/src/proxy.rs).
     fn spy_tray(st: PlayerStatus) -> (MbvTray, std::sync::mpsc::Receiver<PlayerCommand>) {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
         let (shutdown_tx, _shutdown_rx) = std::sync::mpsc::sync_channel(1);

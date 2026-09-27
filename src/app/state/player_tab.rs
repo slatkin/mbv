@@ -262,7 +262,7 @@ impl PlayerTab {
 
     /// Test helper: replace the item at a specific index. Used by tests
     /// that need to modify queue items after construction.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(test)]
     pub fn set_item_at(&mut self, index: usize, item: QueueItem) {
         if let Some(slot_id) = self.queue.slots().get(index).map(|slot| slot.slot_id) {
             let _ = self.queue.update_slot_item(slot_id, item);
