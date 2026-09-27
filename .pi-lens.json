@@ -20,5 +20,13 @@
     "disabledServers": [
       "typos"
     ]
+  },
+  "rules": {
+    "rust-unwrap": {
+      "disable": ["rust-unwrap"]
+    },
+    "rust-2024-let-chain-candidate": {
+      "disable": ["rust-2024-let-chain-candidate"]
+    }
   }
 }
