@@ -38,7 +38,6 @@ fn stop_old_emby_run(player: &Player) -> bool {
 /// slot only if it survived. Returns the retained items.
 fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> Vec<ExecSlot> {
     let active = queue.active_slot_id();
-    let revision_mint = queue.revision_mint();
     let retained: Vec<_> = queue
         .slot_pairs()
         .into_iter()
@@ -54,7 +53,7 @@ fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> 
             .map(|slot| (slot.slot_id, slot.item.clone()))
             .collect(),
         active,
-        revision_mint,
+        queue.revision_mint(),
     );
     retained
 }

@@ -42,39 +42,27 @@ fn item(id: &str) -> EmbyItem {
     }
 }
 
+fn revision_mint() -> std::sync::Arc<QueueRevisionMint> {
+    std::sync::Arc::new(QueueRevisionMint::default())
+}
+
 fn queue_from_items(items: Vec<EmbyItem>, active: Option<usize>) -> PlaybackQueue {
-    PlaybackQueue::from_items(
-        items,
-        active,
-        std::sync::Arc::new(QueueRevisionMint::default()),
-    )
+    PlaybackQueue::from_items(items, active, revision_mint())
 }
 
 fn queue_from_queue_items(items: Vec<QueueItem>, active: Option<usize>) -> PlaybackQueue {
-    PlaybackQueue::from_queue_items(
-        items,
-        active,
-        std::sync::Arc::new(QueueRevisionMint::default()),
-    )
+    PlaybackQueue::from_queue_items(items, active, revision_mint())
 }
 
 fn queue_from_slot_items(
     slots: Vec<(QueueSlotId, QueueItem)>,
     active: Option<QueueSlotId>,
 ) -> PlaybackQueue {
-    PlaybackQueue::from_slot_items(
-        slots,
-        active,
-        std::sync::Arc::new(QueueRevisionMint::default()),
-    )
+    PlaybackQueue::from_slot_items(slots, active, revision_mint())
 }
 
 fn empty_queue() -> PlaybackQueue {
-    PlaybackQueue::from_queue_items(
-        Vec::new(),
-        None,
-        std::sync::Arc::new(QueueRevisionMint::default()),
-    )
+    PlaybackQueue::from_queue_items(Vec::new(), None, revision_mint())
 }
 
 fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> AudiobookshelfQueueItem {
