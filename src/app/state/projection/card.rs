@@ -23,17 +23,18 @@ fn card_image_types(item_type: &str) -> &'static [&'static str] {
 }
 
 fn card_cache_key(item: &EmbyItem) -> String {
-    if item.item_type == "Audio" && !item.album_id.is_empty() {
-        format!("{}:P", item.album_id)
+    let album_id = if item.item_type == "Audio" {
+        item.album_id.as_str()
     } else {
-        card_cache_key_for_id(&item.id)
-    }
+        ""
+    };
+    mbv_images::emby_card_cache_key(&item.id, album_id)
 }
 
 /// The artwork cache key for an Emby item id held without an `EmbyItem` (a
 /// watched remote Session's now-playing item).
 fn card_cache_key_for_id(item_id: &str) -> String {
-    format!("{item_id}:P")
+    mbv_images::emby_card_cache_key(item_id, "")
 }
 
 impl App {

@@ -126,35 +126,16 @@ struct MediaPlayer2Player {
     snapshot: Arc<Mutex<PlayerStatus>>,
 }
 
-/// Candidate on-disk image-cache keys for a track's cover art, in the order
-/// the existing UI card-image cache (`src/app/images.rs` and
-/// `crates/mbv-render/src/components/card.rs`) is most likely to have already
-/// populated them under -- checked cheaply via `std::path::Path::is_file`,
-/// no network I/O. Covers every write site that keys on an album/item id:
-/// the card (`:card`) and album-level card (`:album_card`). `album_id`
-/// mirrors the audio-album grouping the queue card already uses: tracks on
-/// the same album share one cache entry keyed by album id rather than
-/// track id.
-#[cfg(not(test))]
-fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
-    use crate::config::{IMAGE_CACHE_SUFFIX_ALBUM_CARD, IMAGE_CACHE_SUFFIX_CARD_PRIMARY};
-    let mut keys = Vec::new();
-    if !album_id.is_empty() {
-        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_CARD_PRIMARY}"));
-        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_ALBUM_CARD}"));
-    }
-    if !item_id.is_empty() {
-        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_CARD_PRIMARY}"));
-    }
-    keys
-}
-
 /// Resolve `mpris:artUrl` to a local `file://` URI for the current track's
 /// cover art, or `None` when it isn't cached yet.
 ///
 /// Per the #158 triage decision this must NEVER fall back to an Emby image
 /// URL: that would embed the API token in a query string and leak it onto
 /// the session D-Bus. An uncached track simply omits `mpris:artUrl`.
+///
+/// Uses the same cache-key builder as the queue-card projection
+/// (`mbv_images::emby_card_cache_key`), so this lookup can never drift from
+/// what the card projection actually wrote to disk (issue #833).
 ///
 /// `resolve_path` is injected so the URI decision stays pure and never
 /// touches a real cache directory; production passes
@@ -165,10 +146,11 @@ fn resolve_art_url(
     album_id: &str,
     resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
 ) -> Option<String> {
-    art_cache_key_candidates(item_id, album_id)
-        .into_iter()
-        .find_map(|key| resolve_path(&key))
-        .map(|path| format!("file://{}", path.display()))
+    if item_id.is_empty() && album_id.is_empty() {
+        return None;
+    }
+    let key = mbv_images::emby_card_cache_key(item_id, album_id);
+    resolve_path(&key).map(|path| format!("file://{}", path.display()))
 }
 
 /// Convert a microsecond position to seconds; exact while |µs| < 2^53 (about 285 years of media).

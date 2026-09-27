@@ -54,6 +54,21 @@ pub fn audiobookshelf_hero_book_cover_cache_key(server: &str, id: &str, suffix: 
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:bookcover:{id}:{suffix}")
 }
 
+/// Cache key for an Emby card's primary image: the album key when `album_id`
+/// is non-empty (audio tracks on the same album share one cache entry keyed
+/// by album id), else the item key. Shared by the queue-card projection
+/// (`src/app/state/projection/card.rs`) and MPRIS (`src/mpris.rs`) so their
+/// `mpris:artUrl` lookup can never drift from what the card projection
+/// actually wrote to disk (issue #833).
+#[must_use]
+pub fn emby_card_cache_key(item_id: &str, album_id: &str) -> String {
+    if album_id.is_empty() {
+        format!("{item_id}:P")
+    } else {
+        format!("{album_id}:P")
+    }
+}
+
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.
