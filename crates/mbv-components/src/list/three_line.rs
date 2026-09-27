@@ -8,6 +8,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 /// Embedded selectable three-line item flow. It is not independently mounted.
+#[derive(Debug)]
 pub struct ThreeLineFlatList<Target> {
     items: Vec<ThreeLineItem<Target>>,
     selected: Option<Target>,
@@ -18,6 +19,7 @@ pub struct ThreeLineFlatList<Target> {
 }
 
 impl<Target> ThreeLineFlatList<Target> {
+    #[must_use]
     pub fn new(gap: u16) -> Self {
         Self {
             items: Vec::new(),

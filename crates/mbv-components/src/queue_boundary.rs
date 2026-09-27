@@ -12,6 +12,7 @@ use tuirealm::state::State;
 
 /// The one-column Queue-side root boundary. Its gesture state is deliberately
 /// private: the shell only receives resolved semantic widths.
+#[derive(Debug)]
 pub struct QueueBoundaryComponent {
     area: Rect,
     frame_left: u16,
@@ -23,6 +24,7 @@ pub struct QueueBoundaryComponent {
 }
 
 impl QueueBoundaryComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             area: Rect::default(),

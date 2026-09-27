@@ -36,6 +36,7 @@ pub use wide::WideMediaList;
 ///
 /// Presentations embed or receive this owner; they never maintain a second
 /// cursor, scroll, selectable index, or selected-target state.
+#[derive(Debug)]
 pub struct MediaList<Target> {
     /// Every display row in paint order.
     rows: Vec<MediaListRow<Target>>,
@@ -61,8 +62,15 @@ pub struct MediaList<Target> {
     marquee_started_at: Instant,
 }
 
+impl<Target> Default for MediaList<Target> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Target> MediaList<Target> {
     /// Creates an empty canonical owner for one logical row flow.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             rows: Vec::new(),

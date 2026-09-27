@@ -15,6 +15,7 @@ use mbv_ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPo
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg};
 
+#[derive(Debug)]
 pub struct MultiselectComponent {
     kind: Option<MultiSelectKind>,
     items: Vec<(String, String, bool)>,
@@ -30,6 +31,7 @@ pub struct MultiselectComponent {
 }
 
 impl MultiselectComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             kind: None,
@@ -60,6 +62,7 @@ impl MultiselectComponent {
         }
     }
 
+    #[must_use]
     pub fn commit_snapshot(&self) -> Option<(MultiSelectKind, Vec<MultiSelectItem>)> {
         self.kind.map(|kind| (kind, self.items.clone()))
     }

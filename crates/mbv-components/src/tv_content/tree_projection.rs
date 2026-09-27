@@ -12,6 +12,7 @@ impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.
     /// Only the selected show's detail snapshot is available at this boundary;
     /// task 2.2 wires in additional shell-owned loaded details.
+    #[must_use]
     pub fn stable_show_target(show: &EmbyItem, duplicate_id: bool, occurrence: usize) -> String {
         let base = if show.id.is_empty() {
             format!("tv-name:{}:{}", show.name.len(), show.name)
@@ -37,6 +38,7 @@ impl TvContent {
     /// disambiguating duplicate Emby ids the same way `stable_show_target`
     /// does. The single source of the show-id-collision resolution that
     /// every show-target lookup (projection, expansion, selection) shares.
+    #[must_use]
     pub fn show_targets(items: &[EmbyItem]) -> Vec<(String, &EmbyItem)> {
         let mut shows: Vec<&EmbyItem> = items.iter().collect();
         shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
@@ -60,6 +62,7 @@ impl TvContent {
 
     /// The show matching a stable tree target string, resolved through the
     /// same collision-disambiguated ordering [`Self::show_targets`] builds.
+    #[must_use]
     pub fn resolve_show_target<'a>(
         items: &'a [EmbyItem],
         show_target: &str,
@@ -73,6 +76,7 @@ impl TvContent {
     /// The loaded detail to project beneath `show`: the shell's per-show map
     /// entry when present, else the selected show's detail for contexts built
     /// without the map (existing unit tests).
+    #[must_use]
     pub fn detail_for_projection<'a>(
         context: &'a TvWideRenderCtx,
         show: &EmbyItem,
@@ -89,6 +93,7 @@ impl TvContent {
     /// The loaded detail holding `show`'s seasons/episodes for target
     /// resolution: the shell's per-show map entry when present, else the
     /// pushed selected detail (existing single-detail contexts).
+    #[must_use]
     pub fn detail_for_show(&self, show: &EmbyItem) -> Option<&mbv_ui_model::browse::SeriesDetail> {
         self.context
             .series_details
@@ -142,6 +147,7 @@ impl TvContent {
     /// Loaded details for every listed show project per show, so an expanded
     /// show keeps its children while another show is selected. Contexts built
     /// without the shell's detail map fall back to the selected show's detail.
+    #[must_use]
     pub fn tree_projection(context: &TvWideRenderCtx) -> Vec<TreeEntry<TvTreeTarget>> {
         let grouped = context.show_letter_pills
             || context.list.has_letter_filter()
@@ -223,6 +229,7 @@ impl TvContent {
         entries
     }
 
+    #[must_use]
     pub fn tree_expansion_source(&self, target: &TvTreeTarget) -> Option<(String, Option<String>)> {
         let (show_target, season_id) = match target {
             TvTreeTarget::Show(show) => (show, None),

@@ -14,6 +14,7 @@ enum HeroWheelOutcome {
 impl LibraryPanel {
     /// The list slot's row-flow rect from the last painted frame, when one
     /// painted.
+    #[must_use]
     pub fn list_rect(&self) -> Option<ratatui::layout::Rect> {
         self.wide_geometry
             .as_ref()

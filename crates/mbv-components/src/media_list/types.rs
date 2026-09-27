@@ -50,6 +50,7 @@ pub struct MediaListTransition<Target> {
 }
 
 impl<Target> MediaListTransition<Target> {
+    #[must_use]
     pub fn unhandled() -> Self {
         Self {
             disposition: MediaListDisposition::Unhandled,

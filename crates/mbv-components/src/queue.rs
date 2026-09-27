@@ -34,11 +34,13 @@ pub use self::rows::{queue_media_row, queue_media_rows};
 /// pinned to its slot across a content refresh; `Set` is an authoritative
 /// move (follow-the-playhead, jump-to-now-playing, wheel scroll, scope switch)
 /// that must win over slot-identity reconciliation.
+#[derive(Debug)]
 pub enum QueueCursorUpdate {
     Preserve,
     Set(usize),
 }
 
+#[derive(Debug)]
 pub struct QueueComponent {
     /// The one shared canonical owner of the Queue rows, carried by the Wide
     /// presentation in every panel mode (design.md D1/D2). It owns the local
@@ -78,10 +80,12 @@ impl QueueComponent {
         self.carrier.clear_owner_selection();
     }
 
+    #[must_use]
     pub fn selected_row_rect(&self) -> Option<Rect> {
         self.carrier.wide().current_selected_row_rect()
     }
 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             carrier: MediaListCarrier::new(),
@@ -109,6 +113,7 @@ impl QueueComponent {
     /// The semantic states of the projected rows, in row order (tick-test
     /// evidence for the shell's now-playing claim projection).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn projected_row_states(&self) -> Vec<MediaSemanticState> {
         self.carrier
             .wide()
@@ -185,6 +190,7 @@ impl QueueComponent {
     /// The framed list content area the panel retained from its last paint:
     /// the context-menu anchor's panel rect and the list body's own geometry
     /// (task 3.1; the the former queue-area mirror mirror is gone).
+    #[must_use]
     pub fn content_area(&self) -> Rect {
         self.content_area
     }
@@ -228,11 +234,13 @@ impl QueueComponent {
             .clamp_viewport(self.content_area.height.max(1) as usize);
     }
 
+    #[must_use]
     pub fn selection_summary(&self) -> mbv_ui_msg::SelectionSummary {
         self.carrier.selection_summary()
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_cursor(&self) -> usize {
         self.carrier.cursor()
     }

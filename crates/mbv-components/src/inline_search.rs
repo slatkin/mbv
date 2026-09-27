@@ -24,7 +24,7 @@ use mbv_render::components::media_list::{
 /// shell supplies wall-clock ticks; see [`InlineSearch::handle_clock`]).
 const SEARCH_DEBOUNCE_MS: u64 = 300;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SearchPool {
     Items(Vec<mbv_emby_model::EmbyItem>),
     Albums(Vec<mbv_ui_model::browse::AlbumSearchEntry>),
@@ -135,6 +135,7 @@ fn search_result_row(item: &mbv_emby_model::EmbyItem) -> MediaListRow<String> {
 /// gives it first refusal on keyboard events while active, and the Library
 /// panel paints its session through the [`super::library_panel::content::PanelList`]
 /// surface over the embedded carrier.
+#[derive(Debug)]
 pub struct InlineSearch {
     active: bool,
     query: String,
@@ -155,6 +156,7 @@ pub struct InlineSearch {
 }
 
 impl InlineSearch {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             active: false,
@@ -167,6 +169,7 @@ impl InlineSearch {
         }
     }
 
+    #[must_use]
     pub fn is_active(&self) -> bool {
         self.active
     }
@@ -200,10 +203,12 @@ impl InlineSearch {
         self.publish_rows(true);
     }
 
+    #[must_use]
     pub fn query(&self) -> &str {
         &self.query
     }
 
+    #[must_use]
     pub fn loading(&self) -> bool {
         self.loading
     }
@@ -215,6 +220,7 @@ impl InlineSearch {
     /// The embedded canonical row-flow carrier: the panel drives it through
     /// the [`super::library_panel::content::PanelList`] surface and the owners
     /// resolve pointer inputs against it (design.md D1/D4).
+    #[must_use]
     pub fn results(&self) -> &MediaListCarrier<String> {
         &self.results
     }
@@ -223,6 +229,7 @@ impl InlineSearch {
         &mut self.results
     }
 
+    #[must_use]
     pub fn results_len(&self) -> usize {
         self.results.rows().len()
     }
@@ -230,6 +237,7 @@ impl InlineSearch {
     /// Whether a host explicitly supplied a flat corpus. Grouped Music keeps
     /// this false in production; the compatibility distinction lets focused
     /// harnesses exercise the old activation path without changing painting.
+    #[must_use]
     pub fn has_pool_entries(&self) -> bool {
         match &self.pool {
             SearchPool::Items(items) => !items.is_empty(),
@@ -251,6 +259,7 @@ impl InlineSearch {
     /// The pool item for a resolved row target — the row a delegated
     /// double-click or context gesture resolved (design.md D4) — independent
     /// of the carrier's current selection.
+    #[must_use]
     pub fn item_for_target(&self, target: &str) -> Option<mbv_emby_model::EmbyItem> {
         self.order
             .iter()
@@ -260,6 +269,7 @@ impl InlineSearch {
 
     /// The item under the carrier's selection, resolved from the stored order
     /// (design.md D2).
+    #[must_use]
     pub fn selected_item(&self) -> Option<mbv_emby_model::EmbyItem> {
         let target = self.results.selected_target()?;
         self.order
@@ -398,6 +408,7 @@ impl InlineSearch {
     /// movement without depending on target identities (the shared fixtures
     /// reuse one item id).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_cursor(&self) -> usize {
         self.results.cursor()
     }

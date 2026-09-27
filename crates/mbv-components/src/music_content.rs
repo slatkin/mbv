@@ -41,6 +41,7 @@ use mbv_ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 /// without a second painter. `artist` is the resolved display artist the
 /// content projection already carries (`group_album_info`'s
 /// `album_artist_cache` fallback chain).
+#[must_use]
 pub fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (String, u32) {
     let display_name = album.display_name();
     if let Some((parsed_artist, parsed_year, title)) =
@@ -75,6 +76,7 @@ pub enum MusicWorkspaceFocus {
 const NEIGHBOUR_PREFETCH_BEHIND: usize = 1;
 const NEIGHBOUR_PREFETCH_AHEAD: usize = 3;
 
+#[derive(Debug)]
 pub struct MusicContent {
     pub context: MusicWideRenderCtx,
     /// The Grouped Music browser: the shared embedded tree owner over
@@ -136,6 +138,7 @@ pub struct MusicContent {
 }
 
 impl MusicContent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             context: MusicWideRenderCtx::new(
@@ -379,9 +382,11 @@ impl MusicContent {
         self.workspace_focus = MusicWorkspaceFocus::AlbumRail;
     }
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn album_cursor(&self) -> usize {
         self.selected_album_index()
     }
+    #[must_use]
     pub fn track_focused(&self) -> bool {
         self.workspace_focus == MusicWorkspaceFocus::TrackWorkspace
     }

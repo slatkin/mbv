@@ -23,11 +23,13 @@ use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
 /// The Interactive Component for the Sessions sidebar.
+#[derive(Debug)]
 struct SessionsDisplayContext {
     use_nerd_fonts: bool,
     emby_color: Color,
 }
 
+#[derive(Debug)]
 pub struct SessionsComponent {
     targets: Vec<PanelTarget>,
     loading: bool,
@@ -47,6 +49,7 @@ pub struct SessionsComponent {
 }
 
 impl SessionsComponent {
+    #[must_use]
     pub fn new() -> Self {
         let mut list = ThreeLineFlatList::new(0);
         list.set_focused(true);
@@ -309,6 +312,7 @@ impl SessionsComponent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn selection_and_offset_for_test(&self) -> (Option<SessionTargetKey>, usize) {
         (
             self.list.selected_target().cloned(),
@@ -317,11 +321,13 @@ impl SessionsComponent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn content_area_for_test(&self) -> Option<Rect> {
         self.painted_content_area
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn target_at_for_test(&self, point: ratatui::layout::Position) -> Option<SessionTargetKey> {
         self.list.resolve_point(point).cloned()
     }

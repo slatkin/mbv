@@ -18,6 +18,7 @@ impl<Target> Row<Target> {
     }
 
     /// Construct a structural row.
+    #[must_use]
     pub const fn structural() -> Self {
         Self::Structural
     }
@@ -44,16 +45,24 @@ pub struct RowFlow<Target> {
 
 impl<Target> RowFlow<Target> {
     /// Create a flow from rows already ordered in paint order.
+    #[must_use]
     pub fn new(rows: Vec<Row<Target>>) -> Self {
         Self { rows }
     }
 
     /// Number of rows, including structural rows.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.rows.len()
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Borrow a row by its flow position.
+    #[must_use]
     pub fn row_at(&self, position: usize) -> Option<&Row<Target>> {
         self.rows.get(position)
     }
@@ -69,6 +78,7 @@ impl<Target> RowFlow<Target> {
     }
 
     /// Count selectable rows.
+    #[must_use]
     pub fn selectable_len(&self) -> usize {
         self.rows
             .iter()
@@ -82,6 +92,7 @@ impl<Target> RowFlow<Target> {
     }
 
     /// Find a selectable row's ordinal in the flow.
+    #[must_use]
     pub fn selectable_ordinal_at(&self, position: usize) -> Option<usize> {
         self.rows[..=position]
             .iter()
@@ -91,6 +102,7 @@ impl<Target> RowFlow<Target> {
     }
 
     /// Find the flow position of the `ordinal`th selectable row.
+    #[must_use]
     pub fn position_of_selectable(&self, ordinal: usize) -> Option<usize> {
         self.rows
             .iter()

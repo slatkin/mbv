@@ -7,6 +7,8 @@ use super::{
 };
 
 impl TvContent {
+    /// # Panics
+    /// Panics if the internally generated context input cannot be converted to a media-list operation.
     pub fn context_menu_request(&mut self) -> Option<ShellRequest> {
         let outcome = self.carrier.delegate_operation(
             MediaListSurfaceInput::Context
@@ -447,6 +449,7 @@ impl TvContent {
         self.show_item_for_tree_target(&TvTreeTarget::Show(show_target))
     }
 
+    #[must_use]
     pub fn selected_tree_show(&self) -> Option<EmbyItem> {
         if self.flat_episode_mode() || self.inline_search.is_active() {
             return None;
@@ -456,6 +459,7 @@ impl TvContent {
             .and_then(|target| self.show_for_tree_target(target))
     }
 
+    #[must_use]
     pub fn tree_selection_request(&self, target: &TvTreeTarget) -> Option<Msg> {
         let show = self.show_for_tree_target(target)?;
         let already_selected = self
@@ -468,6 +472,7 @@ impl TvContent {
         })))
     }
 
+    #[must_use]
     pub fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
         let show_target = Self::show_target_str(target);
         let show = TvContent::resolve_show_target(&self.context.list.items, show_target)?.clone();

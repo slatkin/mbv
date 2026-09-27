@@ -40,6 +40,7 @@ use mbv_ui_msg::{Msg, PlaybackRequest};
 /// queue-only strip's identity, D10).
 const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackPanel;
 
+#[derive(Debug)]
 pub struct QueuePlaybackPanel {
     /// The header's projected facts: status word left, playback target
     /// right (`App::playback_host_label_and_remote`, no tracking suffix)
@@ -69,6 +70,7 @@ pub struct QueuePlaybackPanel {
 }
 
 impl QueuePlaybackPanel {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             status: NowPlayingStatus::Idle,
@@ -130,18 +132,21 @@ impl QueuePlaybackPanel {
 
     /// Test-only: the retained transport hit geometry (task 3.7).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn transport_hits(&self) -> (Rect, Rect) {
         (self.play_pause_area, self.seekbar_area)
     }
 
     /// Test-only: the retained prev/next transport hit rects.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn transport_nav_hits(&self) -> (Rect, Rect) {
         (self.prev_area, self.next_area)
     }
 
     /// Test-only: the sync-projected transport area.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn transport_area_for_test(&self) -> Option<Rect> {
         self.transport_area
     }
@@ -149,6 +154,7 @@ impl QueuePlaybackPanel {
     /// Test-only: the projected now-playing title parts the sync pass
     /// delivered (task 5.2).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn transport_title_parts_for_test(&self) -> Option<mbv_queue::PlaybackTitleParts> {
         self.transport.title_parts.clone()
     }

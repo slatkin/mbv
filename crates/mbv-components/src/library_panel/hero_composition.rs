@@ -138,6 +138,7 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader)
 
 /// Claim the full panel width for selected-row backgrounds while preserving
 /// the inset content rows used for list flow and hit geometry.
+#[must_use]
 pub fn full_width_claim(panel: Rect, content: Rect) -> Rect {
     Rect {
         x: panel.x,

@@ -76,6 +76,7 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
     }
 }
 
+#[must_use]
 pub fn upcoming_episode_target(episode: &EmbyItem) -> String {
     if !episode.id.is_empty() {
         return episode.id.clone();
@@ -159,6 +160,7 @@ impl TvContent {
     /// the loaded/loading distinction the refresh guard in `set_content`
     /// needs, unlike [`Self::current_season_episodes`] which treats both as
     /// empty.
+    #[must_use]
     pub fn current_season_episodes_key_present(&self) -> bool {
         self.context
             .series_detail
@@ -218,6 +220,7 @@ impl TvContent {
     /// cached render context. `handle_key`'s Series Enter attaches this to
     /// `ShellRequest::TvActivate` so the shell effect targets the component
     /// selection instead of the mirrored App browse cursor.
+    #[must_use]
     pub fn selected_item(&self) -> Option<EmbyItem> {
         // Flat Latest/Upcoming lists resolve by the selected row's stable
         // target: the flat rows are painted newest-first, while the ordinal
@@ -237,6 +240,7 @@ impl TvContent {
     /// The episode item under the episode owner's current selection, resolved
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
+    #[must_use]
     pub fn selected_episode_item(&self) -> Option<EmbyItem> {
         if self.flat_episode_mode() {
             return self
@@ -256,12 +260,14 @@ impl TvContent {
             .cloned()
     }
 
+    #[must_use]
     pub fn flat_episode_mode(&self) -> bool {
         matches!(
             self.context.tv_content_mode,
             Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         )
     }
+    #[must_use]
     pub fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();
         let season_id = self

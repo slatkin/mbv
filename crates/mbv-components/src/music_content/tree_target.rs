@@ -14,6 +14,7 @@ use std::collections::HashMap;
 impl MusicContent {
     /// Resolves the selected tree track to stable identities only. The shell
     /// owns the cached Emby items and resolves the playback queue.
+    #[must_use]
     pub fn selected_tree_track(&self) -> Option<(String, String)> {
         let (album_target, track_target) = self.selected_track_identity()?;
         self.tree_tracks
@@ -26,6 +27,7 @@ impl MusicContent {
     /// The selected node's album identity: an album leaf's own target, or the
     /// owning album of a selected cached track. An artist root resolves to no
     /// album (task 2.2: artist focus never writes album persistence).
+    #[must_use]
     pub fn selected_album_target(&self) -> Option<String> {
         match self.browser.selected_target()? {
             MusicTreeTarget::Album(target) => Some(target.clone()),
@@ -37,6 +39,7 @@ impl MusicContent {
     /// The selected cached track's stable `(album target, track target)`
     /// identity, if the tree is on a track item rather than an artist or
     /// album row.
+    #[must_use]
     pub fn selected_track_identity(&self) -> Option<(String, String)> {
         match self.browser.selected_target()? {
             MusicTreeTarget::Track { album, track } => Some((album.clone(), track.clone())),
@@ -46,6 +49,7 @@ impl MusicContent {
 
     /// Whether the selected node is an artist root (task 2.2: an artist focus
     /// resolves to no album and never writes album persistence).
+    #[must_use]
     pub fn selected_is_artist(&self) -> bool {
         matches!(
             self.browser.selected_target(),
@@ -54,6 +58,7 @@ impl MusicContent {
     }
 
     /// Whether the selected node is a cached track row.
+    #[must_use]
     pub fn selected_is_track(&self) -> bool {
         matches!(
             self.browser.selected_target(),
@@ -76,6 +81,7 @@ impl MusicContent {
 
     /// Album targets marked in insertion order. Hidden marks are masked while
     /// a filter is active but remain in the shared mark set for dismissal.
+    #[must_use]
     pub fn selected_album_targets(&self) -> Vec<String> {
         self.browser
             .marked_targets()
@@ -92,6 +98,7 @@ impl MusicContent {
     /// action scope: a collapsed root contributes the same marked albums as
     /// an expanded one. The shared ordered-mark set supplies membership only;
     /// it is never the ordering source.
+    #[must_use]
     pub fn selected_album_targets_in_display_order(&self) -> Vec<String> {
         let mut targets = Vec::new();
         for root in self.browser.roots() {
@@ -122,6 +129,7 @@ impl MusicContent {
     /// filter session is active, the current visible flow is the visibility
     /// predicate, so only matching leaves cross the component boundary. A
     /// non-artist selection is not an artist action.
+    #[must_use]
     pub fn selected_artist_album_targets(&self) -> Option<Vec<String>> {
         let selected = self.browser.selected_target()?.clone();
         if !matches!(selected, MusicTreeTarget::Artist(_)) {
@@ -140,6 +148,7 @@ impl MusicContent {
     /// Resolves an artist root's currently visible album descendants in tree
     /// order for context-hit membership checks. A target the owner does not
     /// hold is an explicit empty result.
+    #[must_use]
     pub fn artist_album_targets(&self, root: &MusicTreeTarget) -> Vec<String> {
         self.browser
             .children_of(root)
@@ -156,6 +165,7 @@ impl MusicContent {
     /// and the album's cached track children. Stored played/unplayed facts
     /// are deliberately ignored for music rows; a positive position still
     /// retains `Active`.
+    #[must_use]
     pub fn tree_projection(&self) -> Vec<TreeNode<MusicTreeTarget>> {
         let mut nodes: Vec<TreeNode<MusicTreeTarget>> = Vec::new();
         let mut root_of_key: HashMap<mbv_ui_model::music_grouping::ArtistKey, MusicTreeTarget> =

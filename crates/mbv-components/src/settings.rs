@@ -44,6 +44,7 @@ pub struct SettingsSnapshot {
     pub area: Rect,
 }
 
+#[derive(Debug)]
 pub struct SettingsComponent {
     destination: SettingsDestination,
     rows: Vec<SettingsRow>,
@@ -66,6 +67,7 @@ pub struct SettingsComponent {
 }
 
 impl SettingsComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             destination: SettingsDestination::Main,
@@ -392,6 +394,7 @@ impl SettingsComponent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_rows(&self) -> &HitRegions<usize> {
         &self.hit_rows
     }

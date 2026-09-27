@@ -64,6 +64,7 @@ impl BookContent {
     /// The chapter owner's book-qualified stable target, resolved only while
     /// the chapter pane holds focus (design.md D4/D5). Activation never
     /// re-derives it from a numeric display position.
+    #[must_use]
     pub fn chapter_target(&self) -> Option<BookChapterTarget> {
         if !self.chapter_focused {
             return None;
@@ -74,6 +75,7 @@ impl BookContent {
             index,
         ))
     }
+    #[must_use]
     pub fn chapter_focus_request(&self) -> Msg {
         Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::ChapterFocus(self.chapter_target()),
@@ -94,6 +96,8 @@ impl BookContent {
             self.chapter_list.set_content(rows);
         }
     }
+    /// # Panics
+    /// Panics if the internally generated movement input cannot be converted to a media-list operation.
     pub fn move_chapter(&mut self, delta: i64) {
         self.chapter_list.delegate_operation(
             MediaListSurfaceInput::Move(delta)

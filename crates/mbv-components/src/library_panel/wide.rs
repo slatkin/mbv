@@ -26,6 +26,7 @@ use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPol
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{paint_pill_row_gap, paint_selector_row};
 
+#[must_use]
 pub fn selector_row_visible(content: &LibraryPanelContent<'_>) -> bool {
     content.selector.is_some()
         || match &content.list {
@@ -96,6 +97,7 @@ pub struct WideSkeletonGeometry {
 /// field form (the pane painter's contribution to the skeleton geometry).
 /// Both skeletons consume it: the non-Wide panel delegates to
 /// [`paint_browser_pane`] and folds the rects into its own geometry.
+#[derive(Debug)]
 pub struct BrowserPaneGeometry {
     /// The Selector row's pill-bar rect, or a zero-height rect when neither
     /// a selector nor Inline Search is present.
@@ -113,6 +115,7 @@ pub struct BrowserPaneGeometry {
 /// Paint inputs for one Browser pane pass: the panel/list focus bits and
 /// the pointer/hit plumbing the painter feeds. Bundled so the painter keeps
 /// a short signature without losing the per-input docs.
+#[derive(Debug)]
 pub struct BrowserPanePaintParams<'a> {
     /// Whether the browser list slot holds focus (drives the list's focused
     /// surface and the Wide paint policy).
@@ -317,6 +320,7 @@ pub fn paint_browser_pane(
 /// Paint inputs for the Wide skeleton pass: focus, pointer, hit plumbing,
 /// and the breakpoint/layout knobs the skeleton needs. Bundled so the
 /// painter keeps a short signature without losing the per-input docs.
+#[derive(Debug)]
 pub struct WideSkeletonPaintParams<'a> {
     /// Whether the browser panel holds focus.
     pub browser_focused: bool,

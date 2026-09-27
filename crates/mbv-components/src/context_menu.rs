@@ -29,6 +29,7 @@ use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 ///
 /// Owns `entries` (with their `ContextAction`s), `cursor`, `anchor`, and the
 /// painted `menu_rect` (set by the shell via downcast before each render).
+#[derive(Debug)]
 pub struct ContextMenuComponent {
     entries: Vec<ContextMenuEntry>,
     cursor: usize,
@@ -37,6 +38,7 @@ pub struct ContextMenuComponent {
 }
 
 impl ContextMenuComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -66,25 +68,30 @@ impl ContextMenuComponent {
 
     /// The painted rect the shell computed from `AppLayout` (task 5.3c).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn menu_rect(&self) -> Rect {
         self.menu_rect
     }
 
     /// The menu's anchor, used by the shell to recompute `menu_rect`.
+    #[must_use]
     pub fn anchor(&self) -> ContextMenuAnchor {
         self.anchor
     }
 
     /// Entries, used by the shell to recompute `menu_rect` size.
+    #[must_use]
     pub fn entries(&self) -> &[ContextMenuEntry] {
         &self.entries
     }
 
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
     }
 
     /// The selectable action at `idx`, if any (the shell executes it).
+    #[must_use]
     pub fn action_at(&self, idx: usize) -> Option<ContextAction> {
         self.entries.get(idx).and_then(|entry| entry.action.clone())
     }

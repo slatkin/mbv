@@ -52,6 +52,7 @@ pub struct PlaybackProjection {
     pub availability: TransportAvailability,
 }
 
+#[derive(Debug)]
 pub struct LibraryPlaybackPanel {
     projection: PlaybackProjection,
     props: Props,
@@ -65,6 +66,7 @@ pub struct LibraryPlaybackPanel {
 }
 
 impl LibraryPlaybackPanel {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             projection: PlaybackProjection {
@@ -98,6 +100,7 @@ impl LibraryPlaybackPanel {
 
     /// Test-only: the retained transport hit geometry.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn transport_hits(&self) -> (Rect, Rect) {
         (self.play_pause_area, self.seekbar_area)
     }
@@ -105,6 +108,7 @@ impl LibraryPlaybackPanel {
     /// Test-only: the projected now-playing title parts the sync pass
     /// delivered (task 5.2).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn title_parts_for_test(&self) -> Option<PlaybackTitleParts> {
         self.projection.title_parts.clone()
     }

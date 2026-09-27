@@ -72,6 +72,7 @@ impl HeroArtwork {
     /// therefore re-arms the side-by-side layout instead of painting a
     /// portrait poster — uncropped in the overlay, cover-cropped in Wide —
     /// inside a 16:9 box; genuinely 16:9 artwork keeps the Landscape arm.
+    #[must_use]
     pub fn painted_shape(&self) -> ArtworkShape {
         let decoded = match &self.image {
             HeroImageState::Ready { decoded, .. } => *decoded,
@@ -153,6 +154,7 @@ pub enum HeroHeaderArm {
 
 impl HeroHeader {
     /// The one constructor (design D5): the arm is the policy's shape.
+    #[must_use]
     pub fn from(shape: ArtworkShape) -> Self {
         Self {
             arm: match shape {
@@ -164,6 +166,7 @@ impl HeroHeader {
     }
 
     /// The arm, for the header painter's dispatch — not a constructor.
+    #[must_use]
     pub fn arm(self) -> HeroHeaderArm {
         self.arm
     }
@@ -194,6 +197,20 @@ pub enum ListSlot<'a> {
     Search(&'a mut InlineSearch),
 }
 
+impl std::fmt::Debug for ListSlot<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Media(_) => f.write_str("Media(..)"),
+            Self::Empty { loading, text } => f
+                .debug_struct("Empty")
+                .field("loading", loading)
+                .field("text", text)
+                .finish(),
+            Self::Search(_) => f.write_str("Search(..)"),
+        }
+    }
+}
+
 /// The hero pane's Workspace (design D3): an optional header row and
 /// selector row over one list. A hero with a Workspace is focusable;
 /// `focused` selects the focused surfaces (design D6).
@@ -208,8 +225,19 @@ pub struct Workspace<'a> {
     pub focused: bool,
 }
 
+impl std::fmt::Debug for Workspace<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Workspace")
+            .field("header", &self.header)
+            .field("selector", &self.selector)
+            .field("focused", &self.focused)
+            .finish_non_exhaustive()
+    }
+}
+
 /// One hero pane's content (design D3). Breakpoint-neutral: the Wide header
 /// and the Library Hero overlay both derive from it.
+#[derive(Debug)]
 pub struct HeroContent<'a> {
     pub facts: HeroFacts,
     pub overview: Option<String>,
@@ -221,6 +249,7 @@ pub struct HeroContent<'a> {
 /// content plus `&mut` views into the active owner's media-list flow and
 /// search session; no rect, surface, style, focus-kind, header-arm or
 /// variant field.
+#[derive(Debug)]
 pub struct LibraryPanelContent<'a> {
     /// The Browser pane's primary browse selector, if the destination
     /// supplies one.
@@ -235,6 +264,7 @@ impl LibraryPanelContent<'_> {
     /// Whether the Hero pane's Workspace list holds focus (design D6): the
     /// one owner of this fact, so every consumer reads it instead of
     /// re-deriving it from `hero`/`workspace` at each call site.
+    #[must_use]
     pub fn workspace_focused(&self) -> bool {
         self.hero
             .as_ref()
@@ -246,6 +276,7 @@ impl LibraryPanelContent<'_> {
 /// The closed paint policy the panel sets on its lists (design D3/D6): the
 /// focus bit and selected-row surface are fixed by the owning presentation
 /// policy; destinations pass none.
+#[derive(Debug)]
 pub enum PanelListPaintPolicy {
     /// The Wide browser presentation's policy: focus only. Selected rows use
     /// the list backdrop surface.
@@ -328,6 +359,7 @@ pub enum WorkspaceHeader {
 
 impl WorkspaceHeader {
     /// The row's painted label.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Tracklist => "TRACKLIST",

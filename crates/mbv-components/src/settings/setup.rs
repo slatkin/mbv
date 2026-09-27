@@ -5,6 +5,7 @@ use mbv_render::components::settings_component::SetupDraft;
 use mbv_ui_msg::{Msg, ServiceRequest};
 
 impl SettingsComponent {
+    #[must_use]
     pub fn service_key(&self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
             Key::Enter | Key::Char(' ') => ServiceRequest::ActivateService(self.services_cursor),

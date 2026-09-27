@@ -144,6 +144,7 @@ impl MusicContent {
     /// artist root. The shell binds the projection to the owner-resolved
     /// target at push time; a local move onto a different root between pushes
     /// must not paint the prior root's summary, artwork, or groups.
+    #[must_use]
     pub fn current_artist_detail(
         &self,
     ) -> Option<&mbv_ui_model::music_artist_detail::ArtistDetailProjection> {
@@ -156,6 +157,7 @@ impl MusicContent {
     /// Expose the current shell-projected artist detail to the shell's
     /// playback resolver without carrying queue data across the component
     /// message boundary.
+    #[must_use]
     pub fn artist_detail_for_target(
         &self,
         target: &MusicArtistTarget,
@@ -272,6 +274,7 @@ impl MusicContent {
         }
     }
 
+    #[must_use]
     pub fn selected_item(&self) -> Option<EmbyItem> {
         let target = self.selected_album_target()?;
         let index = self
@@ -310,6 +313,7 @@ impl MusicContent {
 
     /// Resolves the focused artist's settled album targets against the latest
     /// content snapshot.
+    #[must_use]
     pub fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
         let targets = self.selected_artist_album_targets()?;
         Some(self.resolve_album_targets(targets))
@@ -318,6 +322,7 @@ impl MusicContent {
     /// Resolves marked tree album leaves in settled display order. This is the
     /// multi-selection boundary: the tree owns membership and the content
     /// owner only translates stable album targets to the current snapshot.
+    #[must_use]
     pub fn selected_tree_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
         let targets = self.selected_album_targets_in_display_order();
         if targets.is_empty() {
@@ -326,6 +331,7 @@ impl MusicContent {
         Some(self.resolve_album_targets(targets))
     }
 
+    #[must_use]
     pub fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
         let origin = self.selection_origin.clone()?;
         let (items, unresolved_targets) = self
@@ -345,6 +351,7 @@ impl MusicContent {
     /// The focused artist root's component-resolved detail identity (design
     /// D7): settled identity, display name, leaf album targets, and the
     /// snapshot's settled revision. `None` while an album leaf is focused.
+    #[must_use]
     pub fn artist_detail_target(&self) -> Option<MusicArtistTarget> {
         let selected = self.browser.selected_target()?;
         let MusicTreeTarget::Artist(key) = selected else {
@@ -368,6 +375,7 @@ impl MusicContent {
     /// snapshot), otherwise the selected album's cached tracks. Every row
     /// behaviour resolves through this one owner, so an artist track row and
     /// an album track row share the same paths.
+    #[must_use]
     pub fn workspace_track_item(&self, target: &str) -> Option<EmbyItem> {
         if let Some(detail) = self.current_artist_detail() {
             return detail
@@ -408,10 +416,12 @@ impl MusicContent {
     /// onto a root is not that Workspace: there Enter keeps toggling the root
     /// (task 2.4) instead of resolving a track from a snapshot that no longer
     /// addresses the focused node.
+    #[must_use]
     pub fn artist_workspace_focused(&self) -> bool {
         self.track_focused() && self.selected_is_artist() && self.current_artist_detail().is_some()
     }
 
+    #[must_use]
     pub fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
         self.workspace_track_item(target)
@@ -427,6 +437,7 @@ impl MusicContent {
     /// `None` when no paint completed (retained geometry is not the painted
     /// projection), when an artist root is focused (the shipped suppression),
     /// or when the window has no album leaf.
+    #[must_use]
     pub fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
         if !self.neighbour_prefetch_eligible() {
             return None;
@@ -463,6 +474,7 @@ impl MusicContent {
     /// the pane belongs to an artist root, otherwise as the ordinary album
     /// track activation. All Workspace gestures use this one fallback so the
     /// stable artist identity gate and album-item resolution cannot drift.
+    #[must_use]
     pub fn workspace_track_activation(&self) -> Option<Msg> {
         if self.artist_workspace_focused() {
             if let (Some(target), Some(track_id)) = (
@@ -540,6 +552,7 @@ impl MusicContent {
     /// leaf's from the album arm, and an artist root without a matching
     /// projection has no honest Hero yet (the push that follows its focus
     /// supplies one).
+    #[must_use]
     pub fn resolved_hero_data(&self) -> Option<HeroContentData> {
         if let Some(detail) = self.current_artist_detail() {
             let artwork = self.artist_hero_artwork(detail);

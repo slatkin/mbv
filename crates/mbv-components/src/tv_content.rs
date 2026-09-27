@@ -48,7 +48,7 @@ mod tree_projection;
 use episode_rows::build_episode_rows;
 pub use episode_rows::upcoming_episode_target;
 use episode_rows::{build_latest_episode_rows, upcoming_episode_rows};
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
     Series,
     Episodes,
@@ -60,6 +60,7 @@ pub enum TvDisplayMode {
     Wide,
     Narrow,
 }
+#[derive(Debug)]
 pub struct TvContent {
     context: TvWideRenderCtx,
     /// The one shared series-row owner, kept in the fixed-row Wide
@@ -108,6 +109,7 @@ pub struct TvContent {
 }
 
 impl TvContent {
+    #[must_use]
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
             mbv_render::LibraryListRenderCtx::from_items(Vec::new(), 0),
@@ -380,6 +382,7 @@ impl TvContent {
     /// shell effects that persist a resting `BrowseLevel` cursor
     /// (`App::narrow_browse_extras`), mirroring the prior TV browse cursor
     /// before the merge.
+    #[must_use]
     pub fn browse_cursor(&self) -> usize {
         self.carrier
             .selected_target()
@@ -396,6 +399,7 @@ impl TvContent {
     /// active presentation's retained content rect from the last frame the
     /// panel viewed it (ADR 0024: the owner reads only geometry it helped
     /// paint), falling back to the height the shell last pushed content for.
+    #[must_use]
     pub fn painted_viewport_height(&self) -> usize {
         let painted = self
             .carrier
@@ -408,6 +412,7 @@ impl TvContent {
         }
     }
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;
         self.context

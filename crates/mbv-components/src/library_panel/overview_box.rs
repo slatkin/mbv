@@ -303,6 +303,7 @@ fn contains_control(text: &str) -> bool {
     text.chars().any(mbv_text::text_safety::is_control_char)
 }
 
+#[must_use]
 pub fn sanitize_url(url: &str) -> Option<&str> {
     if url.is_empty() || contains_control(url) {
         return None;

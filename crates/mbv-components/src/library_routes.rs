@@ -15,6 +15,7 @@ use mbv_ui_model::context_menu::{LibraryRoutePopup, LibraryRouteStage};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 
+#[derive(Debug)]
 pub struct LibraryRoutesComponent {
     stage: Option<LibraryRouteStage>,
     cursor: usize,
@@ -29,6 +30,7 @@ pub struct LibraryRoutesComponent {
 }
 
 impl LibraryRoutesComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             stage: None,
@@ -58,11 +60,13 @@ impl LibraryRoutesComponent {
 
     /// Read the current picker stage (task 5.3c): the shell drives stage
     /// transitions once the component owns the interaction state.
+    #[must_use]
     pub fn stage(&self) -> Option<&LibraryRouteStage> {
         self.stage.as_ref()
     }
 
     /// Read the current picker cursor (task 5.3c).
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
     }

@@ -22,6 +22,7 @@ use mbv_ui_msg::{DaemonLostIntent, Msg, ShellRequest};
 /// Owns display content set by the shell via `get_component_mut`+downcast
 /// before each render. The `dim_backdrop_active` field is a scratch flag for
 /// `render_modal_frame` (same pattern as `ConfirmComponent`).
+#[derive(Debug)]
 pub struct DaemonLostComponent {
     last_playing_title: Option<String>,
     daemon_log_path: String,
@@ -30,6 +31,7 @@ pub struct DaemonLostComponent {
 }
 
 impl DaemonLostComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             last_playing_title: None,

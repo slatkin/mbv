@@ -26,7 +26,7 @@ pub use self::three_line::ThreeLineFlatList;
 pub use self::viewport::{PagingPolicy, Viewported};
 
 #[cfg(test)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TestListState {
     pub selected: Option<u8>,
     pub offset: usize,

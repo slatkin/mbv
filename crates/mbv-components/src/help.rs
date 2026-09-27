@@ -30,6 +30,7 @@ use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 /// Owns `scroll` and `destination` (set by the shell). `panel_area` is stored
 /// during `view()` for hit-testing in `on()` (design D8: component-owned
 /// geometry).
+#[derive(Debug)]
 pub struct HelpComponent {
     scroll: u16,
     destination: HelpDestination,
@@ -48,6 +49,7 @@ pub struct HelpComponent {
 }
 
 impl HelpComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             scroll: 0,
@@ -124,6 +126,7 @@ impl HelpComponent {
     /// click outside dismisses (the second click of a double included), and
     /// the focused overlay's wheel adjusts the scroll by one line regardless of pointer.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_scroll(&self) -> u16 {
         self.scroll
     }

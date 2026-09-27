@@ -68,6 +68,7 @@ mod leaf_key_tests {
 }
 
 impl LeafKeyResult {
+    #[must_use]
     pub fn into_option(self) -> Option<Msg> {
         match self {
             Self::Unhandled => None,

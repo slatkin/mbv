@@ -27,6 +27,7 @@ use mbv_ui_msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
 /// is written-to but not read by the modal, and `App::render` resets
 /// `App::dim_backdrop_active` from `any_dim_modal_open()` before each frame's
 /// image lookups, so no shell↔component sync is needed).
+#[derive(Debug)]
 pub struct ConfirmComponent {
     title: String,
     message: String,
@@ -36,6 +37,7 @@ pub struct ConfirmComponent {
 }
 
 impl ConfirmComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             title: String::new(),
@@ -62,6 +64,7 @@ impl ConfirmComponent {
         self.on_confirm = Some(modal.on_confirm.clone());
     }
 
+    #[must_use]
     pub fn confirm_action(&self) -> Option<ConfirmAction> {
         self.on_confirm.clone()
     }

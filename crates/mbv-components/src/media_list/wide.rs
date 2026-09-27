@@ -19,6 +19,7 @@ use tuirealm::state::State;
 /// Painting is performed by its `Component::view` through the render adapter;
 /// current-frame point resolution and geometry are retained by the shared
 /// paint carrier.
+#[derive(Debug)]
 pub struct WideMediaList<Target> {
     core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
@@ -33,6 +34,7 @@ impl<Target> Default for WideMediaList<Target> {
 }
 
 impl<Target> WideMediaList<Target> {
+    #[must_use]
     pub fn new() -> Self {
         Self::from_media_list(MediaList::new())
     }

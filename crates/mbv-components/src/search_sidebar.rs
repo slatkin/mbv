@@ -41,6 +41,7 @@ const SEARCH_DEBOUNCE_MS: u64 = 300;
 /// Owns the `SearchSidebar` state and the debounce deadline. The shell sets
 /// the panel area via downcast before each render; the component renders via
 /// the existing `render_search_sidebar` free function (design D9).
+#[derive(Debug)]
 pub struct SearchSidebarComponent {
     pub sidebar: SearchSidebar,
     /// 300 ms deadline past which `tick_clock` dispatches `SearchQuery`.
@@ -64,6 +65,7 @@ pub struct SearchSidebarComponent {
 }
 
 impl SearchSidebarComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sidebar: SearchSidebar::new(),
@@ -296,6 +298,7 @@ impl SearchSidebarComponent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_results(&self) -> &HitRegions<usize> {
         &self.hit_results
     }

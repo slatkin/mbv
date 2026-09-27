@@ -75,11 +75,13 @@ impl LibraryPanel {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_hero_overlay_open(&self) -> bool {
         self.hero_overlay_open
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_overlay_geometry(&self) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
         self.overlay_geometry
             .as_ref()

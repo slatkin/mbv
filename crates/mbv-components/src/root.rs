@@ -26,9 +26,17 @@ const OVERLAY_IDS: &[ComponentId] = &[
 
 /// Root routing owns overlay z-order from a fixed canonical mount order;
 /// `TuiRealm` owns focus and its LIFO stack.
+#[derive(Debug)]
 pub struct UiRootComponent;
 
+impl Default for UiRootComponent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UiRootComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -36,10 +44,12 @@ impl UiRootComponent {
     /// Subscribe the root to every terminal event so the shell can distinguish
     /// a processed event from an empty component message. The root remains a
     /// permanent observer even while another component owns focus.
+    #[must_use]
     pub fn subscriptions() -> Vec<Sub<ComponentId, UserEvent>> {
         vec![Sub::new(EventClause::Any, SubClause::Always)]
     }
 
+    #[must_use]
     pub fn overlay_ids() -> &'static [ComponentId] {
         OVERLAY_IDS
     }

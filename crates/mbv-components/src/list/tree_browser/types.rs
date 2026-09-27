@@ -77,16 +77,19 @@ impl<Target> TreeNode<Target> {
         }
     }
 
+    #[must_use]
     pub fn with_trailing(mut self, trailing: impl Into<String>) -> Self {
         self.trailing = Some(TreeTrailing::new(trailing));
         self
     }
 
+    #[must_use]
     pub fn with_title_role(mut self, title_role: TreeTitleRole) -> Self {
         self.title_role = title_role;
         self
     }
 
+    #[must_use]
     pub fn with_expandable(mut self, expandable: bool) -> Self {
         self.expandable = expandable;
         self

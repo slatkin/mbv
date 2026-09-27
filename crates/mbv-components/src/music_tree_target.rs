@@ -22,6 +22,7 @@ pub enum MusicTreeTarget {
 impl MusicTreeTarget {
     /// The stable album target when this target is an album leaf; artist roots
     /// and cached tracks have none.
+    #[must_use]
     pub fn album_leaf_target(&self) -> Option<&str> {
         match self {
             Self::Album(target) => Some(target),

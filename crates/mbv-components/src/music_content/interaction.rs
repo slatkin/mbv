@@ -10,6 +10,7 @@ impl MusicContent {
     /// Inline Search carrier empty, so input must resolve through the
     /// current-frame tree geometry rather than the compatibility carrier path
     /// (design D5).
+    #[must_use]
     pub fn local_filter_owns_input(&self) -> bool {
         self.browser.filter_active()
             && !self.inline_search.has_pool_entries()

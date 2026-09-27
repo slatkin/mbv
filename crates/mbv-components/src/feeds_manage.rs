@@ -17,6 +17,7 @@ use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 
+#[derive(Debug)]
 pub struct FeedsManageComponent {
     feeds: Vec<FeedSubscription>,
     stage: Option<FeedsManageStage>,
@@ -35,6 +36,7 @@ pub struct FeedsManageComponent {
 }
 
 impl FeedsManageComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             feeds: Vec::new(),
@@ -68,10 +70,12 @@ impl FeedsManageComponent {
         self.pending_add = pending_add;
     }
 
+    #[must_use]
     pub fn stage_clone(&self) -> Option<FeedsManageStage> {
         self.stage.clone()
     }
 
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
     }

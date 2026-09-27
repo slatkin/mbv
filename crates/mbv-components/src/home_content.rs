@@ -33,6 +33,7 @@ mod launch_state;
 
 /// The embedded content owner for the Home destination (design D2). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
+#[derive(Debug)]
 pub struct HomeContent {
     continue_items: Vec<QueueItem>,
     /// The shared canonical owner of Continue Watching rows.
@@ -43,7 +44,14 @@ pub struct HomeContent {
     hero_image: HeroImageState,
 }
 
+impl Default for HomeContent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HomeContent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             continue_items: Vec::new(),
@@ -61,6 +69,7 @@ impl HomeContent {
         self.project_continue_rows();
     }
 
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.carrier.cursor()
     }

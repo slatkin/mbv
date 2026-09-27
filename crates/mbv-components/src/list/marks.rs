@@ -19,19 +19,23 @@ impl<Target> Default for MarkSelectionState<Target> {
 
 impl<Target> MarkSelectionState<Target> {
     /// Create an empty ordered-mark carrier.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Marks in their stored addition order.
+    #[must_use]
     pub fn targets(&self) -> &[Target] {
         &self.marked
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.marked.is_empty()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.marked.len()
     }

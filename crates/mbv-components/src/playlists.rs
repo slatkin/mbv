@@ -13,6 +13,7 @@ use mbv_render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsVie
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
+#[derive(Debug)]
 pub struct PlaylistsComponent {
     playlists: Vec<EmbyItem>,
     cursor: usize,
@@ -41,6 +42,7 @@ pub struct PlaylistsComponent {
 /// Owned snapshot of playlist state, handed to the component whenever the
 /// shell refreshes it. Grouped into one value because the fields always
 /// travel together and the component mirrors them all.
+#[derive(Debug)]
 pub struct PlaylistsContent {
     pub playlists: Vec<EmbyItem>,
     pub cursor: usize,
@@ -55,6 +57,7 @@ pub struct PlaylistsContent {
 }
 
 impl PlaylistsComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             playlists: Vec::new(),
@@ -118,6 +121,7 @@ impl PlaylistsComponent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
     }

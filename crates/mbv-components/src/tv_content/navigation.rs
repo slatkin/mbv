@@ -2,6 +2,8 @@ use super::{ShellRequest, TvContent};
 use crate::media_list::MediaListSurfaceInput;
 
 impl TvContent {
+    /// # Panics
+    /// Panics if the internally generated movement input cannot be converted to a list operation.
     pub fn move_episode(&mut self, delta: i64) {
         self.episodes.delegate_operation(
             MediaListSurfaceInput::Move(delta)
@@ -14,6 +16,9 @@ impl TvContent {
     /// -- its page stride and its ends, the same seam the movement chords
     /// use -- and report the applied cursor movement as the component-
     /// resolved `TvEpisodeMove` delta; the shell never recomputes it.
+    ///
+    /// # Panics
+    /// Panics if `input` cannot be converted to a list operation.
     pub fn move_episode_by(&mut self, input: MediaListSurfaceInput) -> ShellRequest {
         let from = self.episodes.cursor();
         self.episodes.delegate_operation(
@@ -48,6 +53,8 @@ impl TvContent {
     /// truth for the one-column rail -- the legacy layout row map holds
     /// display-row indices (headings included), not selectable cursor
     /// indices, so consulting it made Down jump across grouped rows.
+    /// # Panics
+    /// Panics if the internally generated movement input cannot be converted to a list operation.
     pub fn move_rows(&mut self, rows: i64) {
         self.carrier.delegate_operation(
             MediaListSurfaceInput::Move(rows)
@@ -56,6 +63,8 @@ impl TvContent {
         );
     }
 
+    /// # Panics
+    /// Panics if the internally generated first/last input cannot be converted to a list operation.
     pub fn jump_cursor(&mut self, to_end: bool) {
         let input = if to_end {
             MediaListSurfaceInput::Last
@@ -71,6 +80,7 @@ impl TvContent {
 
     /// Painted item rows the Narrow pager moves per PageUp/PageDown: the
     /// fixed-row list strides one selectable row per painted row.
+    #[must_use]
     pub fn narrow_page_rows(&self) -> i64 {
         i64::try_from(self.painted_viewport_height().saturating_sub(1).max(1)).unwrap_or(i64::MAX)
     }

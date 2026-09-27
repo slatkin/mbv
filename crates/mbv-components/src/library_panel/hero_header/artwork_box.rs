@@ -28,6 +28,7 @@ pub const HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS: u16 = 20;
 
 /// The compact-cap decision, shared by the artwork box, the overview box,
 /// and the shell's image projection: the threshold is the terminal height.
+#[must_use]
 pub fn short_pane(terminal_height: u16) -> bool {
     terminal_height <= super::HERO_SHORT_PANE_MAX_HEIGHT
 }
@@ -57,6 +58,7 @@ const HERO_MIN_TEXT_COLS: u16 = 16;
 /// is always encoded for the box that paints it. `terminal_height` is the
 /// terminal's row count: the compact caps apply at [`HERO_SHORT_PANE_MAX_HEIGHT`]
 /// terminal rows or fewer.
+#[must_use]
 pub fn hero_artwork_box(
     area: Rect,
     facts: &HeroFacts,

@@ -34,6 +34,8 @@ impl EmbyLibraryContent {
     /// embedded carrier like every other list — a click selects, a double-click
     /// activates, a right-click resolves the row's ordinary item-based
     /// context-menu intent, and a wheel over the painted rows is claimed.
+    /// # Panics
+    /// Panics if a wheel input cannot be converted to a media-list operation.
     pub fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         let search = &mut self.inline_search;
         match input {

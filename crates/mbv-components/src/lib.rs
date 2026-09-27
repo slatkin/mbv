@@ -34,6 +34,7 @@ pub mod status_bar_panel;
 pub mod tab_panel;
 pub mod tv_content;
 
+#[must_use]
 pub fn selector_markers(len: usize, latest_marker: bool) -> Vec<bool> {
     let mut markers = vec![false; len];
     if let Some(first) = markers.first_mut() {

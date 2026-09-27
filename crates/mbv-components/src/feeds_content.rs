@@ -46,6 +46,7 @@ pub const MAX_GROUP_LABEL: usize = 18;
 /// `set_content` contract). The Watched filter and the selected feed group
 /// are owner-local selection, not shell content, so they never cross this
 /// seam.
+#[derive(Debug)]
 pub struct FeedsOwnerPush {
     pub subscriptions: Vec<FeedSubscription>,
     pub entries: Vec<Vec<FeedEntry>>,
@@ -55,6 +56,7 @@ pub struct FeedsOwnerPush {
 
 /// The Feeds embedded content owner (design D2, task 7.1). Plain type,
 /// hosted by the mounted `LibraryPanel` under `LibraryKey::Feeds` (task 7.3).
+#[derive(Debug)]
 pub struct FeedsContent {
     subscriptions: Vec<FeedSubscription>,
     entries: Vec<Vec<FeedEntry>>,
@@ -82,6 +84,7 @@ pub struct FeedsContent {
 }
 
 impl FeedsContent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             subscriptions: Vec::new(),
@@ -130,6 +133,7 @@ impl FeedsContent {
         }
     }
 
+    #[must_use]
     pub fn latest_selected(&self) -> bool {
         self.latest_selected
     }
@@ -138,18 +142,21 @@ impl FeedsContent {
         self.latest_marker = marker;
     }
 
+    #[must_use]
     pub fn group_count(&self) -> usize {
         1 + self.subscriptions.len()
     }
 
     /// The stable row id under `point`, resolved by the shared owner that
     /// painted the active list (design D6).
+    #[must_use]
     pub fn resolve_row_id(&self, at: Position) -> Option<String> {
         self.carrier.resolve_current_point(at).cloned()
     }
 
     /// Whether the active presentation's retained frame claims `point`
     /// (design D6 frame invalidation).
+    #[must_use]
     pub fn claims_current_point(&self, at: Position) -> bool {
         self.carrier.claims_current_point(at)
     }
@@ -157,6 +164,7 @@ impl FeedsContent {
     /// The entry whose stable `guid` the shared owner selected. Effect
     /// requests are built from this owner-resolved target, never by indexing
     /// `visible_entries` with the cursor.
+    #[must_use]
     pub fn entry_for_target(&self, target: &str) -> Option<&FeedEntry> {
         self.visible_entries
             .iter()
@@ -419,6 +427,7 @@ impl FeedsContent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn canonical_cursor(&self) -> usize {
         self.carrier.cursor()
     }
@@ -428,21 +437,25 @@ impl FeedsContent {
     /// signal (the Selector row's `active` pill only ever encodes Latest or
     /// the group, never the filter — see `content()`).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn selected_group(&self) -> usize {
         self.selected_group
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn watched_filter(&self) -> WatchedFilter {
         self.watched_filter
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn canonical_rows(&self) -> &[MediaListRow<String>] {
         self.carrier.rows()
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn canonical_selectable_len(&self) -> usize {
         self.carrier
             .rows()
@@ -452,6 +465,7 @@ impl FeedsContent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn canonical_selected_target(&self) -> Option<&String> {
         self.carrier.selected_target()
     }

@@ -11,6 +11,7 @@ use mbv_ui_model::ui_util::fmt_duration_short;
 /// slot title, duration/elapsed metadata, and semantic active state whose
 /// progress is clamped to `0..=100` at this projection boundary. No ticks,
 /// runtime, source, credentials, callbacks, or effects cross the child edge.
+#[must_use]
 pub fn queue_media_rows(
     slots: &[QueueSlot],
     playback: PlaybackState,
@@ -23,6 +24,7 @@ pub fn queue_media_rows(
         .collect()
 }
 
+#[must_use]
 pub fn queue_media_row(
     slot: &QueueSlot,
     index: usize,

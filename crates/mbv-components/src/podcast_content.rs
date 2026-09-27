@@ -45,6 +45,7 @@ const STATE_PILL_COUNT: usize = AudiobookshelfEpisodeFilter::ALL.len();
 /// Plain owner for one Audiobookshelf podcast library. Content is projected
 /// by the shell; the pill selection and the list selection remain local
 /// interaction state.
+#[derive(Debug)]
 pub struct PodcastContent {
     pub state: AudiobookshelfBrowseState,
     latest_items: Vec<AudiobookshelfQueueItem>,
@@ -77,6 +78,7 @@ pub struct PodcastContent {
 }
 
 impl PodcastContent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: AudiobookshelfBrowseState::new(mbv_audiobookshelf::AudiobookshelfLibrary {
@@ -137,6 +139,7 @@ impl PodcastContent {
         self.pill == PillSelection::Latest
     }
 
+    #[must_use]
     pub fn latest_selected(&self) -> bool {
         self.on_latest()
     }
@@ -436,11 +439,13 @@ impl PodcastContent {
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn pill(&self) -> &PillSelection {
         &self.pill
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn selected_episode_target(&self) -> Option<PodcastEpisodeTarget> {
         self.episodes.selected_target().cloned()
     }

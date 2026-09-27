@@ -23,6 +23,7 @@ impl HomeContent {
         true
     }
 
+    #[must_use]
     pub fn launch_snapshot_impl(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = Some(SelectorIdentity::Home {
             key: HomeSelectorKey::Continue,

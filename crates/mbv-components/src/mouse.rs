@@ -25,6 +25,7 @@ use mbv_ui_msg::{ComponentId, UserEvent};
 /// The bounds are the half-open `Range<u16>` `0..u16::MAX` —
 /// `0..=u16::MAX` does not type-check (`MouseEventClause` fields are `Range`,
 /// not `RangeInclusive`).
+#[must_use]
 pub fn mouse_event_clause() -> EventClause<UserEvent> {
     EventClause::Mouse(MouseEventClause {
         kind: MouseEventKind::Moved,
@@ -37,6 +38,7 @@ pub fn mouse_event_clause() -> EventClause<UserEvent> {
 /// A `Sub` for [`mouse_event_clause`] with `SubClause::Always`. Mouse
 /// eligibility is decided by `sync_mouse_subscriptions` adding and removing
 /// this subscription, never by a `SubClause` predicate (ADR 0024 D2).
+#[must_use]
 pub fn mouse_sub() -> Sub<ComponentId, UserEvent> {
     Sub::new(mouse_event_clause(), SubClause::Always)
 }

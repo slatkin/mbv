@@ -56,7 +56,7 @@ pub enum VisibleRow {
     Structural(usize, usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ArenaNode<Target> {
     pub node: TreeNode<Target>,
     pub children: Vec<usize>,
@@ -81,6 +81,7 @@ struct ReconciledSelection<Target> {
 ///
 /// The arena and its identifiers are private.  In particular, callers can
 /// only select, expand, mark, and resolve rows through destination targets.
+#[derive(Debug)]
 pub struct TreeBrowser<Target> {
     pub arena: HashMap<usize, ArenaNode<Target>>,
     pub target_to_node: HashMap<Target, usize>,
@@ -164,6 +165,7 @@ where
 }
 
 impl<Target> TreeBrowser<Target> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             arena: HashMap::new(),

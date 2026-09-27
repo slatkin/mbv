@@ -41,6 +41,7 @@ use mbv_ui_msg::{
     clippy::struct_excessive_bools,
     reason = "initialized/chapter_focused/focused are independent lifecycle and focus state; images_enabled is a separate rendering option (design analysis, issue #804)"
 )]
+#[derive(Debug)]
 pub struct BookContent {
     pub state: AudiobookshelfBookBrowseState,
     /// `false` until the first `set_content`: the initial projection adopts
@@ -69,6 +70,7 @@ pub struct BookContent {
 }
 
 impl BookContent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: AudiobookshelfBookBrowseState::new(mbv_audiobookshelf::AudiobookshelfLibrary {
@@ -155,12 +157,14 @@ impl BookContent {
         self.carrier.selected_target().map(String::as_str)
     }
 
+    #[must_use]
     pub fn book_request(&self) -> Msg {
         Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Book(self.carrier.selected_target().cloned()),
         )))
     }
 
+    #[must_use]
     pub fn bucket_request(&self) -> Msg {
         Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Bucket(self.selected_bucket),
@@ -173,6 +177,9 @@ impl BookContent {
     /// provider-neutral outcome; the component mirrors the owner's selection
     /// into the projected snapshot and returns the typed book-move request
     /// (design.md D3).
+    ///
+    /// # Panics
+    /// Panics if `input` cannot be converted to a media-list operation.
     pub fn move_book(&mut self, input: MediaListSurfaceInput) -> Msg {
         self.carrier.delegate_operation(
             input

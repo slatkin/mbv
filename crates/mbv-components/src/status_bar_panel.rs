@@ -29,6 +29,7 @@ use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 
 /// The status row panel: paints the status row where `RootFrame` places it
 /// and retains its volume/mute/remote pill regions.
+#[derive(Debug)]
 pub struct StatusBarPanel {
     model: StatusBarModel,
     regions: StatusBarRegions,
@@ -36,6 +37,7 @@ pub struct StatusBarPanel {
 }
 
 impl StatusBarPanel {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             model: StatusBarModel::default(),
@@ -51,6 +53,7 @@ impl StatusBarPanel {
 
     /// The pill regions retained from the last paint (test accessor).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn regions(&self) -> StatusBarRegions {
         self.regions
     }

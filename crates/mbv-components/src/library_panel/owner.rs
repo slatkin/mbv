@@ -364,7 +364,17 @@ pub struct LibraryOwners {
     active: Option<LibraryKey>,
 }
 
+impl std::fmt::Debug for LibraryOwners {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LibraryOwners")
+            .field("owner_count", &self.owners.len())
+            .field("active", &self.active)
+            .finish_non_exhaustive()
+    }
+}
+
 impl LibraryOwners {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -378,6 +388,7 @@ impl LibraryOwners {
 
     /// Whether an owner exists for `key` (the transitional branch's
     /// migrated-owner check).
+    #[must_use]
     pub fn has(&self, key: &LibraryKey) -> bool {
         self.owners.contains_key(key)
     }
@@ -405,11 +416,13 @@ impl LibraryOwners {
     }
 
     /// The shared-borrow twin of [`LibraryOwners::get_mut`].
+    #[must_use]
     pub fn get(&self, key: &LibraryKey) -> Option<&dyn LibraryContentOwner> {
         self.owners.get(key).map(|owner| &**owner)
     }
 
     /// The active owner's key, for the shell's transitional branch.
+    #[must_use]
     pub fn active_key(&self) -> Option<&LibraryKey> {
         self.active.as_ref()
     }

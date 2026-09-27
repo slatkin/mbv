@@ -22,6 +22,7 @@ pub struct HitRegions<Tag> {
 }
 
 impl<Tag> HitRegions<Tag> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             regions: Vec::new(),
@@ -43,6 +44,7 @@ impl<Tag> HitRegions<Tag> {
     /// The tag of the last-pushed region containing `point`, if any. Points on
     /// the right/bottom edge of a rectangle are outside it (ratatui
     /// `Rect::contains` semantics).
+    #[must_use]
     pub fn resolve(&self, point: Position) -> Option<&Tag> {
         self.regions
             .iter()
@@ -54,6 +56,7 @@ impl<Tag> HitRegions<Tag> {
     /// The recorded rect/tag pairs in paint order. Test accessors read them
     /// for hit-geometry assertions.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }

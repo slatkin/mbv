@@ -66,6 +66,7 @@ struct SplitGeometry {
     clippy::struct_excessive_bools,
     reason = "focused, split_changed, hero_overlay_open, and mini_view_hero_auto_open are independent panel interaction/lifecycle flags, not one mode (design analysis, issue #804)"
 )]
+#[derive(Debug)]
 pub struct LibraryPanel {
     owners: LibraryOwners,
     focused: bool,
@@ -123,6 +124,7 @@ pub struct LibraryPanel {
 }
 
 impl LibraryPanel {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             owners: LibraryOwners::new(),
@@ -166,6 +168,7 @@ impl LibraryPanel {
 
     /// Whether an owner exists for `key` — the transitional branch's
     /// migrated-owner check.
+    #[must_use]
     pub fn has_owner(&self, key: &LibraryKey) -> bool {
         self.owners.has(key)
     }
@@ -220,6 +223,7 @@ impl LibraryPanel {
     /// The hero image box the last painted frame reserved — the Library Hero
     /// overlay's while it is open, else the Wide Hero pane's. The shell's
     /// image projection encodes for the box that paints.
+    #[must_use]
     pub fn active_hero_image_box(&self) -> Option<(u16, u16)> {
         let paint = if self.hero_overlay_open {
             self.overlay_geometry
@@ -246,28 +250,33 @@ impl LibraryPanel {
 
     /// The painted split's gap rect, for the width-resolution test path.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_split_gap(&self) -> Option<ratatui::layout::Rect> {
         self.split.as_ref().map(|split| split.gap)
     }
 
     /// The painted list slot's rect, for the breakpoint-transition test path.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_list_rect(&self) -> Option<ratatui::layout::Rect> {
         self.list_rect()
     }
 
     /// The Selector row's retained hit regions, for the pill-row test path.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_selector_hits(&self) -> &crate::mouse::hit::HitRegions<usize> {
         &self.hits.selector
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_hovered_selector(&self) -> Option<usize> {
         self.hovered_selector
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_link_hits(&self) -> &crate::mouse::hit::HitRegions<usize> {
         &self.hits.links
     }
@@ -275,6 +284,7 @@ impl LibraryPanel {
     /// The last painted Wide skeleton geometry, for the panel-output test
     /// path.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_wide_geometry(&self) -> Option<WideSkeletonGeometry> {
         self.wide_geometry.clone()
     }
@@ -285,6 +295,7 @@ impl LibraryPanel {
     /// to publish; task 12.3: this no longer round-trips through the
     /// shell's legacy chrome geometry).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_painted_layout(&self) -> mbv_render::layout::PaintedRowGeometry {
         if let Some(wide) = self.wide_geometry.as_ref() {
             return mbv_render::layout::PaintedRowGeometry {
@@ -303,6 +314,7 @@ impl LibraryPanel {
     /// [`WideSkeletonGeometry`] shape: the non-Wide panel is the Wide
     /// browser pane without a Hero), for the panel-output test path.
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_narrow_geometry(&self) -> Option<WideSkeletonGeometry> {
         self.narrow_geometry.clone()
     }
@@ -362,6 +374,7 @@ impl LibraryPanel {
 
     /// The shared-borrow twin of [`LibraryPanel::active_inline_search_session`]
     /// for the shell's pure reads (is-open, selected result).
+    #[must_use]
     pub fn active_inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
         let key = self.owners.active_key()?;
         self.owners.get(key)?.inline_search_session_ref()
@@ -369,6 +382,7 @@ impl LibraryPanel {
 
     /// The shared-borrow twin of [`LibraryPanel::owner_mut`], for the
     /// shell's pure reads.
+    #[must_use]
     pub fn owner(&self, key: &LibraryKey) -> Option<&dyn LibraryContentOwner> {
         self.owners.get(key)
     }
@@ -390,6 +404,7 @@ impl LibraryPanel {
 
     /// Apply the one discrete startup launch re-anchor to exactly one active
     /// destination owner. The panel does not mirror the resulting local state.
+    #[must_use]
     pub fn launch_selector(
         &self,
         key: &LibraryKey,
@@ -422,6 +437,7 @@ impl LibraryPanel {
     /// `menu_placement_geometry` served. Both skeletons save the Browser
     /// pane's panel rect in `list_panel` (the non-Wide panel *is* the Wide
     /// browser pane), so one expression covers every geometry.
+    #[must_use]
     pub fn menu_geometry(&self) -> Option<(ratatui::layout::Rect, Option<ratatui::layout::Rect>)> {
         self.wide_geometry
             .as_ref()

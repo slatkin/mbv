@@ -35,6 +35,7 @@ pub struct HeroContentData {
 /// Landscape, a declared `Primary` poster alone is Portrait — and nothing
 /// declared falls back to Landscape with the placeholder. Availability is
 /// provider metadata only, so the arm is stable before the image loads.
+#[must_use]
 pub fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
     let music = item.item_type == "MusicAlbum" || item.is_audio();
     if music {
@@ -100,6 +101,7 @@ fn movie_logo_source(item: &EmbyItem) -> Option<ArtworkSource> {
 
 /// The artwork policy for an Audiobookshelf book (design D5): books declare
 /// a portrait cover; no cover means the Portrait placeholder.
+#[must_use]
 pub fn abs_book_artwork_policy(book: &AudiobookshelfBookQueueItem) -> HeroArtwork {
     HeroArtwork {
         shape: ArtworkShape::Portrait,
@@ -118,6 +120,7 @@ pub fn abs_book_artwork_policy(book: &AudiobookshelfBookQueueItem) -> HeroArtwor
 
 /// The artwork policy for an Audiobookshelf podcast episode (design D5):
 /// podcasts are always Square; the cover is Service-scoped.
+#[must_use]
 pub fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueItem) -> HeroArtwork {
     HeroArtwork {
         shape: ArtworkShape::Square,
@@ -138,6 +141,7 @@ pub fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueItem) -> HeroArtw
 /// for feed entries. Podcast feeds (declared `FeedKind::Audio`) are Square;
 /// video (and unknown-kind legacy) feeds fall back to Landscape — both with
 /// the shared placeholder.
+#[must_use]
 pub fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
     let podcast = matches!(entry.feed_kind, Some(mbv_queue::FeedKind::Audio));
     HeroArtwork {
@@ -202,6 +206,7 @@ fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
 /// type, so `emby_artwork_policy`'s type dispatch cannot recognise them: the
 /// Music destination knows its rows are albums and asks for the music arm
 /// directly (the pre-panel music painters' unconditional chain).
+#[must_use]
 pub fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
     HeroArtwork {
         shape: ArtworkShape::Square,
@@ -249,6 +254,7 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 
 /// The Emby item producer (design D5): plain title, plain meta rows (the
 /// series line, release date, duration), cleaned overview, policy artwork.
+#[must_use]
 pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let movie = item.item_type == "Movie";
     let (mut meta_rows, duration_row) = emby_hero_meta_rows_plain(item);
@@ -345,6 +351,7 @@ pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
 /// the album arm's artwork (`music_album_artwork`) instead of the type-based
 /// policy. Grouped Music's album rows are Emby `Folder` items, so their
 /// artwork cannot be derived from `item_type`.
+#[must_use]
 pub fn hero_content_music_album(item: &EmbyItem) -> HeroContentData {
     let mut data = hero_content_emby(item);
     data.facts.artwork = music_album_artwork(item);
@@ -353,6 +360,7 @@ pub fn hero_content_music_album(item: &EmbyItem) -> HeroContentData {
 
 /// The queue-item producer (design D5): dispatches to the item kind's
 /// producer, so a queued item and its source item share one set of facts.
+#[must_use]
 pub fn hero_content_queue(item: &QueueItem) -> HeroContentData {
     match item {
         QueueItem::Emby(item) => hero_content_emby(item),
@@ -373,6 +381,7 @@ pub fn hero_content_queue(item: &QueueItem) -> HeroContentData {
 /// paths hold (the Books tab resolves its selection through
 /// `audiobookshelf_book_queue_item`); narrator/year fields return with the
 /// tab's conversion in task 10.1.
+#[must_use]
 pub fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) -> HeroContentData {
     let (meta_rows, duration_row, progress_row) = abs_book_meta_rows(book);
     let facts = HeroFacts {
@@ -473,6 +482,7 @@ pub fn hero_content_abs_episode(episode: &AudiobookshelfQueueItem) -> HeroConten
 /// The feed entry producer (design D5): title and duration; no overview and
 /// no artwork source exist for feed entries (design D5 keeps the
 /// placeholder).
+#[must_use]
 pub fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
     let has_duration = entry.duration_ticks.is_some_and(|t| t > 0);
     let facts = HeroFacts {

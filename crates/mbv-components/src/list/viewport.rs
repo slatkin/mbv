@@ -11,6 +11,7 @@ pub enum PagingPolicy {
 
 impl PagingPolicy {
     /// The tree/list policy whose page is the visible viewport.
+    #[must_use]
     pub const fn visible_viewport() -> Self {
         Self::VisibleViewport
     }
@@ -36,6 +37,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
     fn set_viewport_offset(&mut self, offset: usize);
 
     /// Maximum legal offset for a flow and viewport geometry.
+    #[must_use]
     fn max_viewport_offset(flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         flow.len().saturating_sub(viewport_len.max(1))
     }

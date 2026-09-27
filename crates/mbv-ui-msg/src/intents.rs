@@ -12,6 +12,7 @@ pub struct PodcastEpisodeTarget {
 }
 
 impl PodcastEpisodeTarget {
+    #[must_use]
     pub fn new(library_item_id: String, episode_id: String) -> Self {
         Self {
             library_item_id,
@@ -19,10 +20,12 @@ impl PodcastEpisodeTarget {
         }
     }
 
+    #[must_use]
     pub fn library_item_id(&self) -> &str {
         &self.library_item_id
     }
 
+    #[must_use]
     pub fn episode_id(&self) -> &str {
         &self.episode_id
     }
@@ -38,6 +41,7 @@ pub struct BookChapterTarget {
 }
 
 impl BookChapterTarget {
+    #[must_use]
     pub fn new(book_library_item_id: String, row_discriminator: usize) -> Self {
         Self {
             book_library_item_id,
@@ -45,10 +49,12 @@ impl BookChapterTarget {
         }
     }
 
+    #[must_use]
     pub fn book_library_item_id(&self) -> &str {
         &self.book_library_item_id
     }
 
+    #[must_use]
     pub fn row_discriminator(&self) -> usize {
         self.row_discriminator
     }

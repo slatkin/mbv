@@ -7,6 +7,7 @@
 
 use ratatui::layout::{Position, Rect};
 
+#[derive(Debug)]
 struct CompletedPaint<Target> {
     claim_rect: Rect,
     content_rect: Rect,
@@ -19,6 +20,7 @@ struct CompletedPaint<Target> {
 /// The carrier owns the single completed-paint snapshot: claim and content
 /// rectangles, target-bearing row geometry, and the selected row rectangle.
 /// A shape keeps no second paint-result carrier.
+#[derive(Debug)]
 pub struct PaintRetainedState<Target> {
     completed: Option<CompletedPaint<Target>>,
 }
@@ -31,6 +33,7 @@ impl<Target> Default for PaintRetainedState<Target> {
 
 impl<Target> PaintRetainedState<Target> {
     /// Create an empty retained-paint carrier.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -74,16 +77,19 @@ impl<Target> PaintRetainedState<Target> {
     }
 
     /// Whether a completed frame is currently retained.
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         self.completed.is_some()
     }
 
     /// The latest completed frame's row-flow rectangle.
+    #[must_use]
     pub fn content_rect(&self) -> Option<Rect> {
         self.completed.as_ref().map(|paint| paint.content_rect)
     }
 
     /// Whether the latest completed paint claims `point`.
+    #[must_use]
     pub fn claims_point(&self, point: Position) -> bool {
         self.completed
             .as_ref()
@@ -91,6 +97,7 @@ impl<Target> PaintRetainedState<Target> {
     }
 
     /// Resolve `point` against the latest completed paint's target geometry.
+    #[must_use]
     pub fn resolve_point(&self, point: Position) -> Option<&Target> {
         let completed = self.completed.as_ref()?;
         if !completed.claim_rect.contains(point) {
@@ -103,6 +110,7 @@ impl<Target> PaintRetainedState<Target> {
     }
 
     /// The latest completed paint's selected-row rectangle, if any.
+    #[must_use]
     pub fn selected_row_rect(&self) -> Option<Rect> {
         self.completed
             .as_ref()

@@ -24,6 +24,7 @@ use mbv_ui_msg::{Msg, ShellRequest};
 
 /// The tab bar panel: paints the tab bar where `RootFrame` places it, retains
 /// its tab hit regions, and emits a tab-select `Msg` for clicks.
+#[derive(Debug)]
 pub struct TabPanel {
     titles: Vec<String>,
     markers: Vec<bool>,
@@ -37,6 +38,7 @@ pub struct TabPanel {
 }
 
 impl TabPanel {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             titles: Vec::new(),
@@ -65,16 +67,19 @@ impl TabPanel {
 
     /// The hit regions retained from the last paint (test accessor).
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn hit_regions(&self) -> &[(Rect, usize)] {
         &self.hits
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_selected(&self) -> usize {
         self.selected
     }
 
     #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn test_hovered(&self) -> Option<usize> {
         self.hovered
     }

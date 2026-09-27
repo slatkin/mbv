@@ -44,7 +44,7 @@ pub enum EmbySelectorMode {
 }
 
 /// Browse identity used to decide when a projected position should be applied.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct EmbyLibraryIdentity {
     pub depth: usize,
     pub parent_id: String,
@@ -102,6 +102,7 @@ fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
 /// letter/feed-group pill facts the old `NarrowBrowseExtras`/wide-Movies pill
 /// row carried separately; task 6.1 unifies them into the Selector row,
 /// design D8).
+#[derive(Debug)]
 pub struct BrowserOwnerPush {
     pub items: Vec<EmbyItem>,
     pub latest_items: Vec<EmbyItem>,
@@ -122,6 +123,7 @@ pub struct BrowserOwnerPush {
 /// The embedded content owner for Movies, `HomeVideos` and Generic Emby
 /// libraries (design D2, task 6.1). Plain type; the mounted `LibraryPanel`
 /// borrows it for content and slot events.
+#[derive(Debug)]
 pub struct EmbyLibraryContent {
     kind: LibraryKind,
     browse_items: Vec<EmbyItem>,
@@ -160,6 +162,7 @@ pub struct EmbyLibraryContent {
 }
 
 impl EmbyLibraryContent {
+    #[must_use]
     pub fn new(kind: LibraryKind) -> Self {
         Self {
             kind,
@@ -220,6 +223,7 @@ impl EmbyLibraryContent {
         }
     }
 
+    #[must_use]
     pub fn latest_mode(&self) -> bool {
         self.latest_mode
     }
@@ -273,6 +277,7 @@ impl EmbyLibraryContent {
 
     /// The authoritative selection of the shared owner, as an `items` index
     /// (the owner is the only cursor store).
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.carrier
             .selected_target()
@@ -280,6 +285,7 @@ impl EmbyLibraryContent {
             .unwrap_or(0)
     }
 
+    #[must_use]
     pub fn scroll(&self) -> usize {
         self.carrier.scroll()
     }

@@ -12,6 +12,7 @@ use mbv_ui_model::feed::SavePlaylistStage;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, SavePlaylistIntent, ShellRequest};
 
+#[derive(Debug)]
 pub struct SavePlaylistComponent {
     input: String,
     rename: bool,
@@ -24,6 +25,7 @@ pub struct SavePlaylistComponent {
 }
 
 impl SavePlaylistComponent {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             input: String::new(),
@@ -44,14 +46,17 @@ impl SavePlaylistComponent {
         self.rename = self.rename_id.is_some();
     }
 
+    #[must_use]
     pub fn input(&self) -> &str {
         &self.input
     }
 
+    #[must_use]
     pub fn is_rename(&self) -> bool {
         self.rename
     }
 
+    #[must_use]
     pub fn rename_id(&self) -> Option<&str> {
         self.rename_id.as_deref()
     }

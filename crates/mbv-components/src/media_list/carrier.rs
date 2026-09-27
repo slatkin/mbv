@@ -12,16 +12,25 @@ use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal};
 use mbv_ui_model::media_list::SelectionOrigin;
 
 /// One logical row flow's destination-side carrier over one canonical owner.
+#[derive(Debug)]
 pub struct MediaListCarrier<Target> {
     wide: WideMediaList<Target>,
     selection_origin: SelectionOrigin,
 }
 
+impl<Target> Default for MediaListCarrier<Target> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Target> MediaListCarrier<Target> {
+    #[must_use]
     pub fn new() -> Self {
         Self::new_with_origin(SelectionOrigin::Queue)
     }
 
+    #[must_use]
     pub fn new_with_origin(selection_origin: SelectionOrigin) -> Self {
         Self {
             wide: WideMediaList::new(),
