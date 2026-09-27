@@ -15,7 +15,6 @@ workspace = true
 
 [dependencies]
 mbv-emby-model = { path = "../mbv-emby-model" }
-mbv-ids = { path = "../mbv-ids" }
 serde.workspace = true
 serde_json.workspace = true
 

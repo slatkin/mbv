@@ -1798,7 +1798,6 @@ name = "mbv-queue"
 version = "0.21.2"
 dependencies = [
  "mbv-emby-model",
- "mbv-ids",
  "rstest",
  "serde",
  "serde_json",
