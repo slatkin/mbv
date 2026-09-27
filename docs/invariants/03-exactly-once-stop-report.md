@@ -1,12 +1,12 @@
 # Invariant 3 — Exactly one `report_stopped` per item lifecycle
 
 **Scope:** `StopReport::{NotSent, Sent, Accepted}` and `LoadState`
-(`crates/mbv-core/src/player_run_state.rs`), `PlaybackRun::{on_end_file,
-on_shutdown, report_stop_now_or_background}` (`player_run_events.rs`,
-`player_run_queue.rs`), all `cmd_*` replacement paths
-(`player_run_commands.rs`), and `SessionReporter::{report_stopped,
+(`crates/mbv-player/src/run/state.rs`), `PlaybackRun::{on_end_file,
+on_shutdown, report_stop_now_or_background}` (`crates/mbv-player/src/run/events.rs`,
+`crates/mbv-player/src/run/queue.rs`), all `cmd_*` replacement paths
+(`crates/mbv-player/src/run/commands.rs`), and `SessionReporter::{report_stopped,
 report_stopped_background, report_stopped_for_shutdown, has_session,
-clear_session}` (`player_runtime.rs:210+`).
+clear_session}` (`crates/mbv-player/src/report_worker.rs`).
 
 ## The invariant
 

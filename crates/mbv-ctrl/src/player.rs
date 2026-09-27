@@ -56,7 +56,7 @@ pub struct PlayerStatus {
     pub art_item_id: String,
     /// Album id for the current track, when it's a grouped audio track
     /// (mirrors the `Audio` + non-empty `album_id` grouping the
-    /// queue card already uses in `src/app/render/power/card.rs`, so the
+    /// queue card already uses in `crates/mbv-render/src/components/card.rs`, so the
     /// same disk-cache entry a browsed album card populated can be reused
     /// here). Empty when not applicable.
     #[serde(default)]
@@ -110,7 +110,7 @@ impl PlayerStatus {
         self.album.clone_from(&item.album);
         self.art_item_id.clone_from(&item.id);
         // Same audio-album grouping condition as the queue card
-        // (src/app/render/power/card.rs) uses for its cache key, so a
+        // (crates/mbv-render/src/components/card.rs) uses for its cache key, so a
         // previously browsed/cached album cover is found under the same key.
         self.art_album_id = if item.item_type == "Audio" && !item.album_id.is_empty() {
             item.album_id.clone()

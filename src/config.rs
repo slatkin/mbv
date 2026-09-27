@@ -200,12 +200,12 @@ pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
     Some(path)
 }
 
-/// Cache-key suffix for a card's primary image (see `src/app/render/card.rs`).
+/// Cache-key suffix for a card's primary image (see `crates/mbv-render/src/components/card.rs`).
 #[cfg(not(test))]
 pub const IMAGE_CACHE_SUFFIX_CARD_PRIMARY: &str = "card";
 
 /// Cache-key suffix for an album-level card
-/// (see `src/app/render/card.rs`).
+/// (see `crates/mbv-render/src/components/card.rs`).
 #[cfg(not(test))]
 pub const IMAGE_CACHE_SUFFIX_ALBUM_CARD: &str = "album_card";
 

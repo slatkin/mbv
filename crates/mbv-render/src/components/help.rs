@@ -27,7 +27,7 @@ enum HelpSection {
 /// focus"). With library focus the selected destination is matched
 /// exhaustively — there is no default-to-Emby branch.
 //
-// `pub(crate)` so the Interactive Component (`src/app/components/help.rs`)
+// `pub(crate)` so the Interactive Component (`crates/mbv-components/src/help.rs`)
 // can receive a destination from the shell and pass it into `render_help_panel`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelpDestination {
@@ -369,7 +369,7 @@ fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> 
 /// Render the help sidebar panel.
 ///
 /// Extracted from `App::render_help_panel` so the Interactive Component
-/// (`src/app/components/help.rs`) can call it in `view()` without `App` access
+/// (`crates/mbv-components/src/help.rs`) can call it in `view()` without `App` access
 /// (design D9: a component's `view()` calls the existing render substrate).
 /// The shell-owned scroll offset and destination are passed in; the function
 /// clamps scroll to the visible content and mutates the caller's `scroll`.

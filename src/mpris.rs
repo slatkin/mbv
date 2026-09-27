@@ -128,7 +128,7 @@ struct MediaPlayer2Player {
 
 /// Candidate on-disk image-cache keys for a track's cover art, in the order
 /// the existing UI card-image cache (`src/app/images.rs` and
-/// `src/app/render/card.rs`) is most likely to have already
+/// `crates/mbv-render/src/components/card.rs`) is most likely to have already
 /// populated them under -- checked cheaply via `std::path::Path::is_file`,
 /// no network I/O. Covers every write site that keys on an album/item id:
 /// the card (`:card`) and album-level card (`:album_card`). `album_id`

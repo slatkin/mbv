@@ -1,15 +1,15 @@
 # Invariant 6 — Progress must be applied at every queue mirror, in order
 
 **Scope:** the daemon's canonical Bound queue (`PlayerOwnerState.queue`,
-`crates/mbv-core/src/player/owner_state.rs`), the Playback run's own queue
-mirror (`ExecutionSequence`, `crates/mbv-core/src/playback/execution_sequence.rs`),
+`crates/mbv-player/src/owner_state.rs`), the Playback run's own queue
+mirror (`ExecutionSequence`, `crates/mbv-queue/src/execution_sequence.rs`),
 each connected shell's `PlaybackQueue` mirror (`src/app/dispatch/session/player_event.rs`), the
-shared write path (`crate::playback::queue::apply_progress_to_queue_item`),
+shared write path (`crates/mbv-queue/src/lib.rs`),
 resume resolution (`crate::player::resume_start_pos` /
-`resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-core/src/player.rs`),
-jump dispatch (`crates/mbv-core/src/daemon/core.rs`, `src/app/dispatch/action.rs`,
-`crates/mbv-core/src/playback/transition.rs`), and the Playback run's
-forced-jump/re-seek state (`crates/mbv-core/src/player/run/{types,commands,events,queue}.rs`).
+`resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-player/src/`),
+jump dispatch (`crates/mbv-daemon/src/core.rs`, `src/app/dispatch/action.rs`,
+`crates/mbv-player/src/transition.rs`), and the Playback run's
+forced-jump/re-seek state (`crates/mbv-player/src/run/{types,commands,events,queue}.rs`).
 
 ## The invariant
 

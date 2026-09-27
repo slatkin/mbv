@@ -15,5 +15,5 @@ impl App {
 }
 
 // The debounce and key-handling tests moved to the `SearchSidebarComponent`
-// unit tests in `src/app/components/search_sidebar.rs` (task 3.2). The
+// unit tests in `crates/mbv-components/src/search_sidebar.rs` (task 3.2). The
 // debounce is now component-owned, not App-owned.

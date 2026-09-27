@@ -1,7 +1,7 @@
 //! Tab-bar painter and tab-window math (task 2.1).
 //!
 //! The mounted `TabPanel` Interactive Component
-//! (`src/app/components/tab_panel.rs`) owns the tab bar's placement paint,
+//! (`crates/mbv-components/src/tab_panel.rs`) owns the tab bar's placement paint,
 //! hit regions and click resolution; this module is its painter plus the one
 //! shared visible-window computation, so the keyboard tab-cycling path
 //! (`App::ensure_tab_visible`) and the painted bar cannot drift.

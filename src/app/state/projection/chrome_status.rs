@@ -1,7 +1,7 @@
 //! Status-bar span builders (task 2.2).
 //!
 //! The mounted `StatusBarPanel` Interactive Component
-//! (`src/app/components/status_bar_panel.rs`) owns the status row's pill hit
+//! (`crates/mbv-components/src/status_bar_panel.rs`) owns the status row's pill hit
 //! regions, overflow drop-order and click/scroll resolution. The `impl App`
 //! methods here are content production only: they read app state and build
 //! the pill/right-segment spans the shell projects into the component.

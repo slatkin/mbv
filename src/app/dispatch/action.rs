@@ -8,7 +8,7 @@
 //! condition, and `dispatch`'s state transitions.
 //!
 //! The help overlay was converted to a `TuiRealm` Interactive Component
-//! (`src/app/components/help.rs`) and no longer routes through this `Command`
+//! (`crates/mbv-components/src/help.rs`) and no longer routes through this `Command`
 //! enum. Other modal handlers still speak directly to `App` and are expected to
 //! migrate to this same `Command` enum over time, one handler at a time.
 

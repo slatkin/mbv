@@ -83,8 +83,8 @@ impl EmbyClient {
     /// the media URL/content type the receiver should fetch, per
     /// cast-media-dispatch's "Emby media URLs are negotiated for the
     /// receiver" requirement. Deliberately separate from `get_playback_info`
-    /// above (used for local session tracking from `player_runtime.rs` and
-    /// player/controller.rs + player/submit.rs) so this addition touches none of those
+    /// above (used for local session tracking from `crates/mbv-player/src/report_worker.rs` and
+    /// crates/mbv-player/src/submit.rs) so this addition touches none of those
     /// call sites. Also carries the session/media-source identity the
     /// cast-session-control progress-reporting requirement needs, since
     /// there is no other caller (yet) whose shape this would disturb.
