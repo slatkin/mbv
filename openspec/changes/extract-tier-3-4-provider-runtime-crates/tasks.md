@@ -236,7 +236,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 7. `mbv-daemon`
 
-- [ ] 7.1 Create `crates/mbv-daemon`. Deps: `mbv-core`,
+- [x] 7.1 Create `crates/mbv-daemon`. Deps: `mbv-core`,
   `mbv-emby`, `mbv-emby-model`, `mbv-audiobookshelf`, `mbv-ctrl`,
   `mbv-config`, `mbv-queue`, `mbv-ids`, `mbv-net`, `mbv-ws`, `libc`, `uuid`,
   `serde_json`, `log`, plus others only if the compiler asks. Dev-deps:
@@ -250,7 +250,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   paths rewritten as `mbv_core::player::` (player still lives in mbv-core;
   group 6 rewires them to `mbv_player::`). Verify:
   `cargo nextest run -p mbv-daemon` passes.
-- [ ] 7.2 Delete `pub mod daemon;` from `mbv-core/src/lib.rs`. Add
+- [x] 7.2 Delete `pub mod daemon;` from `mbv-core/src/lib.rs`. Add
   `mbv-daemon` to the `[dependencies]` of the TUI (`src/local_daemon.rs`) and
   `mbvd`. Rewrite `mbv_core::daemon::` / `mbv_core::{…, daemon}` →
   `mbv_daemon`. Verify:
