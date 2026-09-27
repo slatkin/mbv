@@ -24,12 +24,6 @@ unicode-width.workspace = true
 time.workspace = true
 ratatui.workspace = true
 log.workspace = true
-mbv-cast = { path = "../mbv-cast" }
-mbv-ctrl = { path = "../mbv-ctrl" }
-mbv-emby = { path = "../mbv-emby" }
-mbv-player = { path = "../mbv-player" }
-mbv-remote-player = { path = "../mbv-remote-player" }
-mbv-ws = { path = "../mbv-ws" }
 
 [features]
 test = []
