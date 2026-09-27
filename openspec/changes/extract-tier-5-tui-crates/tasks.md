@@ -273,7 +273,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 7. `mbv-components`
 
-- [ ] 7.1 Create `crates/mbv-components`. Deps: `mbv-ui-msg`, `mbv-render`,
+- [x] 7.1 Create `crates/mbv-components`. Deps: `mbv-ui-msg`, `mbv-render`,
   `mbv-ui-model`, `mbv-images`, `mbv-theme`, `tuirealm`, `ratatui`,
   `ratatui-image`, `unicode-width`, and `mbv-text`, plus the Tier 1–4 crates
   the compiler asks for. Dev-deps: `rstest`, plus `mbv-emby-model` and
@@ -285,7 +285,7 @@ Each task below is its own commit, and the full gate passes after each.
   `cargo nextest run -p mbv-components` passes, and
   `rg 'crate::app|mbv_core::|\bApp\b' crates/mbv-components` shows no code
   hits (doc comments that mention `App::…` are allowed).
-- [ ] 7.2 Delete `pub mod components;` from `src/app.rs`. Add
+- [x] 7.2 Delete `pub mod components;` from `src/app.rs`. Add
   `mbv-components` to the root `[dependencies]`. Rewrite
   `crate::app::components::` → `mbv_components::` (~74 files). Verify: gate
   passes, and `rg 'app::components\b' src` is empty.
