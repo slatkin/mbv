@@ -166,10 +166,11 @@ impl Model {
                 crate::app::LibEvent::RestoreLibraryPosition { .. } => {
                     self.handle_restored_library_position_event(ev);
                     self.music_track_focus_request = Some(MusicTrackFocusRequest::Clear);
-                    // Saved position restored into the nav stack; re-anchor
-                    // the workspace cursor to it at this event rather than
-                    // by an equality test on the next content push.
-                    self.music_workspace_reanchor = true;
+                    // A saved nav-stack position is not a Music selection
+                    // source: the mounted owner's local selection is
+                    // authoritative, and startup restores only through
+                    // `reanchor_launch_state`. The stale album cursor this
+                    // event carries must never re-point the tree.
                     self.push_inline_search_content();
                 }
                 crate::app::LibEvent::HomeContentRefreshed(content) => {

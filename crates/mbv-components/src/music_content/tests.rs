@@ -1,6 +1,7 @@
 use self::artist_workspace::artist_workspace_owner;
 use self::tree_fixtures::{press, tree_owner};
 use super::*;
+use crate::list::tree_browser::TreeConsumed;
 use mbv_emby_model::test_support::make_item;
 use mbv_render::LibraryListRenderCtx;
 

@@ -3,9 +3,9 @@ use super::{
     AlbumCursorKind, EmbyItem, EmbySelectorKey, HeroContentData, InlineSearch, InlineSearchHost,
     Key, KeyEvent, KeyModifiers, LeafKeyResult, LibraryContentOwner, LibraryItemIdentity,
     LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent,
-    MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest, TreeConsumed,
-    TreeOperation,
+    MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest, TreeOperation,
 };
+use crate::list::tree_browser::TreeConsumed;
 use mbv_render::components::tv_wide::HeroImageState;
 
 impl InlineSearchHost for MusicContent {

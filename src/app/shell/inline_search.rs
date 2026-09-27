@@ -270,7 +270,20 @@ impl Model {
                         self.reanchor_tv_owner_selection(&series_id);
                     }
                 }
-                Some("music") => self.music_workspace_reanchor = true,
+                Some("music") => {
+                    // The grouped landing's last level resting item is the
+                    // resolved album; re-point the retained owner at that
+                    // stable target (never at a positional cursor).
+                    if let Some(album_id) = nav_stack
+                        .last()
+                        .and_then(|level| level.items.get(level.resting().cursor()))
+                        .map(|item| item.id.clone())
+                    {
+                        self.reanchor_music_owner_selection(
+                            mbv_components::music_tree_target::MusicTreeTarget::Album(album_id),
+                        );
+                    }
+                }
                 _ => {}
             }
         }

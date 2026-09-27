@@ -136,14 +136,16 @@ pub struct Model {
     /// `MusicTrackSelection`; consumed at the workspace content push.
     pub(in crate::app) pending_episode_selection: Option<PendingEpisodeSelection>,
     pub(in crate::app) pending_music_track_selection: Option<MusicTrackSelection>,
-    /// One-shot shell→component re-anchor trigger for the mounted Music
-    /// workspace's album cursor/scroll, consumed at the next
-    /// `push_music_workspace_content`. Set at the three navigation events that
-    /// legitimately move a shell-owned cursor -- group switch, recursive-album
-    /// activation, saved-position restore -- and once after mount. An ordinary
-    /// content push never adopts the shell cursor; this is the explicit
-    /// re-anchor that replaced the deleted echo-suppression test.
-    pub(in crate::app) music_workspace_reanchor: bool,
+    /// One-shot shell→component selection re-anchor for the mounted Music
+    /// owner, consumed at the next `push_music_workspace_content`. Set only
+    /// at a discrete navigation event that names a stable tree target
+    /// (recursive-album activation, `NavigateTo` landing, Inline Search
+    /// activation). Ordinary content pushes never re-point the tree: the
+    /// mounted owner's local selection is authoritative across refreshes, tab
+    /// changes, and async completions, and startup restores only through
+    /// `reanchor_launch_state`.
+    pub(in crate::app) pending_music_reanchor:
+        Option<mbv_components::music_tree_target::MusicTreeTarget>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -274,7 +276,7 @@ impl Model {
             music_track_focus_request: None,
             pending_episode_selection: None,
             pending_music_track_selection: None,
-            music_workspace_reanchor: false,
+            pending_music_reanchor: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
             acknowledged_home_latest_sources: std::collections::HashSet::new(),

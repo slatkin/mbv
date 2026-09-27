@@ -180,7 +180,6 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     model.sync_mounted_surfaces();
     expand_and_descend_to_first_album(&mut model);
 
-    model.music_workspace_reanchor = true;
     model.music_track_focus_request = Some(MusicTrackFocusRequest::Enter {
         album_id: "album-1".into(),
     });
@@ -410,7 +409,12 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
     assert_eq!(model.test_music_owner().album_cursor(), 1);
     // A non-trivial scroll offset, distinct from the cursor: proves the full
     // viewport position survives, not just the selected target.
-    model.test_music_owner_mut().re_anchor(10, 7);
+    model.test_music_owner_mut().browser.apply(
+        mbv_components::list::tree_browser::TreeOperation::AnchorSelection {
+            target: mbv_components::music_tree_target::MusicTreeTarget::Album("album-11".into()),
+            flow_offset: 7,
+        },
+    );
     assert_eq!(model.test_music_owner().album_cursor(), 10);
     // The carrier clamps the requested scroll to its own valid range for the
     // fixture's short flow; read the clamped value back through painted row
@@ -462,3 +466,100 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
 
 // ── Mouse: album-list gestures the shared tick-integration coverage does
 // not already exercise ────────────────────────────────────────────────────
+
+// ── Discrete navigation re-anchor (mirrors TV's `reanchor_tv_owner_selection`):
+// the shell re-points the retained Music tree only at a stable target, never
+// from a positional cursor. Recursive-album activation is the shell-side
+// landing path (Inline Search activation and `NavigateLanding::Album` both
+// funnel through it). ─────────────────────────────────────────────────────
+
+fn music_two_artist_app() -> crate::app::App {
+    let mut app = crate::app::tests::make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.music_levels = vec!["group".into(), "album".into()];
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.is_folder = true;
+    library.collection_type = "music".into();
+    let mut group = make_item("Soul", "MusicArtist");
+    group.id = "group-soul".into();
+    group.is_folder = true;
+    let mut aaliyah = make_item("Aaliyah", "MusicAlbum");
+    aaliyah.id = "album-aaliyah".into();
+    aaliyah.artist = "Aaliyah".into();
+    aaliyah.is_folder = true;
+    let mut pf = make_item("Pizzicato Five", "MusicAlbum");
+    pf.id = "album-pf".into();
+    pf.artist = "Pizzicato Five".into();
+    pf.is_folder = true;
+    app.libs.push(LibraryTab {
+        nav_stack: vec![
+            BrowseLevel {
+                fetched_rows: 0,
+                parent_id: "lib-music".into(),
+                title: "Music".into(),
+                items: vec![group],
+                total_count: 1,
+                resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: None,
+                music_grouping: None,
+            },
+            BrowseLevel {
+                fetched_rows: 0,
+                parent_id: "group-soul".into(),
+                title: "Soul".into(),
+                items: vec![aaliyah, pf],
+                total_count: 2,
+                resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: None,
+                music_grouping: None,
+            },
+        ],
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+#[test]
+fn recursive_album_activation_reanchors_the_tree_to_the_activated_album() {
+    let mut model = Model::new(music_two_artist_app());
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+    );
+
+    let nav_stack = std::mem::take(&mut model.app.libs[0].nav_stack);
+    model.on_recursive_album_activated("lib-music".into(), nav_stack);
+    model.push_music_workspace_content();
+
+    // The activated album's artist root is collapsed, so the programmatic
+    // selection lands on that visible root (the product rule) rather than the
+    // hidden leaf.
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Pizzicato Five"),
+        "the shell's discrete landing target re-points the retained tree",
+    );
+}

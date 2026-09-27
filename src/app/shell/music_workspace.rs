@@ -117,6 +117,15 @@ impl Model {
                     .get(level.resting().cursor())
                     .map(|item| item.id.clone())
             });
+        // Nav stack was replaced wholesale; its resting cursor now points at
+        // the activated album. Re-point the tree at that stable target, not a
+        // positional cursor (the shell's only selection write to a retained
+        // owner besides `reanchor_launch_state`).
+        if let Some(album_id) = activated_album_id.clone() {
+            self.reanchor_music_owner_selection(
+                mbv_components::music_tree_target::MusicTreeTarget::Album(album_id),
+            );
+        }
         // Bind the enter request to the activated album so it can retry once
         // the album's tracks arrive without ever firing on an album the user
         // moved to meanwhile.
@@ -141,10 +150,6 @@ impl Model {
             .and_then(|(_, track_id)| {
                 activated_album_id.map(|album_id| MusicTrackSelection { album_id, track_id })
             });
-        // Nav stack was replaced wholesale; its resting cursor now points at
-        // the activated album. Re-anchor the component explicitly, regardless
-        // of prior local moves.
-        self.music_workspace_reanchor = true;
     }
 
     pub(in crate::app) fn push_music_workspace_content(&mut self) {
@@ -164,11 +169,10 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        let (resting, cursor) = self.music_workspace_cursor(&key, index);
+        let cursor = self.music_workspace_cursor(index);
         let context = self.project_music_workspace_context(&key, index, cursor);
         self.fetch_music_workspace_album_tracks(&context);
-        let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
-            .then(|| resting.unwrap_or((context.list.cursor(), 0)));
+        let reanchor = self.pending_music_reanchor.take();
         let wide = self.app.is_right_panel_wide();
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
@@ -185,37 +189,35 @@ impl Model {
         self.apply_pending_music_track_selection();
     }
 
-    fn music_workspace_cursor(
+    /// One-shot target-id selection re-anchor for the mounted Music owner
+    /// (mirrors [`Model::reanchor_tv_owner_selection`]): consumed at the next
+    /// `push_music_workspace_content`, after the owner has reconciled that
+    /// push's content. Set only for a discrete navigation the shell performed
+    /// that names a stable tree target.
+    pub(in crate::app) fn reanchor_music_owner_selection(
         &mut self,
-        key: &LibraryKey,
-        index: usize,
-    ) -> (Option<(usize, usize)>, Option<usize>) {
-        // A fresh owner adopts the shell's resting cursor once; an existing
-        // owner retains its divergent local cursor when the projection repoints.
-        if !self.library_panel_has_owner(key) {
-            self.music_workspace_reanchor = true;
-        }
-        let resting = self.app.libs[index]
-            .nav_stack
-            .last()
-            .map(|level| (level.resting().cursor(), level.resting().scroll()));
-        let selected_target = (!self.music_workspace_reanchor)
-            .then(|| {
-                self.music_owner()
-                    .and_then(MusicContent::selected_item)
-                    .map(|item| item.id)
-            })
-            .flatten();
-        let cursor = self.app.libs[index]
-            .nav_stack
-            .last()
-            .and_then(|level| {
-                selected_target
-                    .as_deref()
-                    .and_then(|target| level.items.iter().position(|item| item.id == target))
-            })
-            .or_else(|| resting.map(|position| position.0));
-        (resting, cursor)
+        target: mbv_components::music_tree_target::MusicTreeTarget,
+    ) {
+        self.pending_music_reanchor = Some(target);
+    }
+
+    /// The shell-projected album snapshot cursor: the mounted owner's own
+    /// selected album resolved to a position in the current level. This feeds
+    /// the hero/Workspace projection only; the tree's selection is owned by
+    /// the component and is never re-pointed from this value
+    /// (`reanchor_music_owner_selection` is the sole shell-driven selection
+    /// write after startup). `None` (no album selected, e.g. an artist root)
+    /// projects the level's first album; the artist-detail projection
+    /// replaces it for an artist selection.
+    fn music_workspace_cursor(&self, index: usize) -> Option<usize> {
+        let selected_target = self
+            .music_owner()
+            .and_then(MusicContent::selected_item)
+            .map(|item| item.id);
+        let level = self.app.libs[index].nav_stack.last()?;
+        selected_target
+            .as_deref()
+            .and_then(|target| level.items.iter().position(|item| item.id == target))
     }
 
     fn project_music_workspace_context(
@@ -268,15 +270,15 @@ impl Model {
     fn push_music_workspace_owner(
         &mut self,
         context: mbv_render::MusicWideRenderCtx,
-        reanchor: Option<(usize, usize)>,
+        reanchor: Option<mbv_components::music_tree_target::MusicTreeTarget>,
         wide: bool,
         focused: bool,
         request: Option<MusicTrackFocusRequest>,
     ) -> Option<MusicTrackFocusRequest> {
         self.update_music_owner(|owner| {
             owner.set_content(context);
-            if let Some((cursor, scroll)) = reanchor {
-                owner.re_anchor(cursor, scroll);
+            if let Some(target) = reanchor {
+                owner.select_tree_target(target);
             }
             owner.set_focused(focused);
             owner.set_inline_track_focus_enabled(wide);

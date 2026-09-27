@@ -22,7 +22,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
-use crate::list::tree_browser::{TreeBrowser, TreeConsumed, TreeOperation};
+use crate::list::tree_browser::{TreeBrowser, TreeOperation};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
@@ -130,11 +130,6 @@ pub struct MusicContent {
     /// album and never clears or overwrites it. This is a destination
     /// translation of the shared owner's selected stable target.
     last_reported_album: Option<String>,
-    /// Whether this owner already adopted the shell's projected album position
-    /// (design D3 step 4). Later pushes never re-point the tree — the tree
-    /// owns selection, and an explicit shell re-anchor request (`re_anchor`)
-    /// adopts a navigated position.
-    tree_adopted: bool,
 }
 
 impl MusicContent {
@@ -169,7 +164,6 @@ impl MusicContent {
             tree_tracks: HashMap::new(),
             tree_track_revision: None,
             last_reported_album: None,
-            tree_adopted: false,
         }
     }
 
@@ -193,33 +187,11 @@ impl MusicContent {
             "music tree projection rejected: {:?}",
             reconciled.as_ref().err()
         );
-        // A fresh owner adopts the shell's projected album position once
-        // (design D3 step 4). The first push can be a loading/empty snapshot
-        // with no target to adopt, so the latch is set only when adoption
-        // actually resolved one; later pushes retry until it lands, then
-        // never re-point the tree — the tree owns selection, and an explicit
-        // shell re-anchor request (`re_anchor`) adopts a navigated position.
-        if !self.tree_adopted && reconciled.is_ok() {
-            let adopted = self
-                .context
-                .selected_album
-                .as_ref()
-                .and_then(|album| {
-                    self.context
-                        .list
-                        .items
-                        .iter()
-                        .position(|item| item.id == album.id)
-                })
-                .and_then(|position| self.context.album_targets.get(position).cloned());
-            if let Some(target) = adopted {
-                let transition = self.browser.apply(TreeOperation::AnchorSelection {
-                    target: MusicTreeTarget::Album(target),
-                    flow_offset: 0,
-                });
-                self.tree_adopted = transition.disposition == TreeConsumed::Consumed;
-            }
-        }
+        // The tree owns selection. A content push never re-points it: the
+        // mounted owner's local selection is authoritative across ordinary
+        // refreshes, tab changes, and async completions. The shell re-points
+        // the tree only for a discrete navigation event, through
+        // `select_tree_target`.
         // The Workspace rows and the Hero facts resolve from the same tree
         // selection (`resolved_workspace`/`resolved_hero_data`), so a
         // snapshot for another album or artist never paints under this title.
@@ -317,18 +289,19 @@ impl MusicContent {
         self.album_selection_request(kind)
     }
 
-    pub fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        let cursor = cursor.min(self.context.album_targets.len().saturating_sub(1));
-        if let Some(target) = self.context.album_targets.get(cursor).cloned() {
-            // The persisted offset is a settled-flow row (artist row +
-            // leaves), not a tree projection row: the tree owner translates
-            // it so an interleaved artist root can never anchor the viewport
-            // to the wrong album.
-            self.browser.apply(TreeOperation::AnchorSelection {
-                target: MusicTreeTarget::Album(target),
-                flow_offset: scroll,
-            });
-        }
+    /// One-shot shell-driven selection re-anchor (mirrors
+    /// `TvContent::select_series_target`): point the tree at a stable row
+    /// identity for a discrete navigation the shell performed — a recursive
+    /// album activation, an Inline Search activation, or a `NavigateTo`
+    /// landing. This is the only path that moves the owner's selection from
+    /// the shell; ordinary content pushes never re-point it (the owner's
+    /// local selection is authoritative). A target the owner does not hold is
+    /// an explicit no-op.
+    pub fn select_tree_target(&mut self, target: MusicTreeTarget) {
+        self.browser.apply(TreeOperation::AnchorSelection {
+            target,
+            flow_offset: 0,
+        });
         // A re-anchor is a discrete navigation transition: a cursor that no
         // longer rests on the armed root voids its Wide Workspace entry.
         self.void_artist_workspace_focus_off_root();

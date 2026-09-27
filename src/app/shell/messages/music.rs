@@ -62,10 +62,10 @@ impl super::super::Model {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     self.app.switch_music_group(lib_idx, delta);
                 }
-                // A group switch replaces the album level; re-anchor the
-                // workspace cursor at this nav event (mirrors the pill
-                // click path in `ShellRequest::EmbyLibraryPillClick`).
-                self.music_workspace_reanchor = true;
+                // A group switch replaces the album level; the component
+                // reconciles the new projection and selects its first visible
+                // root when its prior target does not survive. No shell
+                // re-anchor is issued.
                 self.push_music_workspace_content();
             }
             _ => return Some(request),

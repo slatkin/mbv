@@ -391,3 +391,204 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
         "a podcast library requests shows and shelves; a book library requests books"
     );
 }
+
+// ── Regression: a stale `library_position_state` album cursor must never
+// re-anchor the mounted Grouped Music owner. Artist selections never write
+// that album position, so a saved Soul level keeps pointing at a Pizzicato
+// Five album under a collapsed root; `3d1a0a5df` made programmatic selection
+// non-expanding, so re-anchoring onto that hidden album lands on that other
+// artist's collapsed root. The owner's local selection is authoritative, and
+// startup restores only through `reanchor_launch_state`. ─────────────────
+
+fn music_two_artist_items() -> (Vec<mbv_emby_model::EmbyItem>, Vec<mbv_emby_model::EmbyItem>) {
+    let mut group = mbv_emby_model::test_support::make_item("Soul", "MusicArtist");
+    group.id = "group-soul".into();
+    group.is_folder = true;
+    let mut aaliyah = mbv_emby_model::test_support::make_item("Aaliyah", "MusicAlbum");
+    aaliyah.id = "album-aaliyah".into();
+    aaliyah.artist = "Aaliyah".into();
+    aaliyah.is_folder = true;
+    let mut pf = mbv_emby_model::test_support::make_item("Pizzicato Five", "MusicAlbum");
+    pf.id = "album-pf".into();
+    pf.artist = "Pizzicato Five".into();
+    pf.is_folder = true;
+    (vec![group], vec![aaliyah, pf])
+}
+
+fn music_level(
+    parent_id: &str,
+    title: &str,
+    items: Vec<mbv_emby_model::EmbyItem>,
+    resting: usize,
+) -> crate::app::BrowseLevel {
+    crate::app::BrowseLevel {
+        fetched_rows: 0,
+        parent_id: parent_id.into(),
+        title: title.into(),
+        items,
+        total_count: 0,
+        resting: mbv_ui_model::browse::BrowseResting::new(resting, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    }
+}
+
+fn music_two_artist_stale_pf() -> App {
+    let mut app = make_app_stub();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.music_levels = vec!["group".into(), "album".into()];
+    app.emby_catalog_ready = true;
+    let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.is_folder = true;
+    library.collection_type = "music".into();
+    let (groups, albums) = music_two_artist_items();
+    app.libs.push(crate::app::LibraryTab {
+        nav_stack: vec![
+            music_level("lib-music", "Music", groups, 0),
+            music_level("group-soul", "Soul", albums, 1),
+        ],
+        ..crate::app::LibraryTab::new(library)
+    });
+    app
+}
+
+fn music_launch_state_aaliyah() -> mbv_config::TuiLaunchState {
+    mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::ServiceLibrary {
+            kind: mbv_queue::ServiceKind::Emby,
+            library_id: "lib-music".into(),
+        },
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
+        selector: Some(mbv_config::SelectorIdentity::Emby {
+            key: mbv_config::EmbySelectorKey::Group("group-soul".into()),
+        }),
+        item: Some(mbv_config::LibraryItemIdentity::Emby {
+            id: "Aaliyah".into(),
+        }),
+    }
+}
+
+/// Deliver the production stale-position restore: a saved Soul level whose
+/// `focused_item_id` is the Pizzicato Five album. `restore_library_position_levels`
+/// turns that id into the restored album level's resting cursor, exactly the
+/// stale cursor the owner must ignore.
+fn deliver_music_stale_pf_restore(model: &mut Model) {
+    let (groups, albums) = music_two_artist_items();
+    let position = mbv_queue::LibraryPosition {
+        levels: vec![
+            mbv_queue::LibraryPositionLevel {
+                parent_id: "lib-music".into(),
+                title: "Music".into(),
+                focused_item_id: Some("group-soul".into()),
+                cursor_index: 0,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                ..Default::default()
+            },
+            mbv_queue::LibraryPositionLevel {
+                parent_id: "group-soul".into(),
+                title: "Soul".into(),
+                focused_item_id: Some("album-pf".into()),
+                cursor_index: 1,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    model
+        .app
+        .library_position_state
+        .libraries
+        .insert("lib-music".into(), position.clone());
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            requested_position: position.clone(),
+            position,
+            nav_stack: vec![
+                music_level("lib-music", "Music", groups, 0),
+                music_level("group-soul", "Soul", albums, 1),
+            ],
+        })
+        .expect("lib event channel");
+    model.drain_lib_events();
+}
+
+#[test]
+fn music_launch_state_artist_survives_a_stale_saved_position_restore() {
+    let mut app = music_two_artist_stale_pf();
+    app.pending_launch_state = Some(music_launch_state_aaliyah());
+    app.pending_launch_tab_resolved = false;
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+    );
+
+    deliver_music_stale_pf_restore(&mut model);
+
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+        "a stale saved album cursor (bug: Pizzicato Five) must not override the launch-state artist"
+    );
+}
+
+#[test]
+fn music_owner_artist_survives_a_stale_restore_after_a_tab_round_trip() {
+    let mut model = Model::new(music_two_artist_stale_pf());
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+    );
+
+    model.app.tab = crate::app::TabSelection::Home;
+    model.sync_mounted_surfaces();
+    model.app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+        "the retained owner keeps its artist across a tab round trip",
+    );
+
+    deliver_music_stale_pf_restore(&mut model);
+
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_artist_launch_id()
+            .as_deref(),
+        Some("Aaliyah"),
+        "a stale saved album cursor (bug: Pizzicato Five) must not override the retained owner after a tab round trip"
+    );
+}
