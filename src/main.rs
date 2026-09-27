@@ -24,7 +24,10 @@ mod mpris;
 mod single_instance;
 mod tray;
 
-use app::{capture_launch_window, current_launch_secs, App, Model};
+use app::{
+    ui_model::home_latest::{capture_launch_window, current_launch_secs},
+    App, Model,
+};
 use config::load_config;
 use mbv_core::applog;
 use mbv_ctrl::player::PlayerEvent;

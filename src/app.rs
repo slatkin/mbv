@@ -1,10 +1,10 @@
 pub mod components;
-pub(crate) use self::state::home_latest::{capture_launch_window, current_launch_secs};
 mod dispatch;
 mod infra;
 mod input;
 pub mod render;
 pub(in crate::app) mod state;
+pub(crate) mod ui_model;
 
 pub(in crate::app) use self::infra::layout::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,
@@ -16,7 +16,7 @@ pub(in crate::app) use self::infra::signals::{
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
-pub(crate) use self::infra::{images, layout, palette, ui_util};
+pub(crate) use self::infra::{images, layout, palette};
 pub use self::state::app_struct::App;
 #[cfg(test)]
 mod test_seams;
@@ -32,36 +32,36 @@ use self::infra::images::resize::spawn_resize_worker;
 pub use self::shell::Model;
 use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;
-pub(in crate::app) use self::state::playback_target::NowPlayingStatus;
 #[cfg(test)]
-use self::state::types::browse::restore_library_position;
-use self::state::types::browse::{
+use self::ui_model::browse::restore_library_position;
+use self::ui_model::browse::{
     restore_library_position_with_fetched_rows_for_kind, AlbumIndex, AlbumIndexState,
     AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
 };
-use self::state::types::confirm::{ConfirmAction, ConfirmModal};
+use self::ui_model::confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]
-use self::state::types::context_menu::MultiSelectKind;
-use self::state::types::context_menu::{
+use self::ui_model::context_menu::MultiSelectKind;
+use self::ui_model::context_menu::{
     ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage,
 };
-use self::state::types::daemon_lost::DaemonLostModal;
-use self::state::types::events::{LibEvent, SessionEvent};
-use self::state::types::feed::{
+use self::ui_model::daemon_lost::DaemonLostModal;
+use self::ui_model::events::{LibEvent, SessionEvent};
+use self::ui_model::feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
-use self::state::types::library_tab::LibraryTab;
-use self::state::types::playback::{
+use self::ui_model::library_tab::LibraryTab;
+use self::ui_model::playback::{
     CastPlaybackTarget, DestinationLatestSource, LocalPlaybackTarget, PendingQueueAction,
     PlaybackState, PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget,
     RemoteSlotState, ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
-use self::state::types::player_tab::PlayerTab;
+use self::ui_model::player_tab::PlayerTab;
 #[cfg(test)]
-use self::state::types::settings::SettingKey;
-use self::state::types::settings::{PanelFocus, PanelMode};
-pub(crate) use self::state::types::sidebar::SidebarId;
-use self::state::types::tab_selection::TabSelection;
+use self::ui_model::settings::SettingKey;
+use self::ui_model::settings::{PanelFocus, PanelMode};
+#[cfg(test)]
+pub(in crate::app) use self::ui_model::sidebar::SidebarId;
+use self::ui_model::tab_selection::TabSelection;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
