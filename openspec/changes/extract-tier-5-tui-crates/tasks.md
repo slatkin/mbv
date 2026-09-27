@@ -324,7 +324,7 @@ Each task below is its own commit, and the full gate passes after each.
 - [x] 9.3 Run `make check-code-file-lines` before pushing. Split any file it
   flags along a responsibility seam, following the `splitting-files` skill.
   Verify: the check passes.
-- [ ] 9.4 Comment on issue #814. Summarise the Tier 5 crates, the graph
+- [x] 9.4 Comment on issue #814. Summarise the Tier 5 crates, the graph
   (`mbv-theme → mbv-images → mbv-ui-model → mbv-render → mbv-ui-msg →
   mbv-components → mbv`), and the deviation from the issue: the single
   `mbv-ui-msg` became `mbv-ui-model` below render plus `mbv-ui-msg` above it
