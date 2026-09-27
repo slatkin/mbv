@@ -87,12 +87,12 @@ cargo nextest run --workspace
 
 ## 4. Sessions sidebar paints `SessionTargetRow` (design D2)
 
-- [ ] 4.1 Add `SessionTargetRow` (fields exactly as in design D2) and
+- [x] 4.1 Add `SessionTargetRow` (fields exactly as in design D2) and
   `SessionTargetRow::key()` to `crates/mbv-ui-model/src/panel_targets.rs`.
   Move `PanelTarget` and `resolve_session_target` into the existing
   `src/app/state/panel_targets.rs`, and add `PanelTarget::row(&self) ->
   SessionTargetRow` there.
-- [ ] 4.2 Change `SessionsComponent` (`crates/mbv-components/src/sessions.rs`)
+- [x] 4.2 Change `SessionsComponent` (`crates/mbv-components/src/sessions.rs`)
   to store `Vec<SessionTargetRow>` and take `&[SessionTargetRow]` in
   `set_content`. `project_targets` reads the row fields in place of
   `session.*` / `receiver.*`. Its painted text must not change. Map
