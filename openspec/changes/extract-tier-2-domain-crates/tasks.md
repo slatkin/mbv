@@ -211,11 +211,11 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 7. `mbv-feed`
 
-- [ ] 7.1 Re-run `openspec list`; if `decompose-app-god-type` or
+- [x] 7.1 Re-run `openspec list`; if `decompose-app-god-type` or
   `prune-tui-test-suite` has unchecked tasks touching
   `src/app/state/types/feed.rs` or `src/app/infra/`, rebase onto their latest
   commit first. Verify: `git status` clean before starting.
-- [ ] 7.2 Create `crates/mbv-feed` (deps: `mbv-config`, `mbv-queue`,
+- [x] 7.2 Create `crates/mbv-feed` (deps: `mbv-config`, `mbv-queue`,
   `mbv-emby-model`, `mbv-net`, `mbv-text`, `ureq`, `time`, `serde`,
   `serde_json`, `log` as the compiler asks; dev-dep `mbv-config` with
   `features = ["test"]`). `git mv src/app/infra/feed_parse.rs` →
@@ -225,7 +225,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   Move `IdleFeedItem` from `src/app/state/types/feed.rs` into `lib.rs` with
   `pub` fields. Widen `pub(in crate::app)` items to `pub`; make `tls_agent`
   private. Verify: `cargo nextest run -p mbv-feed` passes.
-- [ ] 7.3 Delete `mod feed_parse;` from `src/app/infra.rs` and `pub mod
+- [x] 7.3 Delete `mod feed_parse;` from `src/app/infra.rs` and `pub mod
   feed_entry_state;` from `mbv-core/src/lib.rs`. Add `mbv-feed` to the TUI
   `[dependencies]`. Rewrite `crate::app::infra::feed_parse::` →
   `mbv_feed::`, `mbv_core::feed_entry_state::` → `mbv_feed::`, and
