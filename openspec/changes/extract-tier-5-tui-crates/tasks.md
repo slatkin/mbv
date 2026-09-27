@@ -305,7 +305,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 9. Docs and pre-push
 
-- [ ] 9.1 Update `AGENTS.md`:
+- [x] 9.1 Update `AGENTS.md`:
   - in the repository map, add one line each for `mbv-theme`, `mbv-images`,
     `mbv-ui-model`, `mbv-render`, `mbv-ui-msg`, and `mbv-components`;
   - repoint the `src/app/components/` and `src/app/render/` lines to
@@ -315,7 +315,7 @@ Each task below is its own commit, and the full gate passes after each.
 
   Verify: `rg 'src/app/(components|render)' AGENTS.md` is empty, and all six
   crate names appear.
-- [ ] 9.2 Repoint the 14 `src/app/(render|components)` paths in
+- [x] 9.2 Repoint the 14 `src/app/(render|components)` paths in
   `.agents/skills/mbv-frontend/SKILL.md`, and the path mentions in
   `docs/invariants/07-colour-value-sharing-is-deliberate.md` and
   `docs/invariants/09-completed-frame-hit-claim.md`, to the new crate paths.
