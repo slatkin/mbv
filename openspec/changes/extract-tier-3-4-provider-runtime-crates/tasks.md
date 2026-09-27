@@ -110,7 +110,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 2. `mbv-audiobookshelf`
 
-- [ ] 2.1 Create `crates/mbv-audiobookshelf`. Deps: `mbv-config`, `mbv-queue`,
+- [x] 2.1 Create `crates/mbv-audiobookshelf`. Deps: `mbv-config`, `mbv-queue`,
   `mbv-emby-model`, `mbv-text`, `mbv-net`, `ureq`, `serde`, `serde_json`,
   `tungstenite`, `log`, plus others only if the compiler asks. Dev-deps:
   `rstest`, `mbv-net` with `test`, `mbv-config` with `test`. `git mv` the
@@ -122,7 +122,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   `cargo nextest run -p mbv-audiobookshelf` passes and
   `rg 'mbv_core|crate::(api|cast|player|daemon|service_runtime)' crates/mbv-audiobookshelf`
   is empty.
-- [ ] 2.2 Delete `pub mod audiobookshelf;` from `mbv-core/src/lib.rs`. Add
+- [x] 2.2 Delete `pub mod audiobookshelf;` from `mbv-core/src/lib.rs`. Add
   `mbv-audiobookshelf` to `[dependencies]` in `mbv-core`, the TUI, and `mbvd`.
   Rewrite `crate::audiobookshelf::` (in `mbv-core`) and
   `mbv_core::audiobookshelf::` (TUI, `mbvd`) → `mbv_audiobookshelf::`. Verify:
