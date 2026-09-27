@@ -11,10 +11,10 @@ use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 #[derive(Debug, Default)]
 pub struct PlayerOwnerState {
-    pub(crate) queue: PlaybackQueue,
-    pub(crate) source: mbv_queue::QueueSource,
+    pub queue: PlaybackQueue,
+    pub source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
-    pub(crate) transitions: OwnerTransitionState,
+    pub transitions: OwnerTransitionState,
 }
 
 impl PlayerOwnerState {

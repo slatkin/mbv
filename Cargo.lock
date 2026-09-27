@@ -1711,6 +1711,7 @@ dependencies = [
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-daemon",
  "mbv-emby",
  "mbv-emby-model",
  "mbv-feed",
@@ -1827,6 +1828,27 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mbv-daemon"
+version = "0.21.2"
+dependencies = [
+ "libc",
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-config",
+ "mbv-core",
+ "mbv-ctrl",
+ "mbv-emby",
+ "mbv-emby-model",
+ "mbv-ids",
+ "mbv-net",
+ "mbv-queue",
+ "mbv-ws",
+ "rstest",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -1957,6 +1979,7 @@ dependencies = [
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
+ "mbv-daemon",
  "mbv-emby",
  "mbv-queue",
  "mimalloc",

@@ -343,7 +343,12 @@ impl Player {
         }
     }
 
-    pub(crate) fn advance_sequence_generation(&self) -> u64 {
+    /// Advance the active playback sequence generation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the status mutex is poisoned.
+    pub fn advance_sequence_generation(&self) -> u64 {
         let mut status = self.status.lock().unwrap();
         status.sequence_generation = status.sequence_generation.saturating_add(1);
         status.sequence_generation
@@ -370,8 +375,13 @@ impl Player {
         sent
     }
 
-    #[cfg(test)]
-    pub(crate) fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
+    /// Replace the command sender with a test observer and return its receiver.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the command sender mutex is poisoned.
+    #[cfg(any(test, feature = "test"))]
+    pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
         let (tx, rx) = mpsc::channel();
         *self.cmd_tx.lock().unwrap() = Some(tx);
         rx
@@ -429,7 +439,7 @@ impl Player {
     // type. Reads `audio_pipe_enabled` from `client.config` (rather than a
     // field cached on `Player`) so a setting toggled mid-session takes effect
     // on the very next play() call instead of requiring an app restart.
-    pub(crate) fn headless_for(&self, client: &EmbyClient, is_audio: bool) -> bool {
+    pub fn headless_for(&self, client: &EmbyClient, is_audio: bool) -> bool {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 

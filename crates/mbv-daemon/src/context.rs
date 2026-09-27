@@ -1,0 +1,95 @@
+/// Process policy for the shared Player-owner daemon core.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DaemonRole {
+    Local,
+    Packaged,
+}
+
+/// Owner-local Emby state. Constructing this value never authenticates; the
+/// daemon may start even when the configured server is unavailable.
+#[derive(Clone, Debug)]
+pub struct EmbyOwnerContext {
+    pub client: std::sync::Arc<std::sync::Mutex<mbv_emby::EmbyClient>>,
+    pub generation: mbv_core::service_runtime::SetupGeneration,
+    pub revision: u64,
+}
+
+impl EmbyOwnerContext {
+    #[must_use]
+    pub fn from_client(client: mbv_emby::EmbyClient, revision: u64) -> Self {
+        Self {
+            client: std::sync::Arc::new(std::sync::Mutex::new(client)),
+            generation: mbv_core::service_runtime::SetupGeneration::default(),
+            revision,
+        }
+    }
+
+    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
+        let setup = config
+            .emby_setup
+            .as_ref()
+            .ok_or_else(|| "Emby setup is missing from owner storage".to_string())?;
+        let token = mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby)
+            .ok_or_else(|| "Emby Service secret is unavailable".to_string())?;
+        if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
+            return Err("Emby setup is incomplete in owner storage".to_string());
+        }
+        let mut client = mbv_emby::EmbyClient::new(config.clone());
+        client.config.server_url.clone_from(&setup.server_url);
+        client.user_id.clone_from(&setup.user_id);
+        client.token = token;
+        Ok(Self::from_client(client, setup.revision))
+    }
+}
+
+/// Owner-local Audiobookshelf state. Constructing this value never
+/// authenticates; the daemon may start even when the configured server is
+/// unavailable.
+#[derive(Clone, Debug)]
+pub struct AudiobookshelfOwnerContext {
+    pub setup: mbv_config::AudiobookshelfSetup,
+    pub device_id: String,
+    pub generation: mbv_core::service_runtime::SetupGeneration,
+}
+
+impl AudiobookshelfOwnerContext {
+    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
+        let setup = config
+            .audiobookshelf_setup
+            .clone()
+            .ok_or_else(|| "Audiobookshelf setup is missing from owner storage".to_string())?;
+        let api_key = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+            .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
+        if setup.server_url.trim().is_empty() || api_key.trim().is_empty() {
+            return Err("Audiobookshelf setup is incomplete in owner storage".to_string());
+        }
+        Ok(Self {
+            setup,
+            device_id: mbv_emby::device_id(),
+            generation: mbv_core::service_runtime::SetupGeneration::default(),
+        })
+    }
+}
+
+/// Common startup input for Local and packaged daemons.
+#[derive(Clone, Debug)]
+pub struct DaemonStartupContext {
+    pub role: DaemonRole,
+    pub config: mbv_config::Config,
+    pub emby: Option<EmbyOwnerContext>,
+    pub audiobookshelf: Option<AudiobookshelfOwnerContext>,
+}
+
+impl DaemonStartupContext {
+    #[must_use]
+    pub fn new(config: mbv_config::Config, role: DaemonRole) -> Self {
+        let emby = EmbyOwnerContext::from_packaged_storage_result(&config).ok();
+        let audiobookshelf = AudiobookshelfOwnerContext::from_packaged_storage_result(&config).ok();
+        Self {
+            role,
+            config,
+            emby,
+            audiobookshelf,
+        }
+    }
+}

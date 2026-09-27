@@ -19,8 +19,6 @@ use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use mbv_core::daemon;
-
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
@@ -204,14 +202,14 @@ pub fn run_local_daemon_main() -> ! {
     // Player ownership does not depend on Remote Service availability. The
     // Local role retains its existing Control-credential contract.
     let show_systray_icon = config.show_systray_icon;
-    let player_handle: std::sync::Arc<std::sync::Mutex<Option<daemon::DaemonPlayerHandle>>> =
+    let player_handle: std::sync::Arc<std::sync::Mutex<Option<mbv_daemon::DaemonPlayerHandle>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let player_handle_for_tray = std::sync::Arc::clone(&player_handle);
 
-    daemon::run_with_options(
-        daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Local),
+    mbv_daemon::run_with_options(
+        mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Local),
         false,
-        daemon::DaemonRuntimeHooks {
+        mbv_daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(move |handle| {
                 *player_handle.lock().unwrap() = Some(handle);
             }),
@@ -223,7 +221,7 @@ pub fn run_local_daemon_main() -> ! {
                 crate::tray::spawn(shutdown_tx, handle.status, handle.command_tx)
             }),
         },
-    );
+    )
 }
 
 #[cfg(test)]

@@ -1,5 +1,4 @@
 pub mod applog;
-pub mod daemon;
 pub mod player;
 /// Compatibility re-export for callers that used the former flat module path.
 pub mod player_owner_state {

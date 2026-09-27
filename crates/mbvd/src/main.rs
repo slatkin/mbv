@@ -1,5 +1,5 @@
 use mbv_config as config;
-use mbv_core::{applog, daemon};
+use mbv_core::applog;
 use mimalloc::MiMalloc;
 use std::io::{self, BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
@@ -27,7 +27,7 @@ fn print_usage() {
 }
 
 fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else {
+    let Ok(s) = std::fs::read_to_string(mbv_daemon::pid_file()) else {
         return false;
     };
     let Ok(pid) = s.trim().parse::<u32>() else {
@@ -37,7 +37,7 @@ fn daemon_running() -> bool {
 }
 
 fn stop_daemon() -> Result<String, String> {
-    let path = daemon::pid_file();
+    let path = mbv_daemon::pid_file();
     let pid = std::fs::read_to_string(&path)
         .map_err(|error| format!("mbvd: no daemon running: {error}"))?
         .trim()
@@ -541,16 +541,16 @@ fn run() -> Result<(), String> {
     applog::init(is_system, log_path, log_level);
     log::info!(target: "startup", "mbvd starting");
 
-    daemon::run_with_options(
-        daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Packaged),
+    mbv_daemon::run_with_options(
+        mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
-        daemon::DaemonRuntimeHooks {
+        mbv_daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(|_| {}),
             // Deliberately a stub: mbvd runs as a system service with no
             // user session, so there's no tray to spawn into.
             on_tray_ready: Box::new(|_| None),
         },
-    );
+    )
 }
 
 fn main() {
