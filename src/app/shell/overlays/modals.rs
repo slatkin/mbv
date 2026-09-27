@@ -1,9 +1,9 @@
 use super::super::components::{
-    ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, ModalId, OverlayId,
-    SavePlaylistComponent,
+    ConfirmComponent, ContextMenuComponent, DaemonLostComponent, SavePlaylistComponent,
 };
 use super::super::Model;
 use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_msg::{ComponentId, ModalId, OverlayId};
 
 impl Model {
     fn confirm_id() -> ComponentId {

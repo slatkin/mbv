@@ -129,7 +129,7 @@ impl super::super::Model {
     fn handle_music_album_cursor(
         &mut self,
         target: usize,
-        kind: crate::app::components::msg::AlbumCursorKind,
+        kind: crate::app::ui_msg::AlbumCursorKind,
     ) {
         self.app
             .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);
@@ -164,12 +164,12 @@ impl super::super::Model {
 
     fn handle_music_artist_action(
         &mut self,
-        action: crate::app::components::msg::MusicTreeAction,
+        action: crate::app::ui_msg::MusicTreeAction,
         items: Vec<mbv_emby_model::EmbyItem>,
         origin: crate::app::ui_model::media_list::SelectionOrigin,
         unresolved_targets: &[String],
     ) {
-        use crate::app::components::msg::MusicTreeAction;
+        use crate::app::ui_msg::MusicTreeAction;
 
         self.app
             .set_panel_focus(crate::app::ui_model::settings::PanelFocus::Library);

@@ -12,8 +12,7 @@ use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
 use super::components::{
-    ComponentId, LibraryPlaybackPanel, Msg, QueueComponent, QueuePlaybackPanel, StatusBarPanel,
-    TabPanel, UserEvent,
+    LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
 use super::{App, DestinationLatestSource, Model, PanelFocus};
 use crate::app::components::library_panel::LibraryPanel;
@@ -26,6 +25,7 @@ use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
 use crate::app::render::{StatusBarModel, VisualModeIndicator};
 use crate::app::ui_model::playback_target::NowPlayingStatus;
+use crate::app::ui_msg::{ComponentId, Msg, UserEvent};
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
     let area = app

@@ -4,8 +4,6 @@
 use super::components::home_content::HomeContent as HomeOwner;
 #[cfg(test)]
 use super::components::library_panel::LibraryPanel;
-#[cfg(test)]
-use super::components::ComponentId;
 use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
@@ -13,6 +11,8 @@ use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_model::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
+#[cfg(test)]
+use crate::app::ui_msg::ComponentId;
 use mbv_queue::QueueItem;
 use std::time::Instant;
 

@@ -79,7 +79,7 @@ impl App {
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
     pub(in crate::app) fn set_audiobookshelf_book_chapter_focus(
-        _selection: Option<crate::app::components::msg::BookChapterTarget>,
+        _selection: Option<crate::app::ui_msg::BookChapterTarget>,
     ) {
     }
 
@@ -121,7 +121,7 @@ impl App {
     /// slot or session (book-playback spec).
     pub(in crate::app) fn activate_audiobookshelf_book_row_target(
         &mut self,
-        target: Option<crate::app::components::msg::BookChapterTarget>,
+        target: Option<crate::app::ui_msg::BookChapterTarget>,
     ) {
         let Some(target) = target else { return };
         let Some(index) = self.tab.audiobookshelf_index() else {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::msg::TvHit;
+use crate::app::ui_msg::TvHit;
 
 #[test]
 fn typed_tv_requests_keep_component_cursor_authoritative() {
@@ -97,7 +97,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
        request,
        Some(Msg::Shell(ref shell_boxed))
     if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
-           target: crate::app::components::tv_tree_target::TvTreeTarget::Show(_)
+           target: crate::app::ui_msg::TvTreeTarget::Show(_)
        })));
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 }

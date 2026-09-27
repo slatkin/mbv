@@ -4,7 +4,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest};
+use crate::app::components::QueueComponent;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
@@ -15,6 +15,7 @@ use crate::app::ui_model::context_menu::{
 };
 use crate::app::ui_model::daemon_lost::DaemonLostModal;
 use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 use mbv_emby_model::test_support::make_item;
 
@@ -406,7 +407,7 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     let outcome = harness.step();
     assert!(
         outcome.messages.contains(&Msg::Playback(
-            crate::app::components::PlaybackRequest::VolumeDelta(-5)
+            crate::app::ui_msg::PlaybackRequest::VolumeDelta(-5)
         )),
         "the volume intent reaches the shell: {:?}",
         outcome.messages

@@ -1,4 +1,4 @@
-use crate::app::ui_model::media_list::SelectionOrigin;
+use crate::app::ui_msg::SelectionSummary;
 use ratatui::layout::Position;
 
 /// Pointer surface input resolved by a mounted presentation. Convert this to
@@ -39,14 +39,6 @@ pub enum MediaListOperation<Target> {
 pub enum MediaListDisposition {
     Unhandled,
     Consumed,
-}
-
-/// Read-only presentation projection of a `MediaList` selection. Membership is
-/// deliberately private to the owner and cannot be reconstructed here.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SelectionSummary {
-    pub count: usize,
-    pub origin: SelectionOrigin,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

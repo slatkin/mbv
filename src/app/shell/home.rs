@@ -1,9 +1,9 @@
 //! Home Continue Watching sync and typed effects for the shell `Model`.
 
 use super::components::home_content::HomeContent;
-use super::components::ShellRequest;
 use super::Model;
 use crate::app::ui_model::library::LibraryKey;
+use crate::app::ui_msg::ShellRequest;
 use mbv_queue::QueueItem;
 
 impl Model {

@@ -13,13 +13,14 @@
 use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
-use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::arrangements::wide_hero::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
 use crate::app::ui_model::library::LibraryKey;
 use crate::app::ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
+use crate::app::ui_msg::SelectionSummary;
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
 use super::content::PanelHeroImagePaint;
 use super::hero::HeroContentData;

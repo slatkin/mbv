@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::OverlayId;
 use crate::app::tests::render_fixtures::make_movie_app;
 use crate::app::ui_model::tab_selection::TabSelection;
+use crate::app::ui_msg::OverlayId;
 
 // ADR 0024 D2 (task 2.3): the three-rung mouse-eligibility ladder.
 
@@ -42,7 +42,8 @@ fn mouse_eligibility_rung3_is_painted_destination_plus_playback() {
 
 #[test]
 fn mouse_eligibility_rung1_blocking_overlay_is_exclusive() {
-    use crate::app::components::{ConfirmComponent, ModalId};
+    use crate::app::components::ConfirmComponent;
+    use crate::app::ui_msg::ModalId;
     let mut model = eligibility_model();
     model
         .application
@@ -170,7 +171,8 @@ fn shell_routes_focus_to_the_active_destination_child() {
 /// to the destination child.
 #[test]
 fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
-    use crate::app::components::{ConfirmComponent, ModalId};
+    use crate::app::components::ConfirmComponent;
+    use crate::app::ui_msg::ModalId;
     let mut model = Model::new(make_movie_app());
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;

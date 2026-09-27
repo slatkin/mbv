@@ -22,14 +22,14 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LeafKeyResult, Msg, PlaybackRequest};
-use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::components::chrome_player::TransportAvailability;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::ui_model::playback::PlaybackState;
+use crate::app::ui_msg::UserEvent;
+use crate::app::ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 use mbv_queue::PlaybackTitleParts;
 
 #[derive(Clone, Debug, PartialEq)]

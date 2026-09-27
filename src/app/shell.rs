@@ -1,10 +1,7 @@
 use std::time::Duration;
 
-use super::components::msg::AlbumCursorKind;
-use super::components::{
-    ComponentId, Msg, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent,
-    UserEvent,
-};
+use super::components::{QueueBoundaryComponent, UiRootComponent};
+use super::ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use super::{
     components, palette, render, ui_model::sidebar::SidebarId, AlbumIndexState, App, BrowseLevel,
     ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState,
@@ -13,8 +10,6 @@ use super::{
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
-#[cfg(test)]
-pub(in crate::app) use crate::app::components::OverlayId;
 #[cfg(test)]
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
@@ -26,6 +21,9 @@ use crate::app::ui_model::home_latest::HomeLatestLaunchWindow;
 use crate::app::ui_model::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
+use crate::app::ui_msg::AlbumCursorKind;
+#[cfg(test)]
+pub(in crate::app) use crate::app::ui_msg::OverlayId;
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 

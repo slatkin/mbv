@@ -25,7 +25,7 @@ fn assert_settled_show_tree(
 fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
     use crate::app::components::library_panel::ListSlot;
     use crate::app::components::list::tree_browser::TreeOperation;
-    use crate::app::components::tv_tree_target::TvTreeTarget;
+    use crate::app::ui_msg::TvTreeTarget;
     use mbv_queue::TvContentMode;
 
     let mut season = make_item("Season 1", "Season");
@@ -131,8 +131,8 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
     use crate::app::components::library_panel::LibraryPanel;
     use crate::app::components::list::tree_browser::TreeOperation;
     use crate::app::components::media_list::MediaListSurfaceInput;
-    use crate::app::components::tv_tree_target::TvTreeTarget;
     use crate::app::ui_model::library::LibraryKey;
+    use crate::app::ui_msg::TvTreeTarget;
     use ratatui::layout::Rect;
     use tuirealm::component::Component;
 

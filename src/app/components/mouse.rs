@@ -11,7 +11,7 @@ pub mod hit;
 use tuirealm::event::{KeyModifiers, MouseEventKind};
 use tuirealm::subscription::{EventClause, MouseEventClause, Sub, SubClause};
 
-use super::{ComponentId, UserEvent};
+use crate::app::ui_msg::{ComponentId, UserEvent};
 
 /// The any-position mouse subscription clause.
 ///

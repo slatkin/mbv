@@ -10,10 +10,10 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
-use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
+use crate::app::ui_msg::UserEvent;
+use crate::app::ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 

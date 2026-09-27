@@ -13,9 +13,9 @@ use crate::app::components::library_panel::owner::{
 };
 use crate::app::components::library_panel::HeroContentData;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::sort_filter::LetterFilter;
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
 impl InlineSearchHost for EmbyLibraryContent {
@@ -48,7 +48,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         self.carrier.set_selection_origin(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
         Some(self.carrier.selection_summary())
     }
 

@@ -1,9 +1,8 @@
-use super::components::msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
-use super::components::{
-    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
-};
+use super::components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use super::Model;
 use crate::app::ui_model::confirm::ConfirmAction;
+use crate::app::ui_msg::{ComponentId, ModalId};
+use crate::app::ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl Model {

@@ -6,6 +6,7 @@
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported,
 };
+use crate::app::ui_msg::SelectionSummary;
 use std::time::Instant;
 
 use crate::app::ui_model::media_list::SelectionOrigin;
@@ -29,7 +30,7 @@ pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
 pub use types::{
     MediaListDisposition, MediaListOperation, MediaListSurfaceInput, MediaListTransition,
-    RowIntent, SelectionSummary, WideViewport,
+    RowIntent, WideViewport,
 };
 pub use wide::WideMediaList;
 

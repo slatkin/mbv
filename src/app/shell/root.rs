@@ -1,5 +1,6 @@
-use super::components::{ComponentId, ModalId, OverlayId, PopupId, UiRootComponent};
+use super::components::UiRootComponent;
 use super::Model;
+use crate::app::ui_msg::{ComponentId, ModalId, OverlayId, PopupId};
 
 impl Model {
     /// Overlay paint order is the canonical `OVERLAY_IDS` order filtered by

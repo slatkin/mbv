@@ -1,11 +1,11 @@
 use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
-use super::super::msg::{Msg, ShellRequest};
-use super::super::tv_tree_target::TvTreeTarget;
 use super::episode_rows::upcoming_episode_target;
 use super::TvContent;
 use crate::app::render::components::media_list::MediaSemanticState;
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_model::ui_util::natural_sort_key;
+use crate::app::ui_msg::TvTreeTarget;
+use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_emby_model::EmbyItem;
 
 impl TvContent {

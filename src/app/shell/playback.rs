@@ -1,7 +1,8 @@
-use super::components::{PlaybackProjection, PlaybackRequest};
+use super::components::PlaybackProjection;
 use super::Model;
 use super::{palette, PanelFocus};
 use crate::app::render::components::chrome_player::TransportAvailability;
+use crate::app::ui_msg::PlaybackRequest;
 
 impl Model {
     /// The shared transport projection both playback panels consume (task
@@ -114,7 +115,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::Msg;
+    use crate::app::ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -126,7 +127,7 @@ mod tests {
             Msg::Playback(PlaybackRequest::VolumeDelta(5)),
             Msg::Playback(PlaybackRequest::VolumeDelta(_))
         ));
-        let _ = Event::<super::super::components::UserEvent>::Keyboard(KeyEvent {
+        let _ = Event::<crate::app::ui_msg::UserEvent>::Keyboard(KeyEvent {
             code: Key::Char('m'),
             modifiers: KeyModifiers::NONE,
         });

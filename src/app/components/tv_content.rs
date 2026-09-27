@@ -21,8 +21,6 @@ use super::library_panel::{
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
-use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
-use super::tv_tree_target::TvTreeTarget;
 use crate::app::render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
@@ -32,6 +30,8 @@ use crate::app::render::{
 use crate::app::ui_model::ui_util::{
     fmt_duration_gutter, fmt_publish_date_short, natural_sort_key,
 };
+use crate::app::ui_msg::TvTreeTarget;
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::QueueItem;

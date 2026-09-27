@@ -9,11 +9,7 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
-use crate::app::components::{
-    ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
-    TerminalObserverEvent, UserEvent,
-};
+use crate::app::components::SearchSidebarComponent;
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
@@ -21,6 +17,11 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::ui_model::confirm::{ConfirmAction, ConfirmModal};
 use crate::app::ui_model::overlay::OverlayRequest;
+use crate::app::ui_msg::{
+    ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
+    UserEvent,
+};
+use crate::app::ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 fn key(code: Key) -> Event<UserEvent> {

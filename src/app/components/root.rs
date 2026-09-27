@@ -7,21 +7,23 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
 
-use super::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
+use crate::app::ui_msg::{
+    ComponentId, ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent,
+};
 
 const OVERLAY_IDS: &[ComponentId] = &[
-    ComponentId::Overlay(super::OverlayId::Settings),
-    ComponentId::Overlay(super::OverlayId::Playlists),
-    ComponentId::Modal(super::ModalId::SavePlaylist),
-    ComponentId::Overlay(super::OverlayId::Help),
-    ComponentId::Modal(super::ModalId::Confirm),
-    ComponentId::Modal(super::ModalId::DaemonLost),
-    ComponentId::Overlay(super::OverlayId::ContextMenu),
-    ComponentId::Popup(super::PopupId::Multiselect),
-    ComponentId::Popup(super::PopupId::LibraryRoutes),
-    ComponentId::Popup(super::PopupId::FeedManage),
-    ComponentId::Overlay(super::OverlayId::Search),
-    ComponentId::Overlay(super::OverlayId::Sessions),
+    ComponentId::Overlay(OverlayId::Settings),
+    ComponentId::Overlay(OverlayId::Playlists),
+    ComponentId::Modal(ModalId::SavePlaylist),
+    ComponentId::Overlay(OverlayId::Help),
+    ComponentId::Modal(ModalId::Confirm),
+    ComponentId::Modal(ModalId::DaemonLost),
+    ComponentId::Overlay(OverlayId::ContextMenu),
+    ComponentId::Popup(PopupId::Multiselect),
+    ComponentId::Popup(PopupId::LibraryRoutes),
+    ComponentId::Popup(PopupId::FeedManage),
+    ComponentId::Overlay(OverlayId::Search),
+    ComponentId::Overlay(OverlayId::Sessions),
 ];
 
 /// Root routing owns overlay z-order from a fixed canonical mount order;

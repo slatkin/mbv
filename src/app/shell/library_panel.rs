@@ -14,12 +14,12 @@ use super::components::book_content::BookContent;
 use super::components::library_panel::owner::LaunchSelector;
 use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
-use super::components::ComponentId;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::library::{LibraryKey, LibraryKind};
 use crate::app::ui_model::playback::DestinationLatestSource;
+use crate::app::ui_msg::ComponentId;
 use mbv_queue::ServiceKind;
 
 impl Model {

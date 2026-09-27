@@ -5,8 +5,8 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use super::EmbyLibraryContent;
 use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::ui_model::sort_filter::LetterFilter;
+use crate::app::ui_msg::{Msg, ShellRequest, TerminalObserverEvent};
 use mbv_emby_model::EmbyItem;
 
 impl EmbyLibraryContent {

@@ -8,9 +8,9 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
-use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
+use crate::app::ui_msg::UserEvent;
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use mbv_emby_model::EmbyItem;
 
 pub struct PlaylistsComponent {

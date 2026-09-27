@@ -160,7 +160,7 @@ impl LibraryContentOwner for TvContent {
         self.carrier.set_selection_origin(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
         Some(self.carrier.selection_summary())
     }
 

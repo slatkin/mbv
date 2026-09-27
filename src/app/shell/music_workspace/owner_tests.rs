@@ -8,9 +8,9 @@
 use super::*;
 use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::msg::AlbumCursorKind;
-use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::tests::render_fixtures::make_music_group_app;
+use crate::app::ui_msg::AlbumCursorKind;
+use crate::app::ui_msg::{ComponentId, Msg, ShellRequest};
 use crate::app::{LibraryTab, PanelFocus};
 use mbv_emby_model::test_support::make_item;
 use ratatui::backend::TestBackend;

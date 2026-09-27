@@ -7,10 +7,10 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::components::{OverlayId, UserEvent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::ui_msg::{OverlayId, UserEvent};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -59,9 +59,7 @@ fn configured_rebind_fires_through_tick() {
         harness
             .model()
             .application
-            .mounted(&crate::app::components::ComponentId::Overlay(
-                OverlayId::Help
-            )),
+            .mounted(&crate::app::ui_msg::ComponentId::Overlay(OverlayId::Help)),
         "Help must be mounted after the configured chord"
     );
 
@@ -80,9 +78,7 @@ fn configured_rebind_fires_through_tick() {
     assert!(!harness
         .model()
         .application
-        .mounted(&crate::app::components::ComponentId::Overlay(
-            OverlayId::Help
-        )));
+        .mounted(&crate::app::ui_msg::ComponentId::Overlay(OverlayId::Help)));
 }
 
 /// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set; the default

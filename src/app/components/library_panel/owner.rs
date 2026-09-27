@@ -13,9 +13,10 @@ use std::collections::HashMap;
 use tuirealm::event::KeyEvent;
 
 use crate::app::components::inline_search::InlineSearchHost;
-use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
-use crate::app::components::msg::{LeafKeyResult, Msg};
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::ui_model::library::LibraryKey;
+use crate::app::ui_msg::SelectionSummary;
+use crate::app::ui_msg::{LeafKeyResult, Msg};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
 
 use super::content::LibraryPanelContent;

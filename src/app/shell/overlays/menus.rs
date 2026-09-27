@@ -1,8 +1,6 @@
 use super::super::components::library_panel::LibraryPanel;
-use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
-    ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
-    PopupId, QueueComponent, ShellRequest,
+    ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
 };
 use super::super::Model;
 use crate::app::ui_model::context_menu::{
@@ -10,6 +8,8 @@ use crate::app::ui_model::context_menu::{
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
 use crate::app::ui_model::settings::PanelFocus;
+use crate::app::ui_msg::ContextMenuIntent;
+use crate::app::ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
 use ratatui::layout::Rect;
 
 impl Model {

@@ -1,9 +1,9 @@
 use super::components::book_content::BookContent;
-use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 use super::Model;
 use super::TabSelection;
 use crate::app::ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use crate::app::ui_model::library::{LibraryKey, LibraryKind};
+use crate::app::ui_msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 use mbv_queue::ServiceKind;
 
 impl Model {

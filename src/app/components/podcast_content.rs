@@ -19,9 +19,6 @@ use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput};
-use super::msg::{
-    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
-};
 use crate::app::render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
@@ -32,6 +29,9 @@ use crate::app::ui_model::audiobookshelf_browse::{
     PodcastDisplayRow,
 };
 use crate::app::ui_model::ui_util::{fmt_publish_date_short, trunc_str};
+use crate::app::ui_msg::{
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
+};
 
 /// Shared max pill label length (`feeds_content.rs`): this owner is the one
 /// producer of the Selector row's labels, and show pills truncate like the

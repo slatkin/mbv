@@ -2,7 +2,7 @@ use super::{
     AlbumCursorKind, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent, MusicTreeTarget,
     RowIntent, ShellRequest, TreeOperation,
 };
-use crate::app::components::msg::TerminalObserverEvent;
+use crate::app::ui_msg::TerminalObserverEvent;
 
 impl MusicContent {
     /// Whether the destination's own tree filter owns pointer/keyboard input.

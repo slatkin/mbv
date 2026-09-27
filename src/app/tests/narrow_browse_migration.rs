@@ -23,7 +23,7 @@
 use super::*;
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, Msg, ShellRequest};
+use crate::app::ui_msg::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_emby_model::EmbyItem> {

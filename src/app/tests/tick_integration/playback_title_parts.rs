@@ -6,16 +6,17 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::components::{ComponentId, LibraryPlaybackPanel, QueuePlaybackPanel};
+use crate::app::components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::ui_msg::ComponentId;
 use crate::app::{App, PanelFocus, PanelMode};
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 
 /// An unbound chord: no policy arm claims it and the focused component
 /// ignores it, so the tick is real while mutating nothing.
-fn inert_key() -> Event<crate::app::components::UserEvent> {
+fn inert_key() -> Event<crate::app::ui_msg::UserEvent> {
     Event::Keyboard(KeyEvent {
         code: Key::Function(24),
         modifiers: KeyModifiers::NONE,

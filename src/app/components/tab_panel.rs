@@ -18,9 +18,9 @@ use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::user_event::UserEvent;
 use crate::app::render::{render_tab_bar, TabBarModel};
+use crate::app::ui_msg::UserEvent;
+use crate::app::ui_msg::{Msg, ShellRequest};
 
 /// The tab bar panel: paints the tab bar where `RootFrame` places it, retains
 /// its tab hit regions, and emits a tab-select `Msg` for clicks.

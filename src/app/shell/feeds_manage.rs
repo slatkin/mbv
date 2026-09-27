@@ -7,11 +7,12 @@
 //! dialog, config persistence — and the background add-feed channel that
 //! cannot live in the component (`Model::feeds_manage`).
 
-use super::components::msg::FeedsManageIntent;
-use super::components::{ComponentId, FeedsManageComponent, PopupId};
+use super::components::FeedsManageComponent;
 use crate::app::ui_model::feeds_manage::{
     FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
 };
+use crate::app::ui_msg::FeedsManageIntent;
+use crate::app::ui_msg::{ComponentId, PopupId};
 use mbv_config::FeedSubscription;
 
 fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {

@@ -7,15 +7,16 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::msg::PlaybackRequest;
-use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
+use crate::app::components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::ui_model::playback::PlaybackState;
+use crate::app::ui_msg::PlaybackRequest;
+use crate::app::ui_msg::{ComponentId, Msg};
 use crate::app::{PanelFocus, PanelMode};
 use mbv_ctrl::player::PlayerEvent;
 
-fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
+fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::ui_msg::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column,

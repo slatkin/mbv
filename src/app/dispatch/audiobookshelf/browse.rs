@@ -312,7 +312,7 @@ impl App {
     pub(in crate::app) fn play_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &crate::app::ui_msg::PodcastEpisodeTarget,
     ) {
         let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
             return;
@@ -330,7 +330,7 @@ impl App {
     pub(in crate::app) fn enqueue_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &crate::app::ui_msg::PodcastEpisodeTarget,
     ) {
         let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
             return;
@@ -413,7 +413,7 @@ impl App {
             .to_owned();
         self.selected_audiobookshelf_queue_item_target(
             audiobookshelf_library_index,
-            &crate::app::components::msg::PodcastEpisodeTarget::new(
+            &crate::app::ui_msg::PodcastEpisodeTarget::new(
                 episode.library_item_id.clone(),
                 episode.episode_id.clone(),
             ),
@@ -423,7 +423,7 @@ impl App {
     pub(in crate::app) fn selected_audiobookshelf_queue_item_target(
         &self,
         audiobookshelf_library_index: usize,
-        target: &crate::app::components::msg::PodcastEpisodeTarget,
+        target: &crate::app::ui_msg::PodcastEpisodeTarget,
     ) -> Option<QueueItem> {
         if target.library_item_id().trim().is_empty() || target.episode_id().trim().is_empty() {
             return None;

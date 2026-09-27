@@ -5,6 +5,7 @@ mod input;
 pub mod render;
 pub(in crate::app) mod state;
 pub(crate) mod ui_model;
+pub(crate) mod ui_msg;
 
 pub(in crate::app) use self::infra::layout::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,

@@ -5,7 +5,7 @@ impl super::super::Model {
     pub(super) fn refresh_visual_selection(&mut self) {
         let summary = if self.app.effective_panel_focus() == PanelFocus::Queue {
             self.application
-                .get_component(&crate::app::components::ComponentId::Queue)
+                .get_component(&crate::app::ui_msg::ComponentId::Queue)
                 .and_then(|component| {
                     component
                         .as_any()
@@ -14,7 +14,7 @@ impl super::super::Model {
                 .map(crate::app::components::queue::QueueComponent::selection_summary)
         } else {
             self.application
-                .get_component_mut(&crate::app::components::ComponentId::Library)
+                .get_component_mut(&crate::app::ui_msg::ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
                 .and_then(
                     crate::app::components::library_panel::panel::LibraryPanel::focused_summary,

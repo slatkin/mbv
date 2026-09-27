@@ -1,10 +1,9 @@
 use super::super::components::{
-    ComponentId, HelpComponent, OverlayId, PlaylistsComponent, SearchSidebarComponent,
-    SessionsComponent, SettingsComponent,
+    HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent, SettingsComponent,
 };
-use super::super::components::{Msg, UserEvent};
 use super::super::Model;
 use super::super::SidebarId;
+use crate::app::ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 use tuirealm::component::AppComponent;
 
 impl Model {

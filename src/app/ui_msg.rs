@@ -8,18 +8,23 @@
 //!
 //! Task 8.3 split the per-family request/intent enums into submodules so
 //! this file stays below the 800-line cap. Re-exports preserve the
-//! `crate::app::components::msg::TypeName` import path used throughout the
+//! `crate::app::ui_msg::TypeName` import path used throughout the
 //! codebase; nothing else had to change.
 
 use tuirealm::event::KeyEvent as TuiKeyEvent;
 
+mod component_id;
 mod hit_regions;
 mod intents;
 mod playback;
 mod queue;
+mod selection;
 mod service;
 mod shell;
+mod tv_tree_target;
+mod user_event;
 
+pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 pub use self::hit_regions::TvHit;
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
@@ -28,8 +33,11 @@ pub use self::intents::{
 };
 pub use self::playback::PlaybackRequest;
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
+pub use self::selection::SelectionSummary;
 pub use self::service::ServiceRequest;
 pub use self::shell::ShellRequest;
+pub(crate) use self::tv_tree_target::TvTreeTarget;
+pub use self::user_event::UserEvent;
 
 /// Result of handling a key at a leaf component.  The disposition is
 /// independent from an optional cross-authority request: local mutations can

@@ -14,12 +14,12 @@
 
 use super::components::library_panel::LibraryPanel;
 use super::components::tv_content::TvContent;
-use super::components::ComponentId;
-use super::components::ShellRequest;
 use super::render::TvWideRenderCtx;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
 use crate::app::ui_model::library::{LibraryKey, LibraryKind};
+use crate::app::ui_msg::ComponentId;
+use crate::app::ui_msg::ShellRequest;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 

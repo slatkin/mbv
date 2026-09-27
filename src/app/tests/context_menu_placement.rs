@@ -9,7 +9,8 @@
 use super::podcast::add_emby_movie_library;
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, ContextMenuComponent, Msg, OverlayId};
+use crate::app::components::ContextMenuComponent;
+use crate::app::ui_msg::{ComponentId, Msg, OverlayId};
 use ratatui::layout::Rect;
 
 fn library_app() -> App {
@@ -89,18 +90,16 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
-        Msg::Shell(Box::new(
-            crate::app::components::ShellRequest::RowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
-                    crate::app::ui_model::msg::HomeRowTarget {
-                        item_id: Some("id0".into()),
-                        source: None,
-                        from_continue_watching: true,
-                    },
-                ]),
-                None,
-            ),
-        )),
+        Msg::Shell(Box::new(crate::app::ui_msg::ShellRequest::RowContextMenu(
+            crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
+                crate::app::ui_model::msg::HomeRowTarget {
+                    item_id: Some("id0".into()),
+                    source: None,
+                    from_continue_watching: true,
+                },
+            ]),
+            None,
+        ))),
         &mut false,
         &mut false,
     );
@@ -202,18 +201,16 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
-        Msg::Shell(Box::new(
-            crate::app::components::ShellRequest::RowContextMenu(
-                crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
-                    crate::app::ui_model::msg::HomeRowTarget {
-                        item_id: Some("id0".into()),
-                        source: None,
-                        from_continue_watching: true,
-                    },
-                ]),
-                None,
-            ),
-        )),
+        Msg::Shell(Box::new(crate::app::ui_msg::ShellRequest::RowContextMenu(
+            crate::app::ui_model::context_menu::ContextMenuTargets::Home(vec![
+                crate::app::ui_model::msg::HomeRowTarget {
+                    item_id: Some("id0".into()),
+                    source: None,
+                    from_continue_watching: true,
+                },
+            ]),
+            None,
+        ))),
         &mut false,
         &mut false,
     );

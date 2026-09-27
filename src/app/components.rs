@@ -2,7 +2,6 @@
 //! (design `migrate-tui-to-tuirealm` D3–D5).
 
 pub mod book_content;
-pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
@@ -18,7 +17,6 @@ pub mod library_routes;
 pub mod list;
 pub mod media_list;
 pub mod mouse;
-pub mod msg;
 pub mod multiselect;
 pub mod music_content;
 pub mod music_tree_target;
@@ -35,8 +33,6 @@ pub mod settings;
 pub mod status_bar_panel;
 pub mod tab_panel;
 pub mod tv_content;
-pub(crate) mod tv_tree_target;
-pub mod user_event;
 
 pub(in crate::app) fn selector_markers(len: usize, latest_marker: bool) -> Vec<bool> {
     let mut markers = vec![false; len];
@@ -46,7 +42,6 @@ pub(in crate::app) fn selector_markers(len: usize, latest_marker: bool) -> Vec<b
     markers
 }
 
-pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
@@ -56,10 +51,6 @@ pub(in crate::app) use self::inline_search::SearchPool;
 pub(in crate::app) use self::library_playback_panel::{LibraryPlaybackPanel, PlaybackProjection};
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::mouse::{mouse_event_clause, mouse_sub};
-pub use self::msg::{
-    Msg, PlaybackRequest, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ServiceRequest,
-    SettingsIntent, ShellRequest, TerminalObserverEvent,
-};
 pub use self::multiselect::MultiselectComponent;
 #[cfg(test)]
 pub(in crate::app) use self::music_content::MusicContent;
@@ -76,7 +67,6 @@ pub use self::sessions::SessionsComponent;
 pub(in crate::app) use self::settings::{SettingsComponent, SettingsSnapshot};
 pub use self::status_bar_panel::StatusBarPanel;
 pub use self::tab_panel::TabPanel;
-pub use self::user_event::UserEvent;
 
 #[cfg(test)]
 mod tests;

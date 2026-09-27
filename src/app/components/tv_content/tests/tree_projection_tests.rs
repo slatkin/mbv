@@ -17,7 +17,7 @@ fn collect_targets<T: Clone + Eq + std::hash::Hash>(
 #[test]
 fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
     use crate::app::components::list::tree_browser::TreeOperation;
-    use crate::app::components::tv_tree_target::TvTreeTarget;
+    use crate::app::ui_msg::TvTreeTarget;
 
     let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
     let mut component = TvContent::new();
@@ -112,7 +112,7 @@ fn duplicate_child_identities_are_scoped_to_their_parent(
 #[test]
 fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() {
     use crate::app::components::list::tree_browser::TreeOperation;
-    use crate::app::components::tv_tree_target::TvTreeTarget;
+    use crate::app::ui_msg::TvTreeTarget;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
     use ratatui::Terminal;

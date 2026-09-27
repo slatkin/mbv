@@ -124,7 +124,7 @@ pub enum ShellRequest {
     /// normalized width and persists it once, after the gesture ends.
     ResizeListPaneEnd(u16),
     /// Project the focused list's count-only summary to the Status bar.
-    SelectionProjection(crate::app::components::media_list::SelectionSummary),
+    SelectionProjection(crate::app::ui_msg::SelectionSummary),
     /// Clear the active list's Visual selection from the status indicator.
     ClearMultiSelection(crate::app::ui_model::media_list::SelectionOrigin),
     /// Select the left-panel tab at the position the mounted `TabPanel`
@@ -242,7 +242,7 @@ pub enum ShellRequest {
     /// reuses its existing detail/season fetch guards. The mounted-tree intent
     /// is connected in task 3.1.
     TvTreeExpand {
-        target: super::super::tv_tree_target::TvTreeTarget,
+        target: crate::app::ui_msg::TvTreeTarget,
     },
     /// The podcast tab's committed pill or pill-scoped list interaction
     /// (reorganize-podcast-pill-navigation D3/D5): `Some(id)` carries a show

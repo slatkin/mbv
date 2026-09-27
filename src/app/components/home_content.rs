@@ -25,7 +25,7 @@ use crate::app::render::components::media_list::{MediaKind, MediaListRow, MediaS
 use crate::app::render::components::tv_wide::HeroImageState;
 use crate::app::ui_model::context_menu::ContextMenuTargets;
 
-use super::msg::{LeafKeyResult, Msg, ShellRequest};
+use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
 
@@ -259,7 +259,7 @@ impl HomeContent {
 
     fn claim_wheel(&mut self, input: MediaListSurfaceInput) -> Msg {
         self.delegate_row_local_input(input, None);
-        Msg::TerminalEvent(super::msg::TerminalObserverEvent::MouseClaimed)
+        Msg::TerminalEvent(crate::app::ui_msg::TerminalObserverEvent::MouseClaimed)
     }
 
     fn activate_pointer_target(&mut self, target: String) -> Msg {
@@ -336,7 +336,7 @@ impl LibraryContentOwner for HomeContent {
         self.carrier.set_selection_origin(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
         Some(self.carrier.selection_summary())
     }
 

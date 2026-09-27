@@ -1,17 +1,16 @@
-use super::components::{
-    ComponentId, PopupId, ServiceRequest, SettingsComponent, SettingsIntent, SettingsSnapshot,
-};
+use super::components::{SettingsComponent, SettingsSnapshot};
 use super::Model;
 use crate::app::render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use crate::app::ui_model::settings;
 use crate::app::ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
+use crate::app::ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
 use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
 
 impl Model {
     pub(in crate::app) fn update_settings_content(&mut self) {
-        let id = ComponentId::Overlay(super::components::OverlayId::Settings);
+        let id = ComponentId::Overlay(crate::app::ui_msg::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
         }
@@ -39,7 +38,7 @@ impl Model {
     }
 
     pub(in crate::app) fn render_settings_overlay(&mut self, frame: &mut ratatui::Frame) {
-        let id = ComponentId::Overlay(super::components::OverlayId::Settings);
+        let id = ComponentId::Overlay(crate::app::ui_msg::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
         }
