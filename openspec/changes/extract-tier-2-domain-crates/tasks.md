@@ -129,7 +129,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 4. `mbv-queue`
 
-- [ ] 4.1 Create `crates/mbv-queue` (deps: `mbv-emby-model`, `mbv-ids`,
+- [x] 4.1 Create `crates/mbv-queue` (deps: `mbv-emby-model`, `mbv-ids`,
   `serde`, `serde_json`/`log` only if the moved code uses them; dev-dep
   `rstest`). `git mv` `playback/queue.rs` → `src/lib.rs`,
   `playback/queue/items.rs` → `src/items.rs`,
@@ -138,7 +138,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `playback/tests.rs` + `playback/tests/` → `src/tests.rs` + `src/tests/`.
   Verify: the files exist under `crates/mbv-queue/src/` and not under
   `crates/mbv-core/src/playback/` except `playback.rs` (removed in 4.3).
-- [ ] 4.2 Into the same crate move, unchanged: `FeedKind` + its `impl` (from
+- [x] 4.2 Into the same crate move, unchanged: `FeedKind` + its `impl` (from
   `config/types_feed.rs`) → `src/kinds.rs`; `ServiceKind` + its `impl` (from
   `config/types_setup.rs`) → `src/kinds.rs`; all of
   `config/types_queue_state.rs` (`QueueSource`, `QueueState`, impls) →
@@ -146,7 +146,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `config.rs`); `QueueLineage` (from `ctrl.rs`, with its derives/impls) →
   `src/state.rs`. `lib.rs` gets `mod kinds; pub use kinds::*; mod state; pub use state::*;`.
   Verify: `cargo nextest run -p mbv-queue` passes.
-- [ ] 4.3 Delete `crates/mbv-core/src/playback.rs`, the empty `playback/`
+- [x] 4.3 Delete `crates/mbv-core/src/playback.rs`, the empty `playback/`
   directory, and the `pub mod playback;` / `playback_queue` /
   `playback_execution_sequence` lines in `lib.rs`. Add `mbv-queue` to
   `mbv-core`, TUI and (if the compiler asks) `mbvd` `[dependencies]`. Rewrite
