@@ -1904,7 +1904,6 @@ version = "0.21.2"
 dependencies = [
  "image",
  "log",
- "mbv-theme",
  "ratatui",
  "ratatui-image",
 ]
