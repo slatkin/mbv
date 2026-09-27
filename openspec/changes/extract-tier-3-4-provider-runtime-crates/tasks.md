@@ -268,7 +268,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 9. Docs and pre-push
 
-- [ ] 9.1 Update `AGENTS.md`'s repository map:
+- [x] 9.1 Update `AGENTS.md`'s repository map:
   - add one line each for `mbv-audiobookshelf`, `mbv-cast`, `mbv-emby`,
     `mbv-remote-player`, `mbv-player`, and `mbv-daemon`, in the style of the
     Tier 1 entries;
