@@ -15,7 +15,7 @@ use unicode_width::UnicodeWidthStr;
 pub(in crate::app) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 
 /// Resolve the glyph colour from the service's connection state.
-pub(crate) fn service_state_color(state: ServiceState, ready: Color) -> Color {
+pub(in crate::app) fn service_state_color(state: ServiceState, ready: Color) -> Color {
     match state {
         ServiceState::Ready => ready,
         ServiceState::NotConfigured => palette::TEXT_MUTED,
