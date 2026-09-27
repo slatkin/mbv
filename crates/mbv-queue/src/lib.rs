@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
@@ -36,8 +37,10 @@ impl QueueSlotId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QueueRevision(u64);
+
+static NEXT_REVISION: AtomicU64 = AtomicU64::new(0);
 
 impl QueueRevision {
     #[must_use]
@@ -45,13 +48,12 @@ impl QueueRevision {
         self.0
     }
 
-    #[must_use]
-    pub fn from_raw(raw: u64) -> Self {
-        Self(raw)
+    fn next() -> Self {
+        Self(NEXT_REVISION.fetch_add(1, Ordering::Relaxed))
     }
 
     fn bump(&mut self) {
-        self.0 = self.0.saturating_add(1);
+        *self = Self::next();
     }
 }
 
@@ -231,19 +233,10 @@ impl PlaybackQueue {
 
     #[must_use]
     pub fn from_queue_items(items: Vec<QueueItem>, active_index: Option<usize>) -> Self {
-        Self::from_queue_items_with_revision(items, active_index, QueueRevision::default())
-    }
-
-    #[must_use]
-    pub fn from_queue_items_with_revision(
-        items: Vec<QueueItem>,
-        active_index: Option<usize>,
-        revision: QueueRevision,
-    ) -> Self {
         let mut queue = Self {
             slots: Vec::with_capacity(items.len()),
             active_slot_id: None,
-            revision,
+            revision: QueueRevision::next(),
             next_slot_id: 1,
         };
 
@@ -264,7 +257,6 @@ impl PlaybackQueue {
     pub fn from_slot_items(
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
-        revision: QueueRevision,
     ) -> Self {
         let next_slot_id = slots
             .iter()
@@ -281,7 +273,7 @@ impl PlaybackQueue {
         Self {
             slots,
             active_slot_id,
-            revision,
+            revision: QueueRevision::next(),
             next_slot_id,
         }
     }

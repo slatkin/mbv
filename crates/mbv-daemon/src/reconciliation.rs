@@ -44,14 +44,12 @@ fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> 
         .filter(|slot| !drop(&slot.item))
         .collect();
     let active = active.filter(|id| retained.iter().any(|slot| slot.slot_id == *id));
-    let revision = queue.revision();
     *queue = PlaybackQueue::from_slot_items(
         retained
             .iter()
             .map(|slot| (slot.slot_id, slot.item.clone()))
             .collect(),
         active,
-        revision,
     );
     retained
 }

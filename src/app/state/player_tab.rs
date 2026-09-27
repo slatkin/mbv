@@ -41,11 +41,8 @@ impl PlayerTab {
             .iter()
             .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item.clone()))
             .collect();
-        let queue = PlaybackQueue::from_slot_items(
-            slots,
-            state.active_slot.map(QueueSlotId::from_raw),
-            mbv_queue::QueueRevision::from_raw(state.revision),
-        );
+        let queue =
+            PlaybackQueue::from_slot_items(slots, state.active_slot.map(QueueSlotId::from_raw));
         Self {
             queue_cursor: active_index.unwrap_or(0),
             queue,

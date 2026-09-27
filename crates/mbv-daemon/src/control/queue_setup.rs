@@ -289,8 +289,7 @@ pub(super) fn handle_queue_replace(
         ..
     } = &mut *ctx.owner;
     let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
-    *queue =
-        PlaybackQueue::from_slot_items(slots, active_slot, mbv_queue::QueueRevision::default());
+    *queue = PlaybackQueue::from_slot_items(slots, active_slot);
     *source = new_source;
     mint_queue_lineage(ctx.shared_queue);
     reset_slot_jumps(transitions, queued_transition_origin);

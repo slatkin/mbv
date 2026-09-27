@@ -493,6 +493,37 @@ mod tests {
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
+    fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836() {
+        let mut first = crate::app::tests::emby_unified_state(&make_items(2), 0);
+        first.active_slot = None;
+        first.revision = 7;
+        let mut app = make_app_stub();
+        app.player_tab = crate::app::PlayerTab::from_unified_state(&first);
+        let mut model = Model::new(app);
+
+        model.sync_queue();
+        let component = model
+            .application
+            .get_component(&ComponentId::Queue)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+            .expect("Queue component mounted");
+        assert_eq!(component.projected_row_states().len(), 2);
+
+        let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
+        replacement.active_slot = None;
+        replacement.revision = 7;
+        model.app.player_tab.set_unified_state(&replacement, 0);
+        model.sync_queue();
+
+        let component = model
+            .application
+            .get_component(&ComponentId::Queue)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+            .expect("Queue component mounted");
+        assert_eq!(component.projected_row_states().len(), 1);
+    }
+
+    #[test]
     fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
         // Task 3.4 (D9): the queue projection — not the painter — issues the
         // visual slot's fetch. One fetch per new now-playing key, and a

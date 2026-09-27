@@ -132,11 +132,7 @@ fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
             QueueItem::Emby(Box::new(item("dup"))),
         ),
     ];
-    let mut queue = PlaybackQueue::from_slot_items(
-        submitted,
-        Some(QueueSlotId::from_raw(10)),
-        QueueRevision::default(),
-    );
+    let mut queue = PlaybackQueue::from_slot_items(submitted, Some(QueueSlotId::from_raw(10)));
 
     // Then append the same content twice more with fresh owner ids.
     queue.append_with_id(
@@ -534,13 +530,12 @@ fn confirmed_active_slot_removal_clears_active_identity() {
 
 #[test]
 fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
-    let mut queue = PlaybackQueue::from_queue_items_with_revision(
+    let mut queue = PlaybackQueue::from_queue_items(
         vec![
             QueueItem::Emby(Box::new(item("a"))),
             QueueItem::Emby(Box::new(item("b"))),
         ],
         Some(0),
-        QueueRevision::from_raw(40),
     );
     let first = queue.slots()[0].slot_id;
     let second = queue.slots()[1].slot_id;
@@ -593,6 +588,16 @@ fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
 
     queue.clear_active_slot();
     assert!(queue.revision() > before_refresh);
+}
+
+#[test]
+fn independent_queues_mint_distinct_revisions_and_clones_share_them() {
+    let first = PlaybackQueue::default();
+    let second = PlaybackQueue::default();
+    let clone = first.clone();
+
+    assert_ne!(first.revision(), second.revision());
+    assert_eq!(first.revision(), clone.revision());
 }
 
 #[test]
