@@ -387,6 +387,20 @@ impl Player {
         rx
     }
 
+    /// Marks this player so every later `submit_queue_slots` keeps its
+    /// queue/status seeding but never spawns the player thread — whose
+    /// first act is a live `init_mpv` handle tests must not construct
+    /// (it raced process teardown at test exit; issue #757).
+    /// Used by externally built players that only feed the command-watching
+    /// paths, e.g. `cold_player()`.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn with_mpv_inhibited(self) -> Self {
+        self.mpv_inhibited
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self
+    }
+
     pub fn next(&self) -> bool {
         self.send_command(PlayerCommand::Next)
     }

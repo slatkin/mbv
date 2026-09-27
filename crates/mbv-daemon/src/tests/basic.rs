@@ -89,6 +89,10 @@ pub fn shared_queue_state() -> SharedQueueState {
 
 pub fn cold_player() -> Player {
     let (event_tx, _event_rx) = mpsc::channel::<PlayerEvent>();
+    // Never construct the real external from the cold-test player: an
+    // inhibited player keeps the queue/status seeding a cold-start submit
+    // performs but skips the player thread whose first act is a live
+    // `init_mpv` handle (it raced process teardown at test exit; issue #757).
     Player::new(
         String::new(),
         String::new(),
@@ -100,6 +104,7 @@ pub fn cold_player() -> Player {
         event_tx,
         None,
     )
+    .with_mpv_inhibited()
 }
 
 pub fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {

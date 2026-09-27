@@ -114,8 +114,8 @@ fn unified_queue_replace_clears_observed_active_slot() {
     );
     assert_eq!(owner.core.observed_active_slot(), None);
     assert_eq!(*shared_queue.observed_active_slot.lock().unwrap(), None);
-    // The spy receiver stays attached so the submit path's cold-start thread
-    // targets the test player, mirroring `replace_queue_succeeds_unconditionally`.
+    // The spy receiver stays attached so the submit path's cold-start branch
+    // keeps the spy installed, mirroring `replace_queue_succeeds_unconditionally`.
 }
 
 /// Shared wiring for the source-update tests: a cold player with a command
