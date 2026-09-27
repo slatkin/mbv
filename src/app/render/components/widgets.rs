@@ -9,11 +9,6 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
-// The main UI re-renders frequently while scrolling; prefer a cheaper filter in
-// these hot paths to reduce terminal image preparation stalls.
-pub(in crate::app) const RENDER_FILTER: ratatui_image::FilterType =
-    ratatui_image::FilterType::Triangle;
-
 // Configured music albums need the image worker's child-audio lookup; their
 // album containers do not reliably expose usable Primary images.
 pub(in crate::app) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];

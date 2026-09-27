@@ -1,4 +1,4 @@
-use super::widgets::RENDER_FILTER;
+use crate::app::infra::images::RENDER_FILTER;
 use crate::app::palette;
 use crate::app::state::projection::card::QueueCardProjection;
 use ratatui::layout::Rect;

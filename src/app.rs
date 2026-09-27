@@ -28,7 +28,7 @@ pub(in crate::app) use self::test_seams::{
 };
 mod shell;
 use self::dispatch::notify::ToastSeverity;
-use self::infra::resize::spawn_resize_worker;
+use self::infra::images::resize::spawn_resize_worker;
 pub use self::shell::Model;
 use self::state::app_init::AppInit;
 use self::state::bootstrap::bootstrap_unified_queue;

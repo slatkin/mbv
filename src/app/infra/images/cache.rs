@@ -1,5 +1,5 @@
 use super::{CachedImage, ImageFetchReq};
-use crate::app::infra::resize::{ResizeRegisterTx, ResizeResponseRx};
+use crate::app::infra::images::resize::{ResizeRegisterTx, ResizeResponseRx};
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 
