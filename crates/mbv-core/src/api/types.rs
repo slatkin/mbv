@@ -1,4 +1,4 @@
-pub use crate::config::Config;
+use crate::config::Config;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 
 #[must_use]
