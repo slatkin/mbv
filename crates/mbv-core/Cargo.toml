@@ -22,6 +22,7 @@ mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-net = { path = "../mbv-net" }
 mbv-text = { path = "../mbv-text" }
 mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-queue = { path = "../mbv-queue" }
 mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true

@@ -11,8 +11,8 @@ use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
-use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 use mbv_emby_model::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
+use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
@@ -156,9 +156,9 @@ impl PodcastContent {
         self.latest_items = latest
             .iter()
             .filter_map(|item| match item {
-                QueueItem::Audiobookshelf(
-                    mbv_core::playback_queue::AudiobookshelfItem::Episode(item),
-                ) => Some(item.clone()),
+                QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(item)) => {
+                    Some(item.clone())
+                }
                 _ => None,
             })
             .collect();

@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use crate::api::EmbyClient;
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
-use crate::playback_queue::QueueItem;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub struct RemotePlayer {
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<EmbyItem>>>,
     pub unified_queue: Arc<Mutex<Option<crate::ctrl::UnifiedQueueStateData>>>,
-    pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
+    pub queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
@@ -228,7 +228,7 @@ impl RemotePlayer {
         &self,
         items: Vec<QueueItem>,
         cursor: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) -> bool {
         let cursor = cursor.min(items.len().saturating_sub(1));
         {
@@ -261,7 +261,7 @@ impl RemotePlayer {
     pub fn play(
         &self,
         item: &EmbyItem,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
@@ -291,7 +291,7 @@ impl RemotePlayer {
         &self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
@@ -367,8 +367,8 @@ impl RemotePlayer {
     /// projection. A peer without the additive capability is refused locally.
     pub fn update_queue_source(
         &self,
-        source: crate::config::QueueSource,
-        lineage: crate::ctrl::QueueLineage,
+        source: mbv_queue::QueueSource,
+        lineage: mbv_queue::QueueLineage,
     ) -> Result<(), String> {
         if !self.supports_owner_queue_load() {
             return Err("daemon does not support owner queue source updates".to_string());
@@ -384,7 +384,7 @@ impl RemotePlayer {
         request_id: crate::ctrl::QueueLoadRequestId,
         slots: Vec<crate::ctrl::UnifiedQueueSlot>,
         cursor: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) -> Result<(), String> {
         if !self.supports_owner_queue_load() {
             return Err("daemon does not support owner-authoritative idle queue loads".to_string());
@@ -472,7 +472,7 @@ impl RemotePlayer {
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
-        let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
+        let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));

@@ -186,11 +186,11 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();
 
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    crate::config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_content_id: None,
@@ -219,11 +219,11 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
 
     // Seed an on-disk queue as if a previous session left one behind — this
     // session never touched the local queue tab (e.g. only browsed Home).
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    crate::config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_content_id: None,

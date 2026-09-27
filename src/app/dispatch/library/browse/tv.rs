@@ -7,7 +7,7 @@ type BrowseRefresh = (
     usize,
     crate::app::state::types::browse::LevelFetchKey,
     usize,
-    Option<mbv_core::config::TvContentMode>,
+    Option<mbv_queue::TvContentMode>,
 );
 trait TvLatestSource {
     fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String>;
@@ -134,25 +134,23 @@ impl App {
             .collect();
         for (lib_idx, key, loaded_count, tv_content_mode) in fetches {
             match tv_content_mode {
-                Some(mbv_core::config::TvContentMode::Latest) => {
+                Some(mbv_queue::TvContentMode::Latest) => {
                     self.spawn_tv_latest(
                         lib_idx,
                         key.parent_id.clone(),
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
-                Some(mbv_core::config::TvContentMode::Upcoming) => {
+                Some(mbv_queue::TvContentMode::Upcoming) => {
                     self.spawn_tv_upcoming(
                         lib_idx,
                         key.parent_id.clone(),
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
-                Some(
-                    mbv_core::config::TvContentMode::All
-                    | mbv_core::config::TvContentMode::Range(_),
-                )
-                | None => self.spawn_refresh(lib_idx, loaded_count, key),
+                Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
+                    self.spawn_refresh(lib_idx, loaded_count, key)
+                }
             }
         }
     }
@@ -282,8 +280,8 @@ mod tv_latest_tests {
     }
 
     #[rstest]
-    #[case::latest(mbv_core::config::TvContentMode::Latest)]
-    fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_core::config::TvContentMode) {
+    #[case::latest(mbv_queue::TvContentMode::Latest)]
+    fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_queue::TvContentMode) {
         let mut app = crate::app::tests::make_app_stub();
         let config = crate::config::Config {
             server_url: "http://127.0.0.1:1".into(),

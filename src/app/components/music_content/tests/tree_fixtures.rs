@@ -58,7 +58,7 @@ pub(super) fn tree_owner_with_tracks(
     owner.selection_origin = Some(SelectionOrigin::Library(
         crate::app::components::media_list::LibrarySelectionOrigin::Service(
             crate::app::components::library_panel::owner::LibraryKey::Service {
-                service: mbv_core::config::ServiceKind::Emby,
+                service: mbv_queue::ServiceKind::Emby,
                 library_id: "music-library".into(),
                 kind: crate::app::components::library_panel::owner::LibraryKind::Music,
             },

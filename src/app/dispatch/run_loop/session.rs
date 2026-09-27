@@ -131,7 +131,7 @@ impl App {
     ) {
         match result {
             Ok(id) if self.origin_is_current(origin) => {
-                let source = crate::config::QueueSource::Playlist {
+                let source = mbv_queue::QueueSource::Playlist {
                     id: Some(id),
                     name: name.to_string(),
                 };
@@ -162,7 +162,7 @@ impl App {
                 if self.origin_is_current(origin)
                     && self.queue_playlist_id() == source_playlist_id =>
             {
-                let source = crate::config::QueueSource::Playlist {
+                let source = mbv_queue::QueueSource::Playlist {
                     id: Some(id),
                     name: name.to_string(),
                 };

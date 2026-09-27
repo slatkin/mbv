@@ -13,8 +13,7 @@ fn invalid_setup_candidate_does_not_change_persisted_setup() {
     )
     .unwrap();
     let config_before = std::fs::read(crate::config::config_path()).unwrap();
-    let secret_before =
-        crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf);
+    let secret_before = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
 
     AudiobookshelfClient::validate_setup_bounded(
         "",
@@ -28,7 +27,7 @@ fn invalid_setup_candidate_does_not_change_persisted_setup() {
         config_before
     );
     assert_eq!(
-        crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf),
+        crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf),
         secret_before
     );
 }

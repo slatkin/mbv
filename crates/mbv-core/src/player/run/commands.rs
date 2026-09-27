@@ -5,11 +5,11 @@ use super::{
     start_queue_playback, volume_decision, LoadState, PlaybackOrigin, PlaybackRun, ProgressGuard,
     StopReport,
 };
-use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
-use crate::playback_queue::{QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent};
 use libmpv2::Mpv;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::{ExecSlot, ExecutionSequence};
+use mbv_queue::{QueueItem, QueueSlotId};
 use std::time::Instant;
 
 impl PlaybackRun {

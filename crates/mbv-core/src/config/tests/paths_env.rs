@@ -5,9 +5,10 @@ use crate::config::{
     load_last_remote_connection_at, load_queue_state, mpv_ipc_path, parse_config, queue_state_path,
     save_config_settings_at, save_home_latest_launch, save_last_remote_connection,
     save_last_remote_connection_at, save_queue_state, write_config_text_at, Config,
-    LastRemoteConnection, QueueSource, QueueState, TestStateDirGuard,
-    DEFAULT_SYSTEM_DAEMON_TCP_LISTEN,
+    LastRemoteConnection, TestStateDirGuard, DEFAULT_SYSTEM_DAEMON_TCP_LISTEN,
 };
+#[cfg(test)]
+use mbv_queue::{QueueSource, QueueState};
 // Path-routing and save/load error-path tests. Included into `config::tests`
 // (see `config.rs`).
 

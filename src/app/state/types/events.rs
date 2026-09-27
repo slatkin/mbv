@@ -246,8 +246,8 @@ pub(in crate::app) enum LibEvent {
     },
     RestoreLibraryPosition {
         lib_idx: usize,
-        requested_position: crate::config::LibraryPosition,
-        position: crate::config::LibraryPosition,
+        requested_position: mbv_queue::LibraryPosition,
+        position: mbv_queue::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     },
     PlaylistsLoaded(Vec<EmbyItem>),

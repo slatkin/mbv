@@ -169,7 +169,7 @@ fn stale_stopped_run_observation_is_rejected() {
 fn assert_stale_completion_unchanged(
     owner: &DaemonPlayerOwner,
     shared_queue: &SharedQueueState,
-    slot: crate::playback_queue::QueueSlotId,
+    slot: mbv_queue::QueueSlotId,
     original_len: usize,
     original_position: i64,
 ) {
@@ -313,7 +313,7 @@ fn stale_track_changed_report_leaves_queue_and_observed_slot_unchanged() {
     // caller (daemon_run's TrackChanged arm) emits nothing and canonical
     // queue + observed active slot are untouched (design D6, no clamp, no
     // neighbour fallback).
-    let stale = crate::playback_queue::QueueSlotId::from_raw(9_999_999);
+    let stale = mbv_queue::QueueSlotId::from_raw(9_999_999);
     assert!(owner.core.observe_track_change(stale).is_none());
     assert_eq!(owner.core.queue.active_slot_id(), Some(real));
     assert_eq!(owner.core.observed_active_slot(), Some(real));

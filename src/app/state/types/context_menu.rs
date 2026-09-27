@@ -1,5 +1,5 @@
-use mbv_core::playback_queue::{FeedEntry, QueueSlotId};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::{FeedEntry, QueueSlotId};
 
 #[derive(Clone, Debug)]
 pub(in crate::app) enum BulkRemoveTarget {

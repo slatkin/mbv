@@ -3,8 +3,8 @@ use super::super::{
     Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
 };
 use super::{PlaybackRun, ProgressGuard};
-use crate::playback_queue::QueueItem;
 use libmpv2::Mpv;
+use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
 
 fn command_quit_async(mpv: &Mpv) {

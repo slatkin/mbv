@@ -5,7 +5,7 @@
 use super::*;
 
 pub fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
         AudiobookshelfQueueItem {
             library_item_id: library_item_id.into(),
             episode_id: episode_id.into(),

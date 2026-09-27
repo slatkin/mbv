@@ -55,7 +55,7 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
         mime_type: Some("video/mp4".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Video),
+        feed_kind: Some(mbv_queue::FeedKind::Video),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -82,7 +82,7 @@ pub fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
-        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
+        lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
     }
 }

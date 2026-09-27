@@ -156,9 +156,7 @@ fn item_level_derivation_makes_music_rows_ordinary() {
             "a {item_type} row ignores both its played flag and its resume position"
         );
         assert_eq!(
-            MediaSemanticState::from_queue_item(&mbv_core::playback_queue::QueueItem::Emby(
-                Box::new(item)
-            )),
+            MediaSemanticState::from_queue_item(&mbv_queue::QueueItem::Emby(Box::new(item))),
             MediaSemanticState::Ordinary,
             "the queue's music row is ordinary too"
         );
@@ -179,9 +177,7 @@ fn item_level_derivation_makes_music_rows_ordinary() {
         MediaSemanticState::active(Some(50))
     );
     assert_eq!(
-        MediaSemanticState::from_queue_item(&mbv_core::playback_queue::QueueItem::Emby(Box::new(
-            film
-        ))),
+        MediaSemanticState::from_queue_item(&mbv_queue::QueueItem::Emby(Box::new(film))),
         MediaSemanticState::active(Some(50))
     );
 }

@@ -29,7 +29,7 @@ fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, commands) =
         crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("old-playlist".into()),
         name: "Old playlist".into(),
     };
@@ -43,7 +43,7 @@ fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
             .try_iter()
             .find(|command| matches!(command, CtrlCmd::UnifiedQueueReplace { .. })),
         Some(CtrlCmd::UnifiedQueueReplace {
-            source: crate::config::QueueSource::Unknown,
+            source: mbv_queue::QueueSource::Unknown,
             ..
         })
     ));

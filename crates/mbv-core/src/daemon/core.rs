@@ -12,9 +12,9 @@ use crate::ctrl::{
     PlaybackIntentOutcome, PlaybackRequestId,
 };
 use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
@@ -62,7 +62,7 @@ pub(super) enum DaemonEvent {
     PlaybackResolved {
         start_idx: usize,
         start_ticks: i64,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         client_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
@@ -367,7 +367,7 @@ pub(crate) struct PendingIdleQueueLoad {
     pub(super) request_id: crate::ctrl::QueueLoadRequestId,
     pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
     pub(super) cursor: usize,
-    pub(super) source: crate::config::QueueSource,
+    pub(super) source: mbv_queue::QueueSource,
     pub(super) reply_tx: CtrlSender,
     pub(super) stopped_run: crate::ctrl::PlaybackGeneration,
     pub(super) started_at: Instant,
@@ -566,8 +566,8 @@ pub(super) fn expire_and_redispatch(
 #[derive(Clone, Debug)]
 pub(crate) struct SharedQueueState {
     pub(super) queue: Arc<Mutex<PlaybackQueue>>,
-    pub(super) source: Arc<Mutex<crate::config::QueueSource>>,
-    pub(super) lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,
+    pub(super) source: Arc<Mutex<mbv_queue::QueueSource>>,
+    pub(super) lineage: Arc<Mutex<mbv_queue::QueueLineage>>,
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 

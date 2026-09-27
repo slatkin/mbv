@@ -26,7 +26,7 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
     use crate::app::components::library_panel::ListSlot;
     use crate::app::components::list::tree_browser::TreeOperation;
     use crate::app::components::tv_tree_target::TvTreeTarget;
-    use mbv_core::config::TvContentMode;
+    use mbv_queue::TvContentMode;
 
     let mut season = make_item("Season 1", "Season");
     season.id = "season-1".into();
@@ -177,7 +177,7 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
         .apply(TreeOperation::ToggleExpansionTarget(season_target));
 
     let key = LibraryKey::Service {
-        service: mbv_core::config::ServiceKind::Emby,
+        service: mbv_queue::ServiceKind::Emby,
         library_id: "lib-tv".into(),
         kind: crate::app::components::LibraryKind::TvShows,
     };

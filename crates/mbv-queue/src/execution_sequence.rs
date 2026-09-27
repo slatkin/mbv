@@ -2,13 +2,13 @@
 //!
 //! This is the smallest slot-bearing projection mpv needs: the ordered
 //! `(QueueSlotId, QueueItem)` sequence with the observed active slot. It is
-//! deliberately *not* a [`crate::playback_queue::PlaybackQueue`] — it carries no
+//! deliberately *not* a [`crate::PlaybackQueue`] — it carries no
 //! queue revision, allocates no slot ids, and exposes only the lookups and
 //! mutations the run performs while projecting the owner's Bound queue into mpv
 //! (design D1/D2). Owner-assigned identity is supplied by callers; the sequence
 //! never mints.
 
-use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::{QueueItem, QueueSlotId};
 
 /// One entry of the execution sequence: an owner-assigned slot id and its item.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -98,11 +98,7 @@ impl ExecutionSequence {
     /// is gone.
     pub fn apply_progress(&mut self, slot_id: QueueSlotId, position_ticks: i64, played: bool) {
         if let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) {
-            crate::playback::queue::apply_progress_to_queue_item(
-                &mut slot.item,
-                position_ticks,
-                played,
-            );
+            crate::apply_progress_to_queue_item(&mut slot.item, position_ticks, played);
         }
     }
 
@@ -185,7 +181,7 @@ fn assert_unique_slot_ids(incoming: &[(QueueSlotId, QueueItem)], existing: &[Que
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::playback_queue::FeedEntry;
+    use crate::FeedEntry;
 
     fn item() -> QueueItem {
         QueueItem::Feed(FeedEntry {

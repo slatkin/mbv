@@ -60,26 +60,3 @@ impl AudiobookshelfSetup {
         }
     }
 }
-
-/// Singleton Service kind identifier. Each variant represents exactly one
-/// configured instance of that Service within mbv.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum ServiceKind {
-    Emby,
-    /// Reserved; not yet implemented. Added now to establish the pattern
-    /// and the per-Service secret path. No Audiobookshelf auth, browsing,
-    /// playback, or credential logic is introduced here.
-    Audiobookshelf,
-}
-
-impl ServiceKind {
-    /// Filesystem-safe name for this Service kind, used for per-Service
-    /// secret file names.
-    #[must_use]
-    pub fn secret_name(self) -> &'static str {
-        match self {
-            ServiceKind::Emby => "emby",
-            ServiceKind::Audiobookshelf => "audiobookshelf",
-        }
-    }
-}

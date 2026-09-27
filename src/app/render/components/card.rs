@@ -3,8 +3,8 @@ use crate::app::images::{
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
 };
 use crate::app::{palette, App};
-use mbv_core::playback_queue::QueueItem;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
@@ -382,12 +382,12 @@ impl App {
             queue.item_at(queue.queue_cursor).cloned()
         });
         let cover_id = match raw_item {
-            Some(QueueItem::Audiobookshelf(
-                mbv_core::playback_queue::AudiobookshelfItem::Episode(ep),
-            )) => Some((ep.library_item_id, false)),
-            Some(QueueItem::Audiobookshelf(
-                mbv_core::playback_queue::AudiobookshelfItem::Book(book),
-            )) => Some((book.library_item_id, true)),
+            Some(QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(ep))) => {
+                Some((ep.library_item_id, false))
+            }
+            Some(QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book))) => {
+                Some((book.library_item_id, true))
+            }
             _ => None,
         };
         let Some((item_id, is_book)) = cover_id else {

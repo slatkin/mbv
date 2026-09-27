@@ -8,11 +8,11 @@ use super::{
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient};
 use crate::ctrl::{CtrlEvent, PlaybackGeneration};
 use crate::daemon::{ClientRegistry, CtrlClients};
-use crate::playback::PlaybackQueue;
-use crate::playback_queue::QueueSlotId;
 use crate::player::{Player, PlayerEvent, PlayerOwnerState};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
+use mbv_queue::PlaybackQueue;
+use mbv_queue::QueueSlotId;
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -284,8 +284,8 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         || {
             (
                 PlaybackQueue::default(),
-                crate::config::QueueSource::Unknown,
-                crate::ctrl::QueueLineage::default(),
+                mbv_queue::QueueSource::Unknown,
+                mbv_queue::QueueLineage::default(),
             )
         },
         |state| {

@@ -9,8 +9,8 @@ use super::super::{
 };
 use super::EventOutcome;
 use crate::ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
-use crate::playback_queue::QueueItem;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise
@@ -29,7 +29,7 @@ impl DaemonLoop {
             let allowed = owner_admin_transport_allowed(self.role, kind, transport);
             let result = if allowed {
                 match kind {
-                    crate::config::ServiceKind::Emby => reconcile_packaged_emby(
+                    mbv_queue::ServiceKind::Emby => reconcile_packaged_emby(
                         revision,
                         &mut self.emby_runtime,
                         &mut self.ws_send_tx,
@@ -44,19 +44,17 @@ impl DaemonLoop {
                             ctrl_clients: &self.ctrl_clients,
                         },
                     ),
-                    crate::config::ServiceKind::Audiobookshelf => {
-                        reconcile_packaged_audiobookshelf(
-                            revision,
-                            &mut self.audiobookshelf_runtime,
-                            &mut DaemonOwnerContext {
-                                player: &self.player,
-                                client: &self.client,
-                                owner: &mut self.owner,
-                                shared_queue: &self.shared_queue,
-                                ctrl_clients: &self.ctrl_clients,
-                            },
-                        )
-                    }
+                    mbv_queue::ServiceKind::Audiobookshelf => reconcile_packaged_audiobookshelf(
+                        revision,
+                        &mut self.audiobookshelf_runtime,
+                        &mut DaemonOwnerContext {
+                            player: &self.player,
+                            client: &self.client,
+                            owner: &mut self.owner,
+                            shared_queue: &self.shared_queue,
+                            ctrl_clients: &self.ctrl_clients,
+                        },
+                    ),
                 }
             } else {
                 Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
@@ -72,7 +70,7 @@ impl DaemonLoop {
                     },
                 ),
             }
-            if result.is_ok() && kind == crate::config::ServiceKind::Audiobookshelf {
+            if result.is_ok() && kind == mbv_queue::ServiceKind::Audiobookshelf {
                 install_daemon_audiobookshelf_context(
                     &self.player,
                     self.audiobookshelf_runtime.as_ref(),
@@ -111,7 +109,7 @@ impl DaemonLoop {
         &mut self,
         start_idx: usize,
         start_ticks: i64,
-        new_source: crate::config::QueueSource,
+        new_source: mbv_queue::QueueSource,
         client_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,

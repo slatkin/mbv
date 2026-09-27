@@ -6,9 +6,9 @@ use super::{
     IntroState, LoadState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
     QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
 };
-use crate::playback_queue::MpvUrlSource;
 use crate::player::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
+use mbv_queue::MpvUrlSource;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

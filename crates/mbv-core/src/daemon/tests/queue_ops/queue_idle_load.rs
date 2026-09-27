@@ -53,7 +53,7 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Album,
-            lineage: crate::ctrl::QueueLineage(3),
+            lineage: mbv_queue::QueueLineage(3),
         },
         CtrlContext {
             reply_tx: &reply_tx,
@@ -315,7 +315,7 @@ fn assert_idle_load_committed(
 /// same item, the reused slot id, position reset, and not played.
 fn assert_replacement_untouched_by_late_observation(
     owner: &crate::daemon::DaemonPlayerOwner,
-    old_slot: crate::playback_queue::QueueSlotId,
+    old_slot: mbv_queue::QueueSlotId,
 ) {
     assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
     assert_eq!(

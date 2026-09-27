@@ -9,7 +9,7 @@ fn feed_entry(guid: &str) -> FeedEntry {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,

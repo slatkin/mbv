@@ -164,7 +164,7 @@ impl PlayerProxy {
     pub fn play(
         &self,
         item: &EmbyItem,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         client: Arc<EmbyClient>,
         initial_volume: u8,
     ) {
@@ -180,7 +180,7 @@ impl PlayerProxy {
         &self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         client: Arc<EmbyClient>,
         initial_volume: u8,
     ) {
@@ -199,7 +199,7 @@ impl PlayerProxy {
         &self,
         slots: Vec<ExecSlot>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,

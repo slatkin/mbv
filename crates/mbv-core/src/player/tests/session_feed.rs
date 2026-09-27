@@ -4,11 +4,8 @@ use rstest::rstest;
 
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────
 
-pub(in crate::player) fn make_feed_entry(
-    guid: &str,
-    title: &str,
-) -> crate::playback_queue::FeedEntry {
-    crate::playback_queue::FeedEntry {
+pub(in crate::player) fn make_feed_entry(guid: &str, title: &str) -> mbv_queue::FeedEntry {
+    mbv_queue::FeedEntry {
         guid: guid.into(),
         title: title.into(),
         enclosure_url: Some(format!("https://example.com/{guid}.mp3")),
@@ -16,14 +13,14 @@ pub(in crate::player) fn make_feed_entry(
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(300 * mbv_emby_model::TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
     }
 }
 
-fn make_feed_entry_no_source(guid: &str, title: &str) -> crate::playback_queue::FeedEntry {
+fn make_feed_entry_no_source(guid: &str, title: &str) -> mbv_queue::FeedEntry {
     let mut e = make_feed_entry(guid, title);
     e.enclosure_url = None;
     e.link = None;

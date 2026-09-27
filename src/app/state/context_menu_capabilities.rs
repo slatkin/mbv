@@ -1,5 +1,5 @@
 //! Capability derivation for multi-item context menus.
-use mbv_core::playback_queue::{QueueItem, QueueItemKind};
+use mbv_queue::{QueueItem, QueueItemKind};
 
 #[expect(
     clippy::struct_excessive_bools,

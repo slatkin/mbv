@@ -65,7 +65,7 @@ fn mixed_services_app() -> App {
     app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
-        kind: mbv_core::config::FeedKind::Audio,
+        kind: mbv_queue::FeedKind::Audio,
     }];
     app.feed_tab.entries.resize_with(1, Vec::new);
     app

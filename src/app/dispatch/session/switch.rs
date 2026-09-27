@@ -287,7 +287,7 @@ impl App {
     fn finish_local_mode(
         &mut self,
         status: String,
-        reconnected_local_daemon: Option<(PlayerTab, crate::config::QueueSource)>,
+        reconnected_local_daemon: Option<(PlayerTab, mbv_queue::QueueSource)>,
     ) {
         if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
             self.player_tab = initial_tab;

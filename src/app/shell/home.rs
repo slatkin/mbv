@@ -4,7 +4,7 @@ use super::components::home_content::HomeContent;
 use super::components::library_panel::LibraryKey;
 use super::components::ShellRequest;
 use super::Model;
-use mbv_core::playback_queue::QueueItem;
+use mbv_queue::QueueItem;
 
 impl Model {
     pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {

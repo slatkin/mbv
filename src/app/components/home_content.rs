@@ -26,7 +26,7 @@ use crate::app::state::types::context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_core::config::{LibraryItemIdentity, SelectorIdentity};
-use mbv_core::playback_queue::QueueItem;
+use mbv_queue::QueueItem;
 
 mod launch_state;
 

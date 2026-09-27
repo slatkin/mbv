@@ -481,7 +481,7 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
     assert_eq!(owner.core.source, QueueSource::Unknown);
     assert_eq!(
         *shared_queue.lineage.lock().unwrap(),
-        crate::ctrl::QueueLineage(1)
+        mbv_queue::QueueLineage(1)
     );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {

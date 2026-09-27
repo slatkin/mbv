@@ -11,10 +11,10 @@ use std::sync::Arc;
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
 pub(super) fn handle_adopt_queue(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
     cursor: usize,
-    new_source: crate::config::QueueSource,
+    new_source: mbv_queue::QueueSource,
 ) {
     let has_emby = ctx.has_emby();
     let DaemonPlayerOwner {
@@ -149,9 +149,9 @@ fn enrich_adopted_emby_slots(
 /// queue if its lineage still matches.
 pub(super) fn handle_queue_source_update(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
-    new_source: crate::config::QueueSource,
-    cmd_lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
+    new_source: mbv_queue::QueueSource,
+    cmd_lineage: mbv_queue::QueueLineage,
 ) {
     let supports_operation = ctx
         .ctrl_clients
@@ -262,11 +262,11 @@ fn prepare_replacement_slots(
 /// slots and optionally begin playback from `start_idx`.
 pub(super) fn handle_queue_replace(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
     slots: Vec<crate::ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
-    new_source: crate::config::QueueSource,
+    new_source: mbv_queue::QueueSource,
 ) {
     let has_emby = ctx.has_emby();
     let (slots, next_cursor) =
@@ -289,11 +289,8 @@ pub(super) fn handle_queue_replace(
         ..
     } = &mut *ctx.owner;
     let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
-    *queue = PlaybackQueue::from_slot_items(
-        slots,
-        active_slot,
-        crate::playback_queue::QueueRevision::default(),
-    );
+    *queue =
+        PlaybackQueue::from_slot_items(slots, active_slot, mbv_queue::QueueRevision::default());
     *source = new_source;
     mint_queue_lineage(ctx.shared_queue);
     reset_slot_jumps(transitions, queued_transition_origin);
@@ -341,7 +338,7 @@ pub(super) fn handle_queue_replace(
 /// the queue.
 pub(super) fn handle_queue_append(
     ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+    lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
 ) {
     let has_emby = ctx.has_emby();

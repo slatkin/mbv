@@ -15,9 +15,8 @@ use tuirealm::event::KeyEvent;
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
-use mbv_core::config::{
-    LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity, TuiLaunchState,
-};
+use mbv_core::config::{LibraryItemIdentity, SelectorIdentity, TabIdentity, TuiLaunchState};
+use mbv_queue::ServiceKind;
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;

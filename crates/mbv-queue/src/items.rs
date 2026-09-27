@@ -116,7 +116,7 @@ pub struct FeedEntry {
     /// refines it when recognized. `None` means unknown — legacy
     /// persisted/wire data that predates this field.
     #[serde(default)]
-    pub feed_kind: Option<crate::config::FeedKind>,
+    pub feed_kind: Option<crate::FeedKind>,
     /// Stable feed identity for the keyed feed-entry state store (#492).
     /// Set to the normalized subscription URL at fetch time. `None` means
     /// the entry cannot address the store (legacy or identity-less) and
@@ -154,7 +154,7 @@ pub enum QueueItem {
 
 /// A queued source that can be resolved directly to an mpv URL.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum MpvUrlSource<'a> {
+pub enum MpvUrlSource<'a> {
     Emby(&'a EmbyItem),
     Feed(&'a FeedEntry),
 }
@@ -240,7 +240,7 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
 
 impl QueueItem {
     #[must_use]
-    pub(crate) fn mpv_url_source(&self) -> Option<MpvUrlSource<'_>> {
+    pub fn mpv_url_source(&self) -> Option<MpvUrlSource<'_>> {
         match self {
             Self::Emby(item) => Some(MpvUrlSource::Emby(item)),
             Self::Feed(entry) => Some(MpvUrlSource::Feed(entry)),
@@ -288,7 +288,7 @@ impl QueueItem {
             Self::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("audio/") => true,
                 Some(m) if m.starts_with("video/") => false,
-                _ => entry.feed_kind == Some(crate::config::FeedKind::Audio),
+                _ => entry.feed_kind == Some(crate::FeedKind::Audio),
             },
             Self::Audiobookshelf(item) => item.is_audio(),
         }
@@ -311,7 +311,7 @@ impl QueueItem {
             Self::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("video/") => true,
                 Some(m) if m.starts_with("audio/") => false,
-                _ => entry.feed_kind == Some(crate::config::FeedKind::Video),
+                _ => entry.feed_kind == Some(crate::FeedKind::Video),
             },
             Self::Audiobookshelf(item) => item.is_video(),
         }
@@ -504,9 +504,9 @@ impl QueueItem {
     /// is decided by the owner capability supplied to
     /// `admissible_for_owner`.
     #[must_use]
-    pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
+    pub fn required_service(&self) -> Option<crate::ServiceKind> {
         match self {
-            Self::Audiobookshelf(_) => Some(crate::config::ServiceKind::Audiobookshelf),
+            Self::Audiobookshelf(_) => Some(crate::ServiceKind::Audiobookshelf),
             Self::Emby(_) | Self::Feed(_) => None,
         }
     }
@@ -514,7 +514,7 @@ impl QueueItem {
     pub fn admissible_for_owner(
         &self,
         audio_only: bool,
-        has_service: impl Fn(crate::config::ServiceKind) -> bool,
+        has_service: impl Fn(crate::ServiceKind) -> bool,
     ) -> bool {
         self.admissible_for_owner_with_audiobookshelf(audio_only, has_service, false)
     }
@@ -522,7 +522,7 @@ impl QueueItem {
     pub fn admissible_for_owner_with_audiobookshelf(
         &self,
         audio_only: bool,
-        has_service: impl Fn(crate::config::ServiceKind) -> bool,
+        has_service: impl Fn(crate::ServiceKind) -> bool,
         can_admit_audiobookshelf: bool,
     ) -> bool {
         if self.is_audiobookshelf() && !can_admit_audiobookshelf {

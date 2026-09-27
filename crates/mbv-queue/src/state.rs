@@ -1,5 +1,5 @@
-// Queue/library position state types. Included into `config`'s module scope
-// (see `config.rs`), so callers reach them as `crate::config::…`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct QueueLineage(pub u64);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -28,13 +28,13 @@ pub struct QueueState {
     // has to already be on disk. A separate best-effort background fetch
     // refreshes played/position state from the server afterward.
     #[serde(default)]
-    pub items: Vec<crate::playback_queue::QueueItem>,
+    pub items: Vec<crate::QueueItem>,
     #[serde(default)]
     pub cursor: usize,
     /// Provider-qualified anchor. The raw ID below remains readable for old
     /// snapshots, but is only used when it identifies one provider uniquely.
     #[serde(default)]
-    pub last_played_content_id: Option<crate::playback_queue::QueueItemContentId>,
+    pub last_played_content_id: Option<crate::QueueItemContentId>,
     pub last_played_item_id: Option<String>,
     pub last_played_completed: bool,
     // Per-item resume positions saved at quit time. Used on restore to override stale Emby
@@ -52,16 +52,15 @@ impl QueueState {
         self.items
             .iter()
             .filter_map(|qi| match qi {
-                crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
-                crate::playback_queue::QueueItem::Feed(_)
-                | crate::playback_queue::QueueItem::Audiobookshelf(_) => None,
+                crate::QueueItem::Emby(e) => Some((**e).clone()),
+                crate::QueueItem::Feed(_) | crate::QueueItem::Audiobookshelf(_) => None,
             })
             .collect()
     }
 
     /// Consumes self and returns the inner `Vec<QueueItem>`.
     #[must_use]
-    pub fn into_queue_items(self) -> Vec<crate::playback_queue::QueueItem> {
+    pub fn into_queue_items(self) -> Vec<crate::QueueItem> {
         self.items
     }
 
@@ -77,7 +76,7 @@ impl QueueState {
         Self {
             items: items
                 .into_iter()
-                .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
+                .map(|item| crate::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor,
             source,
@@ -86,6 +85,65 @@ impl QueueState {
             last_played_completed: false,
             positions: std::collections::HashMap::default(),
         }
+    }
+}
+
+impl QueueState {
+    fn without_items<F>(&self, keep: F) -> Self
+    where
+        F: Fn(&crate::QueueItem) -> bool,
+    {
+        let items: Vec<crate::QueueItem> = self
+            .items
+            .iter()
+            .filter(|item| keep(item))
+            .cloned()
+            .collect();
+        let positions = self
+            .positions
+            .iter()
+            .filter(|(id, _)| items.iter().any(|item| item.id() == **id))
+            .map(|(id, position)| (id.clone(), *position))
+            .collect();
+        Self {
+            source: if items.is_empty() {
+                QueueSource::Unknown
+            } else {
+                self.source.clone()
+            },
+            cursor: self.cursor.min(items.len().saturating_sub(1)),
+            last_played_content_id: self
+                .last_played_content_id
+                .as_ref()
+                .filter(|id| items.iter().any(|item| item.content_id() == **id))
+                .cloned(),
+            last_played_item_id: self
+                .last_played_item_id
+                .as_ref()
+                .filter(|id| items.iter().any(|item| item.id() == **id))
+                .cloned(),
+            last_played_completed: self.last_played_completed && !items.is_empty(),
+            items,
+            positions,
+        }
+    }
+
+    /// Remove only Emby slots and native-ID keyed positions. Feed and
+    /// Audiobookshelf snapshots remain intact for mixed queue restoration.
+    /// After this change Emby removal preserves non-Emby items (Feed +
+    /// Audiobookshelf) as required by the Audiobookshelf lifecycle.
+    #[must_use]
+    pub fn without_emby(&self) -> Self {
+        self.without_items(|item| !matches!(item, crate::QueueItem::Emby(_)))
+    }
+
+    /// Remove only Audiobookshelf slots (both episode and book shapes) and
+    /// their keyed positions. Emby and Feed items remain intact. Used on
+    /// confirmed Audiobookshelf Service replacement/removal to purge
+    /// Service-owned queue state without affecting other Services.
+    #[must_use]
+    pub fn without_audiobookshelf(&self) -> Self {
+        self.without_items(|item| !item.is_audiobookshelf())
     }
 }
 
@@ -132,7 +190,6 @@ pub struct LibraryPositionLevel {
     pub fetched_rows: Option<usize>,
     #[serde(default)]
     pub cursor_index: usize,
-    #[serde(default)]
     pub item_types: Option<String>,
     #[serde(default)]
     pub unplayed_only: bool,

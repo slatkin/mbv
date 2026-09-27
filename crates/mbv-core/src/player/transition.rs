@@ -8,7 +8,7 @@
 use std::time::{Duration, Instant};
 
 use crate::ctrl::{PlaybackGeneration, PlaybackRequestId};
-use crate::playback_queue::QueueSlotId;
+use mbv_queue::QueueSlotId;
 
 /// Deadline for the Playback run to confirm an in-flight transition (via
 /// `TrackChanged`) before the owner abandons it. Design D4's risk row: "keep

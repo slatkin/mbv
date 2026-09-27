@@ -201,7 +201,7 @@ fn playback_intent_event_round_trips_structured_rejection() {
 #[test]
 fn local_only_command_is_refused_without_delivery_or_termination() {
     let cmd = PlayerCommand::JumpTo {
-        slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
+        slot_id: mbv_queue::QueueSlotId::from_raw(3),
         request_id: 9,
         generation: 9,
         resume_ticks: None,
@@ -221,7 +221,7 @@ fn local_only_command_is_refused_without_delivery_or_termination() {
     let (remote, _event_rx, cmd_rx) =
         crate::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     assert!(!remote.send_command(PlayerCommand::JumpTo {
-        slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
+        slot_id: mbv_queue::QueueSlotId::from_raw(3),
         request_id: 9,
         generation: 9,
         resume_ticks: None,

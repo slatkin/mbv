@@ -29,7 +29,7 @@ impl EmbyOwnerContext {
             .emby_setup
             .as_ref()
             .ok_or_else(|| "Emby setup is missing from owner storage".to_string())?;
-        let token = crate::config::load_service_secret(crate::config::ServiceKind::Emby)
+        let token = crate::config::load_service_secret(mbv_queue::ServiceKind::Emby)
             .ok_or_else(|| "Emby Service secret is unavailable".to_string())?;
         if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
             return Err("Emby setup is incomplete in owner storage".to_string());
@@ -58,9 +58,8 @@ impl AudiobookshelfOwnerContext {
             .audiobookshelf_setup
             .clone()
             .ok_or_else(|| "Audiobookshelf setup is missing from owner storage".to_string())?;
-        let api_key =
-            crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf)
-                .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
+        let api_key = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+            .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
         if setup.server_url.trim().is_empty() || api_key.trim().is_empty() {
             return Err("Audiobookshelf setup is incomplete in owner storage".to_string());
         }

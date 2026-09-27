@@ -32,11 +32,8 @@ fn configured_startup_is_independent_and_reaches_ready() {
         audiobookshelf_setup: Some(AudiobookshelfSetup::new("https://books.example")),
         ..Default::default()
     };
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "book-secret",
-    )
-    .unwrap();
+    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "book-secret")
+        .unwrap();
     let mut app = App::new_independent(&config);
     assert!(app.setup.audiobookshelf_startup_request.is_some());
     let generation = app.audiobookshelf_runtime.generation();
@@ -55,11 +52,8 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     let mut app = tests::make_app_stub();
     app.config.lock().unwrap().audiobookshelf_setup =
         Some(AudiobookshelfSetup::new("https://books.example"));
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "book-secret",
-    )
-    .unwrap();
+    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "book-secret")
+        .unwrap();
     let generation = app.audiobookshelf_runtime.begin_validation();
     app.install_audiobookshelf_player_context(generation);
     assert!(app.player.can_admit_audiobookshelf());
@@ -75,17 +69,13 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
         ServiceState::NeedsAuthentication
     );
     assert!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-            .is_none()
+        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_none()
     );
     assert!(app.config.lock().unwrap().audiobookshelf_setup.is_some());
     assert!(!app.player.can_admit_audiobookshelf());
 
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "book-secret",
-    )
-    .unwrap();
+    mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "book-secret")
+        .unwrap();
     let generation = app.audiobookshelf_runtime.begin_validation();
     app.apply_audiobookshelf_completion(completion(
         generation,
@@ -96,8 +86,7 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     ));
     assert_eq!(app.audiobookshelf_runtime.state, ServiceState::Unavailable);
     assert_eq!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-            .as_deref(),
+        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).as_deref(),
         Some("book-secret")
     );
 }

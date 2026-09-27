@@ -6,13 +6,13 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let emby = emby_qi("movie1", "Video", "Movie");
     let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
     let status = crate::player::PlayerStatus::default();
-    let source = crate::config::QueueSource::Unknown;
+    let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(capable_data) = super::unified_queue_state_for_peer(
         &status,
         &queue,
         &source,
-        crate::ctrl::QueueLineage::default(),
+        mbv_queue::QueueLineage::default(),
         None,
         None,
         None,
@@ -25,7 +25,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         &status,
         &queue,
         &source,
-        crate::ctrl::QueueLineage::default(),
+        mbv_queue::QueueLineage::default(),
         None,
         None,
         None,
@@ -52,13 +52,13 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     // active index 0 = ABS
     let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
     let status = crate::player::PlayerStatus::default();
-    let source = crate::config::QueueSource::Unknown;
+    let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
         &status,
         &queue,
         &source,
-        crate::ctrl::QueueLineage::default(),
+        mbv_queue::QueueLineage::default(),
         None,
         None,
         None,

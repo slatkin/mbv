@@ -131,14 +131,14 @@ fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
 
     assert_eq!(
         reconcile_event_outcome(&CtrlEvent::ServiceSetupApplied {
-            kind: config::ServiceKind::Emby,
+            kind: mbv_queue::ServiceKind::Emby,
             revision: 1,
         }),
         Some(Ok(()))
     );
     assert_eq!(
         reconcile_event_outcome(&CtrlEvent::ServiceSetupRejected {
-            kind: config::ServiceKind::Emby,
+            kind: mbv_queue::ServiceKind::Emby,
             revision: 1,
             reason: ServiceSetupRejection::RevisionMismatch,
         }),

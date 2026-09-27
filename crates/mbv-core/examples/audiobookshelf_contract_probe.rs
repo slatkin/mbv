@@ -3,10 +3,8 @@
 //! Run only against a disposable/controlled Audiobookshelf Service.
 
 use libmpv2::{events::Event, Mpv};
-use mbv_core::{
-    audiobookshelf::AudiobookshelfClient,
-    config::{self, ServiceKind},
-};
+use mbv_core::{audiobookshelf::AudiobookshelfClient, config};
+use mbv_queue::ServiceKind;
 use serde_json::{json, Map, Value};
 use std::{
     collections::BTreeSet,

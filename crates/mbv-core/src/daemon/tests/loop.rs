@@ -459,7 +459,7 @@ fn role_gate_non_local_dirty_event_persists_nothing() {
     let flow = t
         .event_loop
         .handle_event(DaemonEvent::Player(PlayerEvent::TrackCompleted {
-            slot_id: crate::playback_queue::QueueSlotId::from_raw(1),
+            slot_id: mbv_queue::QueueSlotId::from_raw(1),
             run_identity: current_run(&t.event_loop),
             position_ticks: 0,
             played: true,

@@ -14,7 +14,7 @@ pub(in crate::app) struct LibraryTab {
     pub(in crate::app) library_total: Option<usize>,
     /// Selected top-level TV content mode. `None` is unresolved until the
     /// library total is known; non-TV libraries leave this unset.
-    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_queue::TvContentMode>,
 }
 
 impl LibraryTab {
@@ -28,12 +28,12 @@ impl LibraryTab {
         }
     }
 
-    pub(in crate::app) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
+    pub(in crate::app) fn library_position_snapshot(&self) -> mbv_queue::LibraryPosition {
         let (feed_selected_group, feed_video_cursor, feed_video_scroll) =
             self.feed_home_video.as_ref().map_or((0, 0, 0), |state| {
                 (state.selected_group, state.video_cursor, state.video_scroll)
             });
-        let mut levels: Vec<crate::config::LibraryPositionLevel> = self
+        let mut levels: Vec<mbv_queue::LibraryPositionLevel> = self
             .nav_stack
             .iter()
             .map(BrowseLevel::to_position_level)
@@ -45,7 +45,7 @@ impl LibraryTab {
             root.library_total = self.library_total;
             root.tv_content_mode.clone_from(&self.tv_content_mode);
         }
-        crate::config::LibraryPosition {
+        mbv_queue::LibraryPosition {
             levels,
             feed_selected_group,
             feed_video_cursor,
@@ -55,7 +55,7 @@ impl LibraryTab {
 
     pub(in crate::app) fn apply_library_position(
         &mut self,
-        position: &crate::config::LibraryPosition,
+        position: &mbv_queue::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
         self.library_total = position.levels.first().and_then(|l| l.library_total);

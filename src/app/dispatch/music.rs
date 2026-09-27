@@ -269,19 +269,19 @@ impl App {
         let Some(mode) = Self::tv_mode_for_pill(pill_index, large) else {
             return;
         };
-        if matches!((&mode, large), (mbv_core::config::TvContentMode::Range(index), true) if *index >= crate::app::render::LetterFilter::count_for_kind(crate::app::render::LetterFilterKind::Tv))
+        if matches!((&mode, large), (mbv_queue::TvContentMode::Range(index), true) if *index >= crate::app::render::LetterFilter::count_for_kind(crate::app::render::LetterFilterKind::Tv))
         {
             return;
         }
         self.apply_tv_letter_mode(lib_idx, &mode);
     }
 
-    fn tv_mode_for_pill(pill_index: usize, large: bool) -> Option<mbv_core::config::TvContentMode> {
+    fn tv_mode_for_pill(pill_index: usize, large: bool) -> Option<mbv_queue::TvContentMode> {
         match pill_index {
-            0 => Some(mbv_core::config::TvContentMode::Latest),
-            1 => Some(mbv_core::config::TvContentMode::Upcoming),
-            index if large => Some(mbv_core::config::TvContentMode::Range(index - 2)),
-            2 => Some(mbv_core::config::TvContentMode::All),
+            0 => Some(mbv_queue::TvContentMode::Latest),
+            1 => Some(mbv_queue::TvContentMode::Upcoming),
+            index if large => Some(mbv_queue::TvContentMode::Range(index - 2)),
+            2 => Some(mbv_queue::TvContentMode::All),
             _ => None,
         }
     }
@@ -309,7 +309,7 @@ impl App {
         self.save_default_library_position(lib_idx);
     }
 
-    fn apply_tv_letter_mode(&mut self, lib_idx: usize, mode: &mbv_core::config::TvContentMode) {
+    fn apply_tv_letter_mode(&mut self, lib_idx: usize, mode: &mbv_queue::TvContentMode) {
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };
@@ -318,7 +318,7 @@ impl App {
         let sort_by = level.sort_by.clone();
         let sort_order = level.sort_order.clone();
         let current = self.libs[lib_idx].tv_content_mode.as_ref();
-        if current == Some(mode) && !matches!(mode, mbv_core::config::TvContentMode::Upcoming) {
+        if current == Some(mode) && !matches!(mode, mbv_queue::TvContentMode::Upcoming) {
             return;
         }
         self.libs[lib_idx].tv_content_mode = Some(mode.clone());
@@ -337,28 +337,28 @@ impl App {
     fn refresh_tv_letter_mode(
         &mut self,
         lib_idx: usize,
-        mode: &mbv_core::config::TvContentMode,
+        mode: &mbv_queue::TvContentMode,
         parent_id: String,
         unplayed_only: bool,
         sort_by: String,
         sort_order: String,
     ) {
         match mode {
-            mbv_core::config::TvContentMode::Latest => {
+            mbv_queue::TvContentMode::Latest => {
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                     last.loading = true;
                     last.item_types = Some("Episode".into());
                 }
                 self.spawn_tv_latest(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
-            mbv_core::config::TvContentMode::Upcoming => {
+            mbv_queue::TvContentMode::Upcoming => {
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                     last.loading = true;
                     last.item_types = Some("Episode".into());
                 }
                 self.spawn_tv_upcoming(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
-            mbv_core::config::TvContentMode::All => {
+            mbv_queue::TvContentMode::All => {
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                     last.loading = true;
                     last.item_types = Some("Series".into());
@@ -373,7 +373,7 @@ impl App {
                 };
                 self.spawn_refresh(lib_idx, 0, key);
             }
-            mbv_core::config::TvContentMode::Range(index) => {
+            mbv_queue::TvContentMode::Range(index) => {
                 let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
                     *index,
                     crate::app::render::LetterFilterKind::Tv,
@@ -460,10 +460,10 @@ impl App {
                 .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
             let count = if large { 5 } else { 3 };
             let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
-                Some(mbv_core::config::TvContentMode::Latest) => 0,
-                Some(mbv_core::config::TvContentMode::Upcoming) => 1,
-                Some(mbv_core::config::TvContentMode::All) => 2,
-                Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+                Some(mbv_queue::TvContentMode::Latest) => 0,
+                Some(mbv_queue::TvContentMode::Upcoming) => 1,
+                Some(mbv_queue::TvContentMode::All) => 2,
+                Some(mbv_queue::TvContentMode::Range(index)) => index + 2,
                 None => {
                     if large {
                         0

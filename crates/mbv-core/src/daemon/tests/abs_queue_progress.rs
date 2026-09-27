@@ -1,7 +1,7 @@
 use super::*;
 
 pub fn book_qi(library_item_id: &str) -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(
         AudiobookshelfBookQueueItem {
             library_item_id: library_item_id.into(),
             title: "Test Book".into(),

@@ -322,7 +322,7 @@ impl App {
     /// retained position, apply it, persist Feed lifecycle state.
     fn apply_stopped_slot_progress(
         &mut self,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,
         played: bool,
         progress_report_accepted: bool,
@@ -347,7 +347,7 @@ impl App {
         // Persist Feed lifecycle state before any
         // consume/removal changes the queue.
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_)) {
+            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
                 let runtime = slot.item.runtime_ticks();
                 let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
                 self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
@@ -366,8 +366,8 @@ impl App {
     /// to drop a deleted slot, or run the consume reaction.
     fn finish_stopped_consumption(
         &mut self,
-        deleted_slot: Option<mbv_core::playback_queue::QueueSlotId>,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        deleted_slot: Option<mbv_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
         consume: bool,
     ) {
         if deleted_slot.is_some() {
@@ -455,7 +455,7 @@ impl App {
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_)) {
+            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
                 let runtime = slot.item.runtime_ticks();
                 let feed_completed = played && runtime > 0;
                 self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
@@ -562,11 +562,10 @@ impl App {
         log::warn!(target: "app", "next-up: play triggered");
         if let Some(item) = self.next_up_item.take() {
             let label = item.playback_label();
-            if let Some(idx) = self
-                .playback_queue()
-                .slots()
-                .iter()
-                .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
+            if let Some(idx) =
+                self.playback_queue().slots().iter().position(
+                    |s| matches!(&s.item, mbv_queue::QueueItem::Emby(e) if e.id == item.id),
+                )
             {
                 let slot_id = self.playback_queue().slots()[idx].slot_id;
                 let accepted = self.request_slot_jump(slot_id);
@@ -713,9 +712,9 @@ impl App {
     /// Persist a Feed slot's current player position, when the slot still
     /// exists and carries a feed identity. Shared by the pause and
     /// seek-completion paths (extracted from `handle_player_event`).
-    fn persist_feed_slot_position(&mut self, slot_id: mbv_core::playback_queue::QueueSlotId) {
+    fn persist_feed_slot_position(&mut self, slot_id: mbv_queue::QueueSlotId) {
         if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item {
+            if let mbv_queue::QueueItem::Feed(ref entry) = slot.item {
                 if entry.feed_id.is_some() {
                     let pos_ticks = self.player.status.lock().unwrap().position_ticks;
                     self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);

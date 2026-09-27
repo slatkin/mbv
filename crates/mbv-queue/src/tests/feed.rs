@@ -23,7 +23,7 @@ fn feed_entry_primary_source(
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(crate::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -39,7 +39,7 @@ fn feed_entry_primary_source(
 #[case::uses_mime_when_present(
     "g1",
     Some("audio/mpeg"),
-    crate::config::FeedKind::Video,
+    crate::FeedKind::Video,
     "Audio",
     true,
     false
@@ -47,7 +47,7 @@ fn feed_entry_primary_source(
 #[case::falls_back_to_feed_kind_when_mime_absent(
     "g2",
     None,
-    crate::config::FeedKind::Video,
+    crate::FeedKind::Video,
     "video",
     false,
     true
@@ -55,7 +55,7 @@ fn feed_entry_primary_source(
 #[case::falls_back_to_feed_kind_for_unrecognized_mime(
     "g3",
     Some("application/octet-stream"),
-    crate::config::FeedKind::Audio,
+    crate::FeedKind::Audio,
     "audio",
     true,
     false
@@ -63,7 +63,7 @@ fn feed_entry_primary_source(
 fn feed_media_kind(
     #[case] guid: &str,
     #[case] mime_type: Option<&str>,
-    #[case] feed_kind: crate::config::FeedKind,
+    #[case] feed_kind: crate::FeedKind,
     #[case] expected_kind: &str,
     #[case] expected_audio: bool,
     #[case] expected_video: bool,

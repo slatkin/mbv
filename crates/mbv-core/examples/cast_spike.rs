@@ -32,7 +32,7 @@ fn check_audiobookshelf_url_credential() {
         .as_ref()
         .map(|s| s.server_url.clone())
         .unwrap_or_default();
-    let api_key = config::load_service_secret(config::ServiceKind::Audiobookshelf);
+    let api_key = config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
     let (Some(api_key), false) = (api_key, server_url.is_empty()) else {
         println!("skipped: no Audiobookshelf setup/secret found on this machine");
         return;
@@ -175,7 +175,7 @@ fn emby_credentials() -> Option<(String, String, String)> {
     let cfg = config::load_config().ok()?;
     let server_url = cfg.emby_setup.as_ref().map(|s| s.server_url.clone())?;
     let user_id = cfg.emby_setup.as_ref().map(|s| s.user_id.clone())?;
-    let token = config::load_service_secret(config::ServiceKind::Emby)?;
+    let token = config::load_service_secret(mbv_queue::ServiceKind::Emby)?;
     Some((server_url, user_id, token))
 }
 

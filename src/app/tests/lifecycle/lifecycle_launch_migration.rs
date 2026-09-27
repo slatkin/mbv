@@ -8,16 +8,16 @@ fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
     app.emby_catalog_ready = true;
     app.library_position_state.libraries.insert(
         "lib-movies".into(),
-        crate::config::LibraryPosition {
+        mbv_queue::LibraryPosition {
             levels: vec![
-                crate::config::LibraryPositionLevel {
+                mbv_queue::LibraryPositionLevel {
                     parent_id: "lib-movies".into(),
                     title: "Movies".into(),
                     focused_item_id: Some("movie-focused".into()),
                     cursor_index: 99,
                     ..Default::default()
                 },
-                crate::config::LibraryPositionLevel {
+                mbv_queue::LibraryPositionLevel {
                     parent_id: "series-1".into(),
                     title: "Series".into(),
                     focused_item_id: Some("deep-item-must-not-migrate".into()),
@@ -32,8 +32,8 @@ fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
     app.libs.push(crate::app::LibraryTab::new(other_library));
     app.library_position_state.libraries.insert(
         "lib-shows".into(),
-        crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 parent_id: "lib-shows".into(),
                 focused_item_id: Some("unselected-library-item".into()),
                 ..Default::default()
@@ -138,8 +138,8 @@ fn legacy_audiobookshelf_podcast_item_is_not_migrated() {
     );
     app.library_position_state.libraries.insert(
         "audiobookshelf:https://abs.example:abs-podcasts".into(),
-        crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 parent_id: "abs-podcasts".into(),
                 item_types: Some("podcast".into()),
                 focused_item_id: Some("retired-show-id".into()),

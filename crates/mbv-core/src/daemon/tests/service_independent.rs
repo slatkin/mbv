@@ -44,8 +44,7 @@ fn packaged_context_loads_unreachable_emby_without_authenticating() {
         "http://127.0.0.1:1",
         "owner-user",
     ));
-    crate::config::save_service_secret(crate::config::ServiceKind::Emby, "unreachable-token")
-        .unwrap();
+    crate::config::save_service_secret(mbv_queue::ServiceKind::Emby, "unreachable-token").unwrap();
     let owner =
         EmbyOwnerContext::from_packaged_storage_result(&config).expect("owner context loads");
     assert_eq!(owner.revision, 1);
@@ -65,7 +64,7 @@ fn emby_absence_keeps_feed_admission_and_rejects_emby_admission() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -110,28 +109,28 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
 fn owner_administration_is_local_transport_only() {
     assert!(owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Local)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Tcp)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Packaged,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         None
     ));
     // The user-owned Local daemon may reconcile Audiobookshelf but not Emby.
     assert!(owner_admin_transport_allowed(
         DaemonRole::Local,
-        crate::config::ServiceKind::Audiobookshelf,
+        mbv_queue::ServiceKind::Audiobookshelf,
         Some(CtrlTransport::Local)
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Local,
-        crate::config::ServiceKind::Emby,
+        mbv_queue::ServiceKind::Emby,
         Some(CtrlTransport::Local)
     ));
 }
@@ -177,7 +176,7 @@ fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_chang
     let pre = current.as_ref().unwrap().generation;
 
     // Drop the Service secret so the owner context can no longer be loaded.
-    crate::config::clear_service_secret(crate::config::ServiceKind::Audiobookshelf);
+    crate::config::clear_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
 
     let result = reconcile_abs(1, &mut current);
     assert!(
@@ -318,7 +317,7 @@ fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
                 mime_type: Some("audio/mpeg".into()),
                 duration_ticks: None,
                 pub_date_secs: None,
-                feed_kind: Some(crate::config::FeedKind::Audio),
+                feed_kind: Some(mbv_queue::FeedKind::Audio),
                 feed_id: None,
                 position_ticks: 0,
                 played: false,
@@ -364,7 +363,7 @@ fn every_setup_rejection_reason_is_wire_representable() {
         ServiceSetupRejection::TransitionRejected,
     ] {
         let event = CtrlEvent::ServiceSetupRejected {
-            kind: crate::config::ServiceKind::Emby,
+            kind: mbv_queue::ServiceKind::Emby,
             revision: 4,
             reason,
         };

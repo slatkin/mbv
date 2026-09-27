@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
-use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
+use mbv_queue::QueueState;
 
 fn forward_audiobookshelf_updates<T, F>(
     receiver: &std::sync::mpsc::Receiver<T>,
@@ -31,7 +31,7 @@ impl App {
 
     fn signal_running_local_daemon(&mut self, revision: u64) {
         if let Err(error) = mbv_core::remote_player::signal_local_daemon_service_setup(
-            mbv_core::config::ServiceKind::Audiobookshelf,
+            mbv_queue::ServiceKind::Audiobookshelf,
             revision,
         ) {
             self.flash(error, ToastSeverity::Warning);
@@ -47,7 +47,7 @@ impl App {
         self.stop_active_audiobookshelf_playback();
         self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
-        mbv_core::config::clear_service_secret_result(mbv_core::config::ServiceKind::Audiobookshelf)
+        mbv_core::config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
@@ -195,7 +195,7 @@ impl App {
         // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
         // but future-proof: if items empty, reset source).
         if self.player_tab.total_queue_len() == 0 {
-            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
+            self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         }
         self.queue_dirty = false;
     }
@@ -332,7 +332,7 @@ impl App {
     ) {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
         let credential =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf);
+            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
         let context = setup.zip(credential).and_then(|(setup, credential)| {
             mbv_core::player::AudiobookshelfPlayerContext::new(
                 generation,

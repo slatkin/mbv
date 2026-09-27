@@ -2,7 +2,7 @@
 
 use super::{
     home_latest_launch_path, library_position_state_path, queue_state_path, state_dir,
-    stay_alive_queue_state_path, LibraryPositionState, QueueSource, QueueState,
+    stay_alive_queue_state_path, LibraryPositionState, QueueState,
 };
 use std::path::PathBuf;
 
@@ -48,7 +48,7 @@ pub(super) fn load_json<T: serde::de::DeserializeOwned>(
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct StayAliveQueueState {
     pub queue: QueueState,
-    pub lineage: crate::ctrl::QueueLineage,
+    pub lineage: mbv_queue::QueueLineage,
 }
 
 pub(crate) fn save_stay_alive_queue_state_at(
@@ -82,7 +82,7 @@ pub(crate) fn legacy_queue_for_owner_if_absent(
     }
     legacy.map(|queue| StayAliveQueueState {
         queue,
-        lineage: crate::ctrl::QueueLineage::default(),
+        lineage: mbv_queue::QueueLineage::default(),
     })
 }
 
@@ -258,64 +258,5 @@ pub fn load_library_position_state() -> LibraryPositionState {
             log::warn!(target: "library_position", "library_position_state.json failed to parse: {e}");
             LibraryPositionState::default()
         }
-    }
-}
-
-impl QueueState {
-    fn without_items<F>(&self, keep: F) -> Self
-    where
-        F: Fn(&crate::playback_queue::QueueItem) -> bool,
-    {
-        let items: Vec<crate::playback_queue::QueueItem> = self
-            .items
-            .iter()
-            .filter(|item| keep(item))
-            .cloned()
-            .collect();
-        let positions = self
-            .positions
-            .iter()
-            .filter(|(id, _)| items.iter().any(|item| item.id() == **id))
-            .map(|(id, position)| (id.clone(), *position))
-            .collect();
-        Self {
-            source: if items.is_empty() {
-                QueueSource::Unknown
-            } else {
-                self.source.clone()
-            },
-            cursor: self.cursor.min(items.len().saturating_sub(1)),
-            last_played_content_id: self
-                .last_played_content_id
-                .as_ref()
-                .filter(|id| items.iter().any(|item| item.content_id() == **id))
-                .cloned(),
-            last_played_item_id: self
-                .last_played_item_id
-                .as_ref()
-                .filter(|id| items.iter().any(|item| item.id() == **id))
-                .cloned(),
-            last_played_completed: self.last_played_completed && !items.is_empty(),
-            items,
-            positions,
-        }
-    }
-
-    /// Remove only Emby slots and native-ID keyed positions. Feed and
-    /// Audiobookshelf snapshots remain intact for mixed queue restoration.
-    /// After this change Emby removal preserves non-Emby items (Feed +
-    /// Audiobookshelf) as required by the Audiobookshelf lifecycle.
-    #[must_use]
-    pub fn without_emby(&self) -> Self {
-        self.without_items(|item| !matches!(item, crate::playback_queue::QueueItem::Emby(_)))
-    }
-
-    /// Remove only Audiobookshelf slots (both episode and book shapes) and
-    /// their keyed positions. Emby and Feed items remain intact. Used on
-    /// confirmed Audiobookshelf Service replacement/removal to purge
-    /// Service-owned queue state without affecting other Services.
-    #[must_use]
-    pub fn without_audiobookshelf(&self) -> Self {
-        self.without_items(|item| !item.is_audiobookshelf())
     }
 }

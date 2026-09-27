@@ -10,10 +10,11 @@ use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
 use crate::app::state::types::feed_tab::WatchedFilter;
 use mbv_core::config::{
-    FeedGroupKey, FeedKind, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
+    FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
 };
-use mbv_core::playback_queue::FeedEntry;
+use mbv_queue::FeedEntry;
+use mbv_queue::FeedKind;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;

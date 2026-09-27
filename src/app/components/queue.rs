@@ -25,7 +25,7 @@ use crate::app::render::components::queue::{render_queue_status, QueueTitleModel
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::state::types::playback::{PlaybackState, QueueScope};
-use mbv_core::playback_queue::{QueueSlot, QueueSlotId};
+use mbv_queue::{QueueSlot, QueueSlotId};
 
 mod keys;
 mod pointer;

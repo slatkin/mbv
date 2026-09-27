@@ -19,7 +19,7 @@ use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::state::types::playback::DestinationLatestSource;
-use mbv_core::config::ServiceKind;
+use mbv_queue::ServiceKind;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner

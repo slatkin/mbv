@@ -128,7 +128,7 @@ fn read_initial_state(reader: &mut BufReader<SocketStream>) -> Result<CtrlEvent,
 /// applied/rejected acknowledgement is awaited. Any failure after the connect
 /// reports a restart requirement; the caller's durable commit is untouched.
 pub fn signal_local_daemon_service_setup(
-    kind: crate::config::ServiceKind,
+    kind: mbv_queue::ServiceKind,
     revision: u64,
 ) -> Result<(), String> {
     let path = PathBuf::from(crate::config::control_socket_path());
@@ -175,7 +175,7 @@ fn apply_ctrl_event(
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     notify: bool,
@@ -312,7 +312,7 @@ fn apply_unified_queue_state(
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
@@ -366,7 +366,7 @@ struct ReaderThreadState {
     status: Arc<Mutex<PlayerStatus>>,
     items: Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     disconnected: Arc<AtomicBool>,
     disconnect_notified: Arc<AtomicBool>,
@@ -391,7 +391,7 @@ fn connect_stream(
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
+    let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let disconnect_notified = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -638,8 +638,8 @@ pub fn connect_stub_daemon_pair() -> Result<
             slots: Vec::new(),
             active_slot: None,
             revision: 0,
-            source: crate::config::QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            source: mbv_queue::QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         }))

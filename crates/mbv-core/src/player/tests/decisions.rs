@@ -305,9 +305,7 @@ fn command_decisions_keep_seek_modes_and_reject_stale_slots() {
 fn active_item_state_resolves_episode_progress_and_identity() {
     let mut item = super::make_media_item("episode");
     item.playback_position_ticks = 75;
-    let state = active_item_state(Some(&crate::playback_queue::QueueItem::Emby(Box::new(
-        item,
-    ))));
+    let state = active_item_state(Some(&mbv_queue::QueueItem::Emby(Box::new(item))));
     assert_eq!(state.osd_title, "Show Test Episode");
     assert_eq!(state.last_valid_pos, 75);
     assert_eq!(state.series_id.as_str(), "series1");
@@ -320,7 +318,7 @@ fn active_item_state_resolves_episode_progress_and_identity() {
 fn active_item_state_gates_feed_resume_position(#[case] position: i64, #[case] expected: i64) {
     let mut entry = super::make_feed_entry("feed", "Podcast");
     entry.position_ticks = position;
-    let state = active_item_state(Some(&crate::playback_queue::QueueItem::Feed(entry)));
+    let state = active_item_state(Some(&mbv_queue::QueueItem::Feed(entry)));
     assert_eq!(state.last_valid_pos, expected);
 }
 
@@ -349,9 +347,7 @@ fn active_item_state_clears_episode_identity_for_non_episodes(
     item.item_type = item_type.into();
     item.media_type = media_type.into();
     item.playback_position_ticks = 75;
-    let state = active_item_state(Some(&crate::playback_queue::QueueItem::Emby(Box::new(
-        item,
-    ))));
+    let state = active_item_state(Some(&mbv_queue::QueueItem::Emby(Box::new(item))));
     assert_eq!(state.last_valid_pos, expected_position);
     assert_eq!(state.series_id.as_str(), "");
     assert_eq!((state.season, state.episode), (0, 0));

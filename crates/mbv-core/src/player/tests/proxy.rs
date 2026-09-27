@@ -1,8 +1,8 @@
 use super::*;
 
 use crate::ctrl::{CtrlCmd, CtrlCompatibility};
-use crate::playback_queue::AudiobookshelfQueueItem;
 use crate::remote_player::RemotePlayer;
+use mbv_queue::AudiobookshelfQueueItem;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
     QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
@@ -41,7 +41,7 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
     assert!(proxy.submit_queue_slots(
         vec![paired(proxy_audiobookshelf_item())],
         0,
-        crate::config::QueueSource::Unknown,
+        mbv_queue::QueueSource::Unknown,
         None,
         false,
         100
@@ -84,7 +84,7 @@ fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     assert!(!proxy.submit_queue_slots(
         vec![paired(proxy_audiobookshelf_item())],
         0,
-        crate::config::QueueSource::Unknown,
+        mbv_queue::QueueSource::Unknown,
         None,
         false,
         100

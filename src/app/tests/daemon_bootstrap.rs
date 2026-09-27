@@ -15,10 +15,10 @@ fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
 #[test]
 fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let saved = crate::config::QueueState::from_emby_items(
+    let saved = mbv_queue::QueueState::from_emby_items(
         make_items(5),
         0,
-        crate::config::QueueSource::Playlist {
+        mbv_queue::QueueSource::Playlist {
             id: Some("saved".into()),
             name: "Saved snapshot".into(),
         },
@@ -37,7 +37,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
         config,
     );
     assert!(app.player_tab.emby_items().is_empty());
-    assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
+    assert_eq!(app.queue_source, mbv_queue::QueueSource::Remote);
     app.restore_queue_state();
     assert!(app.player_tab.emby_items().is_empty());
 
@@ -99,33 +99,31 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     // Inject the live ABS queue slot (simulates the daemon broadcasting its
     // queue to the newly attached client via PlayerEvent::UnifiedQueueUpdated).
     let acknowledged_position_ticks = 30 * mbv_emby_model::TICKS_PER_SECOND;
-    let abs_item = mbv_core::playback_queue::QueueItem::Audiobookshelf(
-        mbv_core::playback_queue::AudiobookshelfItem::Episode(
-            mbv_core::playback_queue::AudiobookshelfQueueItem {
-                library_item_id: "show-a".into(),
-                episode_id: "episode-a".into(),
-                title: "Episode A".into(),
-                show_title: None,
-                author: None,
-                description: None,
-                duration_ticks: None,
-                position_ticks: acknowledged_position_ticks,
-                played: false,
-                pub_date_secs: None,
-                is_finished: false,
-                cover_path: None,
-            },
-        ),
-    );
+    let abs_item = mbv_queue::QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: acknowledged_position_ticks,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ));
     app.player_tab.set_queue_items(vec![abs_item], 0);
     assert_eq!(app.player_tab.total_queue_len(), 1);
 
     // Save a stale disk snapshot (5 Emby items) — what a previous session left.
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    crate::config::save_queue_state(&mbv_queue::QueueState {
+        source: mbv_queue::QueueSource::Unknown,
         items: make_items(5)
             .into_iter()
-            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_content_id: None,

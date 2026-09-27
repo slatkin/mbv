@@ -120,12 +120,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
         &LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
-            owner.set_content(
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                    selected,
-                ))],
-                false,
-            );
+            owner.set_content(vec![mbv_queue::QueueItem::Emby(Box::new(selected))], false);
         },
     );
 

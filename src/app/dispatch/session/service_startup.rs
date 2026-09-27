@@ -1,7 +1,8 @@
 use mbv_core::api::EmbyClient;
 use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
+use mbv_core::config::{load_service_secret, EmbySetup};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
+use mbv_queue::ServiceKind;
 use std::sync::mpsc;
 
 pub(in crate::app) enum AudiobookshelfCompletionKind {
@@ -452,7 +453,7 @@ mod tests {
         config.feeds.push(mbv_core::config::FeedSubscription {
             name: "News".into(),
             url: "https://example.test/feed".into(),
-            kind: mbv_core::config::FeedKind::Audio,
+            kind: mbv_queue::FeedKind::Audio,
         });
         assert!(!should_open_services(&config));
 

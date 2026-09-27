@@ -1,5 +1,5 @@
 use super::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, QueueItem};
-use crate::playback_queue::AudiobookshelfItem;
+use mbv_queue::AudiobookshelfItem;
 
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -300,10 +300,8 @@ impl ActiveItemLifecycle {
 #[cfg(test)]
 mod reporting_tests {
     use super::{ActiveItemLifecycle, ListeningTime};
-    use crate::playback_queue::{
-        AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
-    };
     use mbv_emby_model::EmbyItem;
+    use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
     use std::time::{Duration, Instant};
 
     fn emby() -> QueueItem {

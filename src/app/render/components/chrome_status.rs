@@ -167,7 +167,7 @@ impl App {
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {
-            crate::config::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
+            mbv_queue::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
             _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
@@ -498,21 +498,19 @@ impl App {
 }
 
 fn queue_source_status_label(
-    source: &crate::config::QueueSource,
+    source: &mbv_queue::QueueSource,
     queue_focused: bool,
 ) -> Option<(String, Color)> {
     if !queue_focused {
         return None;
     }
     let label = match source {
-        crate::config::QueueSource::Album => "ALBUM".to_string(),
-        crate::config::QueueSource::Series => "SERIES".to_string(),
-        crate::config::QueueSource::Shuffle => "SHUFFLE".to_string(),
-        crate::config::QueueSource::Remote => "REMOTE Q".to_string(),
-        crate::config::QueueSource::Collection { collection_type } => {
-            collection_type.to_uppercase()
-        }
-        crate::config::QueueSource::Playlist { .. } | crate::config::QueueSource::Unknown => {
+        mbv_queue::QueueSource::Album => "ALBUM".to_string(),
+        mbv_queue::QueueSource::Series => "SERIES".to_string(),
+        mbv_queue::QueueSource::Shuffle => "SHUFFLE".to_string(),
+        mbv_queue::QueueSource::Remote => "REMOTE Q".to_string(),
+        mbv_queue::QueueSource::Collection { collection_type } => collection_type.to_uppercase(),
+        mbv_queue::QueueSource::Playlist { .. } | mbv_queue::QueueSource::Unknown => {
             return None;
         }
     };

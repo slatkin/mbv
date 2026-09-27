@@ -281,8 +281,8 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
 }
 
 fn audiobookshelf_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
-        crate::playback_queue::AudiobookshelfQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-1".into(),
             episode_id: "episode-1".into(),
             title: "Episode 1".into(),
@@ -300,8 +300,8 @@ fn audiobookshelf_item() -> QueueItem {
 }
 
 fn audiobookshelf_book_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
-        crate::playback_queue::AudiobookshelfBookQueueItem {
+    QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(
+        mbv_queue::AudiobookshelfBookQueueItem {
             library_item_id: "book-1".into(),
             title: "Book 1".into(),
             author: None,

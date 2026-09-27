@@ -2,11 +2,12 @@ use super::{
     broadcast_queue_state, AudiobookshelfOwnerContext, DaemonEvent, DaemonOwnerContext,
     DaemonPlayerOwner, EmbyOwnerContext,
 };
-use crate::config::{EmbySetup, QueueSource};
+use crate::config::EmbySetup;
 use crate::ctrl::ServiceSetupRejection;
-use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerOwnerState};
+use mbv_queue::ExecSlot;
+use mbv_queue::QueueSource;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 

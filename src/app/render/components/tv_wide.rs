@@ -30,17 +30,14 @@ pub(in crate::app) struct TvWideRenderCtx {
     pub(in crate::app) episode_cursor: Option<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) show_letter_pills: bool,
-    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_queue::TvContentMode>,
     /// The shell-projected hero image state (design D9/D16): the panel's
     /// shared `EmbyItem` producer reads it; painting never fetches.
     pub(in crate::app) hero_image: HeroImageState,
 }
 
 impl TvWideRenderCtx {
-    pub(in crate::app) fn set_tv_content_mode(
-        &mut self,
-        mode: Option<mbv_core::config::TvContentMode>,
-    ) {
+    pub(in crate::app) fn set_tv_content_mode(&mut self, mode: Option<mbv_queue::TvContentMode>) {
         self.tv_content_mode = mode;
     }
 

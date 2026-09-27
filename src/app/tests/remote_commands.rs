@@ -42,16 +42,12 @@ fn remote_command_app() -> (App, MockHttp) {
     item_b.playback_position_ticks = 200;
     let mut item_c = make_item("c", "Movie");
     item_c.playback_position_ticks = 300;
-    app.player_tab.set_item_at(
-        0,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
-    );
-    app.player_tab.set_item_at(
-        1,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
-    );
     app.player_tab
-        .append_item(mbv_core::playback_queue::QueueItem::Emby(Box::new(item_c)));
+        .set_item_at(0, mbv_queue::QueueItem::Emby(Box::new(item_a)));
+    app.player_tab
+        .set_item_at(1, mbv_queue::QueueItem::Emby(Box::new(item_b)));
+    app.player_tab
+        .append_item(mbv_queue::QueueItem::Emby(Box::new(item_c)));
     let mut session = make_session("Client", "Emby");
     session.id = "session".into();
     session.now_playing_item_id = Some("a".into());

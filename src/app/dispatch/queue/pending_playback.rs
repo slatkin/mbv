@@ -1,15 +1,15 @@
 use super::{App, QueueScope, ToastSeverity};
 use crate::app::state::queue_owner::LocalQueueOwner;
-use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 impl App {
     pub(super) fn execute_pending_play_items(
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         autostart: bool,
     ) {
         if autostart && self.player.is_remote_disconnected() {
@@ -38,7 +38,7 @@ impl App {
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
     ) {
         let request_id = self.next_owner_queue_load_request;
         self.next_owner_queue_load_request = self.next_owner_queue_load_request.saturating_add(1);
@@ -92,7 +92,7 @@ impl App {
         &mut self,
         items: &[EmbyItem],
         start_idx: usize,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         direct_remote: bool,
     ) {
         if !direct_remote {

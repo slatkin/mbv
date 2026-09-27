@@ -8,7 +8,7 @@ fn artist_cache_key(
 ) -> crate::app::state::music_artist_detail::ArtistDetailKey {
     crate::app::state::music_artist_detail::ArtistDetailKey {
         destination: crate::app::components::library_panel::LibraryKey::Service {
-            service: mbv_core::config::ServiceKind::Emby,
+            service: mbv_queue::ServiceKind::Emby,
             library_id: "lib-music".into(),
             kind: crate::app::components::LibraryKind::Music,
         },
@@ -140,7 +140,7 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
             );
             assert_eq!(start_idx, 1, "the selected track is the start index");
             assert!(autostart, "a track activation starts playback");
-            assert!(matches!(source, crate::config::QueueSource::Album));
+            assert!(matches!(source, mbv_queue::QueueSource::Album));
         }
         PendingQueueAction::ClearQueue => panic!("a track activation never clears the queue"),
     }
@@ -214,7 +214,7 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
         .set_items(vec![existing], 0);
-    app.queue_source = crate::config::QueueSource::Playlist {
+    app.queue_source = mbv_queue::QueueSource::Playlist {
         id: Some("playlist-1".into()),
         name: "Playlist".into(),
     };
@@ -228,7 +228,7 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
     assert_eq!(app.playback_queue().queue_cursor, 0);
     assert!(matches!(
         app.queue_source,
-        crate::config::QueueSource::Playlist { .. }
+        mbv_queue::QueueSource::Playlist { .. }
     ));
     assert!(
         app.status.contains("Library error"),

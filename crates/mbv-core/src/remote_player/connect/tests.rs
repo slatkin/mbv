@@ -1,7 +1,7 @@
 use super::*;
-use crate::config::QueueSource;
-use crate::playback_queue::{FeedEntry, QueueItem};
 use mbv_emby_model::EmbyImageTags;
+use mbv_queue::QueueSource;
+use mbv_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
 
 fn make_media_item(id: &str) -> EmbyItem {
@@ -84,7 +84,7 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -317,7 +317,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -349,7 +349,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
             active_slot: None,
             revision: 0,
             source: QueueSource::Unknown,
-            lineage: crate::ctrl::QueueLineage::default(),
+            lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         });
@@ -433,7 +433,7 @@ fn track_changed_leaves_status_mirror_for_app_to_rederive() {
 
     apply_ctrl_event(
         CtrlEvent::Player(PlayerEvent::TrackChanged {
-            slot_id: crate::playback_queue::QueueSlotId::from_raw(2),
+            slot_id: mbv_queue::QueueSlotId::from_raw(2),
             transition: None,
         }),
         &status,
@@ -503,7 +503,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
         active_slot: Some(22),
         revision: 9,
         source: QueueSource::Remote,
-        lineage: crate::ctrl::QueueLineage::default(),
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     };
@@ -598,7 +598,7 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
             id: Some("pl-1".into()),
             name: "My Playlist".into(),
         },
-        lineage: crate::ctrl::QueueLineage::default(),
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     };

@@ -1,5 +1,5 @@
 use super::{duration_secs, parse_atom_entries, parse_rss_entries};
-use mbv_core::config::FeedKind;
+use mbv_queue::FeedKind;
 
 #[test]
 fn rss_entry_with_enclosure_guid_and_duration() {

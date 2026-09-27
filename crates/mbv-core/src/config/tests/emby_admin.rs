@@ -2,9 +2,10 @@
 use crate::config::{
     config_path, load_config, load_queue_state, load_service_secret, persist_emby_setup_and_secret,
     replace_emby_setup_and_secret, save_config_settings, save_queue_state, save_service_secret,
-    Config, EmbySetup, FeedKind, FeedSubscription, QueueSource, QueueState, ServiceKind,
-    TestStateDirGuard,
+    Config, EmbySetup, FeedSubscription, TestStateDirGuard,
 };
+#[cfg(test)]
+use mbv_queue::{FeedKind, QueueSource, QueueState, ServiceKind};
 
 #[test]
 fn emby_setup_normalizes_server_and_starts_at_revision_one() {
@@ -30,21 +31,19 @@ fn different_server_replacement_clears_only_emby_owned_state() {
     save_service_secret(ServiceKind::Emby, "old-token").unwrap();
     save_queue_state(&QueueState {
         source: QueueSource::Unknown,
-        items: vec![crate::playback_queue::QueueItem::Feed(
-            crate::playback_queue::FeedEntry {
-                guid: "feed-1".into(),
-                title: "Episode".into(),
-                enclosure_url: Some("https://feeds.example/episode.mp3".into()),
-                link: None,
-                mime_type: Some("audio/mpeg".into()),
-                duration_ticks: None,
-                pub_date_secs: None,
-                feed_kind: Some(FeedKind::Audio),
-                feed_id: None,
-                position_ticks: 0,
-                played: false,
-            },
-        )],
+        items: vec![mbv_queue::QueueItem::Feed(mbv_queue::FeedEntry {
+            guid: "feed-1".into(),
+            title: "Episode".into(),
+            enclosure_url: Some("https://feeds.example/episode.mp3".into()),
+            link: None,
+            mime_type: Some("audio/mpeg".into()),
+            duration_ticks: None,
+            pub_date_secs: None,
+            feed_kind: Some(FeedKind::Audio),
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
+        })],
         cursor: 0,
         last_played_content_id: None,
         last_played_item_id: None,
@@ -59,10 +58,7 @@ fn different_server_replacement_clears_only_emby_owned_state() {
 
     let state = load_queue_state().unwrap();
     assert_eq!(state.items.len(), 1);
-    assert!(matches!(
-        state.items[0],
-        crate::playback_queue::QueueItem::Feed(_)
-    ));
+    assert!(matches!(state.items[0], mbv_queue::QueueItem::Feed(_)));
     assert_eq!(
         load_service_secret(ServiceKind::Emby).as_deref(),
         Some("new-token")

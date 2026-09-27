@@ -48,7 +48,7 @@ pub(in crate::app) fn feed_age_group(pub_date_secs: Option<u64>, now_secs: u64) 
 }
 
 pub(in crate::app) fn feed_display_rows(
-    entries: &[mbv_core::playback_queue::FeedEntry],
+    entries: &[mbv_queue::FeedEntry],
     now_secs: u64,
 ) -> Vec<FeedDisplayRow> {
     let mut rows = Vec::new();

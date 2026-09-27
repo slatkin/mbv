@@ -212,9 +212,7 @@ impl App {
         self.now_playing_status() != NowPlayingStatus::Idle && !self.visual_slot_hidden
     }
 
-    pub(in crate::app) fn pending_playback_slot(
-        &self,
-    ) -> Option<mbv_core::playback_queue::QueueSlotId> {
+    pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
             .pending_playback_slot
             .or_else(|| self.bare_in_flight_slot())
@@ -253,7 +251,7 @@ impl App {
             runtime_ticks: self
                 .playback_queue()
                 .item_at(index)
-                .map_or(0, mbv_core::playback::QueueItem::runtime_ticks),
+                .map_or(0, mbv_queue::QueueItem::runtime_ticks),
             paused: false,
         }
     }
@@ -273,7 +271,7 @@ impl App {
     /// in-flight transition it publishes, so a locally selected slot projects
     /// as now-playing before the Playback run reports the change
     /// (queue-canonical-list, "Selecting a different item to play").
-    fn bare_in_flight_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
+    fn bare_in_flight_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         if self.player.is_remote() {
             return None;
         }

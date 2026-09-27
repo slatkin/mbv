@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::playback_execution_sequence::ExecSlot;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
@@ -10,6 +9,12 @@ const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 mod audiobookshelf;
 mod items;
 pub use items::*;
+mod kinds;
+pub use kinds::*;
+mod state;
+pub use state::*;
+mod execution_sequence;
+pub use execution_sequence::*;
 
 // serde derives so the owner-assigned slot identity can travel on
 // `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
@@ -130,7 +135,7 @@ impl ProgressState {
 
 /// Writes a resolved position/played pair into whichever kind `item` is.
 /// Shared by [`ProgressState::apply_to_item`] (the canonical `PlaybackQueue`)
-/// and [`crate::playback::execution_sequence::ExecutionSequence`]'s own
+/// and [`crate::execution_sequence::ExecutionSequence`]'s own
 /// progress application (the Playback run's local queue mirror), so the two
 /// never diverge on how a kind's fields are written.
 pub(crate) fn apply_progress_to_queue_item(
@@ -554,7 +559,7 @@ impl PlaybackQueue {
     /// Applies a refresh to the specific queue slots captured before an
     /// asynchronous adoption fetch. Unlike [`Self::merge_refresh`], this is
     /// not a reconciliation: missing fetched items never prune the queue.
-    pub(crate) fn merge_refresh_for_slots(
+    pub fn merge_refresh_for_slots(
         &mut self,
         fetched_slots: Vec<(QueueSlotId, EmbyItem)>,
     ) -> RefreshMergeResult {
@@ -759,3 +764,6 @@ fn group_fetched_items_by_item_id(
 fn should_protect_missing_slot(slot: &QueueSlot, active_slot_id: Option<QueueSlotId>) -> bool {
     active_slot_id == Some(slot.slot_id) || slot.progress_state.pending_sync.is_some()
 }
+
+#[cfg(test)]
+mod tests;

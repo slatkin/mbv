@@ -4,12 +4,12 @@ impl App {
     pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {
         matches!(
             &self.queue_source,
-            crate::config::QueueSource::Playlist { id: Some(_), .. }
+            mbv_queue::QueueSource::Playlist { id: Some(_), .. }
         )
     }
 
     pub(in crate::app) fn queue_playlist_id(&self) -> Option<&str> {
-        if let crate::config::QueueSource::Playlist {
+        if let mbv_queue::QueueSource::Playlist {
             id: Some(ref id), ..
         } = self.queue_source
         {
@@ -20,7 +20,7 @@ impl App {
     }
 
     pub(in crate::app) fn queue_playlist_name(&self) -> &str {
-        if let crate::config::QueueSource::Playlist { ref name, .. } = self.queue_source {
+        if let mbv_queue::QueueSource::Playlist { ref name, .. } = self.queue_source {
             name.as_str()
         } else {
             ""

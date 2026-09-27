@@ -5,8 +5,8 @@ use super::{
     init_mpv, AudiobookshelfPlayerContext, EmbyClient, MpvRunConfig, PlayerCommand, PlayerEvent,
     PlayerStatus, SubtitlePrefs,
 };
-use crate::playback_queue::QueueItem;
 use libmpv2::Mpv;
+use mbv_queue::QueueItem;
 use std::sync::{atomic::AtomicBool, mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;

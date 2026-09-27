@@ -3,7 +3,7 @@ use crate::app::infra::feed_parse::fetch_and_parse_entries;
 use crate::app::state::types::feed_tab::FeedTabRefreshResult;
 use crate::app::App;
 use mbv_core::feed_entry_state::FeedEntryState;
-use mbv_core::playback_queue::{FeedEntry, QueueItem};
+use mbv_queue::{FeedEntry, QueueItem};
 use std::collections::HashMap;
 
 impl App {
@@ -307,7 +307,7 @@ impl App {
     /// Unknown-runtime EOF keeps `played` false.
     pub(in crate::app) fn persist_feed_slot_lifecycle(
         &mut self,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,
         completed: bool,
     ) {

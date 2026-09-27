@@ -2,8 +2,8 @@ use super::core::{
     broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress, DaemonEvent,
 };
 use super::{AudiobookshelfOwnerContext, ClientRegistry};
-use crate::playback_queue::PlaybackQueue;
 use crate::player::Player;
+use mbv_queue::PlaybackQueue;
 use std::sync::mpsc;
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
@@ -18,8 +18,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
         player.update_audiobookshelf_context(None);
         return;
     };
-    let Some(api_key) =
-        crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf)
+    let Some(api_key) = crate::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
     else {
         player.update_audiobookshelf_context(None);
         return;

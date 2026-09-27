@@ -2,8 +2,9 @@ use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
 use crate::app::state::types::settings;
-use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
-use mbv_core::playback_queue::FeedEntry;
+use mbv_core::config::FeedSubscription;
+use mbv_queue::FeedEntry;
+use mbv_queue::{FeedKind, ServiceKind};
 use rstest::rstest;
 
 mod lifecycle_launch_migration;

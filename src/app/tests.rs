@@ -122,8 +122,8 @@ pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
-pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> crate::config::QueueState {
-    crate::config::QueueState::from_emby_items(items, 0, crate::config::QueueSource::Unknown)
+pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> mbv_queue::QueueState {
+    mbv_queue::QueueState::from_emby_items(items, 0, mbv_queue::QueueSource::Unknown)
 }
 
 pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
@@ -386,7 +386,7 @@ pub(crate) fn emby_unified_state(
         .enumerate()
         .map(|(i, item)| mbv_core::ctrl::UnifiedQueueSlot {
             slot_id: (100 + i) as u64,
-            item: mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone())),
+            item: mbv_queue::QueueItem::Emby(Box::new(item.clone())),
         })
         .collect();
     mbv_core::ctrl::UnifiedQueueStateData {
@@ -394,8 +394,8 @@ pub(crate) fn emby_unified_state(
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,
         revision: 1,
-        source: crate::config::QueueSource::Remote,
-        lineage: mbv_core::ctrl::QueueLineage::default(),
+        source: mbv_queue::QueueSource::Remote,
+        lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     }

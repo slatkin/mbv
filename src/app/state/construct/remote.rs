@@ -71,7 +71,7 @@ impl RemoteSnapshot {
 
     /// The legacy/unified bootstrap a local-daemon attach replays through
     /// `App::build`.
-    fn local_bootstrap(&self, source: &crate::config::QueueSource) -> LocalDaemonBootstrap {
+    fn local_bootstrap(&self, source: &mbv_queue::QueueSource) -> LocalDaemonBootstrap {
         self.unified_state.as_ref().map_or_else(
             || bootstrap_legacy_queue(self.items.clone(), self.cursor, source.clone()),
             bootstrap_unified_queue,
@@ -123,11 +123,10 @@ fn remote_services(
 ) -> RemoteServices {
     let emby_configured = app_config.emby_setup.is_some();
     let emby_credential_present =
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
     let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
     let audiobookshelf_credential_present =
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-            .is_some();
+        mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
     let emby_runtime = client_arc.map_or_else(
         || independent_emby_runtime(emby_configured, emby_credential_present),
         |client| EmbyRuntime::ready(std::sync::Arc::clone(client)),

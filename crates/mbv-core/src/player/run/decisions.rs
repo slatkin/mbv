@@ -1,6 +1,6 @@
 use super::{IntroState, NextUp};
-use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use mbv_ids::ItemId;
+use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::player) struct ActiveItemState {

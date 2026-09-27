@@ -6,13 +6,13 @@
 //! only via [`PlayerOwnerState::note_observed_active_slot`] from a Playback-run
 //! observation, never from accepting a command.
 
-use crate::playback_queue::{PlaybackQueue, QueueSlotId};
 use crate::player::transition::OwnerTransitionState;
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 #[derive(Debug, Default)]
 pub struct PlayerOwnerState {
     pub(crate) queue: PlaybackQueue,
-    pub(crate) source: crate::config::QueueSource,
+    pub(crate) source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
     pub(crate) transitions: OwnerTransitionState,
 }
@@ -21,7 +21,7 @@ impl PlayerOwnerState {
     /// Seed an owner core with an existing canonical queue and its source
     /// (queue adoption on startup / handoff).
     #[must_use]
-    pub fn new(queue: PlaybackQueue, source: crate::config::QueueSource) -> Self {
+    pub fn new(queue: PlaybackQueue, source: mbv_queue::QueueSource) -> Self {
         Self {
             queue,
             source,
@@ -101,7 +101,7 @@ impl PlayerOwnerState {
         allowed
             && matches!(
                 self.queue.consume_slot(slot_id),
-                crate::playback_queue::QueueMutationResult::Applied(_)
+                mbv_queue::QueueMutationResult::Applied(_)
             )
     }
 
@@ -245,7 +245,7 @@ mod tests {
         let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
         let slot_id = queue.slots()[0].slot_id;
         let before_revision = queue.revision();
-        let mut owner = PlayerOwnerState::new(queue, crate::config::QueueSource::default());
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
 
         let watched_ticks = 86 * mbv_emby_model::TICKS_PER_SECOND;
         owner.apply_completion_progress(slot_id, watched_ticks, false);

@@ -243,7 +243,7 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
         )
         .unwrap_err();
     assert!(!crate::config::token_cache_path().exists());
-    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
+    assert!(!crate::config::service_secret_path(mbv_queue::ServiceKind::Emby).exists());
     assert!(!crate::config::config_path().exists());
 
     client
@@ -255,7 +255,7 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
         )
         .unwrap_err();
     assert!(!crate::config::token_cache_path().exists());
-    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
+    assert!(!crate::config::service_secret_path(mbv_queue::ServiceKind::Emby).exists());
     assert!(!crate::config::config_path().exists());
 }
 

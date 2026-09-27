@@ -1,7 +1,7 @@
-use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
+use mbv_queue::ExecSlot;
+use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, Default)]
 pub struct SubtitlePrefs {

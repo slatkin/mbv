@@ -7,7 +7,7 @@ use crate::app::render::arrangements::playback_transport::{
     transport_buttons_fit, TransportMeasure,
 };
 use crate::app::ui_util::fmt_duration_short;
-use mbv_core::playback_queue::PlaybackTitleParts;
+use mbv_queue::PlaybackTitleParts;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

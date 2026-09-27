@@ -1,5 +1,5 @@
 use super::*;
-use mbv_core::config::TvContentMode;
+use mbv_queue::TvContentMode;
 use tuirealm::event::KeyModifiers;
 
 /// Narrow Latest resolves keyboard actions against the displayed row

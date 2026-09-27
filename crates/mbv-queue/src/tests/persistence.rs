@@ -47,7 +47,7 @@ fn queue_item_serializes_tagged() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(crate::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -101,7 +101,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(crate::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,
@@ -237,8 +237,8 @@ fn audiobookshelf_admission_and_purge_keep_other_kinds() {
     assert!(!abs.admissible_for_owner(true, |_| false));
     assert!(QueueItem::Feed(feed("feed-1")).admissible_for_owner(true, |_| false));
 
-    let state = crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
+    let state = crate::QueueState {
+        source: crate::QueueSource::Unknown,
         items: vec![
             QueueItem::Emby(Box::new(item("emby-1"))),
             abs,

@@ -238,10 +238,10 @@ impl App {
             item.playback_position_ticks = last_valid_pos;
         }
         let last_id = item.id.clone();
-        let _ = self.player_tab.queue.update_slot_item(
-            slot_id,
-            mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
-        );
+        let _ = self
+            .player_tab
+            .queue
+            .update_slot_item(slot_id, mbv_queue::QueueItem::Emby(Box::new(item)));
         self.last_played_item_id = Some(last_id);
     }
 

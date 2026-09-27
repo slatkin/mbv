@@ -457,7 +457,7 @@ impl Model {
     /// right-click/keyboard menu, then the queue re-projection.
     fn handle_queue_row_context_menu(
         &mut self,
-        slot_ids: Vec<mbv_core::playback_queue::QueueSlotId>,
+        slot_ids: Vec<mbv_queue::QueueSlotId>,
         anchor: Option<(u16, u16)>,
     ) {
         self.context_menu_origin = Some(crate::app::components::media_list::SelectionOrigin::Queue);

@@ -105,7 +105,7 @@ fn has_flag(args: &[String], flag: &str) -> bool {
 }
 
 fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
-    let token = mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby)?;
+    let token = mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby)?;
     let setup = config.emby_setup.as_ref()?;
     let mut client = EmbyClient::new(config.clone());
     client.config.server_url.clone_from(&setup.server_url);
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn cached_emby_client_carries_user_id_from_setup() {
         let _state_dir = mbv_core::config::TestStateDirGuard::new();
-        mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "tok").unwrap();
+        mbv_core::config::save_service_secret(mbv_queue::ServiceKind::Emby, "tok").unwrap();
         let config = config::Config {
             emby_setup: Some(mbv_core::config::EmbySetup::new(
                 "http://emby.example:8096",

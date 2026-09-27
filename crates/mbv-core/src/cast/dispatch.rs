@@ -5,7 +5,7 @@
 
 use crate::audiobookshelf::{AudiobookshelfAudioSource, AudiobookshelfSourceMethod};
 use crate::cast::client::CastMediaItem;
-use crate::playback_queue::{AudiobookshelfBookQueueItem, FeedEntry};
+use mbv_queue::{AudiobookshelfBookQueueItem, FeedEntry};
 
 /// Which subtitle rendition, if any, a dispatched Emby item needs. Sidecar
 /// text tracks are dropped from v1 (design.md Risks: `rust_cast` 0.21 has no
@@ -73,8 +73,8 @@ fn feed_content_type(entry: &FeedEntry) -> String {
         return mime.to_string();
     }
     match entry.feed_kind.unwrap_or_default() {
-        crate::config::FeedKind::Audio => "audio/mpeg".to_string(),
-        crate::config::FeedKind::Video => "video/mp4".to_string(),
+        mbv_queue::FeedKind::Audio => "audio/mpeg".to_string(),
+        mbv_queue::FeedKind::Video => "video/mp4".to_string(),
     }
 }
 

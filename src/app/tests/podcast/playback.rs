@@ -1,8 +1,8 @@
 use super::*;
 use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::socket::SocketEvent;
-use mbv_core::playback_queue::QueueItem;
 use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_queue::QueueItem;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
@@ -244,8 +244,8 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
     );
 
     // Activate a different slot so episode-a is inactive.
-    let other = QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-        mbv_core::playback_queue::AudiobookshelfQueueItem {
+    let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-b".into(),
             episode_id: "ep-b".into(),
             title: "Other".into(),

@@ -24,7 +24,7 @@ use mbv_core::config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
 };
-use mbv_core::playback_queue::{FeedEntry, QueueItem};
+use mbv_queue::{FeedEntry, QueueItem};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::library_panel::HeroImageState;

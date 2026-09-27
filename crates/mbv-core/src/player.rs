@@ -11,15 +11,15 @@ use std::{
 };
 
 use crate::api::EmbyClient;
-use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
-#[cfg(test)]
-use crate::playback_queue::QueueMutationResult;
-use crate::playback_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
 };
 use mbv_emby_model::{seconds_to_ticks, ticks_to_seconds, EmbyItem, TICKS_PER_SECOND};
+#[cfg(test)]
+use mbv_queue::QueueMutationResult;
+use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
+use mbv_queue::{ExecSlot, ExecutionSequence};
 
 fn mpv_err_str(e: &libmpv2::Error) -> String {
     if let libmpv2::Error::Raw(code) = e {

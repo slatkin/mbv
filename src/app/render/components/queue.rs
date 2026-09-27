@@ -2,7 +2,7 @@ use crate::app::components::media_list::{
     queue_row_zebra_stripe, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

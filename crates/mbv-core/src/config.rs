@@ -1,9 +1,9 @@
+use mbv_queue::{FeedKind, LibraryPositionState, QueueState, ServiceKind};
+
 mod types_paths;
 pub use types_paths::*;
 mod types_setup;
 pub use types_setup::*;
-mod types_queue_state;
-pub use types_queue_state::*;
 mod launch_state;
 pub use launch_state::*;
 mod test_support;

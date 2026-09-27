@@ -628,7 +628,7 @@ fn feed(guid: &str) -> FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(60 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(crate::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,

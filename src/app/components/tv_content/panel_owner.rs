@@ -94,10 +94,10 @@ impl TvContent {
             pills.push("All".to_string());
         }
         let active = match self.context.tv_content_mode.as_ref() {
-            Some(mbv_core::config::TvContentMode::Latest) => 0,
-            Some(mbv_core::config::TvContentMode::Upcoming) => 1,
-            Some(mbv_core::config::TvContentMode::All) => 2,
-            Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+            Some(mbv_queue::TvContentMode::Latest) => 0,
+            Some(mbv_queue::TvContentMode::Upcoming) => 1,
+            Some(mbv_queue::TvContentMode::All) => 2,
+            Some(mbv_queue::TvContentMode::Range(index)) => index + 2,
             None => {
                 if large {
                     0

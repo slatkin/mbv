@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::QueueSource;
-use crate::playback_queue::{QueueItem, QueueSlotId};
 use crate::player::PlayerStatus;
+use mbv_queue::{QueueItem, QueueLineage, QueueSlotId, QueueSource};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
 /// fail to understand. Compatibility is exact-match, so every bump kills
@@ -71,10 +70,6 @@ pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 
 pub type PlaybackRequestId = u64;
 pub type QueueLoadRequestId = u64;
-/// Opaque owner-minted replacement lineage carried by queue snapshots and
-/// source-only updates.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QueueLineage(pub u64);
 pub type PlaybackGeneration = u64;
 
 // ── Unified queue wire types ──────────────────────────────────────────────

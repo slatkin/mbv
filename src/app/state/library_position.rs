@@ -40,7 +40,7 @@ impl App {
     pub(in crate::app) fn saved_library_position(
         &self,
         lib_idx: usize,
-    ) -> Option<crate::config::LibraryPosition> {
+    ) -> Option<mbv_queue::LibraryPosition> {
         let library_id = self.libs.get(lib_idx)?.library.id.as_str();
         self.library_position_state
             .libraries
@@ -51,7 +51,7 @@ impl App {
     pub(in crate::app) fn replace_saved_library_position(
         &mut self,
         lib_idx: usize,
-        position: crate::config::LibraryPosition,
+        position: mbv_queue::LibraryPosition,
     ) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -112,21 +112,21 @@ impl App {
         }
     }
 
-    fn saved_tv_mode_is_stale(saved: Option<&crate::config::LibraryPosition>) -> bool {
+    fn saved_tv_mode_is_stale(saved: Option<&mbv_queue::LibraryPosition>) -> bool {
         saved
             .and_then(|position| position.levels.first())
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
-                Some(mbv_core::config::TvContentMode::All) => root
+                Some(mbv_queue::TvContentMode::All) => root
                     .library_total
                     .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD),
-                Some(mbv_core::config::TvContentMode::Range(_)) => root
+                Some(mbv_queue::TvContentMode::Range(_)) => root
                     .library_total
                     .is_some_and(|total| total <= crate::app::render::LIBRARY_PILL_THRESHOLD),
                 _ => false,
             })
     }
 
-    fn normalize_saved_tv_mode(saved: Option<&mut crate::config::LibraryPosition>) {
+    fn normalize_saved_tv_mode(saved: Option<&mut mbv_queue::LibraryPosition>) {
         if let Some(position) = saved {
             if let Some(root) = position.levels.first_mut() {
                 let mode = crate::app::render::resolve_tv_content_mode(
@@ -134,7 +134,7 @@ impl App {
                     root.tv_content_mode.as_ref(),
                 );
                 root.letter_filter_index = match mode {
-                    mbv_core::config::TvContentMode::Range(index) => Some(index),
+                    mbv_queue::TvContentMode::Range(index) => Some(index),
                     _ => None,
                 };
                 root.tv_content_mode = Some(mode);
@@ -161,7 +161,7 @@ impl App {
     fn restore_saved_library_position(
         &mut self,
         lib_idx: usize,
-        position: crate::config::LibraryPosition,
+        position: mbv_queue::LibraryPosition,
     ) {
         let root = &position.levels[0];
         let restore_feed_view = self.is_feed_home_video_library(lib_idx);
@@ -180,7 +180,7 @@ impl App {
     fn library_position_placeholder(
         &self,
         lib_idx: usize,
-        root: &crate::config::LibraryPositionLevel,
+        root: &mbv_queue::LibraryPositionLevel,
     ) -> BrowseLevel {
         BrowseLevel {
             fetched_rows: 0,
@@ -214,7 +214,7 @@ impl App {
 
     fn reset_library_position(&mut self, lib_idx: usize) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
-            lib.apply_library_position(&crate::config::LibraryPosition::default(), Vec::new());
+            lib.apply_library_position(&mbv_queue::LibraryPosition::default(), Vec::new());
         }
         self.ensure_lib_loaded_for(lib_idx);
     }
@@ -248,8 +248,8 @@ impl App {
         let Some(state) = self.audiobookshelf_browse.get(index) else {
             return;
         };
-        let position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        let position = mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: state.library.id.clone(),
                 title: state.library.name.clone(),
@@ -282,8 +282,8 @@ impl App {
         let Some(state) = self.audiobookshelf_book_browse.get(index) else {
             return;
         };
-        let position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        let position = mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: state.library.id.clone(),
                 title: state.library.name.clone(),

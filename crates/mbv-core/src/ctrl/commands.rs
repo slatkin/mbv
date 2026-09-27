@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::{QueueSource, ServiceKind};
 use crate::ctrl::{
-    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLineage, QueueLoadRequestId,
-    UnifiedQueueSlot,
+    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, UnifiedQueueSlot,
 };
-use crate::playback_queue::QueueItem;
 use crate::player::PlayerCommand;
+use mbv_queue::QueueItem;
+use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
 
 // ── CtrlCmd ──────────────────────────────────────────────────────────────
 

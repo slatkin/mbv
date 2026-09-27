@@ -96,19 +96,15 @@ pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
 
 pub(crate) fn resolve_tv_content_mode(
     total: usize,
-    restored: Option<&mbv_core::config::TvContentMode>,
-) -> mbv_core::config::TvContentMode {
+    restored: Option<&mbv_queue::TvContentMode>,
+) -> mbv_queue::TvContentMode {
     let large = total > LIBRARY_PILL_THRESHOLD;
     match restored {
-        Some(mbv_core::config::TvContentMode::All) if large => {
-            mbv_core::config::TvContentMode::Latest
-        }
-        Some(mbv_core::config::TvContentMode::Range(_)) if !large => {
-            mbv_core::config::TvContentMode::All
-        }
+        Some(mbv_queue::TvContentMode::All) if large => mbv_queue::TvContentMode::Latest,
+        Some(mbv_queue::TvContentMode::Range(_)) if !large => mbv_queue::TvContentMode::All,
         Some(mode) => mode.clone(),
-        None if large => mbv_core::config::TvContentMode::Latest,
-        None => mbv_core::config::TvContentMode::All,
+        None if large => mbv_queue::TvContentMode::Latest,
+        None => mbv_queue::TvContentMode::All,
     }
 }
 

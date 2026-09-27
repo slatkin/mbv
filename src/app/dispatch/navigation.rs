@@ -137,11 +137,9 @@ impl App {
                     let ct = self.libs[lib_idx].library.collection_type.clone();
                     drop(client);
                     self.replace_playback_queue(siblings.clone(), start_idx);
-                    self.set_queue_source_if_not_local_daemon(
-                        crate::config::QueueSource::Collection {
-                            collection_type: ct,
-                        },
-                    );
+                    self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Collection {
+                        collection_type: ct,
+                    });
                     if !self.has_direct_remote_queue() {
                         self.save_queue_state();
                     }
@@ -232,14 +230,14 @@ impl App {
             Some(PendingQueueAction::PlayItems {
                 items: tracks,
                 start_idx,
-                source: crate::config::QueueSource::Album,
+                source: mbv_queue::QueueSource::Album,
                 autostart: true,
             })
         } else {
             Some(PendingQueueAction::PlayItems {
                 items: vec![tracks.remove(start_idx)],
                 start_idx: 0,
-                source: crate::config::QueueSource::Album,
+                source: mbv_queue::QueueSource::Album,
                 autostart: true,
             })
         }
@@ -256,7 +254,7 @@ impl App {
         let action = PendingQueueAction::PlayItems {
             items: tracks,
             start_idx,
-            source: crate::config::QueueSource::Album,
+            source: mbv_queue::QueueSource::Album,
             autostart: true,
         };
         self.request_queue_replacement(

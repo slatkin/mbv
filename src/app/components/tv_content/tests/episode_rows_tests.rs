@@ -110,7 +110,7 @@ fn idless_upcoming_rows_have_stable_distinct_targets_and_resolve_selection() {
         None,
         false,
     );
-    context.set_tv_content_mode(Some(mbv_core::config::TvContentMode::Upcoming));
+    context.set_tv_content_mode(Some(mbv_queue::TvContentMode::Upcoming));
     let mut component = TvContent::new();
     component.set_content(context);
     component.carrier.select_index(1);

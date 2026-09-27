@@ -62,7 +62,8 @@ mod tests {
     use crate::app::components::library_panel::LibraryContentOwner;
     use crate::app::state::types::feed_tab::WatchedFilter;
     use crate::app::tests::make_app_stub;
-    use mbv_core::config::{FeedKind, FeedSubscription};
+    use mbv_core::config::FeedSubscription;
+    use mbv_queue::FeedKind;
 
     fn subscription(name: &str) -> FeedSubscription {
         FeedSubscription {

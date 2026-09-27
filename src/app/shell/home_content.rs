@@ -13,7 +13,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
-use mbv_core::playback_queue::QueueItem;
+use mbv_queue::QueueItem;
 use std::time::Instant;
 
 impl Model {
@@ -60,7 +60,7 @@ impl Model {
             let Some(level) = library.nav_stack.last_mut() else {
                 continue;
             };
-            if level.tv_content_mode != Some(mbv_core::config::TvContentMode::Latest) {
+            if level.tv_content_mode != Some(mbv_queue::TvContentMode::Latest) {
                 continue;
             }
             level.items.clone_from(&items);

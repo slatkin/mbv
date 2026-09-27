@@ -5,9 +5,9 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
-use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 
 mod pending_playback;
 mod playlist;
@@ -121,7 +121,7 @@ impl App {
     pub(in crate::app) fn remove_slots_from_queue(
         &mut self,
         scope: QueueScope,
-        slot_ids: &[mbv_core::playback_queue::QueueSlotId],
+        slot_ids: &[mbv_queue::QueueSlotId],
     ) {
         let needs_confirm = slot_ids.iter().any(|slot_id| {
             self.slot_index(scope, *slot_id)
@@ -158,7 +158,7 @@ impl App {
 
         // Descending order keeps the remaining positions valid as slots go;
         // the recorded undo positions are the pre-removal indices.
-        let mut removed_slots: Vec<mbv_core::playback_queue::QueueSlotId> = Vec::new();
+        let mut removed_slots: Vec<mbv_queue::QueueSlotId> = Vec::new();
         for pos in positions.iter().rev() {
             let Some(slot_id) = self.queue_for_scope(scope).slot_id_at(*pos) else {
                 continue;
@@ -285,7 +285,7 @@ impl App {
     fn apply_queue_move_by_slot(
         &mut self,
         scope: QueueScope,
-        slot_id: mbv_core::playback_queue::QueueSlotId,
+        slot_id: mbv_queue::QueueSlotId,
         from: usize,
         to: usize,
     ) -> bool {

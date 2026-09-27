@@ -7,8 +7,8 @@
 //! Home, Queue, TV, and Browser. The component owns the cursor and resolves
 //! the click region; the shell owns the matching `App` side effect.
 
-use mbv_core::playback_queue::FeedEntry;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::FeedEntry;
 
 use super::hit_regions::TvHit;
 use super::intents::{
@@ -305,11 +305,11 @@ pub enum ShellRequest {
     /// A Queue row the user single-clicked; the component has already pinned
     /// its selection to `slot_id` (design.md D4/D5).
     QueueRowClick {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
     },
     /// A Queue row the user double-clicked; the shell activates `slot_id`.
     QueueRowActivate {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
     },
 
     /// A Queue scope pill the user clicked; the component has already switched

@@ -1,7 +1,7 @@
 use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
 use crate::ctrl::CtrlEvent;
-use crate::playback_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 use crate::player::Player;
+use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the
@@ -24,9 +24,9 @@ pub(in crate::daemon) fn persist_stay_alive_owner_queue(
 
 pub(crate) fn project_queue_state(
     queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
+    source: &mbv_queue::QueueSource,
     player_status: &crate::player::PlayerStatus,
-) -> crate::config::QueueState {
+) -> mbv_queue::QueueState {
     use std::collections::HashMap;
 
     let slots = queue.slots();
@@ -62,7 +62,7 @@ pub(crate) fn project_queue_state(
 
     let queue_items: Vec<QueueItem> = slots.iter().map(|s| s.item.clone()).collect();
 
-    crate::config::QueueState {
+    mbv_queue::QueueState {
         source: source.clone(),
         items: queue_items,
         cursor: active_idx,
@@ -83,9 +83,9 @@ pub(crate) fn project_queue_state(
 pub(crate) fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-    lineage: crate::ctrl::QueueLineage,
-    observed_active_slot: Option<crate::playback_queue::QueueSlotId>,
+    source: &mbv_queue::QueueSource,
+    lineage: mbv_queue::QueueLineage,
+    observed_active_slot: Option<mbv_queue::QueueSlotId>,
     in_flight_transition: Option<crate::ctrl::TransitionSummary>,
     queued_latest_transition: Option<crate::ctrl::TransitionSummary>,
     supports_abs_queue: bool,
@@ -132,7 +132,7 @@ pub(crate) fn broadcast_queue_state(
     player: &Player,
     shared_queue: &SharedQueueState,
     queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
+    source: &mbv_queue::QueueSource,
     transitions: &crate::player::transition::OwnerTransitionState,
 ) {
     let status = player.status.lock().unwrap().clone();
@@ -263,12 +263,12 @@ pub(crate) fn admit_queue_items(
 }
 
 pub(crate) fn admit_queue_slots(
-    original: Vec<(crate::playback_queue::QueueSlotId, QueueItem)>,
+    original: Vec<(mbv_queue::QueueSlotId, QueueItem)>,
     requested_cursor: Option<usize>,
     audio_only: bool,
     has_emby: bool,
     has_audiobookshelf: bool,
-) -> (Vec<(crate::playback_queue::QueueSlotId, QueueItem)>, usize) {
+) -> (Vec<(mbv_queue::QueueSlotId, QueueItem)>, usize) {
     admit_queue(
         original,
         requested_cursor,
@@ -290,7 +290,7 @@ pub(crate) fn daemon_admits(
     }
     item.admissible_for_owner_with_audiobookshelf(
         audio_only,
-        |kind| kind != crate::config::ServiceKind::Emby || has_emby,
+        |kind| kind != mbv_queue::ServiceKind::Emby || has_emby,
         has_audiobookshelf,
     )
 }

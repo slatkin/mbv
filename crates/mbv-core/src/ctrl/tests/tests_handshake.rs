@@ -30,7 +30,7 @@ fn current_hello_has_no_service_credential_field() {
 #[test]
 fn service_setup_reconciliation_wire_has_only_kind_and_revision() {
     let json = serde_json::to_string(&CtrlCmd::ApplyServiceSetup {
-        kind: crate::config::ServiceKind::Emby,
+        kind: mbv_queue::ServiceKind::Emby,
         revision: 42,
     })
     .unwrap();
@@ -46,11 +46,11 @@ fn service_setup_reconciliation_wire_has_only_kind_and_revision() {
 #[test]
 fn service_setup_reconciliation_responses_round_trip() {
     let applied = CtrlEvent::ServiceSetupApplied {
-        kind: crate::config::ServiceKind::Emby,
+        kind: mbv_queue::ServiceKind::Emby,
         revision: 7,
     };
     let rejected = CtrlEvent::ServiceSetupRejected {
-        kind: crate::config::ServiceKind::Emby,
+        kind: mbv_queue::ServiceKind::Emby,
         revision: 7,
         reason: ServiceSetupRejection::RevisionMismatch,
     };
@@ -152,7 +152,7 @@ fn audiobookshelf_progress_event_wire_fields_exact() {
 
 #[test]
 fn audiobookshelf_queue_item_wire_fields_exact() {
-    use crate::playback_queue::AudiobookshelfQueueItem;
+    use mbv_queue::AudiobookshelfQueueItem;
     let item = AudiobookshelfQueueItem {
         library_item_id: "li_abc".to_string(),
         episode_id: "ep_123".to_string(),

@@ -31,8 +31,8 @@ use crate::app::render::{
 };
 use crate::app::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
-use mbv_core::playback_queue::QueueItem;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_queue::QueueItem;
 use ratatui::layout::Position;
 use time::Date;
 #[cfg(test)]
@@ -192,9 +192,7 @@ impl TvContent {
     fn is_episode_mode(context: &TvWideRenderCtx) -> bool {
         matches!(
             context.tv_content_mode,
-            Some(
-                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
-            )
+            Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         )
     }
 
@@ -203,16 +201,15 @@ impl TvContent {
         inline_search_active: bool,
     ) -> Vec<MediaListRow<String>> {
         match context.tv_content_mode {
-            Some(mbv_core::config::TvContentMode::Latest) => {
+            Some(mbv_queue::TvContentMode::Latest) => {
                 build_latest_episode_rows(&context.list.items)
             }
-            Some(mbv_core::config::TvContentMode::Upcoming) => {
+            Some(mbv_queue::TvContentMode::Upcoming) => {
                 upcoming_episode_rows(&context.list.items, time::OffsetDateTime::now_utc().date())
             }
-            Some(
-                mbv_core::config::TvContentMode::All | mbv_core::config::TvContentMode::Range(_),
-            )
-            | None => Self::series_rows(context, inline_search_active),
+            Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
+                Self::series_rows(context, inline_search_active)
+            }
         }
     }
 

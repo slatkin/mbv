@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::ServiceKind;
 use crate::ctrl::{
     CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, UnifiedQueueStateData,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
+use mbv_queue::ServiceKind;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CtrlEvent {

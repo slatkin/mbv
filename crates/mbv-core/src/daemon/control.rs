@@ -6,11 +6,11 @@ use super::{
 };
 use crate::api::EmbyClient;
 use crate::ctrl::{CtrlCmd, CtrlEvent};
-use crate::playback::QueueSlotId;
-use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerCommand, PlayerOwnerState};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::ExecSlot;
+use mbv_queue::QueueSlotId;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};
 
 use super::control_queue::{
@@ -32,7 +32,7 @@ pub(in crate::daemon) use queue_load::{
 /// Mints the next queue lineage into `SharedQueueState.lineage`, the single
 /// source of truth for queue lineage (needed by other threads that seed
 /// newly-connecting ctrl clients off `SharedQueueState`), and returns it.
-fn mint_queue_lineage(shared_queue: &SharedQueueState) -> crate::ctrl::QueueLineage {
+fn mint_queue_lineage(shared_queue: &SharedQueueState) -> mbv_queue::QueueLineage {
     let mut lineage = shared_queue.lineage.lock().unwrap();
     lineage.0 = lineage
         .0
@@ -73,7 +73,7 @@ impl CtrlContext<'_> {
     /// that reject mid-arm build a `RejectContext` literal instead, because
     /// their outstanding mutable borrows of the owner's queue would conflict
     /// with a whole-context shared borrow here.
-    fn rejection_context(&self, lineage: crate::ctrl::QueueLineage) -> RejectContext<'_> {
+    fn rejection_context(&self, lineage: mbv_queue::QueueLineage) -> RejectContext<'_> {
         RejectContext {
             reply_tx: self.reply_tx,
             ctrl_clients: self.ctrl_clients,
@@ -96,8 +96,8 @@ struct RejectContext<'a> {
     client_id: CtrlClientId,
     player: &'a Player,
     queue: &'a PlaybackQueue,
-    source: &'a crate::config::QueueSource,
-    lineage: crate::ctrl::QueueLineage,
+    source: &'a mbv_queue::QueueSource,
+    lineage: mbv_queue::QueueLineage,
 }
 
 /// Sends a command rejection to the requesting client and re-publishes the
@@ -292,7 +292,7 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
 fn dispatch_ctrl_command(
     cmd: CtrlCmd,
     ctx: &mut CtrlContext<'_>,
-    queue_lineage: crate::ctrl::QueueLineage,
+    queue_lineage: mbv_queue::QueueLineage,
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
@@ -371,10 +371,10 @@ fn dispatch_ctrl_command(
 
 pub(crate) fn owner_admin_transport_allowed(
     role: crate::daemon::DaemonRole,
-    kind: crate::config::ServiceKind,
+    kind: mbv_queue::ServiceKind,
     transport: Option<CtrlTransport>,
 ) -> bool {
     let role_allowed = role == crate::daemon::DaemonRole::Packaged
-        || kind == crate::config::ServiceKind::Audiobookshelf;
+        || kind == mbv_queue::ServiceKind::Audiobookshelf;
     role_allowed && transport == Some(CtrlTransport::Local)
 }

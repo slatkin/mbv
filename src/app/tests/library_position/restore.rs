@@ -10,14 +10,14 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab::new(library));
-    let level = crate::config::LibraryPositionLevel {
+    let level = mbv_queue::LibraryPositionLevel {
         fetched_rows: None,
         parent_id: "lib-movies".into(),
         title: "Power".into(),
         focused_item_id: Some("id1".into()),
         ..Default::default()
     };
-    let position = crate::config::LibraryPosition {
+    let position = mbv_queue::LibraryPosition {
         levels: vec![level.clone()],
         ..Default::default()
     };
@@ -49,8 +49,8 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab::new(library));
-    let pre_feature_position = crate::config::LibraryPosition {
-        levels: vec![crate::config::LibraryPositionLevel {
+    let pre_feature_position = mbv_queue::LibraryPosition {
+        levels: vec![mbv_queue::LibraryPositionLevel {
             fetched_rows: None,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -111,8 +111,8 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab::new(library));
-    let requested = crate::config::LibraryPosition {
-        levels: vec![crate::config::LibraryPositionLevel {
+    let requested = mbv_queue::LibraryPosition {
+        levels: vec![mbv_queue::LibraryPositionLevel {
             fetched_rows: None,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

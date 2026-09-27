@@ -234,7 +234,7 @@ impl App {
 
     pub(in crate::app) fn open_feeds_context_menu(
         &mut self,
-        entries: Vec<mbv_core::playback_queue::FeedEntry>,
+        entries: Vec<mbv_queue::FeedEntry>,
         anchor: Option<(u16, u16)>,
     ) {
         if entries.is_empty() {

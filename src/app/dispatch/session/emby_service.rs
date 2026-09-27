@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, LibEvent};
-use mbv_core::config::{QueueState, ServiceKind};
-use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_queue::QueueItem;
+use mbv_queue::{QueueState, ServiceKind};
 
 impl App {
     fn persist_filtered_queue(state: Option<&QueueState>) -> Result<(), String> {
@@ -57,7 +57,7 @@ impl App {
                 .collect::<Vec<_>>();
             queue.set_queue_items(non_emby_items, 0);
         }
-        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
+        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
@@ -99,7 +99,7 @@ impl App {
         self.images.image_lru.clear();
         self.images.pending_image_fetches.clear();
         self.images.image_fetches_active = 0;
-        self.library_position_state = crate::config::LibraryPositionState::default();
+        self.library_position_state = mbv_queue::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;
         self.connected_session_state = None;

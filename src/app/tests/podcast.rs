@@ -178,8 +178,8 @@ fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
     let mut app = audiobookshelf_app();
     app.library_position_state.libraries.insert(
         "audiobookshelf:https://podcasts.example:abs-podcasts".into(),
-        crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 focused_item_id: Some("show-old".into()),
                 ..Default::default()
             }],

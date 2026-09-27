@@ -173,7 +173,7 @@ impl App {
     /// the owner's snapshot confirms it.
     pub(in crate::app) fn apply_saved_playlist_source(
         &mut self,
-        source: crate::config::QueueSource,
+        source: mbv_queue::QueueSource,
         origin: QueueOrigin,
     ) -> bool {
         match origin {
@@ -203,7 +203,7 @@ impl App {
         }
     }
 
-    pub(super) fn build_queue_state(&self) -> crate::config::QueueState {
+    pub(super) fn build_queue_state(&self) -> mbv_queue::QueueState {
         let positions: std::collections::HashMap<String, i64> = self
             .player_tab
             .queue
@@ -213,7 +213,7 @@ impl App {
             .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
             .map(|i| (i.id.clone(), i.playback_position_ticks))
             .collect();
-        crate::config::QueueState {
+        mbv_queue::QueueState {
             source: self.queue_source.clone(),
             items: self
                 .player_tab

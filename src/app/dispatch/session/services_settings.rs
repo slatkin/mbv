@@ -292,7 +292,7 @@ impl App {
             self.open_emby_setup();
             return;
         }
-        if mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_none() {
+        if mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_none() {
             self.emby_runtime.state = ServiceState::NeedsAuthentication;
             self.open_emby_setup();
             return;

@@ -5,9 +5,9 @@ use super::{
 };
 use crate::api::EmbyClient;
 use crate::ctrl::CtrlEvent;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{PlayerCommand, PlayerOwnerState};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::{PlaybackQueue, QueueItem};
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
@@ -40,7 +40,7 @@ pub(in crate::daemon) fn play_resolved_items(
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
-    new_source: crate::config::QueueSource,
+    new_source: mbv_queue::QueueSource,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -152,7 +152,7 @@ fn resolve_play_intent(
     item_ids: Vec<String>,
     start_idx: usize,
     start_ticks: i64,
-    intent_source: crate::config::QueueSource,
+    intent_source: mbv_queue::QueueSource,
 ) {
     if !ctx.has_emby() {
         return;

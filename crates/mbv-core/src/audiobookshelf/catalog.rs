@@ -1,5 +1,5 @@
 use super::{AudiobookshelfClient, AudiobookshelfError};
-use crate::playback_queue::AudiobookshelfQueueItem;
+use mbv_queue::AudiobookshelfQueueItem;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;

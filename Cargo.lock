@@ -1711,6 +1711,7 @@ dependencies = [
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-queue",
  "mbv-text",
  "mbv-visualizer",
  "mbv-ws",
@@ -1746,6 +1747,7 @@ dependencies = [
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-queue",
  "mbv-text",
  "mbv-ws",
  "mdns-sd",
@@ -1792,6 +1794,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-queue"
+version = "0.21.2"
+dependencies = [
+ "mbv-emby-model",
+ "mbv-ids",
+ "rstest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mbv-text"
 version = "0.21.2"
 dependencies = [
@@ -1824,6 +1837,7 @@ dependencies = [
  "libc",
  "log",
  "mbv-core",
+ "mbv-queue",
  "mimalloc",
  "nix 0.31.3",
  "serde_json",

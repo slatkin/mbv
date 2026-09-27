@@ -449,7 +449,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     let confirmed = app.player_tab.slot_id_at(0).unwrap();
     assert!(matches!(
         app.player_tab.queue.set_active_slot(confirmed),
-        mbv_core::playback_queue::QueueMutationResult::Applied(())
+        mbv_queue::QueueMutationResult::Applied(())
     ));
     {
         let mut status = app.player.status.lock().unwrap();

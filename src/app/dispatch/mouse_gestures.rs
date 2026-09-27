@@ -45,8 +45,7 @@ impl App {
         // the resulting position (confirmed seek completion).
         if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
             if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(ref e) if e.feed_id.is_some())
-                {
+                if matches!(slot.item, mbv_queue::QueueItem::Feed(ref e) if e.feed_id.is_some()) {
                     self.feed_seek_pending_slot = Some(slot_id);
                 }
             }
@@ -69,7 +68,7 @@ impl App {
 
     pub(in crate::app) fn handle_mouse_single_click_queue(
         &mut self,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
     ) -> Option<usize> {
         self.set_panel_focus(crate::app::PanelFocus::Queue);
         let slot_id = slot_id?;
@@ -129,7 +128,7 @@ impl App {
 
     pub(in crate::app) fn handle_mouse_double_click_queue(
         &mut self,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
     ) {
         // The single-click resolves the clicked slot to an index; that
         // resolved index is passed straight to the play effect (D2) instead
@@ -142,7 +141,7 @@ impl App {
 
     pub(in crate::app) fn handle_mouse_right_click_queue(
         &mut self,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
         col: u16,
         row: u16,
         home_cw_selected: bool,
@@ -162,7 +161,7 @@ impl App {
     /// menu the right-click path builds.
     pub(in crate::app) fn handle_keyboard_context_menu_queue(
         &mut self,
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        slot_id: Option<mbv_queue::QueueSlotId>,
         home_cw_selected: bool,
     ) {
         self.handle_mouse_single_click_queue(slot_id);
@@ -187,9 +186,7 @@ impl App {
         let level = self.libs.get(lib_idx)?.nav_stack.last()?;
         if matches!(
             level.tv_content_mode,
-            Some(
-                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
-            )
+            Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         ) {
             return level
                 .items

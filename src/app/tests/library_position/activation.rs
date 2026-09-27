@@ -9,9 +9,9 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     app.libs.push(LibraryTab::new(library));
     app.library_position_state.libraries.insert(
         "lib-movies".into(),
-        crate::config::LibraryPosition {
+        mbv_queue::LibraryPosition {
             levels: vec![
-                crate::config::LibraryPositionLevel {
+                mbv_queue::LibraryPositionLevel {
                     fetched_rows: None,
                     parent_id: "lib-movies".into(),
                     title: "Movies".into(),
@@ -25,7 +25,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
                     tv_content_mode: None,
                     library_total: Some(673),
                 },
-                crate::config::LibraryPositionLevel {
+                mbv_queue::LibraryPositionLevel {
                     fetched_rows: None,
                     parent_id: "folder-b".into(),
                     title: "Folder B".into(),
@@ -72,8 +72,8 @@ fn library_tab_next_activates_saved_placeholder() {
     app.libs.push(LibraryTab::new(library));
     app.library_position_state.libraries.insert(
         "lib-movies".into(),
-        crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
+        mbv_queue::LibraryPosition {
+            levels: vec![mbv_queue::LibraryPositionLevel {
                 fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Saved".into(),

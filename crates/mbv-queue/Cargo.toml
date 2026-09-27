@@ -1,0 +1,23 @@
+[package]
+name = "mbv-queue"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Canonical playback queue and queue state types for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-ids = { path = "../mbv-ids" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

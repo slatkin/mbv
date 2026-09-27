@@ -109,7 +109,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
             .core
             .queue
             .active_slot_id()
-            .map(crate::playback_queue::QueueSlotId::raw),
+            .map(mbv_queue::QueueSlotId::raw),
         Some(77)
     );
     assert_eq!(owner.core.observed_active_slot(), None);
@@ -312,10 +312,10 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         } if got == request_id)
         );
     }
-    let stale_lineage = crate::ctrl::QueueLineage(1);
+    let stale_lineage = mbv_queue::QueueLineage(1);
     assert_eq!(
         *fx.shared_queue.lineage.lock().unwrap(),
-        crate::ctrl::QueueLineage(2)
+        mbv_queue::QueueLineage(2)
     );
     // Drain both replacement broadcasts before asserting the rejection result.
     for rx in [&fx.client_rx, &rx_b] {
@@ -349,12 +349,12 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     );
     assert!(
         matches!(recv_event(&fx.reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
-        if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before)
+        if snapshot.lineage == mbv_queue::QueueLineage(2) && snapshot.source == source_before)
     );
     assert_eq!(fx.owner.core.source, source_before);
     assert_eq!(
         *fx.shared_queue.lineage.lock().unwrap(),
-        crate::ctrl::QueueLineage(2)
+        mbv_queue::QueueLineage(2)
     );
     assert_eq!(
         fx.owner

@@ -1,4 +1,5 @@
 use super::super::*;
+use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 
 fn stub_media_item() -> mbv_emby_model::EmbyItem {
     mbv_emby_model::EmbyItem {
@@ -42,8 +43,8 @@ fn stub_media_item() -> mbv_emby_model::EmbyItem {
 
 // ── Unified queue wire types ──────────────────────────────────────────────
 
-fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
-    crate::playback_queue::FeedEntry {
+fn stub_feed_entry() -> mbv_queue::FeedEntry {
+    mbv_queue::FeedEntry {
         guid: "feed-guid-1".into(),
         title: "Episode 1".into(),
         enclosure_url: Some("https://example.com/ep1.mp3".into()),
@@ -51,7 +52,7 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some((3_600 * mbv_emby_model::TICKS_PER_SECOND) as u64),
         pub_date_secs: Some(1_700_000_000),
-        feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_kind: Some(mbv_queue::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,
         played: false,

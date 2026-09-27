@@ -104,7 +104,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     library.id = "lib-music".into();
     library.collection_type = "music".into();
     app.libs.push(LibraryTab::new(library));
-    app.queue_source = crate::config::QueueSource::Album;
+    app.queue_source = mbv_queue::QueueSource::Album;
 
     http.respond(
         200,
@@ -116,7 +116,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
         &app.pending_queue_replacement,
         Some((
             PendingQueueAction::PlayItems {
-                source: crate::config::QueueSource::Collection { collection_type },
+                source: mbv_queue::QueueSource::Collection { collection_type },
                 ..
             },
             crate::app::state::types::playback::ReplacementExecutor::Routed(
@@ -124,7 +124,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
             )
         )) if collection_type == "music"
     ));
-    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
 
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
@@ -135,5 +135,5 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     );
 
     assert!(app.pending_queue_replacement.is_none());
-    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
 }

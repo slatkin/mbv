@@ -7,7 +7,8 @@
 //! client construction immediately without touching the network.
 
 use super::*;
-use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
+use mbv_core::config::AudiobookshelfSetup;
+use mbv_queue::ServiceKind;
 
 /// A podcast tab whose listed shows have no cached episodes yet, with a
 /// configured Audiobookshelf Service whose URL fails client construction

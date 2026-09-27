@@ -7,9 +7,10 @@ use crate::config::{
     persist_emby_setup_and_secret_at, remove_audiobookshelf_setup_and_secret_with_owned_state,
     replace_audiobookshelf_setup_and_secret, save_audiobookshelf_setup_at, save_emby_setup_at,
     save_library_position_state, save_service_secret, service_secret_path, AudiobookshelfSetup,
-    EmbySetup, LibraryPosition, LibraryPositionLevel, LibraryPositionState, ServiceKind,
-    TestStateDirGuard,
+    EmbySetup, TestStateDirGuard,
 };
+#[cfg(test)]
+use mbv_queue::{LibraryPosition, LibraryPositionLevel, LibraryPositionState, ServiceKind};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 

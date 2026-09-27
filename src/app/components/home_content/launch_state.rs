@@ -42,7 +42,7 @@ impl HomeContent {
 /// accepted by the config type and fall back to this fixed scope.
 #[cfg(test)]
 mod tests {
-    use mbv_core::playback_queue::QueueItem;
+    use mbv_queue::QueueItem;
 
     use super::*;
     use crate::app::tests::make_item;

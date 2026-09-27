@@ -124,7 +124,7 @@ impl App {
             .flatten();
         let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
-            crate::config::QueueSource::Unknown,
+            mbv_queue::QueueSource::Unknown,
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
@@ -261,7 +261,7 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_source: crate::config::QueueSource::Unknown,
+            queue_source: mbv_queue::QueueSource::Unknown,
             queue_dirty: false,
             pending_owner_source_update: None,
             pending_queue_action: None,
@@ -336,12 +336,11 @@ impl App {
         let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
         let configured = app_config.emby_setup.is_some();
         let credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
         let generation = mbv_core::service_runtime::SetupGeneration::default();
         let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
         let audiobookshelf_credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-                .is_some();
+            mbv_core::config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
         let raw_player = Player::new(
             String::new(),
             String::new(),
