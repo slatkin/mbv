@@ -16,12 +16,12 @@ use super::components::library_panel::LibraryPanel;
 use super::components::tv_content::TvContent;
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
-use crate::app::ui_msg::ComponentId;
-use crate::app::ui_msg::ShellRequest;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::ComponentId;
+use mbv_ui_msg::ShellRequest;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {

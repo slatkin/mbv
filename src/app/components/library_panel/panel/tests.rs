@@ -1,7 +1,7 @@
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel, LibrarySlotEvent};
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::ui_msg::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_msg::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute};
@@ -137,7 +137,7 @@ impl LibraryContentOwner for FixtureOwner {
         // A consumed pointer gesture after a list mutation reports the
         // framework's claim marker (ADR 0024).
         Some(Msg::TerminalEvent(
-            crate::app::ui_msg::TerminalObserverEvent::MouseClaimed,
+            mbv_ui_msg::TerminalObserverEvent::MouseClaimed,
         ))
     }
 

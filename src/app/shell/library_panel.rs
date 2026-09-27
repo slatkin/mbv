@@ -16,11 +16,11 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
-use crate::app::ui_msg::ComponentId;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 use mbv_ui_model::playback::DestinationLatestSource;
+use mbv_ui_msg::ComponentId;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner

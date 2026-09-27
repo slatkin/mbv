@@ -93,13 +93,13 @@ impl LibraryContentOwner for MusicContent {
         self.selection_origin = Some(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
+    fn selection_summary(&self) -> Option<mbv_ui_msg::SelectionSummary> {
         // The tree keeps membership locally; expose only the same read-only
         // count/origin projection used by every canonical list. Music rows
         // never inspect played/unplayed state here.
         let count = self.selected_album_targets().len();
         let origin = self.selection_origin.clone()?;
-        (count > 0).then_some(crate::app::ui_msg::SelectionSummary { count, origin })
+        (count > 0).then_some(mbv_ui_msg::SelectionSummary { count, origin })
     }
 
     fn launch_selector(

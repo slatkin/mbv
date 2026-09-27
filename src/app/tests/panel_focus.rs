@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::ui_msg::{Msg, TerminalObserverEvent};
+use mbv_ui_msg::{Msg, TerminalObserverEvent};
 use tuirealm::event::Event;
 
 #[test]

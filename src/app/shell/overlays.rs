@@ -7,7 +7,7 @@ mod sidebars;
 #[cfg(test)]
 use super::Model;
 #[cfg(test)]
-use crate::app::ui_msg::{ComponentId, OverlayId, PopupId};
+use mbv_ui_msg::{ComponentId, OverlayId, PopupId};
 
 #[cfg(test)]
 mod tests;

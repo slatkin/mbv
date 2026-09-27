@@ -463,9 +463,9 @@ mod tests {
             .expect("artist target");
         let (mut music_resize, mut tv_resize) = (false, false);
         model.handle_terminal_message(
-            crate::app::ui_msg::Msg::Shell(Box::new(
-                crate::app::ui_msg::ShellRequest::MusicArtistTracks { target },
-            )),
+            mbv_ui_msg::Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MusicArtistTracks {
+                target,
+            })),
             &mut music_resize,
             &mut tv_resize,
         );
@@ -480,9 +480,9 @@ mod tests {
             .artist_detail_target()
             .expect("artist target");
         model.handle_terminal_message(
-            crate::app::ui_msg::Msg::Shell(Box::new(
-                crate::app::ui_msg::ShellRequest::MusicArtistTracks { target },
-            )),
+            mbv_ui_msg::Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MusicArtistTracks {
+                target,
+            })),
             &mut music_resize,
             &mut tv_resize,
         );

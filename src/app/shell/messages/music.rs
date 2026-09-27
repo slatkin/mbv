@@ -126,11 +126,7 @@ impl super::super::Model {
         );
     }
 
-    fn handle_music_album_cursor(
-        &mut self,
-        target: usize,
-        kind: crate::app::ui_msg::AlbumCursorKind,
-    ) {
+    fn handle_music_album_cursor(&mut self, target: usize, kind: mbv_ui_msg::AlbumCursorKind) {
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -164,12 +160,12 @@ impl super::super::Model {
 
     fn handle_music_artist_action(
         &mut self,
-        action: crate::app::ui_msg::MusicTreeAction,
+        action: mbv_ui_msg::MusicTreeAction,
         items: Vec<mbv_emby_model::EmbyItem>,
         origin: mbv_ui_model::media_list::SelectionOrigin,
         unresolved_targets: &[String],
     ) {
-        use crate::app::ui_msg::MusicTreeAction;
+        use mbv_ui_msg::MusicTreeAction;
 
         self.app
             .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);

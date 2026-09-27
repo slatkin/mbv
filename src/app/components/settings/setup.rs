@@ -1,8 +1,8 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::SettingsComponent;
-use crate::app::ui_msg::{Msg, ServiceRequest};
 use mbv_render::components::settings_component::SetupDraft;
+use mbv_ui_msg::{Msg, ServiceRequest};
 
 impl SettingsComponent {
     pub(super) fn service_key(&self, key: &KeyEvent) -> Option<Msg> {

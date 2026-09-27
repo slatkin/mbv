@@ -15,12 +15,12 @@ use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
-use crate::app::ui_msg::SelectionSummary;
-use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use mbv_render::arrangements::wide_hero::normalize_list_pane_width;
 use mbv_render::wide_hero_fits;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
+use mbv_ui_msg::SelectionSummary;
+use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 
 use super::content::PanelHeroImagePaint;
 use super::hero::HeroContentData;

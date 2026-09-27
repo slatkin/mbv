@@ -21,8 +21,6 @@ use super::library_panel::{
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::ui_msg::TvTreeTarget;
-use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::QueueItem;
@@ -33,6 +31,8 @@ use mbv_render::{
     effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
 };
 use mbv_ui_model::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
+use mbv_ui_msg::TvTreeTarget;
+use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use ratatui::layout::Position;
 use time::Date;
 #[cfg(test)]

@@ -23,8 +23,6 @@ use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
 use crate::app::components::list::tree_browser::{TreeBrowser, TreeConsumed, TreeOperation};
-use crate::app::ui_msg::LeafKeyResult;
-use crate::app::ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
@@ -33,6 +31,8 @@ use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::msg::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
+use mbv_ui_msg::LeafKeyResult;
+use mbv_ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 
 /// Strips the `Artist (Year) ` folder-name prefix from an album's display
 /// name, returning the bare title and resolved release year. Rehomed from the

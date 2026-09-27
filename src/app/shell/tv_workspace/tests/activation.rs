@@ -57,10 +57,10 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         .test_tv_owner()
         .selected_item()
         .expect("component-selected Series");
-    model.handle_tv_request(crate::app::ui_msg::ShellRequest::TvActivate { item });
+    model.handle_tv_request(mbv_ui_msg::ShellRequest::TvActivate { item });
     let panel = model
         .application
-        .get_component(&crate::app::ui_msg::ComponentId::Library)
+        .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
         .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
@@ -109,7 +109,7 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
        moved,
        Some(Msg::Shell(ref shell_boxed))
     if matches!(shell_boxed.as_ref(),
-           crate::app::ui_msg::ShellRequest::TvHitClick { .. }
+           mbv_ui_msg::ShellRequest::TvHitClick { .. }
        )));
     assert_eq!(
         model.test_tv_owner().selected_item().map(|item| item.id),
@@ -122,13 +122,13 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
         .expect("tree selects the second show");
     assert_eq!(selected_show.id, "movie-second");
 
-    model.handle_tv_request(crate::app::ui_msg::ShellRequest::TvActivate {
+    model.handle_tv_request(mbv_ui_msg::ShellRequest::TvActivate {
         item: selected_show,
     });
 
     let panel = model
         .application
-        .get_component(&crate::app::ui_msg::ComponentId::Library)
+        .get_component(&mbv_ui_msg::ComponentId::Library)
         .expect("Library panel mounted")
         .as_any()
         .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()

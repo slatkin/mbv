@@ -10,12 +10,12 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 use mbv_render::{render_feeds_manage_content, FeedsManageRenderModel};
 use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 
 pub struct FeedsManageComponent {
     feeds: Vec<FeedSubscription>,

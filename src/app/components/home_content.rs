@@ -25,9 +25,9 @@ use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticS
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 
-use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
+use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 
 mod launch_state;
 
@@ -256,7 +256,7 @@ impl HomeContent {
 
     fn claim_wheel(&mut self, input: MediaListSurfaceInput) -> Msg {
         self.delegate_row_local_input(input, None);
-        Msg::TerminalEvent(crate::app::ui_msg::TerminalObserverEvent::MouseClaimed)
+        Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::MouseClaimed)
     }
 
     fn activate_pointer_target(&mut self, target: String) -> Msg {
@@ -333,7 +333,7 @@ impl LibraryContentOwner for HomeContent {
         self.carrier.set_selection_origin(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
+    fn selection_summary(&self) -> Option<mbv_ui_msg::SelectionSummary> {
         Some(self.carrier.selection_summary())
     }
 

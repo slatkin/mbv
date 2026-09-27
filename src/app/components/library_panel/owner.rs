@@ -14,10 +14,10 @@ use tuirealm::event::KeyEvent;
 
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::ui_msg::SelectionSummary;
-use crate::app::ui_msg::{LeafKeyResult, Msg};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity, TuiLaunchState};
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_msg::SelectionSummary;
+use mbv_ui_msg::{LeafKeyResult, Msg};
 
 use super::content::LibraryPanelContent;
 use super::hero::HeroContentData;

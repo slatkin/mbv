@@ -6,7 +6,7 @@
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported,
 };
-use crate::app::ui_msg::SelectionSummary;
+use mbv_ui_msg::SelectionSummary;
 use std::time::Instant;
 
 use mbv_ui_model::media_list::SelectionOrigin;

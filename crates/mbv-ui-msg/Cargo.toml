@@ -1,0 +1,22 @@
+[package]
+name = "mbv-ui-msg"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Message vocabulary for mbv's terminal UI components."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-ui-model = { path = "../mbv-ui-model" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-queue = { path = "../mbv-queue" }
+tuirealm.workspace = true
+[features]
+test = []

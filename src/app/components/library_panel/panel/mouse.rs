@@ -66,7 +66,7 @@ impl LibraryPanel {
             i16::try_from(delta).unwrap_or(if delta < 0 { i16::MIN } else { i16::MAX });
         let message = self.owners.active_mut().map(|owner| {
             owner.hero_scroll(scroll_delta, max);
-            Msg::TerminalEvent(crate::app::ui_msg::TerminalObserverEvent::MouseClaimed)
+            Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::MouseClaimed)
         });
         HeroWheelOutcome::Handled(message)
     }
@@ -319,7 +319,7 @@ impl LibraryPanel {
             return self.activate_overlay_hero_selection();
         }
         Some(Msg::TerminalEvent(
-            crate::app::ui_msg::TerminalObserverEvent::MouseClaimed,
+            mbv_ui_msg::TerminalObserverEvent::MouseClaimed,
         ))
     }
 
@@ -381,7 +381,7 @@ impl LibraryPanel {
             {
                 self.dismiss_hero_overlay();
                 return Some(Msg::TerminalEvent(
-                    crate::app::ui_msg::TerminalObserverEvent::MouseClaimed,
+                    mbv_ui_msg::TerminalObserverEvent::MouseClaimed,
                 ));
             }
             if self

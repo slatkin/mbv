@@ -1,12 +1,12 @@
 use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::episode_rows::upcoming_episode_target;
 use super::TvContent;
-use crate::app::ui_msg::TvTreeTarget;
-use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::media_list::MediaSemanticState;
 use mbv_render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use mbv_ui_model::ui_util::natural_sort_key;
+use mbv_ui_msg::TvTreeTarget;
+use mbv_ui_msg::{Msg, ShellRequest};
 
 impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.

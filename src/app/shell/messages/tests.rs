@@ -1,4 +1,4 @@
-use crate::app::ui_msg::ShellRequest;
+use mbv_ui_msg::ShellRequest;
 
 #[test]
 fn quit_request_sets_shell_quit_and_unknown_navigation_is_forwarded() {

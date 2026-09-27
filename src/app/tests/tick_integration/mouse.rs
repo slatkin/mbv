@@ -9,7 +9,6 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
-use crate::app::ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
@@ -17,6 +16,7 @@ use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, 
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
 // rung 1), not by message discarding. A mounted Search sidebar painted with
@@ -405,9 +405,9 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Playback(
-            crate::app::ui_msg::PlaybackRequest::VolumeDelta(-5)
-        )),
+        outcome
+            .messages
+            .contains(&Msg::Playback(mbv_ui_msg::PlaybackRequest::VolumeDelta(-5))),
         "the volume intent reaches the shell: {:?}",
         outcome.messages
     );

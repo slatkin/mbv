@@ -15,15 +15,15 @@ use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::ui_msg::{
-    ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
-    UserEvent,
-};
-use crate::app::ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_msg::{
+    ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
+    UserEvent,
+};
+use mbv_ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {

@@ -8,7 +8,7 @@
 //!
 //! Task 8.3 split the per-family request/intent enums into submodules so
 //! this file stays below the 800-line cap. Re-exports preserve the
-//! `crate::app::ui_msg::TypeName` import path used throughout the
+//! `crate::TypeName` import path used throughout the
 //! codebase; nothing else had to change.
 
 use tuirealm::event::KeyEvent as TuiKeyEvent;
@@ -36,14 +36,14 @@ pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 pub use self::selection::SelectionSummary;
 pub use self::service::ServiceRequest;
 pub use self::shell::ShellRequest;
-pub(crate) use self::tv_tree_target::TvTreeTarget;
+pub use self::tv_tree_target::TvTreeTarget;
 pub use self::user_event::UserEvent;
 
 /// Result of handling a key at a leaf component.  The disposition is
 /// independent from an optional cross-authority request: local mutations can
 /// consume a key without emitting a request.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum LeafKeyResult {
+pub enum LeafKeyResult {
     Unhandled,
     Consumed(Option<Box<Msg>>),
 }
@@ -68,7 +68,7 @@ mod leaf_key_tests {
 }
 
 impl LeafKeyResult {
-    pub(crate) fn into_option(self) -> Option<Msg> {
+    pub fn into_option(self) -> Option<Msg> {
         match self {
             Self::Unhandled => None,
             Self::Consumed(message) => message

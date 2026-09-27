@@ -7,10 +7,10 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{LeafKeyResult, Msg, SavePlaylistIntent, ShellRequest};
 use crate::app::SavePlaylistStage;
 use mbv_render::render_save_playlist_content;
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{LeafKeyResult, Msg, SavePlaylistIntent, ShellRequest};
 
 pub struct SavePlaylistComponent {
     input: String,

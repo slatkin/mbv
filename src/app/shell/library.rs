@@ -1,6 +1,6 @@
 use super::Model;
 use super::{PanelFocus, PanelMode};
-use crate::app::ui_msg::ComponentId;
+use mbv_ui_msg::ComponentId;
 
 impl Model {
     /// Route `TuiRealm`'s native LIFO focus to the active destination's child
@@ -57,7 +57,7 @@ impl Model {
     /// three-rung ladder derived from the active mounted surfaces the
     /// active-destination pass uses (no second "did I paint" ledger).
     pub(in crate::app) fn mouse_eligible_ids(&self) -> Vec<ComponentId> {
-        use crate::app::ui_msg::{ModalId, OverlayId, PopupId};
+        use mbv_ui_msg::{ModalId, OverlayId, PopupId};
 
         // Rung 1: a mounted blocking overlay/modal is eligible alone.
         const BLOCKING: &[ComponentId] = &[
@@ -220,18 +220,18 @@ impl Model {
     /// overlay that just took focus is never stolen back on the next tick.
     pub(in crate::app) fn overlay_holds_focus(&self) -> bool {
         [
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::Search),
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::Settings),
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::Sessions),
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::Playlists),
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::Help),
-            ComponentId::Overlay(crate::app::ui_msg::OverlayId::ContextMenu),
-            ComponentId::Modal(crate::app::ui_msg::ModalId::Confirm),
-            ComponentId::Modal(crate::app::ui_msg::ModalId::DaemonLost),
-            ComponentId::Modal(crate::app::ui_msg::ModalId::SavePlaylist),
-            ComponentId::Popup(crate::app::ui_msg::PopupId::Multiselect),
-            ComponentId::Popup(crate::app::ui_msg::PopupId::LibraryRoutes),
-            ComponentId::Popup(crate::app::ui_msg::PopupId::FeedManage),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::Search),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::Settings),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::Sessions),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::Playlists),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::Help),
+            ComponentId::Overlay(mbv_ui_msg::OverlayId::ContextMenu),
+            ComponentId::Modal(mbv_ui_msg::ModalId::Confirm),
+            ComponentId::Modal(mbv_ui_msg::ModalId::DaemonLost),
+            ComponentId::Modal(mbv_ui_msg::ModalId::SavePlaylist),
+            ComponentId::Popup(mbv_ui_msg::PopupId::Multiselect),
+            ComponentId::Popup(mbv_ui_msg::PopupId::LibraryRoutes),
+            ComponentId::Popup(mbv_ui_msg::PopupId::FeedManage),
         ]
         .iter()
         .any(|id| self.application.mounted(id))

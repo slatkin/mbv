@@ -14,7 +14,7 @@ impl Model {
         }
         let selected_latest = self
             .application
-            .get_component(&crate::app::ui_msg::ComponentId::Library)
+            .get_component(&mbv_ui_msg::ComponentId::Library)
             .and_then(|component| {
                 component
                     .as_any()

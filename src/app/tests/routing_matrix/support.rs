@@ -27,9 +27,9 @@ use crate::app::input::router::{
     resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
 };
 use crate::app::shell::fold_keyboard_messages;
-use crate::app::ui_msg::{ComponentId, Msg, TerminalObserverEvent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
+use mbv_ui_msg::{ComponentId, Msg, TerminalObserverEvent};
 
 /// The registry-defaults configuration the matrix resolves against (task
 /// 3.2): no prefix, every declared action on its declared chords.
@@ -119,14 +119,12 @@ pub(crate) fn active_snapshot() -> RouterSnapshot {
 
 #[test]
 fn stale_summary_does_not_change_current_leaf_arbitration() {
-    let stale_summary = Msg::Shell(Box::new(
-        crate::app::ui_msg::ShellRequest::SelectionProjection(
-            crate::app::ui_msg::SelectionSummary {
-                count: 99,
-                origin: mbv_ui_model::media_list::SelectionOrigin::Queue,
-            },
-        ),
-    ));
+    let stale_summary = Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::SelectionProjection(
+        mbv_ui_msg::SelectionSummary {
+            count: 99,
+            origin: mbv_ui_model::media_list::SelectionOrigin::Queue,
+        },
+    )));
     let focused = Some(ComponentId::Library);
     let messages = fold_tick_with_outcome(
         Some(stale_summary.clone()),
@@ -147,7 +145,7 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
 
 #[test]
 fn immediate_router_outcomes_have_distinct_fold_behavior() {
-    let leaf = Some(Msg::Shell(Box::new(crate::app::ui_msg::ShellRequest::Quit)));
+    let leaf = Some(Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Quit)));
     let focused = Some(ComponentId::Library);
 
     let command = fold_tick_with_outcome(

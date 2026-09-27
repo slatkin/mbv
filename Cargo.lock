@@ -1726,6 +1726,7 @@ dependencies = [
  "mbv-text",
  "mbv-theme",
  "mbv-ui-model",
+ "mbv-ui-msg",
  "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
@@ -2023,6 +2024,16 @@ dependencies = [
  "rstest",
  "time",
  "unicode-width",
+]
+
+[[package]]
+name = "mbv-ui-msg"
+version = "0.21.2"
+dependencies = [
+ "mbv-emby-model",
+ "mbv-queue",
+ "mbv-ui-model",
+ "tuirealm",
 ]
 
 [[package]]

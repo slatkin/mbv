@@ -83,7 +83,7 @@ mod prefix_mode {
         );
         // When the focused leaf is the blocking overlay itself, its own
         // request stands.
-        let focused = crate::app::ui_msg::ComponentId::Modal(crate::app::ui_msg::ModalId::Confirm);
+        let focused = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::Confirm);
         assert_eq!(
             crate::app::input::router::resolve_router_outcome_with_focused(
                 crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),

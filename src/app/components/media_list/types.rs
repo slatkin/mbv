@@ -1,4 +1,4 @@
-use crate::app::ui_msg::SelectionSummary;
+use mbv_ui_msg::SelectionSummary;
 use ratatui::layout::Position;
 
 /// Pointer surface input resolved by a mounted presentation. Convert this to

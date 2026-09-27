@@ -2,7 +2,6 @@ use mbv_theme as palette;
 use std::time::Duration;
 
 use super::components::{QueueBoundaryComponent, UiRootComponent};
-use super::ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use super::{
     components, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent,
     PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
@@ -15,14 +14,15 @@ use super::{
 pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
-use crate::app::ui_msg::AlbumCursorKind;
-#[cfg(test)]
-pub(in crate::app) use crate::app::ui_msg::OverlayId;
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
 #[cfg(test)]
 use mbv_ui_model::home_latest::current_launch_secs;
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
 use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
+use mbv_ui_msg::AlbumCursorKind;
+#[cfg(test)]
+pub(in crate::app) use mbv_ui_msg::OverlayId;
+use mbv_ui_msg::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 

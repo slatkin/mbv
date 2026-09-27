@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::components::MultiselectComponent;
 use crate::app::tests::make_app_stub;
-use crate::app::ui_msg::{Msg, ShellRequest, UserEvent};
 use mbv_ui_model::context_menu::{MultiSelectKind, MultiSelectPopup};
+use mbv_ui_msg::{Msg, ShellRequest, UserEvent};
 use tuirealm::component::AppComponent;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -74,7 +74,7 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
 #[test]
 fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
     use crate::app::components::SearchSidebarComponent;
-    use crate::app::ui_msg::ServiceRequest;
+    use mbv_ui_msg::ServiceRequest;
     use std::time::Instant;
 
     let mut model = Model::new(make_app_stub());
@@ -107,13 +107,13 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
     assert!(matches!(
         dispatch(&mut model, &type_key('a')),
         Some(Msg::TerminalEvent(
-            crate::app::ui_msg::TerminalObserverEvent::KeyClaimed
+            mbv_ui_msg::TerminalObserverEvent::KeyClaimed
         ))
     ));
     assert!(matches!(
         dispatch(&mut model, &type_key('b')),
         Some(Msg::TerminalEvent(
-            crate::app::ui_msg::TerminalObserverEvent::KeyClaimed
+            mbv_ui_msg::TerminalObserverEvent::KeyClaimed
         ))
     ));
 

@@ -10,9 +10,9 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::ui_msg::Msg;
-use crate::app::ui_msg::UserEvent;
 use mbv_ui_model::library::LibraryKind;
+use mbv_ui_msg::Msg;
+use mbv_ui_msg::UserEvent;
 
 impl Default for LibraryPanel {
     fn default() -> Self {
@@ -333,7 +333,7 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                         .is_some_and(|owner| owner.hero_overlay_available());
                 if hero_overlay_resolvable && matches!(result, LeafKeyResult::Unhandled) {
                     return Some(Msg::TerminalEvent(
-                        crate::app::ui_msg::TerminalObserverEvent::KeyClaimed,
+                        mbv_ui_msg::TerminalObserverEvent::KeyClaimed,
                     ));
                 }
                 result.into_option()

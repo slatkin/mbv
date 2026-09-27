@@ -3,7 +3,7 @@ use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
     resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
 };
-use crate::app::ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
 /// tick's message list and return the messages that survive.
@@ -410,7 +410,7 @@ impl Model {
 #[cfg(test)]
 mod mouse_fold_tests {
     use super::*;
-    use crate::app::ui_msg::PlaybackRequest;
+    use mbv_ui_msg::PlaybackRequest;
 
     #[test]
     fn fold_keeps_one_mouse_claim_and_the_observer_signal() {

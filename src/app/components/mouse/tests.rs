@@ -9,7 +9,7 @@ use tuirealm::listener::{EventListenerCfg, Poll, PortResult};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::ui_msg::{Msg, TerminalObserverEvent};
+use mbv_ui_msg::{Msg, TerminalObserverEvent};
 
 /// Records that a mouse event was forwarded to it, and emits a message so
 /// the forward is observable out of `Application::tick`.

@@ -1,11 +1,11 @@
 use super::components::podcast_content::PodcastContent;
 use super::Model;
 use super::TabSelection;
-use crate::app::ui_msg::PodcastEpisodeIntent;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::library::LibraryKind;
+use mbv_ui_msg::PodcastEpisodeIntent;
 
 impl Model {
     fn abs_podcast_key(&self) -> Option<LibraryKey> {
@@ -63,7 +63,7 @@ impl Model {
         };
         let selected_latest = self
             .application
-            .get_component(&crate::app::ui_msg::ComponentId::Library)
+            .get_component(&mbv_ui_msg::ComponentId::Library)
             .and_then(|component| {
                 component
                     .as_any()

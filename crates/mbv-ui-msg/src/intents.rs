@@ -19,11 +19,11 @@ impl PodcastEpisodeTarget {
         }
     }
 
-    pub(crate) fn library_item_id(&self) -> &str {
+    pub fn library_item_id(&self) -> &str {
         &self.library_item_id
     }
 
-    pub(crate) fn episode_id(&self) -> &str {
+    pub fn episode_id(&self) -> &str {
         &self.episode_id
     }
 }
@@ -45,11 +45,11 @@ impl BookChapterTarget {
         }
     }
 
-    pub(crate) fn book_library_item_id(&self) -> &str {
+    pub fn book_library_item_id(&self) -> &str {
         &self.book_library_item_id
     }
 
-    pub(crate) fn row_discriminator(&self) -> usize {
+    pub fn row_discriminator(&self) -> usize {
         self.row_discriminator
     }
 }

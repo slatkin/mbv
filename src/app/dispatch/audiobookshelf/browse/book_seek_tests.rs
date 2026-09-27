@@ -62,7 +62,7 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
     app.player_tab.queue =
         mbv_queue::PlaybackQueue::from_queue_items(vec![book_queue_item("book-1")], Some(0));
 
-    app.activate_audiobookshelf_book_row_target(Some(crate::app::ui_msg::BookChapterTarget::new(
+    app.activate_audiobookshelf_book_row_target(Some(mbv_ui_msg::BookChapterTarget::new(
         "book-1".into(),
         1,
     )));

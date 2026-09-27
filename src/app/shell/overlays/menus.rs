@@ -3,13 +3,13 @@ use super::super::components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
 };
 use super::super::Model;
-use crate::app::ui_msg::ContextMenuIntent;
-use crate::app::ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
 use mbv_ui_model::context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
 use mbv_ui_model::settings::PanelFocus;
+use mbv_ui_msg::ContextMenuIntent;
+use mbv_ui_msg::{ComponentId, OverlayId, PopupId, ShellRequest};
 use ratatui::layout::Rect;
 
 impl Model {

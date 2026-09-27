@@ -5,9 +5,9 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use super::EmbyLibraryContent;
 use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use crate::app::ui_msg::{Msg, ShellRequest, TerminalObserverEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::sort_filter::LetterFilter;
+use mbv_ui_msg::{Msg, ShellRequest, TerminalObserverEvent};
 
 impl EmbyLibraryContent {
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors

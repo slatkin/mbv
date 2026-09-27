@@ -2,9 +2,9 @@
 
 use super::components::home_content::HomeContent;
 use super::Model;
-use crate::app::ui_msg::ShellRequest;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_msg::ShellRequest;
 
 impl Model {
     pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {

@@ -3,7 +3,7 @@ use super::super::components::{
 };
 use super::super::Model;
 use super::super::SidebarId;
-use crate::app::ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 use tuirealm::component::AppComponent;
 
 impl Model {

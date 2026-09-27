@@ -87,10 +87,10 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
         assert!(outcome.raw_messages.iter().all(|msg| {
             !matches!(
                 msg,
-                Msg::Queue(crate::app::ui_msg::QueueRequest::ResizeColumnLive(_))
+                Msg::Queue(mbv_ui_msg::QueueRequest::ResizeColumnLive(_))
             ) && !matches!(
                 msg,
-                Msg::Queue(crate::app::ui_msg::QueueRequest::ResizeColumnEnd(_))
+                Msg::Queue(mbv_ui_msg::QueueRequest::ResizeColumnEnd(_))
             ) && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))
                 && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))
         }));

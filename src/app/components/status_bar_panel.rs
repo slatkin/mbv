@@ -21,11 +21,11 @@ use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{Msg, PlaybackRequest, ShellRequest};
 use mbv_render::{render_status_bar, StatusBarModel, StatusBarRegions};
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::volume::VOLUME_STEP;
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 
 /// The status row panel: paints the status row where `RootFrame` places it
 /// and retains its volume/mute/remote pill regions.

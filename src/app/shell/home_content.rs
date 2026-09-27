@@ -6,12 +6,12 @@ use super::components::home_content::HomeContent as HomeOwner;
 use super::components::library_panel::LibraryPanel;
 use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
-#[cfg(test)]
-use crate::app::ui_msg::ComponentId;
 use mbv_queue::QueueItem;
 #[cfg(test)]
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
+#[cfg(test)]
+use mbv_ui_msg::ComponentId;
 use std::time::Instant;
 
 impl Model {

@@ -6,7 +6,6 @@
 
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryPanel};
-use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
@@ -16,6 +15,7 @@ use mbv_queue::FeedKind;
 use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::feed_tab::WatchedFilter;
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_msg::{Msg, ShellRequest};
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
@@ -228,7 +228,7 @@ fn unfocused_panel_does_not_forward_keys_to_the_feeds_owner() {
 
     for code in keys {
         assert_eq!(
-            panel.on(&Event::<crate::app::ui_msg::UserEvent>::Keyboard(key(code))),
+            panel.on(&Event::<mbv_ui_msg::UserEvent>::Keyboard(key(code))),
             None
         );
     }

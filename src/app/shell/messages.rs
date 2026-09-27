@@ -6,8 +6,8 @@ mod tests;
 
 use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::ui_msg::{ComponentId, Msg, ShellRequest};
 use mbv_ui_model::playback::DestinationLatestSource;
+use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use std::time::Instant;
 
 fn matching_context_items(
@@ -648,8 +648,8 @@ impl Model {
 
     /// The `TvHitClick` arm: single-click the TV hit, acknowledge the Latest
     /// marker for letter pills, and always repaint the TV owner.
-    fn handle_tv_hit_click(&mut self, hit: crate::app::ui_msg::TvHit) {
-        let acknowledge_latest = matches!(hit, crate::app::ui_msg::TvHit::LetterPill(0));
+    fn handle_tv_hit_click(&mut self, hit: mbv_ui_msg::TvHit) {
+        let acknowledge_latest = matches!(hit, mbv_ui_msg::TvHit::LetterPill(0));
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             self.app.handle_mouse_single_click_tv(lib_idx, hit);
         }

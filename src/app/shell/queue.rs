@@ -2,8 +2,8 @@ use super::components::{QueueComponent, QueueCursorUpdate};
 use super::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 use mbv_queue::QueueSlotId;
+use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 
 /// The row projection inputs that can change queue rows. Chrome and pause
 /// state are delivered independently; pause only affects the paint-time
@@ -488,8 +488,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
-    use crate::app::ui_msg::Msg;
     use mbv_emby_model::test_support::make_item;
+    use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -662,7 +662,7 @@ mod tests {
         let slots: Vec<_> = (1..=4)
             .map(|index| model.app.player_tab.slot_id_at(index).unwrap())
             .collect();
-        model.handle_queue_request(crate::app::ui_msg::QueueRequest::RemoveSelection {
+        model.handle_queue_request(mbv_ui_msg::QueueRequest::RemoveSelection {
             scope: QueueScope::Local,
             slot_ids: slots,
         });

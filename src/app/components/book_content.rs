@@ -22,10 +22,6 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
-use crate::app::ui_msg::{
-    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
-    ShellRequest,
-};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
@@ -33,6 +29,10 @@ use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
+use mbv_ui_msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
+    ShellRequest,
+};
 
 /// The plain Books content owner. Its list controls retain cursor, scroll,
 /// selected targets, and chapter-pane focus locally; shell pushes replace
@@ -524,7 +524,7 @@ impl LibraryContentOwner for BookContent {
         self.carrier.set_selection_origin(origin);
     }
 
-    fn selection_summary(&self) -> Option<crate::app::ui_msg::SelectionSummary> {
+    fn selection_summary(&self) -> Option<mbv_ui_msg::SelectionSummary> {
         Some(self.carrier.selection_summary())
     }
 

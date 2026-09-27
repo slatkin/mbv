@@ -7,9 +7,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
 
-use crate::app::ui_msg::{
-    ComponentId, ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent,
-};
+use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent};
 
 const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(OverlayId::Settings),

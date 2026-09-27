@@ -3,7 +3,7 @@ use super::components::library_panel::LibraryPanel;
 use super::components::SearchPool;
 use super::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
-use crate::app::ui_msg::ComponentId;
+use mbv_ui_msg::ComponentId;
 
 impl Model {
     /// The panel's active owner's Inline Search session, when one is

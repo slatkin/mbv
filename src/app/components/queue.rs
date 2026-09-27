@@ -11,8 +11,6 @@ use tuirealm::state::State;
 
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{Msg, QueueRequest};
 use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box, queue_panel_subareas};
 use mbv_render::components::media_list::MediaListRow;
@@ -23,6 +21,8 @@ use mbv_render::components::queue::render_queue_status;
 use mbv_render::components::widgets::render_queue_panel_frame;
 use mbv_theme as palette;
 use mbv_ui_model::playback::{PlaybackState, QueueScope};
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{Msg, QueueRequest};
 
 mod keys;
 mod pointer;
@@ -232,7 +232,7 @@ impl QueueComponent {
             .clamp_viewport(self.content_area.height.max(1) as usize);
     }
 
-    pub(in crate::app) fn selection_summary(&self) -> crate::app::ui_msg::SelectionSummary {
+    pub(in crate::app) fn selection_summary(&self) -> mbv_ui_msg::SelectionSummary {
         self.carrier.selection_summary()
     }
 

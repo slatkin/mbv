@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::render_fixtures::make_movie_app;
-use crate::app::ui_msg::{Msg, ShellRequest};
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_msg::{Msg, ShellRequest};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 mod group;
@@ -65,7 +65,7 @@ fn expanding_an_uncached_show_starts_the_detail_fetch() {
     assert!(model.app.series_detail_cache.is_empty());
 
     model.handle_tv_request(ShellRequest::TvTreeExpand {
-        target: crate::app::ui_msg::TvTreeTarget::Show("tv-id:13:movie-focused".into()),
+        target: mbv_ui_msg::TvTreeTarget::Show("tv-id:13:movie-focused".into()),
     });
 
     assert_eq!(
@@ -202,12 +202,11 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     assert!(matches!(
         move_request,
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
-            hit: crate::app::ui_msg::TvHit::SeriesRow(ref target)
+            hit: mbv_ui_msg::TvHit::SeriesRow(ref target)
         } if target == "movie-second")));
-    model.app.handle_mouse_single_click_tv(
-        0,
-        crate::app::ui_msg::TvHit::SeriesRow("movie-second".into()),
-    );
+    model
+        .app
+        .handle_mouse_single_click_tv(0, mbv_ui_msg::TvHit::SeriesRow("movie-second".into()));
     model.push_tv_workspace_content();
     let selected_id = |model: &mut Model| {
         model

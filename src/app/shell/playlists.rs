@@ -1,6 +1,6 @@
 use super::components::{PlaylistsComponent, PlaylistsContent};
 use super::Model;
-use crate::app::ui_msg::{ComponentId, ModalId, OverlayId, ShellRequest};
+use mbv_ui_msg::{ComponentId, ModalId, OverlayId, ShellRequest};
 
 impl Model {
     pub(in crate::app) fn update_playlists_content(&mut self) {
@@ -155,7 +155,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
-    use crate::app::ui_msg::{Msg, TerminalObserverEvent};
+    use mbv_ui_msg::{Msg, TerminalObserverEvent};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

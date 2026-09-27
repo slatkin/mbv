@@ -10,10 +10,10 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{LeafKeyResult, Msg};
 use mbv_render::{render_multiselect_content, MultiSelectRenderModel};
 use mbv_ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{LeafKeyResult, Msg};
 
 pub struct MultiselectComponent {
     kind: Option<MultiSelectKind>,
@@ -85,9 +85,10 @@ impl MultiselectComponent {
                 None
             }
             Key::Esc | Key::Enter => self.commit_snapshot().map(|(kind, items)| {
-                Msg::Shell(Box::new(
-                    crate::app::ui_msg::ShellRequest::MultiselectCommit { kind, items },
-                ))
+                Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MultiselectCommit {
+                    kind,
+                    items,
+                }))
             }),
             _ => None,
         }
@@ -133,9 +134,10 @@ impl MultiselectComponent {
     /// The keyboard Esc/Enter path: commit the current choices.
     fn commit_request(&self) -> Option<Msg> {
         self.commit_snapshot().map(|(kind, items)| {
-            Msg::Shell(Box::new(
-                crate::app::ui_msg::ShellRequest::MultiselectCommit { kind, items },
-            ))
+            Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::MultiselectCommit {
+                kind,
+                items,
+            }))
         })
     }
 }
@@ -237,7 +239,7 @@ mod tests {
            component.on(&key(Key::Enter)),
            Some(Msg::Shell(ref shell_boxed))
         if matches!(shell_boxed.as_ref(),
-               crate::app::ui_msg::ShellRequest::MultiselectCommit { .. }
+               mbv_ui_msg::ShellRequest::MultiselectCommit { .. }
            )));
     }
 }

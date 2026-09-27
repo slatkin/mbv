@@ -25,8 +25,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{Msg, PlaybackRequest};
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
@@ -34,6 +32,8 @@ use mbv_render::PlaybackStripAreas;
 use mbv_render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{Msg, PlaybackRequest};
 
 /// The queue-column transport's surface: the fixed chrome band the queue
 /// playback panel paints in every queue-visible layout (the former

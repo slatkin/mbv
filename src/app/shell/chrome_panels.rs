@@ -16,7 +16,6 @@ use super::components::{
 };
 use super::{App, DestinationLatestSource, Model, PanelFocus};
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::ui_msg::{ComponentId, Msg, UserEvent};
 use mbv_render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
     QUEUE_PLAYBACK_HEADER_ROWS,
@@ -26,6 +25,7 @@ use mbv_render::components::widgets::{fill_surface, queue_panel_inset};
 use mbv_render::layout::CardGeometry;
 use mbv_render::{StatusBarModel, VisualModeIndicator};
 use mbv_ui_model::playback_target::NowPlayingStatus;
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
     let area = app

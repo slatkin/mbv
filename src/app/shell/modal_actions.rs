@@ -1,9 +1,9 @@
 use super::components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use super::Model;
-use crate::app::ui_msg::{ComponentId, ModalId};
-use crate::app::ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 use crossterm::event::{KeyCode, KeyEvent};
 use mbv_ui_model::confirm::ConfirmAction;
+use mbv_ui_msg::{ComponentId, ModalId};
+use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 
 impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {

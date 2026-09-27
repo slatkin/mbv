@@ -19,11 +19,11 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use crate::app::ui_msg::UserEvent;
-use crate::app::ui_msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_render::render_context_menu_content;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::settings::PanelFocus;
+use mbv_ui_msg::UserEvent;
+use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 
 /// The Interactive Component for the Context menu.
 ///
@@ -197,10 +197,10 @@ impl Component for ContextMenuComponent {
 impl ContextMenuComponent {
     fn key_result(key: &tuirealm::event::KeyEvent) -> LeafKeyResult {
         let intent = match key.code {
-            tuirealm::event::Key::Up => crate::app::ui_msg::ContextMenuIntent::MoveUp,
-            tuirealm::event::Key::Down => crate::app::ui_msg::ContextMenuIntent::MoveDown,
-            tuirealm::event::Key::Enter => crate::app::ui_msg::ContextMenuIntent::Select,
-            tuirealm::event::Key::Esc => crate::app::ui_msg::ContextMenuIntent::Dismiss,
+            tuirealm::event::Key::Up => mbv_ui_msg::ContextMenuIntent::MoveUp,
+            tuirealm::event::Key::Down => mbv_ui_msg::ContextMenuIntent::MoveDown,
+            tuirealm::event::Key::Enter => mbv_ui_msg::ContextMenuIntent::Select,
+            tuirealm::event::Key::Esc => mbv_ui_msg::ContextMenuIntent::Dismiss,
             _ => return LeafKeyResult::Unhandled,
         };
         LeafKeyResult::Consumed(Some(Box::new(Msg::Shell(Box::new(
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(
             msg,
             Some(Msg::Shell(Box::new(ShellRequest::ContextMenuIntent(
-                crate::app::ui_msg::ContextMenuIntent::MoveDown
+                mbv_ui_msg::ContextMenuIntent::MoveDown
             ))))
         );
     }
