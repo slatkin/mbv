@@ -39,26 +39,25 @@ pub fn resolve_library_route(
     routes: &std::collections::BTreeMap<String, String>,
     library_name: &str,
 ) -> Option<DaemonEndpoint> {
-    let configured_endpoint = routes.get(&library_name.to_lowercase())?;
-    match DaemonEndpoint::parse(configured_endpoint) {
+    let raw = routes.get(&library_name.to_lowercase())?;
+    match DaemonEndpoint::parse(raw) {
         Ok(endpoint @ DaemonEndpoint::Tcp(_)) => Some(endpoint),
-        Ok(non_tcp_endpoint) => {
+        Ok(other) => {
             log::warn!(
                 target: "library_route",
-                "library_routes entry {configured_endpoint:?} parsed as {non_tcp_endpoint:?}, but library routing is tcp://-only; skipping"
+                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
             );
             None
         }
-        Err(error) => {
+        Err(e) => {
             log::warn!(
                 target: "library_route",
-                "library_routes entry {configured_endpoint:?} is not a valid tcp:// endpoint: {error}; skipping"
+                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
             );
             None
         }
     }
 }
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DaemonEndpoint {
     Local,
