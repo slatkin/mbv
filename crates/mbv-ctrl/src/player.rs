@@ -205,6 +205,58 @@ impl Default for PlayerStatus {
     }
 }
 
+/// `run_identity` crosses the ctrl wire as the protocol-10
+/// `(PlaybackRequestId, generation)` pair. The request slot was always a
+/// hardcoded 0 (dead data), so the pair shape stays on the wire for protocol
+/// stability while the model carries the bare generation; a bare scalar is
+/// also accepted on decode so peers built while the wire briefly carried the
+/// scalar still decode.
+mod run_identity_wire {
+    use serde::de::{Deserializer, SeqAccess, Visitor};
+    use serde::ser::SerializeTuple;
+
+    pub(super) fn serialize<S, T>(generation: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+        T: serde::Serialize + ?Sized,
+    {
+        let mut pair = serializer.serialize_tuple(2)?;
+        pair.serialize_element(&0u64)?;
+        pair.serialize_element(generation)?;
+        pair.end()
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<crate::PlaybackGeneration, D::Error> {
+        deserializer.deserialize_any(GenerationVisitor)
+    }
+
+    struct GenerationVisitor;
+
+    impl<'de> Visitor<'de> for GenerationVisitor {
+        type Value = crate::PlaybackGeneration;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a playback generation or a (request id, generation) pair")
+        }
+
+        fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<u64, E> {
+            Ok(v)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<u64, A::Error> {
+            let _request_id: u64 = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+            let generation: u64 = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+            Ok(generation)
+        }
+    }
+}
+
 pub const CONNECTION_LOST_MESSAGE: &str = "Lost connection to the daemon's device";
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -220,7 +272,7 @@ pub enum PlayerEvent {
         slot_id: Option<QueueSlotId>,
         /// Identity of the Playback run that observed this stop: the owner
         /// submission generation at event construction time.
-        #[serde(default)]
+        #[serde(default, with = "run_identity_wire")]
         run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,
@@ -250,7 +302,7 @@ pub enum PlayerEvent {
         slot_id: QueueSlotId,
         /// Identity of the Playback run that observed this completion: the
         /// owner submission generation at event construction time.
-        #[serde(default)]
+        #[serde(default, with = "run_identity_wire")]
         run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,
