@@ -76,16 +76,13 @@ impl MediaSemanticState {
     /// [`Self::from_queue_item`], which add the music rule on top of this.
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
         if position_ticks > 0 {
-            let progress = u128::try_from(position_ticks)
-                .ok()
-                .zip(
-                    u128::try_from(runtime_ticks)
-                        .ok()
-                        .filter(|runtime| *runtime > 0),
-                )
-                .and_then(|(position, runtime)| {
-                    u16::try_from((position.saturating_mul(100) / runtime).min(100)).ok()
-                });
+            let progress = (runtime_ticks > 0).then(|| {
+                (u128::try_from(position_ticks)
+                    .unwrap_or(u128::MAX)
+                    .saturating_mul(100)
+                    / u128::try_from(runtime_ticks).unwrap_or(u128::MAX))
+                .min(100) as u16
+            });
             Self::active(progress)
         } else if played {
             Self::Played
@@ -299,22 +296,22 @@ impl<Target> RowGeometry<Target> {
         self.selected_row
     }
 
-    fn row_rect(&self, area: Rect, flow_row: usize) -> Option<Rect> {
-        let row_offset = u16::try_from(flow_row.checked_sub(self.offset)?).ok()?;
-        Some(Rect {
-            y: area.y.checked_add(row_offset)?,
+    fn row_rect(&self, area: Rect, flow_row: usize) -> Rect {
+        Rect {
+            y: area.y
+                + u16::try_from(flow_row - self.offset)
+                    .expect("visible row offset is bounded by the painted rect height"),
             height: 1,
             ..area
-        })
+        }
     }
 
     /// The selected row's absolute one-line rectangle when it is visible.
     pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
         let row = self.selected_row?;
-        if !(self.offset..self.offset.saturating_add(area.height as usize)).contains(&row) {
-            return None;
-        }
-        self.row_rect(area, row)
+        (self.offset..self.offset.saturating_add(area.height as usize))
+            .contains(&row)
+            .then(|| self.row_rect(area, row))
     }
 
     /// Produce target-bearing rectangles for the visible portion of the
@@ -333,9 +330,10 @@ impl<Target> RowGeometry<Target> {
                 let target = self.rows.get(flow_row)?.clone()?;
                 // Rows anchor at `content_rect.y` (where the list paints)
                 // but inherit x/width from the claim rectangle.
-                let row_offset = u16::try_from(flow_row.checked_sub(self.offset)?).ok()?;
                 let rect = Rect {
-                    y: content_rect.y.checked_add(row_offset)?,
+                    y: content_rect.y
+                        + u16::try_from(flow_row - self.offset)
+                            .expect("visible row offset is bounded by the painted rect height"),
                     height: 1,
                     ..claim_rect
                 };
