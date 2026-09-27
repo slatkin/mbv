@@ -51,7 +51,7 @@ pub struct PlayerStatus {
     /// NOT a ready-made URL: `mbv-core` has no access to the disk cache
     /// (that lives in the root crate's `config` module) and, per #158's
     /// recorded triage decision, must never build a token-bearing Emby URL
-    /// as a fallback. See `src/mpris.rs::resolve_art_url`.
+    /// as a fallback. See `mbv-desktop::mpris::resolve_art_url`.
     #[serde(default)]
     pub art_item_id: String,
     /// Album id for the current track, when it's a grouped audio track

@@ -218,7 +218,7 @@ pub fn run_local_daemon_main() -> ! {
                     return None;
                 }
                 let handle = player_handle_for_tray.lock().unwrap().take()?;
-                crate::tray::spawn(shutdown_tx, handle.status, handle.command_tx)
+                mbv_desktop::tray::spawn(shutdown_tx, handle.status, handle.command_tx)
             }),
         },
     )

@@ -57,7 +57,7 @@ pub fn audiobookshelf_hero_book_cover_cache_key(server: &str, id: &str, suffix: 
 /// Cache key for an Emby card's primary image: the album key when `album_id`
 /// is non-empty (audio tracks on the same album share one cache entry keyed
 /// by album id), else the item key. Shared by the queue-card projection
-/// (`src/app/state/projection/card.rs`) and MPRIS (`src/mpris.rs`) so their
+/// (`src/app/state/projection/card.rs`) and MPRIS (`mbv-desktop::mpris`) so their
 /// `mpris:artUrl` lookup can never drift from what the card projection
 /// actually wrote to disk (issue #833).
 #[must_use]

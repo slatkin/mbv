@@ -99,10 +99,16 @@ impl MediaPlayer2 {
 /// (`switch_to_direct_remote` / `restore_local_mode`), and MPRIS must track
 /// whichever one currently owns playback rather than staying wired to
 /// whatever was live when `start` was first called.
-pub(crate) struct MprisSource {
+pub struct MprisSource {
     status: Arc<Mutex<PlayerStatus>>,
     send: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
+}
+
+impl std::fmt::Debug for MprisSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MprisSource").finish_non_exhaustive()
+    }
 }
 
 /// Handle returned by `start`; pass it to `rebind` to re-point a live MPRIS
@@ -110,7 +116,7 @@ pub(crate) struct MprisSource {
 /// (`main.rs`, `app.rs`) only ever move this opaque handle around and
 /// pass it back into `rebind` -- they never touch `MprisSource`'s fields
 /// directly, which stay module-private.
-pub(crate) type MprisHandle = Arc<Mutex<MprisSource>>;
+pub type MprisHandle = Arc<Mutex<MprisSource>>;
 
 #[cfg(not(test))]
 struct MediaPlayer2Player {
@@ -124,6 +130,7 @@ struct MediaPlayer2Player {
     /// Snapshot updated every 500ms by the polling loop so all property reads
     /// within one D-Bus call batch see consistent state.
     snapshot: Arc<Mutex<PlayerStatus>>,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
 }
 
 /// Resolve `mpris:artUrl` to a local `file://` URI for the current track's
@@ -138,8 +145,7 @@ struct MediaPlayer2Player {
 /// what the card projection actually wrote to disk (issue #833).
 ///
 /// `resolve_path` is injected so the URI decision stays pure and never
-/// touches a real cache directory; production passes
-/// `crate::config::image_disk_cache_path`.
+/// touches a real cache directory; the caller supplies the path lookup.
 #[cfg(not(test))]
 fn resolve_art_url(
     item_id: &str,
@@ -176,8 +182,11 @@ fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
 }
 
 #[cfg(not(test))]
-fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> {
-    make_metadata_with_art_resolver(s, crate::config::image_disk_cache_path)
+fn make_metadata(
+    s: &PlayerStatus,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
+) -> HashMap<String, zvariant::Value<'static>> {
+    make_metadata_with_art_resolver(s, art_path)
 }
 
 #[cfg(not(test))]
@@ -356,7 +365,7 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn metadata(&self) -> HashMap<String, zvariant::Value<'static>> {
-        make_metadata(&self.snapshot.lock().unwrap())
+        make_metadata(&self.snapshot.lock().unwrap(), self.art_path)
     }
 
     #[zbus(property)]
@@ -448,6 +457,7 @@ async fn poll_status(
     conn: zbus::Connection,
     source_poll: MprisHandle,
     snapshot_poll: Arc<Mutex<PlayerStatus>>,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
 ) {
     let mut last_status = String::new();
     let mut last_metadata_key = (String::new(), String::new(), String::new(), String::new());
@@ -478,12 +488,8 @@ async fn poll_status(
             let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
             // Include the resolved cache path so artwork appearing mid-track
             // triggers a metadata change instead of remaining absent.
-            let art_key = resolve_art_url(
-                &s.art_item_id,
-                &s.art_album_id,
-                crate::config::image_disk_cache_path,
-            )
-            .unwrap_or_default();
+            let art_key =
+                resolve_art_url(&s.art_item_id, &s.art_album_id, art_path).unwrap_or_default();
             let result = (
                 st,
                 (s.title.clone(), s.artist.clone(), s.album.clone(), art_key),
@@ -548,6 +554,7 @@ pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
     send: impl Fn(PlayerCommand) + Send + Sync + 'static,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
+    art_path: fn(&str) -> Option<std::path::PathBuf>,
 ) -> MprisHandle {
     let snapshot = Arc::new(Mutex::new(status.lock().unwrap().clone()));
     let source: MprisHandle = Arc::new(Mutex::new(MprisSource {
@@ -573,6 +580,7 @@ pub fn start(
             let player_iface = MediaPlayer2Player {
                 source: Arc::clone(&source_poll),
                 snapshot: Arc::clone(&snapshot_poll),
+                art_path,
             };
             let conn = match connection::Builder::session()
                 .unwrap()
@@ -592,7 +600,7 @@ pub fn start(
                 }
             };
 
-            poll_status(conn, source_poll, snapshot_poll).await;
+            poll_status(conn, source_poll, snapshot_poll, art_path).await;
         });
     });
 

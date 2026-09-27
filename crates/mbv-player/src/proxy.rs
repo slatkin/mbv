@@ -447,7 +447,7 @@ impl PlayerProxy {
     /// Returns a clone of the raw local `Player`'s command channel, or
     /// `None` when this proxy currently wraps a `RemotePlayer`.
     ///
-    /// Intended for callers (e.g. the stay-alive tray, `src/tray.rs`) that
+    /// Intended for callers (e.g. the stay-alive tray, `mbv-desktop::tray`) that
     /// must drive playback through the in-process `Player` mpsc *only* --
     /// never through `send_command`/`next`/`previous`/`set_paused` above,
     /// which forward to `RemotePlayer::send_command` (a ctrl-socket call)

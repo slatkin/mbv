@@ -65,7 +65,7 @@ impl App {
         self.player_rx = remote_rx;
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
-            crate::mpris::rebind(
+            mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
                 move |cmd| {

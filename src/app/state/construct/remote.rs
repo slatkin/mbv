@@ -22,17 +22,17 @@ use std::sync::{mpsc, Arc, Mutex};
 /// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
 /// session bus from a thread with no shutdown path -- leaked into every test
 /// process that constructs a remote App, where process teardown races it
-/// (issue #757). Tests that exercise rebind inject `mpris::test_handle`
-/// themselves.
+/// (issue #757). Tests leave `mpris` unset.
 #[cfg(not(test))]
-fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> crate::mpris::MprisHandle {
+fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::MprisHandle {
     let mpris_remote = remote.clone();
-    crate::mpris::start(
+    mbv_desktop::mpris::start(
         std::sync::Arc::clone(&mpris_remote.status),
         move |cmd| {
             let _ = mpris_remote.send_command(cmd);
         },
         Some(remote.disconnected_flag()),
+        crate::config::image_disk_cache_path,
     )
 }
 
