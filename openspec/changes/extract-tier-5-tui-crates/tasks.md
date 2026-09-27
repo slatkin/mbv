@@ -59,7 +59,7 @@ unreachable from another crate's tests, change it to
 
 ## 0. Groundwork
 
-- [ ] 0.1 Confirm Tier 3–4 has merged. Run `gh pr view 826 --json state` and
+- [x] 0.1 Confirm Tier 3–4 has merged. Run `gh pr view 826 --json state` and
   `git log --oneline -20`. Verify with all of:
   - PR #826 is `MERGED`;
   - `ls crates` shows `mbv-emby`, `mbv-audiobookshelf`, `mbv-player`, and
@@ -67,10 +67,10 @@ unreachable from another crate's tests, change it to
   - `rg 'mbv_core::(api|player|audiobookshelf)' src` is empty.
 
   If any check fails, stop and report which one.
-- [ ] 0.2 Rebase onto the latest `main` before each group. Verify:
+- [x] 0.2 Rebase onto the latest `main` before each group. Verify:
   `git status` is clean and `git merge-base --is-ancestor origin/main HEAD`
   succeeds.
-- [ ] 0.3 Promote the TUI's UI dependencies to `[workspace.dependencies]`:
+- [x] 0.3 Promote the TUI's UI dependencies to `[workspace.dependencies]`:
   `ratatui`, `crossterm`, `tuirealm`, `ratatui-image`, `image`,
   `unicode-width`, `textwrap`, and `tui-scrollbar`, each with its exact
   version/features line from the root `[dependencies]`. Rewrite the root
