@@ -43,9 +43,9 @@ Gate for every group: `cargo check --workspace`,
 
 ## 7. Item lifecycle types (invariant 03)
 
-- [ ] 7.1 Collapse `LoadState` to `{Ready, DrainingReplacedFile}` and delete `StillPending` and the `NonZeroU8` (`crates/mbv-player/src/run/state.rs`). Verify: `cargo nextest run -p mbv-player` passes.
-- [ ] 7.2 Replace `forced_slot_id`, `forced_transition`, `forced_resume_ticks`, and `forced_jump_from_idle` with `forced_jump: Option<ForcedJump>` (`run/types.rs`) and update every clear and read site. Verify: `rg "forced_(slot_id|transition|resume_ticks|jump_from_idle)" crates/mbv-player/src` is empty and the `mbv-player` tests pass.
-- [ ] 7.3 Introduce `StopAction` and `begin_item_lifecycle(StopAction)`. Make `stop_report` and `load_state` private to `run/state.rs` behind transition methods (design D6), and convert all 14 assignment sites. Verify: `rg "stop_report = |load_state = " crates/mbv-player/src/run` matches only inside `state.rs`, and the `player_tests_session*` suites pass.
+- [x] 7.1 Collapse `LoadState` to `{Ready, DrainingReplacedFile}` and delete `StillPending` and the `NonZeroU8` (`crates/mbv-player/src/run/state.rs`). Verify: `cargo nextest run -p mbv-player` passes.
+- [x] 7.2 Replace `forced_slot_id`, `forced_transition`, `forced_resume_ticks`, and `forced_jump_from_idle` with `forced_jump: Option<ForcedJump>` (`run/types.rs`) and update every clear and read site. Verify: `rg "forced_(slot_id|transition|resume_ticks|jump_from_idle)" crates/mbv-player/src` is empty and the `mbv-player` tests pass.
+- [x] 7.3 Introduce `StopAction` and `begin_item_lifecycle(StopAction)`. Make `stop_report` and `load_state` private to `run/state.rs` behind transition methods (design D6), and convert all 14 assignment sites. Verify: `rg "stop_report = |load_state = " crates/mbv-player/src/run` matches only inside `state.rs`, and the `player_tests_session*` suites pass.
 
 ## 8. Docs and specs
 
