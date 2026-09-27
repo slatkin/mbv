@@ -20,7 +20,7 @@ Gate for every group: `cargo check --workspace`,
 
 ## 3. Observed active slot published once
 
-- [ ] 3.1 Add `SharedQueueState::publish_observed(&PlayerOwnerState)` and replace the four hand writes (`run.rs:83`, `event_loop/player_events.rs:57`, `control/queue_setup.rs:306`, `control/queue_load.rs:39`). Verify: `rg "observed_active_slot.lock\(\).unwrap\(\) =" crates/mbv-daemon/src` finds only `publish_observed`, and the `mbv-daemon` tests pass.
+- [x] 3.1 Add `SharedQueueState::publish_observed(&PlayerOwnerState)` and replace the four hand writes (`run.rs:83`, `event_loop/player_events.rs:57`, `control/queue_setup.rs:306`, `control/queue_load.rs:39`). Verify: `rg "observed_active_slot.lock\(\).unwrap\(\) =" crates/mbv-daemon/src` finds only `publish_observed`, and the `mbv-daemon` tests pass.
 
 ## 4. Jump origin and daemon transport inbound
 
