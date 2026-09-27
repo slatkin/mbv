@@ -1,7 +1,8 @@
 use mbv_config::{load_service_secret, EmbySetup};
 use mbv_core::api::EmbyClient;
-use mbv_core::api::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
+use mbv_core::api::{EmbyFailure, EmbyFailureClass};
 use mbv_core::audiobookshelf::AudiobookshelfClient;
+use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_queue::ServiceKind;
 use std::sync::mpsc;
 
