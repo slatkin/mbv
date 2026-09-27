@@ -1,9 +1,9 @@
 use super::*;
+use crate::app::state::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;
 use crossterm::event::KeyModifiers;
 use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::playback::{ReplacementExecutor, RoutedReplacementPrep};
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path
@@ -241,7 +241,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         .playlist_mutations
         .get("playlist-1")
         .and_then(|state| state.active.as_ref())
-        .map(mbv_ui_model::playback::PlaylistMutation::mutation_id)
+        .map(crate::app::state::playback::PlaylistMutation::mutation_id)
         .expect("the save is tracked as an in-flight mutation");
 
     // Second activation while that save is still in flight: it gates on the
@@ -258,7 +258,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: save_mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: mbv_ui_model::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
             epoch: app.queue_epoch,
         },
         source_playlist_id: "playlist-1".into(),

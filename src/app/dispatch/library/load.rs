@@ -1,10 +1,10 @@
+use crate::app::state::playback::HomeContent;
 use crate::app::{
     dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
-use mbv_ui_model::playback::HomeContent;
 use std::collections::HashMap;
 
 impl App {

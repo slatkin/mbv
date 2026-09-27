@@ -1,5 +1,5 @@
 use super::*;
-use mbv_ui_model::events::NavigateLanding;
+use crate::app::state::events::NavigateLanding;
 
 #[test]
 fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {

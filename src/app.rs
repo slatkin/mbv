@@ -1,7 +1,7 @@
 mod dispatch;
 mod infra;
 mod input;
-pub(in crate::app) mod state;
+pub(crate) mod state;
 
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
@@ -26,6 +26,12 @@ use self::state::bootstrap::bootstrap_unified_queue;
 use self::state::playback_target::{
     CastPlaybackTarget, LocalPlaybackTarget, PlaybackTarget, RemotePlaybackTarget,
 };
+use crate::app::state::events::{LibEvent, SessionEvent};
+use crate::app::state::playback::{
+    DestinationLatestSource, PendingQueueAction, QueueScopeResolution, RemoteSlotState,
+    ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
+};
+use crate::app::state::player_tab::PlayerTab;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
@@ -44,16 +50,11 @@ use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
-use mbv_ui_model::events::{LibEvent, SessionEvent};
 use mbv_ui_model::feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use mbv_ui_model::library_tab::LibraryTab;
-use mbv_ui_model::playback::{
-    DestinationLatestSource, PendingQueueAction, PlaybackState, QueueScope, QueueScopeResolution,
-    RemoteSlotState, ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
-};
-use mbv_ui_model::player_tab::PlayerTab;
+use mbv_ui_model::playback::{PlaybackState, QueueScope};
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

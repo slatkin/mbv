@@ -2,6 +2,9 @@
 
 use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::playback::{
+    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
+};
 #[cfg(test)]
 use mbv_components::home_content::HomeContent as HomeOwner;
 #[cfg(test)]
@@ -9,7 +12,6 @@ use mbv_components::library_panel::LibraryPanel;
 use mbv_queue::QueueItem;
 #[cfg(test)]
 use mbv_ui_model::library::LibraryKey;
-use mbv_ui_model::playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use std::time::Instant;

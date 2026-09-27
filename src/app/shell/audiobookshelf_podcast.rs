@@ -72,8 +72,9 @@ impl Model {
             .and_then(|panel| panel.owner(&key))
             .and_then(|owner| owner.as_any().downcast_ref::<PodcastContent>())
             .is_some_and(PodcastContent::latest_selected);
-        let source =
-            mbv_ui_model::playback::DestinationLatestSource::Audiobookshelf(library_id.clone());
+        let source = crate::app::state::playback::DestinationLatestSource::Audiobookshelf(
+            library_id.clone(),
+        );
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {
             self.record_home_latest_acknowledgement(source.clone());
         }

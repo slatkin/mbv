@@ -250,13 +250,13 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::state::events::LibEvent;
     use mbv_audiobookshelf::{
         AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage, AudiobookshelfChapter,
         AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,
     };
     use mbv_core::service_runtime::SetupGeneration;
     use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-    use mbv_ui_model::events::LibEvent;
     use rstest::rstest;
 
     fn book(id: &str) -> AudiobookshelfBook {

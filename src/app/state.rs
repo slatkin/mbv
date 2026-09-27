@@ -20,4 +20,8 @@ pub(in crate::app) mod runtime_channels;
 pub(in crate::app) mod service_runtime;
 pub(in crate::app) mod service_setup;
 
+pub(in crate::app) mod events;
+pub(crate) mod home_latest;
+pub(in crate::app) mod playback;
+pub(in crate::app) mod player_tab;
 pub mod types;

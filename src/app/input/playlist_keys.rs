@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::playback::PlaylistMutation;
 use crate::app::App;
-use mbv_ui_model::playback::PlaylistMutation;
 
 impl App {
     /// Effect for `ConfirmAction::SaveOverwritePlaylist`'s "yes" answer
