@@ -105,7 +105,7 @@ cargo nextest run --workspace
 
 ## 5. Device picker carries endpoint strings (design D3)
 
-- [ ] 5.1 Change `LibraryRouteStage::PickDevice.devices` in
+- [x] 5.1 Change `LibraryRouteStage::PickDevice.devices` in
   `crates/mbv-ui-model/src/context_menu.rs` to `Vec<(String, Option<String>)>`.
   In `enter_device_stage` (`src/app/shell/overlays/menus.rs`), keep the typed
   list, the eligibility logging and the parsed-endpoint cursor comparison.
