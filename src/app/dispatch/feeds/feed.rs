@@ -207,7 +207,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let (mut all_items, total_count) = match client.get_items_sorted(
                 &parent_id,

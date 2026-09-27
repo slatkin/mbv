@@ -1,14 +1,11 @@
-use crate::app::infra::resize::{ResizeRegisterTx, ResizeResponseRx};
-use crate::app::infra::{images, layout};
+use crate::app::infra::layout;
 use crate::app::render;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::types::browse::{AlbumIndexState, SeriesDetail};
-use crate::app::state::types::cast::{CastAttachment, CastEvent};
+use crate::app::state::types::cast::CastAttachment;
 use crate::app::state::types::confirm::ConfirmModal;
-use crate::app::state::types::events::{
-    LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent,
-};
+use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::types::feed::IdleFeed;
 use crate::app::state::types::feed::SavePlaylistDialog;
 use crate::app::state::types::feed_tab::FeedTabState;
@@ -27,7 +24,6 @@ use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
-use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -77,7 +73,7 @@ impl LevelFillState {
 
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "26 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
+    reason = "23 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
 )]
 pub struct App {
     /// General application configuration is independent of the optional Emby
@@ -85,20 +81,7 @@ pub struct App {
     pub(in crate::app) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
-    pub(in crate::app) emby_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::StartupReceiver>,
-    pub(in crate::app) emby_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_catalog_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfCatalogReceiver>,
+    pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
     pub(in crate::app) audiobookshelf_libraries:
         Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
     /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
@@ -111,23 +94,6 @@ pub struct App {
         Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:
         Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
-    pub(in crate::app) audiobookshelf_test_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_setup_rx: Option<
-        std::sync::mpsc::Receiver<
-            crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
-        >,
-    >,
-    pub(in crate::app) emby_setup_form:
-        Option<crate::app::dispatch::session::services_settings::EmbySetupForm>,
-    pub(in crate::app) audiobookshelf_setup_form:
-        Option<crate::app::dispatch::session::services_settings::AudiobookshelfSetupForm>,
-    pub(in crate::app) emby_setup_rx:
-        Option<mpsc::Receiver<crate::app::dispatch::session::service_startup::SetupCompletion>>,
-    pub(in crate::app) pending_emby_replacement:
-        Option<crate::app::dispatch::session::service_startup::Startup>,
-    pub(in crate::app) pending_audiobookshelf_replacement:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement>,
     pub(in crate::app) player: PlayerProxy,
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps
@@ -285,38 +251,13 @@ pub struct App {
     pub(in crate::app) pending_track_selection: Option<(usize, String)>,
     pub(in crate::app) last_played_item_id: Option<String>,
     pub(in crate::app) last_played_completed: bool,
-    pub(in crate::app) card_image_states: std::collections::HashMap<String, images::CachedImage>,
-    pub(in crate::app) image_lru: std::collections::VecDeque<String>,
-    pub(in crate::app) image_cache_size: usize,
-    pub(in crate::app) card_image_loading: std::collections::HashSet<String>,
-    pub(in crate::app) last_card_height: u16,
-    pub(in crate::app) last_card_width: u16,
     /// The queue visual slot's image projection (task 3.4, D9): the queue
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection:
         crate::app::render::components::card::QueueCardProjection,
-    pub(in crate::app) pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
-    pub(in crate::app) image_fetches_active: usize,
-    pub(in crate::app) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    pub(in crate::app) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    /// Registers a freshly created per-cache-key `ResizeRequest` receiver
-    /// with the resize worker thread (see `spawn_resize_worker`), so the
-    /// worker can service many concurrently-alive `ThreadProtocol`s off the
-    /// render thread while still routing each `ResizeResponse` back to the
-    /// right `card_image_states` entry (#164). `ResizeRequest`/`ResizeResponse`
-    /// carry no key of their own — that's why each cache key gets its own
-    /// dedicated channel instead of sharing one globally.
-    pub(in crate::app) resize_register_tx: ResizeRegisterTx,
-    /// Completed off-thread resize+encode results, tagged with the
-    /// `card_image_states` cache key they belong to. Drained once per
-    /// event-loop tick alongside `card_image_rx` (#164).
-    pub(in crate::app) resize_response_rx: ResizeResponseRx,
-    pub(in crate::app) image_picker: Option<Picker>,
-    pub(in crate::app) halfblock_picker: Option<Picker>,
     pub(in crate::app) dim_backdrop_active: bool,
-    pub(in crate::app) image_cache_size_total: usize,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
     /// Live mouse-capture flip requested by the Settings toggle arm (ADR
@@ -326,12 +267,7 @@ pub struct App {
     pub(in crate::app) confirm_logout: bool,
     pub(in crate::app) system_notifications: bool,
     pub(in crate::app) notif_failed: bool,
-    pub(in crate::app) notif_action_tx: mpsc::Sender<String>,
-    pub(in crate::app) notif_action_rx: mpsc::Receiver<String>,
-    pub(in crate::app) lib_tx: mpsc::Sender<LibEvent>,
-    pub(in crate::app) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(in crate::app) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(in crate::app) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(in crate::app) channels: crate::app::state::runtime_channels::RuntimeChannels,
     /// Whether the global Search sidebar overlay is open. The
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
@@ -378,37 +314,19 @@ pub struct App {
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
-    pub(in crate::app) sessions_tx: mpsc::Sender<SessionEvent>,
-    pub(in crate::app) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(in crate::app) connected_session_id: Option<String>,
     pub(in crate::app) connected_session_state: Option<mbv_core::api::SessionInfo>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.
     pub(in crate::app) cast_attachment: Option<CastAttachment>,
-    pub(in crate::app) cast_tx: mpsc::Sender<CastEvent>,
-    pub(in crate::app) cast_rx: mpsc::Receiver<CastEvent>,
     pub(in crate::app) last_cast_poll: Instant,
     pub(in crate::app) cast_status_loading: bool,
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,
     pub(in crate::app) next_owner_queue_load_request: u64,
-    pub(in crate::app) direct_remote_connected: bool,
-    pub(in crate::app) direct_remote_label: Option<String>,
-    /// Emby session id of a remote owner under Direct remote control, so the
-    /// Sessions sidebar can still mark that row after the control socket
-    /// takes over. Never set for the Stay-alive process: that process is not
-    /// a remote session.
-    pub(in crate::app) direct_remote_session_id: Option<String>,
-    pub(in crate::app) last_session_poll: Instant,
-    pub(in crate::app) session_miss_count: u8, // consecutive polls that didn't find the connected session
-    pub(in crate::app) remote_pos_s: i64, // monotonic position estimate for the connected remote
-    pub(in crate::app) remote_pos_at: Instant, // when remote_pos_s was last anchored
-    pub(in crate::app) remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
-    pub(in crate::app) remote_stalled_while_paused: bool, // last API poll observed IsPaused=true with no position advance
-    pub(in crate::app) remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
-    pub(in crate::app) runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
+    pub(in crate::app) remote: crate::app::state::remote_tracking::RemoteTracking,
     pub(in crate::app) suspended_local: Option<SuspendedLocalSession>,
     /// The library route currently driving playback, if any (#223):
     /// `Some(name)` holds the lowercased library name whose configured
@@ -521,8 +439,7 @@ pub struct App {
     /// Season expansions received before their show's detail has arrived.
     pub(in crate::app) pending_series_season_expansions:
         std::collections::HashSet<(String, String)>,
-    pub(in crate::app) image_protocol: Option<String>,
-    pub(in crate::app) image_protocol_enabled: bool,
+    pub(in crate::app) images: crate::app::infra::images::cache::ImageCache,
     pub(in crate::app) library_position_state: crate::config::LibraryPositionState,
     pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
@@ -538,17 +455,6 @@ pub struct App {
     pub(in crate::app) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
-    /// Test-only instrumentation: counts every reservation `queue_card_image_fetch`
-    /// makes past its dedup guard, so a broken guard is visible even when the
-    /// fixture has no Emby client (`spawn_image_fetch` balances
-    /// `image_fetches_active` back to its prior value synchronously in that
-    /// case, hiding a redundant reservation from the other counters).
-    #[cfg(test)]
-    pub(in crate::app) card_image_fetch_calls: u32,
-    /// Test-only instrumentation: counts protocol construction so hero cache
-    /// validity tests can distinguish reuse from a rebuild.
-    #[cfg(test)]
-    pub(in crate::app) image_protocol_builds: std::cell::Cell<u32>,
 }
 
 impl App {

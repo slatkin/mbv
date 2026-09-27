@@ -51,7 +51,7 @@ impl App {
                 device_name: sess.device_name.clone(),
             })
         } else {
-            self.direct_remote_label.as_ref().map(|device_name| {
+            self.remote.direct_remote_label.as_ref().map(|device_name| {
                 mbv_core::config::LastRemoteConnection::DirectSession {
                     device_name: device_name.clone(),
                 }

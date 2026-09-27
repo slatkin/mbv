@@ -38,7 +38,7 @@ impl App {
     fn wait_for_playlist_mutations(&mut self, playlist_id: &str, deadline: Instant) {
         while self.playlist_mutations.contains_key(playlist_id) && Instant::now() < deadline {
             let remaining = deadline.saturating_duration_since(Instant::now());
-            match self.sessions_rx.recv_timeout(remaining) {
+            match self.channels.sessions_rx.recv_timeout(remaining) {
                 Ok(event) => self.handle_session_event(event),
                 Err(_) => break,
             }

@@ -1,6 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::ui_util::is_playable;
-use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::state::types::playback::PlaylistMutation;
 use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
@@ -10,6 +9,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 
+mod pending_playback;
 mod playlist;
 mod playlist_mutation;
 mod replacement;

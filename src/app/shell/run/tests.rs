@@ -47,7 +47,7 @@ fn wide_tv_shows_placeholder(model: &mut Model) -> bool {
 #[test]
 fn series_image_completion_repushes_tv_workspace_content() {
     let mut model = mounted_wide_tv_model();
-    model.app.image_protocol_enabled = true;
+    model.app.images.image_protocol_enabled = true;
     // The sync pass is the production projection seam (task 5.10's central
     // hero projection owns the fetch for every migrated owner, TV included
     // since task 8.4). One throwaway draw publishes `root_frame` first — the
@@ -70,13 +70,21 @@ fn series_image_completion_repushes_tv_workspace_content() {
         "the Series prefetch must resolve into the cache"
     );
     assert!(
-        model.app.card_image_states.contains_key(&painted_key),
+        model
+            .app
+            .images
+            .card_image_states
+            .contains_key(&painted_key),
         "the painted Series key must be cached"
     );
     // The fixture's fetch resolves to an empty cache entry (no pixel
     // protocol is available), so the shared producer now treats the
     // placeholder as final while the shell still re-projects the cached key.
-    assert!(model.app.card_image_states.contains_key(&painted_key));
+    assert!(model
+        .app
+        .images
+        .card_image_states
+        .contains_key(&painted_key));
 }
 
 /// Task 2.3: no other image namespace may drive the TV projection. The cached
@@ -87,7 +95,8 @@ fn series_image_completion_repushes_tv_workspace_content() {
 #[test]
 fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     let mut app = make_app_stub();
-    app.notif_action_tx
+    app.channels
+        .notif_action_tx
         .send("clear:yes".into())
         .expect("notif channel");
 
@@ -120,7 +129,8 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
 fn drain_session_events_dispatches_a_queued_event() {
     let mut app = make_app_stub();
     app.sessions_loading = true;
-    app.sessions_tx
+    app.channels
+        .sessions_tx
         .send(SessionEvent::Loaded {
             sessions: vec![make_session("living-room", "mbv")],
         })
@@ -171,7 +181,11 @@ fn catalog_receiver(
 fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
     let mut events = Vec::new();
     for _ in 0..expected {
-        match app.lib_rx.recv_timeout(std::time::Duration::from_secs(1)) {
+        match app
+            .channels
+            .lib_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+        {
             Ok(event) => events.push(event),
             Err(error) => panic!(
                 "expected {expected} library-fetch events, received {}: {error:?}",
@@ -200,7 +214,7 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
     app.audiobookshelf_runtime.begin_setup();
     let (tx, rx) = std::sync::mpsc::channel::<AudiobookshelfSetupCompletion>();
     drop(tx);
-    app.audiobookshelf_setup_rx = Some(rx);
+    app.setup.audiobookshelf_setup_rx = Some(rx);
 
     assert!(
         app.drain_audiobookshelf_events(),
@@ -212,7 +226,7 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
         "the setup disconnect resets to the form's previous state"
     );
     assert!(
-        app.audiobookshelf_setup_rx.is_none(),
+        app.setup.audiobookshelf_setup_rx.is_none(),
         "the disconnected setup receiver is not put back"
     );
 }
@@ -237,7 +251,7 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         "saved-token",
     )
     .expect("secret is written under the test state dir");
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
+    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
         Err(AudiobookshelfError {
             class: AudiobookshelfFailureClass::AuthenticationRejected,
@@ -290,7 +304,7 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
             is_finished: false,
         },
     )]);
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
+    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
         Ok((
             vec![

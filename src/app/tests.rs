@@ -143,9 +143,9 @@ pub(crate) fn make_app_stub() -> App {
     let mut app = make_built_app();
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
-    app.image_cache_size_total = 50;
+    app.images.cache_size_total = 50;
     // Never start with a session poll already due.
-    app.last_session_poll = Instant::now();
+    app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_core::feed_entry_state::FeedEntryStore::default();
     // Default to "focused, past grace window" so existing mouse tests dispatch
@@ -222,12 +222,8 @@ pub(crate) fn make_built_app() -> App {
 
     let (_, player_rx) = std::sync::mpsc::channel();
     let (_, ws_rx) = std::sync::mpsc::channel();
-    let (lib_tx, lib_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
-    let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-    let (search_tx, search_rx) =
-        std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+    let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
     let player = PlayerProxy::stub(status);
 
@@ -237,14 +233,6 @@ pub(crate) fn make_built_app() -> App {
         config: Arc::new(Mutex::new(config)),
         emby_runtime: mbv_core::service_runtime::EmbyRuntime::default(),
         audiobookshelf_runtime: mbv_core::service_runtime::AudiobookshelfRuntime::new(false),
-        emby_startup_rx: None,
-        emby_startup_request: None,
-        audiobookshelf_startup_rx: None,
-        audiobookshelf_startup_request: None,
-        audiobookshelf_test_rx: None,
-        audiobookshelf_setup_rx: None,
-        emby_setup_form: None,
-        emby_setup_rx: None,
         player,
         player_rx,
         ws_rx,
@@ -268,16 +256,9 @@ pub(crate) fn make_built_app() -> App {
         indicator_style: render::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        lib_tx,
-        lib_rx,
-        sessions_tx,
-        sessions_rx,
         card_image_tx,
         card_image_rx,
-        notif_action_tx,
-        notif_action_rx,
-        search_tx,
-        search_rx,
+        channels,
         idle_feed: None,
     })
 }

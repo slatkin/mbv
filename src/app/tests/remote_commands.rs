@@ -67,6 +67,7 @@ fn capture_error(http: &MockHttp, app: &mut App, act: impl FnOnce(&mut App)) -> 
     http.respond(500, "command failed");
     act(app);
     let event = app
+        .channels
         .sessions_rx
         .recv_timeout(std::time::Duration::from_secs(2))
         .expect("command error");

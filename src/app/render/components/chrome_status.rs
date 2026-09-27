@@ -1,11 +1,10 @@
-//! Status-bar span builders and painter (task 2.2).
+//! Status-bar span builders (task 2.2).
 //!
 //! The mounted `StatusBarPanel` Interactive Component
 //! (`src/app/components/status_bar_panel.rs`) owns the status row's pill hit
 //! regions, overflow drop-order and click/scroll resolution. The `impl App`
 //! methods here are content production only: they read app state and build
-//! the pill/right-segment spans the shell projects into the component. The
-//! free [`render_status_bar`] is the component's painter.
+//! the pill/right-segment spans the shell projects into the component.
 //!
 //! The Local/Remote queue-scope pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
@@ -14,12 +13,8 @@ use super::chrome::daemon_endpoint_label;
 use super::indicators;
 use crate::app::ui_util::service_state_color;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState};
-use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-
-mod painter;
-pub(in crate::app) use painter::render_status_bar;
 
 impl App {
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
@@ -64,7 +59,7 @@ impl App {
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
@@ -139,7 +134,7 @@ impl App {
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         };
         let label = match target {
@@ -479,20 +474,6 @@ impl App {
         right_spans
     }
 
-    pub(in crate::app) fn status_width(spans: &[Span]) -> u16 {
-        painter::spans_width(spans)
-    }
-
-    pub(in crate::app) fn append_status(
-        spans: &mut Vec<Span<'static>>,
-        status: Vec<Span<'static>>,
-    ) {
-        if !spans.is_empty() {
-            spans.push(Span::raw(" "));
-        }
-        spans.extend(status);
-    }
-
     pub(in crate::app) fn set_status_label_color(spans: &mut [Span<'static>], color: Color) {
         if let Some(label) = spans.get_mut(2) {
             label.style = label.style.fg(color);
@@ -536,45 +517,4 @@ fn queue_source_status_label(
         }
     };
     Some((label, palette::TEXT_MUTED))
-}
-
-/// Plain-data indicator for active Visual mode.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(in crate::app) struct VisualModeIndicator {
-    /// Number of selected items.
-    pub count: usize,
-}
-/// Plain-data paint model for one status row. The shell projects spans; the
-/// mounted `StatusBarPanel` owns overflow, hit regions and Visual-mode clearing.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(in crate::app) struct StatusBarModel {
-    /// Whether the remote/session pill participates (the base frame has
-    /// always passed `false` here — the queue-scope pills below show the
-    /// same info; the parameter is retained verbatim).
-    pub show_session_pill: bool,
-    /// Remote/session pill spans (empty unless `show_session_pill`).
-    pub remote: Vec<Span<'static>>,
-    /// Mute pill spans (absent when not muted).
-    pub mute: Option<Vec<Span<'static>>>,
-    /// Volume pill spans.
-    pub volume: Vec<Span<'static>>,
-    /// Fully built right segment (scope label, username, service glyphs).
-    pub right: Vec<Span<'static>>,
-    /// Visual-mode count indicator, when selected items exist.
-    pub visual_mode: Option<VisualModeIndicator>,
-    /// Prefix-armed pill spans (absent when not armed).
-    pub prefix_armed: Option<Vec<Span<'static>>>,
-}
-/// The status row's pointer regions, retained by the mounted
-/// `StatusBarPanel` after painting.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(in crate::app) struct StatusBarRegions {
-    /// Volume pill: scroll-wheel adjusts the volume.
-    pub volume: Option<Rect>,
-    /// Mute pill: click toggles mute.
-    pub mute: Option<Rect>,
-    /// Remote/session pill region, when the session pill is enabled.
-    pub remote: Option<Rect>,
-    /// Visual-mode region; clicking it clears selection.
-    pub visual_clear: Option<Rect>,
 }

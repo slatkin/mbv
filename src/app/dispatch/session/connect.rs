@@ -238,18 +238,18 @@ impl App {
             || PlayerTab::from_emby_items(initial_items, initial_cursor),
             PlayerTab::from_unified_state,
         ));
-        self.direct_remote_connected = true;
+        self.remote.direct_remote_connected = true;
         self.advance_queue_epoch();
-        self.session_miss_count = 0;
-        self.remote_pos_s = 0;
-        self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now()
+        self.remote.session_miss_count = 0;
+        self.remote.remote_pos_s = 0;
+        self.remote.remote_pos_at = Instant::now();
+        self.remote.remote_api_pos_advanced_at = Instant::now()
             .checked_sub(Duration::from_secs(60))
             .unwrap_or_else(Instant::now);
-        self.remote_seek_pending_until = Instant::now()
+        self.remote.remote_seek_pending_until = Instant::now()
             .checked_sub(Duration::from_secs(1))
             .unwrap_or_else(Instant::now);
-        self.runtime_zero_since = None;
+        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
@@ -329,7 +329,7 @@ impl App {
                 {
                     log::info!(target: "auto_reconnect", "direct-session resolved device={device_name:?} session_id={:?}; connecting", sess.id);
                     self.connect_to_session(&sess);
-                    if self.direct_remote_connected {
+                    if self.remote.direct_remote_connected {
                         log::info!(target: "auto_reconnect", "direct-session connection succeeded device={device_name:?} outcome=direct-daemon-upgrade");
                     } else if self.connected_session_id.is_some() {
                         log::info!(target: "auto_reconnect", "direct-session connection initiated device={device_name:?} outcome=emby-session-control");

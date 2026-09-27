@@ -47,7 +47,7 @@ impl Model {
             return;
         };
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        let images_enabled = self.app.images_enabled();
+        let images_enabled = self.app.images.images_enabled();
         self.update_abs_book_owner(|owner| {
             owner.set_content(&snapshot, images_enabled);
             owner.set_focused(focused);

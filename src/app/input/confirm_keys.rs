@@ -107,7 +107,7 @@ impl App {
         key: KeyEvent,
     ) {
         if key.code == KeyCode::Esc {
-            self.pending_emby_replacement = None;
+            self.setup.pending_emby_replacement = None;
         } else if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
             self.replace_emby_confirmed(generation);
         }
@@ -126,7 +126,7 @@ impl App {
         key: KeyEvent,
     ) {
         if key.code == KeyCode::Esc {
-            self.pending_audiobookshelf_replacement = None;
+            self.setup.pending_audiobookshelf_replacement = None;
         } else if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
             self.replace_audiobookshelf_confirmed(generation);
         }

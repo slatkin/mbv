@@ -101,6 +101,7 @@ impl App {
             // effects); the computed content travels to Model-owned
             // `home_content` via lib_tx (task 5.3d).
             let _ = self
+                .channels
                 .lib_tx
                 .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         }
@@ -162,7 +163,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match build(&client, parent_id.clone(), title) {
             Ok(level) => {
                 let _ = tx.send(LibEvent::Loaded {
@@ -203,7 +204,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let items = client.get_latest(&library_id, 30);
             match items {
@@ -337,6 +338,7 @@ mod tv_latest_tests {
         app.refresh_after_stop();
         let event = loop {
             let event = app
+                .channels
                 .lib_rx
                 .recv()
                 .expect("selected TV refresh must complete");

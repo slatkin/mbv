@@ -70,7 +70,7 @@ impl App {
         // through lib_tx; the shell wipes `home_content` (items, cursor,
         // latest — the `loading` flag is intentionally left alone, matching
         // the legacy clear) and re-projects.
-        let _ = self.lib_tx.send(LibEvent::HomeContentCleared);
+        let _ = self.channels.lib_tx.send(LibEvent::HomeContentCleared);
         self.libs.clear();
         self.sessions.clear();
         self.playlists.clear();
@@ -94,18 +94,18 @@ impl App {
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();
-        self.card_image_states.clear();
-        self.card_image_loading.clear();
-        self.image_lru.clear();
-        self.pending_image_fetches.clear();
-        self.image_fetches_active = 0;
+        self.images.card_image_states.clear();
+        self.images.card_image_loading.clear();
+        self.images.image_lru.clear();
+        self.images.pending_image_fetches.clear();
+        self.images.image_fetches_active = 0;
         self.library_position_state = crate::config::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.direct_remote_connected = false;
-        self.direct_remote_label = None;
-        self.direct_remote_session_id = None;
+        self.remote.direct_remote_connected = false;
+        self.remote.direct_remote_label = None;
+        self.remote.direct_remote_session_id = None;
         self.ws_send_tx = None;
         self.emby_runtime.client = None;
         self.player
@@ -147,7 +147,7 @@ impl App {
         if !self.emby_runtime.accepts(generation) {
             return;
         }
-        let Some(candidate) = self.pending_emby_replacement.take() else {
+        let Some(candidate) = self.setup.pending_emby_replacement.take() else {
             return;
         };
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
@@ -185,6 +185,7 @@ impl App {
         // wiped the pills (task 5.3d).
         let content = self.apply_emby_bootstrap(candidate.bootstrap);
         let _ = self
+            .channels
             .lib_tx
             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         let mut config = self.config.lock().unwrap();

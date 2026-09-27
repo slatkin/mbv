@@ -48,7 +48,7 @@ impl Model {
             return;
         };
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        let images_enabled = self.app.images_enabled();
+        let images_enabled = self.app.images.images_enabled();
         let library_id = snapshot.library.id.clone();
         let latest = self
             .app

@@ -28,7 +28,7 @@ impl App {
             self.album_tracks_loading.remove(&album_id);
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let tracks = client
                 .get_items_sorted(
@@ -63,7 +63,7 @@ impl App {
             self.series_detail_loading.remove(series_id);
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let sid = series_id.to_string();
         std::thread::spawn(move || {
             let (seasons, episodes) = client
@@ -107,7 +107,7 @@ impl App {
         self.pending_series_season_expansions.remove(&key);
         self.series_detail_loading.insert(series_id.clone());
         self.series_season_loading.insert(key);
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let episodes = client
                 .get_items_sorted(

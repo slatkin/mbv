@@ -28,7 +28,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.sessions_tx.clone();
+        let tx = self.channels.sessions_tx.clone();
         std::thread::spawn(move || match client.get_sessions() {
             Ok(sessions) => {
                 let _ = tx.send(SessionEvent::Loaded { sessions });
@@ -104,7 +104,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.sessions_tx.clone();
+        let tx = self.channels.sessions_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {
                 let _ = tx.send(SessionEvent::CommandError { error: e });

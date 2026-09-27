@@ -301,11 +301,12 @@ impl App {
             // An unavailable Emby is a resolve failure (task 4.2), never a
             // silent drop: the 4.2 flash fires and the active tab is unchanged.
             let _ = self
+                .channels
                 .lib_tx
                 .send(LibEvent::Error("Emby is unavailable".into()));
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let music_levels = self.music_levels.clone();
         let target_ctype = match item_type.as_str() {
             "Series" | "Episode" | "Season" => "tvshows",

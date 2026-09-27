@@ -162,9 +162,9 @@ impl App {
                 let elapsed_s = if remote.is_paused {
                     0.0
                 } else {
-                    self.remote_pos_at.elapsed().as_secs_f64()
+                    self.remote.remote_pos_at.elapsed().as_secs_f64()
                 };
-                let remote_pos_s = mbv_core::api::i64_to_f64_saturating(self.remote_pos_s);
+                let remote_pos_s = mbv_core::api::i64_to_f64_saturating(self.remote.remote_pos_s);
                 let runtime_s = mbv_core::api::i64_to_f64_saturating(remote.runtime_s);
                 let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
                 mbv_core::api::seconds_to_ticks(pos_s)

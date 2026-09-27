@@ -8,6 +8,7 @@ pub(in crate::app) mod chrome;
 pub(super) mod chrome_player;
 pub(in crate::app) mod chrome_player_context;
 pub(in crate::app) mod chrome_status;
+pub(in crate::app) mod chrome_status_bar;
 pub(in crate::app) mod chrome_tabs;
 pub(super) mod confirm_modal;
 pub(super) mod context_menu;

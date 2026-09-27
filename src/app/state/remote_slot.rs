@@ -51,26 +51,26 @@ impl App {
     pub(in crate::app) fn sessions_panel_connected_id(&self) -> Option<&str> {
         self.connected_session_id
             .as_deref()
-            .or(self.direct_remote_session_id.as_deref())
+            .or(self.remote.direct_remote_session_id.as_deref())
     }
 
     pub(in crate::app) fn can_disconnect_remote(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()
-            || self.direct_remote_connected
+            || self.remote.direct_remote_connected
     }
 
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
-            self.session_miss_count = 0;
-            self.remote_pos_s = 0;
+            self.remote.session_miss_count = 0;
+            self.remote.remote_pos_s = 0;
             self.flash(
                 "Disconnected from remote session".to_string(),
                 ToastSeverity::Success,
             );
-        } else if self.direct_remote_connected {
+        } else if self.remote.direct_remote_connected {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);

@@ -89,7 +89,7 @@ fn switch_to_library_route_sets_active_route_and_suspends_local() {
     assert!(app.suspended_local.is_some());
     assert!(app.remote_player_tab.is_some());
     assert!(app.connected_session_id.is_none());
-    assert!(app.direct_remote_label.is_none());
+    assert!(app.remote.direct_remote_label.is_none());
 }
 
 #[test]

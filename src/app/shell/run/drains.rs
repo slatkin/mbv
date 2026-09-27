@@ -6,6 +6,7 @@ use super::super::{
     RouterOutcome,
 };
 use super::{Duration, IdleFeed, Instant, PollStrategy};
+use crate::app::dispatch::session::player_event::PlayerEventFlow;
 
 /// Outcome of one `drain_worker` step.
 enum WorkerDrain {
@@ -42,7 +43,7 @@ impl Model {
     /// any event was drained.
     pub(super) fn drain_startup_workers(&mut self) -> bool {
         let mut had_events = false;
-        if let Some(mut worker) = self.app.emby_startup_rx.take() {
+        if let Some(mut worker) = self.app.setup.emby_startup_rx.take() {
             let generation = worker.generation;
             match self.drain_worker(
                 &mut worker.rx,
@@ -52,10 +53,10 @@ impl Model {
                 |model| model.app.handle_emby_startup_worker_disconnect(generation),
             ) {
                 WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.emby_startup_rx = Some(worker),
+                WorkerDrain::Empty => self.app.setup.emby_startup_rx = Some(worker),
             }
         }
-        if let Some(mut rx) = self.app.emby_setup_rx.take() {
+        if let Some(mut rx) = self.app.setup.emby_setup_rx.take() {
             match self.drain_worker(
                 &mut rx,
                 // Emby setup drain re-bootstraps Home content; assign +
@@ -64,7 +65,7 @@ impl Model {
                 |model| model.app.handle_emby_setup_worker_disconnect(),
             ) {
                 WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.emby_setup_rx = Some(rx),
+                WorkerDrain::Empty => self.app.setup.emby_setup_rx = Some(rx),
             }
         }
         had_events
@@ -77,7 +78,7 @@ impl Model {
             return false;
         };
         *had_events = true;
-        let restart = self.app.handle_player_event(ev);
+        let flow = self.app.handle_player_event(ev);
         // Playback completion refetches Home; re-project (task 5.3d, sync_home
         // mirror deletion).
         self.push_home_content();
@@ -88,13 +89,13 @@ impl Model {
         // Player events can reconcile ABS book progress; re-project (5.3d).
         self.push_audiobookshelf_book_content();
         self.push_music_workspace_content();
-        restart
+        flow == PlayerEventFlow::RestartLoop
     }
 
     /// Drain pending library events. Returns whether any event was drained.
     pub(super) fn drain_lib_events(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok(ev) = self.app.lib_rx.try_recv() {
+        while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
             had_events = true;
             match ev {
                 crate::app::LibEvent::EmbyLatestSnapshotFetched {
@@ -229,7 +230,7 @@ impl Model {
     /// resize request for the same (still-present) key is a no-op too.
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok((key, response)) = self.app.resize_response_rx.try_recv() {
+        while let Ok((key, response)) = self.app.images.resize_response_rx.try_recv() {
             had_events = true;
             // Responses are tagged with the per-suffix mem-key
             // ("bare@suffix"); route them into the matching protocol of
@@ -237,7 +238,7 @@ impl Model {
             let Some((bare_key, suffix)) = key.rsplit_once('@') else {
                 continue;
             };
-            let Some(entry) = self.app.card_image_states.get_mut(bare_key) else {
+            let Some(entry) = self.app.images.card_image_states.get_mut(bare_key) else {
                 continue;
             };
             if let Some(state) = entry.protocols.get_mut(suffix) {
@@ -292,7 +293,7 @@ impl Model {
 
         // Periodic session poll when connected to a remote session
         if self.app.connected_session_id.is_some()
-            && self.app.last_session_poll.elapsed() >= Duration::from_secs(1)
+            && self.app.remote.last_session_poll.elapsed() >= Duration::from_secs(1)
             && !self.app.sessions_loading
         {
             self.app.spawn_sessions_load();
@@ -452,13 +453,14 @@ impl Model {
         // Only start the configured Remote Service after the first TUI frame
         // has been rendered. The selected Player owner and UI therefore never
         // wait for Emby setup, authentication, or connectivity.
-        if let Some((config, generation)) = self.app.emby_startup_request.take() {
-            self.app.emby_startup_rx = Some(service_startup::start(config, generation));
+        if let Some(request) = self.app.setup.emby_startup_request.take() {
+            self.app.setup.emby_startup_rx =
+                Some(service_startup::start(request.config, request.generation));
         }
-        if let Some((config, generation)) = self.app.audiobookshelf_startup_request.take() {
-            self.app.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                config,
-                generation,
+        if let Some(request) = self.app.setup.audiobookshelf_startup_request.take() {
+            self.app.setup.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
+                request.config,
+                request.generation,
                 service_startup::AudiobookshelfCompletionKind::Startup,
             ));
         }

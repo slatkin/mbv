@@ -192,7 +192,7 @@ impl Model {
     pub(in crate::app) fn drain_search_results(&mut self) -> bool {
         let id = Self::search_id();
         let mut received = 0;
-        while let Ok((query, result)) = self.app.search_rx.try_recv() {
+        while let Ok((query, result)) = self.app.channels.search_rx.try_recv() {
             received += 1;
             if let Some(comp) = self.application.get_component_mut(&id) {
                 if let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>() {

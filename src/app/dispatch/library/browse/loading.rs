@@ -146,7 +146,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
@@ -247,7 +247,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
             match client.get_items_sorted(
@@ -313,7 +313,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
             match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {

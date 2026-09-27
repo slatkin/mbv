@@ -9,7 +9,7 @@ impl App {
         }
         let config = self.config.lock().unwrap().clone();
         let generation = self.audiobookshelf_runtime.begin_validation();
-        self.audiobookshelf_test_rx = Some(
+        self.setup.audiobookshelf_test_rx = Some(
             crate::app::dispatch::session::service_startup::start_audiobookshelf(
                 config,
                 generation,
@@ -19,7 +19,7 @@ impl App {
     }
 
     pub(in crate::app) fn clear_audiobookshelf_catalog(&mut self) {
-        self.audiobookshelf_catalog_rx = None;
+        self.setup.audiobookshelf_catalog_rx = None;
         self.audiobookshelf_libraries.clear();
         self.audiobookshelf_browse.clear();
         self.audiobookshelf_book_browse.clear();
@@ -27,13 +27,13 @@ impl App {
     }
 
     pub(in crate::app) fn clear_audiobookshelf_images(&mut self) {
-        self.card_image_states.retain(|key, _| {
+        self.images.card_image_states.retain(|key, _| {
             !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
         });
-        self.card_image_loading.retain(|key| {
+        self.images.card_image_loading.retain(|key| {
             !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
         });
-        self.pending_image_fetches.retain(|request| {
+        self.images.pending_image_fetches.retain(|request| {
             !matches!(
                 request.source,
                 crate::app::infra::images::ImageSource::Audiobookshelf { .. }
@@ -61,7 +61,7 @@ impl App {
                     .commit_ready(completion.generation, user.clone());
                 self.start_audiobookshelf_socket(completion.generation);
                 self.install_audiobookshelf_player_context(completion.generation);
-                self.audiobookshelf_catalog_rx = Some(
+                self.setup.audiobookshelf_catalog_rx = Some(
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_catalog(
                         self.config.lock().unwrap().clone(),
                         completion.generation,

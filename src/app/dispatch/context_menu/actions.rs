@@ -323,6 +323,7 @@ impl App {
                             // Delivered to Model-owned `home_content` via the
                             // lib_tx/ lib_rx drain (task 5.3d).
                             let _ = self
+                                .channels
                                 .lib_tx
                                 .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                         }
@@ -383,6 +384,7 @@ impl App {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self
+                            .channels
                             .lib_tx
                             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                     }
@@ -420,6 +422,7 @@ impl App {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
                         let _ = self
+                            .channels
                             .lib_tx
                             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                     }

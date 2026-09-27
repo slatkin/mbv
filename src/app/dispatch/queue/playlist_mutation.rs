@@ -99,7 +99,7 @@ impl App {
         let Some(mutation) = state.active.as_mut() else {
             return;
         };
-        let tx = self.sessions_tx.clone();
+        let tx = self.channels.sessions_tx.clone();
         let playlist_id = playlist_id.to_string();
         let mutation_id = mutation.mutation_id();
         let ids: Vec<String> = self
@@ -337,7 +337,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let mut items = match client.get_items_by_ids(&item_ids) {
                 Ok(items) => items,

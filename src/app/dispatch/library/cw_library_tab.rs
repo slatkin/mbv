@@ -291,8 +291,8 @@ impl App {
         if self.normalize_stale_browse_destination() {
             return;
         }
-        self.last_card_height = 0; // reset stale image height for new view
-        self.last_card_width = 0;
+        self.images.last_card_height = 0; // reset stale image height for new view
+        self.images.last_card_width = 0;
         match self.tab {
             TabSelection::Home => {}
             TabSelection::EmbyLibrary(lib_idx) => {

@@ -283,7 +283,7 @@ fn loading_artist_result_projects_no_partial_album_rows() {
 #[test]
 fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
     let (mut app, _context, target, destination) = settled_artist_app();
-    app.image_protocol_enabled = true;
+    app.images.image_protocol_enabled = true;
     app.emby_runtime = unroutable_emby_runtime();
     let key = app
         .artist_detail_key(&destination, &target)
@@ -291,7 +291,7 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
     let cache_key = artist_artwork_cache_key(&destination, key.generation, &key.artist_id);
     // A completed artist fetch: the decoded bitmap is cached and the
     // status is terminal for this source identity.
-    app.card_image_states.insert(
+    app.images.card_image_states.insert(
         cache_key.clone(),
         crate::app::images::CachedImage {
             img: Some(image::DynamicImage::ImageRgba8(
@@ -318,7 +318,7 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
     // The image LRU (`shell_run`) evicts the decoded bitmap while the
     // status stays `Ready`; without the re-arm the projection would fall
     // back to `HeroImageState::None` forever for this revision.
-    app.card_image_states.remove(&cache_key);
+    app.images.card_image_states.remove(&cache_key);
     app.request_artist_artwork(&destination, &target);
     assert_eq!(
         app.artist_artwork_status.get(&key),
@@ -326,7 +326,7 @@ fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
         "a Ready status without its bitmap is a cache miss and re-arms"
     );
     assert!(
-        app.card_image_loading.contains(&cache_key),
+        app.images.card_image_loading.contains(&cache_key),
         "the re-armed request reserves its stable-ID cache key"
     );
     assert_eq!(app.artist_artwork_requests.get(&cache_key), Some(&key));

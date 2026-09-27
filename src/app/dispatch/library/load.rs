@@ -113,6 +113,7 @@ impl App {
                                 // computed content travels to Model-owned
                                 // `home_content` via lib_tx (task 5.3d).
                                 let _ = self
+                                    .channels
                                     .lib_tx
                                     .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                             }
@@ -145,7 +146,7 @@ impl App {
             self.playlists_loading = false;
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match client.get_playlists() {
             Ok(items) => {
                 let _ = tx.send(LibEvent::PlaylistsLoaded(items));
@@ -162,7 +163,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.rename_playlist(&playlist_id, &new_name) {
                 let _ = tx.send(LibEvent::Error(format!("Rename failed: {e}")));
@@ -184,7 +185,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.delete_playlist(&playlist_id) {
                 let _ = tx.send(LibEvent::Error(format!("Delete failed: {e}")));
@@ -215,7 +216,7 @@ impl App {
             self.playlists_open_loading = false;
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let playlist_id = playlist.id.clone();
         std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
             Ok(items) => {

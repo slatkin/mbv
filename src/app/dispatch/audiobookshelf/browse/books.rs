@@ -30,7 +30,7 @@ impl App {
             generation,
             library_id,
             0,
-            self.lib_tx.clone(),
+            self.channels.lib_tx.clone(),
         );
     }
 

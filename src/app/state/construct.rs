@@ -1,15 +1,13 @@
+use crate::app::state::service_setup::StartupRequest;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::{
-    layout, spawn_resize_worker, App, AppInit, SessionEvent, SuspendedLocalSession,
-    LEFT_WIDTH_DEFAULT,
+    layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
-use mbv_core::api::EmbyItem;
 use mbv_core::player::{Player, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -101,7 +99,7 @@ impl App {
 
     #[expect(
         clippy::too_many_lines,
-        reason = "App::build is one complete App construction; splitting it before the decompose-app-god-type work would need a Default impl over ~470 non-Default fields — blocked on that change (approved, issue #804)"
+        reason = "App construction explicitly initializes heterogeneous fields after extracting four owned seams"
     )]
     pub(in crate::app) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
@@ -129,29 +127,19 @@ impl App {
             crate::config::QueueSource::Unknown,
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
-        let (cast_tx, cast_rx) = mpsc::channel();
+        let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard: test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,
-            emby_startup_rx: init.emby_startup_rx,
-            emby_startup_request: init.emby_startup_request,
-            audiobookshelf_startup_rx: init.audiobookshelf_startup_rx,
-            audiobookshelf_startup_request: init.audiobookshelf_startup_request,
-            audiobookshelf_catalog_rx: None,
+            setup,
+            channels: init.channels,
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
             audiobookshelf_book_browse: Vec::new(),
-            audiobookshelf_test_rx: init.audiobookshelf_test_rx,
-            audiobookshelf_setup_rx: init.audiobookshelf_setup_rx,
-            emby_setup_form: init.emby_setup_form,
-            audiobookshelf_setup_form: None,
-            emby_setup_rx: init.emby_setup_rx,
-            pending_emby_replacement: None,
-            pending_audiobookshelf_replacement: None,
             player: init.player,
             bare_owner,
             mpris: None,
@@ -164,8 +152,15 @@ impl App {
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
             system_notifications: init.system_notifications,
-            image_protocol: init.image_protocol,
-            image_protocol_enabled: init.image_protocol_enabled,
+            images: crate::app::infra::images::cache::ImageCache::new(
+                init.image_cache_size,
+                init.image_protocol,
+                init.image_protocol_enabled,
+                init.card_image_tx,
+                init.card_image_rx,
+                resize_register_tx,
+                resize_response_rx,
+            ),
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
@@ -177,19 +172,6 @@ impl App {
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
-            image_cache_size: init.image_cache_size,
-            lib_tx: init.lib_tx,
-            lib_rx: init.lib_rx,
-            search_tx: init.search_tx,
-            search_rx: init.search_rx,
-            sessions_tx: init.sessions_tx,
-            sessions_rx: init.sessions_rx,
-            card_image_tx: init.card_image_tx,
-            card_image_rx: init.card_image_rx,
-            resize_register_tx,
-            resize_response_rx,
-            notif_action_tx: init.notif_action_tx,
-            notif_action_rx: init.notif_action_rx,
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
@@ -258,16 +240,9 @@ impl App {
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
-            card_image_states: std::collections::HashMap::new(),
-            card_image_loading: std::collections::HashSet::new(),
-            last_card_height: 0,
-            last_card_width: 0,
             queue_card_projection:
                 crate::app::render::components::card::QueueCardProjection::default(),
-            image_picker: None,
-            halfblock_picker: None,
             dim_backdrop_active: false,
-            image_cache_size_total: init.image_cache_size.saturating_mul(2),
             settings_destination: crate::app::state::types::settings::SettingsDestination::Main,
             settings_save_at: None,
             mouse_capture_pending: None,
@@ -297,8 +272,6 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             cast_attachment: None,
-            cast_tx,
-            cast_rx,
             last_cast_poll: Instant::now()
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
@@ -307,23 +280,7 @@ impl App {
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,
-            direct_remote_connected: false,
-            direct_remote_label: None,
-            direct_remote_session_id: None,
-            last_session_poll: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            session_miss_count: 0,
-            remote_pos_s: 0,
-            remote_pos_at: Instant::now(),
-            remote_api_pos_advanced_at: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            remote_stalled_while_paused: false,
-            remote_seek_pending_until: Instant::now()
-                .checked_sub(Duration::from_secs(1))
-                .unwrap_or_else(Instant::now),
-            runtime_zero_since: None,
+            remote: crate::app::state::remote_tracking::RemoteTracking::new(),
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
@@ -353,9 +310,6 @@ impl App {
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
             pending_series_season_expansions: std::collections::HashSet::new(),
-            image_lru: std::collections::VecDeque::new(),
-            pending_image_fetches: std::collections::VecDeque::new(),
-            image_fetches_active: 0,
             queue_scope: init.initial_queue_scope,
             launched_as_remote: false,
             player_endpoint: None,
@@ -364,10 +318,6 @@ impl App {
             feed_seek_pending_slot: None,
             feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
-            #[cfg(test)]
-            card_image_fetch_calls: 0,
-            #[cfg(test)]
-            image_protocol_builds: std::cell::Cell::new(0),
         };
         app.sync_feed_subscriptions();
         app
@@ -379,12 +329,9 @@ impl App {
     pub fn new_independent(app_config: &crate::config::Config) -> Self {
         let (player_tx, player_rx) = mpsc::channel();
         let (_, ws_rx) = mpsc::channel();
-        let (lib_tx, lib_rx) = mpsc::channel();
-        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
-        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+        let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
         let configured = app_config.emby_setup.is_some();
@@ -422,14 +369,6 @@ impl App {
                 audiobookshelf_configured,
                 audiobookshelf_credential_present,
             ),
-            emby_startup_rx: None,
-            emby_startup_request: None,
-            audiobookshelf_startup_rx: None,
-            audiobookshelf_startup_request: None,
-            audiobookshelf_test_rx: None,
-            audiobookshelf_setup_rx: None,
-            emby_setup_form: None,
-            emby_setup_rx: None,
             player,
             player_rx,
             ws_rx,
@@ -450,70 +389,29 @@ impl App {
             indicator_style,
             image_cache_size: ui_config.image_cache_size,
             visualizer_glyph: ui_config.visualizer_glyph.clone(),
-            lib_tx,
-            lib_rx,
-            sessions_tx,
-            sessions_rx,
             card_image_tx,
             card_image_rx,
-            notif_action_tx,
-            notif_action_rx,
-            search_tx,
-            search_rx,
+            channels,
             idle_feed: None,
         });
-        app.emby_startup_request = configured.then_some((app_config.clone(), generation));
-        app.audiobookshelf_startup_request = (audiobookshelf_configured
+        app.setup.emby_startup_request = configured.then_some(StartupRequest {
+            config: app_config.clone(),
+            generation,
+        });
+        app.setup.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
-            .then_some((app_config.clone(), generation));
+            .then_some(StartupRequest {
+                config: app_config.clone(),
+                generation,
+            });
         if crate::app::dispatch::session::service_startup::should_open_services(app_config) {
             app.open_services_settings();
         }
         app
     }
 
-    /// Query the terminal for its image protocol (sixel/kitty/iterm2/etc,
-    /// via `Picker::from_query_stdio`, falling back to halfblocks), then
-    /// apply `self.image_protocol`'s override if it names one of the known
-    /// protocols. Called once at startup by `run`.
-    pub(in crate::app) fn build_image_picker(&self) -> Picker {
-        use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.image_protocol.clone();
-        let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-        let proto = protocol_override
-            .as_deref()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "sixel" => Some(ProtocolType::Sixel),
-                "kitty" => Some(ProtocolType::Kitty),
-                "iterm2" => Some(ProtocolType::Iterm2),
-                "halfblocks" => Some(ProtocolType::Halfblocks),
-                _ => None, // "auto" or unknown: use picker's detected protocol
-            });
-        if let Some(proto) = proto {
-            picker.set_protocol_type(proto);
-        }
-        picker
-    }
-
-    /// Populate `image_picker` (terminal-detected, with the config override)
-    /// and `halfblock_picker` (the #451 dimmed-backdrop fallback: modals
-    /// re-encode images to halfblocks so the dim applies uniformly).
-    ///
-    /// MUST run before the `TuiRealm` crossterm listener starts
-    /// (`Application::init`): `Picker::from_query_stdio` writes a
-    /// `CSI 16 t` cell-size query to the terminal and reads the reply with a
-    /// raw `io::stdin().read()`. If the listener thread is already draining
-    /// stdin it eats the reply, the picker falls back to a wrong cell size,
-    /// and Kitty renders images clipped on the right/bottom (#654).
+    /// Initialize terminal image pickers before the TUI listener starts.
     pub(crate) fn init_image_pickers(&mut self) {
-        let picker = self.build_image_picker();
-        log::debug!(
-            target: "startup",
-            "image picker: protocol={:?} font_size={:?}",
-            picker.protocol_type(),
-            picker.font_size()
-        );
-        self.image_picker = Some(picker);
-        self.halfblock_picker = Some(Picker::halfblocks());
+        self.images.init_image_pickers();
     }
 }
