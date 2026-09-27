@@ -241,7 +241,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 8. Docs and pre-push
 
-- [ ] 8.1 Add the five crates to `AGENTS.md`'s repository map (one line each,
+- [x] 8.1 Add the five crates to `AGENTS.md`'s repository map (one line each,
   matching the Tier 1 entries' style) and update the `crates/mbv-core/` line
   so it no longer claims config/protocols/canonical queue. Verify: `rg
   'mbv-queue|mbv-ctrl|mbv-config|mbv-feed|mbv-emby-model' AGENTS.md` shows all
