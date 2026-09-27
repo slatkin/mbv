@@ -27,7 +27,7 @@ fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components
 /// An app with active playback and a non-empty queue, in the given panel
 /// mode (mini view uses the ephemeral queue focus).
 fn active_app(panel_mode: PanelMode) -> crate::app::App {
-    let mut app = crate::app::render::make_queue_app(3);
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
     app.panel_mode = panel_mode;
     if panel_mode != PanelMode::Both {
         app.mini_view_focus = PanelFocus::Queue;

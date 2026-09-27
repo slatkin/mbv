@@ -39,7 +39,7 @@ pub(in crate::app) enum HelpDestination {
 
 /// Compute the help destination from panel focus and selected tab.
 ///
-/// Extracted from `impl App::help_destination` so the shell can call it
+/// Extracted from `App::help_destination` so the shell can call it
 /// without `App` access in the Interactive Component path (design D5: the
 /// shell computes the presentation model and writes it into the component
 /// via `get_component_mut`+downcast).
@@ -369,7 +369,7 @@ fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> 
 
 /// Render the help sidebar panel.
 ///
-/// Extracted from `impl App::render_help_panel` so the Interactive Component
+/// Extracted from `App::render_help_panel` so the Interactive Component
 /// (`src/app/components/help.rs`) can call it in `view()` without `App` access
 /// (design D9: a component's `view()` calls the existing render substrate).
 /// The shell-owned scroll offset and destination are passed in; the function

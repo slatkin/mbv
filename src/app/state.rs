@@ -1,3 +1,4 @@
+pub(in crate::app) mod album_cursor;
 pub(in crate::app) mod app_init;
 pub(in crate::app) mod app_struct;
 pub(in crate::app) mod bootstrap;
@@ -12,6 +13,7 @@ pub(in crate::app) mod music_grouping;
 pub(in crate::app) mod panel_focus;
 pub(in crate::app) mod panel_targets;
 pub(in crate::app) mod playback_target;
+pub(in crate::app) mod projection;
 pub(in crate::app) mod queue_column_width;
 pub(in crate::app) mod queue_owner;
 pub(in crate::app) mod queue_scope;

@@ -1,6 +1,6 @@
 //! Shared app fixtures used by tests outside `render` (library, music
 //! workspace, TV workspace, tick-integration and dispatch tests reach these
-//! through `crate::app::render::make_*`).
+//! through `crate::app::tests::render_fixtures::make_*`).
 //!
 //! The render presentation suite that once lived beside these was pruned in
 //! issue #801 section 2; only the fixtures with surviving callers remain.

@@ -11,7 +11,7 @@
 #[derive(Clone)]
 pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app) items: Vec<mbv_emby_model::EmbyItem>,
-    pub(in crate::app::render) cursor: usize,
+    pub(in crate::app) cursor: usize,
     pub(in crate::app) total_count: usize,
     pub(in crate::app) library_total: Option<usize>,
     pub(in crate::app) letter_filter: Option<super::super::LetterFilter>,

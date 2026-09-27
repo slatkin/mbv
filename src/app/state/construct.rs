@@ -243,7 +243,7 @@ impl App {
             last_played_item_id: None,
             last_played_completed: false,
             queue_card_projection:
-                crate::app::render::components::card::QueueCardProjection::default(),
+                crate::app::state::projection::card::QueueCardProjection::default(),
             dim_backdrop_active: false,
             settings_destination: crate::app::state::types::settings::SettingsDestination::Main,
             settings_save_at: None,

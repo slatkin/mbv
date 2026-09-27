@@ -40,8 +40,10 @@ use self::state::types::browse::{
     AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
 };
 use self::state::types::confirm::{ConfirmAction, ConfirmModal};
+#[cfg(test)]
+use self::state::types::context_menu::MultiSelectKind;
 use self::state::types::context_menu::{
-    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
+    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage,
 };
 use self::state::types::daemon_lost::DaemonLostModal;
 use self::state::types::events::{LibEvent, SessionEvent};
@@ -55,7 +57,9 @@ use self::state::types::playback::{
     RemoteSlotState, ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use self::state::types::player_tab::PlayerTab;
-use self::state::types::settings::{PanelFocus, PanelMode, SettingKey};
+#[cfg(test)]
+use self::state::types::settings::SettingKey;
+use self::state::types::settings::{PanelFocus, PanelMode};
 pub(crate) use self::state::types::sidebar::SidebarId;
 use self::state::types::tab_selection::TabSelection;
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use super::super::{palette, App};
+use crate::app::{palette, App};
 use mbv_visualizer::StereoSample;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -9,7 +9,7 @@ const SILENCE_THRESHOLD: f32 = 0.0001;
 const DISPLAY_GAIN: f32 = 4.0;
 
 impl App {
-    pub(in crate::app::render) fn render_visualizer(&self, f: &mut Frame, area: Rect, bg: Color) {
+    pub(in crate::app) fn render_visualizer(&self, f: &mut Frame, area: Rect, bg: Color) {
         if area.width == 0 || area.height == 0 {
             return;
         }

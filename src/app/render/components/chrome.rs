@@ -24,7 +24,7 @@ pub(in crate::app::render) fn play_icon(use_nerd_fonts: bool) -> &'static str {
     }
 }
 
-pub(in crate::app::render) fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
+pub(in crate::app) fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
     let endpoint = endpoint.trim();
     if endpoint.is_empty() || endpoint.eq_ignore_ascii_case("local") {
         return None;
@@ -51,9 +51,9 @@ pub(in crate::app::render) fn daemon_endpoint_label(endpoint: &str) -> Option<St
 
 // --- Render-seam free functions (design D9, task 3.1) ---
 //
-// Extracted from `impl App` methods so Interactive Components can call them
+// Extracted from `App` methods so Interactive Components can call them
 // without `App` access. Output-preserving: the function bodies are the former
-// `impl App` method bodies, only `Self::` → direct calls.
+// `App` method bodies, only `Self::` → direct calls.
 //
 // `pub(in crate::app)` so the `render` module can re-export them for the
 // Interactive Components in `crate::app::components` (design D5/D9).

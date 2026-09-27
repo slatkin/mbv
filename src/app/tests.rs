@@ -22,6 +22,7 @@ mod podcast;
 mod queue;
 mod reattach;
 mod remote_commands;
+pub(crate) mod render_fixtures;
 mod route_state;
 mod routing_matrix;
 mod services_settings_lifecycle;

@@ -1,7 +1,7 @@
 use crate::app::components::media_list::{
     queue_row_zebra_stripe, WideMediaList, WideMediaListPaintPolicy,
 };
-use crate::app::{palette, App, RemoteSlotState};
+use crate::app::palette;
 use mbv_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -44,17 +44,6 @@ pub(in crate::app) fn render_queue_body(
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct QueueTitleModel {
     pub remote_pill: Option<String>,
-}
-
-impl App {
-    pub(in crate::app) fn queue_title_model(&self) -> QueueTitleModel {
-        let remote_state = self.remote_slot_state();
-        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
-        let (icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        let remote_pill =
-            (remote_state != RemoteSlotState::Off).then(|| format!(" {} {} ", icon, label.trim()));
-        QueueTitleModel { remote_pill }
-    }
 }
 
 pub(in crate::app) fn render_queue_status(

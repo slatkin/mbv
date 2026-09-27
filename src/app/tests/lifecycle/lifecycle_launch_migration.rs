@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
     app.legacy_launch_tab = Some(1);
     app.emby_catalog_ready = true;
@@ -87,7 +87,7 @@ fn legacy_launch_migration_uses_stable_item_and_ignores_cursor_index() {
 
 #[test]
 fn versioned_launch_state_takes_precedence_over_legacy_migration() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     let saved = mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::Home,

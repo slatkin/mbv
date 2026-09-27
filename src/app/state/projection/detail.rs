@@ -1,4 +1,4 @@
-use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::LibraryListRenderCtx;
 use crate::app::App;
 
 impl App {
@@ -21,7 +21,7 @@ impl App {
             return None;
         }
 
-        let item = ctx.items.get(ctx.cursor)?.clone();
+        let item = ctx.items.get(ctx.cursor())?.clone();
 
         if item.item_type != "Series" {
             return None;

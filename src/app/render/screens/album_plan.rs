@@ -56,7 +56,7 @@ fn resolve_group_album(
 /// identity for every album (design D2 of `add-grouped-music-tree-browser`),
 /// consuming the settled catalog when available (no artist derivation) and
 /// falling back to a synchronous best-effort chain otherwise.
-pub(in crate::app::render) fn group_album_plan(
+pub(in crate::app) fn group_album_plan(
     album_artist_cache: &HashMap<String, String>,
     albums: &[mbv_emby_model::EmbyItem],
     catalog: Option<&GroupedAlbumCatalog>,

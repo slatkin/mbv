@@ -39,6 +39,7 @@ pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
+pub(in crate::app) use screens::album_plan::group_album_plan;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_age_group, feed_display_rows, FeedAgeGroup, FeedDisplayRow,
 };
@@ -106,11 +107,5 @@ pub(crate) use theme::{
 // part of the wider `pub(crate)` role list above.
 pub(in crate::app) use theme::{surface_colors, Surface};
 
-use super::{palette, App};
+use super::palette;
 use crate::app::infra::ui_util::natural_sort_key;
-
-// Shared app fixtures for tests outside `render`.
-#[cfg(test)]
-mod fixtures;
-#[cfg(test)]
-pub(crate) use fixtures::{make_movie_app, make_music_group_app, make_queue_app};

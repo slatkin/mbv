@@ -7,7 +7,7 @@ use ratatui::Frame;
 
 /// Paint the confirm modal: centered 60×7 frame with message + hint lines.
 ///
-/// Extracted from `impl App::render_confirm_modal` so the Interactive
+/// Extracted from `App::render_confirm_modal` so the Interactive
 /// Component (`src/app/components/confirm.rs`) can call it without an `App`
 /// reference (design D9). The `dim_flag` is set by `render_modal_frame` (same
 /// as the `App` path used before migration).

@@ -1,4 +1,4 @@
-use super::list_rows::LibraryListRenderCtx;
+use crate::app::render::LibraryListRenderCtx;
 use crate::app::App;
 
 impl App {

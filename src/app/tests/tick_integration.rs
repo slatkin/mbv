@@ -43,7 +43,7 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 /// resolved; `render_main` no longer writes `self.tab`.
 #[test]
 fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.library_tab_pending = 1;
     let mut harness = TickHarness::new(app);
 
@@ -295,7 +295,7 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
         Some(&ComponentId::Queue)
     );
 
-    let mut library_app = crate::app::render::make_movie_app();
+    let mut library_app = crate::app::tests::render_fixtures::make_movie_app();
     library_app.tab = TabSelection::EmbyLibrary(0);
     library_app.panel_focus = PanelFocus::Library;
     library_app.panel_mode = PanelMode::Both;

@@ -1,7 +1,7 @@
 use super::*;
-use crate::app::render::make_music_group_app;
 use crate::app::state::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
 use crate::app::tests::make_item;
+use crate::app::tests::render_fixtures::make_music_group_app;
 use mbv_emby_model::EmbyArtistRef;
 use std::collections::HashMap;
 

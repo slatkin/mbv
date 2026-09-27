@@ -39,7 +39,7 @@ fn badge_for(item_type: &str) -> &'static str {
 
 /// Render the global Search sidebar (design D9, task 3.1/3.2).
 ///
-/// Extracted from `impl App::render_search_sidebar` as a free function so
+/// Extracted from `App::render_search_sidebar` as a free function so
 /// the Interactive Component (`SearchSidebarComponent`) can call it in
 /// `view()` without `App` access. The sidebar state is passed directly.
 pub(in crate::app) fn render_search_sidebar(

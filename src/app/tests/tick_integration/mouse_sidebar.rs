@@ -162,7 +162,7 @@ fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
 
 #[test]
 fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
-    let mut app = crate::app::render::make_queue_app(8);
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(8);
     app.terminal_width = 70;
     app.mini_view_focus = PanelFocus::Queue;
     let mut harness = TickHarness::new(app);
