@@ -202,7 +202,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 3. `mbv-images`
 
-- [ ] 3.1 Create `crates/mbv-images`. Deps: `mbv-theme`, `ratatui`,
+- [x] 3.1 Create `crates/mbv-images`. Deps: `mbv-theme`, `ratatui`,
   `ratatui-image`, `image`, `log`, plus others only if the compiler asks.
   `git mv` the following:
   - `src/app/infra/images.rs` → `src/lib.rs`;
@@ -211,7 +211,7 @@ Each task below is its own commit, and the full gate passes after each.
   Rewrite `crate::app::infra::images::` / `crate::app::images::` →
   `crate::`. Verify: `cargo nextest run -p mbv-images` passes, and
   `rg 'crate::app' crates/mbv-images` is empty.
-- [ ] 3.2 Delete the `images` `mod` line in `infra.rs` and the `images`
+- [x] 3.2 Delete the `images` `mod` line in `infra.rs` and the `images`
   entry in `src/app.rs`'s `pub(crate) use self::infra::{…}`. Add
   `mbv-images` to the root `[dependencies]`. Rewrite
   `crate::app::images::` and `crate::app::infra::images::` → `mbv_images::`.
