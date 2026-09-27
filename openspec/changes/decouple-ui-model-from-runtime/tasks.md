@@ -46,18 +46,18 @@ cargo nextest run --workspace
 
 ## 2. Move the shell-only event and queue-owner types (design D1)
 
-- [ ] 2.1 Move `crates/mbv-ui-model/src/events.rs` whole to
+- [x] 2.1 Move `crates/mbv-ui-model/src/events.rs` whole to
   `src/app/state/events.rs`. Rewrite `mbv_ui_model::events::` to
   `crate::app::state::events::` and delete `pub mod events;` from
   `crates/mbv-ui-model/src/lib.rs`. Its `use crate::playback::…` /
   `crate::queue_owner::…` imports now point at `mbv_ui_model::playback::…`
   until 2.3 and 3.1 move those types. Verify with
   `rg "mbv_ui_model::events" src crates` (no hits).
-- [ ] 2.2 Move `crates/mbv-ui-model/src/player_tab.rs` whole to
+- [x] 2.2 Move `crates/mbv-ui-model/src/player_tab.rs` whole to
   `src/app/state/player_tab.rs`, the same way as 2.1 (rewrite
   `mbv_ui_model::player_tab::`, delete the `mod` line). Verify with
   `rg "mbv_ui_model::player_tab" src crates` (no hits).
-- [ ] 2.3 Merge `crates/mbv-ui-model/src/queue_owner.rs` (`QueueEpoch`,
+- [x] 2.3 Merge `crates/mbv-ui-model/src/queue_owner.rs` (`QueueEpoch`,
   `QueueOrigin`) into the existing `src/app/state/queue_owner.rs`, then delete
   the ui-model file and its `mod` line. Rewrite
   `mbv_ui_model::queue_owner::` to `crate::app::state::queue_owner::`. Verify
@@ -66,7 +66,7 @@ cargo nextest run --workspace
 
 ## 3. Split `playback` and `home_latest` (design D1)
 
-- [ ] 3.1 Create `src/app/state/playback.rs` holding every item of
+- [x] 3.1 Create `src/app/state/playback.rs` holding every item of
   `crates/mbv-ui-model/src/playback.rs` except `PlaybackState` and
   `QueueScope` (`QueueScopeResolution`, `UndoEntry`, `RemoteSlotState`,
   `DestinationLatestSource`, `DestinationLatestSnapshot`, `HomeContent`,
@@ -76,7 +76,7 @@ cargo nextest run --workspace
   imports of the moved names to `crate::app::state::playback::…`. Verify that
   `crates/mbv-ui-model/src/playback.rs` no longer names `mbv_player`,
   `mbv_ws`, `mbv_ctrl`, `mbv_core` or `mpsc`.
-- [ ] 3.2 Move `capture_launch_window` and `current_launch_secs` from
+- [x] 3.2 Move `capture_launch_window` and `current_launch_secs` from
   `crates/mbv-ui-model/src/home_latest.rs` to a new
   `src/app/state/home_latest.rs`, and update the callers `src/main.rs` and
   `src/app/shell.rs`. (`main.rs` sits outside `crate::app`, so make the two
