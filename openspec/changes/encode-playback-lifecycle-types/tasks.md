@@ -51,4 +51,4 @@ Gate for every group: `cargo check --workspace`,
 
 - [x] 8.1 Delete `docs/invariants/03-exactly-once-stop-report.md`. Shrink `docs/invariants/06-queue-progress-application-sites.md` to mpv's one-shot `start=` (including mpv-native navigation) and the jump-before-`TrackCompleted` race, and point to `ProgressObservation` and `relative_step_target`. Verify: `rg -l "invariants/03|03-exactly-once" docs openspec/specs AGENTS.md` is empty.
 - [x] 8.2 Update `CONTEXT.md` with `Transport command` and `Relative step` if they are not already defined. Verify: the terms are present and don't collide with *Avoid* entries.
-- [ ] 8.3 Final gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, and `make check-code-file-lines`. Verify: all three pass.
+- [x] 8.3 Final gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, and `make check-code-file-lines`. Verify: all three pass.
