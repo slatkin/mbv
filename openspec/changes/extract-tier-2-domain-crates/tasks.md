@@ -69,7 +69,7 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 2. `mbv-emby-model`
 
-- [ ] 2.1 Create `crates/mbv-emby-model` (deps: `serde`, `mbv-ids` only if a
+- [x] 2.1 Create `crates/mbv-emby-model` (deps: `serde`, `mbv-ids` only if a
   moved item names an id type — otherwise omit). Move from
   `crates/mbv-core/src/api/types.rs` into its `src/lib.rs`: `TICKS_PER_SECOND`,
   `RESUME_THRESHOLD_PERCENT`, `MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS`,
@@ -80,7 +80,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `api/types.rs` and cases in `api/tests/` whose subject is a moved item move to
   `crates/mbv-emby-model/src/tests.rs`. Verify: `cargo nextest run -p mbv-emby-model`
   passes.
-- [ ] 2.2 Add `mbv-emby-model` to `mbv-core` and the TUI `[dependencies]` and
+- [x] 2.2 Add `mbv-emby-model` to `mbv-core` and the TUI `[dependencies]` and
   rewrite every reference to the nine moved names from
   `crate::api::` / `mbv_core::api::` / `super::types::` to `mbv_emby_model::`
   (~143 files for `EmbyItem`, ~55 for `TICKS_PER_SECOND`). Verify: gate passes;
