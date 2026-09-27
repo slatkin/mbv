@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
@@ -36,8 +37,20 @@ impl QueueSlotId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QueueRevision(u64);
+
+/// An owner-local source of unique queue revisions, retained across queue replacements.
+#[derive(Debug, Default)]
+pub struct QueueRevisionMint(AtomicU64);
+
+impl QueueRevisionMint {
+    /// Mint a revision unique within this owner.
+    #[must_use]
+    pub fn mint(&self) -> QueueRevision {
+        QueueRevision(self.0.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 impl QueueRevision {
     #[must_use]
@@ -45,13 +58,9 @@ impl QueueRevision {
         self.0
     }
 
-    #[must_use]
-    pub fn from_raw(raw: u64) -> Self {
-        Self(raw)
-    }
-
-    fn bump(&mut self) {
-        self.0 = self.0.saturating_add(1);
+    /// Mint a new owner-local revision.
+    fn bump(&mut self, mint: &QueueRevisionMint) {
+        *self = mint.mint();
     }
 }
 
@@ -210,40 +219,35 @@ pub struct PlaybackQueue {
     slots: Vec<QueueSlot>,
     active_slot_id: Option<QueueSlotId>,
     revision: QueueRevision,
+    mint: std::sync::Arc<QueueRevisionMint>,
     next_slot_id: u64,
-}
-
-impl Default for PlaybackQueue {
-    fn default() -> Self {
-        Self::from_items(Vec::new(), None)
-    }
 }
 
 impl PlaybackQueue {
     #[must_use]
-    pub fn from_items(items: Vec<EmbyItem>, active_index: Option<usize>) -> Self {
+    pub fn from_items(
+        items: Vec<EmbyItem>,
+        active_index: Option<usize>,
+        mint: std::sync::Arc<QueueRevisionMint>,
+    ) -> Self {
         let queue_items: Vec<QueueItem> = items
             .into_iter()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        Self::from_queue_items(queue_items, active_index)
+        Self::from_queue_items(queue_items, active_index, mint)
     }
 
     #[must_use]
-    pub fn from_queue_items(items: Vec<QueueItem>, active_index: Option<usize>) -> Self {
-        Self::from_queue_items_with_revision(items, active_index, QueueRevision::default())
-    }
-
-    #[must_use]
-    pub fn from_queue_items_with_revision(
+    pub fn from_queue_items(
         items: Vec<QueueItem>,
         active_index: Option<usize>,
-        revision: QueueRevision,
+        mint: std::sync::Arc<QueueRevisionMint>,
     ) -> Self {
         let mut queue = Self {
             slots: Vec::with_capacity(items.len()),
             active_slot_id: None,
-            revision,
+            revision: mint.mint(),
+            mint,
             next_slot_id: 1,
         };
 
@@ -258,13 +262,14 @@ impl PlaybackQueue {
     }
 
     /// Reconstruct a queue snapshot while retaining the slot identities
-    /// assigned by its owner. Used at the unified ctrl boundary; local queue
-    /// construction should use `from_queue_items` so it allocates identities.
+    /// assigned by its owner, and mint a fresh revision from `mint`. Used at
+    /// the unified ctrl boundary; local queue construction should use
+    /// `from_queue_items` so it allocates identities.
     #[must_use]
     pub fn from_slot_items(
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
-        revision: QueueRevision,
+        mint: std::sync::Arc<QueueRevisionMint>,
     ) -> Self {
         let next_slot_id = slots
             .iter()
@@ -281,7 +286,8 @@ impl PlaybackQueue {
         Self {
             slots,
             active_slot_id,
-            revision,
+            revision: mint.mint(),
+            mint,
             next_slot_id,
         }
     }
@@ -289,6 +295,18 @@ impl PlaybackQueue {
     #[must_use]
     pub fn revision(&self) -> QueueRevision {
         self.revision
+    }
+
+    /// Continue this queue's revision sequence from another owner-local mint.
+    /// Queue contents, slot identities, active slot, and slot allocator are unchanged.
+    pub fn rebase_revision_mint(&mut self, mint: std::sync::Arc<QueueRevisionMint>) {
+        self.revision = mint.mint();
+        self.mint = mint;
+    }
+
+    #[must_use]
+    pub fn revision_mint(&self) -> std::sync::Arc<QueueRevisionMint> {
+        std::sync::Arc::clone(&self.mint)
     }
 
     #[must_use]
@@ -357,7 +375,7 @@ impl PlaybackQueue {
 
     pub fn clear_active_slot(&mut self) {
         if self.active_slot_id.take().is_some() {
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
     }
 
@@ -388,14 +406,14 @@ impl PlaybackQueue {
     pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
         self.slots.push(QueueSlot::new(slot_id, item));
         self.next_slot_id = self.next_slot_id.max(slot_id.raw().saturating_add(1));
-        self.revision.bump();
+        self.revision.bump(&self.mint);
     }
 
     pub fn insert(&mut self, index: usize, item: QueueItem) -> QueueSlotId {
         let slot_id = self.allocate_slot_id();
         let index = index.min(self.slots.len());
         self.slots.insert(index, QueueSlot::new(slot_id, item));
-        self.revision.bump();
+        self.revision.bump(&self.mint);
         slot_id
     }
 
@@ -410,7 +428,7 @@ impl PlaybackQueue {
             let slot_id = self.allocate_slot_id();
             self.slots.push(QueueSlot::new(slot_id, item));
         }
-        self.revision.bump();
+        self.revision.bump(&self.mint);
         old_active
     }
 
@@ -421,7 +439,7 @@ impl PlaybackQueue {
         }
         self.slots.clear();
         self.active_slot_id = None;
-        self.revision.bump();
+        self.revision.bump(&self.mint);
     }
 
     /// Truncate the slots to the given length. Used by tests to simulate
@@ -431,7 +449,7 @@ impl PlaybackQueue {
             return;
         }
         self.slots.truncate(len);
-        self.revision.bump();
+        self.revision.bump(&self.mint);
         // Clear active slot if it's beyond the new length.
         if let Some(active_id) = self.active_slot_id {
             if self.slot_index(active_id).is_none() {
@@ -446,7 +464,7 @@ impl PlaybackQueue {
         }
         if self.active_slot_id != Some(slot_id) {
             self.active_slot_id = Some(slot_id);
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
         QueueMutationResult::Applied(())
     }
@@ -478,7 +496,7 @@ impl PlaybackQueue {
             return RemoveSlotResult::NotFound;
         };
         let removed = self.slots.remove(index);
-        self.revision.bump();
+        self.revision.bump(&self.mint);
 
         if self.active_slot_id == Some(slot_id) {
             self.active_slot_id = None;
@@ -501,7 +519,7 @@ impl PlaybackQueue {
         let slot = self.slots.remove(from_index);
         let to_index = to_index.min(self.slots.len());
         self.slots.insert(to_index, slot);
-        self.revision.bump();
+        self.revision.bump(&self.mint);
         QueueMutationResult::Applied(())
     }
 
@@ -517,7 +535,7 @@ impl PlaybackQueue {
         slot.item = item;
         slot.progress_state.local = SlotProgress::from_queue_item(&slot.item);
         if !queue_items_equal(&slot.item, &old_item) {
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
         QueueMutationResult::Applied(())
     }
@@ -539,7 +557,7 @@ impl PlaybackQueue {
         };
         slot.progress_state.apply_to_item(&mut slot.item);
         if slot.progress_state.local != old_progress || !queue_items_equal(&slot.item, &old_item) {
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
         QueueMutationResult::Applied(())
     }
@@ -587,7 +605,7 @@ impl PlaybackQueue {
         }
 
         if changed {
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
         result
     }
@@ -639,7 +657,7 @@ impl PlaybackQueue {
             }
         }
         if changed {
-            self.revision.bump();
+            self.revision.bump(&self.mint);
         }
         result
     }
@@ -653,7 +671,7 @@ impl PlaybackQueue {
     fn remove_existing_slot(&mut self, slot_id: QueueSlotId) -> Option<QueueSlot> {
         let index = self.slot_index(slot_id)?;
         let removed = self.slots.remove(index);
-        self.revision.bump();
+        self.revision.bump(&self.mint);
 
         if self.active_slot_id == Some(slot_id) {
             self.active_slot_id = self

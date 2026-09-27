@@ -43,15 +43,17 @@ fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> 
         .into_iter()
         .filter(|slot| !drop(&slot.item))
         .collect();
+    if retained.len() == queue.len() {
+        return retained;
+    }
     let active = active.filter(|id| retained.iter().any(|slot| slot.slot_id == *id));
-    let revision = queue.revision();
     *queue = PlaybackQueue::from_slot_items(
         retained
             .iter()
             .map(|slot| (slot.slot_id, slot.item.clone()))
             .collect(),
         active,
-        revision,
+        queue.revision_mint(),
     );
     retained
 }
@@ -303,4 +305,28 @@ fn finalize_active_audiobookshelf(player: &Player, queue: &PlaybackQueue) -> boo
     player.stop_for_shutdown(remaining(deadline));
     player.join_or_timeout(remaining(deadline));
     !player.status.lock().unwrap().active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::purge_queue;
+    use mbv_queue::{PlaybackQueue, QueueItem, QueueRevisionMint};
+    use std::sync::Arc;
+
+    #[test]
+    fn purge_that_removes_nothing_keeps_the_queue_revision() {
+        let mint = Arc::new(QueueRevisionMint::default());
+        let mut queue = PlaybackQueue::from_queue_items(
+            vec![QueueItem::Emby(Box::new(crate::tests::item(
+                "keep", "Audio", "Audio",
+            )))],
+            Some(0),
+            mint,
+        );
+        let revision = queue.revision();
+
+        purge_queue(&mut queue, |_| false);
+
+        assert_eq!(queue.revision(), revision);
+    }
 }

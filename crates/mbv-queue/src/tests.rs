@@ -42,6 +42,29 @@ fn item(id: &str) -> EmbyItem {
     }
 }
 
+fn revision_mint() -> std::sync::Arc<QueueRevisionMint> {
+    std::sync::Arc::new(QueueRevisionMint::default())
+}
+
+fn queue_from_items(items: Vec<EmbyItem>, active: Option<usize>) -> PlaybackQueue {
+    PlaybackQueue::from_items(items, active, revision_mint())
+}
+
+fn queue_from_queue_items(items: Vec<QueueItem>, active: Option<usize>) -> PlaybackQueue {
+    PlaybackQueue::from_queue_items(items, active, revision_mint())
+}
+
+fn queue_from_slot_items(
+    slots: Vec<(QueueSlotId, QueueItem)>,
+    active: Option<QueueSlotId>,
+) -> PlaybackQueue {
+    PlaybackQueue::from_slot_items(slots, active, revision_mint())
+}
+
+fn empty_queue() -> PlaybackQueue {
+    PlaybackQueue::from_queue_items(Vec::new(), None, revision_mint())
+}
+
 fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> AudiobookshelfQueueItem {
     AudiobookshelfQueueItem {
         library_item_id: library_item_id.into(),
@@ -112,7 +135,7 @@ fn slot_ids(queue: &PlaybackQueue) -> Vec<QueueSlotId> {
 
 #[test]
 fn duplicate_item_ids_receive_distinct_queue_slot_ids() {
-    let queue = PlaybackQueue::from_items(vec![item("same"), item("same")], Some(0));
+    let queue = queue_from_items(vec![item("same"), item("same")], Some(0));
 
     assert_ne!(queue.slots()[0].slot_id, queue.slots()[1].slot_id);
     assert_eq!(queue.slots()[0].item.id(), queue.slots()[1].item.id());
@@ -132,11 +155,7 @@ fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
             QueueItem::Emby(Box::new(item("dup"))),
         ),
     ];
-    let mut queue = PlaybackQueue::from_slot_items(
-        submitted,
-        Some(QueueSlotId::from_raw(10)),
-        QueueRevision::default(),
-    );
+    let mut queue = queue_from_slot_items(submitted, Some(QueueSlotId::from_raw(10)));
 
     // Then append the same content twice more with fresh owner ids.
     queue.append_with_id(
@@ -171,7 +190,7 @@ fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
 fn from_queue_items_next_local_allocation_is_len_plus_one() {
     // A newly constructed canonical queue allocates slot ids starting at one;
     // this locks the assumption that its first three slots use ids 1..=3.
-    let mut queue = PlaybackQueue::from_queue_items(
+    let mut queue = queue_from_queue_items(
         vec![item("a"), item("b"), item("c")]
             .into_iter()
             .map(|i| QueueItem::Emby(Box::new(i)))
@@ -183,7 +202,7 @@ fn from_queue_items_next_local_allocation_is_len_plus_one() {
 
 #[test]
 fn removing_before_active_slot_preserves_active_identity() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(2));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(2));
     let active = queue.active_slot_id().unwrap();
     let before_active = queue.slots()[0].slot_id;
 
@@ -198,7 +217,7 @@ fn removing_before_active_slot_preserves_active_identity() {
 
 #[test]
 fn moving_slots_around_active_slot_preserves_active_identity() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(1));
     let ids = slot_ids(&queue);
     let active = queue.active_slot_id().unwrap();
 
@@ -219,7 +238,7 @@ fn moving_slots_around_active_slot_preserves_active_identity() {
 
 #[test]
 fn moving_active_slot_keeps_active_identity_on_that_slot() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(1));
     let active = queue.active_slot_id().unwrap();
 
     assert!(matches!(
@@ -233,7 +252,7 @@ fn moving_active_slot_keeps_active_identity_on_that_slot() {
 
 #[test]
 fn set_active_slot_targets_slot_after_reorder() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
     let target = queue.slots()[2].slot_id;
 
     assert!(matches!(
@@ -251,7 +270,7 @@ fn set_active_slot_targets_slot_after_reorder() {
 
 #[test]
 fn consume_removes_intended_slot_occurrence() {
-    let mut queue = PlaybackQueue::from_items(vec![item("same"), item("same"), item("c")], Some(2));
+    let mut queue = queue_from_items(vec![item("same"), item("same"), item("c")], Some(2));
     let consumed = queue.slots()[1].slot_id;
 
     let QueueMutationResult::Applied(slot) = queue.consume_slot(consumed) else {
@@ -266,7 +285,7 @@ fn consume_removes_intended_slot_occurrence() {
 
 #[test]
 fn progress_applies_to_intended_slot_after_index_shifts() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(2));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(2));
     let target = queue.slots()[2].slot_id;
     let removed = queue.slots()[0].slot_id;
 
@@ -287,7 +306,7 @@ fn progress_applies_to_intended_slot_after_index_shifts() {
 
 #[test]
 fn progress_for_removed_slot_is_rejected() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(1));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(1));
     let removed = queue.slots()[0].slot_id;
     assert!(matches!(
         queue.remove_slot(removed),
@@ -302,7 +321,7 @@ fn progress_for_removed_slot_is_rejected() {
 
 #[test]
 fn active_slot_progress_is_protected_from_server_refresh() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(0));
     let active = queue.active_slot_id().unwrap();
     assert!(matches!(
         queue.apply_progress(active, 20 * TICKS_PER_SECOND, false),
@@ -323,7 +342,7 @@ fn active_slot_progress_is_protected_from_server_refresh() {
 
 #[test]
 fn refresh_applies_one_fetched_item_to_duplicate_queue_slots() {
-    let mut queue = PlaybackQueue::from_items(vec![item("same"), item("same")], Some(0));
+    let mut queue = queue_from_items(vec![item("same"), item("same")], Some(0));
     let duplicate = queue.slots()[1].slot_id;
 
     let result = queue.merge_refresh(vec![item_with_progress("same", 5, false)]);
@@ -342,7 +361,7 @@ fn refresh_applies_one_fetched_item_to_duplicate_queue_slots() {
 
 #[test]
 fn refresh_matches_duplicate_fetched_items_in_queue_order() {
-    let mut queue = PlaybackQueue::from_items(vec![item("same"), item("same")], None);
+    let mut queue = queue_from_items(vec![item("same"), item("same")], None);
     let first = queue.slots()[0].slot_id;
     let second = queue.slots()[1].slot_id;
 
@@ -364,7 +383,7 @@ fn refresh_matches_duplicate_fetched_items_in_queue_order() {
 
 #[test]
 fn pending_progress_sync_blocks_stale_server_userdata() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+    let mut queue = queue_from_items(vec![item("a")], Some(0));
     let slot = queue.active_slot_id().unwrap();
     assert!(matches!(
         queue.apply_progress(slot, 20 * TICKS_PER_SECOND, false),
@@ -392,7 +411,7 @@ fn pending_progress_sync_blocks_stale_server_userdata() {
 
 #[test]
 fn active_pending_progress_confirmation_clears_pending_but_keeps_local_progress() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+    let mut queue = queue_from_items(vec![item("a")], Some(0));
     let active = queue.active_slot_id().unwrap();
     assert!(matches!(
         queue.apply_progress(active, 20 * TICKS_PER_SECOND, false),
@@ -421,7 +440,7 @@ fn active_pending_progress_confirmation_clears_pending_but_keeps_local_progress(
 
 #[test]
 fn pending_progress_sync_clears_when_server_position_matches_within_tolerance() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a")], None);
+    let mut queue = queue_from_items(vec![item("a")], None);
     let slot = queue.slots()[0].slot_id;
     assert!(matches!(
         queue.apply_progress(slot, 20 * TICKS_PER_SECOND, false),
@@ -449,7 +468,7 @@ fn pending_progress_sync_clears_when_server_position_matches_within_tolerance() 
 
 #[test]
 fn watched_state_confirmation_requires_exact_match() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+    let mut queue = queue_from_items(vec![item("a")], Some(0));
     let slot = queue.active_slot_id().unwrap();
     assert!(matches!(
         queue.apply_progress(slot, 20 * TICKS_PER_SECOND, true),
@@ -474,7 +493,7 @@ fn watched_state_confirmation_requires_exact_match() {
 
 #[test]
 fn refresh_prunes_inactive_non_pending_missing_slots() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
     let pruned = queue.slots()[1].slot_id;
 
     let result = queue.merge_refresh(vec![item("a"), item("c")]);
@@ -486,7 +505,7 @@ fn refresh_prunes_inactive_non_pending_missing_slots() {
 
 #[test]
 fn refresh_cannot_prune_active_or_pending_sync_slots() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
     let active = queue.slots()[0].slot_id;
     let pending = queue.slots()[1].slot_id;
     assert!(matches!(
@@ -508,7 +527,7 @@ fn refresh_cannot_prune_active_or_pending_sync_slots() {
 
 #[test]
 fn active_slot_removal_requires_confirmation_decision() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(0));
     let active = queue.active_slot_id().unwrap();
 
     assert!(matches!(
@@ -520,7 +539,7 @@ fn active_slot_removal_requires_confirmation_decision() {
 
 #[test]
 fn confirmed_active_slot_removal_clears_active_identity() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(0));
     let active = queue.active_slot_id().unwrap();
 
     assert!(matches!(
@@ -534,13 +553,12 @@ fn confirmed_active_slot_removal_clears_active_identity() {
 
 #[test]
 fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
-    let mut queue = PlaybackQueue::from_queue_items_with_revision(
+    let mut queue = queue_from_queue_items(
         vec![
             QueueItem::Emby(Box::new(item("a"))),
             QueueItem::Emby(Box::new(item("b"))),
         ],
         Some(0),
-        QueueRevision::from_raw(40),
     );
     let first = queue.slots()[0].slot_id;
     let second = queue.slots()[1].slot_id;
@@ -595,30 +613,8 @@ fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
     assert!(queue.revision() > before_refresh);
 }
 
-#[test]
-fn structural_mutations_bump_revision() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
-    let initial = queue.revision();
-
-    let inserted = queue.append(QueueItem::Emby(Box::new(item("c"))));
-    assert!(queue.revision() > initial);
-    let after_insert = queue.revision();
-
-    assert!(matches!(
-        queue.move_slot(inserted, 0),
-        QueueMutationResult::Applied(())
-    ));
-    assert!(queue.revision() > after_insert);
-    let after_move = queue.revision();
-
-    assert!(matches!(
-        queue.consume_slot(inserted),
-        QueueMutationResult::Applied(_)
-    ));
-    assert!(queue.revision() > after_move);
-}
-
 mod persistence;
+mod revision;
 fn feed(guid: &str) -> FeedEntry {
     FeedEntry {
         guid: guid.to_string(),
@@ -637,7 +633,7 @@ fn feed(guid: &str) -> FeedEntry {
 
 #[test]
 fn feed_slot_participates_in_queue_ordering_and_survives_refresh() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(0));
     let feed_slot = queue.append(QueueItem::Feed(feed("f1")));
 
     // The Feed slot holds its own identity alongside the Emby slots.
@@ -676,7 +672,7 @@ mod title_parts;
 
 #[test]
 fn replace_clears_queue_and_sets_new_items() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let mut queue = queue_from_items(vec![item("a"), item("b")], Some(0));
     let initial = queue.revision();
     let old_active = queue.replace(vec![
         QueueItem::Emby(Box::new(item("x"))),
@@ -695,7 +691,7 @@ fn replace_clears_queue_and_sets_new_items() {
 
 #[test]
 fn replace_with_empty_vec_clears() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+    let mut queue = queue_from_items(vec![item("a")], Some(0));
     let old_active = queue.replace(vec![]);
 
     assert_eq!(old_active, Some(0));
@@ -705,7 +701,7 @@ fn replace_with_empty_vec_clears() {
 
 #[test]
 fn clear_removes_all_slots_and_bumps_revision() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(1));
     let initial = queue.revision();
     queue.clear();
 
@@ -717,7 +713,7 @@ fn clear_removes_all_slots_and_bumps_revision() {
 
 #[test]
 fn clear_on_empty_queue_is_noop() {
-    let mut queue = PlaybackQueue::default();
+    let mut queue = empty_queue();
     let before = queue.revision();
     queue.clear();
 
@@ -727,7 +723,7 @@ fn clear_on_empty_queue_is_noop() {
 
 #[test]
 fn len_and_active_index_reflect_queue_state() {
-    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(1));
 
     assert_eq!(queue.len(), 3);
     assert_eq!(queue.active_index(), Some(1));
@@ -742,7 +738,7 @@ fn len_and_active_index_reflect_queue_state() {
 
 #[test]
 fn mixed_queue_replace_preserves_item_variants() {
-    let mut queue = PlaybackQueue::default();
+    let mut queue = empty_queue();
     queue.replace(vec![
         QueueItem::Feed(feed("f1")),
         QueueItem::Emby(Box::new(item("e1"))),

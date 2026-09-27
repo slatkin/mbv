@@ -214,10 +214,14 @@ impl App {
                 Some(disconnected),
             );
         }
-        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+        let mut tab = initial_unified_state.as_ref().map_or_else(
             || PlayerTab::from_emby_items(initial_items, initial_cursor),
             PlayerTab::from_unified_state,
-        ));
+        );
+        if let Some(previous_tab) = &self.remote_player_tab {
+            tab.adopt_revision_mint(previous_tab.revision_mint());
+        }
+        self.remote_player_tab = Some(tab);
         self.remote.direct_remote_connected = true;
         self.advance_queue_epoch();
         self.remote.session_miss_count = 0;

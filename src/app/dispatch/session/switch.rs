@@ -75,13 +75,16 @@ impl App {
             );
         }
 
-        let daemon_tab = initial_unified_state.as_ref().map_or_else(
+        let mut daemon_tab = initial_unified_state.as_ref().map_or_else(
             || PlayerTab::from_emby_items(initial_items, initial_cursor),
             PlayerTab::from_unified_state,
         );
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
+            if let Some(previous_tab) = &self.remote_player_tab {
+                daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
+            }
             self.remote_player_tab = Some(daemon_tab);
         }
         self.connected_session_id = None;
@@ -196,13 +199,16 @@ impl App {
             );
         }
 
-        let daemon_tab = initial_unified_state.as_ref().map_or_else(
+        let mut daemon_tab = initial_unified_state.as_ref().map_or_else(
             || PlayerTab::from_emby_items(initial_items, initial_cursor),
             PlayerTab::from_unified_state,
         );
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
+            if let Some(previous_tab) = &self.remote_player_tab {
+                daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
+            }
             self.remote_player_tab = Some(daemon_tab);
         }
         self.advance_queue_epoch();
@@ -270,6 +276,8 @@ impl App {
         daemon_tab: PlayerTab,
         queue_source: mbv_queue::QueueSource,
     ) {
+        let mut daemon_tab = daemon_tab;
+        daemon_tab.adopt_revision_mint(self.player_tab.revision_mint());
         self.player_tab = daemon_tab;
         self.queue_source = queue_source;
         self.remote_player_tab = None;
@@ -402,10 +410,11 @@ impl App {
                     let initial_unified_state = remote.unified_queue_state();
                     let initial_cursor = remote.status.lock().unwrap().current_idx;
                     let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-                    let initial_tab = initial_unified_state.as_ref().map_or_else(
+                    let mut initial_tab = initial_unified_state.as_ref().map_or_else(
                         || PlayerTab::from_emby_items(initial_items, initial_cursor),
                         PlayerTab::from_unified_state,
                     );
+                    initial_tab.adopt_revision_mint(self.player_tab.revision_mint());
                     let always_play_next = self.config.lock().unwrap().always_play_next;
                     self.player = PlayerProxy::remote(remote, always_play_next);
                     self.player_rx = remote_rx;

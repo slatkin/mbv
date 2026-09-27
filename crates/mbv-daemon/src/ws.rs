@@ -129,7 +129,8 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
         return;
     }
-    *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
+    let mint = queue.revision_mint();
+    *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx), mint);
     *source = mbv_queue::QueueSource::Remote;
     take_authority_for_emby_remote(ctrl_clients);
     transitions.reset();
@@ -351,7 +352,7 @@ mod tests {
         let client = mock_client(&http);
         let player = crate::tests::cold_player();
         let playback = MockPlayback::default();
-        let mut queue = PlaybackQueue::default();
+        let mut queue = crate::tests::empty_queue();
         let mut source = QueueSource::Unknown;
         let mut transitions = OwnerTransitionState::default();
         let shared = crate::tests::shared_queue_state();
@@ -398,6 +399,7 @@ mod tests {
                 "existing", "Audio", "Audio",
             )))],
             Some(0),
+            crate::tests::revision_mint(),
         );
         let previous_slots = queue
             .slots()
@@ -454,6 +456,7 @@ mod tests {
                 "existing", "Audio", "Audio",
             )))],
             Some(0),
+            crate::tests::revision_mint(),
         );
         let mut source = QueueSource::Album;
         let mut transitions = OwnerTransitionState::default();

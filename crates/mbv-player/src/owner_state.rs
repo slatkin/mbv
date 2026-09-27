@@ -7,14 +7,26 @@
 //! observation, never from accepting a command.
 
 use crate::transition::OwnerTransitionState;
-use mbv_queue::{PlaybackQueue, QueueSlotId};
+use mbv_queue::{PlaybackQueue, QueueRevisionMint, QueueSlotId};
+use std::sync::Arc;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PlayerOwnerState {
     pub queue: PlaybackQueue,
+    pub revision_mint: Arc<QueueRevisionMint>,
     pub source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
     pub transitions: OwnerTransitionState,
+}
+
+impl Default for PlayerOwnerState {
+    fn default() -> Self {
+        let revision_mint = Arc::new(QueueRevisionMint::default());
+        Self::new(
+            PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
+            mbv_queue::QueueSource::default(),
+        )
+    }
 }
 
 impl PlayerOwnerState {
@@ -22,8 +34,10 @@ impl PlayerOwnerState {
     /// (queue adoption on startup / handoff).
     #[must_use]
     pub fn new(queue: PlaybackQueue, source: mbv_queue::QueueSource) -> Self {
+        let revision_mint = queue.revision_mint();
         Self {
             queue,
+            revision_mint,
             source,
             observed_active_slot: None,
             transitions: OwnerTransitionState::default(),
@@ -34,6 +48,7 @@ impl PlayerOwnerState {
     /// Daemon owners mutate this state directly; Bare keeps the existing shell
     /// queue API and synchronizes the same canonical value at the boundary.
     pub fn sync_canonical_queue(&mut self, queue: PlaybackQueue) {
+        self.revision_mint = queue.revision_mint();
         let observed = self
             .observed_active_slot
             .filter(|slot_id| queue.slot(*slot_id).is_some());
@@ -239,7 +254,11 @@ mod tests {
     // back to its submission-time position (0, for a freshly queued item).
     #[test]
     fn apply_completion_progress_advances_canonical_queue_and_revision() {
-        let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+        let queue = PlaybackQueue::from_items(
+            vec![item("a")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
         let slot_id = queue.slots()[0].slot_id;
         let before_revision = queue.revision();
         let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
