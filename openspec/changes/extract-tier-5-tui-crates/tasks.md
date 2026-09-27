@@ -292,7 +292,7 @@ Each task below is its own commit, and the full gate passes after each.
 
 ## 8. Crate graph
 
-- [ ] 8.1 Check the graph. Verify all of:
+- [x] 8.1 Check the graph. Verify all of:
   - `cargo tree -p mbv-components -e normal --prefix none | rg '^mbv '` is
     empty;
   - `cargo tree -p mbv-render -e normal` contains neither `mbv-components` nor
