@@ -1,6 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
-use mbv_core::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
 mod progress;
@@ -194,12 +194,12 @@ impl App {
         }
     }
 
-    fn handle_unified_queue_load_result(&mut self, result: mbv_core::ctrl::QueueLoadResult) {
+    fn handle_unified_queue_load_result(&mut self, result: mbv_ctrl::QueueLoadResult) {
         match result {
-            mbv_core::ctrl::QueueLoadResult::Accepted => {
+            mbv_ctrl::QueueLoadResult::Accepted => {
                 self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
             }
-            mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
+            mbv_ctrl::QueueLoadResult::Rejected { reason } => {
                 self.flash(
                     format!("Queue load rejected: {reason}"),
                     ToastSeverity::Error,
@@ -381,7 +381,7 @@ impl App {
             if let Some(deleted_slot) = deleted_slot {
                 if !self
                     .player
-                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(deleted_slot))
+                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot))
                 {
                     self.player
                         .send_command(PlayerCommand::QueueRemove(deleted_slot));
@@ -595,10 +595,7 @@ impl App {
     /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
     /// `handle_player_event`). Returns true when the local generation fence
     /// ends the tick early.
-    fn handle_unified_queue_updated(
-        &mut self,
-        unified: &mbv_core::ctrl::UnifiedQueueStateData,
-    ) -> bool {
+    fn handle_unified_queue_updated(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) -> bool {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         *self.player.status.lock().unwrap() = unified.status.clone();
@@ -734,8 +731,8 @@ fn flow_after(restart_loop: bool) -> PlayerEventFlow {
 
 /// The one message for a correlated direct-daemon playback-intent outcome
 /// (extracted from `handle_player_event`).
-fn playback_intent_message(outcome: &mbv_core::ctrl::PlaybackIntentOutcome) -> &'static str {
-    use mbv_core::ctrl::{PlaybackIntentOutcome, PlaybackIntentRejection};
+fn playback_intent_message(outcome: &mbv_ctrl::PlaybackIntentOutcome) -> &'static str {
+    use mbv_ctrl::{PlaybackIntentOutcome, PlaybackIntentRejection};
     match outcome {
         PlaybackIntentOutcome::Accepted => "Playback request accepted",
         PlaybackIntentOutcome::Applied => "Playback request applied",
@@ -755,8 +752,8 @@ fn playback_intent_message(outcome: &mbv_core::ctrl::PlaybackIntentOutcome) -> &
 /// `handle_player_event`). These statuses only originate from a direct
 /// pipe-output daemon. Local, attached-Emby, and ordinary daemon routes
 /// never receive the event, so their presentation is unchanged.
-fn pipe_playback_message(status: &mbv_core::ctrl::PipePlaybackStatus) -> String {
-    use mbv_core::ctrl::PipePlaybackPhase;
+fn pipe_playback_message(status: &mbv_ctrl::PipePlaybackStatus) -> String {
+    use mbv_ctrl::PipePlaybackPhase;
     match status.phase {
         PipePlaybackPhase::Resolving => "Resolving pipe playback target".to_string(),
         PipePlaybackPhase::PlayerOpening => "Opening player output".to_string(),

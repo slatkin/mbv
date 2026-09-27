@@ -331,7 +331,7 @@ impl EmbyClient {
     }
 
     /// Fetch the current user's subtitle and audio language preferences from Emby.
-    pub fn get_user_subtitle_prefs(&self) -> Result<crate::player::SubtitlePrefs, String> {
+    pub fn get_user_subtitle_prefs(&self) -> Result<mbv_ctrl::player::SubtitlePrefs, String> {
         let resp: serde_json::Value = self
             .get("/Users/Me")
             .call()
@@ -352,7 +352,7 @@ impl EmbyClient {
             .as_str()
             .unwrap_or("")
             .to_string();
-        Ok(crate::player::SubtitlePrefs {
+        Ok(mbv_ctrl::player::SubtitlePrefs {
             mode,
             subtitle_lang,
             audio_lang,

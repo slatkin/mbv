@@ -1,0 +1,24 @@
+[package]
+name = "mbv-ctrl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Control protocol and Player vocabulary for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-queue = { path = "../mbv-queue" }
+mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-ids = { path = "../mbv-ids" }
+serde.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+serde_json.workspace = true

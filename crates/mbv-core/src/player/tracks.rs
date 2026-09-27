@@ -1,5 +1,5 @@
-use super::{PlayerStatus, SubtitleChoice, SubtitlePrefs};
 use libmpv2::Mpv;
+use mbv_ctrl::player::{PlayerStatus, SubtitleChoice, SubtitlePrefs};
 use std::sync::{Arc, Mutex};
 
 const LANGS: &[(&[&str], &str)] = &[

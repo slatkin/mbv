@@ -16,7 +16,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::input::resolver::KeyChord;
 use crate::app::App;
 use crossterm::event::KeyCode;
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 use std::sync::Arc;
@@ -155,7 +155,7 @@ impl App {
         if !self.player.is_remote_disconnected() {
             return false;
         }
-        self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+        self.handle_player_event(mbv_ctrl::player::PlayerEvent::CommandRejected(
             crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
         ));
         true
@@ -167,7 +167,7 @@ impl App {
         }
         let sent = self
             .player
-            .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+            .queue_play_slot(mbv_ctrl::slot_id_to_u64(slot_id));
         if !sent {
             self.reject_disconnected_remote_jump();
         }
@@ -427,7 +427,7 @@ impl App {
             if let Some(slot_id) = queue.slot_id_at(t) {
                 let _ = self.request_slot_jump(slot_id);
             } else {
-                self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+                self.handle_player_event(mbv_ctrl::player::PlayerEvent::CommandRejected(
                     crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
                 ));
             }

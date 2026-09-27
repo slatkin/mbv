@@ -420,7 +420,7 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
     assert!(
         matches!(
             cmd_rx.try_recv(),
-            Ok(crate::player::PlayerCommand::QueueRemove(s)) if s == consumed_slot
+            Ok(mbv_ctrl::player::PlayerCommand::QueueRemove(s)) if s == consumed_slot
         ),
         "consuming the active slot must tell the player to remove that same \
              slot from its own internal queue, keeping it in sync"

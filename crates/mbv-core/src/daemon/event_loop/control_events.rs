@@ -8,7 +8,7 @@ use super::super::{
     DaemonLoop, DaemonOwnerContext, DaemonRole,
 };
 use super::EventOutcome;
-use crate::ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
+use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
@@ -57,7 +57,7 @@ impl DaemonLoop {
                     ),
                 }
             } else {
-                Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
+                Err(mbv_ctrl::ServiceSetupRejection::TransitionRejected)
             };
             match result {
                 Ok(()) => send_to(reply_tx, &CtrlEvent::ServiceSetupApplied { kind, revision }),
@@ -131,7 +131,7 @@ impl DaemonLoop {
                 client_id,
                 request_id,
                 generation,
-                crate::ctrl::PlaybackIntentRejection::ResolutionFailed,
+                mbv_ctrl::PlaybackIntentRejection::ResolutionFailed,
             ) {
                 self.ctrl_clients
                     .lock()
@@ -143,7 +143,7 @@ impl DaemonLoop {
         }
         if let Ok(items_for_intent) = &fetched {
             let rejection = if items_for_intent.is_empty() {
-                Some(crate::ctrl::PlaybackIntentRejection::EmptyTarget)
+                Some(mbv_ctrl::PlaybackIntentRejection::EmptyTarget)
             } else if audio_only_rejection(
                 self.audio_only,
                 &items_for_intent
@@ -154,7 +154,7 @@ impl DaemonLoop {
             )
             .is_some()
             {
-                Some(crate::ctrl::PlaybackIntentRejection::AudioOnly)
+                Some(mbv_ctrl::PlaybackIntentRejection::AudioOnly)
             } else {
                 None
             };

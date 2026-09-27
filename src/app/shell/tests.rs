@@ -155,7 +155,7 @@ fn respond_with_tracks(http: &MockHttp, tracks: &[(&str, &str)]) {
 
 fn mocked_music_action_model(
     http: &MockHttp,
-) -> (Model, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (Model, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut app, command_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
     let mut config = app.config.lock().unwrap().clone();
     config.server_url = "http://127.0.0.1:1".into();
@@ -200,12 +200,12 @@ fn dispatch_music_artist_action(model: &mut Model, action: MusicTreeAction, item
 }
 
 fn replacement_command_ids(
-    command_rx: &std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>,
+    command_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) -> Vec<Vec<String>> {
     command_rx
         .try_iter()
         .filter_map(|command| match command {
-            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(
+            mbv_ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(
                 slots
                     .into_iter()
                     .map(|slot| slot.item.id().to_string())

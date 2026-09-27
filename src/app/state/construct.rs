@@ -69,7 +69,7 @@ impl App {
             config.use_mpv_config,
             config.no_scripts,
             config.always_skip_intro,
-            mbv_core::player::SubtitlePrefs {
+            mbv_ctrl::player::SubtitlePrefs {
                 mode: config.subtitle_mode.clone(),
                 subtitle_lang: config.subtitle_lang.clone(),
                 audio_lang: config.audio_lang.clone(),
@@ -348,7 +348,7 @@ impl App {
             app_config.use_mpv_config,
             app_config.no_scripts,
             app_config.always_skip_intro,
-            mbv_core::player::SubtitlePrefs {
+            mbv_ctrl::player::SubtitlePrefs {
                 mode: app_config.subtitle_mode.clone(),
                 subtitle_lang: app_config.subtitle_lang.clone(),
                 audio_lang: app_config.audio_lang.clone(),

@@ -6,13 +6,14 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::api::EmbyClient;
-use crate::ctrl::{
+use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
+use crate::player::Player;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
-use crate::player::{Player, PlayerCommand, PlayerEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
@@ -206,8 +207,8 @@ impl PlaybackIntentState {
         }
     }
 
-    pub(super) fn pipe_status(&self) -> Option<crate::ctrl::PipePlaybackStatus> {
-        use crate::ctrl::PipePlaybackPhase;
+    pub(super) fn pipe_status(&self) -> Option<mbv_ctrl::PipePlaybackStatus> {
+        use mbv_ctrl::PipePlaybackPhase;
         let current = self.current.as_ref()?;
         if !current.pipe_output {
             return None;
@@ -227,7 +228,7 @@ impl PlaybackIntentState {
             ),
             PlaybackIntentPhase::Accepted | PlaybackIntentPhase::Applied => return None,
         };
-        Some(crate::ctrl::PipePlaybackStatus {
+        Some(mbv_ctrl::PipePlaybackStatus {
             request_id: current.request_id,
             generation: current.generation,
             phase,
@@ -238,7 +239,7 @@ impl PlaybackIntentState {
     pub(super) fn output_started_if_current(
         &mut self,
         delay: Option<Duration>,
-    ) -> Option<(CtrlClientId, crate::ctrl::PipePlaybackStatus)> {
+    ) -> Option<(CtrlClientId, mbv_ctrl::PipePlaybackStatus)> {
         let current = self.current.as_mut()?;
         if !current.pipe_output || !matches!(current.action, PlaybackIntentAction::Play { .. }) {
             return None;
@@ -247,16 +248,16 @@ impl PlaybackIntentState {
             current.phase = PlaybackIntentPhase::OutputBuffering;
             current.buffering_deadline = Some(Instant::now() + delay);
             (
-                crate::ctrl::PipePlaybackPhase::OutputBuffering,
+                mbv_ctrl::PipePlaybackPhase::OutputBuffering,
                 Some(delay.as_millis().try_into().unwrap_or(u64::MAX)),
             )
         } else {
             current.phase = PlaybackIntentPhase::Applied;
-            (crate::ctrl::PipePlaybackPhase::OutputStarted, None)
+            (mbv_ctrl::PipePlaybackPhase::OutputStarted, None)
         };
         Some((
             current.connection_id,
-            crate::ctrl::PipePlaybackStatus {
+            mbv_ctrl::PipePlaybackStatus {
                 request_id: current.request_id,
                 generation: current.generation,
                 phase,
@@ -314,7 +315,7 @@ impl PlaybackIntentState {
         connection_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
-        reason: crate::ctrl::PlaybackIntentRejection,
+        reason: mbv_ctrl::PlaybackIntentRejection,
     ) -> Option<PlaybackIntentEvent> {
         let current = self.current.as_ref()?;
         if current.connection_id != connection_id
@@ -364,12 +365,12 @@ pub(super) struct DaemonPlayerOwner {
 }
 
 pub(crate) struct PendingIdleQueueLoad {
-    pub(super) request_id: crate::ctrl::QueueLoadRequestId,
+    pub(super) request_id: mbv_ctrl::QueueLoadRequestId,
     pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
     pub(super) cursor: usize,
     pub(super) source: mbv_queue::QueueSource,
     pub(super) reply_tx: CtrlSender,
-    pub(super) stopped_run: crate::ctrl::PlaybackGeneration,
+    pub(super) stopped_run: mbv_ctrl::PlaybackGeneration,
     pub(super) started_at: Instant,
 }
 
@@ -537,7 +538,7 @@ pub(super) fn expire_and_redispatch(
             connection_id,
             request_id,
             generation,
-            crate::ctrl::PlaybackIntentRejection::Unavailable,
+            mbv_ctrl::PlaybackIntentRejection::Unavailable,
         ) {
             ctrl_clients
                 .lock()
@@ -573,7 +574,7 @@ pub(crate) struct SharedQueueState {
 
 #[derive(Debug)]
 pub struct DaemonPlayerHandle {
-    pub status: Arc<Mutex<crate::player::PlayerStatus>>,
+    pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
 }
 

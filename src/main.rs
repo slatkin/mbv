@@ -27,7 +27,8 @@ mod tray;
 use app::{capture_launch_window, current_launch_secs, App, Model};
 use config::load_config;
 use mbv_core::api::EmbyClient;
-use mbv_core::{applog, player, remote_player};
+use mbv_core::{applog, remote_player};
+use mbv_ctrl::player::PlayerEvent;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
 /// with the launch window available to the model.
@@ -57,7 +58,7 @@ fn run_tui(mut app: App) {
 fn run_remote_app(
     client: Option<EmbyClient>,
     remote: remote_player::RemotePlayer,
-    player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
+    player_rx: std::sync::mpsc::Receiver<PlayerEvent>,
     endpoint: &remote_player::DaemonEndpoint,
     config: config::Config,
 ) {

@@ -3,7 +3,8 @@ use super::{
     SharedQueueState,
 };
 use crate::api::EmbyClient;
-use crate::player::{Player, PlayerCommand};
+use crate::player::Player;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::{PlaybackQueue, QueueItem};
 use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex};

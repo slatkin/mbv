@@ -114,10 +114,7 @@ impl PlayerOwnerState {
     /// Mint an owner-local transition identity for Bare-mode playback.
     pub fn mint_local_transition(
         &mut self,
-    ) -> (
-        crate::ctrl::PlaybackRequestId,
-        crate::ctrl::PlaybackGeneration,
-    ) {
+    ) -> (mbv_ctrl::PlaybackRequestId, mbv_ctrl::PlaybackGeneration) {
         self.transitions.mint_local_id()
     }
 
@@ -130,7 +127,7 @@ impl PlayerOwnerState {
 
     pub fn settle_local_transition(
         &mut self,
-        request_id: crate::ctrl::PlaybackRequestId,
+        request_id: mbv_ctrl::PlaybackRequestId,
         slot_id: QueueSlotId,
     ) -> crate::player::transition::SettleOutcome {
         self.transitions.settle(request_id, slot_id)

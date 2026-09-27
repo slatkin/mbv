@@ -13,7 +13,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
         Some(0),
     );
     let observed = queue.slots()[1].slot_id;
-    let status = crate::player::PlayerStatus::default();
+    let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
     let event = super::unified_queue_state_for_peer(
         &status,
@@ -49,7 +49,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
     let source = mbv_queue::QueueSource::Unknown;
 
     // Not playing: no observation and no fallback -> no active slot.
-    let idle = crate::player::PlayerStatus::default();
+    let idle = mbv_ctrl::player::PlayerStatus::default();
     let CtrlEvent::UnifiedQueueState(idle_data) = super::unified_queue_state_for_peer(
         &idle,
         &queue,
@@ -66,7 +66,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
     assert_eq!(idle_data.active_slot, None);
 
     // Playing with no observation: fall back to the canonical active slot.
-    let playing = crate::player::PlayerStatus {
+    let playing = mbv_ctrl::player::PlayerStatus {
         active: true,
         ..Default::default()
     };

@@ -234,12 +234,12 @@ impl PlayerProxy {
                 let start_idx = start_idx.min(slots.len() - 1);
                 let slots: Vec<_> = slots
                     .into_iter()
-                    .map(|slot| crate::ctrl::UnifiedQueueSlot {
+                    .map(|slot| mbv_ctrl::UnifiedQueueSlot {
                         slot_id: slot.slot_id.raw(),
                         item: slot.item,
                     })
                     .collect();
-                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::unified_queue_replace(
+                r.send_ctrl_cmd(mbv_ctrl::CtrlCmd::unified_queue_replace(
                     slots,
                     Some(start_idx),
                     source,
@@ -252,7 +252,7 @@ impl PlayerProxy {
     pub fn clear_queue(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
-            PlayerProxyInner::Remote(r) => r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueClear),
+            PlayerProxyInner::Remote(r) => r.send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueClear),
         }
     }
 
@@ -298,14 +298,14 @@ impl PlayerProxy {
         }
     }
 
-    pub fn send_ctrl_cmd(&self, cmd: crate::ctrl::CtrlCmd) -> bool {
+    pub fn send_ctrl_cmd(&self, cmd: mbv_ctrl::CtrlCmd) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(r) => r.send_ctrl_cmd(cmd),
         }
     }
 
-    pub fn send_playback_intent(&self, intent: crate::ctrl::PlaybackIntent) -> bool {
+    pub fn send_playback_intent(&self, intent: mbv_ctrl::PlaybackIntent) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(intent),
@@ -395,7 +395,7 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Next),
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
-                remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Next),
+                remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Next),
             ),
         }
     }
@@ -404,7 +404,7 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Previous),
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
-                remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Previous),
+                remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Previous),
             ),
         }
     }
@@ -424,7 +424,7 @@ impl PlayerProxy {
                 None => false,
             },
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
-                remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::SetPaused { paused }),
+                remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::SetPaused { paused }),
             ),
         }
     }

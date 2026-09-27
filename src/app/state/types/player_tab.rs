@@ -31,9 +31,7 @@ impl PlayerTab {
         }
     }
 
-    pub(in crate::app) fn from_unified_state(
-        state: &mbv_core::ctrl::UnifiedQueueStateData,
-    ) -> Self {
+    pub(in crate::app) fn from_unified_state(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
         let active_index = state
             .active_slot
             .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
@@ -93,7 +91,7 @@ impl PlayerTab {
 
     pub(in crate::app) fn set_unified_state(
         &mut self,
-        state: &mbv_core::ctrl::UnifiedQueueStateData,
+        state: &mbv_ctrl::UnifiedQueueStateData,
         queue_cursor: usize,
     ) {
         *self = Self::from_unified_state(state);

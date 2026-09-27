@@ -379,10 +379,10 @@ fn disconnect_abs() -> Result<(), String> {
     Ok(())
 }
 
-fn reconcile_event_outcome(event: &mbv_core::ctrl::CtrlEvent) -> Option<Result<(), String>> {
+fn reconcile_event_outcome(event: &mbv_ctrl::CtrlEvent) -> Option<Result<(), String>> {
     match event {
-        mbv_core::ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
-        mbv_core::ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
+        mbv_ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
+        mbv_ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
             "mbvd: restart required (live setup rejected: {reason:?})"
         ))),
         _ => None,
@@ -394,7 +394,7 @@ fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
         let line = next.map_err(|error| {
             format!("mbvd: restart required (setup acknowledgement unavailable): {error}")
         })?;
-        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line).map_err(|error| {
+        let event = serde_json::from_str::<mbv_ctrl::CtrlEvent>(&line).map_err(|error| {
             format!("mbvd: restart required (invalid setup acknowledgement): {error}")
         })?;
         if let Some(outcome) = reconcile_event_outcome(&event) {
@@ -421,8 +421,8 @@ fn connect_running_owner() -> Result<(UnixStream, BufReader<UnixStream>), String
     reader.read_line(&mut line).map_err(|error| {
         format!("mbvd: restart required (packaged daemon did not acknowledge): {error}")
     })?;
-    match serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line) {
-        Ok(mbv_core::ctrl::CtrlEvent::Hello(hello)) => hello
+    match serde_json::from_str::<mbv_ctrl::CtrlEvent>(&line) {
+        Ok(mbv_ctrl::CtrlEvent::Hello(hello)) => hello
             .validate_peer()
             .map_err(|error| format!("mbvd: restart required (ctrl protocol mismatch): {error}"))?,
         _ => return Err("mbvd: restart required (invalid packaged daemon ctrl hello)".into()),
@@ -435,13 +435,13 @@ fn send_reconcile_request(
     kind: mbv_queue::ServiceKind,
     revision: u64,
 ) -> Result<(), String> {
-    let hello = serde_json::to_string(&mbv_core::ctrl::CtrlCmd::Hello(
-        mbv_core::ctrl::CtrlHello::current(),
-    ))
-    .map_err(|error| format!("mbvd: restart required (cannot serialize ctrl hello): {error}"))?;
+    let hello = serde_json::to_string(&mbv_ctrl::CtrlCmd::Hello(mbv_ctrl::CtrlHello::current()))
+        .map_err(|error| {
+            format!("mbvd: restart required (cannot serialize ctrl hello): {error}")
+        })?;
     writeln!(writer, "{hello}")
         .and_then(|()| {
-            serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
+            serde_json::to_string(&mbv_ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
                 .map_err(|error| {
                     io::Error::other(format!("cannot serialize setup request: {error}"))
                 })

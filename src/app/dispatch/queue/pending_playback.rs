@@ -1,6 +1,6 @@
 use super::{App, QueueScope, ToastSeverity};
 use crate::app::state::queue_owner::LocalQueueOwner;
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
@@ -45,7 +45,7 @@ impl App {
         let slots = items
             .into_iter()
             .enumerate()
-            .map(|(index, item)| mbv_core::ctrl::UnifiedQueueSlot {
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
                 slot_id: (index + 1) as u64,
                 item: QueueItem::Emby(Box::new(item)),
             })

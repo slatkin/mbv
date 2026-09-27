@@ -141,7 +141,7 @@ fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(!remote.send_ctrl_cmd(CtrlCmd::Stop));
@@ -159,7 +159,7 @@ fn failed_writer_write_emits_connection_lost_once() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
@@ -176,7 +176,7 @@ fn reader_eof_emits_connection_lost_instead_of_stopped() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
@@ -195,7 +195,7 @@ fn writer_and_reader_loss_emit_only_one_disconnect_event() {
     assert!(matches!(
         events.recv_timeout(Duration::from_secs(2)).unwrap(),
         PlayerEvent::RemoteDisconnected(message)
-            if message == crate::player::CONNECTION_LOST_MESSAGE
+            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
     ));
     assert!(remote.is_disconnected());
     assert!(matches!(
@@ -301,7 +301,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         let mut hello = CtrlHello::current();
         hello
             .capabilities
-            .push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+            .push(mbv_ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
         hello.capabilities.push("future-capability".to_string());
         writeln!(
             writer,
@@ -479,7 +479,7 @@ fn command_rejected_forwards_reason_as_player_event() {
 
 #[test]
 fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
-    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
     let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
@@ -556,7 +556,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
 
 #[test]
 fn unified_queue_state_preserves_canonical_coordinates_and_source() {
-    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));

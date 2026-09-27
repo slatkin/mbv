@@ -194,12 +194,12 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
     // Mock the active-file run's response (design D1): TrackChanged naming
     // the target slot and carrying the jump's request identity, then apply
     // the daemon loop's TrackChanged arm (observe → settle → publish).
-    let run_response = crate::player::PlayerEvent::TrackChanged {
+    let run_response = mbv_ctrl::player::PlayerEvent::TrackChanged {
         slot_id: slot_b,
         transition: Some((jump_request_id, jump_generation)),
     };
     let observed = match run_response {
-        crate::player::PlayerEvent::TrackChanged {
+        mbv_ctrl::player::PlayerEvent::TrackChanged {
             slot_id,
             transition: Some((request_id, _generation)),
         } if slot_id == slot_b => {

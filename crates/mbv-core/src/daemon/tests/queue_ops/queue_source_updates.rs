@@ -17,11 +17,11 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
         CtrlCmd::UnifiedQueueReplace {
             items: vec![],
             slots: vec![
-                crate::ctrl::UnifiedQueueSlot {
+                mbv_ctrl::UnifiedQueueSlot {
                     slot_id: 11,
                     item: emby_qi("a", "Video", "Movie"),
                 },
-                crate::ctrl::UnifiedQueueSlot {
+                mbv_ctrl::UnifiedQueueSlot {
                     slot_id: 22,
                     item: emby_qi("b", "Video", "Movie"),
                 },
@@ -82,7 +82,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
     run_queue_cmd_with_shared(
         CtrlCmd::UnifiedQueueReplace {
             items: vec![],
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 77,
                 item: emby_qi("c", "Video", "Movie"),
             }],
@@ -191,7 +191,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         fx.client_id,
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 71,
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 81,
                 item: emby_qi("loaded", "Video", "Movie"),
             }],
@@ -207,7 +207,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         recv_event(&fx.reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 71,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
     let lineage = *fx.shared_queue.lineage.lock().unwrap();
@@ -294,7 +294,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             client_id,
             CtrlCmd::UnifiedQueueLoadIdle {
                 request_id,
-                slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slots: vec![mbv_ctrl::UnifiedQueueSlot {
                     slot_id: request_id,
                     item: emby_qi(item_id, "Video", "Movie"),
                 }],
@@ -308,7 +308,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         assert!(
             matches!(recv_event(&fx.reply_rx), CtrlEvent::UnifiedQueueLoadResult {
             request_id: got,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         } if got == request_id)
         );
     }

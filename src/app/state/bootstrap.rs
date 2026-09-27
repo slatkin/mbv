@@ -14,7 +14,7 @@ pub(in crate::app) fn bootstrap_legacy_queue(
 }
 
 pub(in crate::app) fn bootstrap_unified_queue(
-    state: &mbv_core::ctrl::UnifiedQueueStateData,
+    state: &mbv_ctrl::UnifiedQueueStateData,
 ) -> LocalDaemonBootstrap {
     LocalDaemonBootstrap {
         player_tab: PlayerTab::from_unified_state(state),

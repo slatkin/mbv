@@ -221,7 +221,7 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this stop: the owner
         /// submission generation at event construction time.
         #[serde(default)]
-        run_identity: crate::ctrl::PlaybackGeneration,
+        run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -238,10 +238,7 @@ pub enum PlayerEvent {
         /// request. `None` for natural advancement. Bare-mode dispatch
         /// populates this in Section 3; today it is always `None`.
         #[serde(default)]
-        transition: Option<(
-            crate::ctrl::PlaybackRequestId,
-            crate::ctrl::PlaybackGeneration,
-        )>,
+        transition: Option<(crate::PlaybackRequestId, crate::PlaybackGeneration)>,
     },
     /// Emitted after the player confirms its paused property transition.
     PausedChanged(bool),
@@ -254,7 +251,7 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this completion: the
         /// owner submission generation at event construction time.
         #[serde(default)]
-        run_identity: crate::ctrl::PlaybackGeneration,
+        run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -284,11 +281,11 @@ pub enum PlayerEvent {
     /// Emitted by `RemotePlayer` when a `UnifiedQueueState` arrives so App can
     /// sync the full canonical queue (tagged `QueueItems`, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
-    UnifiedQueueUpdated(Box<crate::ctrl::UnifiedQueueStateData>),
+    UnifiedQueueUpdated(Box<crate::UnifiedQueueStateData>),
     /// Correlated result of an owner-authoritative idle queue load.
     UnifiedQueueLoadResult {
-        request_id: crate::ctrl::QueueLoadRequestId,
-        result: crate::ctrl::QueueLoadResult,
+        request_id: crate::QueueLoadRequestId,
+        result: crate::QueueLoadResult,
     },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
@@ -306,10 +303,10 @@ pub enum PlayerEvent {
     CommandRejected(String),
     /// Correlated lifecycle update for a guarded direct-daemon playback
     /// intent. The confirmed `PlayerStatus` remains authoritative separately.
-    PlaybackIntent(crate::ctrl::PlaybackIntentEvent),
+    PlaybackIntent(crate::PlaybackIntentEvent),
     /// Direct-daemon pipe startup status; absent for local, Emby-attached,
     /// and non-pipe playback routes.
-    PipePlaybackStatus(crate::ctrl::PipePlaybackStatus),
+    PipePlaybackStatus(crate::PipePlaybackStatus),
     /// Emitted by `RemotePlayer` when the daemon intentionally disconnects this
     /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),
@@ -331,10 +328,10 @@ pub enum PlayerEvent {
     /// Emitted by `RemotePlayer` when the daemon sends redacted Audiobookshelf
     /// progress. Dormant: delivered for a future browse-reconciliation
     /// consumer, but nothing applies it to queue or browse state yet.
-    AudiobookshelfProgress(crate::ctrl::AudiobookshelfProgressEvent),
+    AudiobookshelfProgress(crate::AudiobookshelfProgressEvent),
     /// Book-shaped counterpart to `AudiobookshelfProgress`; keyed by
     /// `library_item_id` only.
-    AudiobookshelfBookProgress(crate::ctrl::AudiobookshelfBookProgressEvent),
+    AudiobookshelfBookProgress(crate::AudiobookshelfBookProgressEvent),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -347,8 +344,8 @@ pub enum PlayerCommand {
     /// rejects any inbound legacy `WireCommand::JumpTo` before conversion.
     JumpTo {
         slot_id: QueueSlotId,
-        request_id: crate::ctrl::PlaybackRequestId,
-        generation: crate::ctrl::PlaybackGeneration,
+        request_id: crate::PlaybackRequestId,
+        generation: crate::PlaybackGeneration,
         /// Resume position for the target slot, resolved by the sender from
         /// the canonical queue at dispatch time. On the playlist (non-active-
         /// file) path, mpv only honors a playlist entry's baked `start=`

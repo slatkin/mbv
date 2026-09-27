@@ -3,16 +3,16 @@ use super::*;
 // External crate imports needed across test files
 use crate::api::EmbyClient;
 use crate::config::{Config, StayAliveQueueState};
-use crate::ctrl::DisconnectReason;
-use crate::ctrl::{
+use crate::player::{
+    AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerOwnerState,
+};
+use crate::service_runtime::SetupGeneration;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
+use mbv_ctrl::DisconnectReason;
+use mbv_ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome,
     WireCommand,
 };
-use crate::player::{
-    AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, Player, PlayerCommand,
-    PlayerEvent, PlayerOwnerState, PlayerStatus, SubtitlePrefs,
-};
-use crate::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_net::mock_http::MockHttp;
 use mbv_net::stream::SocketStream;

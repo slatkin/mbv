@@ -5,7 +5,7 @@ use super::{
     PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
 };
 use crate::api::EmbyClient;
-use crate::ctrl::CtrlEvent;
+use mbv_ctrl::CtrlEvent;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -204,7 +204,7 @@ pub(super) fn handle_queue_source_update(
 fn prepare_replacement_slots(
     ctx: &CtrlContext<'_>,
     items: Vec<QueueItem>,
-    slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+    slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
     has_emby: bool,
 ) -> Result<(Vec<(QueueSlotId, QueueItem)>, usize), String> {
@@ -264,7 +264,7 @@ pub(super) fn handle_queue_replace(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
-    slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+    slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
     new_source: mbv_queue::QueueSource,
 ) {

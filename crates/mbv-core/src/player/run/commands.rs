@@ -5,8 +5,8 @@ use super::{
     start_queue_playback, volume_decision, LoadState, PlaybackOrigin, PlaybackRun, ProgressGuard,
     StopReport,
 };
-use crate::player::{PlayerCommand, PlayerEvent};
 use libmpv2::Mpv;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{ExecSlot, ExecutionSequence};
 use mbv_queue::{QueueItem, QueueSlotId};

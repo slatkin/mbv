@@ -4,8 +4,9 @@ use super::{
     ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole, EmbyOwnerContext, SharedQueueState,
 };
 use crate::api::EmbyClient;
-use crate::ctrl::CtrlEvent;
-use crate::player::{Player, PlayerEvent};
+use crate::player::Player;
+use mbv_ctrl::player::PlayerEvent;
+use mbv_ctrl::CtrlEvent;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

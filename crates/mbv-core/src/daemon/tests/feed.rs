@@ -104,7 +104,7 @@ fn replace_queue_succeeds_unconditionally() {
                 "Video",
                 "Movie",
             )))],
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 44,
                 item: QueueItem::Emby(Box::new(item("replacement", "Video", "Movie"))),
             }],

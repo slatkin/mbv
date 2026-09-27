@@ -102,7 +102,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     }
     broadcast_audiobookshelf_progress(
         ctrl_clients,
-        crate::ctrl::AudiobookshelfProgressEvent {
+        mbv_ctrl::AudiobookshelfProgressEvent {
             library_item_id: update.library_item_id.clone(),
             episode_id: update.episode_id.clone(),
             position_ticks,
@@ -149,7 +149,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     }
     broadcast_audiobookshelf_book_progress(
         ctrl_clients,
-        crate::ctrl::AudiobookshelfBookProgressEvent {
+        mbv_ctrl::AudiobookshelfBookProgressEvent {
             library_item_id: update.library_item_id.clone(),
             position_ticks,
             is_finished: update.is_finished,

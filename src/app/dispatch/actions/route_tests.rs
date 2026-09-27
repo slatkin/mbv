@@ -4,7 +4,7 @@ use crate::app::tests::{
     make_items, make_session,
 };
 use crate::app::{BrowseLevel, ConfirmAction, ContextAction, LibraryTab, PanelFocus};
-use mbv_core::ctrl::CtrlCmd;
+use mbv_ctrl::CtrlCmd;
 use mbv_net::mock_http::MockHttp;
 use rstest::rstest;
 

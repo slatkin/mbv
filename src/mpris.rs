@@ -18,7 +18,7 @@ use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
 
-use mbv_core::player::{PlayerCommand, PlayerStatus};
+use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
 #[cfg(not(test))]
 use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND};
 

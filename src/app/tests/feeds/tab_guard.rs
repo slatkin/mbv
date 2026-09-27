@@ -142,7 +142,7 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
     app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
     match cmd_rx.try_recv().unwrap() {
-        mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
+        mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
             items,
             start_idx: Some(1),
             ..

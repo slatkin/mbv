@@ -1,6 +1,7 @@
 use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use crate::app::state::queue_owner::QueueOrigin;
-use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::player::PlayerProxy;
+use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;

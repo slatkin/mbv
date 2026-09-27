@@ -21,6 +21,8 @@ pub use protocol::{
 mod hello;
 pub use hello::{CtrlAudiobookshelfCapabilities, CtrlCompatibility, CtrlHello};
 
+pub mod player;
+
 #[cfg(test)]
 use crate::player::{PlayerCommand, PlayerStatus};
 

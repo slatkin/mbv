@@ -33,7 +33,7 @@ fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
     assert_eq!(app.player_tab.queue_cursor, 0);
     assert!(app.player_tab.queue.active_slot_id().is_some());
     match commands.recv().unwrap() {
-        mbv_core::player::PlayerCommand::SubmitQueue { items, start_idx } => {
+        mbv_ctrl::player::PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(start_idx, 0);
             assert!(items[0].item.is_audiobookshelf());
         }
@@ -162,7 +162,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
 
     // (a)(b)(c): completion via daemon route.
     app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
-        mbv_core::ctrl::AudiobookshelfProgressEvent {
+        mbv_ctrl::AudiobookshelfProgressEvent {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             position_ticks,

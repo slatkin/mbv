@@ -5,7 +5,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
     let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
-    let status = crate::player::PlayerStatus::default();
+    let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(capable_data) = super::unified_queue_state_for_peer(
@@ -51,7 +51,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let emby = emby_qi("movie1", "Video", "Movie");
     // active index 0 = ABS
     let queue = PlaybackQueue::from_queue_items(vec![abs, emby], Some(0));
-    let status = crate::player::PlayerStatus::default();
+    let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
 
     let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
@@ -95,7 +95,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let source = QueueSource::Unknown;
 
     // Trigger broadcast via UnifiedQueuePlaySlot on the Emby slot (index 1).
-    let emby_slot_id = crate::ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
+    let emby_slot_id = mbv_ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
 
     let mut owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(queue, source),

@@ -6,9 +6,10 @@ use super::{
     DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
 };
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient};
-use crate::ctrl::{CtrlEvent, PlaybackGeneration};
 use crate::daemon::{ClientRegistry, CtrlClients};
-use crate::player::{Player, PlayerEvent, PlayerOwnerState};
+use crate::player::{Player, PlayerOwnerState};
+use mbv_ctrl::player::PlayerEvent;
+use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_queue::PlaybackQueue;
@@ -195,7 +196,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         client_locked.config.use_mpv_config,
         client_locked.config.no_scripts,
         false,
-        crate::player::SubtitlePrefs::default(),
+        mbv_ctrl::player::SubtitlePrefs::default(),
         player_tx,
         ws_send_tx.clone(),
     )

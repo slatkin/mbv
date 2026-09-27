@@ -77,7 +77,7 @@ fn test_loop_with_queue(
     }
 }
 
-fn current_run(event_loop: &DaemonLoop) -> crate::ctrl::PlaybackGeneration {
+fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
     event_loop.player.status.lock().unwrap().sequence_generation
 }
 
@@ -270,7 +270,7 @@ fn stopped_matching_pending_idle_load_commits_and_persists_once() {
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 7,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
 }
@@ -320,7 +320,7 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 8,
-            result: crate::ctrl::QueueLoadResult::Rejected { .. },
+            result: mbv_ctrl::QueueLoadResult::Rejected { .. },
         }
     ));
 }
@@ -488,7 +488,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 5,
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,
                 item: emby_qi("new", "Video", "Movie"),
             }],
@@ -514,7 +514,7 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
         recv_event(&reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 5,
-            result: crate::ctrl::QueueLoadResult::Accepted,
+            result: mbv_ctrl::QueueLoadResult::Accepted,
         }
     ));
 }

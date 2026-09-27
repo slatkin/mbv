@@ -3,7 +3,7 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use std::time::{Duration, Instant};
 

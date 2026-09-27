@@ -67,7 +67,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
     let id = clients.connect(
         tx,
         CtrlTransport::Local,
-        crate::ctrl::CtrlAudiobookshelfCapabilities {
+        mbv_ctrl::CtrlAudiobookshelfCapabilities {
             queue: true,
             progress: true,
             book_queue: true,

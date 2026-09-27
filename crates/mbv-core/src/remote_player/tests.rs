@@ -1,0 +1,19 @@
+use super::RemotePlayer;
+use mbv_ctrl::player::PlayerCommand;
+
+#[test]
+fn local_only_command_is_refused_without_delivery_or_termination() {
+    // End-to-end through the remote-player send path: the send reports the
+    // refusal (`false`), delivers nothing, and the caller keeps running.
+    let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    assert!(!remote.send_command(PlayerCommand::JumpTo {
+        slot_id: mbv_queue::QueueSlotId::from_raw(3),
+        request_id: 9,
+        generation: 9,
+        resume_ticks: None,
+    }));
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "refused command must not be delivered"
+    );
+}

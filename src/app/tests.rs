@@ -212,7 +212,8 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn make_built_app() -> App {
-    use mbv_core::player::{PlayerProxy, PlayerStatus};
+    use mbv_core::player::PlayerProxy;
+    use mbv_ctrl::player::PlayerStatus;
     use std::sync::Mutex;
 
     let status = Arc::new(Mutex::new(PlayerStatus {
@@ -293,7 +294,7 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
 pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -318,7 +319,7 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
 pub(crate) fn make_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -350,7 +351,7 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
 
 pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -380,17 +381,17 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
 pub(crate) fn emby_unified_state(
     items: &[EmbyItem],
     active_index: usize,
-) -> mbv_core::ctrl::UnifiedQueueStateData {
-    let slots: Vec<mbv_core::ctrl::UnifiedQueueSlot> = items
+) -> mbv_ctrl::UnifiedQueueStateData {
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
         .iter()
         .enumerate()
-        .map(|(i, item)| mbv_core::ctrl::UnifiedQueueSlot {
+        .map(|(i, item)| mbv_ctrl::UnifiedQueueSlot {
             slot_id: (100 + i) as u64,
             item: mbv_queue::QueueItem::Emby(Box::new(item.clone())),
         })
         .collect();
-    mbv_core::ctrl::UnifiedQueueStateData {
-        status: mbv_core::player::PlayerStatus::default(),
+    mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,
         revision: 1,

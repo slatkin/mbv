@@ -69,7 +69,7 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
     assert!(
         matches!(
             rx.try_recv(),
-            Ok(mbv_core::player::PlayerCommand::SeekAbsolute(120.0))
+            Ok(mbv_ctrl::player::PlayerCommand::SeekAbsolute(120.0))
         ),
         "the stable book-qualified target must resolve the chapter's own start"
     );

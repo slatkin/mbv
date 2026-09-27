@@ -1,6 +1,6 @@
 use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
-use crate::ctrl::CtrlEvent;
 use crate::player::Player;
+use mbv_ctrl::CtrlEvent;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
@@ -25,7 +25,7 @@ pub(in crate::daemon) fn persist_stay_alive_owner_queue(
 pub(crate) fn project_queue_state(
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
-    player_status: &crate::player::PlayerStatus,
+    player_status: &mbv_ctrl::player::PlayerStatus,
 ) -> mbv_queue::QueueState {
     use std::collections::HashMap;
 
@@ -81,17 +81,17 @@ pub(crate) fn project_queue_state(
 /// cleared too if the active slot was itself dropped, so a peer never
 /// receives an `active_slot` pointing at a slot missing from `slots`.
 pub(crate) fn unified_queue_state_for_peer(
-    status: &crate::player::PlayerStatus,
+    status: &mbv_ctrl::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
     observed_active_slot: Option<mbv_queue::QueueSlotId>,
-    in_flight_transition: Option<crate::ctrl::TransitionSummary>,
-    queued_latest_transition: Option<crate::ctrl::TransitionSummary>,
+    in_flight_transition: Option<mbv_ctrl::TransitionSummary>,
+    queued_latest_transition: Option<mbv_ctrl::TransitionSummary>,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
 ) -> CtrlEvent {
-    let slots: Vec<crate::ctrl::UnifiedQueueSlot> = queue
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = queue
         .slots()
         .iter()
         .filter(|s| match &s.item {
@@ -99,8 +99,8 @@ pub(crate) fn unified_queue_state_for_peer(
             QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => supports_abs_book_queue,
             QueueItem::Emby(_) | QueueItem::Feed(_) => true,
         })
-        .map(|s| crate::ctrl::UnifiedQueueSlot {
-            slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
+        .map(|s| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(s.slot_id),
             item: s.item.clone(),
         })
         .collect();
@@ -112,9 +112,9 @@ pub(crate) fn unified_queue_state_for_peer(
     // so peers don't strand their now-playing highlight on a stale row.
     let active_slot = observed_active_slot
         .or_else(|| status.active.then(|| queue.active_slot_id()).flatten())
-        .map(crate::ctrl::slot_id_to_u64)
+        .map(mbv_ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
-    CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
+    CtrlEvent::UnifiedQueueState(mbv_ctrl::UnifiedQueueStateData {
         status: status.clone(),
         slots,
         active_slot,

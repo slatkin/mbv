@@ -3,7 +3,6 @@ pub mod applog;
 pub mod audiobookshelf;
 pub mod cast;
 pub mod config;
-pub mod ctrl;
 pub mod daemon;
 pub mod feed_entry_state;
 pub mod player;

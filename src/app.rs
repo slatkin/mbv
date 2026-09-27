@@ -59,7 +59,7 @@ use self::state::types::settings::{PanelFocus, PanelMode, SettingKey};
 pub(crate) use self::state::types::sidebar::SidebarId;
 use self::state::types::tab_selection::TabSelection;
 #[cfg(test)]
-use mbv_core::player::PlayerEvent;
+use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
 use mbv_emby_model::EmbyItem;
 #[cfg(test)]

@@ -104,12 +104,12 @@ fn unified_queue_state_data_round_trips() {
         revision: 5,
         source: QueueSource::Unknown,
         lineage: QueueLineage(42),
-        in_flight_transition: Some(crate::ctrl::TransitionSummary {
+        in_flight_transition: Some(crate::TransitionSummary {
             request_id: 7,
             generation: 3,
             target_slot: 2,
         }),
-        queued_latest_transition: Some(crate::ctrl::TransitionSummary {
+        queued_latest_transition: Some(crate::TransitionSummary {
             request_id: 8,
             generation: 3,
             target_slot: 1,

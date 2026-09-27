@@ -13,7 +13,7 @@ use crate::app::state::types::playback::PlaybackState;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
-use mbv_core::player::PlayerEvent;
+use mbv_ctrl::player::PlayerEvent;
 
 fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {

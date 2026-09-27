@@ -127,7 +127,7 @@ fn disconnect_abs_rejects_non_interactive_terminal_without_touching_state() {
 
 #[test]
 fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
-    use mbv_core::ctrl::{CtrlEvent, ServiceSetupRejection};
+    use mbv_ctrl::{CtrlEvent, ServiceSetupRejection};
 
     assert_eq!(
         reconcile_event_outcome(&CtrlEvent::ServiceSetupApplied {
@@ -148,7 +148,7 @@ fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
     );
     assert_eq!(
         reconcile_event_outcome(&CtrlEvent::StatusOnly(
-            mbv_core::player::PlayerStatus::default()
+            mbv_ctrl::player::PlayerStatus::default()
         )),
         None
     );

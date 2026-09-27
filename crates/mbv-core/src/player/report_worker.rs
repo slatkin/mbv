@@ -1,5 +1,5 @@
-use super::PlayerStatus;
 use crate::api::EmbyClient;
+use mbv_ctrl::player::PlayerStatus;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{

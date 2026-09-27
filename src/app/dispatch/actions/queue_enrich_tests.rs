@@ -150,7 +150,7 @@ fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
     assert!(
         matches!(
             cmd_rx.try_recv(),
-            Ok(crate::player::PlayerCommand::QueueRemove(_))
+            Ok(mbv_ctrl::player::PlayerCommand::QueueRemove(_))
         ),
         "pruning a live playback queue slot must also remove it from the player's private queue copy"
     );

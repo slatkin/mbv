@@ -1,8 +1,8 @@
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_items, make_local_daemon_app_stub, make_session};
 use crate::app::QueueScope;
-use mbv_core::player::CONNECTION_LOST_MESSAGE;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use std::sync::mpsc;
 
 #[test]
@@ -39,7 +39,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
 
     let mut harness = TickHarness::new(app);
     event_tx
-        .send(mbv_core::player::PlayerEvent::RemoteDisconnected(
+        .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
             CONNECTION_LOST_MESSAGE.to_string(),
         ))
         .expect("send remote disconnect event");

@@ -1,7 +1,7 @@
 use super::*;
 
-use crate::ctrl::{CtrlCmd, CtrlCompatibility};
 use crate::remote_player::RemotePlayer;
+use mbv_ctrl::{CtrlCmd, CtrlCompatibility};
 use mbv_queue::AudiobookshelfQueueItem;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
@@ -60,7 +60,7 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
 #[test]
 fn owner_audio_only_reflects_remote_capability_and_local_player_is_capable() {
     let local = PlayerProxy::stub(std::sync::Arc::new(std::sync::Mutex::new(
-        crate::player::PlayerStatus::default(),
+        mbv_ctrl::player::PlayerStatus::default(),
     )));
     assert!(!local.owner_is_audio_only());
 

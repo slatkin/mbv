@@ -3,8 +3,8 @@ use super::{
     DaemonPlayerOwner, EmbyOwnerContext,
 };
 use crate::config::EmbySetup;
-use crate::ctrl::ServiceSetupRejection;
 use crate::player::{Player, PlayerOwnerState};
+use mbv_ctrl::ServiceSetupRejection;
 use mbv_queue::ExecSlot;
 use mbv_queue::QueueSource;
 use mbv_queue::{PlaybackQueue, QueueItem};

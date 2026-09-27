@@ -1,5 +1,5 @@
 use ksni::blocking::TrayMethods;
-use mbv_core::player::{PlayerCommand, PlayerStatus};
+use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 

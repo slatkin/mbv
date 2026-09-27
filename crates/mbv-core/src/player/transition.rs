@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::ctrl::{PlaybackGeneration, PlaybackRequestId};
+use mbv_ctrl::{PlaybackGeneration, PlaybackRequestId};
 use mbv_queue::QueueSlotId;
 
 /// Deadline for the Playback run to confirm an in-flight transition (via
@@ -46,8 +46,8 @@ impl Transition {
     /// caller from the canonical queue at dispatch time (the Playback run's
     /// own queue mirror is not kept current with in-session progress).
     #[must_use]
-    pub fn into_jump(self, resume_ticks: Option<i64>) -> crate::player::PlayerCommand {
-        crate::player::PlayerCommand::JumpTo {
+    pub fn into_jump(self, resume_ticks: Option<i64>) -> mbv_ctrl::player::PlayerCommand {
+        mbv_ctrl::player::PlayerCommand::JumpTo {
             slot_id: self.target,
             request_id: self.request_id,
             generation: self.generation,
@@ -233,8 +233,8 @@ impl OwnerTransitionState {
     pub fn summaries(
         &self,
     ) -> (
-        Option<crate::ctrl::TransitionSummary>,
-        Option<crate::ctrl::TransitionSummary>,
+        Option<mbv_ctrl::TransitionSummary>,
+        Option<mbv_ctrl::TransitionSummary>,
     ) {
         (
             self.in_flight.map(transition_summary),
@@ -243,8 +243,8 @@ impl OwnerTransitionState {
     }
 }
 
-fn transition_summary(t: Transition) -> crate::ctrl::TransitionSummary {
-    crate::ctrl::TransitionSummary {
+fn transition_summary(t: Transition) -> mbv_ctrl::TransitionSummary {
+    mbv_ctrl::TransitionSummary {
         request_id: t.request_id,
         generation: t.generation,
         target_slot: t.target.raw(),

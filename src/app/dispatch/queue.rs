@@ -5,7 +5,7 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
@@ -53,10 +53,7 @@ impl App {
             // Prefer the unified remote path; the in-process command is now
             // slot-addressed too.
             if let Some(sid) = slot_id {
-                if !self
-                    .player
-                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(sid))
-                {
+                if !self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid)) {
                     self.player.send_command(PlayerCommand::QueueRemove(sid));
                 }
             }
@@ -194,7 +191,7 @@ impl App {
         if sent_queue_remove {
             let raw_slot_ids: Vec<u64> = removed_slots
                 .iter()
-                .map(|slot_id| mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
             // A remote owner takes the whole range in one edit. A local owner
             // has no batch command and keeps one player command per slot; its
@@ -307,7 +304,7 @@ impl App {
             // slot-addressed (source) with an ordinal destination.
             let sent_unified = self
                 .player
-                .queue_move_slot(mbv_core::ctrl::slot_id_to_u64(slot_id), to);
+                .queue_move_slot(mbv_ctrl::slot_id_to_u64(slot_id), to);
             if !sent_unified {
                 self.player
                     .send_command(PlayerCommand::QueueMove(slot_id, to));

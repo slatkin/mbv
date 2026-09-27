@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::ctrl::{CtrlAudiobookshelfCapabilities, CtrlEvent, DisconnectReason};
+use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlEvent, DisconnectReason};
 
 pub(crate) type CtrlClientId = u64;
 pub(crate) type CtrlSender = mpsc::Sender<CtrlOutbound>;

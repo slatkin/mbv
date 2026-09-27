@@ -70,7 +70,7 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
 
     let mut replacement = None;
     for command in command_rx.try_iter() {
-        if let mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } = command {
+        if let mbv_ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } = command {
             replacement = Some(slots);
             break;
         }

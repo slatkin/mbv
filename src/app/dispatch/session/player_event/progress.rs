@@ -1,5 +1,5 @@
 use crate::app::App;
-use mbv_core::ctrl::{AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent};
+use mbv_ctrl::{AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent};
 
 impl App {
     pub(super) fn handle_audiobookshelf_progress(&mut self, ev: &AudiobookshelfProgressEvent) {

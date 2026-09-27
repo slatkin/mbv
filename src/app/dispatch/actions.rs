@@ -3,8 +3,8 @@ use crate::app::infra::ui_util::natural_sort_key;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
-use mbv_core::player::PlayerCommand;
-pub(in crate::app) use mbv_core::player::CONNECTION_LOST_MESSAGE;
+use mbv_ctrl::player::PlayerCommand;
+pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::{QueueItem, QueueItemContentId};

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ctrl::{
+use crate::player::{PlayerEvent, PlayerStatus};
+use crate::{
     CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, UnifiedQueueStateData,
 };
-use crate::player::{PlayerEvent, PlayerStatus};
 use mbv_queue::ServiceKind;
 
 #[derive(Debug, Serialize, Deserialize)]

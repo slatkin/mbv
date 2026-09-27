@@ -4,8 +4,9 @@ use crate::player::tracks::{parse_tracks, select_tracks, TrackInfo};
 use crate::player::{
     active_item_state, advance_decision, queue_next_up_decision, resolve_jump_target,
     seek_decision, standalone_next_up_decision, volume_decision, AdvanceDecisionInput,
-    CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitleChoice, SubtitlePrefs,
+    CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitlePrefs,
 };
+use mbv_ctrl::player::SubtitleChoice;
 
 type AudioTracks = Vec<(i64, String)>;
 type SubtitleTracks = Vec<(i64, String, bool)>;

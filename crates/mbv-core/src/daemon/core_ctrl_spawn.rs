@@ -1,7 +1,7 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
-use crate::ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use crate::daemon::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
+use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use mbv_net::stream::SocketStream;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc;
@@ -49,7 +49,7 @@ fn ctrl_client_capabilities(
 }
 
 fn send_initial_queue_state(
-    player_status: &Arc<Mutex<crate::player::PlayerStatus>>,
+    player_status: &Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: &SharedQueueState,
     ev_tx: &mpsc::Sender<CtrlOutbound>,
     supports_abs_queue: bool,
@@ -82,7 +82,7 @@ pub(in crate::daemon) fn spawn_ctrl_client(
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientRegistry,
     control_credential: Option<String>,
-    player_status: Arc<Mutex<crate::player::PlayerStatus>>,
+    player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
     audio_only: bool,
 ) {
@@ -95,12 +95,12 @@ pub(in crate::daemon) fn spawn_ctrl_client(
     if control_credential.is_none() {
         daemon_hello
             .capabilities
-            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
+            .retain(|cap| cap != mbv_ctrl::CTRL_CAP_CONTROL_AUTH);
     }
     if audio_only {
         daemon_hello
             .capabilities
-            .push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+            .push(mbv_ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
     }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         let _ = ev_tx.send(CtrlOutbound::Event(hello_json));

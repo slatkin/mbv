@@ -374,7 +374,7 @@ fn every_setup_rejection_reason_is_wire_representable() {
         );
     }
 }
-use crate::ctrl::ServiceSetupRejection;
+use mbv_ctrl::ServiceSetupRejection;
 
 #[test]
 fn daemon_install_audiobookshelf_context_enables_player_admission() {

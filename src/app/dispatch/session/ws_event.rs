@@ -1,5 +1,5 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 #[cfg(test)]
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;
@@ -168,7 +168,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
-    use mbv_core::player::{PlayerCommand, PlayerStatus};
+    use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
     use rstest::rstest;
     use std::sync::mpsc::Receiver;
 

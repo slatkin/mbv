@@ -48,7 +48,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     assert!(
         !commands
             .iter()
-            .any(|command| matches!(command, mbv_core::ctrl::CtrlCmd::UnifiedAdoptQueue { .. })),
+            .any(|command| matches!(command, mbv_ctrl::CtrlCmd::UnifiedAdoptQueue { .. })),
         "Client must not send queue adoption"
     );
     let restored = crate::config::load_queue_state().expect("saved snapshot remains");
@@ -155,8 +155,8 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     // Browse reconcile: simulate the progress event the daemon sends when a
     // client attaches (Decision-2 apply path).
     let generation = app.audiobookshelf_runtime.generation();
-    app.handle_player_event(mbv_core::player::PlayerEvent::AudiobookshelfProgress(
-        mbv_core::ctrl::AudiobookshelfProgressEvent {
+    app.handle_player_event(mbv_ctrl::player::PlayerEvent::AudiobookshelfProgress(
+        mbv_ctrl::AudiobookshelfProgressEvent {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             position_ticks: acknowledged_position_ticks,

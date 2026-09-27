@@ -9,11 +9,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::ctrl::{
+use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
+use mbv_ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
     UnifiedQueueStateData,
 };
-use crate::player::{PlayerEvent, PlayerStatus};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 
@@ -388,7 +388,7 @@ fn connect_stream(
     let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
+    let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
@@ -573,7 +573,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
         let _ = event_tx.send(PlayerEvent::DaemonShutdownAnnounced);
     } else if !disconnect_notified.swap(true, Ordering::SeqCst) {
         let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-            crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+            mbv_ctrl::player::CONNECTION_LOST_MESSAGE.to_string(),
         ));
     }
 }
@@ -594,7 +594,7 @@ fn write_remote_commands(
             disconnected.store(true, Ordering::SeqCst);
             if !disconnect_notified.swap(true, Ordering::SeqCst) {
                 let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-                    crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+                    mbv_ctrl::player::CONNECTION_LOST_MESSAGE.to_string(),
                 ));
             }
             break;

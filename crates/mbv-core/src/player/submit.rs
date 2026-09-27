@@ -303,7 +303,7 @@ struct PlayerThreadStart {
     initial_volume: u8,
     items: Vec<ExecSlot>,
     start_idx: usize,
-    run_identity: crate::ctrl::PlaybackGeneration,
+    run_identity: mbv_ctrl::PlaybackGeneration,
     server_url: String,
     token: String,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,

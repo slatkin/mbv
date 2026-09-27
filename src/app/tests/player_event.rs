@@ -1,5 +1,5 @@
 use crate::app::tests::*;
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 
 #[test]
 fn intro_started_auto_skips_when_client_prefers_it() {

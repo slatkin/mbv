@@ -3,7 +3,7 @@ use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
-use mbv_core::player::PlayerCommand;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ExecSlot;
 use mbv_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
@@ -139,10 +139,7 @@ impl App {
     /// Adopt the Stay-alive owner's snapshot source and reconcile a pending
     /// playlist-save source update (design D6). `ThisProcess` owns its source
     /// directly, so it adopts nothing.
-    pub(in crate::app) fn adopt_owner_source(
-        &mut self,
-        unified: &mbv_core::ctrl::UnifiedQueueStateData,
-    ) {
+    pub(in crate::app) fn adopt_owner_source(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) {
         match self.local_queue_owner() {
             LocalQueueOwner::ThisProcess => {}
             LocalQueueOwner::StayAlive => {
@@ -304,7 +301,7 @@ impl App {
             for slot_id in &result.pruned_slots {
                 if !self
                     .player
-                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(*slot_id))
                 {
                     self.player
                         .send_command(PlayerCommand::QueueRemove(*slot_id));
