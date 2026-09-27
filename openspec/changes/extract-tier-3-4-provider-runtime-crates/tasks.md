@@ -172,7 +172,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
 
 ## 5. `mbv-remote-player`
 
-- [ ] 5.1 Create `crates/mbv-remote-player`. Deps: `mbv-ctrl`, `mbv-config`,
+- [x] 5.1 Create `crates/mbv-remote-player`. Deps: `mbv-ctrl`, `mbv-config`,
   `mbv-queue`, `mbv-emby`, `mbv-emby-model`, `mbv-net`, `serde_json`, `log`,
   plus others only if the compiler asks. `[features] test = []` for the
   existing `#[cfg(any(test, feature = "test"))]` items (`stub`,
@@ -184,7 +184,7 @@ outside `#[cfg(test)]` (e.g. `mbv-net/test`).
   `cargo nextest run -p mbv-remote-player` passes and
   `rg 'mbv_core|crate::(player|daemon|service_runtime)' crates/mbv-remote-player`
   is empty.
-- [ ] 5.2 Delete `pub mod remote_player;` from `mbv-core/src/lib.rs`. Add
+- [x] 5.2 Delete `pub mod remote_player;` from `mbv-core/src/lib.rs`. Add
   `mbv-remote-player` to the `[dependencies]` of `mbv-core` and the TUI. Add
   it with `features = ["test"]` to the `[dev-dependencies]` of the TUI and
   `mbv-core`. Wire `mbv-core`'s `test` feature to
