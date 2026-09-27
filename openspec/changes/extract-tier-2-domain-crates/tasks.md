@@ -88,14 +88,14 @@ Grouped imports that mix moved and unmoved names (e.g.
 
 ## 3. Cycle cuts inside `mbv-core`
 
-- [ ] 3.1 `git mv crates/mbv-core/src/playback/transition.rs
+- [x] 3.1 `git mv crates/mbv-core/src/playback/transition.rs
   crates/mbv-core/src/player/transition.rs`; declare `pub mod transition;` in
   `player.rs` (no `pub use`); remove it from `playback.rs` and delete the
   `pub use playback::transition as playback_transition;` line in `lib.rs`.
   Rewrite `playback_transition::` and `playback::{…Transition…}` references
   (~22 files) to `player::transition::`. Verify: `cargo check -p mbv-core --all-targets`
   and `cargo check -p mbv --all-targets` succeed.
-- [ ] 3.2 Split `crates/mbv-core/src/player/types.rs` at `const LANGS` (~line
+- [x] 3.2 Split `crates/mbv-core/src/player/types.rs` at `const LANGS` (~line
   416): everything from `LANGS` to end of file (track parsing/selection,
   `lang_code_to_name`, `refresh_tracks`, their helpers and any tests of them)
   moves to a new `player/tracks.rs`, declared `mod tracks;` in `player.rs`, with
@@ -104,7 +104,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   unused. Rewrite `types::{parse_tracks, …}` imports in `player/` to `tracks::`.
   Verify: `rg 'Mpv' crates/mbv-core/src/player/types.rs` shows only the
   `MpvQuit` variant; `cargo check -p mbv-core --all-targets` succeeds.
-- [ ] 3.3 Move `resolve_library_route` (and its doc comment) from
+- [x] 3.3 Move `resolve_library_route` (and its doc comment) from
   `config/types_paths.rs` to `remote_player/connect/endpoint.rs`, exported where
   `DaemonEndpoint` is (`pub use connect::{DaemonEndpoint, resolve_library_route}`
   in `remote_player.rs`). Move its test case from `config/tests/settings.rs` to
@@ -112,7 +112,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `remote_player::resolve_library_route`. Verify: `rg 'remote_player'
   crates/mbv-core/src/config` is empty; `cargo check -p mbv-core -p mbv
   --all-targets` succeeds.
-- [ ] 3.4 Move `commit_audiobookshelf_candidate`,
+- [x] 3.4 Move `commit_audiobookshelf_candidate`,
   `repair_audiobookshelf_candidate`, `replace_audiobookshelf_candidate` from
   `config/audiobookshelf_lifecycle.rs` into `audiobookshelf.rs` (bodies
   unchanged; they now call `crate::config::persist_audiobookshelf_setup_and_secret`
@@ -123,7 +123,7 @@ Grouped imports that mix moved and unmoved names (e.g.
   `audiobookshelf::…`. Verify: `rg 'crate::audiobookshelf'
   crates/mbv-core/src/config` is empty; `cargo check -p mbv-core -p mbv
   --all-targets` succeeds.
-- [ ] 3.5 Delete `pub use crate::config::Config;` from `api/types.rs` (zero
+- [x] 3.5 Delete `pub use crate::config::Config;` from `api/types.rs` (zero
   users). Verify: gate passes and `rg 'crate::(remote_player|audiobookshelf|api)'
   crates/mbv-core/src/config` is empty.
 
