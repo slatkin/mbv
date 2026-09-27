@@ -10,7 +10,7 @@ use ratatui::Frame;
 const LOCAL_NO_ROUTE: &str = "Local (no route)";
 
 pub(in crate::app) fn save_route_config(cfg: &crate::config::Config) -> Result<(), String> {
-    crate::config::save_config_settings(cfg)
+    crate::config::save_config_section(cfg, mbv_config::ConfigSection::LibraryRoutes)
 }
 
 pub(in crate::app) struct LibraryRoutesRenderModel<'a> {

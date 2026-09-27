@@ -89,8 +89,8 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
     })
 }
 
-pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
-    mbv_config::save_config_settings(cfg)
+pub fn save_config_section(cfg: &Config, section: mbv_config::ConfigSection) -> Result<(), String> {
+    mbv_config::save_config_section(cfg, section)
 }
 
 pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {

@@ -29,11 +29,14 @@ use mbv_queue::{QueueItem, QueueLineage, QueueSlotId, QueueSource};
 /// client because the removed required fields fail deserialization — silently,
 /// since undeserializable ctrl lines are skipped without a log.
 ///
-/// Version 11 bumps for the `run_identity` tuple→scalar wire-shape change in
-/// `PlayerEvent::Stopped`/`TrackCompleted`; a v10 peer's `[0, gen]` array fails
-/// to deserialize (the field is dropped silently by serde default) so a
-/// mismatched pair must be rejected at handshake.
-pub const CTRL_PROTOCOL_VERSION: u32 = 11;
+/// Version 11 briefly bumped for the `run_identity` tuple→scalar wire-shape
+/// change in `PlayerEvent::Stopped`/`TrackCompleted`; the bump was withdrawn
+/// because the dropped tuple slot was a hardcoded `PlaybackRequestId` of 0 —
+/// dead data — so the wire keeps the protocol-10 pair shape and protocol 10
+/// stays current. A bare scalar is still accepted on decode. Protocol bumps
+/// require explicit user approval; they are never a ride-along with a
+/// refactor.
+pub const CTRL_PROTOCOL_VERSION: u32 = 10;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";

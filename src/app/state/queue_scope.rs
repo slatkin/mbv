@@ -377,6 +377,13 @@ impl App {
         Some(removed.item.id().to_string())
     }
 
+    /// Connected to an mbv daemon/client: the peer's queue is the displayed
+    /// queue, empty or not. A Local-endpoint attach has no remote tab, so the
+    /// scope resolution lands back on the adopted unified Local view.
+    pub(in crate::app) fn display_peer_queue_on_connect(&mut self) {
+        self.set_queue_scope(QueueScope::Remote);
+    }
+
     pub(in crate::app) fn set_queue_scope(&mut self, scope: QueueScope) {
         let resolved = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
             QueueScope::Remote

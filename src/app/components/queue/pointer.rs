@@ -5,7 +5,6 @@ use crate::app::components::media_list::{MediaListSurfaceInput, RowIntent};
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture};
 use crate::app::components::msg::{Msg, QueueRequest, ShellRequest, TerminalObserverEvent};
 use crate::app::state::types::context_menu::ContextMenuTargets;
-use crate::app::state::types::playback::QueueScope;
 
 use super::QueueComponent;
 
@@ -46,11 +45,6 @@ impl QueueComponent {
     }
 
     fn handle_click(&mut self, at: Position, modifier: ClickModifier) -> Option<Msg> {
-        if let Some(scope) = self.claim_scope_pill(at) {
-            return Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
-                scope,
-            })));
-        }
         if !self.carrier.claims_current_point(at) {
             return None;
         }
@@ -74,11 +68,6 @@ impl QueueComponent {
     }
 
     fn handle_double_click(&mut self, at: Position) -> Option<Msg> {
-        if let Some(scope) = self.claim_scope_pill(at) {
-            return Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
-                scope,
-            })));
-        }
         if !self.carrier.claims_current_point(at) {
             return None;
         }
@@ -121,20 +110,5 @@ impl QueueComponent {
             slot_id: grabbed,
             onto: resolved,
         }))
-    }
-
-    /// If `at` lands on a scope pill, switch the component's own scope and
-    /// reset its scroll, and return the new scope for the shell dispatch.
-    fn claim_scope_pill(&mut self, at: Position) -> Option<QueueScope> {
-        let scope = if self.scope_local.is_some_and(|r| r.contains(at)) {
-            QueueScope::Local
-        } else if self.scope_remote.is_some_and(|r| r.contains(at)) {
-            QueueScope::Remote
-        } else {
-            return None;
-        };
-        self.scope = scope;
-        self.carrier.set_scroll(0);
-        Some(scope)
     }
 }

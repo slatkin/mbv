@@ -103,6 +103,66 @@ fn old_track_completed_player_event_defaults_progress_report_accepted() {
     }
 }
 
+// `run_identity` keeps the protocol-10 `(request id, generation)` pair on the
+// wire (the request slot is a hardcoded 0, dead data) while the model carries
+// the bare generation; a bare scalar also decodes so peers built while the
+// wire briefly carried the scalar still work.
+#[test]
+fn stopped_player_event_wire_keeps_the_protocol_10_run_identity_pair() {
+    let event = CtrlEvent::Player(crate::player::PlayerEvent::Stopped {
+        slot_id: Some(mbv_queue::QueueSlotId::from_raw(7)),
+        run_identity: 42,
+        position_ticks: 123,
+        played: false,
+        consume: false,
+        progress_report_accepted: true,
+        error: None,
+    });
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(
+        json.contains("\"run_identity\":[0,42]"),
+        "wire shape changed: {json}"
+    );
+
+    let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlEvent::Player(crate::player::PlayerEvent::Stopped { run_identity, .. }) => {
+            assert_eq!(run_identity, 42);
+        }
+        _ => panic!("expected stopped player event"),
+    }
+}
+
+#[test]
+fn stopped_player_event_accepts_the_bare_scalar_run_identity() {
+    let event: CtrlEvent = serde_json::from_str(
+        r#"{"Player":{"Stopped":{"run_identity":9,"idx":0,"position_ticks":123,"played":false,"consume":false,"error":null}}}"#,
+    )
+    .unwrap();
+
+    match event {
+        CtrlEvent::Player(crate::player::PlayerEvent::Stopped { run_identity, .. }) => {
+            assert_eq!(run_identity, 9);
+        }
+        _ => panic!("expected stopped player event"),
+    }
+}
+
+#[test]
+fn track_completed_player_event_accepts_the_protocol_10_run_identity_pair() {
+    let event: CtrlEvent = serde_json::from_str(
+        r#"{"Player":{"TrackCompleted":{"run_identity":[0,5],"slot_id":1,"position_ticks":456,"played":true,"consume":true}}}"#,
+    )
+    .unwrap();
+
+    match event {
+        CtrlEvent::Player(crate::player::PlayerEvent::TrackCompleted { run_identity, .. }) => {
+            assert_eq!(run_identity, 5);
+        }
+        _ => panic!("expected track completed player event"),
+    }
+}
+
 /// Returns the top-level (externally-tagged) JSON key for a serialized
 /// `WireCommand`, i.e. the pinned wire tag.
 fn wire_tag(cmd: &WireCommand) -> String {

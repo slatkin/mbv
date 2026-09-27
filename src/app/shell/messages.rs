@@ -158,7 +158,6 @@ impl Model {
             ShellRequest::DismissSettings => {}
             request @ (ShellRequest::HomeRowClick { .. }
             | ShellRequest::HomeRowActivate { .. }
-            | ShellRequest::QueueScopeClick { .. }
             | ShellRequest::QueueRowClick { .. }
             | ShellRequest::QueueRowActivate { .. }
             | ShellRequest::ResizeListPaneLive(_)
@@ -187,10 +186,6 @@ impl Model {
                 if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_play_target(item, from_cw);
                 }
-            }
-            ShellRequest::QueueScopeClick { scope } => {
-                self.app.handle_mouse_selector_click_queue(scope);
-                self.queue_click_reproject();
             }
             ShellRequest::QueueRowClick { slot_id } => {
                 self.app.handle_mouse_single_click_queue(slot_id);

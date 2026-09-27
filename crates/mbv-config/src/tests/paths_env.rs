@@ -3,9 +3,10 @@ use crate::{
     cache_dir, config_path, control_socket_path, data_dir_system_or_local, home_latest_launch_path,
     is_system_instance, load_home_latest_launch, load_last_remote_connection,
     load_last_remote_connection_at, load_queue_state, mpv_ipc_path, parse_config, queue_state_path,
-    save_config_settings_at, save_home_latest_launch, save_last_remote_connection,
-    save_last_remote_connection_at, save_queue_state, write_config_text_at, Config,
-    LastRemoteConnection, TestStateDirGuard, DEFAULT_SYSTEM_DAEMON_TCP_LISTEN,
+    save_config_section_at, save_config_settings_at, save_home_latest_launch,
+    save_last_remote_connection, save_last_remote_connection_at, save_queue_state,
+    write_config_text_at, Config, ConfigSection, LastRemoteConnection, TestStateDirGuard,
+    DEFAULT_SYSTEM_DAEMON_TCP_LISTEN,
 };
 #[cfg(test)]
 use mbv_queue::{QueueSource, QueueState};
@@ -251,6 +252,42 @@ fn save_config_settings_reports_write_failure_with_path() {
     let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
     assert!(error.contains("write"));
     assert!(error.contains(path.with_extension("toml.tmp").to_str().unwrap()));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+// A section-scoped save must not erase sections another concurrently running
+// client wrote after this client loaded its snapshot (stay-alive keeps a
+// background client alive next to the foreground one). Regression coverage
+// for the multi-client config.toml clobbering bug: a full rewrite from a
+// stale snapshot removed `[audiobookshelf]` and reset `[queue]`.
+#[test]
+fn save_config_section_preserves_sections_written_by_another_client() {
+    let dir = std::env::temp_dir().join(format!("mbv-section-save-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("config.toml");
+    std::fs::write(
+        &path,
+        "[audiobookshelf]\nurl = \"http://abs.example\"\nrevision = 3\n\n[queue]\nalways_play_next = true\n",
+    )
+    .unwrap();
+    let cfg = Config {
+        subtitle_mode: "Always".to_string(),
+        ..Default::default()
+    };
+    save_config_section_at(&cfg, &path, ConfigSection::Playback).unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        saved.contains("[audiobookshelf]"),
+        "lost foreign section: {saved}"
+    );
+    assert!(
+        saved.contains("always_play_next = true"),
+        "clobbered foreign queue section: {saved}"
+    );
+    assert!(
+        saved.contains("subtitle_mode = \"Always\""),
+        "missing own write: {saved}"
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }
 

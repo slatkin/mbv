@@ -112,7 +112,9 @@ impl App {
             .mode
             .clone_from(&new_mode);
         self.push_subtitle_prefs();
-        if let Err(e) = crate::config::save_config_settings(&cfg) {
+        if let Err(e) =
+            crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
+        {
             log::warn!(target: "config", "config save failed: {e}");
         }
         self.flash(format!("Subtitle mode: {new_mode}"), ToastSeverity::Neutral);

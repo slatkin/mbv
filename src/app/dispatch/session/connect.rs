@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PlayerTab, QueueScope};
+use crate::app::{App, PlayerTab};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
 use mbv_player::PlayerProxy;
@@ -193,9 +193,6 @@ impl App {
     ) {
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let has_initial_items = initial_unified_state
-            .as_ref()
-            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         let mpris_remote = remote.clone();
@@ -234,11 +231,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        if has_initial_items {
-            self.set_queue_scope(QueueScope::Remote);
-        } else {
-            self.set_queue_scope(QueueScope::Local);
-        }
+        self.display_peer_queue_on_connect();
         self.sync_subtitle_prefs_to_player();
         self.flash(
             format!("Reconnected to daemon (attempt {})", attempt + 1),

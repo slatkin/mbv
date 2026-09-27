@@ -19,7 +19,6 @@ use super::intents::{
 use super::queue::QueueIntent;
 use crate::app::components::media_list::SelectionOrigin;
 use crate::app::state::types::context_menu::ContextMenuTargets;
-use crate::app::state::types::playback::QueueScope;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -312,11 +311,6 @@ pub enum ShellRequest {
         slot_id: Option<mbv_queue::QueueSlotId>,
     },
 
-    /// A Queue scope pill the user clicked; the component has already switched
-    /// its own scope and reset its scroll (design.md D3).
-    QueueScopeClick {
-        scope: QueueScope,
-    },
     /// A TV-workspace row the user single-clicked. The library panel
     /// painted the two panes and resolved which pane + hit the click landed
     /// in (season pill, episode row, blank Episodes-pane space, or a series

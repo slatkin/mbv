@@ -473,28 +473,6 @@ impl App {
         // apparent from the queue UI.
         right_spans
     }
-
-    pub(in crate::app) fn set_status_label_color(spans: &mut [Span<'static>], color: Color) {
-        if let Some(label) = spans.get_mut(2) {
-            label.style = label.style.fg(color);
-        }
-    }
-
-    pub(in crate::app) fn set_status_pill_style(spans: &mut [Span<'static>], fg: Color, bg: Color) {
-        for span in spans.iter_mut() {
-            span.style = span.style.bg(bg);
-        }
-        Self::set_status_label_color(spans, fg);
-    }
-
-    /// Uppercase the status label span (index 2, same convention as
-    /// [`Self::set_status_label_color`]) in place.
-    pub(in crate::app) fn uppercase_status_label(spans: &mut [Span<'static>]) {
-        let Some(label) = spans.get_mut(2) else {
-            return;
-        };
-        label.content = label.content.to_uppercase().into();
-    }
 }
 
 fn queue_source_status_label(

@@ -1,13 +1,17 @@
 use super::{config_path, Config};
 
-pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
-    let mut doc: toml::Value = match std::fs::read_to_string(path) {
-        Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?,
+fn read_config_doc(path: &std::path::Path) -> Result<toml::Value, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            toml::Value::Table(toml::map::Map::new())
+            Ok(toml::Value::Table(toml::map::Map::new()))
         }
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
+        Err(e) => Err(format!("read {}: {e}", path.display())),
+    }
+}
+
+pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
+    let mut doc = read_config_doc(path)?;
     let Some(table) = doc.as_table_mut() else {
         return Err(format!("update {}: root is not a table", path.display()));
     };
@@ -421,4 +425,42 @@ pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result
 
 pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
     save_config_settings_at(cfg, &config_path())
+}
+
+/// A `config.toml` section that can be written in isolation. Section-scoped
+/// saves exist because several mbv processes share one config file
+/// (stay-alive keeps a background client alive): a full rewrite from one
+/// client's in-memory snapshot erases whole sections another client changed
+/// since that snapshot was loaded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSection {
+    Playback,
+    Library,
+    Feeds,
+    LibraryRoutes,
+}
+
+/// Rewrite only `section` from `cfg`, leaving every other section in the
+/// file exactly as another client last wrote it.
+pub fn save_config_section(cfg: &Config, section: ConfigSection) -> Result<(), String> {
+    save_config_section_at(cfg, &config_path(), section)
+}
+
+pub(super) fn save_config_section_at(
+    cfg: &Config,
+    path: &std::path::Path,
+    section: ConfigSection,
+) -> Result<(), String> {
+    let mut doc = read_config_doc(path)?;
+    let Some(table) = doc.as_table_mut() else {
+        return Err(format!("update {}: root is not a table", path.display()));
+    };
+    match section {
+        ConfigSection::Playback => write_playback_section(table, cfg),
+        ConfigSection::Library => write_library_section(table, cfg),
+        ConfigSection::Feeds => write_feeds_section(table, cfg),
+        ConfigSection::LibraryRoutes => write_library_routes_section(table, cfg),
+    }
+    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    write_config_text_at(path, &s)
 }

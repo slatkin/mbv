@@ -2,7 +2,7 @@
 
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
-use crate::app::{App, QueueScope};
+use crate::app::App;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use std::time::{Duration, Instant};
@@ -81,10 +81,6 @@ impl App {
         self.mark_queue_cursor_user_active();
         self.displayed_queue_mut().queue_cursor = index;
         Some(index)
-    }
-
-    pub(in crate::app) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
-        self.set_queue_scope(scope);
     }
 
     pub(in crate::app) fn handle_mouse_selector_click_emby(
