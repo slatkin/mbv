@@ -1,22 +1,24 @@
-use mbv_cast::discovery::CastReceiver;
-use mbv_emby::SessionInfo;
-
-/// One row in the F3 target panel. The channel that produced a target
-/// determines how mbv controls it (design.md "Discovery is a second channel
-/// beside `/Sessions`"), so a device reachable on both channels is two
-/// distinct rows rather than one deduplicated entry.
-///
-/// `Emby` is boxed: `SessionInfo` is far larger than `CastReceiver` (9.2),
-/// and `PanelTarget` lives in `App.panel_targets`, a `Vec` rebuilt on every
-/// panel refresh -- unlike `render/components/home.rs`'s `HeroContentDims`
-/// (the lint's other occurrence), which is a single per-render stack local,
-/// not a persisted collection element, so it was left unboxed there.
+/// Provider-neutral presentation data for one F3 target row.
 #[derive(Clone, Debug)]
-pub enum PanelTarget {
-    Emby(Box<SessionInfo>),
-    Cast(CastReceiver),
+pub enum SessionTargetRow {
+    Emby {
+        id: String,
+        device_name: String,
+        client: String,
+        user_name: String,
+        host: String,
+        now_playing: Option<String>,
+        is_paused: bool,
+        position_s: i64,
+        runtime_s: i64,
+    },
+    Cast {
+        id: String,
+        friendly_name: String,
+        host: String,
+        port: u16,
+    },
 }
-
 /// Stable identity for one F3 target, qualified by its control channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionTargetKey {
@@ -24,21 +26,12 @@ pub enum SessionTargetKey {
     Cast(String),
 }
 
-impl PanelTarget {
+impl SessionTargetRow {
     #[must_use]
     pub fn key(&self) -> SessionTargetKey {
         match self {
-            Self::Emby(session) => SessionTargetKey::Emby(session.id.clone()),
-            Self::Cast(receiver) => SessionTargetKey::Cast(receiver.id.clone()),
+            Self::Emby { id, .. } => SessionTargetKey::Emby(id.clone()),
+            Self::Cast { id, .. } => SessionTargetKey::Cast(id.clone()),
         }
     }
-}
-
-/// Resolve an activation against the latest shell-owned target snapshot.
-#[must_use]
-pub fn resolve_session_target(
-    targets: &[PanelTarget],
-    key: &SessionTargetKey,
-) -> Option<PanelTarget> {
-    targets.iter().find(|target| target.key() == *key).cloned()
 }

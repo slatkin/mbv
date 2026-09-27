@@ -1787,7 +1787,6 @@ version = "0.21.2"
 dependencies = [
  "mbv-audiobookshelf",
  "mbv-config",
- "mbv-emby",
  "mbv-emby-model",
  "mbv-images",
  "mbv-keybinds",

@@ -1,3 +1,4 @@
+use super::panel_targets::PanelTarget;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
     PendingQueueAction, PlaylistMutationState, ReplacementExecutor, SuspendedLocalSession,
@@ -19,7 +20,6 @@ use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::feed::SavePlaylistDialog;
 use mbv_ui_model::feed_tab::FeedTabState;
 use mbv_ui_model::library_tab::LibraryTab;
-use mbv_ui_model::panel_targets::PanelTarget;
 use mbv_ui_model::playback::QueueScope;
 use mbv_ui_model::settings::{PanelFocus, PanelMode, SettingsDestination};
 use mbv_ui_model::tab_selection::TabSelection;
