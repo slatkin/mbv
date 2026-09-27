@@ -1,7 +1,8 @@
 use super::types::{
-    decode_entities, EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson,
-    SessionAudioStream, SessionMediaInfo, SessionSubtitleStream,
+    EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson, SessionAudioStream,
+    SessionMediaInfo, SessionSubtitleStream,
 };
+use mbv_text::html::decode_entities;
 use serde_json::Value;
 
 #[must_use]

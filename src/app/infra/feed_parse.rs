@@ -1,7 +1,8 @@
 use crate::app::state::types::feed::IdleFeedItem;
-use mbv_core::api::{decode_entities, TICKS_PER_SECOND};
+use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
+use mbv_text::html::decode_entities;
 
 mod date;
 pub(in crate::app) use self::date::parse_pub_date_secs;
