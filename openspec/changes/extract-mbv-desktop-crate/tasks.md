@@ -16,7 +16,7 @@ and never add a `pub use` shim.
 
 - [ ] 1.1 Create `crates/mbv-desktop/Cargo.toml`, following the shape of
   `crates/mbv-visualizer/Cargo.toml`, with a one-line `description`. Its
-  dependencies are `mbv-ctrl` and `mbv-emby-model` (path dependencies),
+  dependencies are `mbv-ctrl`, `mbv-emby-model` and `mbv-images` (path dependencies),
   `log.workspace = true`, and the `zbus`, `tokio` and `ksni` lines cut
   verbatim from the root `Cargo.toml` `[dependencies]`. Add the crate to the
   root `[workspace] members` and `default-members`, and add
@@ -26,11 +26,7 @@ and never add a `pub use` shim.
   `git mv src/tray.rs crates/mbv-desktop/src/tray.rs`. Create `src/lib.rs`
   with `pub mod mpris; pub mod tray;`, and delete `mod mpris;` and
   `mod tray;` from `src/main.rs`. Make `MprisSource` and `MprisHandle` `pub`.
-- [ ] 1.3 In the moved `mpris.rs`, move the two constants
-  `IMAGE_CACHE_SUFFIX_CARD_PRIMARY` and `IMAGE_CACHE_SUFFIX_ALBUM_CARD` from
-  `src/config.rs` into the module, with their `#[cfg(not(test))]` gates and
-  doc comments. Delete them from `src/config.rs`.
-- [ ] 1.4 Apply design D1. Add `art_path: fn(&str) -> Option<std::path::PathBuf>`
+- [ ] 1.3 Apply design D1. Add `art_path: fn(&str) -> Option<std::path::PathBuf>`
   as the last parameter of `start`, carry it into the `interface` struct and
   the poll thread, and replace both `crate::config::image_disk_cache_path`
   references with it. `make_metadata` takes it as a parameter. Update the doc

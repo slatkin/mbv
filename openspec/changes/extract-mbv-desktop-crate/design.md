@@ -29,7 +29,6 @@
 
 **Non-Goals:**
 
-- Fixing the MPRIS art cache-key mismatch (see proposal Impact).
 - Moving the image disk-cache helpers out of `src/config.rs`.
 - Changing any `#[cfg(not(test))]` gating, or the existing
   `#[expect(clippy::cast_precision_loss)]` on `us_to_seconds`. It moves

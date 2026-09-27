@@ -5,8 +5,8 @@
 Issue #832, a follow-up to #814. `src/mpris.rs` (639 lines) and `src/tray.rs`
 (230 lines) are the only code in the workspace that uses `zbus`, `tokio` or
 `ksni`. They don't use `crate::app`: tray uses only `mbv-ctrl`, and MPRIS uses
-`mbv-ctrl`, `mbv-emby-model`, and one TUI helper,
-`crate::config::image_disk_cache_path` (plus two cache-suffix constants).
+`mbv-ctrl`, `mbv-emby-model`, `mbv-images` (`emby_card_cache_key`), and one
+TUI helper, `crate::config::image_disk_cache_path`.
 Because both files live in the TUI crate, that crate carries the three heavy
 async/D-Bus dependencies. The AGENTS.md rule "`tokio` is edge-only" is
 therefore only a review convention.
@@ -18,10 +18,7 @@ therefore only a review convention.
 - `mbv_desktop::mpris::start` takes the art-path lookup
   (`fn(&str) -> Option<PathBuf>`) as a parameter, so the crate doesn't depend
   on the TUI's image-cache helpers. The TUI passes
-  `crate::config::image_disk_cache_path`, the function it uses today. The two
-  suffix constants (`IMAGE_CACHE_SUFFIX_CARD_PRIMARY`,
-  `IMAGE_CACHE_SUFFIX_ALBUM_CARD`) move into the MPRIS module, their only
-  user.
+  `crate::config::image_disk_cache_path`, the function it uses today.
 - The TUI crate's `[dependencies]` no longer list `zbus`, `tokio` or `ksni`.
   Its callers (`local_daemon.rs`, `state/construct/remote.rs`,
   `dispatch/session/{switch,connect,daemon_restart}.rs`, `app_struct.rs`)
@@ -45,11 +42,9 @@ therefore only a review convention.
 ## Impact
 
 - New crate `mbv-desktop`, which depends on `mbv-ctrl`, `mbv-emby-model`,
-  `zbus`, `tokio`, `ksni` and `log`.
+  `mbv-images`, `zbus`, `tokio`, `ksni` and `log`.
 - Root `Cargo.toml`: new workspace member and dependency, and three direct
   dependencies removed.
-- Not in scope, noted during discovery: MPRIS looks for cover art under the
-  cache keys `{id}:card` and `{id}:album_card`, but the card image cache
-  writes `{id}:P` (`src/app/state/projection/card.rs`). As a result
-  `mpris:artUrl` probably never resolves. This change keeps the lookup
-  byte-identical, so the bug should be tracked separately.
+- The MPRIS art cache-key mismatch found during discovery was fixed
+  separately (#833, commit f21174d67); MPRIS now derives its key from
+  `mbv_images::emby_card_cache_key`.
