@@ -12,7 +12,7 @@
 
 ## Queue revisions
 
-`QueueRevision` values are minted in `crates/mbv-queue`: a process-wide monotonic counter supplies every constructor, and `bump()` mints a new value when a projected-row change occurs. See `QueueRevision` and `PlaybackQueue` in `crates/mbv-queue/src/lib.rs` for the implementation.
+`QueueRevision` values are minted in `crates/mbv-queue` from an owner-scoped `QueueRevisionMint`: each queue owner (the daemon Player, each client `PlayerTab`) holds one mint, every constructor and `bump()` mints from it, and tab replacements carry the old mint forward so a chain never repeats a revision. See `QueueRevisionMint` and `PlaybackQueue` in `crates/mbv-queue/src/lib.rs` for the implementation.
 
 ## Why it matters
 
