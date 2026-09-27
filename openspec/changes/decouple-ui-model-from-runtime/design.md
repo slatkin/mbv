@@ -79,7 +79,7 @@ pub enum SessionTargetRow {
     Emby { id: String, device_name: String, client: String, user_name: String,
            host: String, now_playing: Option<String>, is_paused: bool,
            position_s: i64, runtime_s: i64 },
-    Cast { id: String, friendly_name: String },
+    Cast { id: String, friendly_name: String, host: String, port: u16 },
 }
 impl SessionTargetRow { pub fn key(&self) -> SessionTargetKey }
 ```
