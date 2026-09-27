@@ -13,10 +13,10 @@ Gate for every group: `cargo check --workspace`,
 
 ## 2. Direction and the shared neighbour rule
 
-- [ ] 2.1 Add `Direction::{Next, Previous}` to `crates/mbv-ctrl`, with a conversion from `PlaybackIntentAction` returning `Option<Direction>`, and add `TransitionCause::{Jump, Step(Direction)}` to `Transition` in `crates/mbv-player/src/transition.rs`. Existing constructors default to `Jump`. Verify: the workspace compiles and existing transition tests pass.
-- [ ] 2.2 Add `PlayerOwnerState::relative_step_target(Direction) -> StepTarget::{Jump, Coalesced, AtEdge}` in `crates/mbv-player/src/owner_state.rs`, using the base and coalescing rules in design D3. Owner tests cover: Next after unsettled Next → `Coalesced`; Previous after unsettled Next → the original slot; Next at the last slot → `AtEdge`. Verify: the new tests pass.
-- [ ] 2.3 Add the #824 divergence regression test at the owner layer: an audio slot left mid-track, and a video slot completed at 12 s with a 20 min recorded position, are each reached by `relative_step_target` + dispatch and by a direct jump. Assert the dispatched `JumpTo.resume_ticks` is identical. Verify: the test passes.
-- [ ] 2.4 Make `step_to_neighbor_slot` (`crates/mbv-daemon/src/control/playback.rs`) call `relative_step_target` and delete its inline neighbour code and the `_ => next` match. On `Coalesced`, reply `PlaybackIntentOutcome::Coalesced` to the ctrl client. Verify: `cargo nextest run -p mbv-daemon` passes, including the existing single-flight tests.
+- [x] 2.1 Add `Direction::{Next, Previous}` to `crates/mbv-ctrl`, with a conversion from `PlaybackIntentAction` returning `Option<Direction>`, and add `TransitionCause::{Jump, Step(Direction)}` to `Transition` in `crates/mbv-player/src/transition.rs`. Existing constructors default to `Jump`. Verify: the workspace compiles and existing transition tests pass.
+- [x] 2.2 Add `PlayerOwnerState::relative_step_target(Direction) -> StepTarget::{Jump, Coalesced, AtEdge}` in `crates/mbv-player/src/owner_state.rs`, using the base and coalescing rules in design D3. Owner tests cover: Next after unsettled Next → `Coalesced`; Previous after unsettled Next → the original slot; Next at the last slot → `AtEdge`. Verify: the new tests pass.
+- [x] 2.3 Add the #824 divergence regression test at the owner layer: an audio slot left mid-track, and a video slot completed at 12 s with a 20 min recorded position, are each reached by `relative_step_target` + dispatch and by a direct jump. Assert the dispatched `JumpTo.resume_ticks` is identical. Verify: the test passes.
+- [x] 2.4 Make `step_to_neighbor_slot` (`crates/mbv-daemon/src/control/playback.rs`) call `relative_step_target` and delete its inline neighbour code and the `_ => next` match. On `Coalesced`, reply `PlaybackIntentOutcome::Coalesced` to the ctrl client. Verify: `cargo nextest run -p mbv-daemon` passes, including the existing single-flight tests.
 
 ## 3. Observed active slot published once
 
