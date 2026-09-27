@@ -192,3 +192,47 @@ fn restore_local_mode_clears_active_route() {
     assert!(app.active_route.is_none());
     assert!(!app.player.is_remote());
 }
+
+// local-daemon-thin-client: the daemon's Bound queue is the client's
+// displayed Local queue in every state. The runtime attach paths must adopt
+// it into the unified tab (as the App-construction path does) instead of
+// parking it in `remote_player_tab`, where the unified view never reads it.
+#[test]
+fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+    let daemon_items = make_items(1);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
+
+    app.switch_to_direct_remote(
+        &make_session("local-daemon", "mbv"),
+        remote,
+        remote_rx,
+        &DaemonEndpoint::Local,
+    );
+
+    assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
+    assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
+    assert!(app.remote_player_tab.is_none());
+    assert_eq!(app.player_tab.emby_items()[0].id, daemon_items[0].id);
+}
+
+#[test]
+fn local_daemon_route_attach_adopts_the_owner_queue_and_restores_local_after_detach() {
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+    let daemon_items = make_items(1);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
+
+    app.switch_to_library_route("music", remote, remote_rx, &DaemonEndpoint::Local);
+
+    assert!(app.remote_player_tab.is_none());
+    assert_eq!(app.player_tab.emby_items()[0].id, daemon_items[0].id);
+
+    app.restore_local_mode("Local playback restored");
+
+    assert!(!app.player.is_remote());
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+}

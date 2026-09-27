@@ -22,6 +22,7 @@ impl App {
             .as_ref()
             .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let initial_queue_source = remote.queue_source.lock().unwrap().clone();
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
         // MPRIS (if this session has a live registration) must follow this
@@ -57,6 +58,8 @@ impl App {
                 ),
                 audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
+                player_tab: self.player_tab.clone(),
+                queue_source: self.queue_source.clone(),
             };
             self.suspended_local = Some(suspended);
         }
@@ -75,10 +78,24 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        ));
+        if endpoint.is_local() {
+            // Local daemon attach: one unified queue owned by the daemon
+            // (local-daemon-thin-client spec). Adopt the owner's Bound queue
+            // as the displayed Local queue, mirroring the App-construction
+            // attach path — parking it in `remote_player_tab` leaves it
+            // unreachable, because the unified view never reads that tab.
+            self.player_tab = initial_unified_state.as_ref().map_or_else(
+                || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                PlayerTab::from_unified_state,
+            );
+            self.queue_source = initial_queue_source;
+            self.remote_player_tab = None;
+        } else {
+            self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+                || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                PlayerTab::from_unified_state,
+            ));
+        }
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.advance_queue_epoch();
@@ -102,7 +119,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        if has_initial_items {
+        if !endpoint.is_local() && has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
         } else {
             self.set_queue_scope(QueueScope::Local);
@@ -144,6 +161,7 @@ impl App {
             .as_ref()
             .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let initial_queue_source = remote.queue_source.lock().unwrap().clone();
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
@@ -177,6 +195,8 @@ impl App {
                 ),
                 audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
+                player_tab: self.player_tab.clone(),
+                queue_source: self.queue_source.clone(),
             };
             self.suspended_local = Some(suspended);
         }
@@ -195,10 +215,24 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        ));
+        if endpoint.is_local() {
+            // Local daemon attach: one unified queue owned by the daemon
+            // (local-daemon-thin-client spec). Adopt the owner's Bound queue
+            // as the displayed Local queue, mirroring the App-construction
+            // attach path — parking it in `remote_player_tab` leaves it
+            // unreachable, because the unified view never reads that tab.
+            self.player_tab = initial_unified_state.as_ref().map_or_else(
+                || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                PlayerTab::from_unified_state,
+            );
+            self.queue_source = initial_queue_source;
+            self.remote_player_tab = None;
+        } else {
+            self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+                || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                PlayerTab::from_unified_state,
+            ));
+        }
         self.advance_queue_epoch();
         self.remote.direct_remote_connected = false;
         self.remote.direct_remote_session_id = None;
@@ -213,7 +247,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
-        if has_initial_items {
+        if !endpoint.is_local() && has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
         } else {
             self.set_queue_scope(QueueScope::Local);
@@ -267,6 +301,8 @@ impl App {
         self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
         self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
         self.player_endpoint = None;
+        self.player_tab = suspended.player_tab;
+        self.queue_source = suspended.queue_source;
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
     }
 

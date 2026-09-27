@@ -94,6 +94,8 @@ impl App {
             audiobookshelf_socket_rx: abs_rx,
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
+            player_tab: self.player_tab.clone(),
+            queue_source: self.queue_source.clone(),
         }
     }
 

@@ -1,5 +1,6 @@
 use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use crate::app::state::queue_owner::QueueOrigin;
+use crate::app::PlayerTab;
 use mbv_core::player::PlayerProxy;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
@@ -201,6 +202,12 @@ pub(in crate::app) struct SuspendedLocalSession {
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,
+    /// The queue presentation and source the suspended local session was
+    /// displaying. A local-daemon attach adopts the daemon's Bound queue as
+    /// the unified (Local) view, so restoring the bare local player must
+    /// also restore what it was playing.
+    pub(in crate::app) player_tab: PlayerTab,
+    pub(in crate::app) queue_source: mbv_queue::QueueSource,
 }
 
 pub(in crate::app) enum PendingQueueAction {
