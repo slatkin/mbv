@@ -129,7 +129,11 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
         .selected_target()
         .cloned()
         .expect("artist root selected");
-    // The initial album adoption expanded the first root's path.
+    // Anchoring/adoption never expands (product rule): the root starts
+    // collapsed and this fixture expands it via the same explicit Right
+    // chord a user would press.
+    assert!(!owner.browser.is_expanded(&root));
+    press(&mut owner, Key::Right);
     assert!(owner.browser.is_expanded(&root));
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));

@@ -131,42 +131,38 @@ impl LibraryContentOwner for MusicContent {
         } else {
             match state.item.as_ref() {
                 Some(LibraryItemIdentity::Emby { id }) => {
-                    let album_selected = self
-                        .browser
-                        .apply(TreeOperation::AnchorSelection {
-                            target: MusicTreeTarget::Album(id.clone()),
-                            flow_offset: 0,
-                        })
-                        .disposition
-                        == TreeConsumed::Consumed;
-                    // The saved id may instead name an artist root left
-                    // selected at teardown (`launch_snapshot`'s artist
-                    // fallback): retry against the artist target before
-                    // giving up and falling back to the default album below.
-                    album_selected
-                        || self
-                            .browser
+                    // The saved id may name an album, a Service-backed artist
+                    // root, or a Fallback-keyed artist root's display name
+                    // (`launch_snapshot`'s artist fallback covers both artist
+                    // key shapes): try each in turn before giving up.
+                    [
+                        MusicTreeTarget::Album(id.clone()),
+                        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(
+                            id.clone(),
+                        )),
+                        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Fallback(
+                            id.clone(),
+                        )),
+                    ]
+                    .into_iter()
+                    .any(|target| {
+                        self.browser
                             .apply(TreeOperation::AnchorSelection {
-                                target: MusicTreeTarget::Artist(
-                                    mbv_ui_model::music_grouping::ArtistKey::Service(id.clone()),
-                                ),
+                                target,
                                 flow_offset: 0,
                             })
                             .disposition
                             == TreeConsumed::Consumed
+                    })
                 }
                 _ => false,
             }
         };
+        // Nothing resolved: select the first visible row rather than
+        // expanding into a default album (product rule: a programmatic
+        // selection never changes expansion).
         if !selected {
-            if let Some(target) = self.context.album_targets.first().cloned() {
-                self.browser.apply(TreeOperation::AnchorSelection {
-                    target: MusicTreeTarget::Album(target),
-                    flow_offset: 0,
-                });
-            } else {
-                self.browser.apply(TreeOperation::First);
-            }
+            self.browser.apply(TreeOperation::First);
         }
         true
     }

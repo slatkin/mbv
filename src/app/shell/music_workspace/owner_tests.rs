@@ -24,6 +24,23 @@ fn wide(model: &mut Model) {
     model.app.terminal_height = 40;
 }
 
+/// Anchoring never expands (product rule): these fixtures' initial album
+/// adoption now lands on the collapsed artist root instead of its first
+/// album. Press the same explicit Right (expand) then Down (descend) chords
+/// a user would, landing on that root's first album exactly as these tests
+/// assumed before the rule changed.
+fn expand_and_descend_to_first_album(model: &mut Model) {
+    let owner = model.test_music_owner_mut();
+    owner.on_key(&KeyEvent {
+        code: Key::Right,
+        modifiers: KeyModifiers::NONE,
+    });
+    owner.on_key(&KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+}
+
 fn painted_music_offset(model: &mut Model) -> usize {
     let area = Rect::new(0, 0, 80, 8);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
@@ -59,6 +76,7 @@ fn narrow_enter_requests_album_activation() {
     model.app.panel_focus = PanelFocus::Library;
     model.sync_mounted_surfaces();
     assert!(!model.app.is_right_panel_wide());
+    expand_and_descend_to_first_album(&mut model);
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::Enter,
@@ -132,6 +150,7 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
     model.app.panel_focus = PanelFocus::Library;
     model.sync_mounted_surfaces();
     assert!(!model.app.is_right_panel_wide());
+    expand_and_descend_to_first_album(&mut model);
 
     model.music_track_focus_request = Some(MusicTrackFocusRequest::Enter {
         album_id: "album-1".into(),
@@ -159,6 +178,7 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     model.app.panel_focus = PanelFocus::Library;
     wide(&mut model);
     model.sync_mounted_surfaces();
+    expand_and_descend_to_first_album(&mut model);
 
     model.music_workspace_reanchor = true;
     model.music_track_focus_request = Some(MusicTrackFocusRequest::Enter {
@@ -284,6 +304,7 @@ fn music_key() -> LibraryKey {
 fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     let mut model = Model::new(music_library_app_with_three_albums());
     model.sync_mounted_surfaces();
+    expand_and_descend_to_first_album(&mut model);
     let key = music_key();
     assert!(model.library_panel_has_owner(&key));
 
@@ -378,6 +399,7 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
     }
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
+    expand_and_descend_to_first_album(&mut model);
     let key = music_key();
     assert!(model.library_panel_has_owner(&key));
 

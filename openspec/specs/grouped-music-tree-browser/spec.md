@@ -26,6 +26,19 @@ The tree SHALL have one owner for its selected node, expansion, viewport, multi-
 - **THEN** it belongs to a deterministic fallback artist root that remains stable across an ordinary refresh
 - **AND** that root does not request artist artwork
 
+### Requirement: Programmatic selection never expands the tree
+Selecting or restoring a node without a direct user expand/collapse action (launch-state restore, a re-anchor after a catalog replacement or pill/group switch, or any other programmatic selection) SHALL NOT change expansion. Only an explicit user expand or collapse action (`Right` on a collapsed artist root, `Left` collapsing a focused expanded root, or a double-click toggling an expandable node) changes expansion. When the target node is hidden under a collapsed ancestor, the shallowest collapsed ancestor on its path SHALL be selected instead, remaining collapsed. The one exception is Enter activating an album leaf while Grouped Music filtering is active (see "Filtered album activation dismisses filtering"): that leaf's own ancestor is revealed because Enter is itself the explicit user action landing on that exact row, not a side effect of an unrelated restore.
+
+#### Scenario: Restoring a hidden album selects its collapsed artist
+- **WHEN** a saved selection names an album under a persistently collapsed artist root
+- **THEN** that artist root is selected and remains collapsed
+- **AND** no album leaf is exposed by the restore
+
+#### Scenario: A saved artist selection restores collapsed
+- **WHEN** a saved selection names an artist root, whether Service-keyed or fallback-keyed
+- **THEN** that artist root is selected
+- **AND** its expansion state, and every other artist root's expansion state, is unchanged
+
 #### Scenario: /Artists listing IDs are not mixed into keys
 - **WHEN** an artist identity from an `/Artists` listing is available for the same display name
 - **THEN** no artist key, artwork request, or artist-track query uses that ID

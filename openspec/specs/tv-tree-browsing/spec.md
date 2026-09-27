@@ -18,6 +18,14 @@ When browsing shows in `All` or a letter-range mode, the TV library SHALL displa
 - **THEN** the branch remains expanded while the shell loads its children
 - **AND** the children appear under that branch when they arrive without losing the selected target
 
+### Requirement: Programmatic selection never expands the tree
+A navigate-to landing or any other programmatic re-anchor of the tree's selection SHALL NOT change expansion (the shared TreeBrowser rule, `grouped-music-tree-browser`'s "Programmatic selection never expands the tree"). A navigated-to show is always a root, so it is always already visible; only an explicit user expand or collapse action changes a season's or episode's expansion.
+
+#### Scenario: A navigate-to landing selects the show without expanding it
+- **WHEN** a search or continue-watching landing re-anchors the tree onto a show
+- **THEN** that show root is selected
+- **AND** its seasons' expansion state is unchanged
+
 #### Scenario: Group headings remain labels
 - **WHEN** a show mode presents alphabet group headings
 - **THEN** they label their following shows but cannot be selected or activated
