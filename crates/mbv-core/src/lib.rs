@@ -1,6 +1,5 @@
 pub mod api;
 pub mod applog;
-pub mod cast;
 pub mod daemon;
 pub mod player;
 /// Compatibility re-export for callers that used the former flat module path.

@@ -7,7 +7,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::render::indicators::IndicatorData;
 use crate::app::{App, CastPlaybackTarget};
-use mbv_core::cast::client::CastPlaybackState;
+use mbv_cast::client::CastPlaybackState;
 
 impl CastPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn toggle_play_pause_sends_play_while_paused() {
-        use mbv_core::cast::client::CastStatus;
+        use mbv_cast::client::CastStatus;
         let (mut app, calls) = attached_app_with_fake_transport();
         app.cast_attachment.as_mut().unwrap().status = Some(CastStatus {
             position_seconds: Some(0.0),

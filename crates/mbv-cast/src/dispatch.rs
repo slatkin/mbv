@@ -3,7 +3,7 @@
 // and which items cannot be cast at all. See
 // openspec/changes/add-chromecast-target/specs/cast-media-dispatch/spec.md.
 
-use crate::cast::client::CastMediaItem;
+use crate::client::CastMediaItem;
 use mbv_audiobookshelf::{AudiobookshelfAudioSource, AudiobookshelfSourceMethod};
 use mbv_queue::{AudiobookshelfBookQueueItem, FeedEntry};
 

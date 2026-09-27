@@ -18,8 +18,8 @@
 // inside the same closure that spawns the worker thread, rather than
 // capturing an already-built one, is what keeps this compiling.
 
-use mbv_core::cast::client::{CastClient, CastMediaItem, CastStatus};
-use mbv_core::cast::discovery::CastReceiver;
+use mbv_cast::client::{CastClient, CastMediaItem, CastStatus};
+use mbv_cast::discovery::CastReceiver;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 use mbv_queue::QueueItemContentId;
 use std::sync::mpsc::Sender;

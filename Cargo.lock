@@ -1707,6 +1707,7 @@ dependencies = [
  "libc",
  "log",
  "mbv-audiobookshelf",
+ "mbv-cast",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
@@ -1757,6 +1758,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-cast"
+version = "0.21.2"
+dependencies = [
+ "flume",
+ "log",
+ "mbv-audiobookshelf",
+ "mbv-queue",
+ "mdns-sd",
+ "rstest",
+ "rust_cast",
+ "serde_json",
+]
+
+[[package]]
 name = "mbv-config"
 version = "0.21.2"
 dependencies = [
@@ -1774,12 +1789,12 @@ dependencies = [
 name = "mbv-core"
 version = "0.21.2"
 dependencies = [
- "flume",
  "libc",
  "libmpv2",
  "libmpv2-sys",
  "log",
  "mbv-audiobookshelf",
+ "mbv-cast",
  "mbv-config",
  "mbv-ctrl",
  "mbv-emby-model",
@@ -1788,7 +1803,6 @@ dependencies = [
  "mbv-queue",
  "mbv-text",
  "mbv-ws",
- "mdns-sd",
  "rand 0.10.2",
  "rstest",
  "rust_cast",

@@ -7,7 +7,7 @@ use crate::app::state::types::cast::{
 };
 use crate::app::App;
 use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
-use mbv_core::cast::client::{CastPlaybackState, CastStatus};
+use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_emby_model::seconds_to_ticks;
 use std::time::{Duration, Instant};
 

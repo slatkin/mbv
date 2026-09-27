@@ -25,6 +25,7 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-cast = { path = "../mbv-cast" }
 mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
 serde.workspace = true
@@ -37,14 +38,9 @@ tungstenite.workspace = true
 log.workspace = true
 libc.workspace = true
 time.workspace = true
-rust_cast = "0.21"
-mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
 
 [dev-dependencies]
-# mdns-sd's `Receiver<ServiceEvent>` is a `flume` channel; tests construct one
-# directly to feed synthetic events into cast_discovery's pure collection
-# logic without a real mDNS browse.
-flume = "0.12"
+rust_cast = "0.21"
 rstest.workspace = true
 mbv-net = { path = "../mbv-net", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }

@@ -7,7 +7,7 @@ use serde_json::Value;
 /// it was negotiated under, so progress can be reported for it later.
 #[derive(Debug)]
 pub struct CastPlaybackInfo {
-    pub item: crate::cast::client::CastMediaItem,
+    pub item: mbv_cast::client::CastMediaItem,
     pub media_source_id: MediaSourceId,
     pub session_id: EmbySessionId,
 }
@@ -92,7 +92,7 @@ impl EmbyClient {
         &self,
         item_id: &str,
         is_audio: bool,
-        profile: &crate::cast::dispatch::CastDeviceProfile,
+        profile: &mbv_cast::dispatch::CastDeviceProfile,
     ) -> Result<CastPlaybackInfo, String> {
         let mut body = serde_json::json!({
             "UserId": self.user_id,
@@ -131,7 +131,7 @@ impl EmbyClient {
             .unwrap_or(false);
         let item = if direct_play {
             let endpoint = if is_audio { "Audio" } else { "Videos" };
-            crate::cast::client::CastMediaItem {
+            mbv_cast::client::CastMediaItem {
                 url: format!(
                     "{}/{}/{}/stream?static=true&api_key={}&MediaSourceId={}",
                     self.config.server_url, endpoint, item_id, self.token, media_source_id
@@ -142,7 +142,7 @@ impl EmbyClient {
             let transcoding_url = media_source["TranscodingUrl"].as_str().ok_or_else(|| {
                 "cast PlaybackInfo requires transcoding but returned no TranscodingUrl".to_string()
             })?;
-            crate::cast::client::CastMediaItem {
+            mbv_cast::client::CastMediaItem {
                 url: format!("{}{}", self.config.server_url, transcoding_url),
                 content_type: cast_content_type(is_audio, false).to_string(),
             }
