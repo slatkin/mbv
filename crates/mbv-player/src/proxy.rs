@@ -524,20 +524,7 @@ impl PlayerProxy {
             }),
             PlayerProxyInner::Remote(r) => {
                 let remote = r.clone();
-                Arc::new(move |transport| match transport {
-                    mbv_ctrl::TransportCommand::Step(direction) => {
-                        let action = match direction {
-                            mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
-                            mbv_ctrl::Direction::Previous => {
-                                mbv_ctrl::PlaybackIntentAction::Previous
-                            }
-                        };
-                        let _ = remote.send_playback_intent(remote.new_playback_intent(action));
-                    }
-                    mbv_ctrl::TransportCommand::Player(command) => {
-                        let _ = remote.send_command(command);
-                    }
-                })
+                Arc::new(move |transport| remote.send_transport(transport))
             }
         }
     }

@@ -191,6 +191,24 @@ impl RemotePlayer {
         }
     }
 
+    /// Dispatch a transport command (mpris/tray) to whichever protocol
+    /// path it belongs on: `Step` becomes a guarded playback intent,
+    /// everything else goes over the legacy command channel.
+    pub fn send_transport(&self, transport: mbv_ctrl::TransportCommand) {
+        match transport {
+            mbv_ctrl::TransportCommand::Step(direction) => {
+                let action = match direction {
+                    mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
+                    mbv_ctrl::Direction::Previous => mbv_ctrl::PlaybackIntentAction::Previous,
+                };
+                let _ = self.send_playback_intent(self.new_playback_intent(action));
+            }
+            mbv_ctrl::TransportCommand::Player(command) => {
+                let _ = self.send_command(command);
+            }
+        }
+    }
+
     #[must_use]
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let wire_cmd = match cmd {

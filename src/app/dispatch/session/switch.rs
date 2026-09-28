@@ -68,21 +68,7 @@ impl App {
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
-                move |transport| match transport {
-                    mbv_ctrl::TransportCommand::Step(direction) => {
-                        let action = match direction {
-                            mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
-                            mbv_ctrl::Direction::Previous => {
-                                mbv_ctrl::PlaybackIntentAction::Previous
-                            }
-                        };
-                        let _ = mpris_remote
-                            .send_playback_intent(mpris_remote.new_playback_intent(action));
-                    }
-                    mbv_ctrl::TransportCommand::Player(command) => {
-                        let _ = mpris_remote.send_command(command);
-                    }
-                },
+                move |transport| mpris_remote.send_transport(transport),
                 Some(disconnected),
             );
         }
@@ -201,21 +187,7 @@ impl App {
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
-                move |transport| match transport {
-                    mbv_ctrl::TransportCommand::Step(direction) => {
-                        let action = match direction {
-                            mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
-                            mbv_ctrl::Direction::Previous => {
-                                mbv_ctrl::PlaybackIntentAction::Previous
-                            }
-                        };
-                        let _ = mpris_remote
-                            .send_playback_intent(mpris_remote.new_playback_intent(action));
-                    }
-                    mbv_ctrl::TransportCommand::Player(command) => {
-                        let _ = mpris_remote.send_command(command);
-                    }
-                },
+                move |transport| mpris_remote.send_transport(transport),
                 Some(disconnected),
             );
         }

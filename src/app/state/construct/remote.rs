@@ -23,30 +23,12 @@ use std::sync::{mpsc, Arc, Mutex};
 /// session bus from a thread with no shutdown path -- leaked into every test
 /// process that constructs a remote App, where process teardown races it
 /// (issue #757). Tests leave `mpris` unset.
-fn send_remote_transport(
-    remote: &mbv_remote_player::RemotePlayer,
-    transport: mbv_ctrl::TransportCommand,
-) {
-    match transport {
-        mbv_ctrl::TransportCommand::Step(direction) => {
-            let action = match direction {
-                mbv_ctrl::Direction::Next => mbv_ctrl::PlaybackIntentAction::Next,
-                mbv_ctrl::Direction::Previous => mbv_ctrl::PlaybackIntentAction::Previous,
-            };
-            let _ = remote.send_playback_intent(remote.new_playback_intent(action));
-        }
-        mbv_ctrl::TransportCommand::Player(command) => {
-            let _ = remote.send_command(command);
-        }
-    }
-}
-
 #[cfg(not(test))]
 fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::MprisHandle {
     let mpris_remote = remote.clone();
     mbv_desktop::mpris::start(
         std::sync::Arc::clone(&mpris_remote.status),
-        move |transport| send_remote_transport(&mpris_remote, transport),
+        move |transport| mpris_remote.send_transport(transport),
         Some(remote.disconnected_flag()),
         crate::config::image_disk_cache_path,
     )
@@ -282,25 +264,5 @@ impl App {
                 generation: app.audiobookshelf_runtime.generation(),
             });
         app
-    }
-}
-
-#[cfg(test)]
-mod transport_tests {
-    use super::send_remote_transport;
-
-    #[test]
-    fn remote_transport_step_next_sends_a_playback_intent() {
-        let (remote, _, commands) =
-            mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-        send_remote_transport(
-            &remote,
-            mbv_ctrl::TransportCommand::Step(mbv_ctrl::Direction::Next),
-        );
-        assert!(matches!(
-            commands.try_recv().unwrap(),
-            mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
-                if intent.action == mbv_ctrl::PlaybackIntentAction::Next
-        ));
     }
 }

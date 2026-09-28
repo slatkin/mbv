@@ -17,3 +17,14 @@ fn local_only_command_is_refused_without_delivery_or_termination() {
         "refused command must not be delivered"
     );
 }
+
+#[test]
+fn send_transport_step_next_sends_a_playback_intent() {
+    let (remote, _, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.send_transport(mbv_ctrl::TransportCommand::Step(mbv_ctrl::Direction::Next));
+    assert!(matches!(
+        commands.try_recv().unwrap(),
+        mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
+            if intent.action == mbv_ctrl::PlaybackIntentAction::Next
+    ));
+}
