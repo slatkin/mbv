@@ -9,14 +9,18 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
 - [ ] 1.1 Add `tracing = "0.1.44"` to `[workspace.dependencies]`. Add `tracing`,
   `tracing-subscriber` (`default-features = false`, features `registry`, `std`) and
-  `tracing-log` to `crates/mbv-core/Cargo.toml`. Verify with `cargo check -p mbv-core` and
-  confirm `cargo tree -p mbv-core -e normal | rg -c 'tokio|regex'` finds nothing new.
+  `tracing-log` to `crates/mbv-core/Cargo.toml`. Add the `formatting`, `local-offset` and
+  `macros` features to the workspace `time`, add `time` to `mbv-core`, and remove `libc`
+  from `mbv-core` (D7). Verify with `cargo check -p mbv-core` and confirm
+  `cargo tree -p mbv-core -e normal | rg -c 'tokio|regex'` finds nothing new.
 - [ ] 1.2 Add `applog/spec.rs`: `LogSpec`, `LogSpecError`, `parse`, `Display`
   round-trip, and the target filter (design D3). Verify with the `#[case]` parse tests and
   the filter tests named in design.md "Tests".
-- [ ] 1.3 Add `applog/time.rs` (`localtime_r` wrapper returning parts, plus a pure RFC 3339
-  ms formatter, D7) and `applog/line.rs` (logfmt line formatter, value quoting/escaping,
-  D6 redaction). Verify with the timestamp, line and redaction unit tests from design.md.
+- [ ] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
+  UTC fallback, D7; the old `unsafe` `now_ts` is deleted) and `applog/line.rs` (logfmt line
+  formatter, value quoting/escaping, D6 URL/bearer redaction). Verify with the timestamp,
+  line and redaction unit tests from design.md, including the unlisted `?password=` and
+  `user:pass@` cases.
 - [ ] 1.4 Add `applog/sink.rs`: `FileSink` with size rotation (3 generations), and the
   one-time stderr warning on open, rotate or create-dir failure (D8). Keep the stderr
   `<prio>` sink (D9). Verify with the temp-directory rotation test and the existing
@@ -40,20 +44,44 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
 ## 3. Correlation spans
 
-- [ ] 3.1 Playback intent and queue load (D5). In `mbv-remote-player`, add the
-  `ctrl.intent.sent` and `queue.load.sent` events. In `mbv-daemon`, add the `ctrl.intent`
-  span around the handler that feeds `PlaybackIntentState::accept`, and the `queue.load`
-  span around `handle_queue_load_idle`. Verify: clippy/nextest for both crates, and by
-  reading the code, each span is entered for the whole handler body.
-- [ ] 3.2 Playback session span in `mbv-player` (D5): the `playback` span, created per
-  active slot with `slot`, `item` and `play_session = Empty`. Record `play_session` when the
-  Emby session id is assigned. Verify: clippy/nextest for `mbv-player`, and by reading the
-  code, the span is re-created on each slot change and entered on the playback thread.
-- [ ] 3.3 HTTP middleware in `mbv-net` (D5), installed on the Emby, Audiobookshelf and feed
-  agents. It logs `http.request.done`/`http.request.failed` with `service`, `http.method`,
-  `url.path`, `http.status`, `duration_ms`. Verify: one unit test in `mbv-net` through its
-  existing mock HTTP seam, asserting the failed event carries `http.status`. clippy/nextest
-  pass for `mbv-net`, `mbv-emby`, `mbv-audiobookshelf` and `mbv-feed`.
+- [ ] 3.1 Ctrl connections, playback intent and queue load (D5).
+  - `mbv-remote-player`: the `ctrl.connected` (`pid`), `ctrl.intent.sent` and
+    `queue.load.sent` events.
+  - `mbv-daemon`:
+    - `ctrl.client.connected` (`client`, `peer` via `SO_PEERCRED` or the TCP address)
+      where `ClientRegistry` registers a connection.
+    - The `ctrl.intent` span (`client`, `request`, `generation`) around the handler that
+      feeds `PlaybackIntentState::accept`.
+    - The thread-spawn rule in `spawn_item_lookup`.
+    - The rejoin rule in `handle_playback_resolved`.
+    - The `queue.load` span (`client`, `queue_request`) around `handle_queue_load_idle`.
+    - The new `client_id` field on `PendingIdleQueueLoad`.
+    - The rejoin rule in `complete_pending_idle_queue_load`.
+
+  Verify: the rejoin-correlation test from design.md "Tests" passes in the
+  `src/tests/loop.rs` harness, and clippy/nextest pass for both crates.
+- [ ] 3.2 Playback session and reporting spans in `mbv-player` (D5):
+  - The `playback` span, created per active slot with `slot`, `item` and
+    `play_session = Empty`, and `Span::record` when the Emby session id is assigned.
+  - The `playback.report` span, entered by each `SessionReporter` report method from its
+    current `ids`, and around each `ReportJob` from the job's ids. This covers the
+    progress reporter, the progress worker and the report worker threads.
+
+  Verify: the reporter-correlation test from design.md "Tests" passes, and clippy/nextest
+  pass for `mbv-player`.
+- [ ] 3.3 HTTP logging in `mbv-net` (D5):
+  - The `HttpService` enum and `agent_config(service, connect, global)`, which installs
+    the middleware.
+  - `native_tls_agent` gains the required `service` argument. Update its callers: Emby
+    `emby_agent`, `AudiobookshelfClient::new`, Feeds `tls_agent`, and the two TUI image
+    fetch sites.
+  - `MockHttp::agent_for(service)` built from `agent_config`.
+  - Events `http.request.done`/`http.request.failed` with `service`,
+    `http.request.method`, `url.path`, `http.response.status_code`, `duration_ms`.
+
+  Verify: the `agent_for` HTTP test from design.md "Tests" passes, and
+  `rg 'native_tls_agent\(' --type rust` shows every call passing an `HttpService`.
+  clippy/nextest pass for `mbv-net`, `mbv-emby`, `mbv-audiobookshelf`, `mbv-feed` and `mbv`.
 
 ## 4. Call-site conversion (design D4; drop the crate's `log` dependency when it has no `log::` uses left)
 
@@ -64,8 +92,9 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 - [ ] 4.3 `mbv-emby`, `mbv-audiobookshelf`, `mbv-ws`, `mbv-net`, `mbv-cast`, `mbv-feed`
   (~76 sites). Verify: `rg 'log::'` is empty in all six and their checks pass.
 - [ ] 4.4 `mbv-config`, `mbv-desktop`, `mbv-visualizer`, `mbv-images`, and the TUI's
-  `src/main.rs`, `src/local_daemon.rs`, `src/config.rs` (~23 sites). Verify: `rg 'log::'`
-  is empty in those paths and their checks pass.
+  `src/main.rs`, `src/local_daemon.rs`, `src/config.rs` (~23 sites). Also remove the unused
+  `log.workspace = true` from `crates/mbv-ui-model/Cargo.toml`. Verify: `rg 'log::'` is
+  empty in those paths, `mbv-ui-model` no longer lists `log`, and their checks pass.
 - [ ] 4.5 `src/app/dispatch/` (~119 sites). Verify: `rg 'log::' src/app/dispatch` is empty
   and `cargo nextest run -p mbv` passes.
 - [ ] 4.6 The rest of `src/app/` (`shell/`, `state/`, `infra/`, ~40 sites). Verify: `rg 'log::' src` is empty, the root crate's `log`
@@ -79,7 +108,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   bridge's `set_max_level`.
 - [ ] 5.2 Manual check (user): run `mbv --log-level info,player=debug`, play an Emby item,
   and confirm in `mbv.log` and `local-daemon.log` that the RFC 3339 `ts`, `event=`, and the
-  shared `request=`/`slot=` values match up across the two files, and that no `api_key`
+  `request=` values match up across the two files (the local daemon's `client=` connect line names the TUI's `pid`), and that no `api_key`
   value appears.
 - [ ] 5.3 Before pushing, run `make check-code-file-lines`. Split any file over 800 lines
   along responsibility seams.

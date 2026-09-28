@@ -95,32 +95,69 @@ same name in every process.
 ### Requirement: Correlation fields
 Log lines SHALL carry correlation fields for the operation they belong to, using the same
 key names in `mbv`, the local daemon and `mbvd`:
-- ctrl playback intents: `request` (playback request id) and `generation`
-- ctrl queue loads: `queue_request` (queue load request id)
+- ctrl playback intents: `request` (playback request id) and `generation`. On the Player
+  owner, also `client` (the owner's id for the connection that sent it).
+- ctrl queue loads: `queue_request` (queue load request id). On the Player owner, also
+  `client`.
 - playback sessions: `slot` (queue slot id), `item` (content id, when there is one) and,
   for Emby, `play_session`
-- HTTP requests to a Service: `service`, `http.method`, `url.path`, and once known
-  `http.status` and `duration_ms`
-Every line logged inside such an operation SHALL carry that operation's fields, including
-lines from code that does not know about the operation.
+- Emby playback reporting: `item` and `play_session` of the session being reported
+- HTTP requests to a Service: `service`, `http.request.method`, `url.path`, and once
+  known `http.response.status_code` and `duration_ms`
+Every line logged inside such an operation SHALL carry that operation's fields. This
+includes lines from code that does not know about the operation, lines logged on worker
+threads the operation starts, and lines logged when a deferred result of the operation
+is handled later.
+
+Request ids are unique only within one client connection. So that lines can be matched
+across processes:
+- When a client connects, the Player owner SHALL log one line with `client` and `peer`:
+  the peer's process id for a local socket, or its remote address for a network
+  connection.
+- Each time `mbv` connects to a Player owner, it SHALL log one line with its own process
+  id as `pid`.
 
 #### Scenario: One intent across processes
 - **WHEN** the TUI sends a playback intent and the daemon accepts and starts it
 - **THEN** the TUI's send line in `mbv.log` and the daemon's accept and start lines in its
-  own log all carry the same `request=` value
+  own log all carry the same `request=` value, and the daemon's lines carry the `client=`
+  whose connect line names the TUI's `pid`
 
-#### Scenario: Nested line inherits playback context
-- **WHEN** an Emby progress report fails during playback of slot 7
-- **THEN** the failure line carries `slot=7` even though the report code does not log it
+#### Scenario: Two clients reuse a request id
+- **WHEN** two TUIs attached to the same `mbvd` each send a playback intent with request
+  id 1
+- **THEN** the owner's lines for the two intents carry different `client=` values, and
+  each `client=` connect line names a different `peer`
+
+#### Scenario: Deferred resolution keeps context
+- **WHEN** a playback intent's item lookup fails on the lookup worker and the failure is
+  handled back on the owner's event loop
+- **THEN** the failure line carries the intent's `client=` and `request=`
+
+#### Scenario: Reporting worker inherits session context
+- **WHEN** an Emby progress report fails on a reporting worker thread
+- **THEN** the failure line carries the `item=` and `play_session=` of the session being
+  reported, even though the report code does not log them
 
 ### Requirement: Credentials are never logged
-Log output SHALL NOT contain access tokens, API keys, passwords or the ctrl control
-credential. URL fields SHALL have credential-carrying query parameters (`api_key`,
-`X-Emby-Token`, `token`) replaced with `REDACTED`.
+Log output SHALL NOT contain access tokens, API keys, passwords, bearer tokens or the ctrl
+control credential. Wherever a URL appears in a log line, in a field value or in the
+message, it SHALL be written without its username/password, query string and fragment.
+A `Bearer <token>` value SHALL be written as `Bearer REDACTED`. Request headers, request
+bodies and credential or configuration values SHALL NOT be logged.
 
 #### Scenario: Stream URL with token
-- **WHEN** a playback event logs an Emby stream URL that contains `api_key=abc123`
-- **THEN** the logged value contains `api_key=REDACTED` and no `abc123`
+- **WHEN** a playback event logs an Emby stream URL that contains `?api_key=abc123`
+- **THEN** the logged value ends at the URL's path and contains no `abc123`
+
+#### Scenario: Unlisted credential shape
+- **WHEN** a feed enclosure URL `https://host/media.mp3?password=secret` is logged
+- **THEN** the logged value is `https://host/media.mp3` and contains no `secret`
+
+#### Scenario: Credentials in the URL itself
+- **WHEN** a URL `https://user:pass@host/feed` appears in an error message
+- **THEN** the logged message contains `https://host/feed` and neither `user:pass` nor
+  `pass`
 
 ### Requirement: Log file failures are reported
 When a process configured with a log file cannot create its directory, open the file or

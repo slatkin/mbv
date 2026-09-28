@@ -89,58 +89,120 @@ unless named" rule, and a hand-written ~40-line matcher is simpler than wrapping
   error = %e, "load failed")`. Keep each site's existing bare target and its level.
 - Every value that was interpolated into the message becomes a field. The message is a
   short fixed phrase with no `{}`. Use `%` (Display) for ids and errors and bare values
-  for numbers and bools. Field names: the D5 correlation keys where they apply, OTel names
-  where one fits (`http.method`, `http.status`, `url.path`, `file.path`, `error`), and
-  plain snake_case otherwise.
+  for numbers and bools. Field names: the D5 correlation keys where they apply, OTel
+  semantic-convention names where one fits, as `M-LOG-STRUCTURED` requires
+  (`http.request.method`, `http.response.status_code`, `url.path`, `file.path`,
+  `error.message`), and plain snake_case otherwise.
+- Never log request headers, request bodies, or `Debug` output of credential or config
+  structs. Delete any field named like `token`, `key`, `password` or `credential`.
 - Event names are `<target-ish component>.<operation>.<state>`, lowercase with `_` inside
   a segment.
 - `Cargo.lock` has `tracing` 0.1.44, which supports `name:` in level macros. Pin the
   workspace requirement to `0.1.44`.
 
-### D5. Correlation spans at four boundaries
-Spans use the D4 target convention and are entered for the duration of the work, on the
-thread doing it.
-- **Playback intent**: TUI side — `RemotePlayer::send_playback_intent`
-  (`crates/mbv-remote-player/src/lib.rs`) logs `ctrl.intent.sent` with `request`,
-  `generation`. Daemon side — the ctrl handler that dispatches `CtrlCmd::PlaybackIntent`
-  into `PlaybackIntentState::accept` (`crates/mbv-daemon/src/core.rs`) runs inside a
-  `ctrl.intent` span with `request`, `generation`.
-- **Queue load**: `RemotePlayer::load_queue_idle` logs `queue.load.sent` with
-  `queue_request`. `handle_queue_load_idle` (`crates/mbv-daemon/src/control/queue_load.rs`)
-  runs inside a `queue.load` span with `queue_request`.
-- **Playback session**: the per-file playback loop in `mbv-player` (the `PlaybackRun`
-  that owns the active slot, `crates/mbv-player/src/run/`) enters a `playback` span with
-  `slot` and `item`, re-created on each slot change. `play_session` is recorded on the
-  span with `Span::record` once the Emby session id is known. Declare it as
-  `play_session = tracing::field::Empty` up front. Report/progress code called from inside
-  inherits these fields.
-- **HTTP**: a ureq 3 `Middleware` in `mbv-net`, installed wherever the Emby, Audiobookshelf
-  and feed agents are built. It opens an `http.request` span with `service`,
-  `http.method`, `url.path` (path only, no query) and logs one `http.request.done`
-  (debug) or `http.request.failed` (warn) event with `http.status` and `duration_ms`.
-  ureq 3.4.2 accepts a plain `Fn(Request, MiddlewareNext) -> Result<Response, Error>` as
-  middleware (`ureq::middleware`), set on the agent config.
+### D5. Correlation spans, carried across every handoff
+Spans use the D4 target convention. A span entered only for a handler body would lose
+context wherever an operation hands off to another thread or resumes later on the event
+loop, so there are two propagation rules:
+- **Thread spawn**: code in these paths that calls `thread::spawn` captures
+  `tracing::Span::current()` before spawning and enters it first thing in the closure.
+- **Event-loop rejoin**: a handler that finishes a deferred operation rebuilds the span
+  from the ids the rejoining event or parked state already carries. It does not store the
+  `Span` itself, which would duplicate those ids.
 
-The same key names in every process give cross-process correlation (`rg 'request=42'
-mbv.log local-daemon.log`) without a protocol change.
+Boundaries:
+- **Ctrl connections** (B3 in the review): request ids are per connection, and a new
+  `RemotePlayer` and a new TUI both restart their counters at 1. So:
+  - The owner's ctrl spans always carry `client` (its `CtrlClientId`).
+  - When `ClientRegistry` registers a connection (`crates/mbv-daemon/src/ctrl.rs`), it
+    logs `ctrl.client.connected` with `client` and `peer`. For a Unix socket, `peer` is
+    the process id from `SO_PEERCRED`, via `nix::sys::socket::getsockopt(…,
+    PeerCredentials)`; the `socket` feature is already enabled. For TCP it is the peer
+    address.
+  - `RemotePlayer` logs `ctrl.connected` with `pid` (`std::process::id()`) each time it
+    connects.
+  - Chain for matching across processes: TUI `pid` → owner's `client` for that `peer`
+    → the `client`+`request` pair. No protocol change.
+- **Playback intent**:
+  - TUI: `RemotePlayer::send_playback_intent` (`crates/mbv-remote-player/src/lib.rs`)
+    logs `ctrl.intent.sent` with `request`, `generation`.
+  - Owner: the handler that feeds `PlaybackIntentState::accept` runs inside a
+    `ctrl.intent` span with `client`, `request`, `generation`.
+  - `spawn_item_lookup` (`crates/mbv-daemon/src/control/playback.rs`) follows the
+    thread-spawn rule.
+  - `handle_playback_resolved` (`crates/mbv-daemon/src/event_loop/control_events.rs`)
+    follows the rejoin rule, using its `client_id`/`request_id`/`generation` arguments.
+- **Queue load**:
+  - TUI: `RemotePlayer::load_queue_idle` logs `queue.load.sent` with `queue_request`.
+  - Owner: `handle_queue_load_idle` (`crates/mbv-daemon/src/control/queue_load.rs`) runs
+    inside a `queue.load` span with `client`, `queue_request`.
+  - `PendingIdleQueueLoad` gains `client_id: CtrlClientId`, set from `ctx.client_id` when
+    the load is parked.
+  - `complete_pending_idle_queue_load` follows the rejoin rule, using the parked
+    `client_id`/`request_id`.
+- **Playback session**:
+  - The per-file playback loop in `mbv-player` (the `PlaybackRun` that owns the active
+    slot, `crates/mbv-player/src/run/`) enters a `playback` span with `slot`, `item` and
+    `play_session = tracing::field::Empty`. The span is re-created on each slot change.
+    `play_session` is filled in with `Span::record` once known.
+  - The reporting threads are longer-lived than one slot and don't know about slots:
+    - the progress reporter (`runtime.rs` `spawn_progress_reporter`)
+    - the progress worker (`run/run_loop.rs`)
+    - the report worker (`report_worker.rs` `SessionReporter::new`)
 
-### D6. Redaction in the formatter, not at call sites
-The line formatter scrubs the values of `api_key=`, `X-Emby-Token=` and `token=`
-(case-insensitive, up to the next `&`, whitespace or quote) in every field value and the
-message, replacing them with `REDACTED`. That covers converted sites, unconverted `log`
-sites and third-party lines in one place. Headers and credentials must not be logged at all.
-Conversion tasks check for any field named like `token`, `key`, `password` or `credential`
-and remove it.
+    So they don't inherit the playback span. Instead each `SessionReporter` report method
+    enters a `playback.report` span built from the reporter's `ids` at call time (`item`,
+    `play_session`). Each queued `ReportJob` is handled inside a span built from the ids
+    the job carries. `item`/`play_session` link these lines to the `playback` span's
+    lines.
+- **HTTP**: every production agent is built by `mbv_net::native_tls_agent` (callers:
+  Emby `emby_agent`, Audiobookshelf `AudiobookshelfClient::new`, Feeds `tls_agent`, TUI
+  image fetching).
+  - Split it into `agent_config(service: HttpService, connect, global) -> ureq::config::Config`
+    plus the agent build. `HttpService` is a new enum: `Emby`, `Audiobookshelf`, `Feed`,
+    `Images`.
+  - `agent_config` installs the logging middleware. ureq 3.4.2 accepts a plain
+    `Fn(Request, MiddlewareNext) -> Result<Response, Error>` (`ureq::middleware`).
+  - The `service` argument is required, so no provider agent can be built without
+    naming its service and getting the middleware.
+  - The middleware runs inside an `http.request` span with `service`,
+    `http.request.method` and `url.path` (path only). It logs `http.request.done` (debug)
+    or `http.request.failed` (warn) with `http.response.status_code` (when there is a
+    response) and `duration_ms`.
+  - `MockHttp` gains `agent_for(service)`, which builds from the same `agent_config`, so
+    tests go through the production configuration.
 
-Rejected: a `RedactedUrl` wrapper at call sites. It relies on every caller remembering it
-and misses messages from the bridge.
+### D6. URL and bearer redaction in the formatter
+A list of credential parameter names can't cover every shape. Feed enclosure URLs are
+arbitrary third-party URLs (`?password=…`, signed-URL parameters, `user:pass@host`). So
+the line formatter rewrites every URL-shaped substring (`<scheme>://…` up to whitespace
+or a quote) in every field value and in the message:
+- It drops the username/password part, the query string and the fragment, keeping
+  scheme, host, port and path.
+- It replaces `Bearer <token>` with `Bearer REDACTED`.
 
-### D7. Timestamps from `localtime_r`, not `time`'s `local-offset`
-`time`'s `UtcOffset::current_local_offset` refuses to work in a multi-threaded process on
-Unix, and all three binaries are multi-threaded. Keep the existing `libc::localtime_r`
-call. Take milliseconds from `SystemTime` sub-seconds and the offset from `tm.tm_gmtoff`.
-Split this into an `unsafe` wrapper returning plain parts and a pure formatter
-(`parts → "YYYY-MM-DDTHH:MM:SS.mmm±HH:MM"`) that tests can call.
+That covers converted sites, unconverted `log` sites, third-party lines, and error
+messages that embed URLs (ureq errors do), all in one place. The trade-off is that query
+parameters are never visible in logs. Anything worth logging from a query gets its own
+field at the call site. Credentials that aren't in URLs (login password bodies, the
+control token in `CtrlHello`, the Audiobookshelf `Authorization` header) are kept out by
+the D4 rule, which conversion tasks apply.
+
+Rejected:
+- A list of named query parameters: misses unknown shapes (review B2).
+- A `RedactedUrl` wrapper at call sites: depends on every caller remembering it, and
+  misses messages from the bridge.
+
+### D7. Timestamps from `time` with `local-offset`
+The workspace `time` 0.3.55 gets the `formatting`, `local-offset` and `macros` features.
+Its Unix local-offset lookup calls `localtime_r` directly and has no multi-thread
+restriction. `mbv-core` takes `time` as a dependency and drops `libc`, along with
+`now_ts`'s `unsafe` block.
+- `OffsetDateTime::now_local()`, falling back to `now_utc()` if it errors, formatted with
+  a `format_description!` of
+  `[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3][offset_hour sign:mandatory]:[offset_minute]`.
+- The formatter is a pure `fn format_ts(OffsetDateTime) -> String`, so tests can pass
+  fixed `datetime!` values.
 
 ### D8. File sink with in-process rotation
 `FileSink { path, file: Option<File>, len: u64 }` sits behind the layer's `Mutex`. Before
@@ -160,11 +222,19 @@ Stderr sink behaviour is unchanged: `<prio>` + line, trace maps to `<7>`. The sy
   (`#[case]` table, only cases with different outcomes). Display round-trip.
 - Filter: a longest-prefix directive wins, and third-party is capped at warn unless named.
 - Line formatter: key order, quoting and escaping, span fragments in outer→inner order.
-- Timestamp formatter: fixed parts → exact string, including a negative offset.
-- Redaction: `api_key` in a field value and in the message.
+- Timestamp formatter: fixed `datetime!` → exact string, including a negative offset.
+- Redaction: `?api_key=` in a field value, an unlisted `?password=` query, `user:pass@`
+  userinfo in the message, and a `Bearer` token.
 - Rotation: temp directory with a tiny limit. Generations shift and are capped at 3.
 - Span inheritance: an event inside a span carries the span's fields (a subscriber built
   on an in-memory sink, `tracing::subscriber::with_default`, no global init).
+- Rejoin correlation (`mbv-daemon`, `src/tests/loop.rs` harness): a failed
+  `PlaybackResolved` handled on the event loop logs a line carrying the intent's `client`
+  and `request`. The test uses a thread-local capture subscriber.
+- Reporter correlation (`mbv-player`, existing `src/tests/` reporter fixtures): a report
+  job's event carries `item` and `play_session`.
+- HTTP (`mbv-net`): an agent from `MockHttp::agent_for(HttpService::Emby)` given a 500
+  logs `http.request.failed` with `service=emby` and `http.response.status_code=500`.
 - CLI parse tests in `src/main.rs` and `crates/mbvd/src/tests.rs` switch to `LogSpec`
   (existing tests, extended with one directive case).
 - Call-site conversion itself gets no new tests. It is mechanical, and clippy plus
@@ -176,8 +246,11 @@ Stderr sink behaviour is unchanged: `<prio>` + line, trace maps to `<7>`. The sy
   agent. The `log` bridge keeps unconverted crates working, so any order is safe.
 - [Log volume grows with fields] → Fields replace interpolated text, so size stays about the
   same. The HTTP done-event is debug level.
-- [Formatter-level redaction can miss new credential shapes] → The pattern list is in one
-  place. Conversion tasks also remove credential-named fields.
+- [Redaction hides query parameters that might help debugging] → Values worth logging get
+  their own field at the call site. URL credentials can't leak through any other path.
+- [Handoffs added later may not propagate context] → The two rules in D5 are stated as
+  conventions. Code review catches a new `thread::spawn` or rejoin in these paths that
+  doesn't follow them.
 - [Log format change breaks external parsers] → No known consumers. It's called out as
   BREAKING in the proposal.
 

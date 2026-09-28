@@ -13,23 +13,26 @@ file failures are silently ignored, and a long-running daemon never rotates its 
 ## What Changes
 
 - Replace the custom `log` backend in `mbv-core` with a `tracing` subscriber that writes
-  logfmt with named key-value fields. The existing `source=` and quoted `msg=` keys stay.
+  logfmt with named key-value fields. The existing `source=` key stays. `msg=` stays as
+  the last key and is quoted only when its value needs it.
 - Timestamps become RFC 3339 local time with milliseconds and a UTC offset
-  (`2026-09-28T14:03:12.345+02:00`).
+  (`2026-09-28T14:03:12.345+02:00`), produced by the `time` crate, which is already a
+  dependency.
 - Each converted event carries a dot-notation event name (`event=player.load.start`) and
-  its context as fields (`slot=`, `item=`, `request=`, `http.status=`, …).
-- Spans cover three scopes: ctrl requests (playback intent and queue load, keyed by the
-  existing request ids), playback sessions (slot, item, Emby play session), and HTTP
-  requests. Every line inside a span carries the span's fields. The same keys are used in
-  every process, so you can match lines from different processes by those shared ids
-  without any protocol change.
+  its context as fields (`slot=`, `item=`, `request=`, `http.response.status_code=`, …).
+- Spans cover four scopes: ctrl requests (playback intent and queue load, keyed by the
+  owner's client id plus the existing request ids), playback sessions (slot, item, Emby
+  play session), Emby progress reporting, and HTTP requests. The context is carried
+  across the worker threads and event-loop handoffs each operation passes through. The
+  owner logs which process or address each client id belongs to, and the TUI logs its pid
+  on every connect. That lets you match TUI and owner lines without any protocol change.
 - `--log-level` accepts `trace` and per-target directives
   (`--log-level info,player=debug`). A plain level keeps working as it does today.
 - A log file that can't be opened or rotated produces one message on stderr. The file
   is rotated by size while the process is running, not only at startup, and three older
   generations are kept.
-- Credentials (tokens, API keys, control credentials) never appear in log output. URL
-  fields are redacted.
+- Credentials never appear in log output. Every URL is logged without its username/
+  password, query string or fragment, and bearer tokens are replaced.
 - All ~415 existing `log::` call sites are converted, crate by crate. Until each crate is
   converted, its `log::` calls keep reaching the same sink through the `log` bridge.
 - **BREAKING (log format only)**: the timestamp format and key set change. Anything that
@@ -50,8 +53,14 @@ None.
 ## Impact
 
 - `crates/mbv-core/src/applog.rs` (rewritten; split into submodules if needed), plus
-  `mbv-core`'s `Cargo.toml` (`tracing`, `tracing-subscriber` with the `registry` and
-  `std` features only, no `env-filter`/regex, and `tracing-log`).
+  `mbv-core`'s `Cargo.toml`: add `tracing`, `tracing-subscriber` (`registry` and `std`
+  features only, no `env-filter`/regex), `tracing-log` and `time`; drop `libc`. The
+  workspace `time` gains the `formatting`, `local-offset` and `macros` features.
+- `mbv_net::native_tls_agent` gains a required service argument and installs the HTTP
+  logging middleware. Its callers in Emby, Audiobookshelf, Feeds and the TUI's image
+  fetching must pass it.
+- Ctrl owner (`mbv-daemon`): logs the peer when a client connects, and the parked queue
+  load records its client id.
 - Workspace `Cargo.toml`: `tracing` becomes a direct workspace dependency. It is already in
   the lockfile transitively. It does not bring in tokio.
 - Every crate with log call sites: `src/`, `mbv-player`, `mbv-daemon`, `mbv-emby`,
