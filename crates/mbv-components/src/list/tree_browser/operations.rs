@@ -6,8 +6,8 @@ use mbv_text::fuzzy_match::{word_match_score, SkimMatcherV2};
 use ratatui::layout::Rect;
 
 use crate::list::{
-    AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PagingPolicy, Row,
-    RowFlow, Viewported,
+    AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
+    Viewported,
 };
 // The full-width bar is paint policy, so its predicate lives with the shared
 // tree painter and is imported through the app-level render seam.
@@ -58,7 +58,7 @@ impl<Target: Clone + Eq + Hash> MarkSelection<Target> for TreeState<'_, Target> 
     }
 }
 
-impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
+impl<Target: Clone + Eq + Hash> TreeState<'_, Target> {
     fn is_expanded(&self, target: &Target) -> bool {
         self.browser.expanded.contains(target)
     }
@@ -77,6 +77,23 @@ impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
     fn parent_target(&self, target: &Target) -> Option<&Target> {
         let id = *self.browser.target_to_node.get(target)?;
         self.browser.arena.get(&id)?.node.parent.as_ref()
+    }
+
+    fn toggle_expanded(&mut self, target: &Target) {
+        let expanded = !self.is_expanded(target);
+        self.set_expanded(target, expanded);
+    }
+
+    /// Move the cursor to the selected target's visible parent.
+    fn select_parent(&mut self, flow: &RowFlow<Target>) -> Option<usize> {
+        let position = self
+            .selected_target()
+            .and_then(|target| self.parent_target(target))
+            .and_then(|parent| flow.position_of(parent));
+        if let Some(position) = position {
+            self.set_selected_target(flow.target_at(position));
+        }
+        position
     }
 }
 
@@ -403,7 +420,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.with_state(|state| Cursored::last(state, flow));
             }
             super::TreeOperation::Parent => {
-                self.with_state(|state| Expandable::select_parent(state, flow));
+                self.with_state(|state| state.select_parent(flow));
             }
             // Every other operation is dispatched by a different branch in
             // apply_operation; keep this match exhaustive as the vocabulary grows.
@@ -498,7 +515,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 (TreeConsumed::Consumed, None)
             };
         }
-        self.with_state(|state| Expandable::toggle_expanded(state, &target));
+        self.with_state(|state| state.toggle_expanded(&target));
         self.reconcile_selection();
         (TreeConsumed::Consumed, None)
     }
@@ -507,7 +524,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         if !self.is_expandable(target) {
             return TreeConsumed::Unhandled;
         }
-        self.with_state(|state| Expandable::toggle_expanded(state, target));
+        self.with_state(|state| state.toggle_expanded(target));
         self.reconcile_selection();
         TreeConsumed::Consumed
     }

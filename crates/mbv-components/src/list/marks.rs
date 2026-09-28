@@ -194,3 +194,14 @@ mod tests {
         assert_eq!(marks.marks.targets(), &[3, 1, 4]);
     }
 }
+
+/// Aggregate mark state for a parent with visible children.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AggregateMarkState {
+    /// No visible child is marked.
+    Unmarked,
+    /// Some, but not all, visible children are marked.
+    Partial,
+    /// Every visible child is marked.
+    Marked,
+}
