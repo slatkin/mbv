@@ -26,7 +26,11 @@ pub(super) fn spawn_item_lookup<F>(
     let tx = tx.clone();
     let lookup_client = client.lock().unwrap().clone();
     std::thread::spawn(move || {
-        if let Some(event) = to_event(lookup_client.get_items_by_ids(&item_ids)) {
+        if let Some(event) = to_event(
+            lookup_client
+                .get_items_by_ids(&item_ids)
+                .map_err(|error| error.to_string()),
+        ) {
             let _ = tx.send(event);
         }
     });

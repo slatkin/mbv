@@ -231,12 +231,12 @@ impl EmbyClient {
             hard_bound.as_millis()
         );
         let result = mbv_net::bounded::run_with_hard_bound(
-            move || {
-                client
+            move || -> Result<_, crate::EmbyError> {
+                let status = client
                     .post("/Sessions/Playing/Stopped")
-                    .send_json(body)
-                    .map(|r| r.status())
-                    .map_err(|e| e.to_string())
+                    .send_json(body)?
+                    .status();
+                Ok(status)
             },
             hard_bound,
         );
@@ -246,7 +246,7 @@ impl EmbyClient {
                 log::info!(target: "api", "inbound: {status} Stopped shutdown in {elapsed_ms}ms");
                 true
             }
-            Err(e) if e.starts_with("timed out after ") => {
+            Err(e) if e.is_timeout() => {
                 log::warn!(target: "api", "err: Stopped shutdown timed out after {elapsed_ms}ms: {e}");
                 false
             }
