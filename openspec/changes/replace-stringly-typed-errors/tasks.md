@@ -73,7 +73,7 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 8. Final verification
 
-- [ ] 8.1 Run the end-of-change gates over the whole workspace
+- [x] 8.1 Run the end-of-change gates over the whole workspace
   (`cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo nextest run --release --test-threads=4`, `cargo fmt --all -- --check`)
   plus the zero-`String`-error `rg` audit, verify all green
