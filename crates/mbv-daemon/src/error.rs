@@ -23,6 +23,7 @@ impl DaemonLibError {
     pub(crate) fn queue_setup(message: impl Into<String>) -> Self {
         Self::new(DaemonLibErrorKind::QueueSetup, message)
     }
+
     fn new(kind: DaemonLibErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,

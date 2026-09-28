@@ -29,12 +29,12 @@ impl EmbyError {
     }
 
     #[must_use]
-    pub fn playback(message: impl Into<String>) -> Self {
+    pub(crate) fn playback(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Playback, message)
     }
 
-    /// A browse/reveal lookup failure inside the app: the server was not the
-    /// problem, the requested item or path simply cannot be resolved.
+    /// An app-side lookup or operation failure with no server fault, e.g. an
+    /// item or path that cannot be resolved or a local action that failed.
     #[must_use]
     pub fn resolve(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Resolve, message)
