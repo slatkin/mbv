@@ -299,10 +299,14 @@ fn authenticate_preserves_token_on_connectivity_error() {
     let mut client = client_with_url(TEST_URL).with_test_agent(agent);
     let result = client.authenticate();
     match &result {
-        Err(e) => assert!(
-            e.starts_with("Cached credential validation failed:"),
-            "expected connectivity error, got {e:?}"
-        ),
+        Err(e) => {
+            assert!(
+                e.to_string()
+                    .starts_with("Cached credential validation failed:"),
+                "expected connectivity error, got {e:?}"
+            );
+            assert!(e.is_auth());
+        }
         Ok(()) => panic!("expected a connectivity error"),
     }
     // The cached token survives a connectivity failure (issue #192): the
@@ -322,7 +326,10 @@ fn authenticate_clears_token_on_401() {
     seed_cached_token(TEST_URL, "cache-token", "cache-user");
     let mut client = client_with_url(TEST_URL).with_test_agent(agent);
     let result = client.authenticate();
-    assert_eq!(result, Err("Cached credentials expired".to_string()));
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "Cached credentials expired"
+    );
     assert_eq!(client.token, "");
     assert_eq!(client.user_id, "");
     assert!(!mbv_config::token_cache_path().exists());

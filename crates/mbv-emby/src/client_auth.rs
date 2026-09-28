@@ -106,14 +106,14 @@ impl EmbyClient {
 
     // ── Authentication ───────────────────────────────────────────────────────
 
-    pub fn authenticate(&mut self) -> Result<(), String> {
+    pub fn authenticate(&mut self) -> Result<(), crate::EmbyError> {
         let Some((cached_url, token, user_id)) = load_cached_token() else {
-            return Err("No cached credentials".to_string());
+            return Err(crate::EmbyError::auth("No cached credentials"));
         };
 
         if self.config.server_url.is_empty() {
             if cached_url.is_empty() {
-                return Err("No server URL configured".to_string());
+                return Err(crate::EmbyError::auth("No server URL configured"));
             }
             self.config.server_url = cached_url;
         }
@@ -140,14 +140,17 @@ impl EmbyClient {
                 clear_cached_token();
                 self.token.clear();
                 self.user_id.clear();
-                Err("Cached credentials expired".to_string())
+                Err(crate::EmbyError::auth("Cached credentials expired"))
             }
             Err(e) => {
                 // Connectivity failure (timeout/refused/DNS/TLS): the token
                 // itself is untouched and may still be valid, so keep it in
                 // memory and on disk for the next attempt (issue #192). Only
                 // 401/403 (above) counts as "credentials expired".
-                Err(format!("Cached credential validation failed: {e}"))
+                Err(crate::EmbyError::auth_context(
+                    "Cached credential validation failed",
+                    e,
+                ))
             }
         }
     }
@@ -166,7 +169,7 @@ impl EmbyClient {
     pub fn authenticate_bounded(
         &self,
         hard_bound: std::time::Duration,
-    ) -> Result<EmbyClient, String> {
+    ) -> Result<EmbyClient, crate::EmbyError> {
         let mut clone = self.clone();
         mbv_net::bounded::run_with_hard_bound(
             move || clone.authenticate().map(|()| clone),
@@ -181,7 +184,7 @@ impl EmbyClient {
         &self,
         token: String,
         hard_bound: std::time::Duration,
-    ) -> Result<EmbyClient, String> {
+    ) -> Result<EmbyClient, crate::EmbyError> {
         let mut clone = self.clone();
         clone.token = token;
         mbv_net::bounded::run_with_hard_bound(
@@ -189,13 +192,17 @@ impl EmbyClient {
                 let users: Value = clone
                     .get("/Users")
                     .call()
-                    .map_err(|e| format!("service credential validation failed: {e}"))?
+                    .map_err(|e| {
+                        crate::EmbyError::auth_context("service credential validation failed", e)
+                    })?
                     .body_mut()
                     .read_json()
-                    .map_err(|e| format!("service credential response failed: {e}"))?;
-                let users = users
-                    .as_array()
-                    .ok_or_else(|| "service credential response was not a user list".to_string())?;
+                    .map_err(|e| {
+                        crate::EmbyError::auth_context("service credential response failed", e)
+                    })?;
+                let users = users.as_array().ok_or_else(|| {
+                    crate::EmbyError::auth("service credential response was not a user list")
+                })?;
                 let user = clone
                     .config
                     .username
@@ -207,7 +214,7 @@ impl EmbyClient {
                             .iter()
                             .find(|user| user_matches_username(user, &clone.config.username))
                     })
-                    .ok_or_else(|| "no matching Emby user".to_string())?;
+                    .ok_or_else(|| crate::EmbyError::auth("no matching Emby user"))?;
                 clone.user_id = user["Id"].as_str().unwrap_or_default().to_string();
                 if let Some(name) = user["Name"].as_str() {
                     clone.config.username = name.to_string();
@@ -256,13 +263,15 @@ impl EmbyClient {
         username: &str,
         password: &str,
         hard_bound: std::time::Duration,
-    ) -> Result<EmbyCredentialExchange, String> {
+    ) -> Result<EmbyCredentialExchange, crate::EmbyError> {
         let mut client = self.clone();
         client.config.server_url = server_url.trim().trim_end_matches('/').to_string();
         let username = username.trim().to_string();
         let password = password.to_string();
         if client.config.server_url.is_empty() || username.is_empty() || password.is_empty() {
-            return Err("server URL, username, and password are required".to_string());
+            return Err(crate::EmbyError::auth(
+                "server URL, username, and password are required",
+            ));
         }
         mbv_net::bounded::run_with_hard_bound(
             move || {
@@ -271,20 +280,29 @@ impl EmbyClient {
                     .post(&client.url("/Users/AuthenticateByName"))
                     .header("Authorization", &client.unauthenticated_header())
                     .send_json(serde_json::json!({"Username": username, "Pw": password}))
-                    .map_err(|e| format!("Emby authentication failed: {e}"))?
+                    .map_err(|e| crate::EmbyError::auth_context("Emby authentication failed", e))?
                     .body_mut()
                     .read_json()
-                    .map_err(|e| format!("Emby authentication response parse failed: {e}"))?;
+                    .map_err(|e| {
+                        crate::EmbyError::auth_context(
+                            "Emby authentication response parse failed",
+                            e,
+                        )
+                    })?;
                 let token = resp["AccessToken"]
                     .as_str()
                     .map(str::trim)
                     .filter(|token| !token.is_empty())
-                    .ok_or_else(|| "Emby authentication returned an empty token".to_string())?;
+                    .ok_or_else(|| {
+                        crate::EmbyError::auth("Emby authentication returned an empty token")
+                    })?;
                 let user_id = resp["User"]["Id"]
                     .as_str()
                     .map(str::trim)
                     .filter(|id| !id.is_empty())
-                    .ok_or_else(|| "Emby authentication returned an empty user ID".to_string())?;
+                    .ok_or_else(|| {
+                        crate::EmbyError::auth("Emby authentication returned an empty user ID")
+                    })?;
                 Ok(EmbyCredentialExchange {
                     server_url: client.config.server_url,
                     user_id: user_id.to_string(),
@@ -326,14 +344,10 @@ impl EmbyClient {
     }
 
     /// Fetch the current user's subtitle and audio language preferences from Emby.
-    pub fn get_user_subtitle_prefs(&self) -> Result<mbv_ctrl::player::SubtitlePrefs, String> {
-        let resp: serde_json::Value = self
-            .get("/Users/Me")
-            .call()
-            .map_err(|e| e.to_string())?
-            .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+    pub fn get_user_subtitle_prefs(
+        &self,
+    ) -> Result<mbv_ctrl::player::SubtitlePrefs, crate::EmbyError> {
+        let resp: serde_json::Value = self.get("/Users/Me").call()?.body_mut().read_json()?;
         let cfg = &resp["Configuration"];
         let mode = cfg["SubtitleMode"]
             .as_str()
