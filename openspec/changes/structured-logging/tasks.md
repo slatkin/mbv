@@ -21,7 +21,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   formatter, value quoting/escaping, D6 URL/bearer redaction). Verify with the timestamp,
   line and redaction unit tests from design.md, including the unlisted `?password=` and
   `user:pass@` cases.
-- [ ] 1.4 Add `applog/sink.rs`: `FileSink` with size rotation (3 generations), and the
+- [x] 1.4 Add `applog/sink.rs`: `FileSink` with size rotation (3 generations), and the
   one-time stderr warning on open, rotate or create-dir failure (D8). Keep the stderr
   `<prio>` sink (D9). Verify with the temp-directory rotation test and the existing
   `stderr_line_has_systemd_priority_prefix` test, extended with a trace case.
