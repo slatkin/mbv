@@ -175,7 +175,16 @@ impl PlaybackRun {
                 end.completed_runtime,
                 self.last_valid_pos,
             ));
-            next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok())
+            let selected =
+                next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok());
+            if selected {
+                // The completed file already ended (this EndFile), so the
+                // replacement the selection armed has nothing left to drain.
+                // Left armed, it swallows the next track's real EndFile and
+                // the one-entry playlist goes idle.
+                let _ = self.on_drained();
+            }
+            selected
         } else {
             self.set_active_index(next_idx)
         };
