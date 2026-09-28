@@ -96,12 +96,13 @@ impl App {
             .or_else(|| items.first())
             .map(EmbyItem::playback_label)
             .unwrap_or_default();
-        self.pending_local_play = Some(PendingQueueAction::PlayItems {
-            items,
-            start_idx,
-            source,
-            autostart: true,
-        });
+        self.queue_deferrals
+            .hold_local_play(PendingQueueAction::PlayItems {
+                items,
+                start_idx,
+                source,
+                autostart: true,
+            });
         let owner = self
             .connected_session_state
             .as_ref()

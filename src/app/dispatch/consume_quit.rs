@@ -17,7 +17,7 @@ impl App {
             let save_on_quit = self.config.lock().unwrap().save_playlist_on_quit;
             if save_on_quit {
                 let playlist_id = self.queue_playlist_id().map(str::to_string);
-                self.save_playlist_to_emby();
+                let _ = self.save_playlist_to_emby();
                 if let Some(playlist_id) = playlist_id {
                     let deadline = Instant::now()
                         + Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
@@ -70,7 +70,7 @@ impl App {
             is_saved_playlist={is_saved_playlist}");
         if save_on_consume && is_saved_playlist {
             self.queue_dirty = false;
-            self.save_playlist_to_emby();
+            let _ = self.save_playlist_to_emby();
         }
     }
 
@@ -93,7 +93,7 @@ impl App {
             save_playlist_on_consume_audio={save_on_consume} is_saved_playlist={is_saved_playlist}");
         if save_on_consume && is_saved_playlist {
             self.queue_dirty = false;
-            self.save_playlist_to_emby();
+            let _ = self.save_playlist_to_emby();
         }
     }
 }

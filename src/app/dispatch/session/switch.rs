@@ -336,7 +336,7 @@ impl App {
     /// Execute a confirmed local fall-through. Local preparation happens
     /// before the current owner is stopped or the attachment is changed.
     pub(in crate::app) fn play_pending_local_play(&mut self) {
-        let Some(action) = self.pending_local_play.take() else {
+        let Some(action) = self.queue_deferrals.take_confirmed_local_play() else {
             return;
         };
         let prepared = match self.prepare_local_player() {

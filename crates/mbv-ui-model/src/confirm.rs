@@ -25,10 +25,11 @@ pub enum ConfirmAction {
     ReplaceAudiobookshelf(mbv_core::service_runtime::SetupGeneration),
     /// Design D6: a resolved queue replacement that would discard a populated
     /// target queue. The payload is the already-resolved
-    /// `pending_queue_replacement` slot, so confirming executes exactly that
-    /// action through the existing playback/admission executor and cannot
-    /// re-resolve into a second one. That slot is private to this arm; the
-    /// save-deferral `pending_queue_action` slot stays with its own callers.
+    /// `QueueDeferrals::take_confirmed_replacement` transition, so confirming
+    /// executes exactly that action through the existing playback/admission
+    /// executor and cannot re-resolve into a second one. Save ownership stays
+    /// with `QueueDeferrals::bind_to_save` and
+    /// `QueueDeferrals::take_on_save_complete`.
     ReplacePopulatedQueue,
 }
 

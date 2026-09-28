@@ -94,6 +94,7 @@ impl App {
         result: Result<(), String>,
     ) {
         let succeeded = result.is_ok();
+        let deferred_action = self.queue_deferrals.take_on_save_complete(mutation_id);
         if let Err(error) = result {
             self.flash(
                 format!("Playlist save failed: {error}"),
@@ -112,11 +113,9 @@ impl App {
         if succeeded
             && self.origin_is_current(origin)
             && self.queue_playlist_id() == Some(playlist_id)
-            && self.pending_queue_action.is_some()
+            && let Some(action) = deferred_action
         {
-            if let Some(action) = self.pending_queue_action.take() {
-                self.execute_pending_queue_action(action);
-            }
+            self.execute_pending_queue_action(action);
             self.request_sidebar_dismiss(SidebarId::Playlists);
             self.set_panel_focus(PanelFocus::Queue);
         }
