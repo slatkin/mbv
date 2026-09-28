@@ -2,8 +2,8 @@
 //! `encode-local-queue-owner`): which process holds the authoritative Local
 //! queue, and one fence value shaped by that owner.
 
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_remote_player::DaemonEndpoint;
 
 /// Which process holds the authoritative Local queue. Derived from

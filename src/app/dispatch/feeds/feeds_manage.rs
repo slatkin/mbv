@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_config::FeedSubscription;
 use mbv_ui_model::tab_selection::TabSelection;
 

@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::{config_path, parse_config, save_config_settings, Config};
+use crate::{Config, config_path, parse_config, save_config_settings};
 
 // ── `[keys]` config parse + save (change add-configurable-keybinds, U2) ──
 //
@@ -73,10 +73,11 @@ help_open = "F9"
     );
     // A rebound action no longer fires its declared default chord.
     let next_tab = mbv_keybinds::action_by_id("next_library_tab").unwrap();
-    assert!(!cfg
-        .keybinds
-        .router_chords(next_tab)
-        .contains(&mbv_keybinds::Chord::parse("Tab").unwrap()));
+    assert!(
+        !cfg.keybinds
+            .router_chords(next_tab)
+            .contains(&mbv_keybinds::Chord::parse("Tab").unwrap())
+    );
 }
 
 #[test]

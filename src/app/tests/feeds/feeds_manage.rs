@@ -1,5 +1,5 @@
-use crate::app::tests::make_app_stub;
 use crate::app::Model;
+use crate::app::tests::make_app_stub;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 use mbv_ui_model::feeds_manage::{FeedAddResult, FeedsManagePopup};

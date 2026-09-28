@@ -1,4 +1,4 @@
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::Write;
 
 type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;

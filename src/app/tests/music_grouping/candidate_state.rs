@@ -359,15 +359,17 @@ fn warmup_orphan_risk_gets_one_browse_upgrade_then_stays_terminal() {
         app.album_artist_levels.get("group-0"),
         Some(&LevelFillState::Failed)
     );
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .music_grouping
-        .as_ref()
-        .unwrap()
-        .candidate
-        .is_some());
+    assert!(
+        app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .music_grouping
+            .as_ref()
+            .unwrap()
+            .candidate
+            .is_some()
+    );
 
     // Model the one upgrade's arrival with an unknown artist. It clears the
     // orphan risk, while the waiting album takes the existing fallback path.
@@ -391,15 +393,17 @@ fn warmup_orphan_risk_gets_one_browse_upgrade_then_stays_terminal() {
         app.album_artist_levels.get("group-0"),
         Some(&LevelFillState::Filled { orphan_risk: false })
     );
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .music_grouping
-        .as_ref()
-        .unwrap()
-        .candidate
-        .is_none());
+    assert!(
+        app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .music_grouping
+            .as_ref()
+            .unwrap()
+            .candidate
+            .is_none()
+    );
 }
 
 #[test]
@@ -412,15 +416,17 @@ fn candidate_filled_level_is_terminal_without_orphan_upgrade() {
 
     app.start_or_supersede_music_grouping(0);
 
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .music_grouping
-        .as_ref()
-        .unwrap()
-        .candidate
-        .is_none());
+    assert!(
+        app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .music_grouping
+            .as_ref()
+            .unwrap()
+            .candidate
+            .is_none()
+    );
     assert_eq!(
         app.album_artist_levels.get("group-0"),
         Some(&LevelFillState::Filled { orphan_risk: false })
@@ -443,13 +449,15 @@ fn orphan_risk_filled_level_with_no_unresolved_items_does_not_upgrade() {
         app.album_artist_levels.get("group-0"),
         Some(&LevelFillState::Filled { orphan_risk: true })
     );
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .music_grouping
-        .as_ref()
-        .unwrap()
-        .candidate
-        .is_none());
+    assert!(
+        app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .music_grouping
+            .as_ref()
+            .unwrap()
+            .candidate
+            .is_none()
+    );
 }

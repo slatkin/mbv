@@ -1,5 +1,5 @@
-use crate::app::state::events::AudiobookshelfEvent;
 use crate::app::App;
+use crate::app::state::events::AudiobookshelfEvent;
 
 impl App {
     pub(super) fn handle_audiobookshelf_event(&mut self, ev: AudiobookshelfEvent) {

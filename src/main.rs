@@ -265,7 +265,9 @@ fn pre_config_startup() -> Option<(Option<applog::Level>, Option<String>)> {
     // Reject the removed -d argument before startup side effects.
     if has_flag(&args, "-d") {
         eprintln!("mbv: the `-d` flag has been removed.");
-        eprintln!("mbv: to keep the local daemon running after quit, enable `stay_alive` in config or the settings overlay.");
+        eprintln!(
+            "mbv: to keep the local daemon running after quit, enable `stay_alive` in config or the settings overlay."
+        );
         std::process::exit(1);
     }
 
@@ -547,7 +549,10 @@ mod tests {
             "tcp://192.0.2.11:17831".to_string(),
         );
         let summary = config_diagnostic_summary(&config);
-        assert_eq!(summary, "config loaded: auto_reconnect=true library_routes=2 entries=[audiobooks=tcp://192.0.2.11:17831, music=tcp://192.0.2.10:17831]");
+        assert_eq!(
+            summary,
+            "config loaded: auto_reconnect=true library_routes=2 entries=[audiobooks=tcp://192.0.2.11:17831, music=tcp://192.0.2.10:17831]"
+        );
         assert!(!summary.contains("secret-token"));
     }
 }

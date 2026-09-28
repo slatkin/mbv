@@ -1,8 +1,8 @@
 use crate::app::{App, PanelFocus, TabSelection};
 use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
-    LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, TabIdentity, TuiLaunchState,
-    TUI_LAUNCH_STATE_VERSION,
+    LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, TUI_LAUNCH_STATE_VERSION, TabIdentity,
+    TuiLaunchState,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;

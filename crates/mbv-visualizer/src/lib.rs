@@ -150,7 +150,7 @@ impl PipeWireWorker {
             Ok(error) => return Err(error),
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
-                return Err("PipeWire worker stopped unexpectedly".into())
+                return Err("PipeWire worker stopped unexpectedly".into());
             }
         }
 
@@ -337,11 +337,14 @@ fn handle_stream_state(
         }
         pw::stream::StreamState::Error(error) => {
             let message = format!("PipeWire capture stream failed: {error}");
-            match data.startup_tx.take() { Some(startup_tx) => {
-                let _ = startup_tx.send(Startup::Failed(message));
-            } _ => {
-                let _ = data.failure_tx.send(message);
-            }}
+            match data.startup_tx.take() {
+                Some(startup_tx) => {
+                    let _ = startup_tx.send(Startup::Failed(message));
+                }
+                _ => {
+                    let _ = data.failure_tx.send(message);
+                }
+            }
             if let Ok(mut buffer) = data.buffer.try_lock() {
                 buffer.clear();
             }
@@ -392,11 +395,14 @@ fn handle_stream_param(
         Ok(())
     })();
     if let Err(message) = result {
-        match data.startup_tx.take() { Some(startup_tx) => {
-            let _ = startup_tx.send(Startup::Failed(message));
-        } _ => {
-            let _ = data.failure_tx.send(message);
-        }}
+        match data.startup_tx.take() {
+            Some(startup_tx) => {
+                let _ = startup_tx.send(Startup::Failed(message));
+            }
+            _ => {
+                let _ = data.failure_tx.send(message);
+            }
+        }
         mainloop.quit();
     }
 }
@@ -508,7 +514,7 @@ pub fn join_worker(handle: JoinHandle<()>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{capture_frame_bytes, StereoSample, StereoSampleBuffer};
+    use super::{StereoSample, StereoSampleBuffer, capture_frame_bytes};
     use pipewire::spa::param::audio::{AudioFormat, AudioInfoRaw};
 
     #[test]

@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, mpsc};
 use std::time::Duration;
 
 pub(in crate::app) type DirectConnectFn = fn(

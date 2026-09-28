@@ -1,7 +1,7 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Block, Clear};
-use ratatui::Frame;
 
 use super::backdrop::dim_backdrop_in;
 use mbv_theme as palette;

@@ -1,5 +1,5 @@
 use super::super::{TreeBrowser, TreeMarkPolicy};
-use super::{named_node, node, paint, Target};
+use super::{Target, named_node, node, paint};
 use ratatui::layout::{Position, Rect};
 #[test]
 fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
@@ -144,9 +144,11 @@ fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_a
     assert_eq!(browser.filter_query, "track");
     assert!(browser.is_expanded(&Target::Root));
     assert!(!browser.is_expanded(&Target::Branch));
-    assert!(browser
-        .visible_node_ids()
-        .contains(&browser.target_to_node[&Target::Leaf]));
+    assert!(
+        browser
+            .visible_node_ids()
+            .contains(&browser.target_to_node[&Target::Leaf])
+    );
     browser.apply(super::super::TreeOperation::ClearFilter);
     assert_eq!(browser.selected_target(), anchor.as_ref());
     assert!(browser.is_expanded(&Target::Root));
@@ -154,8 +156,8 @@ fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_a
 
 #[test]
 fn marks_aggregate_and_context_use_visible_display_order() {
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use tuirealm::component::Component;
 
     let mut browser = TreeBrowser::new();
@@ -229,8 +231,8 @@ fn marks_aggregate_and_context_use_visible_display_order() {
 
 #[test]
 fn one_operation_reports_selection_and_mark_changes_together() {
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use tuirealm::component::Component;
 
     let mut browser = TreeBrowser::new();

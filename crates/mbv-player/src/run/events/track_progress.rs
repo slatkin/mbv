@@ -1,6 +1,6 @@
 use super::super::{
-    handle_intro, queue_next_up_decision, standalone_next_up_decision, Mpv, NextUpFire,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, TICKS_PER_SECOND,
+    Mpv, NextUpFire, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
+    TICKS_PER_SECOND, handle_intro, queue_next_up_decision, standalone_next_up_decision,
 };
 
 impl PlaybackRun {

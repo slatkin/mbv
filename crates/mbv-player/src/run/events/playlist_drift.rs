@@ -1,4 +1,4 @@
-use super::super::{divergent_entry, PlaybackRun};
+use super::super::{PlaybackRun, divergent_entry};
 use mbv_ctrl::player::PlayerEvent;
 
 impl PlaybackRun {

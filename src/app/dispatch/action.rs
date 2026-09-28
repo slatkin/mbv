@@ -12,12 +12,12 @@
 //! enum. Other modal handlers still speak directly to `App` and are expected to
 //! migrate to this same `Command` enum over time, one handler at a time.
 
+use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::input::resolver::KeyChord;
-use crate::app::App;
 use crossterm::event::KeyCode;
-use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::Direction;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 use std::sync::Arc;

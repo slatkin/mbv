@@ -2,9 +2,9 @@ use super::{MediaListCarrier, WideMediaList};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaSemanticState, WideMediaListPaintPolicy,
 };
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
-use ratatui::Terminal;
 use tuirealm::component::Component;
 
 fn item(target: &str) -> MediaListRow<String> {

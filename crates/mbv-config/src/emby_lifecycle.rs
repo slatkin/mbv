@@ -1,7 +1,7 @@
 use super::{
-    cache_dir, config_path, library_position_state_path, persist_emby_setup_and_secret,
-    queue_state_path, save_queue_state, service_secret_path, token_cache_path,
-    write_config_text_at, EmbySetup, QueueState, ServiceKind,
+    EmbySetup, QueueState, ServiceKind, cache_dir, config_path, library_position_state_path,
+    persist_emby_setup_and_secret, queue_state_path, save_queue_state, service_secret_path,
+    token_cache_path, write_config_text_at,
 };
 
 /// A restorable snapshot of the files owned by Emby setup administration.

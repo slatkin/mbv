@@ -358,9 +358,11 @@ fn trigger_lib_rescan_clears_only_active_scope() {
 
     app.trigger_lib_rescan(0);
 
-    assert!(!crate::config::load_library_position_state()
-        .libraries
-        .contains_key("lib-movies"));
+    assert!(
+        !crate::config::load_library_position_state()
+            .libraries
+            .contains_key("lib-movies")
+    );
 }
 
 mod activation;

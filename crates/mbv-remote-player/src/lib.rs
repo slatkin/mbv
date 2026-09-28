@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
@@ -60,7 +60,7 @@ mod tests;
 #[cfg(any(test, feature = "test"))]
 pub use connect::connect_stub_daemon_pair;
 pub use connect::signal_local_daemon_service_setup;
-pub use connect::{resolve_library_route, DaemonEndpoint};
+pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {

@@ -8,9 +8,9 @@ use std::time::Duration;
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config as config;
 use mbv_emby::EmbyClient;
+use rust_cast::CastDevice;
 use rust_cast::channels::media::{Media, MediaQueue, QueueItem, QueueType, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
-use rust_cast::CastDevice;
 
 fn main() {
     let host = std::env::args()
@@ -306,7 +306,9 @@ fn observe_queue_advance(device: &CastDevice, app: &Application, emby_urls: &[St
                     Some(near_end),
                     None,
                 );
-                println!("1.3 seeked first item to {near_end}s of {duration}s to force a fast transition");
+                println!(
+                    "1.3 seeked first item to {near_end}s of {duration}s to force a fast transition"
+                );
             }
         }
     }

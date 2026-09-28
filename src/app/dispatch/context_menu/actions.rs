@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::ModelContentEvent;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,

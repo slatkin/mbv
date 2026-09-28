@@ -379,10 +379,10 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::MusicEvent;
     use crate::app::shell::Model;
     use crate::app::state::service_runtime::EmbyRuntime;
     use crate::app::tests::render_fixtures::make_music_group_app;
-    use crate::app::MusicEvent;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
 

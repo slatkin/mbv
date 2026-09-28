@@ -18,12 +18,12 @@ use zbus::zvariant;
 #[cfg(not(test))]
 use zbus::{connection, interface};
 
+use mbv_ctrl::TransportCommand;
 #[cfg(not(test))]
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::player::PlayerStatus;
-use mbv_ctrl::TransportCommand;
 #[cfg(not(test))]
-use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND};
+use mbv_emby_model::{TICKS_PER_SECOND, saturating_i64_from_f64};
 
 #[cfg(not(test))]
 struct MediaPlayer2;

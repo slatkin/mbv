@@ -4,8 +4,8 @@ use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::{
-    dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
-    FeedHomeVideoState, QueueScope,
+    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, FeedHomeVideoState, QueueScope,
+    dispatch::notify::ToastSeverity,
 };
 use mbv_ui_model::ui_util::sort_audio_tracks;
 

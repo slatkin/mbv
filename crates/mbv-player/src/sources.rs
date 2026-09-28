@@ -1,6 +1,6 @@
 use super::{
-    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos, AudiobookshelfBookPlaybackLifecycle,
-    AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
+    AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
+    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos,
 };
 use mbv_audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,

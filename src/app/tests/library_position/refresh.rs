@@ -113,9 +113,11 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
 
     assert!(!app.libs[0].nav_stack[0].loading);
     assert_eq!(app.audiobookshelf_browse[0].shows.len(), 1);
-    assert!(app.audiobookshelf_browse[0]
-        .detail_cache
-        .contains_key("show-a"));
+    assert!(
+        app.audiobookshelf_browse[0]
+            .detail_cache
+            .contains_key("show-a")
+    );
     assert!(!app.feed_tab.loading);
 }
 

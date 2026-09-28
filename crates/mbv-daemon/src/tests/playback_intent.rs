@@ -190,14 +190,18 @@ fn clocked_output_intent_never_enters_pipe_guard() {
     // No pipe-guard status ever surfaces for this intent, at any phase.
     assert!(state.pipe_status().is_none());
     // A configured playout-delay estimate never applies to clocked output.
-    assert!(state
-        .output_started_if_current(Some(Duration::from_secs(2)))
-        .is_none());
+    assert!(
+        state
+            .output_started_if_current(Some(Duration::from_secs(2)))
+            .is_none()
+    );
     assert!(state.output_started_if_current(None).is_none());
 
     // Startup/pause/resume acknowledgment (the generic applied_if_current
     // path used by PausedChanged handling) is unaffected by pipe_output.
-    assert!(state
-        .applied_if_current(7, play.request_id, play.generation)
-        .is_some());
+    assert!(
+        state
+            .applied_if_current(7, play.request_id, play.generation)
+            .is_some()
+    );
 }

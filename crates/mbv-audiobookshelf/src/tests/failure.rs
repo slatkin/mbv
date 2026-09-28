@@ -51,9 +51,11 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
             }
         }
         // The bearer header must reach the wire even for the failure cases.
-        assert!(http.requests()[0]
-            .to_ascii_lowercase()
-            .contains("authorization: bearer test-api-key\r\n"));
+        assert!(
+            http.requests()[0]
+                .to_ascii_lowercase()
+                .contains("authorization: bearer test-api-key\r\n")
+        );
     }
 }
 

@@ -1,15 +1,15 @@
 use super::super::core::DaemonEvent;
 use super::{
-    broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
-    CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
+    CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, broadcast_queue_state, dispatch_slot_jump,
+    handle_stop, mint_queue_lineage, send_to,
 };
-use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::CtrlEvent;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerOwnerState;
 use mbv_queue::{PlaybackQueue, QueueItem};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
 /// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by

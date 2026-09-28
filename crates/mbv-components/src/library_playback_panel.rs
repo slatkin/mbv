@@ -12,10 +12,10 @@
 
 use std::time::Instant;
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::text::Span;
-use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
@@ -23,10 +23,10 @@ use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
 use mbv_queue::PlaybackTitleParts;
+use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
-use mbv_render::PlaybackStripAreas;
-use mbv_render::{render_player_panel, PlaybackRenderContext};
+use mbv_render::{PlaybackRenderContext, render_player_panel};
 use mbv_theme as palette;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_msg::UserEvent;
@@ -259,8 +259,8 @@ impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
 mod tests {
     use super::*;
     use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use rstest::rstest;
 
     fn key(code: Key) -> Event<UserEvent> {

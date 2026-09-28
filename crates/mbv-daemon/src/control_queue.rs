@@ -1,4 +1,4 @@
-use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
+use super::{ClientRegistry, DaemonPlayerOwner, SharedQueueState, serialize_ctrl_event};
 use mbv_ctrl::CtrlEvent;
 use mbv_player::Player;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};

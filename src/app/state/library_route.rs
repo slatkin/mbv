@@ -231,8 +231,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
     use crate::app::LibraryTab;
+    use crate::app::tests::make_app_stub;
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {

@@ -1,9 +1,9 @@
 //! Shell-invoked mouse effect handlers for migrated interactive surfaces.
 
-use crate::app::dispatch::action::Command;
 use crate::app::App;
+use crate::app::dispatch::action::Command;
 use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
+use mbv_emby_model::{EmbyItem, i64_to_f64_saturating, seconds_to_ticks};
 use mbv_ui_msg::TvHit;
 use std::time::{Duration, Instant};
 

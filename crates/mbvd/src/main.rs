@@ -23,7 +23,9 @@ fn cap_glibc_arenas() {
 }
 
 fn print_usage() {
-    eprintln!("Usage: mbvd [--audio-only] [--log-level <error|warn|info|debug>] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
+    eprintln!(
+        "Usage: mbvd [--audio-only] [--log-level <error|warn|info|debug>] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]"
+    );
 }
 
 fn daemon_running() -> bool {

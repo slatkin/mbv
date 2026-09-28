@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::service_runtime::ServiceState;
 use mbv_queue::QueueState;
 

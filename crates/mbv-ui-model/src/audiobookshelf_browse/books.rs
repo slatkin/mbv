@@ -7,7 +7,7 @@ use mbv_audiobookshelf::{
 };
 use std::collections::{HashMap, HashSet};
 
-use mbv_emby_model::{saturating_i64_from_f64, TICKS_PER_SECOND_F64};
+use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64};
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
 
 /// Resolve the selected book as a queue item without mutating playback state.

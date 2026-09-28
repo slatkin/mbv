@@ -1,9 +1,10 @@
 //! Pointer-event interpretation against the last painted frame's retained slot geometry, resolving pill, list, hero, and split-drag gestures into typed Msgs.
 
 use super::{
-    normalize_list_pane_width, ClickModifier, LeafKeyResult, LibraryKey, LibraryPanel,
-    LibrarySlotEvent, MediaListSurfaceInput, MouseButton, MouseEvent, MouseEventKind, MouseGesture,
+    ClickModifier, LeafKeyResult, LibraryKey, LibraryPanel, LibrarySlotEvent,
+    MediaListSurfaceInput, MouseButton, MouseEvent, MouseEventKind, MouseGesture,
     MouseGestureState, Msg, Position, ShellRequest, SkeletonHits, TerminalObserverEvent,
+    normalize_list_pane_width,
 };
 
 enum HeroWheelOutcome {

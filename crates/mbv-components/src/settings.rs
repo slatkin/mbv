@@ -1,5 +1,5 @@
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
@@ -9,7 +9,7 @@ use tuirealm::state::State;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
-use mbv_render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
+use mbv_render::{SettingsRenderGeometry, SettingsRenderModel, render_settings_content};
 use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{

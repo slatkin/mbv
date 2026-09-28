@@ -8,11 +8,11 @@
 //! (`render_queue_status`), never here.
 
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 fn status_width(spans: &[Span]) -> u16 {

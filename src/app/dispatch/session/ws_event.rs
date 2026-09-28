@@ -1,6 +1,6 @@
-use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, ModelContentEvent, PanelFocus};
-use mbv_ctrl::player::PlayerCommand;
+use crate::app::{App, LibEvent, ModelContentEvent, PanelFocus, dispatch::notify::ToastSeverity};
 use mbv_ctrl::Direction;
+use mbv_ctrl::player::PlayerCommand;
 #[cfg(test)]
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;

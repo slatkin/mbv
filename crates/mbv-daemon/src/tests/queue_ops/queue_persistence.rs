@@ -93,19 +93,21 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
     let takeover = mbv_config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).unwrap();
     assert_eq!(takeover.lineage, mbv_queue::QueueLineage::default());
     mbv_config::save_stay_alive_queue_state_at(&path, &takeover).unwrap();
-    assert!(mbv_config::legacy_queue_for_owner_if_absent(
-        &path,
-        Some(mbv_queue::QueueState {
-            items: vec![emby_qi("stale", "Video", "Movie")],
-            cursor: 0,
-            source: QueueSource::Unknown,
-            last_played_content_id: None,
-            last_played_item_id: None,
-            last_played_completed: false,
-            positions: std::collections::HashMap::default(),
-        }),
-    )
-    .is_none());
+    assert!(
+        mbv_config::legacy_queue_for_owner_if_absent(
+            &path,
+            Some(mbv_queue::QueueState {
+                items: vec![emby_qi("stale", "Video", "Movie")],
+                cursor: 0,
+                source: QueueSource::Unknown,
+                last_played_content_id: None,
+                last_played_item_id: None,
+                last_played_completed: false,
+                positions: std::collections::HashMap::default(),
+            }),
+        )
+        .is_none()
+    );
     assert_eq!(
         mbv_config::load_stay_alive_queue_state_at(&path)
             .unwrap()

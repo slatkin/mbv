@@ -39,10 +39,12 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
     mini.terminal_width = 70;
     let mut harness = TickHarness::new(mini);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(!harness
-        .model()
-        .application
-        .mounted(&ComponentId::QueueBoundary));
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&ComponentId::QueueBoundary)
+    );
 }
 
 #[test]

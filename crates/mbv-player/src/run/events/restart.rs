@@ -1,7 +1,6 @@
 use super::super::{
-    auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, ForcedJump,
-    Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
-    StopReport,
+    Duration, ForcedJump, Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem,
+    QueueSlotId, StopReport, auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info,
 };
 use libmpv2::Mpv;
 

@@ -1,7 +1,7 @@
 use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
 use mbv_render::components::three_line_flat_list::ThreeLineItem;
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};

@@ -1,4 +1,4 @@
-use super::{config_path, Config};
+use super::{Config, config_path};
 
 fn read_config_doc(path: &std::path::Path) -> Result<toml::Value, String> {
     match std::fs::read_to_string(path) {

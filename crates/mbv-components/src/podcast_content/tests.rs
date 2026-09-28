@@ -1,8 +1,8 @@
 use super::*;
 use mbv_audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow};
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
-use ratatui::Terminal;
 use tuirealm::component::Component;
 
 const DAY: u64 = 24 * 60 * 60;

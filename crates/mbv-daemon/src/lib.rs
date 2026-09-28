@@ -20,9 +20,9 @@ pub(crate) use audiobookshelf::{
 };
 mod control;
 pub(crate) use control::{
-    cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
+    CtrlContext, cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
     complete_pending_idle_queue_load, expire_pending_idle_queue_load, handle_ctrl_for_role,
-    owner_admin_transport_allowed, play_resolved_items, CtrlContext,
+    owner_admin_transport_allowed, play_resolved_items,
 };
 mod control_queue;
 pub(crate) use control_queue::{

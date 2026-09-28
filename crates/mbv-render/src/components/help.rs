@@ -1,12 +1,12 @@
 use super::chrome;
-use mbv_keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
+use mbv_keybinds::{KEYBIND_ACTIONS, KeyGate, KeySection, Keybinds, action_by_id};
 use mbv_theme as palette;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
+use ratatui::Frame;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 /// The named help sections. `Audiobookshelf` is its own destination section so
 /// its key set can never be presented as Emby or Feeds behavior (design §5).

@@ -1,5 +1,5 @@
 use super::cache::ImageCache;
-use super::{mem_key, CachedImage};
+use super::{CachedImage, mem_key};
 use ratatui_image::picker::Picker;
 
 impl ImageCache {

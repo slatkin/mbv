@@ -4,7 +4,7 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
-use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
+use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};

@@ -1,7 +1,7 @@
 use crate::app::state::playback::HomeContent;
 use crate::app::{
-    dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
-    PendingQueueAction, ReplacementExecutor, TabSelection,
+    App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus, PendingQueueAction,
+    ReplacementExecutor, TabSelection, dispatch::notify::ToastSeverity,
 };
 use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
@@ -377,21 +377,22 @@ impl App {
     /// and preserves the Continue Watching column cursor at the assignment.
     pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
-        let (continue_items, all_views) = match self.emby_client() { Some(client) => {
-            emby_fetched = true;
-            let client = client.lock().unwrap();
-            let views = match client.get_views_classified() {
-                Ok(views) => views,
-                Err(error) => {
-                    drop(client);
-                    self.handle_emby_runtime_failure(error.clone());
-                    return Err(error.to_string());
-                }
-            };
-            (client.get_continue_watching(20).unwrap_or_default(), views)
-        } _ => {
-            (Vec::new(), Vec::new())
-        }};
+        let (continue_items, all_views) = match self.emby_client() {
+            Some(client) => {
+                emby_fetched = true;
+                let client = client.lock().unwrap();
+                let views = match client.get_views_classified() {
+                    Ok(views) => views,
+                    Err(error) => {
+                        drop(client);
+                        self.handle_emby_runtime_failure(error.clone());
+                        return Err(error.to_string());
+                    }
+                };
+                (client.get_continue_watching(20).unwrap_or_default(), views)
+            }
+            _ => (Vec::new(), Vec::new()),
+        };
 
         // Library tabs are Emby-modeled state; only rebuild them from the
         // freshly fetched views when Emby was actually reachable, so a broken

@@ -1,8 +1,8 @@
 use super::{
-    fs, mpv_err_str, Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus,
-    SessionReporter,
+    Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus, SessionReporter, fs,
+    mpv_err_str,
 };
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -490,12 +490,14 @@ pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
 pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
-    let handle = thread::spawn(move || loop {
-        match stop_rx.recv_timeout(interval) {
-            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                reporter.report_progress("TimeUpdate");
-                reporter.report_ping();
+    let handle = thread::spawn(move || {
+        loop {
+            match stop_rx.recv_timeout(interval) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    reporter.report_progress("TimeUpdate");
+                    reporter.report_ping();
+                }
             }
         }
     });

@@ -9,7 +9,7 @@
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
 
-use mbv_render::components::hero_model::{emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES};
+use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 

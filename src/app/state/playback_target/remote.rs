@@ -1,5 +1,5 @@
 use crate::app::{App, LocalPlaybackTarget, RemotePlaybackTarget};
-use mbv_render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
+use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl RemotePlaybackTarget {
@@ -50,11 +50,7 @@ impl RemotePlaybackTarget {
             .as_ref()
             .map_or(1, |s| s.audio_index);
         let next = if remote_indexes.is_empty() {
-            if cur <= 1 {
-                2
-            } else {
-                1
-            }
+            if cur <= 1 { 2 } else { 1 }
         } else {
             let cur_pos = remote_indexes
                 .iter()

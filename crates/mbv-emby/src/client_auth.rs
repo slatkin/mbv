@@ -1,4 +1,4 @@
-use super::{clear_cached_token, device_id, device_name, load_cached_token, EmbyClient};
+use super::{EmbyClient, clear_cached_token, device_id, device_name, load_cached_token};
 use mbv_config::Config;
 use serde_json::Value;
 

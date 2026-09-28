@@ -5,8 +5,8 @@
 //! retained-geometry reads — while typed target resolution stays on the
 //! carrier's own surface, so no per-destination `ListSlot` arm can grow.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use std::hash::Hash;
 use tuirealm::component::Component;
 
@@ -138,9 +138,9 @@ impl PanelList for InlineSearch {
 mod panel_list_tests {
     use super::*;
     use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
-    use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {
         MediaListRow::Item {

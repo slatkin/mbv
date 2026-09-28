@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::BrowseEvent;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;

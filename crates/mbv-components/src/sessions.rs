@@ -4,9 +4,9 @@
 //! targets. This component owns selection and hit geometry; connecting,
 //! detaching, and refreshing targets remain shell work.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
-use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
@@ -431,9 +431,9 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
-    use ratatui::Terminal;
     use tuirealm::event::{KeyModifiers, MouseButton};
 
     fn key(code: Key) -> KeyEvent {

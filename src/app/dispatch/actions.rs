@@ -2,8 +2,8 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
-use mbv_ctrl::player::PlayerCommand;
 pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
+use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::{QueueItem, QueueItemContentId};

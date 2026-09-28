@@ -1,9 +1,9 @@
 use super::super::{
-    is_near_end, mpv_end_file_reason, mpv_err_str, retry_mark_played, EndFileReason,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
+    EndFileReason, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId,
+    StopReport, is_near_end, mpv_end_file_reason, mpv_err_str, retry_mark_played,
 };
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::{Arc, atomic::Ordering};
 
 impl PlaybackRun {
     // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),

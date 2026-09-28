@@ -1,11 +1,11 @@
 pub use mbv_config::{
-    clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
-    migrate_legacy_emby_token, prefs_path, save_queue_state, Config,
+    Config, clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
+    migrate_legacy_emby_token, prefs_path, save_queue_state,
 };
 #[cfg(test)]
-pub use mbv_config::{load_last_remote_connection, save_last_remote_connection};
-#[cfg(test)]
 pub use mbv_config::{LastRemoteConnection, TestStateDirGuard};
+#[cfg(test)]
+pub use mbv_config::{load_last_remote_connection, save_last_remote_connection};
 
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
@@ -148,7 +148,7 @@ fn validated_visualizer_glyph(value: Option<&str>) -> String {
 
 #[cfg(test)]
 mod ui_config_tests {
-    use super::{parse_ui_config, validated_visualizer_glyph, DEFAULT_VISUALIZER_GLYPH};
+    use super::{DEFAULT_VISUALIZER_GLYPH, parse_ui_config, validated_visualizer_glyph};
 
     #[test]
     fn visualizer_glyph_round_trips_and_invalid_values_fall_back() {

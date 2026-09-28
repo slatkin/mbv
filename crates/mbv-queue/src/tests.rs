@@ -424,12 +424,14 @@ fn pending_progress_sync_blocks_stale_server_userdata() {
         queue.slot(slot).unwrap().item.playback_position_ticks(),
         20 * TICKS_PER_SECOND
     );
-    assert!(queue
-        .slot(slot)
-        .unwrap()
-        .progress_state
-        .pending_sync
-        .is_some());
+    assert!(
+        queue
+            .slot(slot)
+            .unwrap()
+            .progress_state
+            .pending_sync
+            .is_some()
+    );
 }
 
 #[test]
@@ -449,12 +451,14 @@ fn active_pending_progress_confirmation_clears_pending_but_keeps_local_progress(
 
     assert!(result.pending_confirmed_slots.contains(&active));
     assert!(result.protected_slots.contains(&active));
-    assert!(queue
-        .slot(active)
-        .unwrap()
-        .progress_state
-        .pending_sync
-        .is_none());
+    assert!(
+        queue
+            .slot(active)
+            .unwrap()
+            .progress_state
+            .pending_sync
+            .is_none()
+    );
     assert_eq!(
         queue.slot(active).unwrap().item.playback_position_ticks(),
         20 * TICKS_PER_SECOND
@@ -477,12 +481,14 @@ fn pending_progress_sync_clears_when_server_position_matches_within_tolerance() 
     let result = queue.merge_refresh(vec![item_with_progress("a", 22, false)]);
 
     assert!(result.pending_confirmed_slots.contains(&slot));
-    assert!(queue
-        .slot(slot)
-        .unwrap()
-        .progress_state
-        .pending_sync
-        .is_none());
+    assert!(
+        queue
+            .slot(slot)
+            .unwrap()
+            .progress_state
+            .pending_sync
+            .is_none()
+    );
     assert_eq!(
         queue.slot(slot).unwrap().item.playback_position_ticks(),
         22 * TICKS_PER_SECOND
@@ -505,12 +511,14 @@ fn watched_state_confirmation_requires_exact_match() {
     let result = queue.merge_refresh(vec![item_with_progress("a", 20, false)]);
 
     assert!(result.stale_pending_slots.contains(&slot));
-    assert!(queue
-        .slot(slot)
-        .unwrap()
-        .progress_state
-        .pending_sync
-        .is_some());
+    assert!(
+        queue
+            .slot(slot)
+            .unwrap()
+            .progress_state
+            .pending_sync
+            .is_some()
+    );
     assert!(queue.slot(slot).unwrap().item.played());
 }
 

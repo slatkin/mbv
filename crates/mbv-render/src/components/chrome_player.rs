@@ -1,11 +1,11 @@
 use crate::arrangements::playback_transport::transport_rows;
 use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 mod title;
 

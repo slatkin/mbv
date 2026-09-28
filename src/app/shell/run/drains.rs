@@ -2,8 +2,8 @@
 //! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
 
 use super::super::{
-    arbitrate_key, fold_mouse_messages, service_startup, Model, MusicTrackFocusRequest,
-    RouterOutcome,
+    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
+    service_startup,
 };
 use super::{Duration, IdleFeed, Instant, PollStrategy};
 use crate::app::dispatch::session::player_event::PlayerEventFlow;

@@ -21,7 +21,7 @@
 // Queue item, a nested Workspace selector, overlays/sidebars, search,
 // multi-selection, scroll offsets, loading/error state, or paint geometry.
 
-use super::{state_dir, ServiceKind};
+use super::{ServiceKind, state_dir};
 use std::path::{Path, PathBuf};
 
 /// Current on-disk format version. The loader accepts only this version and

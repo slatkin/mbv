@@ -1,8 +1,8 @@
 use super::{TreeBrowser, TreeMarkPolicy, TreeNode};
 use mbv_render::components::media_list::MediaSemanticState;
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use std::hash::Hash;
 use tuirealm::component::Component;
 

@@ -2,8 +2,8 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    config_path, load_config, load_queue_state, parse_config, save_config_settings,
-    save_emby_setup, EmbySetup, FeedKind, TestStateDirGuard,
+    EmbySetup, FeedKind, TestStateDirGuard, config_path, load_config, load_queue_state,
+    parse_config, save_config_settings, save_emby_setup,
 };
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};

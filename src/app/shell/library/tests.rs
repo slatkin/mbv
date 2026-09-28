@@ -132,13 +132,15 @@ fn shell_routes_focus_to_the_active_destination_child() {
     // `LibraryPanel`; the embedded owner is never a component.
     let child = ComponentId::Library;
     assert_eq!(model.application.focus(), Some(&child));
-    assert!(model
-        .application
-        .get_component(&child)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .is_some());
+    assert!(
+        model
+            .application
+            .get_component(&child)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .is_some()
+    );
 }
 
 /// unify-screens-under-panel-components task 8.4 (design D2): the TV owner is

@@ -13,21 +13,21 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
+use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot, SelectorRow,
     Workspace, WorkspaceHeader,
 };
 use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, RowIntent};
 use super::music_tree_target::MusicTreeTarget;
 use crate::list::tree_browser::{TreeBrowser, TreeOperation};
+use mbv_render::MusicWideRenderCtx;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};

@@ -7,8 +7,8 @@
 //! S3 (task 4.1): the right-column strip joins them as the mounted
 //! `LibraryPlaybackPanel`, mounted only when the queue column is hidden.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::component::AppComponent;
 
 use super::{App, DestinationLatestSource, Model, PanelFocus};
@@ -17,8 +17,8 @@ use mbv_components::{
     LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
 use mbv_render::arrangements::chrome::{
-    queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
-    QUEUE_PLAYBACK_HEADER_ROWS,
+    QUEUE_PLAYBACK_HEADER_ROWS, RootFrame, queue_playback_column_wide,
+    queue_playback_transport_area, status_bar_row,
 };
 use mbv_render::components::card::queue_card_reserved_rect;
 use mbv_render::components::widgets::{fill_surface, queue_panel_inset};

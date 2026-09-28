@@ -16,8 +16,8 @@
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
-    hero_content_emby, HeroContent, HeroContentData, LibraryContentOwner, LibraryPanelContent,
-    LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
+    HeroContent, HeroContentData, LibraryContentOwner, LibraryPanelContent, LibrarySlotEvent,
+    ListSlot, SelectorRow, Workspace, hero_content_emby,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
@@ -28,7 +28,7 @@ use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::{
-    effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
+    LetterFilter, LetterFilterKind, TvWideRenderCtx, effective_sort_str, letter_bucket,
 };
 use mbv_ui_model::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use mbv_ui_msg::TvTreeTarget;

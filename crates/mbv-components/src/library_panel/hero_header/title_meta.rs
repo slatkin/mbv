@@ -3,20 +3,20 @@
 //! the stacked rows, meta-row role cycling, truncation/wrapping, and the
 //! overview box below the header.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use mbv_render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
+use mbv_render::{WrappedHeroLine, paint_wide_hero_text, render_artwork_placeholder};
 use mbv_theme as palette;
 use mbv_ui_model::ui_util::trunc_str;
 
 use super::super::content::{HeroContent, HeroFacts, HeroHeader};
 use super::super::overview_box;
 use super::super::overview_box::OverviewPaint;
-use super::artwork_box::{hero_artwork_box, landscape_grid_columns, ARTWORK_TEXT_GAP_ROWS};
+use super::artwork_box::{ARTWORK_TEXT_GAP_ROWS, hero_artwork_box, landscape_grid_columns};
 
 /// Paints the Hero header and — when overview text exists — the overview
 /// Main content box below it (design D5). One title/meta painter for all

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
-use crate::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
+use crate::ctrl::{ClientRegistry, CtrlClientId, CtrlSender, serialize_ctrl_event};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,

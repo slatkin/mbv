@@ -97,8 +97,11 @@ fn seek_dispatches_and_reports_errors_without_tracking() {
     let request = capture_error(&http, &mut app, |app| {
         app.dispatch(&crate::app::dispatch::action::Command::SeekRelative(5.0));
     });
-    assert!(request
-        .starts_with("POST /Sessions/session/Playing/Seek?SeekPositionTicks=650000000 HTTP/1.1"));
+    assert!(
+        request.starts_with(
+            "POST /Sessions/session/Playing/Seek?SeekPositionTicks=650000000 HTTP/1.1"
+        )
+    );
 }
 
 #[test]

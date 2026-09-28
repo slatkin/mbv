@@ -1,7 +1,7 @@
 //! Interactive Component for the nested Settings Feed-management popup.
 
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
@@ -12,7 +12,7 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
-use mbv_render::{render_feeds_manage_content, FeedsManageRenderModel};
+use mbv_render::{FeedsManageRenderModel, render_feeds_manage_content};
 use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};

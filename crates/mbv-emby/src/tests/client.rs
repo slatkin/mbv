@@ -219,9 +219,11 @@ fn service_setup_validation_uses_setup_url_user_and_token() {
     let request = &http.requests()[0];
     assert!(request.starts_with("GET /Users/user-42 HTTP/1.1"));
     // Header casing isn't significant (RFC 7230 3.2); ureq 3.x lowercases it.
-    assert!(request
-        .to_ascii_lowercase()
-        .contains("x-emby-token: persisted-token"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("x-emby-token: persisted-token")
+    );
     assert_eq!(authenticated.config.server_url, TEST_URL);
     assert_eq!(authenticated.token, "persisted-token");
 }

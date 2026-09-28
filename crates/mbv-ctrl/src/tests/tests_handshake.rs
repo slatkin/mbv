@@ -106,10 +106,12 @@ fn hello_current_advertises_abs_capabilities() {
     );
     assert!(hello.supports_owner_queue_load());
     assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_ABS_QUEUE));
-    assert!(hello
-        .capabilities
-        .iter()
-        .any(|c| c == CTRL_CAP_ABS_PROGRESS));
+    assert!(
+        hello
+            .capabilities
+            .iter()
+            .any(|c| c == CTRL_CAP_ABS_PROGRESS)
+    );
 }
 
 #[test]

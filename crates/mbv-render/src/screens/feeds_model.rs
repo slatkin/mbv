@@ -1,4 +1,4 @@
-use mbv_ui_model::feed_age::{feed_age_group, FeedAgeGroup};
+use mbv_ui_model::feed_age::{FeedAgeGroup, feed_age_group};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

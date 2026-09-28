@@ -1,9 +1,9 @@
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 /// The remote-attachment indicator the queue footer paints: `Some` names

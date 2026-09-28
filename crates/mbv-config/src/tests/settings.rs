@@ -1,7 +1,7 @@
 #[cfg(test)]
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
-use crate::{config_path, load_config, parse_config, save_config_settings, Config};
+use crate::{Config, config_path, load_config, parse_config, save_config_settings};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 

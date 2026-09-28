@@ -2,8 +2,8 @@
 //! enriched queue items, and acknowledged Audiobookshelf progress.
 
 use super::super::{
-    apply_audiobookshelf_book_progress, apply_audiobookshelf_progress, apply_queue_enriched,
-    handle_ws, DaemonLoop,
+    DaemonLoop, apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,
+    apply_queue_enriched, handle_ws,
 };
 use super::EventOutcome;
 use mbv_core::service_runtime::SetupGeneration;

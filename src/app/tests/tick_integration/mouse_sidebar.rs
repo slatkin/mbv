@@ -1,5 +1,5 @@
-use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::app::dispatch::action::Command;
@@ -94,9 +94,11 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
             std::time::Duration::from_millis(500),
         ))
         .expect("normal key tick");
-    assert!(key_messages
-        .iter()
-        .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
+    assert!(
+        key_messages
+            .iter()
+            .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+    );
 }
 
 #[test]
@@ -121,10 +123,12 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert!(outcome
-        .raw_messages
-        .iter()
-        .any(|msg| { matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)) }));
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| { matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)) })
+    );
     let help = harness
         .model_mut()
         .application
@@ -227,7 +231,9 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             std::time::Duration::from_millis(500),
         ))
         .unwrap();
-    assert!(raw_messages
-        .iter()
-        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
+    assert!(
+        raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+    );
 }

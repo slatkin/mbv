@@ -97,9 +97,11 @@ fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
         ]
     );
     assert!(calls.contains(&("artist-a".into(), 200)));
-    assert!(entries
-        .iter()
-        .all(|entry| entry.album.item_type == "MusicAlbum"));
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.album.item_type == "MusicAlbum")
+    );
 }
 
 #[test]

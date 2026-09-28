@@ -9,8 +9,8 @@
 //! (quit, switch panels, dismiss). Local state changes (scroll) return
 //! `None`; the permanent root observer remains the redraw signal (design D12).
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
@@ -19,7 +19,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use mbv_keybinds::Keybinds;
-use mbv_render::{help_destination, render_help_panel, HelpDestination, HelpRenderGeometry};
+use mbv_render::{HelpDestination, HelpRenderGeometry, help_destination, render_help_panel};
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_msg::UserEvent;

@@ -1,10 +1,10 @@
 use mbv_theme as palette;
 use mbv_ui_model::settings::SettingsDestination;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Default, Debug)]

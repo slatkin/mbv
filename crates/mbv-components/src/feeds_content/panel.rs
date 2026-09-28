@@ -1,14 +1,14 @@
+use super::super::library_panel::HeroContentData;
 use super::super::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::super::library_panel::HeroContentData;
 use super::super::media_list::MediaListOperation;
 use super::{
-    trunc_str, FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, Key, KeyEvent,
-    LeafKeyResult, LibraryItemIdentity, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity,
-    ShellRequest, TerminalObserverEvent, WatchedFilter, MAX_GROUP_LABEL,
+    FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, Key, KeyEvent, LeafKeyResult,
+    LibraryItemIdentity, MAX_GROUP_LABEL, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity,
+    ShellRequest, TerminalObserverEvent, WatchedFilter, trunc_str,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 

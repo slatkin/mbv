@@ -5,7 +5,7 @@ use mbv_player::PlayerProxy;
 use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::playback::QueueScope;
 use mbv_ws::WsEvent;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 pub(in crate::app) struct AppInit {
     pub(in crate::app) config: Arc<Mutex<crate::config::Config>>,

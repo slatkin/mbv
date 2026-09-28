@@ -9,7 +9,7 @@
 use crossterm::event::KeyEvent;
 use mbv_keybinds::Keybinds;
 
-use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
+use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
 use crate::app::dispatch::action::Command;
 use mbv_ui_msg::ComponentId;

@@ -28,8 +28,8 @@ use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::render_narrow_skeleton;
 use super::owner::{LibraryContentOwner, LibraryOwners, LibrarySlotEvent};
 use super::wide::{
-    render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry,
-    WideSkeletonPaintParams,
+    SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry, WideSkeletonPaintParams,
+    render_wide_skeleton,
 };
 use crate::inline_search::InlineSearchHost;
 use mbv_render::components::tv_wide::HeroImageState;

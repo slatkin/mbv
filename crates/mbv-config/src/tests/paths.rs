@@ -2,12 +2,12 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    audiobookshelf_transaction, config_path, load_config, load_library_position_state,
-    load_service_secret, persist_audiobookshelf_setup_and_secret, persist_emby_setup_and_secret,
+    AudiobookshelfSetup, EmbySetup, TestStateDirGuard, audiobookshelf_transaction, config_path,
+    load_config, load_library_position_state, load_service_secret,
+    persist_audiobookshelf_setup_and_secret, persist_emby_setup_and_secret,
     persist_emby_setup_and_secret_at, remove_audiobookshelf_setup_and_secret_with_owned_state,
     replace_audiobookshelf_setup_and_secret, save_audiobookshelf_setup_at, save_emby_setup_at,
-    save_library_position_state, save_service_secret, service_secret_path, AudiobookshelfSetup,
-    EmbySetup, TestStateDirGuard,
+    save_library_position_state, save_service_secret, service_secret_path,
 };
 #[cfg(test)]
 use mbv_queue::{LibraryPosition, LibraryPositionLevel, LibraryPositionState, ServiceKind};
@@ -231,9 +231,11 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
         doc["audiobookshelf"]["url"].as_str(),
         Some("https://books.example")
     );
-    assert!(!std::fs::read_to_string(config_path())
-        .unwrap()
-        .contains("books-secret"));
+    assert!(
+        !std::fs::read_to_string(config_path())
+            .unwrap()
+            .contains("books-secret")
+    );
     #[cfg(unix)]
     {
         assert_eq!(

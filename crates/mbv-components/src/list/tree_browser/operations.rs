@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use mbv_text::fuzzy_match::{word_match_score, SkimMatcherV2};
+use mbv_text::fuzzy_match::{SkimMatcherV2, word_match_score};
 use ratatui::layout::Rect;
 
 use crate::list::{

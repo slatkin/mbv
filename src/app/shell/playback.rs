@@ -1,5 +1,5 @@
 use super::Model;
-use super::{palette, PanelFocus};
+use super::{PanelFocus, palette};
 use mbv_components::PlaybackProjection;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_ui_msg::PlaybackRequest;

@@ -3,7 +3,7 @@
 //! within the repository's file-size limit.
 
 use super::{
-    is_playable, App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity,
+    App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity, is_playable,
 };
 use crate::app::state::queue_owner::QueueOrigin;
 use mbv_emby::EmbyClient;

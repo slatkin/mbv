@@ -2,9 +2,9 @@
 //! completions, and all other player observations relayed to control clients.
 
 use super::super::{
-    apply_stopped_observation, apply_track_completed_observation, broadcast,
+    DaemonLoop, apply_stopped_observation, apply_track_completed_observation, broadcast,
     broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
-    complete_pending_idle_queue_load, settle_and_redispatch, DaemonLoop,
+    complete_pending_idle_queue_load, settle_and_redispatch,
 };
 use super::EventOutcome;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};

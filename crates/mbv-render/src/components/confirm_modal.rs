@@ -1,9 +1,9 @@
 use crate::components::modal_frame::render_modal_frame;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 /// Paint the confirm modal: centered 60×7 frame with message + hint lines.
 ///

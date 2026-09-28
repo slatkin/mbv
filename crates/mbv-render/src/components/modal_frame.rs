@@ -1,10 +1,10 @@
 use super::backdrop::dim_backdrop;
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Clear};
-use ratatui::Frame;
 
 pub fn render_modal_frame(
     f: &mut Frame,

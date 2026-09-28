@@ -16,9 +16,9 @@ use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::feed_tab::WatchedFilter;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_msg::{Msg, ShellRequest};
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
-use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
@@ -579,9 +579,11 @@ fn changing_group_invalidates_previous_row_geometry() {
         all_entries: Vec::new(),
         loading: false,
     });
-    assert!(feeds(&panel)
-        .resolve_row_id(Position::new(previous_row.x, previous_row.y))
-        .is_none());
+    assert!(
+        feeds(&panel)
+            .resolve_row_id(Position::new(previous_row.x, previous_row.y))
+            .is_none()
+    );
     down(feeds_mut(&mut panel), Key::Down);
     assert_eq!(canonical_cursor(feeds(&panel)), 0);
 }
@@ -667,11 +669,13 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
     assert_eq!(canonical_cursor(&owner), 0);
     let mut panel = panel_with(owner, true);
     let _ = paint(&mut panel, mbv_render::layout::TWO_COLUMN_THRESHOLD, 30);
-    assert!(panel
-        .test_wide_geometry()
-        .expect("wide skeleton")
-        .selected
-        .is_some());
+    assert!(
+        panel
+            .test_wide_geometry()
+            .expect("wide skeleton")
+            .selected
+            .is_some()
+    );
 }
 
 #[test]

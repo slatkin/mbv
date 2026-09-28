@@ -4,8 +4,8 @@
 //! `Span`/`Style`/width; the header painter owns colours, truncation and
 //! wrapping, design D5).
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 use crate::inline_search::InlineSearch;
 use mbv_render::components::tv_wide::HeroImageState;

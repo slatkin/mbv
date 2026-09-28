@@ -115,9 +115,11 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
                 if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
         )
     }));
-    assert!(!commands
-        .iter()
-        .any(|command| { matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueReplace { .. }) }));
+    assert!(
+        !commands
+            .iter()
+            .any(|command| { matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueReplace { .. }) })
+    );
 }
 
 #[test]
@@ -159,13 +161,14 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     assert!(app.pending_queue_action.is_none());
     assert!(app.pending_overlay.is_none());
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(app
-        .remote_player_tab
-        .as_ref()
-        .unwrap()
-        .emby_items()
-        .iter()
-        .any(|queued| queued.id == item.id));
+    assert!(
+        app.remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .any(|queued| queued.id == item.id)
+    );
     assert!(command_rx.try_iter().any(|command| {
         matches!(
             command,
