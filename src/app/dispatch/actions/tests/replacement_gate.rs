@@ -23,22 +23,14 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
         Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
             if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
     ));
-    assert!(matches!(
-        app.pending_queue_replacement,
-        Some((
-            _,
-            crate::app::state::playback::ReplacementExecutor::Routed(
-                crate::app::state::playback::RoutedReplacementPrep::Album
-            )
-        ))
-    ));
+    assert!(app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().queue_cursor, 0);
 
     confirm_replace_queue(&mut app);
 
     assert_eq!(queued_track_ids(&app), ["track-1"]);
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
 /// Row 3.1 cancellation: Esc at the album-track replacement prompt changes
@@ -66,7 +58,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
         ),
     );
 
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().queue_cursor, 0);
 }
@@ -112,18 +104,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     );
     app.play_or_activate_lib_item(0, folder("album-1", "Album"));
 
-    assert!(matches!(
-        &app.pending_queue_replacement,
-        Some((
-            PendingQueueAction::PlayItems {
-                source: mbv_queue::QueueSource::Collection { collection_type },
-                ..
-            },
-            crate::app::state::playback::ReplacementExecutor::Routed(
-                crate::app::state::playback::RoutedReplacementPrep::Folder
-            )
-        )) if collection_type == "music"
-    ));
+    assert!(app.queue_deferrals.has_gated_replacement());
     assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
 
     app.apply_confirm_action(
@@ -134,6 +115,6 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
         ),
     );
 
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
 }

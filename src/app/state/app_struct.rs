@@ -1,9 +1,7 @@
 use super::panel_targets::PanelTarget;
+use crate::app::QueueDeferrals;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
-use crate::app::state::playback::{
-    PendingQueueAction, PlaylistMutationState, ReplacementExecutor, SuspendedLocalSession,
-    UndoEntry,
-};
+use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
 use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
@@ -293,22 +291,9 @@ pub struct App {
     pub(in crate::app) queue_dirty: bool,
     pub(in crate::app) pending_owner_source_update:
         Option<(mbv_queue::QueueSource, mbv_queue::QueueLineage)>,
-    /// Deferred queue replacement awaiting the save/discard answer, then the
-    /// `PlaylistMutationComplete` boundary. Owned by `replace_queue_or_prompt`
-    /// and its existing callers (`ClearQueue`, the album/artist track paths,
-    /// the notification/quit auto-save routes).
-    pub(in crate::app) pending_queue_action: Option<PendingQueueAction>,
-    /// A resolved, not-yet-confirmed queue replacement held by the D6
-    /// populated-queue gate (`ConfirmAction::ReplacePopulatedQueue`). The
-    /// tuple pairs the action with the executor that runs it once confirmed,
-    /// so a `Routed` entry point replays its own prep instead of the wrong
-    /// path. This is the gate's own slot: its only reader is that confirmation
-    /// arm, so the save-deferral boundary
-    /// (`SessionEvent::PlaylistMutationComplete`) can never pick a gated
-    /// payload up and execute it unconfirmed.
-    pub(in crate::app) pending_queue_replacement: Option<(PendingQueueAction, ReplacementExecutor)>,
-    /// Deferred explicit play awaiting the section-5 local fall-through prompt.
-    pub(in crate::app) pending_local_play: Option<PendingQueueAction>,
+    /// All deferred queue payloads and their ownership transitions live in
+    /// `state::queue_deferrals`; this is the only place slot ownership lives.
+    pub(in crate::app) queue_deferrals: QueueDeferrals,
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) indicator_style: render::indicators::IndicatorStyle,
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,

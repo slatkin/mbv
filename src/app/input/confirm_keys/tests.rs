@@ -74,6 +74,18 @@ fn dirty_saved_playlist_app() -> App {
     app
 }
 
+fn successful_save_completion(app: &mut App, mutation_id: u64) {
+    app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
+        mutation_id,
+        playlist_id: "playlist-1".into(),
+        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+            epoch: app.queue_epoch,
+        },
+        source_playlist_id: "playlist-1".into(),
+        result: Ok(()),
+    });
+}
+
 /// D6: an empty local playback-target queue executes the replacement
 /// immediately, with no confirmation and no stored payload.
 #[test]
@@ -85,7 +97,7 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["track-1"]);
 }
 
@@ -104,17 +116,11 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
         Some(ConfirmAction::ReplacePopulatedQueue)
     );
     assert!(
-        matches!(
-            app.pending_queue_replacement,
-            Some((
-                PendingQueueAction::PlayItems { .. },
-                ReplacementExecutor::Pending
-            ))
-        ),
+        app.queue_deferrals.has_gated_replacement(),
         "the complete payload is stored, not re-derived at confirmation time"
     );
     assert!(
-        app.pending_queue_action.is_none(),
+        !app.queue_deferrals.is_save_deferred(),
         "the gated payload never occupies the save-deferral slot"
     );
     assert_eq!(queue_ids(&app), ["existing"], "the prompt changes no queue");
@@ -135,7 +141,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
         key(KeyCode::Char('y')),
     );
 
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["track-1"]);
 }
 
@@ -151,11 +157,11 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
 
     assert!(
-        app.pending_queue_replacement.is_none(),
+        !app.queue_deferrals.has_gated_replacement(),
         "cancellation clears the stored payload"
     );
     assert!(
-        app.pending_queue_action.is_none(),
+        !app.queue_deferrals.is_save_deferred(),
         "and the save-deferral slot was never touched"
     );
     assert_eq!(queue_ids(&app), ["existing"]);
@@ -183,7 +189,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
         "the second step is the existing save/discard prompt"
     );
     assert!(
-        app.pending_queue_action.is_some(),
+        app.queue_deferrals.is_save_deferred(),
         "the replacement still waits behind the save/discard answer"
     );
     assert_eq!(queue_ids(&app), ["existing"]);
@@ -208,7 +214,7 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
         key(KeyCode::Char('d')),
     );
 
-    assert!(app.pending_queue_action.is_none());
+    assert!(!app.queue_deferrals.is_save_deferred());
     assert_eq!(queue_ids(&app), ["track-1"]);
 }
 
@@ -234,7 +240,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     );
     assert_eq!(queue_ids(&app), ["existing"], "the save defers execution");
     assert!(
-        app.pending_queue_action.is_some(),
+        app.queue_deferrals.is_save_deferred(),
         "the confirmed intent waits for the save boundary"
     );
     let save_mutation_id = app
@@ -251,7 +257,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         pending_confirm_action(&app),
         Some(ConfirmAction::ReplacePopulatedQueue)
     );
-    assert!(app.pending_queue_replacement.is_some());
+    assert!(app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["existing"]);
 
     // The save completes with matching lineage and playlist identity.
@@ -271,11 +277,11 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         "the boundary executes the confirmed deferred intent, not the gated one"
     );
     assert!(
-        app.pending_queue_action.is_none(),
+        !app.queue_deferrals.is_save_deferred(),
         "the deferral was consumed"
     );
     assert!(
-        app.pending_queue_replacement.is_some(),
+        app.queue_deferrals.has_gated_replacement(),
         "the unconfirmed payload survives, still awaiting its own confirmation"
     );
 
@@ -287,7 +293,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         key(KeyCode::Char('y')),
     );
     assert_eq!(queue_ids(&app), ["track-2"]);
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
 /// D6 predicate: only a `PlayItems` payload over a non-empty playback-target
@@ -311,13 +317,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
         Some(ConfirmAction::ReplacePopulatedQueue)
     );
     assert!(
-        matches!(
-            app.pending_queue_replacement,
-            Some((
-                PendingQueueAction::PlayItems { .. },
-                ReplacementExecutor::Routed(RoutedReplacementPrep::Selection)
-            ))
-        ),
+        app.queue_deferrals.has_gated_replacement(),
         "the selection replacement stores its routed prep"
     );
     assert_eq!(
@@ -329,7 +329,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
 
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().queue_cursor, 0);
     assert!(!app.player.status.lock().unwrap().active);
@@ -353,7 +353,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
         ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),
     );
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["shuffle-1"]);
 
     let mut app = make_app_stub();
@@ -370,7 +370,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
         ReplacementExecutor::Pending,
     );
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["playlist-1"]);
 }
 
@@ -416,7 +416,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
         Some(ConfirmAction::PlayLocallyInstead),
         "the fall-through prompt is the second step"
     );
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
 /// Row 3.6: an explicit `play_item` on a populated queue is a direct-play
@@ -432,6 +432,71 @@ fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
     app.play_item(item);
 
     assert!(!confirm_pending(&app), "play_item is never gated");
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["movie-1"]);
+}
+
+#[test]
+fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = dirty_saved_playlist_app();
+    app.replace_queue_or_prompt(play_action(&["track-1"]));
+    app.pending_overlay = None;
+    let later_save_id = app
+        .save_playlist_to_emby()
+        .expect("unanswered prompt's later save is enqueued");
+
+    successful_save_completion(&mut app, later_save_id);
+
+    assert_eq!(queue_ids(&app), ["existing"]);
+}
+
+#[test]
+fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = dirty_saved_playlist_app();
+    app.replace_queue_or_prompt(play_action(&["track-1"]));
+    mount_confirmation(&mut app);
+    app.apply_confirm_action(
+        ConfirmAction::DiscardOrSaveDirtyPlaylist,
+        key(KeyCode::Char('s')),
+    );
+
+    successful_save_completion(&mut app, 99);
+
+    assert_eq!(queue_ids(&app), ["existing"]);
+}
+
+#[test]
+fn failed_bound_save_drops_the_deferred_replacement() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = dirty_saved_playlist_app();
+    app.replace_queue_or_prompt(play_action(&["track-1"]));
+    mount_confirmation(&mut app);
+    app.apply_confirm_action(
+        ConfirmAction::DiscardOrSaveDirtyPlaylist,
+        key(KeyCode::Char('s')),
+    );
+    let failed_save_id = app
+        .playlist_mutations
+        .get("playlist-1")
+        .and_then(|state| state.active.as_ref())
+        .map(crate::app::state::playback::PlaylistMutation::mutation_id)
+        .expect("the save is tracked as an in-flight mutation");
+
+    app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
+        mutation_id: failed_save_id,
+        playlist_id: "playlist-1".into(),
+        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+            epoch: app.queue_epoch,
+        },
+        source_playlist_id: "playlist-1".into(),
+        result: Err("save failed".into()),
+    });
+    assert!(!app.queue_deferrals.is_save_deferred());
+
+    let later_save_id = app.save_playlist_to_emby().expect("later save is enqueued");
+    successful_save_completion(&mut app, later_save_id);
+
+    assert_eq!(queue_ids(&app), ["existing"]);
 }

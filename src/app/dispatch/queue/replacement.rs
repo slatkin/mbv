@@ -16,7 +16,7 @@ impl App {
             && self.queue_dirty
             && self.queue_is_saved_playlist()
         {
-            self.pending_queue_action = Some(action);
+            self.queue_deferrals.defer_for_save_answer(action);
             let name = mbv_ui_model::ui_util::trunc_str(self.queue_playlist_name(), 36);
             self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
@@ -48,18 +48,16 @@ impl App {
     /// gate; the confirmed execution still runs it through
     /// `replace_queue_or_prompt`.
     ///
-    /// The gated payload goes into its own `pending_queue_replacement` slot,
-    /// never the save-deferral `pending_queue_action`: only the
-    /// `ReplacePopulatedQueue` confirmation arm reads it, so an in-flight
-    /// playlist save (whose completion consumes the shared deferral slot)
-    /// cannot fire a replacement the user never confirmed.
+    /// The gated payload belongs to the `QueueDeferrals` gate transition,
+    /// while the save completion consumes only the save-bound transition, so
+    /// an in-flight playlist save cannot fire a replacement the user never confirmed.
     pub(in crate::app) fn request_queue_replacement(
         &mut self,
         action: PendingQueueAction,
         via: ReplacementExecutor,
     ) {
         if self.queue_replacement_needs_confirmation(&action) {
-            self.pending_queue_replacement = Some((action, via));
+            self.queue_deferrals.hold_gated_replacement(action, via);
             self.ask_confirm(ConfirmModal {
                 title: " Replace Queue ".into(),
                 message: "Replace the current queue?".into(),

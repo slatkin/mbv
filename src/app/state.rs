@@ -12,6 +12,7 @@ pub(in crate::app) mod panel_focus;
 pub(in crate::app) mod panel_targets;
 pub(in crate::app) mod playback_target;
 pub(in crate::app) mod projection;
+pub(in crate::app) mod queue_deferrals;
 pub(in crate::app) mod queue_owner;
 pub(in crate::app) mod queue_scope;
 pub(in crate::app) mod remote_slot;

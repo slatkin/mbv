@@ -27,13 +27,9 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn save_playlist_to_emby(&mut self) {
-        let Some(playlist_id) = self.queue_playlist_id().map(str::to_string) else {
-            return;
-        };
-        let Some(origin) = self.queue_origin_or_flash() else {
-            return;
-        };
+    pub(in crate::app) fn save_playlist_to_emby(&mut self) -> Option<u64> {
+        let playlist_id = self.queue_playlist_id().map(str::to_string)?;
+        let origin = self.queue_origin_or_flash()?;
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
         self.enqueue_playlist_mutation(
@@ -45,6 +41,7 @@ impl App {
                 item_ids: None,
             },
         );
+        Some(mutation_id)
     }
 
     pub(in crate::app) fn save_queue_as_playlist(&mut self, name: String) {

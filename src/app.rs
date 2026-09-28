@@ -36,6 +36,7 @@ use crate::app::state::playback::{
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use crate::app::state::player_tab::PlayerTab;
+use crate::app::state::queue_deferrals::QueueDeferrals;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]

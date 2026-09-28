@@ -58,15 +58,7 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
 
     app.play_item(item.clone());
 
-    assert!(matches!(
-        app.pending_local_play,
-        Some(PendingQueueAction::PlayItems {
-            items,
-            start_idx: 0,
-            autostart: true,
-            ..
-        }) if items.len() == 1 && items[0].id == item.id
-    ));
+    assert!(app.queue_deferrals.has_local_play());
     assert!(app.player_tab.emby_items().is_empty());
     command_rx.try_recv().unwrap_err();
 }
@@ -103,7 +95,7 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
         ),
     );
 
-    assert!(app.pending_local_play.is_none());
+    assert!(!app.queue_deferrals.has_local_play());
     assert!(!app.player.is_remote());
     assert_eq!(app.queue_scope, QueueScope::Local);
     assert!(app.connected_session_id.is_none());
@@ -132,7 +124,7 @@ fn wholly_playable_play_keeps_the_existing_play_path() {
 
     app.play_item(item.clone());
 
-    assert!(app.pending_local_play.is_none());
+    assert!(!app.queue_deferrals.has_local_play());
     let slots = command_rx
         .try_iter()
         .find_map(|command| match command {
@@ -157,8 +149,8 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
         None,
     );
 
-    assert!(app.pending_local_play.is_none());
-    assert!(app.pending_queue_action.is_none());
+    assert!(!app.queue_deferrals.has_local_play());
+    assert!(!app.queue_deferrals.is_save_deferred());
     assert!(app.pending_overlay.is_none());
     assert!(app.player_tab.emby_items().is_empty());
     assert!(

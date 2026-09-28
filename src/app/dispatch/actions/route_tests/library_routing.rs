@@ -157,7 +157,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
         ),
         "library autoplay is never gated"
     );
-    assert!(app.pending_queue_replacement.is_none());
+    assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(
         app.playback_queue()
             .emby_items()

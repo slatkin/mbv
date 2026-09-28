@@ -43,10 +43,8 @@ impl App {
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 self.confirm_discard_or_save_dirty_playlist(key);
             }
-            // Design D6: the populated-queue gate. The gate owns
-            // `pending_queue_replacement` exclusively — reading the shared
-            // deferral slot here would let a save-deferral payload masquerade
-            // as a confirmed replacement.
+            // Only this arm calls `QueueDeferrals::take_confirmed_replacement`;
+            // save completion calls `take_on_save_complete` for its bound mutation.
             ConfirmAction::ReplacePopulatedQueue => {
                 self.confirm_replace_populated_queue(key);
             }
@@ -139,7 +137,7 @@ impl App {
                 self.play_pending_local_play();
             }
             KeyCode::Char('n' | 'N') | KeyCode::Esc => {
-                self.pending_local_play = None;
+                self.queue_deferrals.cancel_local_play();
             }
             _ => {}
         }
@@ -149,16 +147,14 @@ impl App {
     /// queue action (restoring the Queue panel and dismissing the playlists
     /// sidebar when that action was a play), and Esc/`[c]` cancels.
     fn confirm_discard_or_save_dirty_playlist(&mut self, key: KeyEvent) {
-        let play_after = matches!(
-            self.pending_queue_action,
-            Some(PendingQueueAction::PlayItems { .. })
-        );
+        let play_after = self.queue_deferrals.save_answer_is_play();
         match key.code {
             KeyCode::Char('s' | 'S') => {
-                self.save_playlist_to_emby();
+                let mutation_id = self.save_playlist_to_emby();
+                self.queue_deferrals.bind_to_save(mutation_id);
             }
             KeyCode::Char('d' | 'D') => {
-                if let Some(action) = self.pending_queue_action.take() {
+                if let Some(action) = self.queue_deferrals.take_on_discard() {
                     self.execute_pending_queue_action(action);
                 }
                 if play_after {
@@ -167,7 +163,7 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::Char('c' | 'C') => {
-                self.pending_queue_action = None;
+                self.queue_deferrals.cancel_save_answer();
             }
             _ => {}
         }
@@ -179,12 +175,12 @@ impl App {
     fn confirm_replace_populated_queue(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
-                if let Some((action, via)) = self.pending_queue_replacement.take() {
+                if let Some((action, via)) = self.queue_deferrals.take_confirmed_replacement() {
                     self.run_replacement(action, &via);
                 }
             }
             _ => {
-                self.pending_queue_replacement = None;
+                self.queue_deferrals.cancel_gated_replacement();
             }
         }
     }
