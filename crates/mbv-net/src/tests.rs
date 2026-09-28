@@ -36,8 +36,14 @@ impl Visit for FieldVisitor {
     }
 }
 
-/// Captures every event as `<event name> | <fields> | <span fields…>`.
-struct CaptureLayer(Arc<Mutex<Vec<String>>>);
+/// Captures every event as `<event name> | <fields> | <span fields…>`, plus
+/// each created span's `<name>=<target>`.
+struct Capture {
+    lines: Mutex<Vec<String>>,
+    span_targets: Mutex<Vec<String>>,
+}
+
+struct CaptureLayer(Arc<Capture>);
 
 impl<S> Layer<S> for CaptureLayer
 where
@@ -47,6 +53,11 @@ where
         let mut visitor = FieldVisitor(Vec::new());
         attrs.record(&mut visitor);
         if let Some(span) = ctx.span(id) {
+            self.0
+                .span_targets
+                .lock()
+                .expect("capture lock")
+                .push(format!("{}={}", span.name(), span.metadata().target()));
             span.extensions_mut().insert(SpanFields(visitor.0));
         }
     }
@@ -81,20 +92,23 @@ where
             visitor.0.join(" "),
             span_fields.join(" ")
         );
-        self.0.lock().expect("capture lock").push(line);
+        self.0.lines.lock().expect("capture lock").push(line);
     }
 }
 
-fn captured(capture: &Arc<Mutex<Vec<String>>>, f: impl FnOnce()) -> Vec<String> {
+fn captured(capture: &Arc<Capture>, f: impl FnOnce()) -> Vec<String> {
     let subscriber =
         tracing_subscriber::Registry::default().with(CaptureLayer(Arc::clone(capture)));
     tracing::subscriber::with_default(subscriber, f);
-    capture.lock().expect("capture lock").clone()
+    capture.lines.lock().expect("capture lock").clone()
 }
 
 #[test]
 fn failed_request_logs_service_and_status() {
-    let capture = Arc::new(Mutex::new(Vec::new()));
+    let capture = Arc::new(Capture {
+        lines: Mutex::new(Vec::new()),
+        span_targets: Mutex::new(Vec::new()),
+    });
     let mock = MockHttp::new();
     mock.respond(500, "{}");
 
@@ -121,4 +135,18 @@ fn failed_request_logs_service_and_status() {
     assert!(failed.contains("url.path=/Items"), "{failed}");
     assert!(!failed.contains("api_key"), "{failed}");
     assert!(failed.contains("duration_ms="), "{failed}");
+    // Span and events share the `http` target, so one LogSpec directive
+    // (`http=…`) gates the span and its outcome events alike — if the span
+    // were gated out while the events pass, the lines would lose every
+    // correlation field.
+    assert!(
+        capture
+            .span_targets
+            .lock()
+            .expect("capture lock")
+            .iter()
+            .any(|span| span == "http.request=http"),
+        "{:?}",
+        capture.span_targets.lock().expect("capture lock")
+    );
 }

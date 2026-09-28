@@ -89,6 +89,7 @@ impl ureq::middleware::Middleware for HttpRequestLogging {
         let method = request.method().as_str();
         let path = request.uri().path().to_owned();
         let span = tracing::info_span!(
+            target: "http",
             "http.request",
             service = %service.as_str(),
             http.request.method = method,
