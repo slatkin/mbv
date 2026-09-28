@@ -68,7 +68,7 @@ Final gate (end of group 2):
 
 ## 3. Docs
 
-- [ ] 3.1 Delete `docs/invariants/12-submission-time-queue-item-progress.md`,
+- [x] 3.1 Delete `docs/invariants/12-submission-time-queue-item-progress.md`,
   or reduce it to the residual: a hand-built `AudiobookshelfQueueItem` literal
   must name its progress. Keep it only if that residual is worth a doc; the
   default is delete. Remove its link from invariant 06 if one remains, and
