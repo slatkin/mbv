@@ -78,13 +78,13 @@ fn is_mpv_ipc_config_line(line: &str) -> bool {
 
 fn sanitized_mpv_conf(user_conf: Option<&Path>, ipc_path: &str) -> String {
     let mut sanitized = String::new();
-    if let Some(path) = user_conf {
-        if let Ok(text) = fs::read_to_string(path) {
-            for line in text.lines() {
-                if !is_mpv_ipc_config_line(line) {
-                    sanitized.push_str(line);
-                    sanitized.push('\n');
-                }
+    if let Some(path) = user_conf
+        && let Ok(text) = fs::read_to_string(path)
+    {
+        for line in text.lines() {
+            if !is_mpv_ipc_config_line(line) {
+                sanitized.push_str(line);
+                sanitized.push('\n');
             }
         }
     }
@@ -281,10 +281,10 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
     ) {
         log::warn!(target: "player", "failed to set video back cache: {e}");
     }
-    if !config.use_mpv_config {
-        if let Err(e) = mpv.set_property("hwdec", "auto-safe") {
-            log::warn!(target: "player", "failed to set hwdec policy: {e}");
-        }
+    if !config.use_mpv_config
+        && let Err(e) = mpv.set_property("hwdec", "auto-safe")
+    {
+        log::warn!(target: "player", "failed to set hwdec policy: {e}");
     }
 }
 
@@ -425,12 +425,13 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
             opt!("osc", "no");
             opt!("osd-bar", "no");
         }
-        if !no_scripts && !use_mpv_config {
-            if let Some(script) = resolve_overlay_scripts() {
-                opt!("scripts", script.to_str().unwrap_or(""));
-                let fonts = resolve_overlay_fonts();
-                opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-            }
+        if !no_scripts
+            && !use_mpv_config
+            && let Some(script) = resolve_overlay_scripts()
+        {
+            opt!("scripts", script.to_str().unwrap_or(""));
+            let fonts = resolve_overlay_fonts();
+            opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
         }
         Ok(())
     }) {

@@ -229,10 +229,10 @@ pub fn evict_old_image_cache() {
             .checked_sub(std::time::Duration::from_secs(30 * 24 * 3600))
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         for entry in entries.flatten() {
-            if let Ok(meta) = entry.metadata() {
-                if meta.modified().is_ok_and(|m| m < cutoff) {
-                    let _ = std::fs::remove_file(entry.path());
-                }
+            if let Ok(meta) = entry.metadata()
+                && meta.modified().is_ok_and(|m| m < cutoff)
+            {
+                let _ = std::fs::remove_file(entry.path());
             }
         }
     });

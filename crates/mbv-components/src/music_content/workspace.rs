@@ -267,10 +267,9 @@ impl MusicContent {
             .items
             .iter()
             .position(|item| item.id == album.id)
+            && let Some(target) = self.context.album_targets.get(index)
         {
-            if let Some(target) = self.context.album_targets.get(index) {
-                self.tree_tracks.insert(target.clone(), tracks.clone());
-            }
+            self.tree_tracks.insert(target.clone(), tracks.clone());
         }
     }
 
@@ -476,15 +475,15 @@ impl MusicContent {
     /// stable artist identity gate and album-item resolution cannot drift.
     #[must_use]
     pub fn workspace_track_activation(&self) -> Option<Msg> {
-        if self.artist_workspace_focused() {
-            if let (Some(target), Some(track_id)) = (
+        if self.artist_workspace_focused()
+            && let (Some(target), Some(track_id)) = (
                 self.artist_detail_target(),
                 self.track_list.selected_target().cloned(),
-            ) {
-                return Some(Msg::Shell(Box::new(
-                    ShellRequest::MusicArtistTrackActivate { target, track_id },
-                )));
-            }
+            )
+        {
+            return Some(Msg::Shell(Box::new(
+                ShellRequest::MusicArtistTrackActivate { target, track_id },
+            )));
         }
         let track = self.selected_track_item()?;
         let album_id = self.focused_track_album_id()?;

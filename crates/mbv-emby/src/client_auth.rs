@@ -129,10 +129,10 @@ impl EmbyClient {
             .call()
         {
             Ok(mut resp) => {
-                if let Ok(user) = resp.body_mut().read_json::<Value>() {
-                    if let Some(name) = user["Name"].as_str().filter(|name| !name.is_empty()) {
-                        self.config.username = name.to_string();
-                    }
+                if let Ok(user) = resp.body_mut().read_json::<Value>()
+                    && let Some(name) = user["Name"].as_str().filter(|name| !name.is_empty())
+                {
+                    self.config.username = name.to_string();
                 }
                 Ok(())
             }

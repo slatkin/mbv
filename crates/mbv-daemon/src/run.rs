@@ -375,7 +375,7 @@ fn start_local_control_server(
 }
 
 fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<TcpListener> {
-    let tcp_listener = if listen.trim().is_empty() {
+    if listen.trim().is_empty() {
         None
     } else {
         match TcpListener::bind(listen.trim()) {
@@ -400,9 +400,7 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
                 None
             }
         }
-    };
-
-    tcp_listener
+    }
 }
 
 fn register_capabilities(

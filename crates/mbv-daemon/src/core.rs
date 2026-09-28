@@ -193,18 +193,18 @@ impl PlaybackIntentState {
     }
 
     pub(super) fn mark_resolving(&mut self, request_id: PlaybackRequestId) {
-        if let Some(current) = &mut self.current {
-            if current.request_id == request_id {
-                current.phase = PlaybackIntentPhase::Resolving;
-            }
+        if let Some(current) = &mut self.current
+            && current.request_id == request_id
+        {
+            current.phase = PlaybackIntentPhase::Resolving;
         }
     }
 
     pub(super) fn mark_starting(&mut self, request_id: PlaybackRequestId) {
-        if let Some(current) = &mut self.current {
-            if current.request_id == request_id {
-                current.phase = PlaybackIntentPhase::PlayerOpening;
-            }
+        if let Some(current) = &mut self.current
+            && current.request_id == request_id
+        {
+            current.phase = PlaybackIntentPhase::PlayerOpening;
         }
     }
 
@@ -435,17 +435,16 @@ pub(super) fn dispatch_slot_jump(
             );
             if let (Some(s), Some((origin_request_id, origin_client))) =
                 (superseded, *queued_origin)
+                && origin_request_id == s.request_id
             {
-                if origin_request_id == s.request_id {
-                    ctx.ctrl_clients.lock().unwrap().send_to_client(
-                        origin_client,
-                        &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
-                            request_id: s.request_id,
-                            generation: s.generation,
-                            outcome: PlaybackIntentOutcome::Superseded,
-                        }),
-                    );
-                }
+                ctx.ctrl_clients.lock().unwrap().send_to_client(
+                    origin_client,
+                    &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                        request_id: s.request_id,
+                        generation: s.generation,
+                        outcome: PlaybackIntentOutcome::Superseded,
+                    }),
+                );
             }
             // Transport senders (MPRIS/tray/Emby-ws) have no ctrl wire form and
             // so no `Superseded` event to receive; only `Ctrl` origins are worth
@@ -546,18 +545,17 @@ pub(super) fn expire_and_redispatch(
                 current.generation,
             )
         })
-    {
-        if let Some(event) = owner.intents.rejected_if_current(
+        && let Some(event) = owner.intents.rejected_if_current(
             connection_id,
             request_id,
             generation,
             mbv_ctrl::PlaybackIntentRejection::Unavailable,
-        ) {
-            ctrl_clients
-                .lock()
-                .unwrap()
-                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-        }
+        )
+    {
+        ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
     if let Some(next) = dispatch_next {
         let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);

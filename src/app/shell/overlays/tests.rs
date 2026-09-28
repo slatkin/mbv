@@ -23,10 +23,10 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
         ],
         cursor: 0,
     };
-    if let Some(comp) = model.application.get_component_mut(&id) {
-        if let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>() {
-            multiselect.set_content(&popup);
-        }
+    if let Some(comp) = model.application.get_component_mut(&id)
+        && let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>()
+    {
+        multiselect.set_content(&popup);
     }
 
     let message = {

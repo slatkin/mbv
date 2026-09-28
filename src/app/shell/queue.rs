@@ -222,34 +222,34 @@ impl Model {
 
     fn push_queue_projection(&mut self, update: QueueProjectionUpdate) {
         let id = ComponentId::Queue;
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                queue.set_pending_slot(update.pending_slot);
-                if let Some(slots) = update.slots {
-                    queue.set_rows(&slots, update.playback);
-                } else if let Some((target, row)) = update.patch {
-                    queue.set_row_patch(target, row);
-                }
-                queue.set_cursor(&update.cursor);
-                queue.set_scope(update.scope);
-                // The footer pills are all queue concern (playlist source,
-                // autosave, the remote-attachment indicator) — never the
-                // library column's status bar.
-                let remote_pill = self.app.queue_title_model().remote_pill;
-                queue.set_status_pills(
-                    self.app.playlist_status_spans(),
-                    self.app.autosave_status_spans(),
-                    remote_pill,
-                );
-                // The queue panel's placement (task 3.1): computed from the
-                // same paint-free checkpoint the draw path consumes (the last
-                // published card geometry; see `App::queue_panel_placement`).
-                queue.set_frame_focused(matches!(
-                    self.app.effective_panel_focus(),
-                    PanelFocus::Queue
-                ));
-                queue.set_area(self.app.queue_panel_placement().panel_area);
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
+        {
+            queue.set_pending_slot(update.pending_slot);
+            if let Some(slots) = update.slots {
+                queue.set_rows(&slots, update.playback);
+            } else if let Some((target, row)) = update.patch {
+                queue.set_row_patch(target, row);
             }
+            queue.set_cursor(&update.cursor);
+            queue.set_scope(update.scope);
+            // The footer pills are all queue concern (playlist source,
+            // autosave, the remote-attachment indicator) — never the
+            // library column's status bar.
+            let remote_pill = self.app.queue_title_model().remote_pill;
+            queue.set_status_pills(
+                self.app.playlist_status_spans(),
+                self.app.autosave_status_spans(),
+                remote_pill,
+            );
+            // The queue panel's placement (task 3.1): computed from the
+            // same paint-free checkpoint the draw path consumes (the last
+            // published card geometry; see `App::queue_panel_placement`).
+            queue.set_frame_focused(matches!(
+                self.app.effective_panel_focus(),
+                PanelFocus::Queue
+            ));
+            queue.set_area(self.app.queue_panel_placement().panel_area);
         }
     }
 
@@ -278,10 +278,10 @@ impl Model {
         if placement.width == 0 || placement.height == 0 {
             return;
         }
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                queue.set_area(placement);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
+        {
+            queue.set_area(placement);
         }
         self.application.view(&id, frame, placement);
     }

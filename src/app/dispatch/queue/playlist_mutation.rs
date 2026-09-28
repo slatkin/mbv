@@ -244,10 +244,10 @@ impl App {
             // Don't nuke the on-disk queue just because the local tab happens to be
             // empty while attached to a remote session — that reflects remote-control
             // UI state, not the user intentionally clearing their local queue.
-            if self.connected_session_id.is_none() {
-                if let Err(e) = crate::config::clear_queue_state() {
-                    log::warn!(target: "queue", "failed to clear queue state: {e}");
-                }
+            if self.connected_session_id.is_none()
+                && let Err(e) = crate::config::clear_queue_state()
+            {
+                log::warn!(target: "queue", "failed to clear queue state: {e}");
             }
         } else if let Err(e) = crate::config::save_queue_state(&state) {
             log::warn!(target: "queue", "failed to save queue state: {e}");
@@ -266,10 +266,10 @@ impl App {
             return;
         }
         let state = self.build_queue_state();
-        if !state.items.is_empty() {
-            if let Err(e) = crate::config::save_queue_state(&state) {
-                log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
-            }
+        if !state.items.is_empty()
+            && let Err(e) = crate::config::save_queue_state(&state)
+        {
+            log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
         }
     }
 

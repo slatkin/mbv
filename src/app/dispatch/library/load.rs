@@ -20,10 +20,10 @@ impl App {
         }
         self.start_album_index(lib_idx, true);
         self.clear_saved_library_position(lib_idx);
-        if self.is_feed_home_video_group_view(lib_idx) {
-            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                state.loading = true;
-            }
+        if self.is_feed_home_video_group_view(lib_idx)
+            && let Some(state) = self.libs[lib_idx].feed_home_video.as_mut()
+        {
+            state.loading = true;
         }
         self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
         if self.libs[lib_idx].library.collection_type != "tvshows"

@@ -367,10 +367,8 @@ impl Player {
         } else {
             false
         };
-        if sent {
-            if let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
-                w.notify();
-            }
+        if sent && let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
+            w.notify();
         }
         sent
     }

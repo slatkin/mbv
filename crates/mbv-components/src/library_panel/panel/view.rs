@@ -256,14 +256,13 @@ impl Component for LibraryPanel {
         // the panel's deferred-message seam and is dispatched after this
         // paint. A pending deferred message is never clobbered; the owner
         // re-resolves the same window on the next painted frame.
-        if self.deferred_msg.is_none() {
-            if let Some(message) = self
+        if self.deferred_msg.is_none()
+            && let Some(message) = self
                 .owners
                 .active_mut()
                 .and_then(|owner| owner.post_paint_message())
-            {
-                self.deferred_msg = Some(message);
-            }
+        {
+            self.deferred_msg = Some(message);
         }
         self.hits = hit_regions;
         self.pill_windows = windows;
@@ -317,10 +316,9 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                         .owners
                         .active_mut()
                         .is_some_and(|owner| owner.hero_overlay_enter_available())
+                    && let Some(message) = self.open_hero_from_browser(None)
                 {
-                    if let Some(message) = self.open_hero_from_browser(None) {
-                        return Some(message);
-                    }
+                    return Some(message);
                 }
                 let result = self
                     .owners

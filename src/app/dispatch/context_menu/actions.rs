@@ -354,12 +354,11 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
+            && lvl.unplayed_only
         {
-            if lvl.unplayed_only {
-                let id = item_id.to_string();
-                lvl.items.retain(|item| item.id != id);
-                lvl.total_count = lvl.total_count.saturating_sub(1);
-            }
+            let id = item_id.to_string();
+            lvl.items.retain(|item| item.id != id);
+            lvl.total_count = lvl.total_count.saturating_sub(1);
         }
     }
 
@@ -480,13 +479,12 @@ impl App {
             }
             self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
             self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            if lvl.unplayed_only {
-                if let Some(pos) = lvl.items.iter().position(|item| item.id == item_id) {
-                    lvl.items.remove(pos);
-                    lvl.total_count = lvl.total_count.saturating_sub(1);
-                }
-            }
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
+            && lvl.unplayed_only
+            && let Some(pos) = lvl.items.iter().position(|item| item.id == item_id)
+        {
+            lvl.items.remove(pos);
+            lvl.total_count = lvl.total_count.saturating_sub(1);
         }
     }
 

@@ -30,10 +30,10 @@ impl Model {
         }
 
         let snapshot = self.settings_snapshot();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(settings) = comp.as_any_mut().downcast_mut::<SettingsComponent>() {
-                settings.set_content(snapshot);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(settings) = comp.as_any_mut().downcast_mut::<SettingsComponent>()
+        {
+            settings.set_content(snapshot);
         }
     }
 

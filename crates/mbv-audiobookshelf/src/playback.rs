@@ -286,21 +286,21 @@ impl AudiobookshelfClient {
             .and_then(|response| {
                 self.decode_playback_session(response, library_item_id, episode_id)
             });
-        if decoded.is_err() {
-            if let Some(session_id) = opened_id {
-                let _ = self.post_json(
-                    api_key,
-                    &format!(
-                        "/api/session/{}/close",
-                        mbv_net::encode_path_segment(&session_id)
-                    ),
-                    &AudiobookshelfPlaybackProgress {
-                        current_time: 0.0,
-                        time_listened: 0.0,
-                        duration: opened_duration,
-                    },
-                );
-            }
+        if decoded.is_err()
+            && let Some(session_id) = opened_id
+        {
+            let _ = self.post_json(
+                api_key,
+                &format!(
+                    "/api/session/{}/close",
+                    mbv_net::encode_path_segment(&session_id)
+                ),
+                &AudiobookshelfPlaybackProgress {
+                    current_time: 0.0,
+                    time_listened: 0.0,
+                    duration: opened_duration,
+                },
+            );
         }
         decoded
     }
@@ -354,21 +354,21 @@ impl AudiobookshelfClient {
                 AudiobookshelfError::malformed()
             })
             .and_then(|response| self.decode_book_playback_session(response, library_item_id));
-        if decoded.is_err() {
-            if let Some(session_id) = opened_id {
-                let _ = self.post_json(
-                    api_key,
-                    &format!(
-                        "/api/session/{}/close",
-                        mbv_net::encode_path_segment(&session_id)
-                    ),
-                    &AudiobookshelfPlaybackProgress {
-                        current_time: 0.0,
-                        time_listened: 0.0,
-                        duration: opened_duration,
-                    },
-                );
-            }
+        if decoded.is_err()
+            && let Some(session_id) = opened_id
+        {
+            let _ = self.post_json(
+                api_key,
+                &format!(
+                    "/api/session/{}/close",
+                    mbv_net::encode_path_segment(&session_id)
+                ),
+                &AudiobookshelfPlaybackProgress {
+                    current_time: 0.0,
+                    time_listened: 0.0,
+                    duration: opened_duration,
+                },
+            );
         }
         decoded
     }

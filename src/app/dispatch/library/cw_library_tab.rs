@@ -239,17 +239,17 @@ impl App {
     /// removal/replacement invalidation; downstream Service helpers may
     /// still bounds-check defensively, but never choose another destination.
     pub(in crate::app) fn normalize_stale_browse_destination(&mut self) -> bool {
-        if let Some(index) = self.tab.emby_library_index() {
-            if index >= self.libs.len() {
-                self.tab = TabSelection::Home;
-                return true;
-            }
+        if let Some(index) = self.tab.emby_library_index()
+            && index >= self.libs.len()
+        {
+            self.tab = TabSelection::Home;
+            return true;
         }
-        if let Some(index) = self.tab.audiobookshelf_index() {
-            if index >= self.audiobookshelf_libraries.len() {
-                self.tab = TabSelection::Home;
-                return true;
-            }
+        if let Some(index) = self.tab.audiobookshelf_index()
+            && index >= self.audiobookshelf_libraries.len()
+        {
+            self.tab = TabSelection::Home;
+            return true;
         }
         false
     }

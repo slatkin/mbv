@@ -87,10 +87,10 @@ impl App {
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
         self.handle_loaded_level(lib_idx, parent_id, level);
-        if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone() {
-            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.tv_content_mode = Some(mode);
-            }
+        if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone()
+            && let Some(level) = self.libs[lib_idx].nav_stack.last_mut()
+        {
+            level.tv_content_mode = Some(mode);
         }
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
@@ -408,10 +408,10 @@ impl App {
             .libs
             .get(lib_idx)
             .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
-        if restored.as_ref() != self.saved_library_position(lib_idx).as_ref() {
-            if let Some(restored) = restored {
-                self.replace_saved_library_position(lib_idx, restored);
-            }
+        if restored.as_ref() != self.saved_library_position(lib_idx).as_ref()
+            && let Some(restored) = restored
+        {
+            self.replace_saved_library_position(lib_idx, restored);
         }
         // A pending Series landing retries against the restored root corpus.
         // `arm` only pays the whole-library prefetch for a user-initiated

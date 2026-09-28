@@ -77,11 +77,11 @@ impl App {
     }
 
     pub(in crate::app) fn cancel_emby_setup(&mut self) {
-        if let Some(form) = self.setup.emby_setup_form.take() {
-            if let Some(generation) = form.generation {
-                self.emby_runtime
-                    .cancel_setup(generation, form.previous_state);
-            }
+        if let Some(form) = self.setup.emby_setup_form.take()
+            && let Some(generation) = form.generation
+        {
+            self.emby_runtime
+                .cancel_setup(generation, form.previous_state);
         }
         self.setup.emby_setup_rx = None;
     }

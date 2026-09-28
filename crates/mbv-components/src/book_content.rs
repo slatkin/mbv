@@ -272,10 +272,10 @@ impl BookContent {
     }
 
     pub fn select_bucket_edge(&mut self, end: bool) {
-        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
-            if bucket.end > bucket.start {
-                self.select_book_index(if end { bucket.end - 1 } else { bucket.start });
-            }
+        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied()
+            && bucket.end > bucket.start
+        {
+            self.select_book_index(if end { bucket.end - 1 } else { bucket.start });
         }
     }
 

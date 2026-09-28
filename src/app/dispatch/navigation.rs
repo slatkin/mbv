@@ -82,10 +82,10 @@ impl App {
             if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut()) {
                 state.video_cursor = pos;
             }
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                lvl.set_resting_cursor(pos);
-            }
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
+            && let Some(pos) = lvl.items.iter().position(|i| i.id == item.id)
+        {
+            lvl.set_resting_cursor(pos);
         }
     }
 

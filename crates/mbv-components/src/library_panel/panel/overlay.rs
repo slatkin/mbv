@@ -49,11 +49,11 @@ impl LibraryPanel {
     }
 
     pub fn dismiss_hero_overlay(&mut self) {
-        if self.hero_overlay_open {
-            if let Some(owner) = self.owners.active_mut() {
-                owner.set_hero_overlay_open(false);
-                owner.clear_hero_workspace_focus();
-            }
+        if self.hero_overlay_open
+            && let Some(owner) = self.owners.active_mut()
+        {
+            owner.set_hero_overlay_open(false);
+            owner.clear_hero_workspace_focus();
         }
         self.hero_overlay_open = false;
         self.overlay_geometry = None;

@@ -56,10 +56,10 @@ impl PlaybackRun {
         auto_select_tracks(mpv, &self.status, &prefs);
         self.tracks_initialized = true;
         self.apply_forced_resume(mpv);
-        if let Some(item) = self.active_item().cloned() {
-            if let Some(emby) = item.as_emby() {
-                send_ep_info(mpv, emby);
-            }
+        if let Some(item) = self.active_item().cloned()
+            && let Some(emby) = item.as_emby()
+        {
+            send_ep_info(mpv, emby);
         }
         if self.config.use_mpv_config {
             let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);

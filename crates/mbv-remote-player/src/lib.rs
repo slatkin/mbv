@@ -356,10 +356,10 @@ impl RemotePlayer {
     /// Panics if the `control_stream` mutex is poisoned: a previous owner
     /// panicked while holding it.
     pub fn disconnect(&self) {
-        if let Some(stream) = self.control_stream.lock().unwrap().take() {
-            if let Err(e) = stream.shutdown() {
-                log::warn!(target: "remote", "control-socket shutdown failed: {e}");
-            }
+        if let Some(stream) = self.control_stream.lock().unwrap().take()
+            && let Err(e) = stream.shutdown()
+        {
+            log::warn!(target: "remote", "control-socket shutdown failed: {e}");
         }
     }
 

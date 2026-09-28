@@ -64,10 +64,10 @@ impl Model {
 
     fn set_daemon_lost_restart_error(&mut self, error: String) {
         let id = ComponentId::Modal(ModalId::DaemonLost);
-        if let Some(component) = self.application.get_component_mut(&id) {
-            if let Some(modal) = component.as_any_mut().downcast_mut::<DaemonLostComponent>() {
-                modal.set_restart_error(error);
-            }
+        if let Some(component) = self.application.get_component_mut(&id)
+            && let Some(modal) = component.as_any_mut().downcast_mut::<DaemonLostComponent>()
+        {
+            modal.set_restart_error(error);
         }
     }
 

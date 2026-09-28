@@ -87,19 +87,19 @@ impl Model {
 
         let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
         let help_id = ComponentId::Overlay(OverlayId::Help);
-        if let Some(comp) = self.application.get_component_mut(&help_id) {
-            if let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>() {
-                help.set_panel_area(panel_area);
-                help.set_destination(self.app.effective_panel_focus(), self.app.tab);
-                help.set_keybinds(&self.keybinds);
-            }
+        if let Some(comp) = self.application.get_component_mut(&help_id)
+            && let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>()
+        {
+            help.set_panel_area(panel_area);
+            help.set_destination(self.app.effective_panel_focus(), self.app.tab);
+            help.set_keybinds(&self.keybinds);
         }
 
         let search_id = Self::search_id();
-        if let Some(comp) = self.application.get_component_mut(&search_id) {
-            if let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>() {
-                search.set_panel_area(panel_area);
-            }
+        if let Some(comp) = self.application.get_component_mut(&search_id)
+            && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
+        {
+            search.set_panel_area(panel_area);
         }
     }
 
@@ -115,29 +115,29 @@ impl Model {
             .cast_attachment
             .as_ref()
             .map(|attachment| attachment.receiver_id.as_str());
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>() {
-                sessions.set_display_context(
-                    self.app.use_nerd_fonts,
-                    mbv_render::components::widgets::service_state_color(
-                        self.app.emby_runtime.state,
-                        mbv_theme::ACCENT,
-                    ),
-                );
-                sessions.set_content(
-                    &self
-                        .app
-                        .panel_targets
-                        .iter()
-                        .map(crate::app::state::panel_targets::PanelTarget::row)
-                        .collect::<Vec<_>>(),
-                    self.app.sessions_loading,
-                    connected_session_id,
-                    cast_attachment_id,
-                    self.app.can_disconnect_remote(),
-                    panel_area,
-                );
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>()
+        {
+            sessions.set_display_context(
+                self.app.use_nerd_fonts,
+                mbv_render::components::widgets::service_state_color(
+                    self.app.emby_runtime.state,
+                    mbv_theme::ACCENT,
+                ),
+            );
+            sessions.set_content(
+                &self
+                    .app
+                    .panel_targets
+                    .iter()
+                    .map(crate::app::state::panel_targets::PanelTarget::row)
+                    .collect::<Vec<_>>(),
+                self.app.sessions_loading,
+                connected_session_id,
+                cast_attachment_id,
+                self.app.can_disconnect_remote(),
+                panel_area,
+            );
         }
     }
 
@@ -204,10 +204,10 @@ impl Model {
         let mut received = 0;
         while let Ok((query, result)) = self.app.channels.search_rx.try_recv() {
             received += 1;
-            if let Some(comp) = self.application.get_component_mut(&id) {
-                if let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>() {
-                    search.apply_drain(&query, result);
-                }
+            if let Some(comp) = self.application.get_component_mut(&id)
+                && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
+            {
+                search.apply_drain(&query, result);
             }
         }
         received > 0

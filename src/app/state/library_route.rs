@@ -145,8 +145,8 @@ impl App {
         log::info!(target: "library_route", "ancestor cache miss item_id={item_id:?}");
         let ancestors = {
             let client = self.emby_client()?;
-            let result = client.lock().unwrap().get_ancestors(item_id);
-            result
+
+            client.lock().unwrap().get_ancestors(item_id)
         };
         let library_name = match ancestors {
             Ok(chain) => chain

@@ -406,11 +406,9 @@ impl Model {
                 }
             ) && !self.library_panel_has_owner(key)
         });
-        if register_book {
-            if let Some(key) = active.clone() {
-                self.push_library_owner(key, Box::new(BookContent::new()));
-                self.push_audiobookshelf_book_content();
-            }
+        if register_book && let Some(key) = active.clone() {
+            self.push_library_owner(key, Box::new(BookContent::new()));
+            self.push_audiobookshelf_book_content();
         }
         let register_podcast = active.as_ref().is_some_and(|key| {
             matches!(
@@ -422,11 +420,9 @@ impl Model {
                 }
             ) && !self.library_panel_has_owner(key)
         });
-        if register_podcast {
-            if let Some(key) = active.clone() {
-                self.push_library_owner(key, Box::new(PodcastContent::new()));
-                self.push_audiobookshelf_podcast_content();
-            }
+        if register_podcast && let Some(key) = active.clone() {
+            self.push_library_owner(key, Box::new(PodcastContent::new()));
+            self.push_audiobookshelf_podcast_content();
         }
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;

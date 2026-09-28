@@ -475,11 +475,11 @@ impl MusicContent {
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
             Key::Left if self.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_target().cloned() {
-                    if self.browser.is_expanded(&root) {
-                        self.browser
-                            .apply(TreeOperation::ToggleExpansionTarget(root));
-                    }
+                if let Some(root) = self.browser.selected_target().cloned()
+                    && self.browser.is_expanded(&root)
+                {
+                    self.browser
+                        .apply(TreeOperation::ToggleExpansionTarget(root));
                 }
                 None
             }

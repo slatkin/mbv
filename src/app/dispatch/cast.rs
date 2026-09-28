@@ -111,10 +111,10 @@ impl App {
     }
 
     pub(in crate::app) fn set_cast_client(&mut self, receiver_id: &str, client: Sender<CastJob>) {
-        if let Some(attachment) = self.cast_attachment.as_mut() {
-            if attachment.receiver_id == receiver_id {
-                attachment.client = Some(client);
-            }
+        if let Some(attachment) = self.cast_attachment.as_mut()
+            && attachment.receiver_id == receiver_id
+        {
+            attachment.client = Some(client);
         }
     }
 
@@ -288,10 +288,8 @@ impl App {
             .is_some_and(|a| a.receiver_id == receiver_id);
         match outcome {
             Ok(dispatched) => {
-                if attached {
-                    if let Some(attachment) = self.cast_attachment.as_mut() {
-                        attachment.dispatched = dispatched;
-                    }
+                if attached && let Some(attachment) = self.cast_attachment.as_mut() {
+                    attachment.dispatched = dispatched;
                 }
             }
             Err(error) => {

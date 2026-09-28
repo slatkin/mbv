@@ -137,10 +137,9 @@ impl FeedsManageComponent {
         if !self.submitting()
             && matches!(key.code, Key::Char(_))
             && (key.modifiers == KeyModifiers::NONE || key.modifiers == KeyModifiers::SHIFT)
+            && let Key::Char(c) = key.code
         {
-            if let Key::Char(c) = key.code {
-                self.push_char(c);
-            }
+            self.push_char(c);
         }
         None
     }
@@ -180,11 +179,11 @@ impl FeedsManageComponent {
                 }
             },
             MouseGesture::DoubleClick(at) => {
-                if let FeedsManageStage::List = &stage {
-                    if let Some(&index) = self.hit_rows.resolve(at) {
-                        self.cursor = index;
-                        return Some(Self::shell_intent(FeedsManageIntent::Edit));
-                    }
+                if let FeedsManageStage::List = &stage
+                    && let Some(&index) = self.hit_rows.resolve(at)
+                {
+                    self.cursor = index;
+                    return Some(Self::shell_intent(FeedsManageIntent::Edit));
                 }
                 // Outside double-click: the first click already dismissed.
                 None

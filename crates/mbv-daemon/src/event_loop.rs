@@ -178,10 +178,11 @@ impl DaemonLoop {
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 
-        if self.role == DaemonRole::Local && outcome.owner_queue_dirty {
-            if let Err(error) = self.persist_owner_queue() {
-                log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
-            }
+        if self.role == DaemonRole::Local
+            && outcome.owner_queue_dirty
+            && let Err(error) = self.persist_owner_queue()
+        {
+            log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
         }
 
         outcome.flow

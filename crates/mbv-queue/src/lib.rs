@@ -341,10 +341,10 @@ impl PlaybackQueue {
         self.slots.truncate(len);
         self.revision.bump(&self.mint);
         // Clear active slot if it's beyond the new length.
-        if let Some(active_id) = self.active_slot_id {
-            if self.slot_index(active_id).is_none() {
-                self.active_slot_id = None;
-            }
+        if let Some(active_id) = self.active_slot_id
+            && self.slot_index(active_id).is_none()
+        {
+            self.active_slot_id = None;
         }
     }
 
@@ -541,10 +541,10 @@ impl PlaybackQueue {
         }
 
         self.slots = merged_slots;
-        if let Some(active_slot_id) = self.active_slot_id {
-            if self.slot_index(active_slot_id).is_none() {
-                self.active_slot_id = None;
-            }
+        if let Some(active_slot_id) = self.active_slot_id
+            && self.slot_index(active_slot_id).is_none()
+        {
+            self.active_slot_id = None;
         }
         if changed {
             self.revision.bump(&self.mint);

@@ -364,12 +364,12 @@ impl Model {
             return;
         }
         self.app.prefix_armed = false;
-        if let Some(id) = self.prefix_armed_focus.take() {
-            if self.application.mounted(&id) {
-                self.application
-                    .active(&id)
-                    .expect("restore prefix-displaced focus");
-            }
+        if let Some(id) = self.prefix_armed_focus.take()
+            && self.application.mounted(&id)
+        {
+            self.application
+                .active(&id)
+                .expect("restore prefix-displaced focus");
         }
     }
 

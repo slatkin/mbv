@@ -360,12 +360,11 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
+            && !last.items.is_empty()
         {
-            if !last.items.is_empty() {
-                let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
-                last.set_resting_cursor(order[0]);
-            }
+            let mut order: Vec<usize> = (0..last.items.len()).collect();
+            order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
+            last.set_resting_cursor(order[0]);
         }
     }
 }

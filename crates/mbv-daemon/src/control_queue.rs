@@ -44,17 +44,18 @@ pub(crate) fn project_queue_state(
     }
 
     // Incorporate the latest valid position for the active video item.
-    if player_status.active && player_status.video_height > 0 && active_idx < slots.len() {
-        if let Some(slot) = slots.get(active_idx) {
-            if slot.item.is_video() {
-                let position = if player_status.last_valid_pos > 0 {
-                    player_status.last_valid_pos
-                } else {
-                    player_status.position_ticks
-                };
-                positions.insert(slot.item.id().to_string(), position);
-            }
-        }
+    if player_status.active
+        && player_status.video_height > 0
+        && active_idx < slots.len()
+        && let Some(slot) = slots.get(active_idx)
+        && slot.item.is_video()
+    {
+        let position = if player_status.last_valid_pos > 0 {
+            player_status.last_valid_pos
+        } else {
+            player_status.position_ticks
+        };
+        positions.insert(slot.item.id().to_string(), position);
     }
 
     let last_played_item_id = (player_status.active && active_idx < slots.len())

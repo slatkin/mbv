@@ -106,12 +106,12 @@ impl LocalPlaybackTarget {
             app.pre_mute_volume = Some(app.ui_volume);
             app.player.send_command(PlayerCommand::SetVolume(0));
             app.ui_volume = 0;
-        } else if current_id == 0 {
-            if let Some(v) = app.pre_mute_volume.take() {
-                app.player
-                    .send_command(PlayerCommand::SetVolume(i64::from(v)));
-                app.ui_volume = v;
-            }
+        } else if current_id == 0
+            && let Some(v) = app.pre_mute_volume.take()
+        {
+            app.player
+                .send_command(PlayerCommand::SetVolume(i64::from(v)));
+            app.ui_volume = v;
         }
         app.player.send_command(PlayerCommand::SetAudio(next_id));
     }

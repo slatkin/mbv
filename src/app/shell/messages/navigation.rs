@@ -239,12 +239,12 @@ impl super::super::Model {
                 self.push_audiobookshelf_podcast_content();
             }
             ShellRequest::AudiobookshelfPodcastLatestSelected => {
-                if let Some(index) = self.app.tab.audiobookshelf_index() {
-                    if let Some(library) = self.app.audiobookshelf_libraries.get(index) {
-                        self.record_home_latest_acknowledgement(
-                            crate::app::DestinationLatestSource::Audiobookshelf(library.id.clone()),
-                        );
-                    }
+                if let Some(index) = self.app.tab.audiobookshelf_index()
+                    && let Some(library) = self.app.audiobookshelf_libraries.get(index)
+                {
+                    self.record_home_latest_acknowledgement(
+                        crate::app::DestinationLatestSource::Audiobookshelf(library.id.clone()),
+                    );
                 }
                 self.push_audiobookshelf_podcast_content();
             }

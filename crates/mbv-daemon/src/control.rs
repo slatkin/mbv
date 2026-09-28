@@ -203,12 +203,12 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
         &player_status,
     );
 
-    if ctx.role != crate::DaemonRole::Local && queue_state.items.is_empty() {
-        if let Some(existing) = mbv_config::load_queue_state() {
-            if !existing.items.is_empty() {
-                queue_state = existing;
-            }
-        }
+    if ctx.role != crate::DaemonRole::Local
+        && queue_state.items.is_empty()
+        && let Some(existing) = mbv_config::load_queue_state()
+        && !existing.items.is_empty()
+    {
+        queue_state = existing;
     }
 
     if let Err(e) = mbv_config::save_queue_state(&queue_state) {

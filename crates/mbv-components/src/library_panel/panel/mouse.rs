@@ -74,12 +74,12 @@ impl LibraryPanel {
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event {
-            if let HeroWheelOutcome::Handled(message) = self.hero_wheel_result(at, delta) {
-                return message;
-            }
-            // Otherwise preserve the owner's existing HeroPane behavior.
+        if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event
+            && let HeroWheelOutcome::Handled(message) = self.hero_wheel_result(at, delta)
+        {
+            return message;
         }
+        // Otherwise preserve the owner's existing HeroPane behavior.
         let is_wheel = matches!(
             event,
             LibrarySlotEvent::List(MediaListSurfaceInput::Wheel { .. })
@@ -88,19 +88,19 @@ impl LibraryPanel {
             .owners
             .active_mut()
             .and_then(|owner| owner.on_slot_event(event));
-        if is_wheel {
-            if let (Some(key @ LibraryKey::Service { .. }), Some((index, scroll))) = (
+        if is_wheel
+            && let (Some(key @ LibraryKey::Service { .. }), Some((index, scroll))) = (
                 self.owners.active_key().cloned(),
                 self.owners
                     .active_mut()
                     .and_then(|owner| owner.scroll_position()),
-            ) {
-                self.deferred_msg = Some(Msg::Shell(Box::new(ShellRequest::LibraryScroll {
-                    key,
-                    index,
-                    scroll,
-                })));
-            }
+            )
+        {
+            self.deferred_msg = Some(Msg::Shell(Box::new(ShellRequest::LibraryScroll {
+                key,
+                index,
+                scroll,
+            })));
         }
         result
     }
@@ -202,14 +202,14 @@ impl LibraryPanel {
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
-        if let MouseGesture::Click { .. } = gesture {
-            if let Some(&index) = self.hits.links.resolve(at) {
-                if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
+        if let MouseGesture::Click { .. } = gesture
+            && let Some(&index) = self.hits.links.resolve(at)
+            && let Some(url) =
+                self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
-                }) {
-                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
-                }
-            }
+                })
+        {
+            return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
         }
         None
     }
@@ -273,10 +273,8 @@ impl LibraryPanel {
                         .owners
                         .active_mut()
                         .is_some_and(|owner| owner.double_click_opens_hero_overlay());
-                if overlay_attempt {
-                    if let Some(message) = self.open_hero_from_browser(Some(at)) {
-                        return Some(message);
-                    }
+                if overlay_attempt && let Some(message) = self.open_hero_from_browser(Some(at)) {
+                    return Some(message);
                 }
                 self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
                     at,
@@ -301,14 +299,14 @@ impl LibraryPanel {
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
-        if let MouseGesture::Click { .. } = gesture {
-            if let Some(&index) = self.hits.links.resolve(at) {
-                if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
+        if let MouseGesture::Click { .. } = gesture
+            && let Some(&index) = self.hits.links.resolve(at)
+            && let Some(url) =
+                self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
-                }) {
-                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
-                }
-            }
+                })
+        {
+            return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
         }
         if geometry
             .hero

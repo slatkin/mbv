@@ -217,10 +217,10 @@ impl DaemonLoop {
     /// deliberate shutdown, and stop the player.
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
         log::info!(target: "daemon", "graceful shutdown: stopping player");
-        if self.role == DaemonRole::Local {
-            if let Err(error) = self.persist_owner_queue() {
-                log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
-            }
+        if self.role == DaemonRole::Local
+            && let Err(error) = self.persist_owner_queue()
+        {
+            log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
         }
         // Announce the deliberate shutdown to every connected client
         // before closing their connections, so they exit cleanly

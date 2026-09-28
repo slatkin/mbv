@@ -218,11 +218,11 @@ impl LibraryContentOwner for MusicContent {
                 // Right on an album node expands only cached track children;
                 // missing data remains the shell's responsibility.
                 Key::Right if !self.track_focused() && !self.selected_is_artist() => {
-                    if let Some(target) = self.browser.selected_target().cloned() {
-                        if !self.browser.is_expanded(&target) {
-                            self.browser
-                                .apply(TreeOperation::ToggleExpansionTarget(target));
-                        }
+                    if let Some(target) = self.browser.selected_target().cloned()
+                        && !self.browser.is_expanded(&target)
+                    {
+                        self.browser
+                            .apply(TreeOperation::ToggleExpansionTarget(target));
                     }
                     None
                 }
@@ -505,19 +505,19 @@ impl MusicContent {
         if self.local_filter_owns_input() {
             return self.on_filter_key(key);
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            if let Some(item) = self.inline_search.selected_item() {
-                let request = match key.code {
-                    Key::Char('p') => Some(ShellRequest::EmbyLibraryPlay { item }),
-                    Key::Char('a') => Some(ShellRequest::EmbyLibraryEnqueue { item }),
-                    Key::Char('s') => Some(ShellRequest::EmbyLibraryShuffle { item }),
-                    _ => None,
-                };
-                if let Some(request) = request {
-                    self.inline_search.close();
-                    self.browser.apply(TreeOperation::ClearFilter);
-                    return Some(Msg::Shell(Box::new(request)));
-                }
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && let Some(item) = self.inline_search.selected_item()
+        {
+            let request = match key.code {
+                Key::Char('p') => Some(ShellRequest::EmbyLibraryPlay { item }),
+                Key::Char('a') => Some(ShellRequest::EmbyLibraryEnqueue { item }),
+                Key::Char('s') => Some(ShellRequest::EmbyLibraryShuffle { item }),
+                _ => None,
+            };
+            if let Some(request) = request {
+                self.inline_search.close();
+                self.browser.apply(TreeOperation::ClearFilter);
+                return Some(Msg::Shell(Box::new(request)));
             }
         }
         match self.inline_search.handle_key(key) {
@@ -671,11 +671,11 @@ impl MusicContent {
     /// or return a leaf to its artist parent.
     fn tree_move_left(&mut self) -> Option<Msg> {
         if self.selected_is_artist() {
-            if let Some(root) = self.browser.selected_target().cloned() {
-                if self.browser.is_expanded(&root) {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(root));
-                }
+            if let Some(root) = self.browser.selected_target().cloned()
+                && self.browser.is_expanded(&root)
+            {
+                self.browser
+                    .apply(TreeOperation::ToggleExpansionTarget(root));
             }
             return None;
         }

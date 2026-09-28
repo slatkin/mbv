@@ -55,10 +55,10 @@ impl LibraryContentOwner for PodcastContent {
             }
             _ => {}
         }
-        if let PillSelection::Show(id) = &self.pill {
-            if !self.state.detail_cache.contains_key(id) {
-                return false;
-            }
+        if let PillSelection::Show(id) = &self.pill
+            && !self.state.detail_cache.contains_key(id)
+        {
+            return false;
         }
         let selected = state
             .item

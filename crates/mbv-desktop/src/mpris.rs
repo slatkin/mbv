@@ -264,14 +264,14 @@ impl MediaPlayer2Player {
         let (status, send) = self.status_and_sender();
         if let Some(cmd) = status.lock().unwrap().toggle_to_reach(false) {
             send(TransportCommand::Player(cmd));
-        };
+        }
     }
 
     fn pause(&self) {
         let (status, send) = self.status_and_sender();
         if let Some(cmd) = status.lock().unwrap().toggle_to_reach(true) {
             send(TransportCommand::Player(cmd));
-        };
+        }
     }
 
     fn play_pause(&self) {

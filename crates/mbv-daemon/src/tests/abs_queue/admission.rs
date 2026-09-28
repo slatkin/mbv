@@ -314,15 +314,14 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     // Transport gate passed. If a CommandRejected arrives, it must not name
     // the abs-queue transport capability — that would mean the capable peer
     // was incorrectly blocked at the transport layer.
-    if let Ok(CtrlOutbound::Event(json)) = reply_rx.try_recv() {
-        if let CtrlEvent::CommandRejected(reason) =
+    if let Ok(CtrlOutbound::Event(json)) = reply_rx.try_recv()
+        && let CtrlEvent::CommandRejected(reason) =
             serde_json::from_str::<CtrlEvent>(&json).unwrap()
-        {
-            assert!(
-                !reason.contains("did not negotiate"),
-                "capable peer must not receive transport rejection, got: {reason}"
-            );
-        }
+    {
+        assert!(
+            !reason.contains("did not negotiate"),
+            "capable peer must not receive transport rejection, got: {reason}"
+        );
     }
 }
 

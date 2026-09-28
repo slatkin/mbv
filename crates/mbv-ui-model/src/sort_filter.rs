@@ -44,10 +44,10 @@ pub fn strip_article(s: &str) -> &str {
         // byte-index slice would) when `prefix.len()` doesn't land on a UTF-8
         // char boundary — e.g. an accented artist name where the boundary
         // falls inside a multi-byte character.
-        if let Some(head) = s.get(..prefix.len()) {
-            if head.eq_ignore_ascii_case(prefix) {
-                return &s[prefix.len()..];
-            }
+        if let Some(head) = s.get(..prefix.len())
+            && head.eq_ignore_ascii_case(prefix)
+        {
+            return &s[prefix.len()..];
         }
     }
     s

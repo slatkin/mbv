@@ -510,22 +510,22 @@ impl App {
         // strand the connection on the plain `AttachedSession` path with no
         // queue management. Only a genuinely different remote target
         // should skip this.
-        if self.player_owner_is_on_this_machine() {
-            if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                match Self::connect_direct_endpoint(&endpoint) {
-                    Ok((remote, remote_rx)) => {
-                        self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
-                        return;
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            target: "sessions",
-                            "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
-                            sess.device_name,
-                            e
-                        );
-                        direct_upgrade_error = Some(e);
-                    }
+        if self.player_owner_is_on_this_machine()
+            && let Some(endpoint) = self.session_direct_endpoint(sess)
+        {
+            match Self::connect_direct_endpoint(&endpoint) {
+                Ok((remote, remote_rx)) => {
+                    self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
+                    return;
+                }
+                Err(e) => {
+                    log::warn!(
+                        target: "sessions",
+                        "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
+                        sess.device_name,
+                        e
+                    );
+                    direct_upgrade_error = Some(e);
                 }
             }
         }

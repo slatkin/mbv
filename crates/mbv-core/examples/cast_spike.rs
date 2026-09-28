@@ -73,11 +73,10 @@ fn check_audiobookshelf_url_credential() {
     for show in &shows {
         if let Ok(episodes) =
             client.podcast_detail_bounded(&api_key, &show.library_item_id, Duration::from_secs(5))
+            && let Some(ep) = episodes.first()
         {
-            if let Some(ep) = episodes.first() {
-                episode_ref = Some((show.library_item_id.clone(), ep.episode_id.clone()));
-                break;
-            }
+            episode_ref = Some((show.library_item_id.clone(), ep.episode_id.clone()));
+            break;
         }
     }
     let Some((library_item_id, episode_id)) = episode_ref else {
@@ -296,21 +295,18 @@ fn observe_queue_advance(device: &CastDevice, app: &Application, emby_urls: &[St
     // Seek near the end of the first item so the unattended transition to the
     // second queue entry happens quickly instead of after the item's full runtime.
     std::thread::sleep(Duration::from_secs(3));
-    if let Ok(status) = device.media.get_status(app.transport_id.as_str(), None) {
-        if let Some(entry) = status.entries.first() {
-            if let Some(duration) = entry.media.as_ref().and_then(|m| m.duration) {
-                let near_end = (duration - 5.0).max(0.0);
-                let _ = device.media.seek(
-                    app.transport_id.as_str(),
-                    entry.media_session_id,
-                    Some(near_end),
-                    None,
-                );
-                println!(
-                    "1.3 seeked first item to {near_end}s of {duration}s to force a fast transition"
-                );
-            }
-        }
+    if let Ok(status) = device.media.get_status(app.transport_id.as_str(), None)
+        && let Some(entry) = status.entries.first()
+        && let Some(duration) = entry.media.as_ref().and_then(|m| m.duration)
+    {
+        let near_end = (duration - 5.0).max(0.0);
+        let _ = device.media.seek(
+            app.transport_id.as_str(),
+            entry.media_session_id,
+            Some(near_end),
+            None,
+        );
+        println!("1.3 seeked first item to {near_end}s of {duration}s to force a fast transition");
     }
 
     println!(

@@ -297,10 +297,10 @@ impl App {
                 // Restore in-memory queues on failure.
                 self.player_tab
                     .set_queue_items(old_player_items.clone(), old_player_cursor);
-                if let Some((items, cursor)) = old_remote_items.clone() {
-                    if let Some(tab) = self.remote_player_tab.as_mut() {
-                        tab.set_queue_items(items, cursor);
-                    }
+                if let Some((items, cursor)) = old_remote_items.clone()
+                    && let Some(tab) = self.remote_player_tab.as_mut()
+                {
+                    tab.set_queue_items(items, cursor);
                 }
                 if let Some(q) = old_queue.as_ref() {
                     let _ = mbv_config::save_queue_state(q);

@@ -474,14 +474,14 @@ impl App {
 
     fn validate_queue_play_feed(&mut self, item: &mbv_queue::QueueItem) -> bool {
         // Validate source for Feed entries early.
-        if let mbv_queue::QueueItem::Feed(entry) = item {
-            if entry.primary_source().is_none() {
-                self.flash(
-                    "Feed entry has no playable source".into(),
-                    crate::app::dispatch::notify::ToastSeverity::Error,
-                );
-                return false;
-            }
+        if let mbv_queue::QueueItem::Feed(entry) = item
+            && entry.primary_source().is_none()
+        {
+            self.flash(
+                "Feed entry has no playable source".into(),
+                crate::app::dispatch::notify::ToastSeverity::Error,
+            );
+            return false;
         }
         true
     }
@@ -542,17 +542,17 @@ impl App {
         // Connected remote session: hand off Emby items to the
         // session; Feed entries cannot cross the Emby session API
         // so they fall through to the local/direct-remote path.
-        if let mbv_queue::QueueItem::Emby(_) = item {
-            if let Some(conn_id) = self.connected_session_id.clone() {
-                let label = item.display_name();
-                self.flash(
-                    format!("Requesting playback: {label}"),
-                    ToastSeverity::Neutral,
-                );
-                self.set_queue_scope(self.playing_queue_scope());
-                self.submit_attached_sequence(&conn_id, emby_items, emby_start);
-                return true;
-            }
+        if let mbv_queue::QueueItem::Emby(_) = item
+            && let Some(conn_id) = self.connected_session_id.clone()
+        {
+            let label = item.display_name();
+            self.flash(
+                format!("Requesting playback: {label}"),
+                ToastSeverity::Neutral,
+            );
+            self.set_queue_scope(self.playing_queue_scope());
+            self.submit_attached_sequence(&conn_id, emby_items, emby_start);
+            return true;
         }
         false
     }

@@ -121,14 +121,14 @@ fn migrate_legacy_emby_setup_and_token(
 // Delete the old record only after the new setup and secret are durable.
 fn remove_migrated_legacy_emby_token(legacy_path: &std::path::Path) -> Result<(), String> {
     // If removal fails the new secret is already safe on disk; inform the caller but do not roll back.
-    if let Err(e) = std::fs::remove_file(legacy_path) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            return Err(format!(
-                "token migrated to {}, but could not remove legacy {}: {e}",
-                service_secret_path(ServiceKind::Emby).display(),
-                legacy_path.display()
-            ));
-        }
+    if let Err(e) = std::fs::remove_file(legacy_path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(format!(
+            "token migrated to {}, but could not remove legacy {}: {e}",
+            service_secret_path(ServiceKind::Emby).display(),
+            legacy_path.display()
+        ));
     }
     Ok(())
 }

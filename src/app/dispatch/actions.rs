@@ -355,24 +355,22 @@ impl App {
             self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
-        if direct_remote {
-            if let Some(item) = items.get(start_idx) {
-                self.flash(
-                    playback_request_message(&item.playback_label(), mixed_unplayable),
-                    ToastSeverity::Neutral,
-                );
-            }
+        if direct_remote && let Some(item) = items.get(start_idx) {
+            self.flash(
+                playback_request_message(&item.playback_label(), mixed_unplayable),
+                ToastSeverity::Neutral,
+            );
         }
         self.submit_tab_queue(self.playing_queue_scope(), start_idx, queue_source);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
-        if let Some(count) = mixed_unplayable {
-            if !direct_remote {
-                self.flash(
-                    format!("Playback started{}", unavailable_suffix(count)),
-                    ToastSeverity::Neutral,
-                );
-            }
+        if let Some(count) = mixed_unplayable
+            && !direct_remote
+        {
+            self.flash(
+                format!("Playback started{}", unavailable_suffix(count)),
+                ToastSeverity::Neutral,
+            );
         }
     }
 
@@ -394,14 +392,12 @@ impl App {
             if self.connected_session_id.is_none()
                 && !item.series_id.is_empty()
                 && self.player.always_play_next
-            {
-                if let Some(episodes) = self
+                && let Some(episodes) = self
                     .series_episodes_from(&item)
                     .filter(|episodes| episodes.len() > 1)
-                {
-                    self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
-                    return;
-                }
+            {
+                self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
+                return;
             }
             self.defer_local_play(vec![item], 0, self.queue_source.clone());
             return;

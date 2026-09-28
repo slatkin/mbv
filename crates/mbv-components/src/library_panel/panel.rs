@@ -189,10 +189,10 @@ impl LibraryPanel {
         if identity_changed {
             self.dismiss_hero_overlay();
             self.mini_view_hero_auto_open = false;
-            if let Some(previous) = self.owners.active_key().cloned() {
-                if let Some(owner) = self.owners.get_mut(&previous) {
-                    owner.clear_selection();
-                }
+            if let Some(previous) = self.owners.active_key().cloned()
+                && let Some(owner) = self.owners.get_mut(&previous)
+            {
+                owner.clear_selection();
             }
         }
         self.owners.set_active(key.clone());

@@ -185,10 +185,10 @@ impl Model {
             .app
             .tab
             .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>() {
-                panel.set_content(titles, markers, selected, self.app.tab_scroll);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>()
+        {
+            panel.set_content(titles, markers, selected, self.app.tab_scroll);
         }
     }
 
@@ -248,15 +248,15 @@ impl Model {
                 .map(|(_, count)| VisualModeIndicator { count }),
             prefix_armed: self.app.prefix_armed_status_spans(),
         };
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>() {
-                // The clear intent must carry the origin captured when this
-                // pill was projected (design D6), not the focus at dispatch.
-                if let Some(origin) = visual_origin {
-                    panel.set_visual_origin(origin);
-                }
-                panel.set_model(model);
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>()
+        {
+            // The clear intent must carry the origin captured when this
+            // pill was projected (design D6), not the focus at dispatch.
+            if let Some(origin) = visual_origin {
+                panel.set_visual_origin(origin);
             }
+            panel.set_model(model);
         }
     }
 
@@ -300,12 +300,12 @@ impl Model {
                 )
             })
         };
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
-                panel.set_header(status, host, host_is_remote);
-                panel.set_transport(transport);
-                panel.set_transport_area(transport_area);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>()
+        {
+            panel.set_header(status, host, host_is_remote);
+            panel.set_transport(transport);
+            panel.set_transport_area(transport_area);
         }
     }
 
@@ -377,10 +377,10 @@ impl Model {
         self.mount_to_placement(ChromePanel::LibraryPlayback, placement);
         let id = ChromePanel::LibraryPlayback.id();
         let transport = self.transport_projection();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPlaybackPanel>() {
-                panel.set_projection(transport);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPlaybackPanel>()
+        {
+            panel.set_projection(transport);
         }
     }
 

@@ -263,14 +263,14 @@ impl Model {
     }
 
     fn handle_open_url_request(&mut self, url: &str) {
-        if mbv_components::library_panel::sanitize_url(url).is_some() {
-            if let Err(error) = crate::app::open_url(url) {
-                log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
-                self.app.flash(
-                    format!("Unable to open link: {error}"),
-                    ToastSeverity::Neutral,
-                );
-            }
+        if mbv_components::library_panel::sanitize_url(url).is_some()
+            && let Err(error) = crate::app::open_url(url)
+        {
+            log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
+            self.app.flash(
+                format!("Unable to open link: {error}"),
+                ToastSeverity::Neutral,
+            );
         }
     }
 
