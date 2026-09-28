@@ -1962,6 +1962,8 @@ dependencies = [
  "log",
  "percent-encoding",
  "rand 0.10.3",
+ "tracing",
+ "tracing-subscriber",
  "ureq",
 ]
 

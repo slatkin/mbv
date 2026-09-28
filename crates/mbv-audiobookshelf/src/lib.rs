@@ -244,6 +244,7 @@ impl AudiobookshelfClient {
             return Err(AudiobookshelfError::protocol());
         }
         let agent = mbv_net::native_tls_agent(
+            mbv_net::HttpService::Audiobookshelf,
             Some(Self::REQUEST_HARD_BOUND),
             Some(Self::REQUEST_HARD_BOUND),
         );
