@@ -27,7 +27,10 @@ fn cap_glibc_arenas() {
 
 fn print_usage() {
     eprintln!(
-        "Usage: mbvd [--audio-only] [--log-level <error|warn|info|debug>] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]"
+        "Usage: mbvd [--audio-only] [--log-level <level[,target=level...]>] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]"
+    );
+    eprintln!(
+        "  --log-level accepts a level (error, warn, info, debug, trace; default info) optionally followed by target overrides, e.g. info,player=debug"
     );
 }
 
@@ -65,7 +68,7 @@ fn stop_daemon() -> Result<String, DaemonError> {
 enum Action {
     Serve {
         audio_only: bool,
-        log_level: applog::Level,
+        log_level: applog::LogSpec,
     },
     ConnectEmby,
     ConnectAbs,
@@ -77,7 +80,7 @@ enum Action {
 
 fn parse_action(args: &[String]) -> Result<Action, DaemonError> {
     let mut audio_only = false;
-    let mut log_level = applog::Level::Info;
+    let mut log_level = applog::LogSpec::default();
     let mut action = None;
     let mut i = 0;
     while i < args.len() {
@@ -113,15 +116,14 @@ fn parse_action(args: &[String]) -> Result<Action, DaemonError> {
     }))
 }
 
-fn parse_log_level(args: &[String], i: &mut usize) -> Result<applog::Level, DaemonError> {
+fn parse_log_level(args: &[String], i: &mut usize) -> Result<applog::LogSpec, DaemonError> {
     *i += 1;
     let Some(value) = args.get(*i) else {
         return Err(DaemonError::usage(
-            "mbvd: --log-level requires error, warn, info, or debug",
+            "mbvd: --log-level requires a level or level[,target=level...] list",
         ));
     };
-    applog::Level::parse(value)
-        .ok_or_else(|| DaemonError::usage(format!("mbvd: invalid log level {value:?}")))
+    applog::LogSpec::parse(value).map_err(|error| DaemonError::usage(format!("mbvd: {error}")))
 }
 
 fn parse_connect_action(
@@ -627,7 +629,7 @@ fn run() -> Result<(), DaemonError> {
     let config = config::load_config()?;
     let is_system = config::is_system_instance();
     let log_path = (!is_system).then(log_path);
-    applog::init(is_system, log_path, log_level);
+    applog::init(is_system, log_path, &log_level);
     log::info!(target: "startup", "mbvd starting");
 
     mbv_daemon::run_with_options(

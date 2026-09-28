@@ -68,24 +68,25 @@ fn run_remote_app(
 
 fn parse_log_level_arg(
     args: &[String],
-) -> Result<Option<applog::Level>, mbv_ui_model::UiModelError> {
-    let mut level = None;
+) -> Result<Option<applog::LogSpec>, mbv_ui_model::UiModelError> {
+    let mut spec = None;
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--log-level" {
             i += 1;
             let Some(value) = args.get(i) else {
                 return Err(mbv_ui_model::UiModelError::operation(
-                    "mbv: --log-level requires error, warn, info, or debug",
+                    "mbv: --log-level requires a level or level[,target=level...] list",
                 ));
             };
-            level = Some(applog::Level::parse(value).ok_or_else(|| {
-                mbv_ui_model::UiModelError::operation(format!("mbv: invalid log level {value:?}"))
-            })?);
+            spec =
+                Some(applog::LogSpec::parse(value).map_err(|error| {
+                    mbv_ui_model::UiModelError::operation(format!("mbv: {error}"))
+                })?);
         }
         i += 1;
     }
-    Ok(level)
+    Ok(spec)
 }
 
 fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, mbv_ui_model::UiModelError> {
@@ -212,7 +213,7 @@ fn print_usage() {
     println!();
     println!("Options:");
     println!(
-        "      --log-level <level>   Set the log level: error, warn, info (default), or debug."
+        "      --log-level <level[,target=level...]>\n\n     Set the log level, e.g. info or info,player=debug.\n     Levels: error, warn, info (default), debug, trace."
     );
     println!("  -q                        Stop the running Player owner (bare mbv, or the local");
     println!("                             daemon in stay-alive mode).");
@@ -223,7 +224,7 @@ fn print_usage() {
     println!("  -h, --help                 Print this help message and exit.");
 }
 
-fn pre_config_startup() -> Option<(Option<applog::Level>, Option<String>)> {
+fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
@@ -307,7 +308,7 @@ fn main() {
     applog::init(
         config::is_system_instance(),
         Some(state_dir().join("mbv.log")),
-        log_level.unwrap_or(applog::Level::Info),
+        log_level.as_ref().unwrap_or(&applog::LogSpec::default()),
     );
 
     if let Err(e) = config::migrate_legacy_emby_token() {
@@ -325,7 +326,7 @@ fn main() {
 }
 
 fn run_configured_startup(
-    log_level: Option<applog::Level>,
+    log_level: Option<applog::LogSpec>,
     cli_daemon_endpoint: Option<String>,
     config: &config::Config,
 ) {
@@ -366,7 +367,7 @@ fn run_configured_startup(
     run_local_instance(config, log_level);
 }
 
-fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>) {
+fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec>) {
     // Single-instance resolution (ADR 0006): advisory flock + control-socket
     // connectability. Independent of stay-alive; always on.
     let lock_path = single_instance::lock_path();
@@ -476,17 +477,23 @@ mod tests {
     #[test]
     fn log_level_arg_accepts_supported_values_and_rejects_invalid_values() {
         for (value, expected) in [
-            ("error", applog::Level::Error),
-            ("warn", applog::Level::Warn),
-            ("info", applog::Level::Info),
-            ("debug", applog::Level::Debug),
+            ("error", "error"),
+            ("warn", "warn"),
+            ("info", "info"),
+            ("debug", "debug"),
+            ("trace", "trace"),
+            ("info,player=debug", "info,player=debug"),
         ] {
             assert_eq!(
-                parse_log_level_arg(&["--log-level".into(), value.into()]).unwrap(),
-                Some(expected)
+                parse_log_level_arg(&["--log-level".into(), value.into()])
+                    .unwrap()
+                    .as_ref()
+                    .map(applog::LogSpec::to_string),
+                Some(expected.to_string())
             );
         }
-        parse_log_level_arg(&["--log-level".into(), "trace".into()]).unwrap_err();
+        parse_log_level_arg(&["--log-level".into(), "info,player=".into()]).unwrap_err();
+        parse_log_level_arg(&["--log-level".into(), "loud".into()]).unwrap_err();
         parse_log_level_arg(&["--log-level".into()]).unwrap_err();
         assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
     }

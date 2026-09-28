@@ -31,10 +31,10 @@ fn to_io(e: nix::Error) -> io::Error {
 /// early because the cached token is missing/invalid -- returns the reason
 /// so the still-live launching terminal can report it, rather than the
 /// daemon failing silently in the background.
-fn local_daemon_args(log_level: Option<mbv_core::applog::Level>) -> Vec<String> {
+fn local_daemon_args(log_level: Option<mbv_core::applog::LogSpec>) -> Vec<String> {
     let mut args = vec!["--__local-daemon".to_string()];
-    if let Some(level) = log_level {
-        args.extend(["--log-level".to_string(), level.logfmt().to_string()]);
+    if let Some(spec) = log_level {
+        args.extend(["--log-level".to_string(), spec.to_string()]);
     }
     args
 }
@@ -86,7 +86,7 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
 
 pub fn spawn_detached(
     socket_path: &str,
-    log_level: Option<mbv_core::applog::Level>,
+    log_level: Option<mbv_core::applog::LogSpec>,
 ) -> Result<(), mbv_remote_player::RemotePlayerError> {
     let exe = std::env::current_exe()
         .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?;
@@ -142,8 +142,8 @@ pub fn spawn_detached(
 /// Entered via the hidden `mbv --__local-daemon` self-spawn. Never returns.
 pub fn run_local_daemon_main() -> ! {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let log_level = match crate::parse_log_level_arg(&args) {
-        Ok(level) => level.unwrap_or(mbv_core::applog::Level::Info),
+    let log_spec = match crate::parse_log_level_arg(&args) {
+        Ok(spec) => spec.unwrap_or_default(),
         Err(error) => {
             crate::print_usage();
             eprintln!("{error}");
@@ -166,7 +166,7 @@ pub fn run_local_daemon_main() -> ! {
     }
 
     let state_dir = crate::state_dir();
-    mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), log_level);
+    mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
     log::info!(target: "local_daemon", "local daemon starting");
 
     let config = match crate::config::load_config() {
@@ -253,8 +253,10 @@ mod tests {
     fn spawn_args_forward_only_an_explicit_log_level() {
         assert_eq!(local_daemon_args(None), ["--__local-daemon"]);
         assert_eq!(
-            local_daemon_args(Some(mbv_core::applog::Level::Debug)),
-            ["--__local-daemon", "--log-level", "debug"]
+            local_daemon_args(Some(
+                mbv_core::applog::LogSpec::parse("debug,player=trace").expect("valid spec"),
+            )),
+            ["--__local-daemon", "--log-level", "debug,player=trace"]
         );
     }
 }

@@ -9,6 +9,15 @@ pub struct LogSpec {
     pub directives: Vec<(String, tracing::level_filters::LevelFilter)>,
 }
 
+impl Default for LogSpec {
+    fn default() -> Self {
+        Self {
+            default: tracing::level_filters::LevelFilter::INFO,
+            directives: Vec::new(),
+        }
+    }
+}
+
 impl LogSpec {
     /// Parses comma-separated level and `target=level` directives.
     pub fn parse(spec: &str) -> Result<Self, LogSpecError> {
@@ -173,6 +182,14 @@ mod tests {
             }
             None => assert_eq!(parsed, Err(LogSpecError::new(input))),
         }
+    }
+
+    #[test]
+    fn default_spec_is_info_with_no_directives() {
+        assert_eq!(
+            LogSpec::default(),
+            LogSpec::parse("info").expect("valid spec")
+        );
     }
 
     #[test]
