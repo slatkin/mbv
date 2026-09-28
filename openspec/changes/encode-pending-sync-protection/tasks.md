@@ -10,7 +10,7 @@ Final gate (end of group 2):
 
 ## 1. `mbv-queue` types (design D1, D2, D4)
 
-- [ ] 1.1 In `crates/mbv-queue/src/progress.rs`, delete `ProgressState` and its
+- [x] 1.1 In `crates/mbv-queue/src/progress.rs`, delete `ProgressState` and its
   `from_queue_item`/`apply_to_item`, and add
   `pub enum StopReportOutcome { Accepted, NotAccepted }` with
   `pub fn from_accepted(bool) -> Self`. `apply_progress_to_queue_item` stays;
@@ -25,7 +25,7 @@ Final gate (end of group 2):
 
   Verify: `rg -n "ProgressState|progress_state" crates/mbv-queue/src --glob '!tests.rs'`
   is empty.
-- [ ] 1.2 Rewrite the progress mutators in `lib.rs`:
+- [x] 1.2 Rewrite the progress mutators in `lib.rs`:
   - `apply_progress` writes only the item (via `apply_progress_to_queue_item`)
     and bumps the revision iff `!queue_items_equal`.
   - Replace `mark_progress_sync_pending` with
@@ -44,7 +44,7 @@ Final gate (end of group 2):
   Verify: `rg -n "pending_sync\s*=" crates/mbv-queue/src/lib.rs` shows exactly
   three assignment sites: the arm in `record_reported_progress`, the clear in
   `merge_fetched_slot`, and `update_slot_item`.
-- [ ] 1.3 In `crates/mbv-queue/src/tests.rs`, move the existing pending and
+- [x] 1.3 In `crates/mbv-queue/src/tests.rs`, move the existing pending and
   refresh tests (`pending_progress_sync_*`, `active_pending_progress_*`,
   `watched_state_confirmation_requires_exact_match`,
   `refresh_cannot_prune_active_or_pending_sync_slots`) from
@@ -68,12 +68,12 @@ Final gate (end of group 2):
 
 ## 2. Callers (design D3)
 
-- [ ] 2.1 `crates/mbv-player/src/owner_state.rs`:
+- [x] 2.1 `crates/mbv-player/src/owner_state.rs`:
   `apply_completion_progress(slot_id, position_ticks, played, outcome: StopReportOutcome)`
   calls `self.queue.record_reported_progress(...)`. Update its in-file test to
   pass `StopReportOutcome::Accepted`. Verify: `cargo check -p mbv-player --tests`
   is clean.
-- [ ] 2.2 In `crates/mbv-daemon`:
+- [x] 2.2 In `crates/mbv-daemon`:
   - `event_loop/player_events.rs`: `handle_track_completed` and the Stopped
     handler destructure `progress_report_accepted`.
   - `run.rs`: `apply_track_completed_observation` and `apply_stopped_observation`
@@ -88,7 +88,7 @@ Final gate (end of group 2):
     the observed position.
 
   Verify: `cargo nextest run -p mbv-daemon` passes.
-- [ ] 2.3 In `src/app/dispatch/session/player_event.rs`, replace the
+- [x] 2.3 In `src/app/dispatch/session/player_event.rs`, replace the
   `apply_progress` + `if progress_report_accepted { mark_progress_sync_pending }`
   pair in the Stopped and TrackCompleted arms with one
   `record_reported_progress(slot_id, position, played, StopReportOutcome::from_accepted(progress_report_accepted))`
