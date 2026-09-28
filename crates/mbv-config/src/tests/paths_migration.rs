@@ -64,7 +64,9 @@ fn legacy_token_migration_with_empty_token_reports_error() {
     )
     .unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err().to_string();
+    let err = migrate_legacy_emby_token().unwrap_err();
+    assert!(err.is_admin());
+    let err = err.to_string();
     assert!(err.contains("empty"), "error must mention empty token");
     assert!(err.contains("token"), "error must mention 'token' field");
 

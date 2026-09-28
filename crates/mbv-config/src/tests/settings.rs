@@ -490,5 +490,6 @@ url = "http://host"
 
 #[test]
 fn parse_invalid_toml_errors() {
-    parse_config("not [ valid toml !!!").unwrap_err();
+    let error = parse_config("not [ valid toml !!!").unwrap_err();
+    assert!(error.is_parse());
 }

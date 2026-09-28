@@ -323,7 +323,7 @@ fn failed_audiobookshelf_transaction_leaves_working_state() {
             "candidate persistence rejected",
         ))
     });
-    assert!(result.is_err());
+    assert!(result.unwrap_err().is_lifecycle());
     assert_eq!(std::fs::read(config_path()).unwrap(), before);
     assert_eq!(
         load_service_secret(ServiceKind::Audiobookshelf),
