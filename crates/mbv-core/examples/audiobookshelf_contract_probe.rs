@@ -20,7 +20,7 @@ const READY_BOUND: Duration = Duration::from_secs(20);
 const MPV_BOUND: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
-struct ProbeError {
+pub struct ProbeError {
     kind: ProbeErrorKind,
     message: String,
 }
@@ -31,6 +31,13 @@ enum ProbeErrorKind {
 }
 
 impl ProbeError {
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match self.kind {
+            ProbeErrorKind::Contract => "core.contract_probe",
+        }
+    }
+
     fn contract(message: impl Into<String>) -> Self {
         Self {
             kind: ProbeErrorKind::Contract,
