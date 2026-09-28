@@ -18,11 +18,11 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 2. Config crate (largest unit)
 
-- [ ] 2.1 Introduce `ConfigError` covering lifecycle/admin/credentials/
+- [x] 2.1 Introduce `ConfigError` covering lifecycle/admin/credentials/
   state/save/parse/launch paths, convert all 74 sites in `mbv-config`,
   keeping every user-visible message byte-identical in `Display`, verify
   `cargo nextest run -p mbv-config` passes and crate `rg` audit returns zero
-- [ ] 2.2 Extend the converted-path tests to assert failure kinds via
+- [x] 2.2 Extend the converted-path tests to assert failure kinds via
   `is_*()` predicates (contract: config failures are kind-distinguishable),
   verify new predicate tests pass under nextest
 
