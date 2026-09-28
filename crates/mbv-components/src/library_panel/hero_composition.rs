@@ -6,8 +6,8 @@
 //! supplied-rectangle contract.
 //!
 //! Bespoke placement: a Panel owns its slots' placement, fills, and painting
-//! (mbv-frontend, "Panel and slot composition"), so this painter lives beside
-//! the Library panel's other skeleton painters (`wide.rs`, `narrow.rs`,
+//! (`docs/architecture/tui-frontend.md`, "Panel and slot composition"), so this
+//! painter lives beside the Library panel's other skeleton painters (`wide.rs`, `narrow.rs`,
 //! `hero_header.rs`) instead of in `crates/mbv-render/src/components/`. It resolves
 //! theme roles only and owns no interaction state.
 

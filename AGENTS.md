@@ -118,9 +118,9 @@ ADRs 0022–0024; `openspec/specs/interactive-component-framework/spec.md`;
 
 ## TUI work
 
-Before any TUI change read `.agents/skills/mbv-frontend/SKILL.md`: Panel/slot
-composition, embedded canonical media lists, keyboard and mouse routing, render
-layering, reuse workflow, and tick-integration test rules. Tripwires that apply
+Before any TUI change read `docs/architecture/tui-frontend.md`: the two UI
+trees, Panel/slot composition, reuse workflow, test-layer matrix, and
+completion checklist. Tripwires that apply
 even when you don't think it's TUI work: one owner and one painter per surface
 per breakpoint; keyboard precedence only in `src/app/input/`.
 
@@ -132,7 +132,7 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo nextest run --release --test-threads=4` (fd-budget throttling, see `build.yml` comment); use `cargo llvm-cov` to check coverage.
 * **A test owns a contract or does not exist.** Before adding a test, name
-  the contract and the layer that owns it (mbv-frontend skill, Tests matrix);
+  the contract and the layer that owns it (`docs/architecture/tui-frontend.md`, Tests matrix);
   if another test already covers the claim, extend that test or add nothing.
   `#[case]` tables keep only cases whose expected outcomes differ. A
   regression test cites the issue or commit it guards, in its name or a

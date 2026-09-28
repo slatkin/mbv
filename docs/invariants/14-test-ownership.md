@@ -9,8 +9,8 @@ and every plan, review, or agent instruction that causes tests to be written.
    bug — and is the sole test owning it. If two tests fail for the same
    production change, one of them should not exist.
 2. A test lives at the narrowest layer that can regress its contract. For
-   presentation code the four-layer matrix in `.agents/skills/mbv-frontend/
-   SKILL.md` (§Tests) assigns ownership: arrangements own relational
+   presentation code the four-layer matrix in
+   `docs/architecture/tui-frontend.md` (§Tests) assigns ownership: arrangements own relational
    placement and breakpoints; render components own painted content and
    paint-local geometry; interactive components own local state transitions,
    semantic requests, viewport, and retained hit resolution; shell tick
@@ -47,7 +47,7 @@ writing.
   duplicate; `#[case]` tables keep only outcome-differing cases; regression
   tests cite their issue/commit; "add tests" without a named contract is
   not a valid plan item; test count and coverage are never goals.
-- **mbv-frontend skill (§Tests):** the layer-ownership matrix, consulted
+- **`docs/architecture/tui-frontend.md` (§Tests):** the layer-ownership matrix, consulted
   before adding, narrowing, or deleting any presentation assertion.
 - **writing-tests skill:** the standing question — "what realistic problem
   would this test catch that another test would not?"
