@@ -78,7 +78,7 @@ Final gate (end of group 2):
 
 ## 3. Docs
 
-- [ ] 3.1 Rewrite `docs/invariants/10-deferred-queue-mutation-slot-ownership.md`:
+- [x] 3.1 Rewrite `docs/invariants/10-deferred-queue-mutation-slot-ownership.md`:
   - Point at `src/app/state/queue_deferrals.rs` as where ownership is
     enforced.
   - Record the one remaining unenforced rule: a transition is named for its
