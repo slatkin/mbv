@@ -16,7 +16,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 - [x] 1.2 Add `applog/spec.rs`: `LogSpec`, `LogSpecError`, `parse`, `Display`
   round-trip, and the target filter (design D3). Verify with the `#[case]` parse tests and
   the filter tests named in design.md "Tests".
-- [ ] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
+- [x] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
   UTC fallback, D7; the old `unsafe` `now_ts` is deleted) and `applog/line.rs` (logfmt line
   formatter, value quoting/escaping, D6 URL/bearer redaction). Verify with the timestamp,
   line and redaction unit tests from design.md, including the unlisted `?password=` and
