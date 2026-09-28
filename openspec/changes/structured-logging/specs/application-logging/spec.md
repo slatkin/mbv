@@ -152,7 +152,8 @@ across processes:
 - **WHEN** a start report for a new item is still resolving its play session while the
   previous session's ids are still current
 - **THEN** its lines carry the new item's `item=`, and no `play_session=` until the new
-  session is known, never the previous session's values
+  session is known. No part of those lines carries the previous session's `slot`, `item`
+  or `play_session` values.
 
 ### Requirement: Credentials are never logged
 Log output SHALL NOT contain access tokens, API keys, passwords, bearer tokens or the ctrl

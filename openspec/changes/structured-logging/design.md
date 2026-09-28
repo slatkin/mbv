@@ -112,6 +112,14 @@ loop, so there are two propagation rules:
   be carried too: an event goes to the default subscriber of the thread it's logged on,
   so a test's `with_default` subscriber would not see events from a worker thread (review
   N3). In production the global dispatcher is used either way.
+
+  Threads that outlive the operation that spawned them use
+  `mbv_core::applog::carry_dispatcher(f)` instead. It carries only the dispatcher, so the
+  thread starts with no span. These are the three reporter threads below. Carrying the
+  spawner's `playback` span into them would stamp the spawning slot's
+  `slot`/`item`/`play_session` on every later line. The formatter writes enclosing spans
+  outer→inner (D2), so an inner span cannot override those fields. `carry_context` is
+  only for threads whose whole life is part of the spawning operation (`spawn_item_lookup`).
 - **Event-loop rejoin**: a handler that finishes a deferred operation rebuilds the span
   from the ids the rejoining event or parked state already carries. It does not store the
   `Span` itself, which would duplicate those ids.
@@ -262,19 +270,23 @@ Stderr sink behaviour is unchanged: `<prio>` + line, trace maps to `<7>`. The sy
 - Rejoin correlation (`mbv-daemon`, `src/tests/loop.rs` harness): a failed
   `PlaybackResolved` handled on the event loop logs a line carrying the intent's `client`
   and `request`. The test uses a thread-local capture subscriber.
-- Reporter correlation (`mbv-player`, existing `src/tests/` reporter fixtures): a deferred
-  `ReportJob::Start` for a new item, run with the shared `ids` still holding the previous
-  session:
-  - a line logged before `get_playback_info` returns carries the new `item` and no
+- Reporter correlation (`mbv-player`, existing `src/tests/` reporter fixtures).
+  Setup: the `SessionReporter` is created while a `playback` span for session A (slot,
+  item, play_session A) is entered, then a deferred `ReportJob::Start` for item B runs
+  with the shared `ids` still holding A. Assertions are on the whole rendered line,
+  enclosing spans included:
+  - a line logged before `get_playback_info` returns contains B's `item` and no
     `play_session`;
-  - a line logged after it returns carries the new `item` and the resolved
-    `play_session`.
+  - a line logged after it returns contains B's `item` and B's `play_session`;
+  - neither line contains A's `slot`, `item` or `play_session` values.
 
   The report worker runs on its own thread. The test sees its events because the spawn
-  goes through `carry_context`, which carries the test's `with_default` dispatcher.
-- `carry_context` (`mbv-core`): an event logged on a thread spawned through
-  `carry_context` reaches the spawning thread's `with_default` subscriber and carries the
-  spawner's span fields.
+  goes through `carry_dispatcher`, which carries the test's `with_default` dispatcher but
+  not A's span.
+- `carry_context` / `carry_dispatcher` (`mbv-core`): an event logged on a thread spawned
+  through either one reaches the spawning thread's `with_default` subscriber. Under
+  `carry_context` the line contains the spawner's span fields; under `carry_dispatcher` it
+  contains none of them.
 - HTTP (`mbv-net`): an agent from `MockHttp::agent_for(HttpService::Emby)` given a 500
   logs `http.request.failed` with `service=emby` and `http.response.status_code=500`.
 - The connect lines have no unit test. The `peer` value comes straight from

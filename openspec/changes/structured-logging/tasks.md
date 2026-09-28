@@ -27,10 +27,11 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   `stderr_line_has_systemd_priority_prefix` test, extended with a trace case.
 - [ ] 1.5 Rewrite `applog.rs`: the logfmt `Layer` (span fragments in extensions, D2), the
   `Registry` + filter, the `tracing-log` `LogTracer` bridge, and
-  `init(stderr, log_path, &LogSpec)`, and `carry_context(f)` (design D5 thread-spawn rule:
-  carries the current span and dispatcher). Delete `applog::Level`, `LogEntry`,
+  `init(stderr, log_path, &LogSpec)`, `carry_context(f)` (carries the current span and
+  dispatcher) and `carry_dispatcher(f)` (carries only the dispatcher; the thread starts
+  with no span), per design D5's thread-spawn rule. Delete `applog::Level`, `LogEntry`,
   `GlobalLogger`. Verify with the span-inheritance test (in-memory sink, `with_default`),
-  the `carry_context` cross-thread test, and the rewritten
+  the `carry_context`/`carry_dispatcher` cross-thread tests, and the rewritten
   `init_at_info_disables_debug_records` test.
 
 ## 2. CLI plumbing
@@ -74,7 +75,8 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
       `get_playback_info`. It never reads the shared `ids` at job entry.
 
     Wrap the three reporter thread spawns (`spawn_progress_reporter`, the `run_loop.rs`
-    progress worker, and `SessionReporter::new`) in `carry_context`.
+    progress worker, and `SessionReporter::new`) in `carry_dispatcher`, not
+    `carry_context`. They outlive the slot, so they must not inherit its `playback` span.
 
   Verify: the reporter-correlation test from design.md "Tests" passes, and clippy/nextest
   pass for `mbv-player`.
