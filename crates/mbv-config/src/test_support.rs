@@ -45,11 +45,11 @@ impl TestTempDir {
     /// the directory before the test body ran.
     #[must_use]
     pub fn as_xdg_home(mut self) -> Self {
-        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        // SAFETY: Callers hold SYS_ENV_LOCK; setup precedes worker spawn and guard drop follows worker joins.
         unsafe { std::env::set_var("XDG_STATE_HOME", &self.dir) };
-        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        // SAFETY: Callers hold SYS_ENV_LOCK; setup precedes worker spawn and guard drop follows worker joins.
         unsafe { std::env::set_var("XDG_CONFIG_HOME", &self.dir) };
-        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        // SAFETY: Callers hold SYS_ENV_LOCK; setup precedes worker spawn and guard drop follows worker joins.
         unsafe { std::env::remove_var("MBV_SYSTEM") };
         self.xdg_home = true;
         self
@@ -88,9 +88,9 @@ impl Drop for TestTempDir {
 #[cfg(any(test, feature = "test"))]
 fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
     match value {
-        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        // SAFETY: Callers hold SYS_ENV_LOCK; guard drop follows worker joins.
         Some(value) => unsafe { std::env::set_var(name, value) },
-        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        // SAFETY: Callers hold SYS_ENV_LOCK; guard drop follows worker joins.
         None => unsafe { std::env::remove_var(name) },
     }
 }
