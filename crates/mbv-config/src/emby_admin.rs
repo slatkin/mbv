@@ -223,7 +223,7 @@ pub fn persist_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(
         &config_path(),
         &service_secret_path(ServiceKind::Emby),
         save_emby_setup_at,
-        save_service_secret_at,
+        |token, path| save_service_secret_at(token, path).map_err(|error| error.to_string()),
     )
 }
 

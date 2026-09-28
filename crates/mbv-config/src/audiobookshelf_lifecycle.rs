@@ -165,7 +165,7 @@ pub fn persist_audiobookshelf_setup_and_secret(
     setup.revision = revision;
     audiobookshelf_transaction(|config, secret| {
         save_audiobookshelf_setup_at(&setup, config)?;
-        save_service_secret_at(api_key, secret)
+        save_service_secret_at(api_key, secret).map_err(|error| error.to_string())
     })?;
     Ok(revision)
 }
@@ -217,7 +217,7 @@ where
             .map_err(|error| format!("remove Audiobookshelf secret: {error}"))?;
         clear_owned_state()?;
         save_audiobookshelf_setup_at(&setup, config)?;
-        save_service_secret_at(api_key, secret)
+        save_service_secret_at(api_key, secret).map_err(|error| error.to_string())
     });
     if result.is_err() {
         restore_owned_state();

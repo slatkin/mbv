@@ -1,6 +1,6 @@
 // Per-Service secret files and the Local-daemon Control credential.
 
-use super::{ServiceKind, state_dir};
+use super::{ConfigError, ServiceKind, state_dir};
 use std::path::PathBuf;
 
 /// ── Per-Service secrets ──────────────────────────────────────────────
@@ -19,28 +19,38 @@ pub fn service_secret_path(kind: ServiceKind) -> PathBuf {
 /// Atomically write a Service secret, restricting to owner-only
 /// permissions on Unix. Uses the same tmp+rename pattern as
 /// `save_queue_state` and `save_last_remote_connection_at`.
-pub fn save_service_secret(kind: ServiceKind, secret: &str) -> Result<(), String> {
+pub fn save_service_secret(kind: ServiceKind, secret: &str) -> Result<(), ConfigError> {
     save_service_secret_at(secret, &service_secret_path(kind))
 }
 
-pub(super) fn save_service_secret_at(secret: &str, path: &std::path::Path) -> Result<(), String> {
+pub(super) fn save_service_secret_at(
+    secret: &str,
+    path: &std::path::Path,
+) -> Result<(), ConfigError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|e| format!("create secrets directory {}: {e}", dir.display()))?;
+        std::fs::create_dir_all(dir).map_err(|e| {
+            ConfigError::credentials(format!("create secrets directory {}: {e}", dir.display()))
+        })?;
     }
     let json = serde_json::json!({"token": secret});
     let text = json.to_string();
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::write(&tmp, &text)
+        .map_err(|e| ConfigError::credentials(format!("write {}: {e}", tmp.display())))?;
     // Restrict to owner-only before renaming into place
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
+            .map_err(|e| ConfigError::credentials(format!("chmod 0600 {}: {e}", tmp.display())))?;
     };
-    std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    std::fs::rename(&tmp, path).map_err(|e| {
+        ConfigError::credentials(format!(
+            "rename {} to {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
 /// Load a Service secret from its dedicated file. Returns `None` when
@@ -62,18 +72,27 @@ pub fn clear_service_secret(kind: ServiceKind) {
     let _ = clear_service_secret_result(kind);
 }
 
-pub fn clear_service_secret_result(kind: ServiceKind) -> Result<(), String> {
+pub fn clear_service_secret_result(kind: ServiceKind) -> Result<(), ConfigError> {
     let path = service_secret_path(kind);
     match std::fs::remove_file(&path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("remove {}: {e}", path.display())),
+        Err(e) => {
+            return Err(ConfigError::credentials(format!(
+                "remove {}: {e}",
+                path.display()
+            )));
+        }
     }
     // Also clean up any orphaned tmp file
     match std::fs::remove_file(path.with_extension("json.tmp")) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("remove Emby secret temporary file: {e}")),
+        Err(e) => {
+            return Err(ConfigError::credentials(format!(
+                "remove Emby secret temporary file: {e}"
+            )));
+        }
     }
     Ok(())
 }
@@ -93,10 +112,11 @@ pub fn control_credential_path() -> PathBuf {
 pub(super) fn write_control_credential_temp(
     secret: &str,
     path: &std::path::Path,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, ConfigError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
+        std::fs::create_dir_all(dir).map_err(|e| {
+            ConfigError::credentials(format!("create directory {}: {e}", dir.display()))
+        })?;
     }
     let text = serde_json::json!({"credential": secret}).to_string();
     let name = path
@@ -104,27 +124,33 @@ pub(super) fn write_control_credential_temp(
         .and_then(|name| name.to_str())
         .unwrap_or("control_credential.json");
     let tmp = path.with_file_name(format!("{name}.{}.tmp", uuid::Uuid::new_v4()));
-    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::write(&tmp, text)
+        .map_err(|e| ConfigError::credentials(format!("write {}: {e}", tmp.display())))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
+            .map_err(|e| ConfigError::credentials(format!("chmod 0600 {}: {e}", tmp.display())))?;
     };
     Ok(tmp)
 }
 
 /// Atomically write the Control credential (mode 0600) using a unique temp file.
-pub fn save_control_credential(secret: &str) -> Result<(), String> {
+pub fn save_control_credential(secret: &str) -> Result<(), ConfigError> {
     let path = control_credential_path();
     let tmp = write_control_credential_temp(secret, &path)?;
-    std::fs::rename(&tmp, &path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    std::fs::rename(&tmp, &path).map_err(|e| {
+        ConfigError::credentials(format!(
+            "rename {} to {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
 /// Load the stable Local-daemon Control credential, creating it on first use.
 /// This credential has no relationship to any Remote Service secret.
-pub fn load_or_create_control_credential() -> Result<String, String> {
+pub fn load_or_create_control_credential() -> Result<String, ConfigError> {
     if let Some(credential) = load_control_credential() {
         return Ok(credential);
     }
@@ -140,19 +166,19 @@ pub fn load_or_create_control_credential() -> Result<String, String> {
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             let _ = std::fs::remove_file(&tmp);
             load_control_credential().ok_or_else(|| {
-                format!(
+                ConfigError::credentials(format!(
                     "load concurrently created Control credential {}",
                     path.display()
-                )
+                ))
             })
         }
         Err(error) => {
             let _ = std::fs::remove_file(&tmp);
-            Err(format!(
+            Err(ConfigError::credentials(format!(
                 "publish {} as {}: {error}",
                 tmp.display(),
                 path.display()
-            ))
+            )))
         }
     }
 }
@@ -176,17 +202,26 @@ pub fn clear_control_credential() {
     let _ = clear_control_credential_result();
 }
 
-pub fn clear_control_credential_result() -> Result<(), String> {
+pub fn clear_control_credential_result() -> Result<(), ConfigError> {
     let path = control_credential_path();
     match std::fs::remove_file(&path) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("remove {}: {error}", path.display())),
+        Err(error) => {
+            return Err(ConfigError::credentials(format!(
+                "remove {}: {error}",
+                path.display()
+            )));
+        }
     }
     match std::fs::remove_file(path.with_extension("json.tmp")) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("remove Control credential temporary file: {error}")),
+        Err(error) => {
+            return Err(ConfigError::credentials(format!(
+                "remove Control credential temporary file: {error}"
+            )));
+        }
     }
     Ok(())
 }
