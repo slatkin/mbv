@@ -65,10 +65,13 @@ impl FeedEntryStore {
         match serde_json::from_str(&text) {
             Ok(store) => store,
             Err(error) => {
-                log::warn!(
+                let display_path = path.display().to_string();
+                tracing::warn!(
+                    name: "feed.state.restore_failed",
                     target: "feed_state",
-                    "{} failed to parse, feed entry state not restored: {error}",
-                    path.display()
+                    file_path = display_path.as_str(),
+                    error = %error,
+                    "feed entry state not restored"
                 );
                 Self::default()
             }

@@ -35,12 +35,30 @@ pub fn reconnect_backoff_sleep(backoff_secs: &mut u64, target: &str) {
     let delay = std::time::Duration::from_secs_f64(
         f64::from(u32::try_from(*backoff_secs).unwrap_or(u32::MAX)) + jitter,
     );
-    log::info!(
-        target: target,
-        "reconnecting in {:.1}s (backoff={}s)",
-        delay.as_secs_f64(),
-        backoff_secs
-    );
+    match target {
+        "ws" => tracing::info!(
+            name: "net.reconnect.scheduled",
+            target: "ws",
+            delay_secs = delay.as_secs_f64(),
+            backoff_secs = *backoff_secs,
+            "reconnecting"
+        ),
+        "audiobookshelf_socket" => tracing::info!(
+            name: "net.reconnect.scheduled",
+            target: "audiobookshelf_socket",
+            delay_secs = delay.as_secs_f64(),
+            backoff_secs = *backoff_secs,
+            "reconnecting"
+        ),
+        _ => tracing::info!(
+            name: "net.reconnect.scheduled",
+            target: "net",
+            source_target = target,
+            delay_secs = delay.as_secs_f64(),
+            backoff_secs = *backoff_secs,
+            "reconnecting"
+        ),
+    }
     std::thread::sleep(delay);
     *backoff_secs = (*backoff_secs * 2).min(60);
 }

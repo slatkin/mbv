@@ -58,7 +58,7 @@ fn browse_cast_receivers_with(
             receivers
         }
         Err(e) => {
-            log::warn!(target: "cast", "cast discovery browse failed to start: {e}");
+            tracing::warn!(name: "cast.discovery.failed", target: "cast", error = %e, "discovery browse failed to start");
             Vec::new()
         }
     }
