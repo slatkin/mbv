@@ -102,7 +102,7 @@ pub fn clear_emby_owned_state() -> Result<(), String> {
         }
         let text = toml::to_string(&document)
             .map_err(|error| format!("serialize owner configuration: {error}"))?;
-        write_config_text_at(&config, &text)?;
+        write_config_text_at(&config, &text).map_err(|error| error.to_string())?;
     }
     remove_emby_image_cache();
     Ok(())

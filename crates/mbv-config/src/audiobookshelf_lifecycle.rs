@@ -36,7 +36,7 @@ pub(super) fn save_audiobookshelf_setup_at(
     section.remove("user_id");
     let text =
         toml::to_string(&doc).map_err(|error| format!("serialize {}: {error}", path.display()))?;
-    write_config_text_at(path, &text)
+    write_config_text_at(path, &text).map_err(|error| error.to_string())
 }
 
 fn clear_audiobookshelf_setup_at(path: &std::path::Path) -> Result<(), String> {
@@ -53,7 +53,7 @@ fn clear_audiobookshelf_setup_at(path: &std::path::Path) -> Result<(), String> {
     table.remove("audiobookshelf");
     let text =
         toml::to_string(&doc).map_err(|error| format!("serialize {}: {error}", path.display()))?;
-    write_config_text_at(path, &text)
+    write_config_text_at(path, &text).map_err(|error| error.to_string())
 }
 
 fn snapshot_file(path: &std::path::Path) -> Result<Option<Vec<u8>>, String> {
