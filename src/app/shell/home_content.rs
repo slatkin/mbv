@@ -78,7 +78,7 @@ impl Model {
 
     pub(in crate::app) fn home_stable_target(
         &self,
-        target: &mbv_ui_model::msg::HomeRowTarget,
+        target: &mbv_ui_model::targets::HomeRowTarget,
     ) -> Option<(QueueItem, bool)> {
         if !target.from_continue_watching {
             return None;

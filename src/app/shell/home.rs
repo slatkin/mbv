@@ -115,7 +115,7 @@ mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
-    use mbv_ui_model::msg::HomeRowTarget;
+    use mbv_ui_model::targets::HomeRowTarget;
 
     fn target(id: &str) -> HomeRowTarget {
         HomeRowTarget {

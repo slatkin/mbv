@@ -1,5 +1,5 @@
 use crate::library::LibraryKey;
-use crate::msg::MusicArtistTarget;
+use crate::targets::MusicArtistTarget;
 use mbv_emby_model::EmbyItem;
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]

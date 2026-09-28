@@ -9,7 +9,7 @@ pub enum BulkRemoveTarget {
 use ratatui::layout::Rect;
 
 use crate::media_list::SelectionOrigin;
-use crate::msg::HomeRowTarget;
+use crate::targets::HomeRowTarget;
 
 /// Values resolved when a context menu opens. The overlay never re-resolves
 /// these values after focus changes.

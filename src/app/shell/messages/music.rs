@@ -108,7 +108,7 @@ impl super::super::Model {
 
     fn handle_music_artist_tracks(
         &mut self,
-        target: mbv_ui_model::msg::MusicArtistTarget,
+        target: mbv_ui_model::targets::MusicArtistTarget,
         music_resize: &mut bool,
         tv_resize: &mut bool,
     ) {
@@ -208,7 +208,7 @@ impl super::super::Model {
 
     fn handle_music_artist_track_activate(
         &mut self,
-        target: &mbv_ui_model::msg::MusicArtistTarget,
+        target: &mbv_ui_model::targets::MusicArtistTarget,
         track_id: &str,
     ) {
         self.app

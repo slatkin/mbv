@@ -12,7 +12,7 @@ use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::library::LibraryKind;
-use mbv_ui_model::msg::MusicArtistTarget;
+use mbv_ui_model::targets::MusicArtistTarget;
 
 impl Model {
     pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {

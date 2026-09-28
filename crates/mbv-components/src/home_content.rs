@@ -140,8 +140,11 @@ impl HomeContent {
 
     /// Home's typed request target for a stable item identity the shared
     /// owner resolved, or the owner's current selection for a local effect.
-    fn home_row_target(_self: &Self, item_id: Option<String>) -> mbv_ui_model::msg::HomeRowTarget {
-        mbv_ui_model::msg::HomeRowTarget {
+    fn home_row_target(
+        _self: &Self,
+        item_id: Option<String>,
+    ) -> mbv_ui_model::targets::HomeRowTarget {
+        mbv_ui_model::targets::HomeRowTarget {
             item_id,
             source: None,
             from_continue_watching: true,
@@ -150,7 +153,7 @@ impl HomeContent {
 
     /// The typed effect target for Home's current selection (the shared
     /// owner's stable target, never a cursor-minus-section-index lookup).
-    fn row_target(&self) -> mbv_ui_model::msg::HomeRowTarget {
+    fn row_target(&self) -> mbv_ui_model::targets::HomeRowTarget {
         Self::home_row_target(self, self.carrier.selected_target().cloned())
     }
 

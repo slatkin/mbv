@@ -92,7 +92,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
-                mbv_ui_model::msg::HomeRowTarget {
+                mbv_ui_model::targets::HomeRowTarget {
                     item_id: Some("id0".into()),
                     source: None,
                     from_continue_watching: true,
@@ -201,7 +201,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::RowContextMenu(
             mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
-                mbv_ui_model::msg::HomeRowTarget {
+                mbv_ui_model::targets::HomeRowTarget {
                     item_id: Some("id0".into()),
                     source: None,
                     from_continue_watching: true,

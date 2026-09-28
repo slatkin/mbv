@@ -21,13 +21,13 @@ use mbv_queue::ServiceKind;
 use crate::app::{App, LibEvent, MusicEvent};
 use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
-use mbv_ui_model::msg::MusicArtistTarget;
 use mbv_ui_model::music_artist_detail::track_matches_album;
 use mbv_ui_model::music_artist_detail::{
     ArtistArtworkStatus, ArtistDetailCacheEntry, ArtistDetailKey, ArtistDetailProjection,
     ArtistSummary, ArtistTrackGroup,
 };
 use mbv_ui_model::music_grouping::ArtistKey;
+use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::sort_audio_tracks;
 
 /// At most this many fallback artist per-album track fetches run at once. A

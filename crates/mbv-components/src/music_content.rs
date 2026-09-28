@@ -29,7 +29,7 @@ use mbv_render::components::media_list::{
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_model::msg::MusicArtistTarget;
+use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 use mbv_ui_msg::LeafKeyResult;
 use mbv_ui_msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};

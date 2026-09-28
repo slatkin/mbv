@@ -19,7 +19,7 @@ use super::intents::{
 use super::queue::QueueIntent;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_model::msg::{HomeRowTarget, MusicArtistTarget};
+use mbv_ui_model::targets::{HomeRowTarget, MusicArtistTarget};
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
