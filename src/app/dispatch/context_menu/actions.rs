@@ -312,7 +312,9 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
-                if let Some(lib_idx) = lib_idx.filter(|_| played) {
+                if let Some(lib_idx) = lib_idx
+                    && played
+                {
                     self.remove_played_item_from_library(lib_idx, item_id);
                 }
                 if self.tab.is_home() {

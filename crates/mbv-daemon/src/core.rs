@@ -433,8 +433,8 @@ pub(super) fn dispatch_slot_jump(
                 target: "transition",
                 "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
             );
-            if let (Some(s), Some((origin_request_id, origin_client))) =
-                (superseded, *queued_origin)
+            if let Some(s) = superseded
+                && let Some((origin_request_id, origin_client)) = *queued_origin
                 && origin_request_id == s.request_id
             {
                 ctx.ctrl_clients.lock().unwrap().send_to_client(

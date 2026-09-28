@@ -98,7 +98,9 @@ impl SettingsComponent {
         );
         if !same_setup {
             self.setup = snapshot.setup;
-        } else if let (Some(current), Some(incoming)) = (&mut self.setup, snapshot.setup) {
+        } else if let Some(current) = &mut self.setup
+            && let Some(incoming) = snapshot.setup
+        {
             match (current, incoming) {
                 (
                     SetupDraft::Emby { busy, error, .. },

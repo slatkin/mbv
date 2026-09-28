@@ -314,13 +314,17 @@ impl Model {
                 self.handle_emby_library_latest_exit(target);
             }
             ShellRequest::EmbyLibraryRowClick { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                    && let Some(target) = target
+                {
                     self.app.handle_mouse_single_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::EmbyLibraryRowActivate { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                    && let Some(target) = target
+                {
                     self.app.handle_mouse_double_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();

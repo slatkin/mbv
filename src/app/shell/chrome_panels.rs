@@ -150,7 +150,9 @@ impl Model {
         placement: Option<Rect>,
         id: &ComponentId,
     ) {
-        if let Some(area) = placement.filter(|_| self.application.mounted(id)) {
+        if let Some(area) = placement
+            && self.application.mounted(id)
+        {
             self.application.view(id, frame, area);
         }
     }

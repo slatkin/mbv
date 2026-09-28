@@ -42,7 +42,10 @@ pub fn render_queue_status(
     let pill_w = pill
         .as_ref()
         .map_or(0, |s| u16::try_from(s.content.width()).unwrap_or(u16::MAX));
-    if let Some(pill) = pill.filter(|_| pill_w > 0 && pill_w < area.width) {
+    if let Some(pill) = pill
+        && pill_w > 0
+        && pill_w < area.width
+    {
         frame.render_widget(
             Paragraph::new(Line::from(vec![pill])),
             Rect {

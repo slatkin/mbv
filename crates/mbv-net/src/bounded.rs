@@ -64,7 +64,9 @@ where
 
     impl<T, C: FnOnce(T)> Drop for Pending<T, C> {
         fn drop(&mut self) {
-            if let (Some(value), Some(cleanup)) = (self.value.take(), self.cleanup.take()) {
+            if let Some(value) = self.value.take()
+                && let Some(cleanup) = self.cleanup.take()
+            {
                 cleanup(value);
             }
         }
