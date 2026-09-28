@@ -175,7 +175,16 @@ impl PlaybackRun {
                 end.completed_runtime,
                 self.last_valid_pos,
             ));
-            next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok())
+            let selected =
+                next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok());
+            if selected {
+                // The completed file already ended (this EndFile), so the
+                // replacement the selection armed has nothing left to drain.
+                // Left armed, it swallows the next track's real EndFile and
+                // the one-entry playlist goes idle.
+                let _ = self.on_drained();
+            }
+            selected
         } else {
             self.set_active_index(next_idx)
         };
@@ -424,7 +433,7 @@ impl PlaybackRun {
         false
     }
 
-    fn set_next_item_status(&mut self, next_item: &QueueItem) {
+    pub(crate) fn set_next_item_status(&mut self, next_item: &QueueItem) {
         let mut s = self.status.lock().unwrap();
         s.position_ticks = 0;
         s.runtime_ticks = next_item.runtime_ticks();
@@ -460,7 +469,7 @@ impl PlaybackRun {
     /// Point Emby reporting at the item now playing — or clear the session
     /// for a non-Emby item so the reporter becomes a no-op. The outgoing
     /// item's `report_stopped` was already sent with the original IDs.
-    fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
+    pub(crate) fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
         if let Some(emby) = next_item.as_emby() {
             let (urls, ok) = self.reporter.start_item(emby);
             self.ext_sub_urls = urls;

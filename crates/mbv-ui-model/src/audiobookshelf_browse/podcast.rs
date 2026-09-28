@@ -6,6 +6,7 @@ use mbv_audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShow,
 };
+use mbv_queue::EpisodeResume;
 use std::collections::{HashMap, HashSet};
 
 /// The podcast tab's state pills, in the painted pill-bar order (spec: the
@@ -150,6 +151,16 @@ impl AudiobookshelfBrowseState {
             .get(library_item_id)?
             .iter()
             .find(|episode| episode.episode_id == episode_id)
+    }
+
+    /// The episode's resume state from the fetched progress, or not-started.
+    #[must_use]
+    pub fn episode_resume(&self, library_item_id: &str, episode_id: &str) -> EpisodeResume {
+        self.progress
+            .get(&(library_item_id.to_owned(), episode_id.to_owned()))
+            .map_or(EpisodeResume::NOT_STARTED, |progress| {
+                EpisodeResume::from_seconds(progress.current_time_seconds, progress.is_finished)
+            })
     }
 
     /// The flat episode view: every fetched show's downloaded episodes,

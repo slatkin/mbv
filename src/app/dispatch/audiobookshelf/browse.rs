@@ -3,8 +3,7 @@ use crate::app::AudiobookshelfEvent;
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64};
 use mbv_queue::{
-    AudiobookshelfEpisodeCatalog, AudiobookshelfItem, AudiobookshelfQueueItem, EpisodeResume,
-    QueueItem,
+    AudiobookshelfEpisodeCatalog, AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem,
 };
 #[cfg(test)]
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
@@ -438,13 +437,7 @@ impl App {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let progress = state.progress.get(&(
-            target.library_item_id().to_owned(),
-            target.episode_id().to_owned(),
-        ));
-        let resume = progress.map_or(EpisodeResume::NOT_STARTED, |progress| {
-            EpisodeResume::from_seconds(progress.current_time_seconds, progress.is_finished)
-        });
+        let resume = state.episode_resume(target.library_item_id(), target.episode_id());
         if let Some(catalog) = self
             .audiobookshelf_shelf_cache
             .get(library_id)

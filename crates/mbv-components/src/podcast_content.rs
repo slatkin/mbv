@@ -12,7 +12,7 @@ use mbv_config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_seconds};
-use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem, EpisodeResume};
+use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 
 use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
@@ -477,14 +477,7 @@ impl PodcastContent {
         };
         let resume = self
             .state
-            .progress
-            .get(&(
-                target.library_item_id().to_owned(),
-                target.episode_id().to_owned(),
-            ))
-            .map_or(EpisodeResume::NOT_STARTED, |progress| {
-                EpisodeResume::from_seconds(progress.current_time_seconds, progress.is_finished)
-            });
+            .episode_resume(target.library_item_id(), target.episode_id());
         Some(AudiobookshelfQueueItem::from_catalog(catalog, resume))
     }
 

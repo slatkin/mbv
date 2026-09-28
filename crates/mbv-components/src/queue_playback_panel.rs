@@ -1,6 +1,6 @@
 //! The Queue playback panel (task 3.5, design D10): the queue column's
 //! playback surface, mounted in every queue-visible layout, idle included.
-//! It owns the always-painted header row (status left, `on <host>` right),
+//! It owns the always-painted header row (`STATUS [host]`, left-aligned),
 //! the visual slot's region (painted by the shell's App-side slot adapter on
 //! the panel's behalf — the ABS `paint_home_image` seam) and the queue-column
 //! transport presentation, which routes through the shared width-driven

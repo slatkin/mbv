@@ -1,8 +1,9 @@
 use super::{
-    ExecSlot, Mpv, PlaybackRun, PlayerEvent, QueueSlotId, mpv_err_str, mpv_load_opts,
-    mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
+    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueSlotId, mpv_err_str,
+    mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
+    spawn_progress_reporter,
 };
-use crate::run::ForcedJump;
+use crate::run::{ForcedJump, StopReport};
 
 impl PlaybackRun {
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
@@ -15,6 +16,7 @@ impl PlaybackRun {
         generation: mbv_ctrl::PlaybackGeneration,
         resume_ticks: Option<i64>,
         mpv: &Mpv,
+        progress: &mut ProgressGuard,
     ) {
         let slot_ids = self
             .queue
@@ -38,7 +40,7 @@ impl PlaybackRun {
             from_idle: false,
         });
         if self.active_file {
-            self.cmd_jump_to_active_file(slot_id, resume_ticks, Some(transition), mpv);
+            self.cmd_jump_to_active_file(slot_id, resume_ticks, Some(transition), mpv, progress);
         } else {
             self.cmd_jump_to_playlist(slot_id, idx, resume_ticks, mpv);
         }
@@ -54,10 +56,13 @@ impl PlaybackRun {
         resume_ticks: Option<i64>,
         transition: Option<crate::transition::Transition>,
         mpv: &Mpv,
+        progress: &mut ProgressGuard,
     ) {
+        let outgoing_pos = self.last_valid_pos;
         match self.select_active_slot_with_resume(slot_id, resume_ticks, mpv) {
             Ok(()) => {
                 let _ = mpv.set_property("pause", false);
+                self.report_jumped_item(outgoing_pos, progress);
                 // Active-file projection has no mpv playlist move to
                 // observe, so emit the JumpTo observation here.
                 self.emit_track_changed(slot_id, transition);
@@ -66,6 +71,22 @@ impl PlaybackRun {
                 log::warn!(target: "player", "active-file selection failed: {error}");
             }
         }
+    }
+
+    /// An active-file jump swallows the replaced file's `EndFile`, so it does
+    /// the reporting `on_end_file` does for a playlist move: stop the outgoing
+    /// item, then point Emby reporting and the status mirror at the new one.
+    pub(crate) fn report_jumped_item(&mut self, outgoing_pos: i64, progress: &mut ProgressGuard) {
+        let Some(item) = self.active_item().cloned() else {
+            return;
+        };
+        progress.stop_and_join(Self::progress_join_budget());
+        let _ = self.reporter.report_stopped(outgoing_pos);
+        self.tracks_initialized = false;
+        self.set_next_item_status(&item);
+        self.start_next_item_reporting(&item);
+        self.mark_reported(StopReport::NotSent);
+        *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
     fn cmd_jump_to_playlist(
