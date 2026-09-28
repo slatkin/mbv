@@ -1,4 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::ModelContentEvent;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
@@ -319,10 +320,9 @@ impl App {
                         Ok(content) => {
                             // Delivered to Model-owned `home_content` via the
                             // lib_tx/ lib_rx drain (task 5.3d).
-                            let _ = self
-                                .channels
-                                .lib_tx
-                                .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                            let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                                ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                            ));
                         }
                         Err(e) => {
                             self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
@@ -380,10 +380,9 @@ impl App {
                     Ok(content) => {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
-                        let _ = self
-                            .channels
-                            .lib_tx
-                            .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                        ));
                     }
                     Err(e) => {
                         self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
@@ -418,10 +417,9 @@ impl App {
                     Ok(content) => {
                         // Delivered to Model-owned `home_content` via the
                         // lib_tx/ lib_rx drain (task 5.3d).
-                        let _ = self
-                            .channels
-                            .lib_tx
-                            .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                        ));
                     }
                     Err(e) => {
                         self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);

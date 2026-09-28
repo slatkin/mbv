@@ -58,7 +58,11 @@ fn progress_update(
 }
 
 fn abs_queue_with_slot() -> PlaybackQueue {
-    PlaybackQueue::from_queue_items(vec![abs_qi("li_1", "ep_1")], Some(0))
+    PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep_1")],
+        Some(0),
+        crate::tests::revision_mint(),
+    )
 }
 
 mod admission;

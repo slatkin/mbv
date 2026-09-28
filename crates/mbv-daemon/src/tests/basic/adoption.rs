@@ -10,7 +10,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -59,7 +59,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let client = Arc::new(Mutex::new(client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let queue = PlaybackQueue::default();
+    let queue = crate::tests::empty_queue();
     let source = QueueSource::Unknown;
     let (dummy_merged_tx, dummy_merged_rx) = mpsc::channel::<DaemonEvent>();
 

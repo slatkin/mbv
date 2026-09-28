@@ -9,7 +9,8 @@
 use crate::transition::OwnerTransitionState;
 use crate::transition::TransitionCause;
 use mbv_ctrl::Direction;
-use mbv_queue::{PlaybackQueue, QueueSlotId};
+use mbv_queue::{PlaybackQueue, QueueRevisionMint, QueueSlotId};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepTarget {
@@ -18,12 +19,23 @@ pub enum StepTarget {
     AtEdge,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PlayerOwnerState {
     pub queue: PlaybackQueue,
+    pub revision_mint: Arc<QueueRevisionMint>,
     pub source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
     pub transitions: OwnerTransitionState,
+}
+
+impl Default for PlayerOwnerState {
+    fn default() -> Self {
+        let revision_mint = Arc::new(QueueRevisionMint::default());
+        Self::new(
+            PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
+            mbv_queue::QueueSource::default(),
+        )
+    }
 }
 
 impl PlayerOwnerState {
@@ -31,8 +43,10 @@ impl PlayerOwnerState {
     /// (queue adoption on startup / handoff).
     #[must_use]
     pub fn new(queue: PlaybackQueue, source: mbv_queue::QueueSource) -> Self {
+        let revision_mint = queue.revision_mint();
         Self {
             queue,
+            revision_mint,
             source,
             observed_active_slot: None,
             transitions: OwnerTransitionState::default(),
@@ -43,6 +57,7 @@ impl PlayerOwnerState {
     /// Daemon owners mutate this state directly; Bare keeps the existing shell
     /// queue API and synchronizes the same canonical value at the boundary.
     pub fn sync_canonical_queue(&mut self, queue: PlaybackQueue) {
+        self.revision_mint = queue.revision_mint();
         let observed = self
             .observed_active_slot
             .filter(|slot_id| queue.slot(*slot_id).is_some());
@@ -280,7 +295,11 @@ mod tests {
     #[test]
     fn relative_steps_use_desired_target_edges_and_coalesce_matching_direction() {
         use crate::transition::{Transition, TransitionCause};
-        let queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(0));
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
         let slots: Vec<_> = queue.slots().iter().map(|slot| slot.slot_id).collect();
         let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
         owner.accept_local_transition(Transition::with_cause(
@@ -320,7 +339,11 @@ mod tests {
             (audio, 8 * mbv_emby_model::TICKS_PER_SECOND),
             (video, 12 * mbv_emby_model::TICKS_PER_SECOND),
         ] {
-            let mut queue = PlaybackQueue::from_items(vec![item("current"), target_item], Some(0));
+            let mut queue = PlaybackQueue::from_items(
+                vec![item("current"), target_item],
+                Some(0),
+                Arc::new(QueueRevisionMint::default()),
+            );
             let target = queue.slots()[1].slot_id;
             let slot_item = &queue.slot(target).expect("target exists").item;
             let recorded = ProgressObservation::Completed {
@@ -365,7 +388,11 @@ mod tests {
 
     #[test]
     fn apply_completion_progress_advances_canonical_queue_and_revision() {
-        let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+        let queue = PlaybackQueue::from_items(
+            vec![item("a")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
         let slot_id = queue.slots()[0].slot_id;
         let before_revision = queue.revision();
         let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());

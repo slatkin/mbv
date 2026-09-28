@@ -31,8 +31,8 @@ fn install_idle_queue_load(
         &mut owner.core.transitions,
         &mut owner.queued_transition_origin,
     );
-    owner.core.queue =
-        PlaybackQueue::from_slot_items(slots, active_slot, mbv_queue::QueueRevision::default());
+    let mint = std::sync::Arc::clone(&owner.core.revision_mint);
+    owner.core.queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
     owner.core.source = source;
     mint_queue_lineage(shared_queue);
     owner.core.note_observed_active_slot(None);

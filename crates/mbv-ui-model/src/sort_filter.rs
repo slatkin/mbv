@@ -57,7 +57,7 @@ pub fn strip_article(s: &str) -> &str {
 /// synchronously (Emby tag or folder-name heuristic only — no network fetch,
 /// no cache lookup). Used to pick a sane initial cursor position when a
 /// music-group album level first loads (see `handle_lib_event`'s
-/// `LibEvent::Loaded` arm in `actions.rs`), before its grouping candidate
+/// `BrowseEvent::Loaded` handler in the App), before its grouping candidate
 /// has settled. Mirrors `derive_album_artist`'s synchronous fallback chain
 /// (Emby tag → folder-name-parsed artist → literal "Unknown Artist"), minus
 /// the cache/fetch steps, since nothing is cached yet at initial load.

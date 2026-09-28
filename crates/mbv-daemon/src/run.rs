@@ -286,17 +286,21 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     } else {
         None
     };
+    let revision_mint = Arc::new(mbv_queue::QueueRevisionMint::default());
     let (initial_queue, initial_source, initial_lineage) = owner_state.map_or_else(
         || {
             (
-                PlaybackQueue::default(),
+                PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
                 mbv_queue::QueueSource::Unknown,
                 mbv_queue::QueueLineage::default(),
             )
         },
         |state| {
-            let queue =
-                PlaybackQueue::from_queue_items(state.queue.items, Some(state.queue.cursor));
+            let queue = PlaybackQueue::from_queue_items(
+                state.queue.items,
+                Some(state.queue.cursor),
+                Arc::clone(&revision_mint),
+            );
             (queue, state.queue.source, state.lineage)
         },
     );

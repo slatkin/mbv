@@ -26,7 +26,11 @@ use self::state::bootstrap::bootstrap_unified_queue;
 use self::state::playback_target::{
     CastPlaybackTarget, LocalPlaybackTarget, PlaybackTarget, RemotePlaybackTarget,
 };
-use crate::app::state::events::{LibEvent, SessionEvent};
+use crate::app::state::events::SessionEvent;
+pub(in crate::app) use crate::app::state::events::{
+    AudiobookshelfEvent, BrowseEvent, LibEvent, ModelContentEvent, MusicEvent, PlaylistEvent,
+    SeriesEvent,
+};
 use crate::app::state::playback::{
     DestinationLatestSource, PendingQueueAction, QueueScopeResolution, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,

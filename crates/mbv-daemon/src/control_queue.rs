@@ -118,6 +118,7 @@ pub(crate) fn unified_queue_state_for_peer(
         status: status.clone(),
         slots,
         active_slot,
+        // Owner-local diagnostic only; clients mint their own projection revision.
         revision: queue.revision().raw(),
         source: source.clone(),
         lineage,

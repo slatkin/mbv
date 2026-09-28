@@ -78,9 +78,17 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
     (id, rx)
 }
 
+pub fn revision_mint() -> Arc<mbv_queue::QueueRevisionMint> {
+    Arc::new(mbv_queue::QueueRevisionMint::default())
+}
+
+pub fn empty_queue() -> PlaybackQueue {
+    PlaybackQueue::from_queue_items(Vec::new(), None, revision_mint())
+}
+
 pub fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
-        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
+        queue: Arc::new(Mutex::new(empty_queue())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
         lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
@@ -89,6 +97,10 @@ pub fn shared_queue_state() -> SharedQueueState {
 
 pub fn cold_player() -> Player {
     let (event_tx, _event_rx) = mpsc::channel::<PlayerEvent>();
+    // Never construct the real external from the cold-test player: an
+    // inhibited player keeps the queue/status seeding a cold-start submit
+    // performs but skips the player thread whose first act is a live
+    // `init_mpv` handle (it raced process teardown at test exit; issue #757).
     Player::new(
         String::new(),
         String::new(),
@@ -100,6 +112,7 @@ pub fn cold_player() -> Player {
         event_tx,
         None,
     )
+    .with_mpv_inhibited()
 }
 
 pub fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
@@ -116,7 +129,7 @@ pub fn queue_from_items(items: &[EmbyItem], active: usize) -> PlaybackQueue {
         .cloned()
         .map(|i| QueueItem::Emby(Box::new(i)))
         .collect();
-    PlaybackQueue::from_queue_items(qi, Some(active))
+    PlaybackQueue::from_queue_items(qi, Some(active), revision_mint())
 }
 
 // Control-client authority and lifetime behavior.

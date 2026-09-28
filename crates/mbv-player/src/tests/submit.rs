@@ -211,7 +211,11 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
     // Regression: selecting an existing Feed slot in a mixed queue must
     // preserve queue length and order — the correct operation is slot
     // selection (set_active_slot), not queue replacement.
-    let mut queue = PlaybackQueue::default();
+    let mut queue = PlaybackQueue::from_queue_items(
+        Vec::new(),
+        None,
+        std::sync::Arc::new(mbv_queue::QueueRevisionMint::default()),
+    );
     let emby_slot = queue.append(QueueItem::Emby(Box::new(EmbyItem {
         id: "emby-1".into(),
         name: "Emby Item".into(),

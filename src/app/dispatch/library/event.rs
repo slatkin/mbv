@@ -1,8 +1,11 @@
 use crate::app::state::app_struct::LevelFillState;
-use crate::app::state::events::{NavigateLanding, PendingSeriesHandoff};
+use crate::app::state::events::{
+    LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
+    SeriesEvent,
+};
 use crate::app::{
     dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
-    FeedHomeVideoState, LibEvent, QueueScope,
+    FeedHomeVideoState, QueueScope,
 };
 use mbv_ui_model::ui_util::sort_audio_tracks;
 
@@ -13,78 +16,58 @@ fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize
     (state.selected_group, state.video_cursor, state.video_scroll)
 }
 
+/// Each variant keeps its own documented no-op arm so a future
+/// `ModelContentEvent` variant that must reach the shell drain cannot
+/// silently fall through here.
+fn handle_model_content_event(ev: ModelContentEvent) {
+    match ev {
+        // The shell drain applies the Model-owned latest snapshot.
+        ModelContentEvent::EmbyLatestSnapshotFetched {
+            library_id,
+            title,
+            items,
+        } => drop((library_id, title, items)),
+        // The shell drain applies the Model-owned refreshed content.
+        ModelContentEvent::HomeContentRefreshed(content) => drop(content),
+        // Clearing Model-owned content is handled by the shell drain.
+        ModelContentEvent::HomeContentCleared => {}
+    }
+}
+
 impl App {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Exhaustive LibEvent routing keeps each variant visible at one dispatch site"
-    )]
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
-            LibEvent::Loaded {
-                lib_idx,
-                parent_id,
-                level,
-            } => self.handle_lib_loaded(lib_idx, &parent_id, *level),
-            // The shell drain applies the Model-owned latest snapshot.
-            LibEvent::EmbyLatestSnapshotFetched {
-                library_id,
-                title,
-                items,
-            } => drop((library_id, title, items)),
-            LibEvent::PageAppended {
-                lib_idx,
-                parent_id,
-                items,
-                total_count,
-            } => self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count),
-            LibEvent::Refreshed {
-                lib_idx,
-                parent_id,
-                item_types,
-                unplayed_only,
-                items,
-                total_count,
-            } => self.handle_lib_refreshed(
-                lib_idx,
-                &parent_id,
-                item_types.as_deref(),
-                unplayed_only,
-                items,
-                total_count,
-            ),
-            LibEvent::SearchItemsLoaded {
-                lib_idx,
-                parent_id,
-                items,
-            } => self.handle_search_items_loaded(lib_idx, &parent_id, items),
-            LibEvent::AlbumIndexBuilt { library_id, result } => {
+            LibEvent::Browse(event) => self.handle_browse_event(event),
+            LibEvent::Music(event) => self.handle_music_event(event),
+            LibEvent::Series(event) => self.handle_series_event(event),
+            LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
+            LibEvent::Playlist(event) => self.handle_playlist_event(event),
+            // The shell drain applies Model-owned content.
+            LibEvent::ModelContent(event) => handle_model_content_event(event),
+            LibEvent::QueueEnriched { items } => self.handle_queue_enriched(items),
+            LibEvent::Error(error) => self.handle_error(&error),
+        }
+    }
+
+    fn handle_music_event(&mut self, ev: MusicEvent) {
+        match ev {
+            MusicEvent::AlbumIndexBuilt { library_id, result } => {
                 self.handle_album_index_built(library_id, result);
             }
-            LibEvent::RecursiveAlbumActivated {
+            MusicEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
             } => self.handle_recursive_album_activated(&library_id, nav_stack),
-            LibEvent::AllItemsPrefetched {
-                lib_idx,
-                parent_id,
-                items,
-            } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
-            LibEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            } => self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups),
-            LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
+            MusicEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 self.handle_album_artist_level_fetched(level_id, artists);
             }
-            LibEvent::MusicGroupWarmupListed { generation, groups } => {
+            MusicEvent::GroupWarmupListed { generation, groups } => {
                 self.handle_music_group_warmup_listed(generation, groups);
             }
-            LibEvent::AlbumTracksFetched { album_id, tracks } => {
+            MusicEvent::AlbumTracksFetched { album_id, tracks } => {
                 self.handle_album_tracks_fetched(album_id, tracks);
             }
-            LibEvent::ArtistTracksFetched {
+            MusicEvent::ArtistTracksFetched {
                 destination,
                 generation,
                 artist_id,
@@ -97,7 +80,7 @@ impl App {
                 revision,
                 result,
             ),
-            LibEvent::ArtistArtworkFetched {
+            MusicEvent::ArtistArtworkFetched {
                 destination,
                 generation,
                 artist_id,
@@ -112,7 +95,12 @@ impl App {
                 &cache_key,
                 available,
             ),
-            LibEvent::SeriesDetailFetched {
+        }
+    }
+
+    fn handle_series_event(&mut self, ev: SeriesEvent) {
+        match ev {
+            SeriesEvent::DetailFetched {
                 series_id,
                 seasons,
                 episodes,
@@ -120,90 +108,31 @@ impl App {
                 &series_id,
                 mbv_ui_model::browse::SeriesDetail { seasons, episodes },
             ),
-            LibEvent::SeriesSeasonEpisodesFetched {
+            SeriesEvent::SeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
             } => self.handle_series_season_episodes_fetched(&series_id, season_id, episodes),
-            LibEvent::AudiobookshelfDetailFetched {
-                generation,
-                request,
-                library_item_id,
-                result,
-            } => self.handle_audiobookshelf_podcast_detail_fetched(
-                generation,
-                request,
-                library_item_id,
-                result,
-            ),
-            LibEvent::AudiobookshelfShowsFetched {
-                generation,
-                library_id,
-                result,
-            } => self.handle_audiobookshelf_shows_fetched(generation, library_id, result),
-            LibEvent::AudiobookshelfBooksFetched {
-                generation,
-                library_id,
-                result,
-            } => self.handle_audiobookshelf_books_fetched(generation, library_id, result),
-            LibEvent::AudiobookshelfShelfFetched {
-                generation,
-                library_id,
-                result,
-            } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
-            LibEvent::AudiobookshelfBookDetailFetched {
-                generation,
-                library_item_id,
-                result,
-            } => {
-                self.handle_audiobookshelf_book_detail_fetched(
-                    generation,
-                    &library_item_id,
-                    result,
-                );
-            }
-            LibEvent::AudiobookshelfProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_progress_acknowledged(&update);
-            }
-            LibEvent::AudiobookshelfBookProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_book_progress_acknowledged(&update);
-            }
-            LibEvent::NavigateTo {
-                lib_idx,
-                landing,
-                switch_tab,
-            } => self.handle_navigate_to_event(lib_idx, landing, switch_tab),
-            LibEvent::RestoreLibraryPosition {
-                lib_idx,
-                requested_position,
-                position,
-                nav_stack,
-            } => self.handle_restored_library_position(
-                lib_idx,
-                &requested_position,
-                position,
-                nav_stack,
-            ),
-            LibEvent::PlaylistsLoaded(items) => self.handle_playlists_loaded(items),
-            LibEvent::PlaylistsLoadError(error) => self.handle_playlists_load_error(error),
-            LibEvent::PlaylistItemsLoaded { playlist_id, items } => {
-                self.handle_playlist_items_loaded(&playlist_id, items);
-            }
-            LibEvent::PlaylistItemsLoadError { playlist_id, error } => {
-                self.handle_playlist_items_load_error(&playlist_id, error);
-            }
-            LibEvent::PlaylistRenamed { new_name } => {
-                self.handle_playlist_renamed(&new_name);
-            }
-            LibEvent::PlaylistDeleted { name } => self.handle_playlist_deleted(&name),
-            LibEvent::QueueEnriched { items } => self.handle_queue_enriched(items),
-            // The shell drain applies the Model-owned refreshed content.
-            LibEvent::HomeContentRefreshed(content) => drop(content),
-            // Clearing Model-owned content is handled by the shell drain.
-            LibEvent::HomeContentCleared => {}
-            LibEvent::Error(error) => self.handle_error(&error),
         }
     }
+
+    fn handle_playlist_event(&mut self, ev: PlaylistEvent) {
+        match ev {
+            PlaylistEvent::ListLoaded(items) => self.handle_playlists_loaded(items),
+            PlaylistEvent::ListLoadError(error) => self.handle_playlists_load_error(error),
+            PlaylistEvent::ItemsLoaded { playlist_id, items } => {
+                self.handle_playlist_items_loaded(&playlist_id, items);
+            }
+            PlaylistEvent::ItemsLoadError { playlist_id, error } => {
+                self.handle_playlist_items_load_error(&playlist_id, error);
+            }
+            PlaylistEvent::Renamed { new_name } => {
+                self.handle_playlist_renamed(&new_name);
+            }
+            PlaylistEvent::Deleted { name } => self.handle_playlist_deleted(&name),
+        }
+    }
+
     fn handle_all_items_prefetched(
         &mut self,
         lib_idx: usize,

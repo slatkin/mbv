@@ -59,8 +59,9 @@ fn activating_book_qualified_chapter_target_seeks_to_that_chapter() {
         ),
     );
     app.audiobookshelf_book_browse.push(state);
+    let mint = app.player_tab.queue.revision_mint();
     app.player_tab.queue =
-        mbv_queue::PlaybackQueue::from_queue_items(vec![book_queue_item("book-1")], Some(0));
+        mbv_queue::PlaybackQueue::from_queue_items(vec![book_queue_item("book-1")], Some(0), mint);
 
     app.activate_audiobookshelf_book_row_target(Some(mbv_ui_msg::BookChapterTarget::new(
         "book-1".into(),

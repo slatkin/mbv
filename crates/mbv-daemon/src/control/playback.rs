@@ -59,7 +59,8 @@ pub(crate) fn play_resolved_items(
         .map(|item| QueueItem::Emby(Box::new(item)))
         .collect();
     let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
-    *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
+    let mint = queue.revision_mint();
+    *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx), mint);
     *source = new_source;
     mint_queue_lineage(ctx.shared_queue);
     broadcast_queue_state(

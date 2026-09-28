@@ -1,4 +1,4 @@
-use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
+use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, ModelContentEvent, PanelFocus};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::Direction;
 #[cfg(test)]
@@ -94,10 +94,9 @@ impl App {
                 // effects); the computed content travels to Model-owned
                 // `home_content` via lib_tx (task 5.3d).
                 if let Ok(content) = self.fetch_home() {
-                    let _ = self
-                        .channels
-                        .lib_tx
-                        .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                    let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                    ));
                 }
             }
         }
@@ -394,7 +393,7 @@ mod tests {
         app.handle_ws_event(WsEvent::UserDataChanged);
 
         match app.channels.lib_rx.try_recv() {
-            Ok(LibEvent::HomeContentRefreshed(content)) => {
+            Ok(LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed(content))) => {
                 assert!(content.continue_items.is_empty());
             }
             Ok(_) => panic!("a successful home fetch must emit HomeContentRefreshed"),

@@ -222,10 +222,11 @@ A Player owner SHALL publish its canonical queue revision, ordered slots, observ
 - **THEN** Clients SHALL receive values from the same resulting owner state
 - **AND** SHALL NOT temporarily pair the new queue with the previous active coordinate
 
-#### Scenario: Client receives a newer snapshot
+#### Scenario: Client receives an owner snapshot
 
-- **WHEN** a Client receives an owner snapshot with a newer queue revision or transition state
-- **THEN** it SHALL replace its previous Bound-queue snapshot
+- **WHEN** a Client receives an owner snapshot in delivery order, regardless of the revision number carried by the owner
+- **THEN** it SHALL atomically replace its previous Bound-queue snapshot and mint a Client-local queue revision for the adopted state
+- **AND** SHALL NOT compare the owner's revision to order snapshots
 - **AND** SHALL NOT preserve an optimistic active slot from the previous snapshot
 
 #### Scenario: Player reports a slot change

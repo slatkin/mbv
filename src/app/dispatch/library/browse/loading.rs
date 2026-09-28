@@ -1,4 +1,4 @@
-use crate::app::{App, BrowseLevel, LibEvent, PAGE_SIZE};
+use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::BrowseResting;
 
@@ -229,12 +229,12 @@ impl App {
             );
             match restored {
                 Ok(Some((position, nav_stack))) => {
-                    let _ = tx.send(LibEvent::RestoreLibraryPosition {
+                    let _ = tx.send(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
                         lib_idx,
                         requested_position: saved,
                         position,
                         nav_stack,
-                    });
+                    }));
                 }
                 Ok(None) => {}
                 Err(e) => {
@@ -275,7 +275,7 @@ impl App {
                         items.len(),
                         spawn_started.elapsed().as_millis(),
                         items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
-                    let _ = tx.send(LibEvent::Loaded {
+                    let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),
                         level: Box::new(BrowseLevel {
@@ -296,7 +296,7 @@ impl App {
                             tv_content_mode: None,
                             music_grouping: None,
                         }),
-                    });
+                    }));
                 }
                 Err(e) => {
                     let _ = tx.send(LibEvent::Error(e));
@@ -338,12 +338,12 @@ impl App {
                 name_lt,
             }) {
                 Ok((items, total_count)) => {
-                    let _ = tx.send(LibEvent::PageAppended {
+                    let _ = tx.send(LibEvent::Browse(BrowseEvent::PageAppended {
                         lib_idx,
                         parent_id,
                         items,
                         total_count,
-                    });
+                    }));
                 }
                 Err(e) => {
                     let _ = tx.send(LibEvent::Error(e));

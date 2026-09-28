@@ -75,7 +75,7 @@ fn run_queue_cmd_with_shared(
 pub fn owner_with(items: Vec<QueueItem>, active: usize) -> DaemonPlayerOwner {
     DaemonPlayerOwner {
         core: PlayerOwnerState::new(
-            PlaybackQueue::from_queue_items(items, Some(active)),
+            PlaybackQueue::from_queue_items(items, Some(active), crate::tests::revision_mint()),
             QueueSource::Unknown,
         ),
         ..Default::default()

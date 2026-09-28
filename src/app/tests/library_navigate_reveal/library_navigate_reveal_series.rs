@@ -14,14 +14,14 @@ fn series_landing_applies_the_searched_series_activation_on_the_root_level() {
 
     let mut show = make_item("The Show", "Series");
     show.id = "ser1".into();
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(show),
             episode_id: None,
         },
         switch_tab: true,
-    });
+    }));
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
     assert_eq!(
@@ -96,20 +96,20 @@ fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
     let mut show = series_item("ser1", "The Show");
     show.id = "ser1".into();
 
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(show),
             episode_id: None,
         },
         switch_tab: true,
-    });
+    }));
 
     assert_eq!(app.tab, TabSelection::Home);
     assert!(app.pending_series_landing.is_some());
     assert!(!app.status.contains("Could not land on"), "{}", app.status);
 
-    app.handle_lib_event(LibEvent::AllItemsPrefetched {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::AllItemsPrefetched {
         lib_idx: 0,
         parent_id: "lib-tv".into(),
         items: vec![
@@ -117,7 +117,7 @@ fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
             series_item("ser1", "The Show"),
             series_item("ser2", "Third Show"),
         ],
-    });
+    }));
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "landed on the drain");
     assert!(app.pending_series_landing.is_none());
@@ -138,24 +138,24 @@ fn series_landing_miss_after_the_whole_library_load_flashes_and_clears() {
     let mut app = app_with_paginated_tv_library();
     app.tab = TabSelection::Home;
 
-    app.handle_lib_event(LibEvent::NavigateTo {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::NavigateTo {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(series_item("ser-absent", "Missing Show")),
             episode_id: None,
         },
         switch_tab: true,
-    });
+    }));
     assert!(app.pending_series_landing.is_some());
 
-    app.handle_lib_event(LibEvent::AllItemsPrefetched {
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::AllItemsPrefetched {
         lib_idx: 0,
         parent_id: "lib-tv".into(),
         items: vec![
             series_item("ser0", "Other Show"),
             series_item("ser2", "Third Show"),
         ],
-    });
+    }));
 
     assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
     assert!(

@@ -18,7 +18,7 @@ use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
-use crate::app::{App, LibEvent};
+use crate::app::{App, LibEvent, MusicEvent};
 use mbv_render::MusicWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 use mbv_ui_model::msg::MusicArtistTarget;
@@ -207,13 +207,13 @@ impl App {
         let artist_id = key.artist_id.clone();
         std::thread::spawn(move || {
             let result = client.get_artist_audio_tracks(&artist_id);
-            let _ = tx.send(LibEvent::ArtistTracksFetched {
+            let _ = tx.send(LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination,
                 generation,
                 artist_id,
                 revision,
                 result,
-            });
+            }));
         });
     }
 

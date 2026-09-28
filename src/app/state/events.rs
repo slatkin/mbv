@@ -79,16 +79,11 @@ pub struct PendingSeriesHandoff {
 }
 
 #[derive(Debug)]
-pub enum LibEvent {
+pub enum BrowseEvent {
     Loaded {
         lib_idx: usize,
         parent_id: String,
         level: Box<BrowseLevel>,
-    },
-    EmbyLatestSnapshotFetched {
-        library_id: String,
-        title: String,
-        items: Vec<EmbyItem>,
     },
     PageAppended {
         lib_idx: usize,
@@ -109,14 +104,6 @@ pub enum LibEvent {
         parent_id: String,
         items: Vec<EmbyItem>,
     },
-    AlbumIndexBuilt {
-        library_id: String,
-        result: Result<Vec<AlbumSearchEntry>, String>,
-    },
-    RecursiveAlbumActivated {
-        library_id: String,
-        nav_stack: Vec<BrowseLevel>,
-    },
     AllItemsPrefetched {
         lib_idx: usize,
         parent_id: String,
@@ -127,6 +114,31 @@ pub enum LibEvent {
         parent_id: String,
         all_items: Vec<EmbyItem>,
         groups: Vec<FeedHomeVideoGroup>,
+    },
+    /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
+    /// false for startup restore (just populate `nav_stack`, stay on current tab).
+    NavigateTo {
+        lib_idx: usize,
+        landing: NavigateLanding,
+        switch_tab: bool,
+    },
+    RestoreLibraryPosition {
+        lib_idx: usize,
+        requested_position: mbv_queue::LibraryPosition,
+        position: mbv_queue::LibraryPosition,
+        nav_stack: Vec<BrowseLevel>,
+    },
+}
+
+#[derive(Debug)]
+pub enum MusicEvent {
+    AlbumIndexBuilt {
+        library_id: String,
+        result: Result<Vec<AlbumSearchEntry>, String>,
+    },
+    RecursiveAlbumActivated {
+        library_id: String,
+        nav_stack: Vec<BrowseLevel>,
     },
     /// One level-fill request resolved (design D4 of
     /// `fix-music-artist-resolution-batching`): `artists` bulk-fills the
@@ -145,7 +157,7 @@ pub enum LibEvent {
     /// (no shell arm): it only mutates App
     /// caches, and failures arrive as empty `AlbumArtistLevelFetched`
     /// artists that merely mark the level `Failed`.
-    MusicGroupWarmupListed {
+    GroupWarmupListed {
         generation: SetupGeneration,
         groups: Vec<EmbyItem>,
     },
@@ -177,21 +189,29 @@ pub enum LibEvent {
         cache_key: String,
         available: bool,
     },
+}
+
+#[derive(Debug)]
+pub enum SeriesEvent {
     /// TV series detail (seasons + episodes) fetched proactively for inline
     /// rendering when a Series is selected.
-    SeriesDetailFetched {
+    DetailFetched {
         series_id: String,
         seasons: Vec<EmbyItem>,
         episodes: std::collections::HashMap<String, Vec<EmbyItem>>,
     },
     /// Episodes for a specific season fetched when switching seasons in
     /// series-selection mode.
-    SeriesSeasonEpisodesFetched {
+    SeasonEpisodesFetched {
         series_id: String,
         season_id: String,
         episodes: Vec<EmbyItem>,
     },
-    AudiobookshelfDetailFetched {
+}
+
+#[derive(Debug)]
+pub enum AudiobookshelfEvent {
+    DetailFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         /// The fetch's request serial (the browse state's
         /// `next_detail_request` at spawn): an arrival retires its in-flight
@@ -204,7 +224,7 @@ pub enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfShowsFetched {
+    ShowsFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
@@ -212,7 +232,7 @@ pub enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfBooksFetched {
+    BooksFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
@@ -220,7 +240,7 @@ pub enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfShelfFetched {
+    ShelfFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
         result: Result<
@@ -228,7 +248,7 @@ pub enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfBookDetailFetched {
+    BookDetailFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_item_id: String,
         result: Result<
@@ -239,42 +259,37 @@ pub enum LibEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
-    AudiobookshelfBookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
-    /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
-    /// false for startup restore (just populate `nav_stack`, stay on current tab).
-    NavigateTo {
-        lib_idx: usize,
-        landing: NavigateLanding,
-        switch_tab: bool,
-    },
-    RestoreLibraryPosition {
-        lib_idx: usize,
-        requested_position: mbv_queue::LibraryPosition,
-        position: mbv_queue::LibraryPosition,
-        nav_stack: Vec<BrowseLevel>,
-    },
-    PlaylistsLoaded(Vec<EmbyItem>),
-    PlaylistsLoadError(String),
-    PlaylistItemsLoaded {
+    ProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
+    BookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
+}
+
+#[derive(Debug)]
+pub enum PlaylistEvent {
+    ListLoaded(Vec<EmbyItem>),
+    ListLoadError(String),
+    ItemsLoaded {
         playlist_id: String,
         items: Vec<EmbyItem>,
     },
-    PlaylistItemsLoadError {
+    ItemsLoadError {
         playlist_id: String,
         error: String,
     },
-    PlaylistRenamed {
+    Renamed {
         new_name: String,
     },
-    PlaylistDeleted {
+    Deleted {
         name: String,
     },
-    /// Best-effort background refresh of played/position state for the queue
-    /// that `restore_queue_state` already populated synchronously from disk.
-    /// See `spawn_enrich_queue_state`.
-    #[rustfmt::skip]
-    QueueEnriched { items: Vec<EmbyItem> },
+}
+
+#[derive(Debug)]
+pub enum ModelContentEvent {
+    EmbyLatestSnapshotFetched {
+        library_id: String,
+        title: String,
+        items: Vec<EmbyItem>,
+    },
     /// A freshly computed Continue Watching snapshot delivered by an
     /// App-internal writer. App-internal callers cannot touch Model-owned
     /// `home_content`, so the result travels here for shell assignment.
@@ -284,6 +299,24 @@ pub enum LibEvent {
     /// `loading` flag is intentionally untouched,
     /// matching the legacy `clear_emby_memory` which never reset it.
     HomeContentCleared,
+}
+
+/// Library events are grouped by the App state handler that owns them.
+/// A new variant goes in the family whose handler file owns its state.
+#[derive(Debug)]
+pub enum LibEvent {
+    Browse(BrowseEvent),
+    Music(MusicEvent),
+    Series(SeriesEvent),
+    Audiobookshelf(AudiobookshelfEvent),
+    Playlist(PlaylistEvent),
+    ModelContent(ModelContentEvent),
+
+    /// Best-effort background refresh of played/position state for the queue
+    /// that `restore_queue_state` already populated synchronously from disk.
+    /// See `spawn_enrich_queue_state`.
+    #[rustfmt::skip]
+    QueueEnriched { items: Vec<EmbyItem> },
     Error(String),
 }
 

@@ -1,4 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::BrowseEvent;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
@@ -280,12 +281,12 @@ impl App {
                     }
                 })
                 .collect();
-            let _ = tx.send(LibEvent::FeedHomeVideoAggregated {
+            let _ = tx.send(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
                 lib_idx,
                 parent_id,
                 all_items,
                 groups,
-            });
+            }));
         });
     }
 

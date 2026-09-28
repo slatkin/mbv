@@ -493,6 +493,62 @@ mod tests {
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
+    fn queue_rows_follow_readopted_owner_snapshot_with_same_wire_revision_issue_836() {
+        let mut first = crate::app::tests::emby_unified_state(&make_items(2), 0);
+        first.active_slot = None;
+        first.revision = 7;
+        let mut app = make_app_stub();
+        app.player_tab = crate::app::PlayerTab::from_unified_state(&first);
+        let mut model = Model::new(app);
+
+        model.sync_queue();
+        let component = queue_component(&model);
+        assert_eq!(component.projected_row_states().len(), 2);
+
+        let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
+        replacement.active_slot = None;
+        replacement.revision = 7;
+        model.app.player_tab.set_unified_state(&replacement, 0);
+        model.sync_queue();
+
+        let component = queue_component(&model);
+        assert_eq!(component.projected_row_states().len(), 1);
+    }
+
+    #[test]
+    fn unchanged_queue_revision_skips_projection_rebuild() {
+        let mut app = make_app_stub();
+        app.player_tab.set_items(make_items(2), 0);
+        let mut model = Model::new(app);
+        model.sync_queue();
+
+        let update = model.prepare_queue_projection();
+
+        assert!(update.slots.is_none());
+    }
+
+    #[test]
+    fn owner_purge_revision_change_rebuilds_same_sized_rows() {
+        let mut state = crate::app::tests::emby_unified_state(&make_items(2), 0);
+        state.active_slot = None;
+        state.revision = 7;
+        let mut app = make_app_stub();
+        app.player_tab = crate::app::PlayerTab::from_unified_state(&state);
+        let mut model = Model::new(app);
+        model.sync_queue();
+
+        let mut replacement_items = make_items(2);
+        replacement_items[0].id = "replacement".into();
+        let mut replacement = crate::app::tests::emby_unified_state(&replacement_items, 0);
+        replacement.active_slot = None;
+        replacement.revision = 7;
+        model.app.player_tab.set_unified_state(&replacement, 0);
+        let update = model.prepare_queue_projection();
+
+        assert!(update.slots.is_some());
+    }
+
+    #[test]
     fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
         // Task 3.4 (D9): the queue projection — not the painter — issues the
         // visual slot's fetch. One fetch per new now-playing key, and a
@@ -626,13 +682,16 @@ mod tests {
             .collect()
     }
 
-    fn queue_cursor(model: &Model) -> usize {
+    fn queue_component(model: &Model) -> &QueueComponent {
         model
             .application
             .get_component(&ComponentId::Queue)
-            .and_then(|c| c.as_any().downcast_ref::<QueueComponent>())
-            .map(QueueComponent::test_cursor)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
             .expect("Queue component mounted")
+    }
+
+    fn queue_cursor(model: &Model) -> usize {
+        queue_component(model).test_cursor()
     }
 
     fn press_down(model: &mut Model) {

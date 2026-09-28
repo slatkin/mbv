@@ -73,7 +73,9 @@ impl App {
             );
         }
 
-        self.player_tab = bootstrap.player_tab;
+        let mut player_tab = bootstrap.player_tab;
+        player_tab.adopt_revision_mint(self.player_tab.revision_mint());
+        self.player_tab = player_tab;
         self.reset_local_daemon_queue_view();
         self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;
