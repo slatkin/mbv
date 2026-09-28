@@ -4,7 +4,6 @@ use crate::app::tests::*;
 use crossterm::event::KeyModifiers;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
-use rstest::rstest;
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces
 /// it, so the gate tests exercise the same executable shape the tree path
@@ -73,24 +72,6 @@ fn dirty_saved_playlist_app() -> App {
     };
     app.queue_dirty = true;
     app
-}
-
-fn save_deferral_case_app(answer_save_prompt: bool) -> (App, u64) {
-    let mut app = dirty_saved_playlist_app();
-    app.replace_queue_or_prompt(play_action(&["track-1"]));
-    let completing_mutation_id = if answer_save_prompt {
-        mount_confirmation(&mut app);
-        app.apply_confirm_action(
-            ConfirmAction::DiscardOrSaveDirtyPlaylist,
-            key(KeyCode::Char('s')),
-        );
-        99
-    } else {
-        app.pending_overlay = None;
-        app.save_playlist_to_emby()
-            .expect("unanswered prompt's later save is enqueued")
-    };
-    (app, completing_mutation_id)
 }
 
 fn successful_save_completion(app: &mut App, mutation_id: u64) {
@@ -455,14 +436,33 @@ fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
     assert_eq!(queue_ids(&app), ["movie-1"]);
 }
 
-#[rstest]
-#[case::prompt_dismissed_without_answer(false)]
-#[case::different_save_for_same_playlist(true)]
-fn save_deferral_ignores_a_save_it_is_not_bound_to(#[case] answer_save_prompt: bool) {
+#[test]
+fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let (mut app, completing_mutation_id) = save_deferral_case_app(answer_save_prompt);
+    let mut app = dirty_saved_playlist_app();
+    app.replace_queue_or_prompt(play_action(&["track-1"]));
+    app.pending_overlay = None;
+    let later_save_id = app
+        .save_playlist_to_emby()
+        .expect("unanswered prompt's later save is enqueued");
 
-    successful_save_completion(&mut app, completing_mutation_id);
+    successful_save_completion(&mut app, later_save_id);
+
+    assert_eq!(queue_ids(&app), ["existing"]);
+}
+
+#[test]
+fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = dirty_saved_playlist_app();
+    app.replace_queue_or_prompt(play_action(&["track-1"]));
+    mount_confirmation(&mut app);
+    app.apply_confirm_action(
+        ConfirmAction::DiscardOrSaveDirtyPlaylist,
+        key(KeyCode::Char('s')),
+    );
+
+    successful_save_completion(&mut app, 99);
 
     assert_eq!(queue_ids(&app), ["existing"]);
 }

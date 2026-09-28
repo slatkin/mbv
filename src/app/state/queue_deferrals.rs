@@ -36,17 +36,10 @@ impl QueueDeferrals {
     pub(in crate::app) fn take_on_discard(&mut self) -> Option<PendingQueueAction> {
         match self.save.take() {
             Some(SaveDeferral::AwaitingAnswer(action)) => Some(action),
-            Some(SaveDeferral::AwaitingSave {
-                mutation_id,
-                action,
-            }) => {
-                self.save = Some(SaveDeferral::AwaitingSave {
-                    mutation_id,
-                    action,
-                });
+            other => {
+                self.save = other;
                 None
             }
-            None => None,
         }
     }
 
@@ -70,14 +63,15 @@ impl QueueDeferrals {
         &mut self,
         mutation_id: u64,
     ) -> Option<PendingQueueAction> {
-        if matches!(self.save, Some(SaveDeferral::AwaitingSave { mutation_id: bound, .. }) if bound == mutation_id)
-        {
-            match self.save.take() {
-                Some(SaveDeferral::AwaitingSave { action, .. }) => Some(action),
-                _ => None,
+        match self.save.take() {
+            Some(SaveDeferral::AwaitingSave {
+                mutation_id: bound,
+                action,
+            }) if bound == mutation_id => Some(action),
+            other => {
+                self.save = other;
+                None
             }
-        } else {
-            None
         }
     }
 
