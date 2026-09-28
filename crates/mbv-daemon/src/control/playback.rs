@@ -21,7 +21,7 @@ pub(super) fn spawn_item_lookup<F>(
     item_ids: Vec<String>,
     to_event: F,
 ) where
-    F: FnOnce(Result<Vec<EmbyItem>, String>) -> Option<DaemonEvent> + Send + 'static,
+    F: FnOnce(Result<Vec<EmbyItem>, crate::DaemonLibError>) -> Option<DaemonEvent> + Send + 'static,
 {
     let tx = tx.clone();
     let lookup_client = client.lock().unwrap().clone();
@@ -29,7 +29,7 @@ pub(super) fn spawn_item_lookup<F>(
         if let Some(event) = to_event(
             lookup_client
                 .get_items_by_ids(&item_ids)
-                .map_err(|error| error.to_string()),
+                .map_err(crate::DaemonLibError::from),
         ) {
             let _ = tx.send(event);
         }

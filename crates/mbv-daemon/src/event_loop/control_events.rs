@@ -113,7 +113,7 @@ impl DaemonLoop {
         client_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
-        fetched: Result<Vec<EmbyItem>, String>,
+        fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     ) -> EventOutcome {
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             self.owner.intents.invalidate_connection(client_id);

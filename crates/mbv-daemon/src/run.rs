@@ -544,7 +544,7 @@ pub fn run_with_options(
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
         store: Box::new(|state| {
-            mbv_config::save_stay_alive_queue_state(state).map_err(|error| error.to_string())
+            mbv_config::save_stay_alive_queue_state(state).map_err(crate::DaemonLibError::from)
         }),
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)

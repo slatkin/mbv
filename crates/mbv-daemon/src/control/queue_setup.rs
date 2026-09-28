@@ -208,7 +208,7 @@ fn prepare_replacement_slots(
     slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
     has_emby: bool,
-) -> Result<(Vec<(QueueSlotId, QueueItem)>, usize), String> {
+) -> Result<(Vec<(QueueSlotId, QueueItem)>, usize), crate::DaemonLibError> {
     let submitted_slots: Vec<(QueueSlotId, QueueItem)> = if slots.is_empty() {
         items
             .into_iter()
@@ -240,7 +240,7 @@ fn prepare_replacement_slots(
         supports_abs_queue,
         supports_abs_book_queue,
     ) {
-        return Err(reason);
+        return Err(crate::DaemonLibError::queue_setup(reason));
     }
     let (slots, next_cursor) = admit_queue_slots(
         submitted_slots,
@@ -250,11 +250,13 @@ fn prepare_replacement_slots(
         ctx.has_audiobookshelf,
     );
     if slots.is_empty() {
-        return Err("Playback owner rejected the queue replacement".to_string());
+        return Err(crate::DaemonLibError::queue_setup(
+            "Playback owner rejected the queue replacement",
+        ));
     }
     let admitted_items: Vec<QueueItem> = slots.iter().map(|(_, item)| item.clone()).collect();
     if let Some(reason) = audio_only_rejection(ctx.audio_only, &admitted_items) {
-        return Err(reason);
+        return Err(crate::DaemonLibError::queue_setup(reason));
     }
     Ok((slots, next_cursor))
 }
@@ -274,7 +276,7 @@ pub(super) fn handle_queue_replace(
         match prepare_replacement_slots(ctx, items, slots, start_idx, has_emby) {
             Ok(admitted) => admitted,
             Err(reason) => {
-                reject_command(&ctx.rejection_context(lineage), &reason);
+                reject_command(&ctx.rejection_context(lineage), &reason.to_string());
                 return;
             }
         };
