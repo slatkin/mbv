@@ -88,15 +88,3 @@ impl From<serde_json::Error> for RemotePlayerError {
         Self::protocol(error.to_string())
     }
 }
-
-impl From<&str> for RemotePlayerError {
-    fn from(message: &str) -> Self {
-        Self::connection(message)
-    }
-}
-
-impl From<String> for RemotePlayerError {
-    fn from(message: String) -> Self {
-        Self::connection(message)
-    }
-}

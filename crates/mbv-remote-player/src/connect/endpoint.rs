@@ -99,19 +99,25 @@ impl DaemonEndpoint {
             ));
         }
 
-        let (host, port) = value
-            .rsplit_once(':')
-            .ok_or_else(|| format!("daemon endpoint tcp:// requires host:port: {value}"))?;
+        let (host, port) = value.rsplit_once(':').ok_or_else(|| {
+            RemotePlayerError::endpoint(format!(
+                "daemon endpoint tcp:// requires host:port: {value}"
+            ))
+        })?;
 
-        let port: u16 = port
-            .parse()
-            .map_err(|e| format!("daemon endpoint tcp:// requires a numeric port: {value}: {e}"))?;
+        let port: u16 = port.parse().map_err(|e| {
+            RemotePlayerError::endpoint(format!(
+                "daemon endpoint tcp:// requires a numeric port: {value}: {e}"
+            ))
+        })?;
 
         let ip = if host.eq_ignore_ascii_case("localhost") {
             Ipv4Addr::LOCALHOST
         } else {
             host.parse().map_err(|e| {
-                format!("daemon endpoint tcp:// requires an IPv4 host: {value}: {e}")
+                RemotePlayerError::endpoint(format!(
+                    "daemon endpoint tcp:// requires an IPv4 host: {value}: {e}"
+                ))
             })?
         };
 
