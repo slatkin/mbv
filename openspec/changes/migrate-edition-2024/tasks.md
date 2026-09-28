@@ -20,5 +20,5 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Run `cargo nextest run --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `make check-code-file-lines`; all pass (split any file the reformat pushed over 800 lines).
-- [ ] 4.2 Confirm `.pi-lens.json` still disables `rust-2024-let-chain-candidate` (clippy owns this check now), then close #840 in the PR description.
+- [x] 4.1 Run `cargo nextest run --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `make check-code-file-lines`; all pass (split any file the reformat pushed over 800 lines).
+- [x] 4.2 Confirm `.pi-lens.json` still disables `rust-2024-let-chain-candidate` (clippy owns this check now), then close #840 in the PR description.
