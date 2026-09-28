@@ -21,6 +21,7 @@ session-log.md
 .handoffs/
 .mcp.json
 .shepherd
+.handoffs
 
 # Local pi-lens tooling probe output
 .pi-lens-probe-home/
