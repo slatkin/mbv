@@ -4,16 +4,18 @@ use mbv_queue::FeedKind;
 use mbv_text::html::decode_entities;
 
 mod date;
+mod error;
 pub use self::date::parse_pub_date_secs;
+pub use self::error::FeedError;
 
-fn fetch_feed_body(url: &str) -> Result<String, String> {
+fn fetch_feed_body(url: &str) -> Result<String, FeedError> {
     tls_agent(None)
         .get(url)
         .call()
-        .map_err(|e| format!("HTTP request failed: {e}"))?
+        .map_err(FeedError::http)?
         .body_mut()
         .read_to_string()
-        .map_err(|e| format!("Failed to read response body: {e}"))
+        .map_err(|e| FeedError::read_body("Failed to read response body", e))
 }
 
 /// ureq's TLS provider defaults to rustls and is never picked up
@@ -23,7 +25,7 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
     mbv_net::native_tls_agent(None, global_timeout)
 }
-pub fn normalize_feed_url(input: &str) -> Result<String, String> {
+pub fn normalize_feed_url(input: &str) -> Result<String, FeedError> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {
         return Ok(input.to_string());
     };
@@ -57,18 +59,17 @@ pub fn normalize_feed_url(input: &str) -> Result<String, String> {
         }
         [handle] if handle.starts_with('@') && handle.len() > 1 => {}
         ["c" | "user", name] if !name.is_empty() => {}
-        _ => return Err("URL is not a resolvable YouTube channel URL".to_string()),
+        _ => return Err(FeedError::invalid_youtube_url()),
     }
 
     let body = tls_agent(None)
         .get(input)
         .call()
-        .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?
+        .map_err(FeedError::youtube_resolve)?
         .body_mut()
         .read_to_string()
-        .map_err(|e| format!("Failed to read YouTube channel page: {e}"))?;
-    extract_rss_link(&body)
-        .ok_or_else(|| "YouTube channel page did not contain an RSS feed URL".to_string())
+        .map_err(|e| FeedError::read_body("Failed to read YouTube channel page", e))?;
+    extract_rss_link(&body).ok_or_else(FeedError::missing_youtube_feed)
 }
 
 fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
@@ -106,7 +107,7 @@ fn extract_rss_link(body: &str) -> Option<String> {
     })
 }
 
-pub fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
+pub fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, FeedError> {
     let body = fetch_feed_body(url)?;
 
     let mut items = Vec::new();
@@ -152,7 +153,7 @@ pub fn fetch_and_parse_entries(
     url: &str,
     subscription_kind: FeedKind,
     feed_id: &str,
-) -> Result<Vec<FeedEntry>, String> {
+) -> Result<Vec<FeedEntry>, FeedError> {
     let body = fetch_feed_body(url)?;
     let mut entries = parse_rss_entries(&body, subscription_kind, feed_id);
     if entries.is_empty() {

@@ -171,7 +171,7 @@ fn session_requests_are_bearer_post_json_and_bounded() {
     );
     assert!(!format!("{error:?}").contains("do-not-leak"));
 
-    // A stalled server: the hard bound wins and classifies as connectivity.
+    // A stalled server: the hard bound has its own unavailable classification.
     let http = MockHttp::new();
     let agent = http.agent();
     http.stall(Duration::from_secs(3600));
@@ -180,7 +180,7 @@ fn session_requests_are_bearer_post_json_and_bounded() {
         .with_test_agent(agent);
     let started = Instant::now();
     let error = session_error(&client, "secret", Duration::from_millis(20));
-    assert_eq!(error.class, AudiobookshelfFailureClass::Connectivity);
+    assert_eq!(error.class, AudiobookshelfFailureClass::Unavailable);
     assert!(started.elapsed() < Duration::from_millis(150));
 }
 
@@ -233,7 +233,7 @@ fn late_success_after_create_bound_is_closed_on_loopback() {
         .with_test_agent(agent);
 
     let error = session_error(&client, "secret", Duration::from_millis(5));
-    assert_eq!(error.class, AudiobookshelfFailureClass::Connectivity);
+    assert_eq!(error.class, AudiobookshelfFailureClass::Unavailable);
     // The cleanup close is sent by the abandoned worker once it observes the
     // bound was missed; poll for it rather than assuming it is already there.
     let deadline = Instant::now() + Duration::from_secs(1);

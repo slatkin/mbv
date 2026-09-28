@@ -29,25 +29,21 @@ impl EmbyClient {
         &self,
         path: &str,
         queries: &[(&str, &str)],
-    ) -> Result<Vec<EmbyItem>, String> {
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let mut req = self.get(path);
         for (k, v) in queries {
             req = req.query(k, v);
         }
-        let resp: Value = req
-            .call()
-            .map_err(|e| e.to_string())?
-            .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+        let resp: Value = req.call()?.body_mut().read_json()?;
         Ok(resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default())
     }
 
-    pub fn get_views(&self) -> Result<Vec<EmbyItem>, String> {
-        self.get_views_classified().map_err(|e| e.to_string())
+    pub fn get_views(&self) -> Result<Vec<EmbyItem>, crate::EmbyError> {
+        let views = self.get_views_classified()?;
+        Ok(views)
     }
 
     pub fn get_views_classified(&self) -> Result<Vec<EmbyItem>, crate::EmbyFailure> {
@@ -108,7 +104,7 @@ impl EmbyClient {
         limit: usize,
         sort_by: &str,
         sort_order: &str,
-    ) -> Result<(Vec<EmbyItem>, usize), String> {
+    ) -> Result<(Vec<EmbyItem>, usize), crate::EmbyError> {
         self.get_items_sorted_ranged(&SortedItemsParams {
             parent_id,
             item_types,
@@ -135,7 +131,7 @@ impl EmbyClient {
     pub fn get_items_sorted_ranged(
         &self,
         params: &SortedItemsParams<'_>,
-    ) -> Result<(Vec<EmbyItem>, usize), String> {
+    ) -> Result<(Vec<EmbyItem>, usize), crate::EmbyError> {
         let SortedItemsParams {
             parent_id,
             item_types,
@@ -172,15 +168,18 @@ impl EmbyClient {
         let call_started = std::time::Instant::now();
         let resp_result = req.call();
         let call_ms = call_started.elapsed().as_millis();
-        let mut resp = resp_result.map_err(|e| {
-            log::warn!(
-                target: "api",
-                "get_items_sorted: parent={parent_id} types={item_types:?} err after {call_ms}ms: {e}"
-            );
-            e.to_string()
-        })?;
+        let mut resp = match resp_result {
+            Ok(resp) => resp,
+            Err(error) => {
+                log::warn!(
+                    target: "api",
+                    "get_items_sorted: parent={parent_id} types={item_types:?} err after {call_ms}ms: {error}"
+                );
+                return Err(error.into());
+            }
+        };
         let parse_started = std::time::Instant::now();
-        let resp: Value = resp.body_mut().read_json().map_err(|e| e.to_string())?;
+        let resp: Value = resp.body_mut().read_json()?;
         let total =
             usize::try_from(resp["TotalRecordCount"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX);
         let items: Vec<EmbyItem> = resp["Items"]
@@ -196,7 +195,11 @@ impl EmbyClient {
         Ok((items, total))
     }
 
-    pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+    pub fn search_items(
+        &self,
+        term: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("SearchTerm",  term),
@@ -206,7 +209,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items/Resume", mbv_net::encode_path_segment(&self.user_id)), &[
             ("UserId",     &self.user_id),
@@ -217,7 +220,11 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_latest(
+        &self,
+        parent_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let resp: Value = self
             .get(&format!(
                 "/Users/{}/Items/Latest",
@@ -227,11 +234,9 @@ impl EmbyClient {
             .query("Limit", limit.to_string())
             .query("GroupItems", "true")
             .query("Fields", LATEST_FIELDS)
-            .call()
-            .map_err(|e| e.to_string())?
+            .call()?
             .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+            .read_json()?;
         Ok(resp
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -242,7 +247,7 @@ impl EmbyClient {
         &self,
         parent_id: &str,
         limit: usize,
-    ) -> Result<Vec<EmbyItem>, String> {
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let limit = limit.to_string();
         self.fetch_items(
             &format!(
@@ -265,7 +270,11 @@ impl EmbyClient {
     /// Fetches upcoming episodes for a library using Emby's library-scoped
     /// Upcoming feed. The route returns a flat episode list, so it uses the
     /// same fields as the library's Latest episode projection.
-    pub fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_upcoming(
+        &self,
+        parent_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let limit = limit.to_string();
         self.fetch_items(
             "/Shows/Upcoming",
@@ -277,7 +286,10 @@ impl EmbyClient {
         )
     }
 
-    pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_all_playable_recursive(
+        &self,
+        parent_id: &str,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
@@ -289,7 +301,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
@@ -300,7 +312,10 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_all_videos_recursive(
+        &self,
+        parent_id: &str,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video"),
@@ -322,7 +337,10 @@ impl EmbyClient {
     /// IDs from such a listing have no proven equivalence to these keys, so
     /// they are never valid here. Unsupported or rejected queries propagate
     /// as `Err` and the caller falls back to per-album aggregation.
-    pub fn get_artist_audio_tracks(&self, artist_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_artist_audio_tracks(
+        &self,
+        artist_id: &str,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ArtistIds",        artist_id),
             ("IncludeItemTypes", "Audio"),
@@ -333,41 +351,38 @@ impl EmbyClient {
 
     // ── Library actions ──────────────────────────────────────────────────────
 
-    pub fn mark_played(&self, item_id: &str) -> Result<(), String> {
+    pub fn mark_played(&self, item_id: &str) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Users/{}/PlayedItems/{}",
             mbv_net::encode_path_segment(&self.user_id),
             mbv_net::encode_path_segment(item_id)
         ))
-        .send_empty()
-        .map_err(|e| e.to_string())?;
+        .send_empty()?;
         Ok(())
     }
 
-    pub fn mark_unplayed(&self, item_id: &str) -> Result<(), String> {
+    pub fn mark_unplayed(&self, item_id: &str) -> Result<(), crate::EmbyError> {
         self.delete(&format!(
             "/Users/{}/PlayedItems/{}",
             mbv_net::encode_path_segment(&self.user_id),
             mbv_net::encode_path_segment(item_id)
         ))
-        .call()
-        .map_err(|e| e.to_string())?;
+        .call()?;
         Ok(())
     }
 
-    pub fn hide_from_resume(&self, item_id: &str) -> Result<(), String> {
+    pub fn hide_from_resume(&self, item_id: &str) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Users/{}/Items/{}/HideFromResume",
             mbv_net::encode_path_segment(&self.user_id),
             mbv_net::encode_path_segment(item_id)
         ))
         .query("Hide", "true")
-        .send_empty()
-        .map_err(|e| e.to_string())?;
+        .send_empty()?;
         Ok(())
     }
 
-    pub fn post_library_refresh(&self, library_id: &str) -> Result<(), String> {
+    pub fn post_library_refresh(&self, library_id: &str) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Items/{}/Refresh",
             mbv_net::encode_path_segment(library_id)
@@ -377,8 +392,7 @@ impl EmbyClient {
         .query("MetadataRefreshMode", "Default")
         .query("ReplaceAllImages", "false")
         .query("ReplaceAllMetadata", "false")
-        .send_empty()
-        .map_err(|e| e.to_string())?;
+        .send_empty()?;
         Ok(())
     }
 

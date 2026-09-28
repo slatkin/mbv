@@ -50,11 +50,13 @@ impl App {
             mbv_queue::ServiceKind::Audiobookshelf,
             revision,
         ) {
-            self.flash(error, ToastSeverity::Warning);
+            self.flash(error.to_string(), ToastSeverity::Warning);
         }
     }
 
-    pub(in crate::app) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
+    pub(in crate::app) fn clear_audiobookshelf_authentication(
+        &mut self,
+    ) -> Result<(), mbv_config::ConfigError> {
         let current_generation = self.audiobookshelf_runtime.generation();
         self.stop_audiobookshelf_socket();
         self.audiobookshelf_runtime
@@ -173,7 +175,9 @@ impl App {
 
     /// Helper that persists a filtered queue or clears the file when empty.
     /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
-    fn persist_filtered_queue_abs(state: Option<&QueueState>) -> Result<(), String> {
+    fn persist_filtered_queue_abs(
+        state: Option<&QueueState>,
+    ) -> Result<(), mbv_config::ConfigError> {
         match state {
             Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
             _ => mbv_config::clear_queue_state(),
@@ -292,7 +296,11 @@ impl App {
                 candidate.user,
                 candidate.api_key,
             ),
-            || Self::persist_filtered_queue_abs(filtered.as_ref()),
+            || {
+                Self::persist_filtered_queue_abs(filtered.as_ref()).map_err(|error| {
+                    mbv_audiobookshelf::AudiobookshelfError::persistence(error.to_string())
+                })
+            },
             || {
                 // Restore in-memory queues on failure.
                 self.player_tab

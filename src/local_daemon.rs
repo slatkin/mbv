@@ -87,8 +87,9 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
 pub fn spawn_detached(
     socket_path: &str,
     log_level: Option<mbv_core::applog::Level>,
-) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| format!("cannot locate binary: {e}"))?;
+) -> Result<(), mbv_remote_player::RemotePlayerError> {
+    let exe = std::env::current_exe()
+        .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?;
     let mut cmd = Command::new(exe);
     cmd.args(local_daemon_args(log_level));
     if let Some(display_env) = session_display_env() {
@@ -112,7 +113,7 @@ pub fn spawn_detached(
     };
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("failed to start local daemon: {e}"))?;
+        .map_err(|e| io::Error::new(e.kind(), format!("failed to start local daemon: {e}")))?;
     let mut stderr = child.stderr.take().expect("piped stderr");
 
     let deadline = Instant::now() + READY_TIMEOUT;
@@ -124,14 +125,15 @@ pub fn spawn_detached(
             let mut captured = String::new();
             let _ = stderr.read_to_string(&mut captured);
             let captured = captured.trim();
-            return Err(if captured.is_empty() {
+            return Err(io::Error::other(if captured.is_empty() {
                 format!("local daemon exited before starting (status {status})")
             } else {
                 captured.to_string()
-            });
+            })
+            .into());
         }
         if Instant::now() >= deadline {
-            return Err("local daemon did not become ready in time".to_string());
+            return Err(io::Error::other("local daemon did not become ready in time").into());
         }
         std::thread::sleep(READY_POLL_INTERVAL);
     }

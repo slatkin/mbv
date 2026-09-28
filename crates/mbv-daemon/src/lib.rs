@@ -2,7 +2,9 @@ pub(crate) mod ctrl;
 pub use ctrl::*;
 
 mod context;
+mod error;
 pub use context::*;
+pub use error::DaemonLibError;
 mod core;
 pub use core::*;
 mod core_ctrl_spawn;

@@ -676,7 +676,10 @@ impl Model {
         });
     }
 
-    pub(in crate::app) fn finish_route_config_save(&mut self, result: Result<(), String>) -> bool {
+    pub(in crate::app) fn finish_route_config_save(
+        &mut self,
+        result: Result<(), mbv_config::ConfigError>,
+    ) -> bool {
         match result {
             Ok(()) => {
                 log::info!(target: "library_route", "config save succeeded");

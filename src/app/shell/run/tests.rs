@@ -243,9 +243,9 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         .expect("secret is written under the test state dir");
     app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
-        Err(AudiobookshelfError {
-            class: AudiobookshelfFailureClass::AuthenticationRejected,
-        }),
+        Err(AudiobookshelfError::from_class(
+            AudiobookshelfFailureClass::AuthenticationRejected,
+        )),
     ));
 
     assert!(

@@ -151,7 +151,7 @@ impl App {
                 let items = match fetch(&parent_id) {
                     Ok(items) => items,
                     Err(error) => {
-                        let _ = tx.send(LibEvent::Error(error));
+                        let _ = tx.send(LibEvent::Error(error.to_string()));
                         return;
                     }
                 };
@@ -246,7 +246,7 @@ impl App {
                     }));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });

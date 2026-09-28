@@ -311,7 +311,11 @@ impl AudiobookshelfClient {
         T: Send + 'static,
     {
         let client = self.clone();
-        mbv_net::bounded::run_with_hard_bound(move || f(client), bound)
+        mbv_net::bounded::run_with_hard_bound_or_error(
+            move || f(client),
+            || AudiobookshelfError::from_class(super::AudiobookshelfFailureClass::Unavailable),
+            bound,
+        )
     }
 
     pub fn libraries_bounded(

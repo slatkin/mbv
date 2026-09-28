@@ -1,19 +1,26 @@
-use super::{Config, config_path};
+use super::{Config, ConfigError, config_path};
 
-fn read_config_doc(path: &std::path::Path) -> Result<toml::Value, String> {
+fn read_config_doc(path: &std::path::Path) -> Result<toml::Value, ConfigError> {
     match std::fs::read_to_string(path) {
-        Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display())),
+        Ok(text) => toml::from_str(&text)
+            .map_err(|e| ConfigError::parse(format!("parse {}: {e}", path.display()))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             Ok(toml::Value::Table(toml::map::Map::new()))
         }
-        Err(e) => Err(format!("read {}: {e}", path.display())),
+        Err(e) => Err(ConfigError::io(format!("read {}: {e}", path.display()))),
     }
 }
 
-pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
+pub(super) fn save_config_settings_at(
+    cfg: &Config,
+    path: &std::path::Path,
+) -> Result<(), ConfigError> {
     let mut doc = read_config_doc(path)?;
     let Some(table) = doc.as_table_mut() else {
-        return Err(format!("update {}: root is not a table", path.display()));
+        return Err(ConfigError::save(format!(
+            "update {}: root is not a table",
+            path.display()
+        )));
     };
 
     write_server_section(table, cfg);
@@ -32,7 +39,8 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
     write_playback_section(table, cfg);
     write_keys_section(table, cfg);
 
-    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let s = toml::to_string(&doc)
+        .map_err(|e| ConfigError::save(format!("serialize {}: {e}", path.display())))?;
     write_config_text_at(path, &s)
 }
 
@@ -412,18 +420,25 @@ fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     }
 }
 
-pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), String> {
+pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), ConfigError> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("create directory {}: {e}", parent.display()))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            ConfigError::save(format!("create directory {}: {e}", parent.display()))
+        })?;
     }
     let tmp = path.with_extension("toml.tmp");
-    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    std::fs::write(&tmp, text)
+        .map_err(|e| ConfigError::save(format!("write {}: {e}", tmp.display())))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        ConfigError::save(format!(
+            "rename {} to {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
-pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
+pub fn save_config_settings(cfg: &Config) -> Result<(), ConfigError> {
     save_config_settings_at(cfg, &config_path())
 }
 
@@ -442,7 +457,7 @@ pub enum ConfigSection {
 
 /// Rewrite only `section` from `cfg`, leaving every other section in the
 /// file exactly as another client last wrote it.
-pub fn save_config_section(cfg: &Config, section: ConfigSection) -> Result<(), String> {
+pub fn save_config_section(cfg: &Config, section: ConfigSection) -> Result<(), ConfigError> {
     save_config_section_at(cfg, &config_path(), section)
 }
 
@@ -450,10 +465,13 @@ pub(super) fn save_config_section_at(
     cfg: &Config,
     path: &std::path::Path,
     section: ConfigSection,
-) -> Result<(), String> {
+) -> Result<(), ConfigError> {
     let mut doc = read_config_doc(path)?;
     let Some(table) = doc.as_table_mut() else {
-        return Err(format!("update {}: root is not a table", path.display()));
+        return Err(ConfigError::save(format!(
+            "update {}: root is not a table",
+            path.display()
+        )));
     };
     match section {
         ConfigSection::Playback => write_playback_section(table, cfg),
@@ -461,6 +479,7 @@ pub(super) fn save_config_section_at(
         ConfigSection::Feeds => write_feeds_section(table, cfg),
         ConfigSection::LibraryRoutes => write_library_routes_section(table, cfg),
     }
-    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let s = toml::to_string(&doc)
+        .map_err(|e| ConfigError::save(format!("serialize {}: {e}", path.display())))?;
     write_config_text_at(path, &s)
 }

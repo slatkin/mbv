@@ -543,7 +543,7 @@ pub fn run_with_options(
         audio_only,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
-        store: Box::new(mbv_config::save_stay_alive_queue_state),
+        store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

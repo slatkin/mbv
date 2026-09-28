@@ -66,26 +66,29 @@ fn run_remote_app(
     run_tui(app);
 }
 
-fn parse_log_level_arg(args: &[String]) -> Result<Option<applog::Level>, String> {
+fn parse_log_level_arg(
+    args: &[String],
+) -> Result<Option<applog::Level>, mbv_ui_model::UiModelError> {
     let mut level = None;
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--log-level" {
             i += 1;
             let Some(value) = args.get(i) else {
-                return Err("mbv: --log-level requires error, warn, info, or debug".into());
+                return Err(mbv_ui_model::UiModelError::operation(
+                    "mbv: --log-level requires error, warn, info, or debug",
+                ));
             };
-            level = Some(
-                applog::Level::parse(value)
-                    .ok_or_else(|| format!("mbv: invalid log level {value:?}"))?,
-            );
+            level = Some(applog::Level::parse(value).ok_or_else(|| {
+                mbv_ui_model::UiModelError::operation(format!("mbv: invalid log level {value:?}"))
+            })?);
         }
         i += 1;
     }
     Ok(level)
 }
 
-fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
+fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, mbv_ui_model::UiModelError> {
     let mut endpoint: Option<String> = None;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -93,7 +96,9 @@ fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
             endpoint = Some(value.to_string());
         } else if arg == "--connect-daemon" {
             let Some(value) = iter.next() else {
-                return Err("mbv: --connect-daemon requires an endpoint".to_string());
+                return Err(mbv_ui_model::UiModelError::operation(
+                    "mbv: --connect-daemon requires an endpoint",
+                ));
             };
             endpoint = Some(value.clone());
         }

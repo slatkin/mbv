@@ -61,7 +61,7 @@ impl WatchedFilter {
 pub struct FeedTabRefreshResult {
     pub feed_id: String,
     pub subscription_index: usize,
-    pub entries: Result<Vec<FeedEntry>, String>,
+    pub entries: Result<Vec<FeedEntry>, crate::UiModelError>,
 }
 
 /// Mutable state held by the Feeds tab.

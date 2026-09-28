@@ -51,7 +51,7 @@ impl EventOutcome {
 
 /// Injected owner-queue persistence hook.
 pub(crate) type OwnerQueueStore =
-    Box<dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), String>>;
+    Box<dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), crate::DaemonLibError>>;
 
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).
@@ -239,7 +239,7 @@ impl DaemonLoop {
 
     /// Persists the owner queue through the injected store, returning the
     /// store's error so the caller can log it in context.
-    pub(super) fn persist_owner_queue(&mut self) -> Result<(), String> {
+    pub(super) fn persist_owner_queue(&mut self) -> Result<(), crate::DaemonLibError> {
         persist_stay_alive_owner_queue(
             &self.owner,
             &self.player,

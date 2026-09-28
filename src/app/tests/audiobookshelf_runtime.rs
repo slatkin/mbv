@@ -55,9 +55,9 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     app.apply_audiobookshelf_completion(completion(
         generation,
         crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Startup,
-        Err(mbv_audiobookshelf::AudiobookshelfError {
-            class: mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
-        }),
+        Err(mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
+        )),
     ));
     assert_eq!(
         app.audiobookshelf_runtime.state,
@@ -72,9 +72,9 @@ fn rejected_key_clears_only_secret_and_unavailable_retains_it() {
     app.apply_audiobookshelf_completion(completion(
         generation,
         crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Startup,
-        Err(mbv_audiobookshelf::AudiobookshelfError {
-            class: mbv_audiobookshelf::AudiobookshelfFailureClass::Connectivity,
-        }),
+        Err(mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::Connectivity,
+        )),
     ));
     assert_eq!(app.audiobookshelf_runtime.state, ServiceState::Unavailable);
     assert_eq!(

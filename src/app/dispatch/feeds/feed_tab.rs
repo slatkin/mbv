@@ -131,7 +131,7 @@ impl App {
                 let _ = tx.send(FeedTabRefreshResult {
                     feed_id,
                     subscription_index: idx,
-                    entries: result,
+                    entries: result.map_err(mbv_ui_model::UiModelError::operation_source),
                 });
             });
         }

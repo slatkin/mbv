@@ -18,18 +18,16 @@ impl App {
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
-        self.transition_emby_failure(
-            Some(completion.generation),
-            completion.result,
-            mbv_config::clear_service_secret_result,
-        )
+        self.transition_emby_failure(Some(completion.generation), completion.result, |kind| {
+            mbv_config::clear_service_secret_result(kind)
+        })
     }
 
     #[cfg(test)]
     pub(in crate::app) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(Some(completion.generation), completion.result, delete)
     }
@@ -41,7 +39,7 @@ impl App {
             crate::app::dispatch::session::service_startup::Startup,
             mbv_emby::EmbyFailure,
         >,
-        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) -> Option<HomeContent> {
         use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
@@ -132,7 +130,7 @@ impl App {
     pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
         &mut self,
         error: mbv_emby::EmbyFailure,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) {
         self.transition_emby_failure(None, Err(error), delete);
     }
@@ -218,7 +216,7 @@ impl App {
                     self.emby_runtime.state = completion.previous_state;
                     if let Some(form) = self.setup.emby_setup_form.as_mut() {
                         form.busy = false;
-                        form.error = error;
+                        form.error = error.to_string();
                         form.fields[2].clear();
                     }
                     return None;
@@ -271,7 +269,7 @@ impl App {
                 self.emby_runtime.state = completion.previous_state;
                 if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;
-                    form.error = error;
+                    form.error = error.to_string();
                     form.fields[2].clear();
                 }
                 None

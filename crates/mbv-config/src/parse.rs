@@ -1,19 +1,20 @@
 use super::{
-    AudiobookshelfSetup, Config, DEFAULT_VIDEO_CACHE_BACK_MB, DEFAULT_VIDEO_CACHE_FORWARD_MB,
-    EmbySetup, FeedKind, FeedSubscription, config_path, default_daemon_server_tcp_listen,
-    is_valid_audio_device,
+    AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
+    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, config_path,
+    default_daemon_server_tcp_listen, is_valid_audio_device,
 };
 
-pub fn load_config() -> Result<Config, String> {
+pub fn load_config() -> Result<Config, ConfigError> {
     let path = config_path();
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(Config::default());
     };
-    parse_config(&text).map_err(|e| format!("Config parse error in {}: {e}", path.display()))
+    parse_config(&text)
+        .map_err(|e| ConfigError::parse(format!("Config parse error in {}: {e}", path.display())))
 }
 
-pub fn parse_config(text: &str) -> Result<Config, String> {
-    let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
+pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
+    let doc: toml::Value = toml::from_str(text)?;
 
     // All non-Emby sections are parsed unconditionally, even when
     // [server] is absent (feed-only / service-independent startup).
@@ -39,7 +40,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         None => mbv_keybinds::Keybinds::default(),
         Some(keys) => {
             let raw = parse_raw_keybinds(keys)?;
-            mbv_keybinds::load(&raw).map_err(|e| e.to_string())?
+            mbv_keybinds::load(&raw)?
         }
     };
 
@@ -113,7 +114,7 @@ struct MpvSettings {
     autoload: bool,
 }
 
-fn parse_mpv_section(misc: Option<&toml::Value>) -> Result<MpvSettings, String> {
+fn parse_mpv_section(misc: Option<&toml::Value>) -> Result<MpvSettings, ConfigError> {
     Ok(MpvSettings {
         show_audio_window: mpv_bool(misc, "show_audio_window"),
         use_mpv_config: mpv_bool(misc, "use_mpv_config"),
@@ -174,14 +175,14 @@ fn mpv_audio_pipe_bitdepth(misc: Option<&toml::Value>) -> u8 {
         })
 }
 
-fn mpv_audio_pipe_playout_delay(misc: Option<&toml::Value>) -> Result<Option<u64>, String> {
+fn mpv_audio_pipe_playout_delay(misc: Option<&toml::Value>) -> Result<Option<u64>, ConfigError> {
     match misc
         .and_then(|m| m.get("audio_pipe_playout_delay_ms"))
         .and_then(toml::Value::as_integer)
     {
-        Some(value) if value < 0 => {
-            Err("mpv.audio_pipe_playout_delay_ms must be nonnegative".to_string())
-        }
+        Some(value) if value < 0 => Err(ConfigError::parse(
+            "mpv.audio_pipe_playout_delay_ms must be nonnegative",
+        )),
         Some(value) => Ok(Some(
             u64::try_from(value).expect("negative values were rejected"),
         )),
@@ -189,14 +190,14 @@ fn mpv_audio_pipe_playout_delay(misc: Option<&toml::Value>) -> Result<Option<u64
     }
 }
 
-fn mpv_audio_device(misc: Option<&toml::Value>) -> Result<String, String> {
+fn mpv_audio_device(misc: Option<&toml::Value>) -> Result<String, ConfigError> {
     match misc.and_then(|m| m.get("audio_device")) {
         None => Ok("alsa".to_string()),
         Some(value) => match value.as_str() {
             Some(value) if is_valid_audio_device(value) => Ok(value.to_string()),
-            _ => Err(format!(
+            _ => Err(ConfigError::parse(format!(
                 "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {value:?}"
-            )),
+            ))),
         },
     }
 }
@@ -475,10 +476,12 @@ fn parse_prefix_chord<'a>(
     chord: &'a toml::Value,
     name: &str,
     action_id: &str,
-) -> Result<&'a str, String> {
-    chord
-        .as_str()
-        .ok_or_else(|| format!("keys.{name}.prefix.{action_id} must be a string chord"))
+) -> Result<&'a str, ConfigError> {
+    chord.as_str().ok_or_else(|| {
+        ConfigError::parse(format!(
+            "keys.{name}.prefix.{action_id} must be a string chord"
+        ))
+    })
 }
 
 /// Parse the `[keys]` table into the raw section-outer shape (design D3):
@@ -486,39 +489,39 @@ fn parse_prefix_chord<'a>(
 /// string keys are router-scope overrides and whose `prefix` sub-table
 /// holds prefix-namespace assignments. Shape errors are reported here;
 /// semantic validation is the registry's (`keybinds::load`).
-fn parse_raw_keybinds(keys: &toml::Value) -> Result<mbv_keybinds::RawKeybinds, String> {
+fn parse_raw_keybinds(keys: &toml::Value) -> Result<mbv_keybinds::RawKeybinds, ConfigError> {
     use mbv_keybinds::{RawKeybinds, RawSection};
 
     let table = keys
         .as_table()
-        .ok_or_else(|| "keys must be a table".to_string())?;
+        .ok_or_else(|| ConfigError::parse("keys must be a table"))?;
     let mut raw = RawKeybinds::default();
     for (name, entry) in table {
         if name == "prefix" {
             let chord = entry
                 .as_str()
-                .ok_or_else(|| "keys.prefix must be a string chord".to_string())?;
+                .ok_or_else(|| ConfigError::parse("keys.prefix must be a string chord"))?;
             raw.prefix = Some(chord.to_string());
             continue;
         }
         let section_table = entry
             .as_table()
-            .ok_or_else(|| format!("keys.{name} must be a table"))?;
+            .ok_or_else(|| ConfigError::parse(format!("keys.{name} must be a table")))?;
         let mut section = RawSection::default();
         for (key, value) in section_table {
             if key == "prefix" {
-                let prefix_table = value
-                    .as_table()
-                    .ok_or_else(|| format!("keys.{name}.prefix must be a table"))?;
+                let prefix_table = value.as_table().ok_or_else(|| {
+                    ConfigError::parse(format!("keys.{name}.prefix must be a table"))
+                })?;
                 for (action_id, chord) in prefix_table {
                     let chord = parse_prefix_chord(chord, name, action_id)?;
                     section.prefix.push((action_id.clone(), chord.to_string()));
                 }
                 continue;
             }
-            let chord = value
-                .as_str()
-                .ok_or_else(|| format!("keys.{name}.{key} must be a string chord"))?;
+            let chord = value.as_str().ok_or_else(|| {
+                ConfigError::parse(format!("keys.{name}.{key} must be a string chord"))
+            })?;
             section.router.push((key.clone(), chord.to_string()));
         }
         raw.sections.push((name.clone(), section));

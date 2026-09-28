@@ -71,17 +71,15 @@ pub(in crate::app) struct AudiobookshelfCatalogReceiver {
 fn audiobookshelf_client(
     config: &crate::config::Config,
 ) -> Result<(AudiobookshelfClient, String), mbv_audiobookshelf::AudiobookshelfError> {
-    let setup =
-        config
-            .audiobookshelf_setup
-            .as_ref()
-            .ok_or(mbv_audiobookshelf::AudiobookshelfError {
-                class: mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol,
-            })?;
+    let setup = config.audiobookshelf_setup.as_ref().ok_or(
+        mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol,
+        ),
+    )?;
     let key = load_service_secret(ServiceKind::Audiobookshelf).ok_or(
-        mbv_audiobookshelf::AudiobookshelfError {
-            class: mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-        },
+        mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable,
+        ),
     )?;
     let client = AudiobookshelfClient::new(&setup.server_url)?;
     Ok((client, key))
@@ -260,7 +258,7 @@ pub(in crate::app) fn audiobookshelf_initial_state(
 }
 
 pub(in crate::app) fn classify_audiobookshelf_failure(
-    error: mbv_audiobookshelf::AudiobookshelfError,
+    error: &mbv_audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
         mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
@@ -284,7 +282,7 @@ pub(in crate::app) struct Startup {
 pub(in crate::app) struct SetupCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) previous_state: ServiceState,
-    pub(in crate::app) result: Result<Startup, String>,
+    pub(in crate::app) result: Result<Startup, mbv_emby::EmbyError>,
 }
 
 pub(in crate::app) fn start_setup(
@@ -308,9 +306,8 @@ pub(in crate::app) fn start_setup(
             let setup = EmbySetup::new(&exchange.server_url, &exchange.user_id);
             let mut client = EmbyClient::new(config);
             client.apply_credential_exchange(&exchange);
-            let bootstrap = client
-                .load_startup_data_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND)
-                .map_err(|error| error.to_string())?;
+            let bootstrap =
+                client.load_startup_data_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND)?;
             Ok(Startup {
                 client,
                 bootstrap,

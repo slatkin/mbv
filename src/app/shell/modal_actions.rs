@@ -51,7 +51,7 @@ impl Model {
         match intent {
             DaemonLostIntent::RestartWithTray | DaemonLostIntent::RestartWithoutTray => {
                 if let Err(error) = self.app.restart_local_daemon() {
-                    self.set_daemon_lost_restart_error(error);
+                    self.set_daemon_lost_restart_error(error.to_string());
                 }
                 false
             }

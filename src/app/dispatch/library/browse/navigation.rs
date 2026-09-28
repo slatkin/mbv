@@ -26,7 +26,7 @@ pub(in crate::app) fn resolve_reveal_target(
     item_type: &str,
     item: &EmbyItem,
     ancestors: Option<&[EmbyItem]>,
-) -> Result<RevealTarget, String> {
+) -> Result<RevealTarget, mbv_emby::EmbyError> {
     match item_type {
         // Episode/Season reveal their owning Series: the item's own
         // `series_id` decides without an ancestors round trip; the chain is
@@ -37,7 +37,7 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "Series")
                 .map(|a| RevealTarget::Series(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's series".to_string())
+                .ok_or_else(|| mbv_emby::EmbyError::resolve("Could not resolve the item's series"))
         }
         // A track reveals its album: `album_id` first, ancestors fallback.
         "Audio" => {
@@ -46,14 +46,16 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "MusicAlbum")
                 .map(|a| RevealTarget::Album(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's album".to_string())
+                .ok_or_else(|| mbv_emby::EmbyError::resolve("Could not resolve the item's album"))
         }
         "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
         // An artist does not land (D1): it has no single owning album, and a
         // plain artist browse chain does not render on a grouped Music
         // surface (real-tick render check). The kind resolves to the
         // pre-U2 failure, flashing and leaving the active view unchanged.
-        "MusicArtist" => Err("Could not resolve the artist's album".to_string()),
+        "MusicArtist" => Err(mbv_emby::EmbyError::resolve(
+            "Could not resolve the artist's album",
+        )),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
         // Movie/generic: the ancestor-chain rebuild is already correct.
         _ => Ok(RevealTarget::Chain),
@@ -67,12 +69,12 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
 
 /// Fetch one item by id; a miss (empty result, server error) is a resolve
 /// failure (deleted item, task 4.2).
-fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
+fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, mbv_emby::EmbyError> {
     client
         .get_items_by_ids(&[item_id.to_string()])?
         .into_iter()
         .next()
-        .ok_or_else(|| format!("Item {item_id} no longer exists"))
+        .ok_or_else(|| mbv_emby::EmbyError::resolve(format!("Item {item_id} no longer exists")))
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
@@ -87,7 +89,7 @@ fn build_navigate_landing(
     lib_id: &str,
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<NavigateLanding, String> {
+) -> Result<NavigateLanding, mbv_emby::EmbyError> {
     // The item's own record supplies the back-references (D1: no ancestors
     // round trip when present); the fetch doubles as the deleted-item check.
     let item = fetch_reveal_item(client, item_id)?;
@@ -120,7 +122,7 @@ fn landing_for_target(
     lib_id: &str,
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<NavigateLanding, String> {
+) -> Result<NavigateLanding, mbv_emby::EmbyError> {
     match reveal {
         RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
             .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
@@ -134,7 +136,9 @@ fn landing_for_target(
                 fetch_reveal_item(client, &series_id)?
             };
             if series.item_type != "Series" {
-                return Err(format!("Item {series_id} is not a Series"));
+                return Err(mbv_emby::EmbyError::resolve(format!(
+                    "Item {series_id} is not a Series"
+                )));
             }
             // Deep selection (task 6.1, design D6): an Episode reveal rides
             // its own id on the Series landing; a Season reveal stays
@@ -156,7 +160,9 @@ fn landing_for_target(
             // (the album index builds its terminal level by `is_folder` for
             // the same reason), so a folder record is a valid album reveal.
             if album.item_type != "MusicAlbum" && !album.is_folder {
-                return Err(format!("Item {album_id} is not an album"));
+                return Err(mbv_emby::EmbyError::resolve(format!(
+                    "Item {album_id} is not an album"
+                )));
             }
             // The recursive activation consumes the configured album-index
             // entry shape (D7): the album plus the root→album folder chain
@@ -191,7 +197,7 @@ fn configured_album_ancestors(
     levels: &[String],
     album: &EmbyItem,
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<Vec<AlbumPathPart>, String> {
+) -> Result<Vec<AlbumPathPart>, mbv_emby::EmbyError> {
     if levels.last().map(String::as_str) != Some("album") {
         let ancestors = client.get_ancestors(&album.id)?;
         let inside = ancestors_inside_library(&ancestors);
@@ -226,10 +232,10 @@ fn configured_album_ancestors(
         .find(|entry| entry.album.id == album.id)
         .map(|entry| entry.ancestors)
         .ok_or_else(|| {
-            format!(
+            mbv_emby::EmbyError::resolve(format!(
                 "Could not reach '{}' through the configured music levels",
                 album.display_name()
-            )
+            ))
         })
 }
 
@@ -240,7 +246,7 @@ fn build_chain_nav_stack(
     client: &EmbyClient,
     item: &EmbyItem,
     lib_id: &str,
-) -> Result<Vec<BrowseLevel>, String> {
+) -> Result<Vec<BrowseLevel>, mbv_emby::EmbyError> {
     // Drop the last two ancestors (physical library folder + AggregateFolder
     // root); everything before those is navigable content inside the library.
     let ancestors = client.get_ancestors(&item.id)?;
@@ -352,7 +358,7 @@ impl App {
                     landing,
                     switch_tab: true,
                 }),
-                Err(e) => LibEvent::Error(e),
+                Err(e) => LibEvent::Error(e.to_string()),
             };
             let _ = tx.send(event);
         });

@@ -118,10 +118,15 @@ fn emby_setup_transaction_restores_exact_files_on_either_write_failure() {
         "new-token",
         &config,
         &secret,
-        |_setup, _path| Err("setup write rejected".into()),
-        |_token, _path| Ok(()),
+        |_setup, _path| Err(crate::ConfigError::admin("setup write rejected")),
+        |_token, _path| -> Result<(), crate::ConfigError> { Ok(()) },
     );
-    assert!(result.unwrap_err().contains("setup write rejected"));
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
+    assert_eq!(
+        error.to_string(),
+        "persist Emby setup: setup write rejected"
+    );
     assert_eq!(std::fs::read(&config).unwrap(), old_config);
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
 
@@ -131,9 +136,14 @@ fn emby_setup_transaction_restores_exact_files_on_either_write_failure() {
         &config,
         &secret,
         save_emby_setup_at,
-        |_token, _path| Err("secret write rejected".into()),
+        |_token, _path| Err(crate::ConfigError::admin("secret write rejected")),
     );
-    assert!(result.unwrap_err().contains("secret write rejected"));
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
+    assert_eq!(
+        error.to_string(),
+        "persist Emby secret: secret write rejected"
+    );
     assert_eq!(std::fs::read(&config).unwrap(), old_config);
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
     let _ = std::fs::remove_dir_all(root);
@@ -153,13 +163,14 @@ fn emby_setup_transaction_rejects_arbitrary_snapshot_read_errors_before_writing(
         "new-token",
         &config,
         &secret,
-        |_setup, _path| {
+        |_setup, _path| -> Result<(), crate::ConfigError> {
             called.set(true);
             Ok(())
         },
-        |_token, _path| Ok(()),
+        |_token, _path| -> Result<(), crate::ConfigError> { Ok(()) },
     );
-    assert!(result.unwrap_err().contains("read"));
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
     assert!(!called.get());
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
     let _ = std::fs::remove_dir_all(root);
@@ -190,7 +201,7 @@ fn audiobookshelf_revision_advances_per_commit() {
         replace_audiobookshelf_setup_and_secret(
             &AudiobookshelfSetup::new("https://new-books.example"),
             "replacement-secret",
-            || Ok(()),
+            || -> Result<(), crate::ConfigError> { Ok(()) },
             || {},
         )
         .unwrap(),
@@ -259,7 +270,7 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
     replace_audiobookshelf_setup_and_secret(
         &AudiobookshelfSetup::new("https://new-books.example"),
         "new-books-secret",
-        move || {
+        move || -> Result<(), crate::ConfigError> {
             clear_order.lock().unwrap().push("clear");
             Ok(())
         },
@@ -279,7 +290,7 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
     let remove_order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let remove_clear = std::sync::Arc::clone(&remove_order);
     remove_audiobookshelf_setup_and_secret_with_owned_state(
-        move || {
+        move || -> Result<(), crate::ConfigError> {
             remove_clear.lock().unwrap().push("clear");
             Ok(())
         },
@@ -309,9 +320,11 @@ fn failed_audiobookshelf_transaction_leaves_working_state() {
             &AudiobookshelfSetup::new("https://candidate.example"),
             config,
         )?;
-        Err("candidate persistence rejected".into())
+        Err(crate::ConfigError::lifecycle(
+            "candidate persistence rejected",
+        ))
     });
-    assert!(result.is_err());
+    assert!(result.unwrap_err().is_lifecycle());
     assert_eq!(std::fs::read(config_path()).unwrap(), before);
     assert_eq!(
         load_service_secret(ServiceKind::Audiobookshelf),

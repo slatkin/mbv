@@ -19,7 +19,9 @@ impl App {
     ///
     /// The owner reloads its own persisted queue; this Client never seeds it
     /// from its per-user snapshot.
-    pub(in crate::app) fn restart_local_daemon(&mut self) -> Result<(), String> {
+    pub(in crate::app) fn restart_local_daemon(
+        &mut self,
+    ) -> Result<(), mbv_remote_player::RemotePlayerError> {
         let socket_path = crate::single_instance::socket_path();
         let lock_path = crate::single_instance::lock_path();
         match crate::single_instance::resolve(&socket_path, &lock_path) {
@@ -36,16 +38,24 @@ impl App {
                 crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
             }
             Ok(crate::single_instance::Resolution::Refuse) => {
-                return Err(
-                    "another process holds the playback lock without a reachable daemon socket"
-                        .to_string(),
-                );
+                return Err(std::io::Error::other(
+                    "another process holds the playback lock without a reachable daemon socket",
+                )
+                .into());
             }
-            Err(e) => return Err(format!("single-instance check failed: {e}")),
+            Err(error) => {
+                return Err(std::io::Error::new(
+                    error.kind(),
+                    format!("single-instance check failed: {error}"),
+                )
+                .into());
+            }
         }
 
-        let (remote, remote_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Local)
-            .map_err(|e| format!("failed to attach to local daemon: {e}"))?;
+        let (remote, remote_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Local).map_err(|error| {
+                std::io::Error::other(format!("failed to attach to local daemon: {error}"))
+            })?;
 
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;

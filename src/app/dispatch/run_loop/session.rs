@@ -91,7 +91,7 @@ impl App {
         playlist_id: &str,
         origin: QueueOrigin,
         source_playlist_id: &str,
-        result: Result<(), String>,
+        result: Result<(), mbv_emby::EmbyError>,
     ) {
         let succeeded = result.is_ok();
         let deferred_action = self.queue_deferrals.take_on_save_complete(mutation_id);
@@ -127,7 +127,7 @@ impl App {
         playlist_id: &str,
         origin: QueueOrigin,
         name: &str,
-        result: Result<String, String>,
+        result: Result<String, mbv_emby::EmbyError>,
     ) {
         match result {
             Ok(id) if self.origin_is_current(origin) => {
@@ -155,7 +155,7 @@ impl App {
         name: &str,
         origin: QueueOrigin,
         source_playlist_id: Option<&str>,
-        result: Result<String, String>,
+        result: Result<String, mbv_emby::EmbyError>,
     ) {
         match result {
             Ok(id)

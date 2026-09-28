@@ -24,15 +24,20 @@ impl EmbyOwnerContext {
         }
     }
 
-    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
-        let setup = config
-            .emby_setup
-            .as_ref()
-            .ok_or_else(|| "Emby setup is missing from owner storage".to_string())?;
-        let token = mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby)
-            .ok_or_else(|| "Emby Service secret is unavailable".to_string())?;
+    pub fn from_packaged_storage_result(
+        config: &mbv_config::Config,
+    ) -> Result<Self, crate::DaemonLibError> {
+        let setup = config.emby_setup.as_ref().ok_or_else(|| {
+            crate::DaemonLibError::owner_context("Emby setup is missing from owner storage")
+        })?;
+        let token =
+            mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).ok_or_else(|| {
+                crate::DaemonLibError::owner_context("Emby Service secret is unavailable")
+            })?;
         if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
-            return Err("Emby setup is incomplete in owner storage".to_string());
+            return Err(crate::DaemonLibError::owner_context(
+                "Emby setup is incomplete in owner storage",
+            ));
         }
         let mut client = mbv_emby::EmbyClient::new(config.clone());
         client.config.server_url.clone_from(&setup.server_url);
@@ -53,15 +58,22 @@ pub struct AudiobookshelfOwnerContext {
 }
 
 impl AudiobookshelfOwnerContext {
-    pub fn from_packaged_storage_result(config: &mbv_config::Config) -> Result<Self, String> {
-        let setup = config
-            .audiobookshelf_setup
-            .clone()
-            .ok_or_else(|| "Audiobookshelf setup is missing from owner storage".to_string())?;
+    pub fn from_packaged_storage_result(
+        config: &mbv_config::Config,
+    ) -> Result<Self, crate::DaemonLibError> {
+        let setup = config.audiobookshelf_setup.clone().ok_or_else(|| {
+            crate::DaemonLibError::owner_context(
+                "Audiobookshelf setup is missing from owner storage",
+            )
+        })?;
         let api_key = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
-            .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
+            .ok_or_else(|| {
+                crate::DaemonLibError::owner_context("Audiobookshelf Service secret is unavailable")
+            })?;
         if setup.server_url.trim().is_empty() || api_key.trim().is_empty() {
-            return Err("Audiobookshelf setup is incomplete in owner storage".to_string());
+            return Err(crate::DaemonLibError::owner_context(
+                "Audiobookshelf setup is incomplete in owner storage",
+            ));
         }
         Ok(Self {
             setup,

@@ -53,6 +53,8 @@ pub struct RemotePlayer {
 }
 
 pub(crate) mod connect;
+mod error;
+pub use error::RemotePlayerError;
 
 #[cfg(test)]
 mod tests;
@@ -66,7 +68,7 @@ pub(crate) use mbv_net::stream::SocketStream;
 impl RemotePlayer {
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
-    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
+    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
         connect::connect_endpoint(endpoint)
     }
 
@@ -404,12 +406,16 @@ impl RemotePlayer {
         &self,
         source: mbv_queue::QueueSource,
         lineage: mbv_queue::QueueLineage,
-    ) -> Result<(), String> {
+    ) -> Result<(), RemotePlayerError> {
         if !self.supports_owner_queue_load() {
-            return Err("daemon does not support owner queue source updates".to_string());
+            return Err(RemotePlayerError::queue_operation(
+                "daemon does not support owner queue source updates",
+            ));
         }
         if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate { source, lineage }) {
-            return Err("could not send queue source update to Player owner".to_string());
+            return Err(RemotePlayerError::queue_operation(
+                "could not send queue source update to Player owner",
+            ));
         }
         Ok(())
     }
@@ -420,9 +426,11 @@ impl RemotePlayer {
         slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
         cursor: usize,
         source: mbv_queue::QueueSource,
-    ) -> Result<(), String> {
+    ) -> Result<(), RemotePlayerError> {
         if !self.supports_owner_queue_load() {
-            return Err("daemon does not support owner-authoritative idle queue loads".to_string());
+            return Err(RemotePlayerError::queue_operation(
+                "daemon does not support owner-authoritative idle queue loads",
+            ));
         }
         if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
@@ -430,7 +438,9 @@ impl RemotePlayer {
             cursor,
             source,
         }) {
-            return Err("could not send idle queue load to Player owner".to_string());
+            return Err(RemotePlayerError::queue_operation(
+                "could not send idle queue load to Player owner",
+            ));
         }
         Ok(())
     }

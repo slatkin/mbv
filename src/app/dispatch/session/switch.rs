@@ -244,7 +244,7 @@ impl App {
     )]
     pub(in crate::app) fn prepare_local_player(
         &mut self,
-    ) -> Result<Option<SuspendedLocalSession>, String> {
+    ) -> Result<Option<SuspendedLocalSession>, mbv_remote_player::RemotePlayerError> {
         if !self.player.is_remote() && self.suspended_local.is_none() {
             return Ok(None);
         }
@@ -465,15 +465,18 @@ impl App {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
-                    Err(message) => {
+                    Err(error) => {
                         log::warn!(
                             target: "library_route",
-                            "connect to library route {name:?} endpoint {endpoint} failed: {message}"
+                            "connect to library route {name:?} endpoint {endpoint} failed: {error}"
+                        );
+                        let warning = format!(
+                            "\u{26a0} {name} route unreachable, using local playback (mbv.log)"
                         );
                         if was_routed.is_some() {
-                            self.restore_local_mode(&message);
+                            self.restore_local_mode(&warning);
                         } else {
-                            self.flash(message, ToastSeverity::Warning);
+                            self.flash(warning, ToastSeverity::Warning);
                         }
                     }
                 }

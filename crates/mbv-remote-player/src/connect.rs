@@ -42,9 +42,9 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 pub(crate) fn perform_handshake<F>(
     stream: SocketStream,
     load_control_token: F,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), String>
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
 where
-    F: FnOnce() -> Result<String, String>,
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
     let mut reader = BufReader::new(stream);
     let ctrl_compatibility = read_server_hello(&mut reader)?;
@@ -54,18 +54,25 @@ where
     Ok((reader, state_event, ctrl_compatibility))
 }
 
-fn read_server_hello(reader: &mut BufReader<SocketStream>) -> Result<CtrlCompatibility, String> {
+fn read_server_hello(
+    reader: &mut BufReader<SocketStream>,
+) -> Result<CtrlCompatibility, crate::RemotePlayerError> {
     let mut first_line = String::new();
-    reader
-        .read_line(&mut first_line)
-        .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
+    reader.read_line(&mut first_line).map_err(|e| {
+        crate::RemotePlayerError::protocol(format!("failed to read daemon protocol hello: {e}"))
+    })?;
     if first_line.trim().is_empty() {
-        return Err("daemon closed connection before protocol hello".to_string());
+        return Err(crate::RemotePlayerError::protocol(
+            "daemon closed connection before protocol hello",
+        ));
     }
-    let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
-        .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
+    let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end()).map_err(|e| {
+        crate::RemotePlayerError::protocol(format!("invalid daemon protocol hello: {e}"))
+    })?;
     let CtrlEvent::Hello(info) = hello else {
-        return Err("daemon did not send protocol hello".to_string());
+        return Err(crate::RemotePlayerError::protocol(
+            "daemon did not send protocol hello",
+        ));
     };
     info.validate_peer()?;
     let mut compatibility = info.compatibility()?;
@@ -87,9 +94,9 @@ fn send_client_hello<F>(
     reader: &mut BufReader<SocketStream>,
     compatibility: &CtrlCompatibility,
     load_control_token: F,
-) -> Result<(), String>
+) -> Result<(), crate::RemotePlayerError>
 where
-    F: FnOnce() -> Result<String, String>,
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
     let mut client_hello = if compatibility.supports_control_auth {
         CtrlHello::current_control_client(load_control_token()?)
@@ -97,27 +104,33 @@ where
         CtrlHello::current()
     };
     client_hello.protocol_version = compatibility.client_protocol_version;
-    let client_hello =
-        serde_json::to_string(&CtrlCmd::Hello(client_hello)).map_err(|e| e.to_string())?;
+    let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
+        .map_err(|e| crate::RemotePlayerError::protocol(e.to_string()))?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
     // than a second `try_clone()`'d handle -- the handshake is strictly
     // sequential (read hello -> write client hello -> read state) with no
     // concurrent access from another thread during this phase, so there's
     // nothing a second handle buys here beyond an extra fallible call.
-    writeln!(reader.get_mut(), "{client_hello}")
-        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))
+    writeln!(reader.get_mut(), "{client_hello}").map_err(|e| {
+        crate::RemotePlayerError::protocol(format!("failed to send daemon protocol hello: {e}"))
+    })
 }
 
-fn read_initial_state(reader: &mut BufReader<SocketStream>) -> Result<CtrlEvent, String> {
+fn read_initial_state(
+    reader: &mut BufReader<SocketStream>,
+) -> Result<CtrlEvent, crate::RemotePlayerError> {
     let mut state_line = String::new();
-    reader
-        .read_line(&mut state_line)
-        .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
+    reader.read_line(&mut state_line).map_err(|e| {
+        crate::RemotePlayerError::protocol(format!("failed to read daemon initial state: {e}"))
+    })?;
     if state_line.trim().is_empty() {
-        return Err("daemon closed connection before initial state".to_string());
+        return Err(crate::RemotePlayerError::protocol(
+            "daemon closed connection before initial state",
+        ));
     }
-    serde_json::from_str::<CtrlEvent>(state_line.trim_end())
-        .map_err(|e| format!("invalid daemon initial state: {e}"))
+    serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
+        crate::RemotePlayerError::protocol(format!("invalid daemon initial state: {e}"))
+    })
 }
 
 /// Best-effort signal to a running same-user Local daemon to reread its own
@@ -130,44 +143,70 @@ fn read_initial_state(reader: &mut BufReader<SocketStream>) -> Result<CtrlEvent,
 pub fn signal_local_daemon_service_setup(
     kind: mbv_queue::ServiceKind,
     revision: u64,
-) -> Result<(), String> {
+) -> Result<(), crate::RemotePlayerError> {
     let path = PathBuf::from(mbv_config::control_socket_path());
     let Ok(stream) = UnixStream::connect(&path) else {
         return Ok(());
     };
     stream
         .set_read_timeout(Some(Duration::from_secs(6)))
-        .map_err(|error| format!("restart required (cannot read local daemon ctrl): {error}"))?;
+        .map_err(|error| {
+            crate::RemotePlayerError::restart_required(format!(
+                "restart required (cannot read local daemon ctrl): {error}"
+            ))
+        })?;
     let (mut reader, _state, _compatibility) =
         perform_handshake(SocketStream::Unix(stream), || {
-            mbv_config::load_or_create_control_credential()
+            Ok(mbv_config::load_or_create_control_credential()?)
         })
-        .map_err(|error| format!("restart required (local daemon handshake failed): {error}"))?;
-    let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
-        .map_err(|error| format!("restart required (cannot serialize setup request): {error}"))?;
+        .map_err(|error| {
+            crate::RemotePlayerError::restart_required(format!(
+                "restart required (local daemon handshake failed): {error}"
+            ))
+        })?;
+    let request =
+        serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision }).map_err(|error| {
+            crate::RemotePlayerError::restart_required(format!(
+                "restart required (cannot serialize setup request): {error}"
+            ))
+        })?;
     writeln!(reader.get_mut(), "{request}")
         .and_then(|()| reader.get_mut().flush())
-        .map_err(|error| format!("restart required (cannot send setup request): {error}"))?;
+        .map_err(|error| {
+            crate::RemotePlayerError::restart_required(format!(
+                "restart required (cannot send setup request): {error}"
+            ))
+        })?;
     await_service_setup_acknowledgement(&mut reader)
 }
 
-fn await_service_setup_acknowledgement(reader: &mut BufReader<SocketStream>) -> Result<(), String> {
+fn await_service_setup_acknowledgement(
+    reader: &mut BufReader<SocketStream>,
+) -> Result<(), crate::RemotePlayerError> {
     for next in reader.lines() {
-        let line = next
-            .map_err(|_error| "restart required (setup acknowledgement unavailable)".to_string())?;
-        let event = serde_json::from_str::<CtrlEvent>(&line)
-            .map_err(|_error| "restart required (invalid setup acknowledgement)".to_string())?;
+        let line = next.map_err(|_error| {
+            crate::RemotePlayerError::restart_required(
+                "restart required (setup acknowledgement unavailable)",
+            )
+        })?;
+        let event = serde_json::from_str::<CtrlEvent>(&line).map_err(|_error| {
+            crate::RemotePlayerError::restart_required(
+                "restart required (invalid setup acknowledgement)",
+            )
+        })?;
         match event {
             CtrlEvent::ServiceSetupApplied { .. } => return Ok(()),
             CtrlEvent::ServiceSetupRejected { reason, .. } => {
-                return Err(format!(
+                return Err(crate::RemotePlayerError::restart_required(format!(
                     "restart required (live setup rejected: {reason:?})"
-                ));
+                )));
             }
             _ => {}
         }
     }
-    Err("restart required (setup acknowledgement unavailable)".into())
+    Err(crate::RemotePlayerError::restart_required(
+        "restart required (setup acknowledgement unavailable)",
+    ))
 }
 
 fn apply_ctrl_event(
@@ -356,7 +395,7 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
-) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let stream = endpoint.connect_stream()?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
     connect_stream(stream)
@@ -382,10 +421,10 @@ struct ReaderThreadState {
 /// instead of a real listener.
 fn connect_stream(
     stream: SocketStream,
-) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
-    let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
+    let disconnect_stream = stream.try_clone()?;
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
@@ -409,12 +448,18 @@ fn connect_stream(
     // TCP-level connect, not these blocking reads (issue #191 fix #5).
     // `stream` itself is kept untouched on this thread for the writer
     // thread spawned below; a clone goes to the worker thread instead.
-    let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
-    let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound(
+    let handshake_stream = stream.try_clone()?;
+    let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
             perform_handshake(handshake_stream, || {
-                mbv_config::load_or_create_control_credential()
+                Ok(mbv_config::load_or_create_control_credential()?)
             })
+        },
+        || {
+            crate::RemotePlayerError::connection(format!(
+                "timed out after {}s",
+                DAEMON_HANDSHAKE_HARD_BOUND.as_secs()
+            ))
         },
         DAEMON_HANDSHAKE_HARD_BOUND,
     )?;
@@ -651,6 +696,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             }
         }
     });
-    let (player, rx) = connect_stream(SocketStream::Unix(client))?;
+    let (player, rx) =
+        connect_stream(SocketStream::Unix(client)).map_err(|error| error.to_string())?;
     Ok((player, rx, peer))
 }

@@ -105,7 +105,7 @@ fn add_fetch_failure_does_not_save() {
             name: "Broken".into(),
             url: "https://broken".into(),
             kind: FeedKind::Video,
-            result: Err("connection refused".into()),
+            result: Err(mbv_ui_model::UiModelError::operation("connection refused")),
         })
         .unwrap();
     model.feeds_manage = Some(popup);

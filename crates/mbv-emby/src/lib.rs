@@ -1,3 +1,5 @@
+mod error;
+pub use error::EmbyError;
 mod failure;
 pub use failure::*;
 mod types;

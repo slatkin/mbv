@@ -35,7 +35,7 @@ impl App {
                 let _ = tx.send(SessionEvent::Loaded { sessions });
             }
             Err(e) => {
-                let _ = tx.send(SessionEvent::Error(e));
+                let _ = tx.send(SessionEvent::Error(e.to_string()));
             }
         });
     }
@@ -100,7 +100,7 @@ impl App {
 
     pub(in crate::app) fn do_session_command(
         &mut self,
-        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
+        f: impl FnOnce(&EmbyClient) -> Result<(), mbv_emby::EmbyError> + Send + 'static,
     ) {
         let Some(client) = self.emby_snapshot() else {
             return;
@@ -108,7 +108,9 @@ impl App {
         let tx = self.channels.sessions_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {
-                let _ = tx.send(SessionEvent::CommandError { error: e });
+                let _ = tx.send(SessionEvent::CommandError {
+                    error: e.to_string(),
+                });
                 return;
             }
             // Refresh the directly observed Session state after a successful command.
@@ -117,7 +119,7 @@ impl App {
                     let _ = tx.send(SessionEvent::Loaded { sessions });
                 }
                 Err(e) => {
-                    let _ = tx.send(SessionEvent::Error(e));
+                    let _ = tx.send(SessionEvent::Error(e.to_string()));
                 }
             }
         });

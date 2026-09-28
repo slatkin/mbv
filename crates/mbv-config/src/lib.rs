@@ -1,5 +1,7 @@
 use mbv_queue::{FeedKind, LibraryPositionState, QueueState, ServiceKind};
 
+mod error;
+pub use error::ConfigError;
 mod types_paths;
 pub use types_paths::*;
 mod types_setup;

@@ -1,12 +1,12 @@
 // Queue, library-position, and last-remote-connection state persistence.
 
 use super::{
-    LibraryPositionState, QueueState, home_latest_launch_path, library_position_state_path,
-    queue_state_path, state_dir, stay_alive_queue_state_path,
+    ConfigError, LibraryPositionState, QueueState, home_latest_launch_path,
+    library_position_state_path, queue_state_path, state_dir, stay_alive_queue_state_path,
 };
 use std::path::PathBuf;
 
-pub fn save_queue_state(state: &QueueState) -> Result<(), String> {
+pub fn save_queue_state(state: &QueueState) -> Result<(), ConfigError> {
     save_json_atomic(&queue_state_path(), state, "queue state")
 }
 
@@ -19,16 +19,23 @@ pub(super) fn save_json_atomic<T: serde::Serialize>(
     path: &std::path::Path,
     state: &T,
     what: &str,
-) -> Result<(), String> {
+) -> Result<(), ConfigError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
-            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
+            .map_err(|e| ConfigError::state(format!("create directory {}: {e}", dir.display())))?;
     }
-    let json = serde_json::to_string(state).map_err(|e| format!("serialize {what}: {e}"))?;
+    let json = serde_json::to_string(state)
+        .map_err(|e| ConfigError::state(format!("serialize {what}: {e}")))?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    std::fs::write(&tmp, &json)
+        .map_err(|e| ConfigError::state(format!("write {}: {e}", tmp.display())))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        ConfigError::state(format!(
+            "rename {} to {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
 pub(super) fn load_json<T: serde::de::DeserializeOwned>(
@@ -54,11 +61,11 @@ pub struct StayAliveQueueState {
 pub fn save_stay_alive_queue_state_at(
     path: &std::path::Path,
     state: &StayAliveQueueState,
-) -> Result<(), String> {
+) -> Result<(), ConfigError> {
     save_json_atomic(path, state, "owner queue")
 }
 
-pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), String> {
+pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), ConfigError> {
     save_stay_alive_queue_state_at(&stay_alive_queue_state_path(), state)
 }
 
@@ -86,12 +93,15 @@ pub fn legacy_queue_for_owner_if_absent(
     })
 }
 
-pub fn clear_queue_state() -> Result<(), String> {
+pub fn clear_queue_state() -> Result<(), ConfigError> {
     let path = queue_state_path();
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!("remove {}: {error}", path.display())),
+        Err(error) => Err(ConfigError::state(format!(
+            "remove {}: {error}",
+            path.display()
+        ))),
     }
 }
 
@@ -106,26 +116,33 @@ struct HomeLatestLaunchState {
 pub(super) fn save_home_latest_launch_at(
     path: &std::path::Path,
     launch_secs: u64,
-) -> Result<(), String> {
+) -> Result<(), ConfigError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|error| format!("create directory {}: {error}", dir.display()))?;
+        std::fs::create_dir_all(dir).map_err(|error| {
+            ConfigError::launch(format!("create directory {}: {error}", dir.display()))
+        })?;
     }
     let state = HomeLatestLaunchState {
         version: HOME_LATEST_LAUNCH_STATE_VERSION,
         launch_secs,
     };
     let json = serde_json::to_string(&state)
-        .map_err(|error| format!("serialize {}: {error}", path.display()))?;
+        .map_err(|error| ConfigError::launch(format!("serialize {}: {error}", path.display())))?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(|error| format!("write {}: {error}", tmp.display()))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
+    std::fs::write(&tmp, json)
+        .map_err(|error| ConfigError::launch(format!("write {}: {error}", tmp.display())))?;
+    std::fs::rename(&tmp, path).map_err(|error| {
+        ConfigError::launch(format!(
+            "rename {} to {}: {error}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
-pub fn save_home_latest_launch(launch_secs: u64) -> Result<(), String> {
+pub fn save_home_latest_launch(launch_secs: u64) -> Result<(), ConfigError> {
     if launch_secs == 0 {
-        return Err("launch timestamp must be positive".to_string());
+        return Err(ConfigError::launch("launch timestamp must be positive"));
     }
     save_home_latest_launch_at(&home_latest_launch_path(), launch_secs)
 }
@@ -175,57 +192,66 @@ pub(super) fn last_remote_connection_path() -> PathBuf {
 pub(super) fn save_last_remote_connection_at(
     path: &std::path::Path,
     conn: Option<&LastRemoteConnection>,
-) -> Result<(), String> {
+) -> Result<(), ConfigError> {
     let Some(conn) = conn else {
         return match std::fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(format!("remove {}: {e}", path.display())),
+            Err(e) => Err(ConfigError::state(format!(
+                "remove {}: {e}",
+                path.display()
+            ))),
         };
     };
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
-            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
+            .map_err(|e| ConfigError::state(format!("create directory {}: {e}", dir.display())))?;
     }
-    let json =
-        serde_json::to_string(conn).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let json = serde_json::to_string(conn)
+        .map_err(|e| ConfigError::state(format!("serialize {}: {e}", path.display())))?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    std::fs::write(&tmp, &json)
+        .map_err(|e| ConfigError::state(format!("write {}: {e}", tmp.display())))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        ConfigError::state(format!(
+            "rename {} to {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
-pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) -> Result<(), String> {
+pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) -> Result<(), ConfigError> {
     save_last_remote_connection_at(&last_remote_connection_path(), conn)
 }
 
 pub(super) fn load_last_remote_connection_at(
     path: &std::path::Path,
-) -> Result<Option<LastRemoteConnection>, String> {
+) -> Result<Option<LastRemoteConnection>, ConfigError> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
+        Err(e) => return Err(ConfigError::state(format!("read {}: {e}", path.display()))),
     };
     match serde_json::from_str(&text) {
         Ok(conn) => Ok(Some(conn)),
         Err(e) => {
             std::fs::remove_file(path).map_err(|remove_error| {
-                format!(
+                ConfigError::state(format!(
                     "parse {}: {e}; remove corrupt {}: {remove_error}",
                     path.display(),
                     path.display()
-                )
+                ))
             })?;
-            Err(format!(
+            Err(ConfigError::state(format!(
                 "parse {}: {e}; corrupt file removed",
                 path.display()
-            ))
+            )))
         }
     }
 }
 
-pub fn load_last_remote_connection() -> Result<Option<LastRemoteConnection>, String> {
+pub fn load_last_remote_connection() -> Result<Option<LastRemoteConnection>, ConfigError> {
     load_last_remote_connection_at(&last_remote_connection_path())
 }
 
@@ -233,18 +259,25 @@ pub fn save_library_position_state(state: &LibraryPositionState) {
     let _ = save_library_position_state_result(state);
 }
 
-pub fn save_library_position_state_result(state: &LibraryPositionState) -> Result<(), String> {
+pub fn save_library_position_state_result(state: &LibraryPositionState) -> Result<(), ConfigError> {
     let path = library_position_state_path();
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|error| format!("create directory {}: {error}", dir.display()))?;
+        std::fs::create_dir_all(dir).map_err(|error| {
+            ConfigError::state(format!("create directory {}: {error}", dir.display()))
+        })?;
     }
-    let json =
-        serde_json::to_string(state).map_err(|error| format!("serialize positions: {error}"))?;
+    let json = serde_json::to_string(state)
+        .map_err(|error| ConfigError::state(format!("serialize positions: {error}")))?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &json).map_err(|error| format!("write {}: {error}", tmp.display()))?;
-    std::fs::rename(&tmp, &path)
-        .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
+    std::fs::write(&tmp, &json)
+        .map_err(|error| ConfigError::state(format!("write {}: {error}", tmp.display())))?;
+    std::fs::rename(&tmp, &path).map_err(|error| {
+        ConfigError::state(format!(
+            "rename {} to {}: {error}",
+            tmp.display(),
+            path.display()
+        ))
+    })
 }
 
 #[must_use]

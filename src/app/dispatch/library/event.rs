@@ -73,13 +73,16 @@ impl App {
                 artist_id,
                 revision,
                 result,
-            } => self.handle_artist_tracks_fetched(
-                &destination,
-                generation,
-                &artist_id,
-                revision,
-                result,
-            ),
+            } => {
+                let result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_emby::EmbyError> = result;
+                self.handle_artist_tracks_fetched(
+                    &destination,
+                    generation,
+                    &artist_id,
+                    revision,
+                    result,
+                );
+            }
             MusicEvent::ArtistArtworkFetched {
                 destination,
                 generation,
@@ -474,7 +477,7 @@ impl App {
     fn handle_album_index_built(
         &mut self,
         library_id: String,
-        result: Result<Vec<AlbumSearchEntry>, String>,
+        result: Result<Vec<AlbumSearchEntry>, mbv_emby::EmbyError>,
     ) {
         let rebuild_pending = matches!(
             self.album_indexes.get(&library_id),

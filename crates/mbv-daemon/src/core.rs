@@ -68,7 +68,7 @@ pub(super) enum DaemonEvent {
         client_id: CtrlClientId,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
-        fetched: Result<Vec<EmbyItem>, String>,
+        fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     },
     CtrlDisconnected(CtrlClientId),
     Shutdown,

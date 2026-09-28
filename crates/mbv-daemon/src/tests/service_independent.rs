@@ -271,7 +271,7 @@ fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
     mbv_config::replace_audiobookshelf_setup_and_secret(
         &mbv_config::AudiobookshelfSetup::new("https://b.example"),
         "secret-b",
-        || Ok(()),
+        || -> Result<(), mbv_config::ConfigError> { Ok(()) },
         || {},
     )
     .unwrap();

@@ -413,9 +413,9 @@ mod tests {
                 }],
             ))
         } else {
-            Err(AudiobookshelfError {
-                class: AudiobookshelfFailureClass::Connectivity,
-            })
+            Err(AudiobookshelfError::from_class(
+                AudiobookshelfFailureClass::Connectivity,
+            ))
         }
     }
 

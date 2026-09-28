@@ -90,7 +90,7 @@ impl SearchSidebarComponent {
     pub fn apply_drain(
         &mut self,
         query: &str,
-        result: Result<Vec<mbv_emby_model::EmbyItem>, String>,
+        result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_ui_model::UiModelError>,
     ) {
         self.sidebar.apply_drain(query, result);
     }
@@ -463,7 +463,10 @@ mod tests {
         let mut comp = SearchSidebarComponent::new();
         comp.sidebar.query = "ab".into();
         comp.sidebar.cursor = 5;
-        comp.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
+        comp.apply_drain(
+            "a",
+            Ok::<_, mbv_ui_model::UiModelError>(vec![make_item("Stale", "Movie")]),
+        );
         assert_eq!(comp.sidebar.cursor, 5);
         assert!(comp.sidebar.results.is_empty());
     }

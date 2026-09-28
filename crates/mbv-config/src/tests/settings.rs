@@ -171,7 +171,7 @@ fn negative_audio_pipe_playout_delay_is_rejected() {
         "[server]\nurl = \"http://localhost\"\n[mpv]\naudio_pipe_playout_delay_ms = -1",
     )
     .unwrap_err();
-    assert!(error.contains("audio_pipe_playout_delay_ms"));
+    assert!(error.to_string().contains("audio_pipe_playout_delay_ms"));
 }
 
 #[cfg(test)]
@@ -198,7 +198,10 @@ fn audio_device_configuration_table() {
             }
             Err(needle) => {
                 let error = parse_config(&toml).unwrap_err();
-                assert!(error.contains(needle), "toml: {toml:?} error: {error}");
+                assert!(
+                    error.to_string().contains(needle),
+                    "toml: {toml:?} error: {error}"
+                );
             }
         }
     }
@@ -487,5 +490,6 @@ url = "http://host"
 
 #[test]
 fn parse_invalid_toml_errors() {
-    parse_config("not [ valid toml !!!").unwrap_err();
+    let error = parse_config("not [ valid toml !!!").unwrap_err();
+    assert!(error.is_parse());
 }

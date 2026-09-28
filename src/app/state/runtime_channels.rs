@@ -6,8 +6,10 @@ use std::sync::mpsc;
 pub(in crate::app) struct RuntimeChannels {
     pub(in crate::app) lib_tx: mpsc::Sender<LibEvent>,
     pub(in crate::app) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(in crate::app) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(in crate::app) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(in crate::app) search_tx:
+        mpsc::Sender<(String, Result<Vec<EmbyItem>, mbv_emby::EmbyError>)>,
+    pub(in crate::app) search_rx:
+        mpsc::Receiver<(String, Result<Vec<EmbyItem>, mbv_emby::EmbyError>)>,
     pub(in crate::app) sessions_tx: mpsc::Sender<SessionEvent>,
     pub(in crate::app) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(in crate::app) cast_tx: mpsc::Sender<CastEvent>,

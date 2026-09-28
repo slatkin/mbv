@@ -7,6 +7,7 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
 use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
+use mbv_cast::CastError;
 use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_emby_model::seconds_to_ticks;
 use std::time::{Duration, Instant};
@@ -65,7 +66,7 @@ impl App {
     pub(in crate::app) fn apply_cast_status(
         &mut self,
         receiver_id: &str,
-        status: Result<CastStatus, String>,
+        status: Result<CastStatus, CastError>,
     ) {
         self.cast_status_loading = false;
         let Some(attachment) = self.cast_attachment.as_mut() else {
@@ -379,7 +380,7 @@ mod tests {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {
-            status: Ok(playing_status(1.0, "https://a")),
+            status: Some(playing_status(1.0, "https://a")),
             ..Default::default()
         });
         app.set_cast_client("device-1", job_tx);
@@ -406,7 +407,7 @@ mod tests {
         );
         app.set_cast_client("device-1", job_tx);
 
-        app.apply_cast_status("device-1", Err("connection lost".to_string()));
+        app.apply_cast_status("device-1", Err(CastError::not_connected()));
 
         let attachment = app.cast_attachment.as_ref().unwrap();
         assert!(attachment.disconnected);

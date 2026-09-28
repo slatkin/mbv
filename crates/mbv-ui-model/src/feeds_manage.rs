@@ -64,7 +64,7 @@ pub struct FeedAddResult {
     pub name: String,
     pub url: String,
     pub kind: FeedKind,
-    pub result: Result<(), String>,
+    pub result: Result<(), crate::UiModelError>,
 }
 
 /// Shell-side state for the feeds management overlay (§6), opened from F2

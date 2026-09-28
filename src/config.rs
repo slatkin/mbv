@@ -19,20 +19,20 @@ pub mod tests {
 
 pub use mbv_ui_model::UiConfig;
 
-pub fn load_config() -> Result<Config, String> {
+pub fn load_config() -> Result<Config, mbv_config::ConfigError> {
     mbv_config::load_config()
 }
 
-pub fn load_ui_config() -> Result<UiConfig, String> {
+pub fn load_ui_config() -> Result<UiConfig, mbv_config::ConfigError> {
     let path = mbv_config::config_path();
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(UiConfig::default());
     };
-    parse_ui_config(&text).map_err(|e| format!("Config parse error in {}: {e}", path.display()))
+    parse_ui_config(&text)
 }
 
-fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
-    let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
+fn parse_ui_config(text: &str) -> Result<UiConfig, mbv_config::ConfigError> {
+    let doc: toml::Value = toml::from_str(text)?;
     let display = doc.get("display");
 
     let image_protocol = display
@@ -70,7 +70,10 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
     })
 }
 
-pub fn save_config_section(cfg: &Config, section: mbv_config::ConfigSection) -> Result<(), String> {
+pub fn save_config_section(
+    cfg: &Config,
+    section: mbv_config::ConfigSection,
+) -> Result<(), mbv_config::ConfigError> {
     mbv_config::save_config_section(cfg, section)
 }
 

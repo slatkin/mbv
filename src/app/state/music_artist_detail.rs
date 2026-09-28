@@ -323,7 +323,7 @@ impl App {
         generation: SetupGeneration,
         artist_id: &str,
         revision: u64,
-        result: Result<Vec<EmbyItem>, String>,
+        result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
     ) {
         let key = ArtistDetailKey {
             destination: destination.clone(),

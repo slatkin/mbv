@@ -13,10 +13,14 @@ use mbv_ui_model::feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, Feed
 use mbv_ui_msg::FeedsManageIntent;
 use mbv_ui_msg::{ComponentId, PopupId};
 
-fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {
+fn require_feed_entries<T>(
+    result: Result<Vec<T>, mbv_ui_model::UiModelError>,
+) -> Result<(), mbv_ui_model::UiModelError> {
     result.and_then(|entries| {
         if entries.is_empty() {
-            Err("response did not contain any valid RSS or Atom entries".to_string())
+            Err(mbv_ui_model::UiModelError::operation(
+                "response did not contain any valid RSS or Atom entries",
+            ))
         } else {
             Ok(())
         }
@@ -253,13 +257,14 @@ impl super::Model {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url) {
+            let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url)
+                .map_err(mbv_ui_model::UiModelError::operation_source)
+            {
                 Ok(resolved_url) => {
-                    let result = require_feed_entries(mbv_feed::fetch_and_parse_entries(
-                        &resolved_url,
-                        kind,
-                        &resolved_url,
-                    ));
+                    let result = require_feed_entries(
+                        mbv_feed::fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
+                            .map_err(mbv_ui_model::UiModelError::operation_source),
+                    );
                     (resolved_url, result)
                 }
                 Err(error) => (url, Err(error)),

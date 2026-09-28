@@ -259,8 +259,9 @@ mod keys_rejections {
     )]
     fn keys_rejection_surfaces(#[case] toml: &str, #[case] expected: &str) {
         let err = parse_config(toml).unwrap_err();
+        assert!(err.is_parse());
         assert!(
-            err.contains(expected),
+            err.to_string().contains(expected),
             "expected {expected:?} in error: {err}"
         );
     }

@@ -20,6 +20,19 @@ fn service_secret_write_and_read_round_trips() {
         Some(secret)
     );
 }
+
+#[test]
+fn service_secret_write_failure_is_credentials_error() {
+    let _guard = TestStateDirGuard::new();
+    let secret_path = service_secret_path(ServiceKind::Emby);
+    let secrets_dir = secret_path.parent().unwrap();
+    std::fs::write(secrets_dir, b"not a directory").unwrap();
+
+    let error = save_service_secret(ServiceKind::Emby, "secret").unwrap_err();
+
+    assert!(error.is_credentials());
+}
+
 #[test]
 fn service_secret_read_returns_none_when_absent() {
     let _guard = TestStateDirGuard::new();

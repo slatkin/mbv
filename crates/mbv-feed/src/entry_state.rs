@@ -17,6 +17,8 @@
 //! per frame.
 
 use serde::{Deserialize, Serialize};
+
+use crate::FeedError;
 use std::path::PathBuf;
 
 /// Resume position and watched flag for one feed entry.
@@ -75,18 +77,18 @@ impl FeedEntryStore {
 
     /// Atomically replace the state file (temp file plus rename). A failed write
     /// leaves the previously written file intact.
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(&self) -> Result<(), FeedError> {
         let path = feed_entry_state_path();
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)
-                .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
+                .map_err(|e| FeedError::create_directory(dir.display().to_string(), e))?;
         }
-        let json =
-            serde_json::to_string(self).map_err(|e| format!("serialize feed entry state: {e}"))?;
+        let json = serde_json::to_string(self).map_err(FeedError::serialize)?;
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-        std::fs::rename(&tmp, &path)
-            .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+        std::fs::write(&tmp, &json).map_err(|e| FeedError::write(tmp.display().to_string(), e))?;
+        std::fs::rename(&tmp, &path).map_err(|e| {
+            FeedError::rename(tmp.display().to_string(), path.display().to_string(), e)
+        })
     }
 
     /// Insert or replace the row for one key. Last write wins; no revision is

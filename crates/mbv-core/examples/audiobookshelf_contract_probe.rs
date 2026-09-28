@@ -19,6 +19,43 @@ const REQUEST_BOUND: Duration = Duration::from_secs(5);
 const READY_BOUND: Duration = Duration::from_secs(20);
 const MPV_BOUND: Duration = Duration::from_secs(15);
 
+#[derive(Debug)]
+pub struct ProbeError {
+    kind: ProbeErrorKind,
+    message: String,
+}
+
+#[derive(Debug)]
+enum ProbeErrorKind {
+    Contract,
+}
+
+impl ProbeError {
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match self.kind {
+            ProbeErrorKind::Contract => "core.contract_probe",
+        }
+    }
+
+    fn contract(message: impl Into<String>) -> Self {
+        Self {
+            kind: ProbeErrorKind::Contract,
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for ProbeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            ProbeErrorKind::Contract => f.write_str(&self.message),
+        }
+    }
+}
+
+impl std::error::Error for ProbeError {}
+
 struct LiveClient {
     base: String,
     token: String,
@@ -27,12 +64,14 @@ struct LiveClient {
 }
 
 impl LiveClient {
-    fn load() -> Result<Self, String> {
-        let setup = config::load_config()?
+    fn load() -> Result<Self, ProbeError> {
+        let setup = config::load_config()
+            .map_err(|error| ProbeError::contract(error.to_string()))?
             .audiobookshelf_setup
-            .ok_or("Audiobookshelf Service is not configured")?;
-        let token = config::load_service_secret(ServiceKind::Audiobookshelf)
-            .ok_or("Audiobookshelf Service credential is unavailable")?;
+            .ok_or_else(|| ProbeError::contract("Audiobookshelf Service is not configured"))?;
+        let token = config::load_service_secret(ServiceKind::Audiobookshelf).ok_or_else(|| {
+            ProbeError::contract("Audiobookshelf Service credential is unavailable")
+        })?;
         Ok(Self {
             base: setup.server_url,
             token,
@@ -50,7 +89,7 @@ impl LiveClient {
         })
     }
 
-    fn post(&self, path: &str, body: Value) -> Result<(u16, String), String> {
+    fn post(&self, path: &str, body: Value) -> Result<(u16, String), ProbeError> {
         let request = self
             .agent
             .post(&format!("{}{}", self.base, path))
@@ -63,11 +102,13 @@ impl LiveClient {
             Err(ureq::Error::StatusCode(status)) => {
                 Ok((status, "<body unavailable after ureq 3.x upgrade>".into()))
             }
-            Err(_) => Err("request failed before an HTTP response".into()),
+            Err(_) => Err(ProbeError::contract(
+                "request failed before an HTTP response",
+            )),
         }
     }
 
-    fn get_status(&self, path: &str, authenticated: bool) -> Result<u16, String> {
+    fn get_status(&self, path: &str, authenticated: bool) -> Result<u16, ProbeError> {
         let mut request = self.agent.get(&format!("{}{}", self.base, path));
         if authenticated {
             request = request.header("Authorization", &format!("Bearer {}", self.token));
@@ -75,11 +116,11 @@ impl LiveClient {
         match request.call() {
             Ok(response) => Ok(response.status().into()),
             Err(ureq::Error::StatusCode(status)) => Ok(status),
-            Err(_) => Err("GET failed before an HTTP response".into()),
+            Err(_) => Err(ProbeError::contract("GET failed before an HTTP response")),
         }
     }
 
-    fn play(&mut self, item: &str, episode: &str, transcode: bool) -> Result<Value, String> {
+    fn play(&mut self, item: &str, episode: &str, transcode: bool) -> Result<Value, ProbeError> {
         let body = json!({
             "deviceInfo": {
                 "deviceId": DEVICE_ID,
@@ -95,14 +136,15 @@ impl LiveClient {
         });
         let (status, text) = self.post(&format!("/api/items/{item}/play/{episode}"), body)?;
         if status != 200 {
-            return Err(format!("play returned HTTP {status}"));
+            return Err(ProbeError::contract(format!("play returned HTTP {status}")));
         }
-        let value: Value = serde_json::from_str(&text)
-            .map_err(|error| format!("play returned malformed JSON: {error}"))?;
+        let value: Value = serde_json::from_str(&text).map_err(|error| {
+            ProbeError::contract(format!("play returned malformed JSON: {error}"))
+        })?;
         let session = value
             .get("id")
             .and_then(Value::as_str)
-            .ok_or("play response omitted session id")?
+            .ok_or_else(|| ProbeError::contract("play response omitted session id"))?
             .to_string();
         self.open_sessions.insert(session);
         Ok(value)
@@ -113,7 +155,7 @@ impl LiveClient {
         session: &str,
         action: &str,
         duration: f64,
-    ) -> Result<(u16, String), String> {
+    ) -> Result<(u16, String), ProbeError> {
         self.post(
             &format!("/api/session/{session}/{action}"),
             json!({
@@ -124,7 +166,7 @@ impl LiveClient {
         )
     }
 
-    fn close(&mut self, session: &str, duration: f64) -> Result<(u16, String), String> {
+    fn close(&mut self, session: &str, duration: f64) -> Result<(u16, String), ProbeError> {
         let result = self.session_request(session, "close", duration);
         if result.as_ref().is_ok_and(|(status, _)| *status == 200) {
             self.open_sessions.remove(session);
@@ -145,62 +187,66 @@ impl Drop for LiveClient {
     }
 }
 
-fn read_response(mut response: ureq::http::Response<ureq::Body>) -> Result<(u16, String), String> {
+fn read_response(
+    mut response: ureq::http::Response<ureq::Body>,
+) -> Result<(u16, String), ProbeError> {
     let status = response.status().into();
     response
         .body_mut()
         .read_to_string()
         .map(|text| (status, text))
-        .map_err(|error| format!("response body could not be read: {error}"))
+        .map_err(|error| ProbeError::contract(format!("response body could not be read: {error}")))
 }
 
-fn duration(value: &Value) -> Result<f64, String> {
+fn duration(value: &Value) -> Result<f64, ProbeError> {
     value
         .get("duration")
         .and_then(Value::as_f64)
-        .ok_or("response omitted duration".into())
+        .ok_or_else(|| ProbeError::contract("response omitted duration"))
 }
 
-fn source(value: &Value) -> Result<(&str, bool), String> {
+fn source(value: &Value) -> Result<(&str, bool), ProbeError> {
     let tracks = value
         .get("audioTracks")
         .and_then(Value::as_array)
-        .ok_or("response omitted audioTracks")?;
+        .ok_or_else(|| ProbeError::contract("response omitted audioTracks"))?;
     if tracks.len() != 1 {
-        return Err(format!("response had {} audio tracks", tracks.len()));
+        return Err(ProbeError::contract(format!(
+            "response had {} audio tracks",
+            tracks.len()
+        )));
     }
     let track = &tracks[0];
     let url = track
         .get("contentUrl")
         .and_then(Value::as_str)
-        .ok_or("audio track omitted contentUrl")?;
+        .ok_or_else(|| ProbeError::contract("audio track omitted contentUrl"))?;
     let hls = value.get("playMethod").and_then(Value::as_u64) == Some(2)
         || url.to_ascii_lowercase().ends_with(".m3u8")
         || url.contains("/hls/");
     Ok((url, hls))
 }
 
-fn absolute_url(base: &str, path: &str) -> Result<String, String> {
+fn absolute_url(base: &str, path: &str) -> Result<String, ProbeError> {
     if path.starts_with("http://") || path.starts_with("https://") {
         return Ok(path.to_string());
     }
     if !path.starts_with('/') {
-        return Err("source path was not absolute".into());
+        return Err(ProbeError::contract("source path was not absolute"));
     }
     Ok(format!("{base}{path}"))
 }
 
-fn wait_hls(client: &LiveClient, url: &str) -> Result<usize, String> {
+fn wait_hls(client: &LiveClient, url: &str) -> Result<usize, ProbeError> {
     let start = Instant::now();
     let mut attempts = 0;
     while start.elapsed() < READY_BOUND {
         attempts += 1;
         match client.agent.get(url).call() {
             Ok(mut response) if response.status() == 200 => {
-                let body = response
-                    .body_mut()
-                    .read_to_string()
-                    .map_err(|error| format!("playlist body unreadable: {error}"))?;
+                let body = response.body_mut().read_to_string().map_err(|error| {
+                    ProbeError::contract(format!("playlist body unreadable: {error}"))
+                })?;
                 if body.starts_with("#EXTM3U") {
                     return Ok(attempts);
                 }
@@ -209,10 +255,12 @@ fn wait_hls(client: &LiveClient, url: &str) -> Result<usize, String> {
         }
         std::thread::sleep(Duration::from_millis(250));
     }
-    Err("REST-only HLS playlist readiness exceeded 20 seconds".into())
+    Err(ProbeError::contract(
+        "REST-only HLS playlist readiness exceeded 20 seconds",
+    ))
 }
 
-fn mpv_probe(url: &str, token: Option<&str>) -> Result<(String, String), String> {
+fn mpv_probe(url: &str, token: Option<&str>) -> Result<(String, String), ProbeError> {
     let header = token.map(|token| format!("Authorization: Bearer {token}"));
     let mpv = Mpv::with_initializer(|init| {
         init.set_option("config", "no")?;
@@ -225,38 +273,40 @@ fn mpv_probe(url: &str, token: Option<&str>) -> Result<(String, String), String>
         }
         Ok(())
     })
-    .map_err(|error| format!("libmpv initialization failed: {error}"))?;
+    .map_err(|error| ProbeError::contract(format!("libmpv initialization failed: {error}")))?;
     mpv.command("loadfile", &[url, "replace", "-1", ""])
-        .map_err(|error| format!("libmpv loadfile failed: {error}"))?;
+        .map_err(|error| ProbeError::contract(format!("libmpv loadfile failed: {error}")))?;
     wait_for_restart(&mpv)?;
-    let before: f64 = mpv
-        .get_property("time-pos")
-        .map_err(|error| format!("libmpv omitted initial time-pos: {error}"))?;
+    let before: f64 = mpv.get_property("time-pos").map_err(|error| {
+        ProbeError::contract(format!("libmpv omitted initial time-pos: {error}"))
+    })?;
     mpv.command("seek", &["1", "absolute"])
-        .map_err(|error| format!("libmpv seek failed: {error}"))?;
+        .map_err(|error| ProbeError::contract(format!("libmpv seek failed: {error}")))?;
     wait_for_restart(&mpv)?;
-    let after: f64 = mpv
-        .get_property("time-pos")
-        .map_err(|error| format!("libmpv omitted post-seek time-pos: {error}"))?;
+    let after: f64 = mpv.get_property("time-pos").map_err(|error| {
+        ProbeError::contract(format!("libmpv omitted post-seek time-pos: {error}"))
+    })?;
     if after < 0.5 {
-        return Err("libmpv ordinary seek did not advance".into());
+        return Err(ProbeError::contract("libmpv ordinary seek did not advance"));
     }
     Ok((format!("{before:.3}"), format!("{after:.3}")))
 }
 
-fn wait_for_restart(mpv: &Mpv) -> Result<(), String> {
+fn wait_for_restart(mpv: &Mpv) -> Result<(), ProbeError> {
     let start = Instant::now();
     while start.elapsed() < MPV_BOUND {
         match mpv.wait_event(0.25) {
             Some(Ok(Event::PlaybackRestart)) => return Ok(()),
             Some(Ok(Event::EndFile(reason))) => {
-                return Err(format!("libmpv ended before readiness: {reason:?}"));
+                return Err(ProbeError::contract(format!(
+                    "libmpv ended before readiness: {reason:?}"
+                )));
             }
-            Some(Err(_)) => return Err("libmpv event error".into()),
+            Some(Err(_)) => return Err(ProbeError::contract("libmpv event error")),
             _ => {}
         }
     }
-    Err("libmpv readiness exceeded 15 seconds".into())
+    Err(ProbeError::contract("libmpv readiness exceeded 15 seconds"))
 }
 
 fn sanitize(value: &Value) -> Value {
@@ -336,12 +386,12 @@ fn session_fixture(value: &Value) -> Value {
     sanitize(&fixture)
 }
 
-fn controlled_failure(status: u16, body: &'static str) -> Result<Value, String> {
+fn controlled_failure(status: u16, body: &'static str) -> Result<Value, ProbeError> {
     let listener = TcpListener::bind("127.0.0.1:0")
-        .map_err(|error| format!("loopback bind failed: {error}"))?;
+        .map_err(|error| ProbeError::contract(format!("loopback bind failed: {error}")))?;
     let address = listener
         .local_addr()
-        .map_err(|error| format!("loopback address failed: {error}"))?;
+        .map_err(|error| ProbeError::contract(format!("loopback address failed: {error}")))?;
     let worker = std::thread::spawn(move || {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut request = [0u8; 2048];
@@ -359,7 +409,7 @@ fn controlled_failure(status: u16, body: &'static str) -> Result<Value, String> 
         }
     });
     let client = AudiobookshelfClient::new(&format!("http://{address}"))
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ProbeError::contract(error.to_string()))?;
     let class = client
         .me_bounded("<LOOPBACK_CREDENTIAL>", REQUEST_BOUND)
         .expect_err("controlled failure unexpectedly succeeded")
@@ -387,42 +437,43 @@ struct PlaybackProbe {
 
 fn first_podcast_episode(
     live: &LiveClient,
-) -> Result<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode, String> {
-    let catalog = AudiobookshelfClient::new(&live.base).map_err(|error| error.to_string())?;
+) -> Result<mbv_audiobookshelf::AudiobookshelfDownloadedEpisode, ProbeError> {
+    let catalog = AudiobookshelfClient::new(&live.base)
+        .map_err(|error| ProbeError::contract(error.to_string()))?;
     let library = catalog
         .libraries_bounded(&live.token, REQUEST_BOUND)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| ProbeError::contract(error.to_string()))?
         .into_iter()
         .find(|library| library.media_type == "podcast")
-        .ok_or("no podcast library available")?;
+        .ok_or_else(|| ProbeError::contract("no podcast library available"))?;
     let show = catalog
         .podcast_shows_bounded(&live.token, &library.id, 0, 25, REQUEST_BOUND)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| ProbeError::contract(error.to_string()))?
         .items
         .into_iter()
         .next()
-        .ok_or("no podcast show available")?;
+        .ok_or_else(|| ProbeError::contract("no podcast show available"))?;
     catalog
         .podcast_detail_bounded(&live.token, &show.library_item_id, REQUEST_BOUND)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| ProbeError::contract(error.to_string()))?
         .into_iter()
         .next()
-        .ok_or_else(|| "no downloaded podcast episode available".into())
+        .ok_or_else(|| ProbeError::contract("no downloaded podcast episode available"))
 }
 
 fn probe_playback(
     live: &mut LiveClient,
     episode: &mbv_audiobookshelf::AudiobookshelfDownloadedEpisode,
-) -> Result<PlaybackProbe, String> {
+) -> Result<PlaybackProbe, ProbeError> {
     let direct = live.play(&episode.library_item_id, &episode.episode_id, false)?;
     let direct_session = direct["id"]
         .as_str()
-        .ok_or("direct session id missing")?
+        .ok_or_else(|| ProbeError::contract("direct session id missing"))?
         .to_string();
     let direct_duration = duration(&direct)?;
     let (direct_path, direct_hls) = source(&direct)?;
     if direct_hls {
-        return Err("forced direct play returned HLS".into());
+        return Err(ProbeError::contract("forced direct play returned HLS"));
     }
     let direct_url = absolute_url(&live.base, direct_path)?;
     let direct_seek = mpv_probe(&direct_url, Some(&live.token))?;
@@ -433,12 +484,12 @@ fn probe_playback(
     let hls = live.play(&episode.library_item_id, &episode.episode_id, true)?;
     let hls_session = hls["id"]
         .as_str()
-        .ok_or("HLS session id missing")?
+        .ok_or_else(|| ProbeError::contract("HLS session id missing"))?
         .to_string();
     let hls_duration = duration(&hls)?;
     let (hls_path, is_hls) = source(&hls)?;
     if !is_hls {
-        return Err("forced transcode did not return HLS".into());
+        return Err(ProbeError::contract("forced transcode did not return HLS"));
     }
     let hls_url = absolute_url(&live.base, hls_path)?;
     let readiness_attempts = wait_hls(live, &hls_url)?;
@@ -513,7 +564,7 @@ fn insert_cleanup_output(
     );
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), ProbeError> {
     let mut live = LiveClient::load()?;
     let episode = first_podcast_episode(&live)?;
     let probe = probe_playback(&mut live, &episode)?;

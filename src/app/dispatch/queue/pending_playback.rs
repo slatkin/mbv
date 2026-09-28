@@ -60,7 +60,7 @@ impl App {
                 crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                 ToastSeverity::Warning,
             ),
-            Some(Err(reason)) => self.flash(reason, ToastSeverity::Error),
+            Some(Err(reason)) => self.flash(reason.to_string(), ToastSeverity::Error),
             None => self.flash(
                 "Could not send idle queue load to Player owner".into(),
                 ToastSeverity::Error,

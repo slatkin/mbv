@@ -4,6 +4,8 @@
 
 use std::time::{Duration, Instant};
 
+use crate::CastError;
+
 use mdns_sd::{Receiver, ServiceDaemon, ServiceEvent};
 
 const SERVICE_TYPE: &str = "_googlecast._tcp.local.";
@@ -38,15 +40,15 @@ fn find_by_id(receivers: Vec<CastReceiver>, id: &str) -> Option<CastReceiver> {
     receivers.into_iter().find(|r| r.id == id)
 }
 
-fn start_real_browse() -> Result<(ServiceDaemon, Receiver<ServiceEvent>), String> {
-    let daemon = ServiceDaemon::new().map_err(|e| e.to_string())?;
-    let rx = daemon.browse(SERVICE_TYPE).map_err(|e| e.to_string())?;
+fn start_real_browse() -> Result<(ServiceDaemon, Receiver<ServiceEvent>), CastError> {
+    let daemon = ServiceDaemon::new()?;
+    let rx = daemon.browse(SERVICE_TYPE)?;
     Ok((daemon, rx))
 }
 
 fn browse_cast_receivers_with(
     timeout: Duration,
-    start: impl FnOnce() -> Result<(ServiceDaemon, Receiver<ServiceEvent>), String>,
+    start: impl FnOnce() -> Result<(ServiceDaemon, Receiver<ServiceEvent>), CastError>,
 ) -> Vec<CastReceiver> {
     match start() {
         Ok((daemon, rx)) => {
@@ -126,7 +128,7 @@ mod tests {
     #[test]
     fn browse_start_failure_returns_empty_list_and_is_non_fatal() {
         let receivers = browse_cast_receivers_with(Duration::from_millis(10), || {
-            Err("simulated failure".to_string())
+            Err(CastError::receiver_not_found())
         });
         assert!(receivers.is_empty());
     }

@@ -207,7 +207,10 @@ impl Model {
             if let Some(comp) = self.application.get_component_mut(&id)
                 && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
             {
-                search.apply_drain(&query, result);
+                search.apply_drain(
+                    &query,
+                    result.map_err(mbv_ui_model::UiModelError::operation_source),
+                );
             }
         }
         received > 0

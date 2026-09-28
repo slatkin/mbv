@@ -1,3 +1,6 @@
+mod error;
+pub use error::PlayerError;
+
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
