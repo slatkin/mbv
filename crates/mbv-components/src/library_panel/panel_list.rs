@@ -351,6 +351,9 @@ mod panel_list_tests {
         let claim = Rect::new(1, 0, 18, 5);
         let content = Rect::new(3, 0, 14, 5);
         let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
+        // The title column: content's x plus the 2-column quiet indent the
+        // stripe is read from (the indent keeps the parent background).
+        let x = content.x + 2;
         for focused in [true, false] {
             terminal
                 .draw(|frame| {
@@ -363,27 +366,27 @@ mod panel_list_tests {
             let box_fill = palette::surface_colors(palette::Surface::LibraryPanel, focused).fill;
             let stripe = palette::surface_colors(palette::Surface::LibraryColumn, focused).fill;
             assert_eq!(
-                buf[(5, 0)].bg,
+                buf[(x, 0)].bg,
                 box_fill,
                 "the group heading keeps the box fill, focused={focused}"
             );
             assert_eq!(
-                buf[(5, 2)].bg,
+                buf[(x, 2)].bg,
                 box_fill,
                 "the spacer between groups keeps the box fill, focused={focused}"
             );
             assert_eq!(
-                buf[(5, 3)].bg,
+                buf[(x, 3)].bg,
                 box_fill,
                 "the next group's heading keeps the box fill, focused={focused}"
             );
             assert_eq!(
-                buf[(5, 1)].bg,
+                buf[(x, 1)].bg,
                 stripe,
                 "the group's first member opens on the stripe, focused={focused}"
             );
             assert_ne!(
-                buf[(5, 1)].bg,
+                buf[(x, 1)].bg,
                 box_fill,
                 "the stripe must be visible against the box fill, focused={focused}"
             );
