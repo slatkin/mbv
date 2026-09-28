@@ -1,7 +1,7 @@
 use super::{
-    EmbySetup, QueueState, ServiceKind, cache_dir, config_path, library_position_state_path,
-    persist_emby_setup_and_secret, queue_state_path, save_queue_state, service_secret_path,
-    token_cache_path, write_config_text_at,
+    ConfigError, EmbySetup, QueueState, ServiceKind, cache_dir, config_path,
+    library_position_state_path, persist_emby_setup_and_secret, queue_state_path, save_queue_state,
+    service_secret_path, token_cache_path, write_config_text_at,
 };
 
 /// A restorable snapshot of the files owned by Emby setup administration.
@@ -19,16 +19,16 @@ pub struct EmbyOwnedStateSnapshot {
     image_cache: Vec<(String, Vec<u8>)>,
 }
 
-fn snapshot_file(path: &std::path::Path) -> Result<Option<Vec<u8>>, String> {
+fn snapshot_file(path: &std::path::Path) -> Result<Option<Vec<u8>>, ConfigError> {
     match std::fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!("read owner state: {error}")),
+        Err(error) => Err(ConfigError::lifecycle(format!("read owner state: {error}"))),
     }
 }
 
 /// Capture Emby-owned local state before a different-server replacement.
-pub fn snapshot_emby_owned_state() -> Result<EmbyOwnedStateSnapshot, String> {
+pub fn snapshot_emby_owned_state() -> Result<EmbyOwnedStateSnapshot, ConfigError> {
     Ok(EmbyOwnedStateSnapshot {
         queue: snapshot_file(&queue_state_path())?,
         library_positions: snapshot_file(&library_position_state_path())?,
@@ -39,27 +39,32 @@ pub fn snapshot_emby_owned_state() -> Result<EmbyOwnedStateSnapshot, String> {
     })
 }
 
-fn restore_file(path: &std::path::Path, bytes: Option<&[u8]>) -> Result<(), String> {
+fn restore_file(path: &std::path::Path, bytes: Option<&[u8]>) -> Result<(), ConfigError> {
     match bytes {
         Some(bytes) => {
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|error| format!("restore owner state: {error}"))?;
+                std::fs::create_dir_all(parent).map_err(|error| {
+                    ConfigError::lifecycle(format!("restore owner state: {error}"))
+                })?;
             }
             let tmp = path.with_extension("restore.tmp");
-            std::fs::write(&tmp, bytes).map_err(|error| format!("restore owner state: {error}"))?;
-            std::fs::rename(&tmp, path).map_err(|error| format!("restore owner state: {error}"))
+            std::fs::write(&tmp, bytes)
+                .map_err(|error| ConfigError::lifecycle(format!("restore owner state: {error}")))?;
+            std::fs::rename(&tmp, path)
+                .map_err(|error| ConfigError::lifecycle(format!("restore owner state: {error}")))
         }
         None => match std::fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(format!("restore owner state: {error}")),
+            Err(error) => Err(ConfigError::lifecycle(format!(
+                "restore owner state: {error}"
+            ))),
         },
     }
 }
 
 /// Restore a snapshot after cleanup or persistence failed.
-pub fn restore_emby_owned_state(snapshot: &EmbyOwnedStateSnapshot) -> Result<(), String> {
+pub fn restore_emby_owned_state(snapshot: &EmbyOwnedStateSnapshot) -> Result<(), ConfigError> {
     restore_file(&queue_state_path(), snapshot.queue.as_deref())?;
     restore_file(
         &library_position_state_path(),
@@ -76,33 +81,40 @@ pub fn restore_emby_owned_state(snapshot: &EmbyOwnedStateSnapshot) -> Result<(),
 
 /// Clear only state whose identity belongs to Emby. Feed and other Service
 /// queue entries remain in the persisted queue snapshot.
-pub fn clear_emby_owned_state() -> Result<(), String> {
+pub fn clear_emby_owned_state() -> Result<(), ConfigError> {
     if let Some(bytes) = snapshot_file(&queue_state_path())? {
         let state: QueueState = serde_json::from_slice(&bytes)
-            .map_err(|error| format!("parse Emby queue state: {error}"))?;
-        save_queue_state(&state.without_emby())?;
+            .map_err(|error| ConfigError::lifecycle(format!("parse Emby queue state: {error}")))?;
+        save_queue_state(&state.without_emby()).map_err(ConfigError::lifecycle)?;
     }
 
     for path in [token_cache_path(), library_position_state_path()] {
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("remove Emby-owned state: {error}")),
+            Err(error) => {
+                return Err(ConfigError::lifecycle(format!(
+                    "remove Emby-owned state: {error}"
+                )));
+            }
         }
     }
 
     let config = config_path();
     if let Ok(text) = std::fs::read_to_string(&config) {
-        let mut document: toml::Value =
-            toml::from_str(&text).map_err(|error| format!("parse owner configuration: {error}"))?;
+        let mut document: toml::Value = toml::from_str(&text).map_err(|error| {
+            ConfigError::lifecycle(format!("parse owner configuration: {error}"))
+        })?;
         if let Some(table) = document.as_table_mut() {
             table.remove("library_routes");
         } else {
-            return Err("owner configuration is not a table".to_string());
+            return Err(ConfigError::lifecycle("owner configuration is not a table"));
         }
-        let text = toml::to_string(&document)
-            .map_err(|error| format!("serialize owner configuration: {error}"))?;
-        write_config_text_at(&config, &text).map_err(|error| error.to_string())?;
+        let text = toml::to_string(&document).map_err(|error| {
+            ConfigError::lifecycle(format!("serialize owner configuration: {error}"))
+        })?;
+        write_config_text_at(&config, &text)
+            .map_err(|error| ConfigError::lifecycle(error.to_string()))?;
     }
     remove_emby_image_cache();
     Ok(())
@@ -130,7 +142,7 @@ fn is_emby_cache(name: &str) -> bool {
     !name.starts_with("audiobookshelf_")
 }
 
-fn snapshot_emby_image_cache() -> Result<Vec<(String, Vec<u8>)>, String> {
+fn snapshot_emby_image_cache() -> Result<Vec<(String, Vec<u8>)>, ConfigError> {
     let Ok(entries) = std::fs::read_dir(image_cache_dir()) else {
         return Ok(Vec::new());
     };
@@ -141,19 +153,23 @@ fn snapshot_emby_image_cache() -> Result<Vec<(String, Vec<u8>)>, String> {
             is_emby_cache(&name).then(|| {
                 std::fs::read(entry.path())
                     .map(|bytes| (name, bytes))
-                    .map_err(|error| format!("read Emby image cache: {error}"))
+                    .map_err(|error| {
+                        ConfigError::lifecycle(format!("read Emby image cache: {error}"))
+                    })
             })
         })
         .collect()
 }
 
-fn restore_emby_image_cache(snapshot: &[(String, Vec<u8>)]) -> Result<(), String> {
+fn restore_emby_image_cache(snapshot: &[(String, Vec<u8>)]) -> Result<(), ConfigError> {
     let dir = image_cache_dir();
-    std::fs::create_dir_all(&dir).map_err(|error| format!("restore Emby image cache: {error}"))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| ConfigError::lifecycle(format!("restore Emby image cache: {error}")))?;
     remove_emby_image_cache();
     for (name, bytes) in snapshot {
-        std::fs::write(dir.join(name), bytes)
-            .map_err(|error| format!("restore Emby image cache: {error}"))?;
+        std::fs::write(dir.join(name), bytes).map_err(|error| {
+            ConfigError::lifecycle(format!("restore Emby image cache: {error}"))
+        })?;
     }
     Ok(())
 }
@@ -161,22 +177,25 @@ fn restore_emby_image_cache(snapshot: &[(String, Vec<u8>)]) -> Result<(), String
 /// Clear Emby-owned state and then commit a validated setup. The existing
 /// setup/secret transaction snapshots both durable halves; this outer seam
 /// adds the owner-state snapshot and rollback required for replacement.
-pub fn replace_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(), String> {
+pub fn replace_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(), ConfigError> {
     let snapshot = snapshot_emby_owned_state()?;
     if let Err(error) = clear_emby_owned_state() {
         return restore_after_failure(error, &snapshot);
     }
     match persist_emby_setup_and_secret(setup, token) {
         Ok(()) => Ok(()),
-        Err(error) => restore_after_failure(error, &snapshot),
+        Err(error) => restore_after_failure(ConfigError::lifecycle(error), &snapshot),
     }
 }
 
-fn restore_after_failure(error: String, snapshot: &EmbyOwnedStateSnapshot) -> Result<(), String> {
+fn restore_after_failure(
+    error: ConfigError,
+    snapshot: &EmbyOwnedStateSnapshot,
+) -> Result<(), ConfigError> {
     match restore_emby_owned_state(snapshot) {
         Ok(()) => Err(error),
-        Err(restore_error) => Err(format!(
+        Err(restore_error) => Err(ConfigError::lifecycle(format!(
             "{error}; owner-state rollback failed: {restore_error}"
-        )),
+        ))),
     }
 }
