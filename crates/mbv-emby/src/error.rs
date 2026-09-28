@@ -11,6 +11,7 @@ pub struct EmbyError {
 enum EmbyErrorKind {
     Auth,
     Timeout,
+    BoundedTimeout,
     Http,
     Parse,
     Playlist,
@@ -67,7 +68,7 @@ impl EmbyError {
     pub fn kind_name(&self) -> &'static str {
         match self.kind {
             EmbyErrorKind::Auth => "emby.auth",
-            EmbyErrorKind::Timeout => "emby.timeout",
+            EmbyErrorKind::Timeout | EmbyErrorKind::BoundedTimeout => "emby.timeout",
             EmbyErrorKind::Http => "emby.http",
             EmbyErrorKind::Parse => "emby.parse",
             EmbyErrorKind::Playlist => "emby.playlist",
@@ -82,7 +83,15 @@ impl EmbyError {
 
     #[must_use]
     pub fn is_timeout(&self) -> bool {
-        matches!(self.kind, EmbyErrorKind::Timeout)
+        matches!(
+            self.kind,
+            EmbyErrorKind::Timeout | EmbyErrorKind::BoundedTimeout
+        )
+    }
+
+    #[must_use]
+    pub fn is_bounded_timeout(&self) -> bool {
+        matches!(self.kind, EmbyErrorKind::BoundedTimeout)
     }
 }
 
@@ -139,6 +148,6 @@ impl From<crate::EmbyFailure> for EmbyError {
 
 impl From<String> for EmbyError {
     fn from(message: String) -> Self {
-        Self::new(EmbyErrorKind::Timeout, message)
+        Self::new(EmbyErrorKind::BoundedTimeout, message)
     }
 }

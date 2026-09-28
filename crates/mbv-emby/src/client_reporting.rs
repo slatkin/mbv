@@ -246,7 +246,7 @@ impl EmbyClient {
                 log::info!(target: "api", "inbound: {status} Stopped shutdown in {elapsed_ms}ms");
                 true
             }
-            Err(e) if e.is_timeout() => {
+            Err(e) if e.is_bounded_timeout() => {
                 log::warn!(target: "api", "err: Stopped shutdown timed out after {elapsed_ms}ms: {e}");
                 false
             }
