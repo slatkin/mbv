@@ -327,17 +327,14 @@ impl App {
         played: bool,
         progress_report_accepted: bool,
     ) {
-        let position = if played {
-            0
-        } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if position_ticks > 0 && !slot.item.is_audio() {
-                position_ticks
-            } else {
-                slot.item.playback_position_ticks()
-            }
-        } else {
-            0
+        let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
+            return;
         };
+        let observation = mbv_queue::ProgressObservation::Stopped {
+            position_ticks,
+            played,
+        };
+        let position = observation.position_to_record(&slot.item);
         let queue = self.playback_queue_mut();
         let _ = queue.queue.apply_progress(slot_id, position, played);
         if progress_report_accepted {
@@ -429,21 +426,14 @@ impl App {
             log::warn!(target: "consume", "TrackCompleted: slot_id={slot_id:?} maps to no live slot; dropping");
             return;
         }
-        let position = if played {
-            0
-        } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            // Only record meaningful progress for video; audio and
-            // startup noise keep the prior value.
-            if position_ticks >= mbv_emby_model::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
-                && !slot.item.is_audio()
-            {
-                position_ticks
-            } else {
-                slot.item.playback_position_ticks()
-            }
-        } else {
+        let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
             return;
         };
+        let observation = mbv_queue::ProgressObservation::Completed {
+            position_ticks,
+            played,
+        };
+        let position = observation.position_to_record(&slot.item);
         let queue = self.playback_queue_mut();
         let _ = queue.queue.apply_progress(slot_id, position, played);
         if progress_report_accepted {

@@ -386,23 +386,24 @@ impl PlayerProxy {
         }
     }
 
+    /// Remote-only: relative stepping for a local player goes through the
+    /// owner via `request_relative_step`/`transport_sender`, not here.
+    /// Returns `false` for local players.
     pub fn next(&self) -> bool {
-        // No mirror gate: the playback owner bounds-checks the step against
-        // its own authoritative state. Gating here on the client's status
-        // mirror silently dropped Next/Previous whenever the mirror lagged a
-        // transition (stale current_idx/queue_len), making the transport
-        // button intermittently do nothing.
         match &self.inner {
-            PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Next),
+            PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                 remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Next),
             ),
         }
     }
 
+    /// Remote-only: relative stepping for a local player goes through the
+    /// owner via `request_relative_step`/`transport_sender`, not here.
+    /// Returns `false` for local players.
     pub fn previous(&self) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Previous),
+            PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                 remote.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Previous),
             ),
@@ -513,21 +514,17 @@ impl PlayerProxy {
     /// In local mode the returned closure panics if the local player's `cmd_tx`
     /// mutex is poisoned — a previous owner panicked while holding it. The
     /// remote closure takes no lock and cannot panic.
-    pub fn command_sender(&self) -> Arc<dyn Fn(PlayerCommand) + Send + Sync> {
+    pub fn transport_sender(
+        &self,
+        local_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
+    ) -> Arc<dyn Fn(mbv_ctrl::TransportCommand) + Send + Sync> {
         match &self.inner {
-            PlayerProxyInner::Local(p) => {
-                let cmd_tx = Arc::clone(&p.cmd_tx);
-                Arc::new(move |cmd: PlayerCommand| {
-                    if let Some(tx) = cmd_tx.lock().unwrap().as_ref() {
-                        let _ = tx.send(cmd);
-                    }
-                })
-            }
+            PlayerProxyInner::Local(_) => Arc::new(move |transport| {
+                let _ = local_tx.send(transport);
+            }),
             PlayerProxyInner::Remote(r) => {
                 let remote = r.clone();
-                Arc::new(move |cmd: PlayerCommand| {
-                    let _ = remote.send_command(cmd);
-                })
+                Arc::new(move |transport| remote.send_transport(transport))
             }
         }
     }

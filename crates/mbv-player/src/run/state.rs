@@ -1,41 +1,136 @@
-use std::num::NonZeroU8;
+use super::PlaybackRun;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LoadState {
     Ready,
-    Pending(NonZeroU8),
+    DrainingReplacedFile,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Drained {
     HitZero,
-    StillPending,
     AlreadyReady,
 }
 
 impl LoadState {
-    pub(crate) fn begin_single() -> Self {
-        LoadState::Pending(NonZeroU8::new(1).unwrap())
-    }
-
     pub(crate) fn drain(&mut self) -> Drained {
         match self {
             LoadState::Ready => Drained::AlreadyReady,
-            LoadState::Pending(n) => {
-                let v = n.get();
-                if v <= 1 {
-                    *self = LoadState::Ready;
-                    Drained::HitZero
-                } else {
-                    *n = NonZeroU8::new(v - 1).unwrap();
-                    Drained::StillPending
-                }
+            LoadState::DrainingReplacedFile => {
+                *self = LoadState::Ready;
+                Drained::HitZero
             }
         }
     }
 
     pub(crate) fn is_ready(self) -> bool {
         matches!(self, LoadState::Ready)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum StopAction {
+    ReportedNow(StopReport),
+    Deferred,
+    NothingPlaying,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ItemLifecycleState {
+    load_state: LoadState,
+    stop_report: StopReport,
+}
+
+impl ItemLifecycleState {
+    pub(crate) fn new() -> Self {
+        Self {
+            load_state: LoadState::Ready,
+            stop_report: StopReport::NotSent,
+        }
+    }
+
+    pub(crate) fn is_ready(self) -> bool {
+        self.load_state.is_ready()
+    }
+
+    pub(crate) fn on_drained(&mut self) -> Drained {
+        let drained = self.load_state.drain();
+        if drained == Drained::HitZero {
+            self.stop_report.reset();
+        }
+        drained
+    }
+
+    pub(crate) fn mark_reported(&mut self, report: StopReport) {
+        self.stop_report = report;
+    }
+
+    pub(crate) fn accept_replacement(&mut self) {
+        self.load_state = LoadState::DrainingReplacedFile;
+    }
+
+    pub(crate) fn is_unreported(self) -> bool {
+        self.stop_report == StopReport::NotSent
+    }
+
+    pub(crate) fn is_accepted(self) -> bool {
+        self.stop_report.is_accepted()
+    }
+
+    pub(crate) fn is_sent(self) -> bool {
+        self.stop_report.is_sent()
+    }
+
+    pub(crate) fn stop_report(self) -> StopReport {
+        self.stop_report
+    }
+}
+
+impl PlaybackRun {
+    pub(crate) fn begin_item_lifecycle(&mut self, action: StopAction) {
+        self.mark_reported(match action {
+            StopAction::ReportedNow(report) => report,
+            StopAction::Deferred | StopAction::NothingPlaying => StopReport::NotSent,
+        });
+        self.accept_replacement();
+        self.tracks_initialized = false;
+        self.forced_jump = None;
+        self.reset_next_up_state();
+        self.stopped_event_sent = false;
+        self.mark_played_id = None;
+        self.stopped_near_end = false;
+    }
+
+    pub(crate) fn accept_replacement(&mut self) {
+        self.item_lifecycle.accept_replacement();
+    }
+
+    pub(crate) fn on_drained(&mut self) -> Drained {
+        self.item_lifecycle.on_drained()
+    }
+
+    pub(crate) fn mark_reported(&mut self, report: StopReport) {
+        self.item_lifecycle.mark_reported(report);
+    }
+
+    pub(crate) fn is_unreported(&self) -> bool {
+        self.item_lifecycle.is_unreported()
+    }
+
+    pub(crate) fn stop_report_accepted(&self) -> bool {
+        self.item_lifecycle.is_accepted()
+    }
+
+    pub(crate) fn stop_report_sent(&self) -> bool {
+        self.item_lifecycle.is_sent()
+    }
+
+    pub(crate) fn stop_report(&self) -> StopReport {
+        self.item_lifecycle.stop_report()
+    }
+
+    pub(crate) fn load_is_ready(&self) -> bool {
+        self.item_lifecycle.is_ready()
     }
 }
 

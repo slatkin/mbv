@@ -158,8 +158,6 @@ fn handle_ws_control(
         }
         WsEvent::Pause => player.set_paused(true),
         WsEvent::Unpause => player.set_paused(false),
-        WsEvent::NextTrack => player.next(),
-        WsEvent::PreviousTrack => player.previous(),
         WsEvent::Seek(ticks) => player.send_command(PlayerCommand::SeekAbsolute(
             mbv_emby_model::ticks_to_seconds(ticks),
         )),
@@ -198,7 +196,7 @@ fn handle_ws_control(
                 false
             }
         }
-        WsEvent::UserDataChanged => false,
+        WsEvent::NextTrack | WsEvent::PreviousTrack | WsEvent::UserDataChanged => false,
         WsEvent::Play { .. } => unreachable!("Play is handled by handle_ws_play"),
     };
     if changed {

@@ -68,9 +68,7 @@ impl App {
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
-                move |cmd| {
-                    let _ = mpris_remote.send_command(cmd);
-                },
+                move |transport| mpris_remote.send_transport(transport),
                 Some(disconnected),
             );
         }
@@ -192,9 +190,7 @@ impl App {
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
-                move |cmd| {
-                    let _ = mpris_remote.send_command(cmd);
-                },
+                move |transport| mpris_remote.send_transport(transport),
                 Some(disconnected),
             );
         }
@@ -299,11 +295,11 @@ impl App {
 
     fn rebind_mpris_to_current_player(&self) {
         if let Some(handle) = &self.mpris {
-            let sender = self.player.command_sender();
+            let sender = self.player.transport_sender(self.transport_tx.clone());
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&self.player.status),
-                move |cmd| sender(cmd),
+                move |transport| sender(transport),
                 self.player.disconnected_flag(),
             );
         }

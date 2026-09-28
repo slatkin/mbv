@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-
-const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
+use mbv_emby_model::EmbyItem;
 
 // FeedEntry and QueueItem — the two item kinds a playback queue slot can
 // hold, plus QueueItem's custom (kind-tagged, legacy-fallback) Deserialize.
@@ -16,6 +14,8 @@ mod state;
 pub use state::*;
 mod execution_sequence;
 pub use execution_sequence::*;
+mod progress;
+pub use progress::*;
 
 // serde derives so the owner-assigned slot identity can travel on
 // `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
@@ -61,116 +61,6 @@ impl QueueRevision {
     /// Mint a new owner-local revision.
     fn bump(&mut self, mint: &QueueRevisionMint) {
         *self = mint.mint();
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SlotProgress {
-    pub position_ticks: i64,
-    pub played: bool,
-}
-
-impl SlotProgress {
-    #[must_use]
-    pub fn from_item(item: &EmbyItem) -> Self {
-        Self {
-            position_ticks: item.playback_position_ticks,
-            played: item.played,
-        }
-    }
-
-    /// Progress from any item kind. Feed and Audiobookshelf slots carry
-    /// their local position and played state without entering Emby sync.
-    fn from_queue_item(item: &QueueItem) -> Self {
-        match item {
-            QueueItem::Emby(emby) => Self::from_item(emby),
-            QueueItem::Feed(entry) => Self {
-                position_ticks: entry.position_ticks,
-                played: entry.played,
-            },
-            QueueItem::Audiobookshelf(item) => Self {
-                position_ticks: item.playback_position_ticks(),
-                played: item.played(),
-            },
-        }
-    }
-
-    fn matches_server_confirmation(&self, item: &EmbyItem) -> bool {
-        (self.position_ticks - item.playback_position_ticks).abs()
-            <= PROGRESS_CONFIRMATION_TOLERANCE_TICKS
-            && self.played == item.played
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ProgressState {
-    pub local: SlotProgress,
-    pub pending_sync: Option<SlotProgress>,
-}
-
-impl ProgressState {
-    /// Progress from any item kind. Feed and Audiobookshelf slots retain
-    /// local position and played state but never enter Emby sync
-    /// (`pending_sync` stays `None`).
-    fn from_queue_item(item: &QueueItem) -> Self {
-        match item {
-            QueueItem::Emby(emby) => Self {
-                local: SlotProgress::from_item(emby),
-                pending_sync: None,
-            },
-            QueueItem::Feed(entry) => Self {
-                local: SlotProgress {
-                    position_ticks: entry.position_ticks,
-                    played: entry.played,
-                },
-                pending_sync: None,
-            },
-            QueueItem::Audiobookshelf(item) => Self {
-                local: SlotProgress {
-                    position_ticks: item.playback_position_ticks(),
-                    played: item.played(),
-                },
-                pending_sync: None,
-            },
-        }
-    }
-
-    /// Applies progress back to the item. Feed and Audiobookshelf entries
-    /// never participate in Emby sync.
-    fn apply_to_item(&self, item: &mut QueueItem) {
-        apply_progress_to_queue_item(item, self.local.position_ticks, self.local.played);
-    }
-}
-
-/// Writes a resolved position/played pair into whichever kind `item` is.
-/// Shared by [`ProgressState::apply_to_item`] (the canonical `PlaybackQueue`)
-/// and [`crate::execution_sequence::ExecutionSequence`]'s own
-/// progress application (the Playback run's local queue mirror), so the two
-/// never diverge on how a kind's fields are written.
-pub(crate) fn apply_progress_to_queue_item(
-    item: &mut QueueItem,
-    position_ticks: i64,
-    played: bool,
-) {
-    match item {
-        QueueItem::Emby(emby) => {
-            emby.playback_position_ticks = position_ticks;
-            emby.played = played;
-        }
-        QueueItem::Feed(entry) => {
-            entry.position_ticks = position_ticks;
-            entry.played = played;
-        }
-        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
-            episode.position_ticks = position_ticks;
-            episode.played = played;
-            episode.is_finished = played;
-        }
-        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
-            book.position_ticks = position_ticks;
-            book.played = played;
-            book.is_finished = played;
-        }
     }
 }
 

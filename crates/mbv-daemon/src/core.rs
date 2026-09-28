@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
-use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
+use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
@@ -42,6 +42,7 @@ pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
 
 pub(super) enum DaemonEvent {
     Player(PlayerEvent),
+    Transport(mbv_ctrl::TransportCommand),
     Ws {
         generation: mbv_core::service_runtime::SetupGeneration,
         event: WsEvent,
@@ -393,9 +394,15 @@ pub(super) struct DaemonOwnerContext<'a> {
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
 /// gate (design D4): dispatch it now, or hold it behind the in-flight one and
 /// report `Superseded` for whatever queued transition it displaced.
+#[derive(Clone, Copy)]
+pub(super) enum JumpOrigin {
+    Ctrl(CtrlClientId),
+    Transport,
+}
+
 pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
-    client_id: CtrlClientId,
+    origin: JumpOrigin,
     transition: mbv_player::transition::Transition,
 ) {
     let DaemonPlayerOwner {
@@ -440,7 +447,13 @@ pub(super) fn dispatch_slot_jump(
                     );
                 }
             }
-            *queued_origin = Some((transition.request_id, client_id));
+            // Transport senders (MPRIS/tray/Emby-ws) have no ctrl wire form and
+            // so no `Superseded` event to receive; only `Ctrl` origins are worth
+            // tracking here.
+            *queued_origin = match origin {
+                JumpOrigin::Ctrl(client_id) => Some((transition.request_id, client_id)),
+                JumpOrigin::Transport => None,
+            };
         }
     }
     // Accepting a transition mutates desired playback state (in_flight /
@@ -572,10 +585,16 @@ pub(crate) struct SharedQueueState {
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
+impl SharedQueueState {
+    pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
+        *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
+    }
+}
+
 #[derive(Debug)]
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
-    pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
+    pub transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;

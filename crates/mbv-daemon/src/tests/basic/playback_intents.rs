@@ -2,13 +2,10 @@ use super::*;
 
 // ── relative transport steps advance from the desired slot ──────────────
 
-/// A Next intent while a jump to B is in flight steps from B (queues C
-/// behind it), never from the published `current_idx` mirror — which still
-/// names A until the run confirms and made a rapid second press re-target B
-/// (the erratic Next report). Both presses must also act: the owner, not a
-/// client's status mirror, bounds-checks the step.
+/// Repeating Next while the first relative transition is unsettled coalesces
+/// rather than queueing another step.
 #[test]
-fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
+fn repeated_next_intent_coalesces_while_relative_transition_is_unsettled() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
@@ -26,7 +23,6 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         0,
     );
     let slot_b = queue.slots()[1].slot_id;
-    let slot_c = queue.slots()[2].slot_id;
     let mut owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(queue, QueueSource::Remote),
         ..Default::default()
@@ -68,8 +64,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         "the first Next dispatches a slot jump to B"
     );
 
-    // Second rapid press, B still in flight: steps from B and queues C
-    // behind it.
+    // Second rapid press coalesces with the unsettled Next to B.
     handle_ctrl_for_role(
         next_intent(2),
         CtrlContext {
@@ -93,8 +88,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         cmd_rx.try_recv().is_err(),
         "no second dispatch while B is in flight"
     );
-    // The owner snapshot names the true desired pair: B in flight, C queued.
-    // (Stepping from the mirror would have queued B again.) Drain the
+    // The owner snapshot retains only the in-flight transition. Drain the
     // already-queued events without ever blocking on recv.
     let mut state = None;
     while let Ok(outbound) = client_rx.try_recv() {
@@ -111,9 +105,8 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         "B remains in flight"
     );
     assert_eq!(
-        state.queued_latest_transition.map(|t| t.target_slot),
-        Some(slot_c.raw()),
-        "the second press queues C behind the in-flight B"
+        state.queued_latest_transition, None,
+        "repeat Next is coalesced"
     );
 }
 
@@ -208,7 +201,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
                 .observe_track_change(slot_id)
                 .expect("the run reports a slot the canonical queue still holds");
             super::settle_and_redispatch(&mut owner, &player, request_id, resolved);
-            *shared.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+            shared.publish_observed(&owner.core);
             Some((1, resolved))
         }
         _ => panic!("expected a TrackChanged confirmation for slot B"),

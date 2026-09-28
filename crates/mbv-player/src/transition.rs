@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use mbv_ctrl::{PlaybackGeneration, PlaybackRequestId};
+use mbv_ctrl::{Direction, PlaybackGeneration, PlaybackRequestId};
 use mbv_queue::QueueSlotId;
 
 /// Deadline for the Playback run to confirm an in-flight transition (via
@@ -20,10 +20,17 @@ const IN_FLIGHT_TRANSITION_TIMEOUT: Duration = Duration::from_secs(5);
 /// A desired playback transition: the correlated request identity plus the
 /// canonical slot it targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitionCause {
+    Jump,
+    Step(Direction),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Transition {
     pub request_id: PlaybackRequestId,
     pub generation: PlaybackGeneration,
     pub target: QueueSlotId,
+    pub cause: TransitionCause,
 }
 
 impl Transition {
@@ -33,10 +40,21 @@ impl Transition {
         generation: PlaybackGeneration,
         target: QueueSlotId,
     ) -> Self {
+        Self::with_cause(request_id, generation, target, TransitionCause::Jump)
+    }
+
+    #[must_use]
+    pub fn with_cause(
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+        target: QueueSlotId,
+        cause: TransitionCause,
+    ) -> Self {
         Self {
             request_id,
             generation,
             target,
+            cause,
         }
     }
 

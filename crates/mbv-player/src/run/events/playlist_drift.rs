@@ -7,8 +7,8 @@ impl PlaybackRun {
             return;
         }
         if self.pending_initial_playlist_layout
-            || !self.load_state.is_ready()
-            || self.forced_slot_id.is_some()
+            || !self.load_is_ready()
+            || self.forced_jump.is_some()
         {
             log::debug!(
                 target: "player",

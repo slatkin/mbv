@@ -65,7 +65,7 @@ Stop SHALL be available while direct-daemon playback is pending or active. An ac
 - **THEN** the client still allows Stop to be dispatched
 
 ### Requirement: Navigation is single-flight
-Next and Previous SHALL each remain single-flight until the requested track change reaches Applied, Rejected, or Superseded. An equivalent repeated navigation input during that interval SHALL be coalesced. The Playback run SHALL confirm the transition through the same TrackChanged observation path regardless of whether the Playback run uses a full mpv playlist or owner-driven active-file projection.
+Next and Previous SHALL each remain single-flight until the requested track change reaches Applied, Rejected, or Superseded. An equivalent repeated navigation input during that interval SHALL be coalesced. This SHALL hold for every Next or Previous sender that reaches the daemon's Player owner, including ctrl clients, Emby remote-control commands, the tray, and MPRIS. The Playback run SHALL confirm the transition through the same TrackChanged observation path regardless of whether the Playback run uses a full mpv playlist or owner-driven active-file projection.
 
 #### Scenario: Repeated Next before confirmation
 - **WHEN** Next is invoked again before the first Next changes the confirmed current item
@@ -78,6 +78,10 @@ Next and Previous SHALL each remain single-flight until the requested track chan
 #### Scenario: Repeated Previous before confirmation
 - **WHEN** Previous is invoked again before the first Previous changes the confirmed current item
 - **THEN** the repeated request is coalesced and playback moves back by only one item
+
+#### Scenario: Repeated Emby remote Next before confirmation
+- **WHEN** an Emby remote-control Next arrives while an earlier Next from any sender is still unconfirmed
+- **THEN** the repeated request is coalesced and playback advances by only one item
 
 #### Scenario: Active-file JumpTo confirms via TrackChanged
 - **WHEN** a JumpTo command completes in active-file mode (owner-driven single-item projection)

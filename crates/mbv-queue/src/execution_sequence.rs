@@ -91,17 +91,6 @@ impl ExecutionSequence {
         self.slots.iter().any(|slot| slot.item.is_audiobookshelf())
     }
 
-    /// Record a completed/stopped occurrence's resolved position on this
-    /// slot, so a later local resume lookup (relative `Next`/`Previous`
-    /// navigation back to it) sees what was actually watched this session
-    /// instead of this sequence's submission-time snapshot. No-op if the slot
-    /// is gone.
-    pub fn apply_progress(&mut self, slot_id: QueueSlotId, position_ticks: i64, played: bool) {
-        if let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) {
-            crate::apply_progress_to_queue_item(&mut slot.item, position_ticks, played);
-        }
-    }
-
     /// Append a slot carrying an owner-assigned identity.
     pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
         assert_unique_slot_ids(
@@ -212,33 +201,5 @@ mod tests {
         let id = QueueSlotId::from_raw(7);
         let mut sequence = ExecutionSequence::from_slot_items(vec![(id, item())], Some(id));
         sequence.append_with_id(id, item());
-    }
-
-    // Regression: this sequence used to be write-once (only ever replaced in
-    // bulk), so relative Next/Previous navigation back to an already-played
-    // slot resolved its resume position from the submission-time snapshot,
-    // not what was actually watched this session.
-    #[test]
-    fn apply_progress_updates_the_slots_own_item() {
-        let id = QueueSlotId::from_raw(1);
-        let mut sequence = ExecutionSequence::from_slot_items(vec![(id, item())], Some(id));
-
-        sequence.apply_progress(id, 42, false);
-
-        assert_eq!(
-            sequence.slot(id).unwrap().item.playback_position_ticks(),
-            42
-        );
-        assert!(!sequence.slot(id).unwrap().item.played());
-    }
-
-    #[test]
-    fn apply_progress_on_missing_slot_is_a_no_op() {
-        let id = QueueSlotId::from_raw(1);
-        let mut sequence = ExecutionSequence::from_slot_items(vec![(id, item())], Some(id));
-
-        sequence.apply_progress(QueueSlotId::from_raw(99), 42, true);
-
-        assert_eq!(sequence.slot(id).unwrap().item.playback_position_ticks(), 0);
     }
 }

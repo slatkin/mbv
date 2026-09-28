@@ -1,4 +1,5 @@
 use super::*;
+use crate::run::StopAction;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use rstest::rstest;
 
@@ -266,7 +267,7 @@ fn feed_append_displaced_emby_reported_before_ids_clear_and_drain() {
     // Proves cmd_load_feed → on_end_file state machine:
     // 1) report_stopped_background fires with live IDs for old Emby item
     // 2) IDs cleared for Feed
-    // 3) load_state drain suppresses displaced EndFile, resets stop_report
+    // 3) the replacement drain suppresses displaced EndFile, resets stop_report
     // 4) After drain, session has no IDs — Feed lifecycle is safe
     let (mut session, _status) = make_queue_session_for_pos_tests(1);
     assert!(session.reporter.has_session());
@@ -283,17 +284,13 @@ fn feed_append_displaced_emby_reported_before_ids_clear_and_drain() {
     );
     session.reporter.clear_session();
     assert!(!session.reporter.has_session());
-    session.load_state = LoadState::begin_single();
-    session.stop_report = StopReport::NotSent;
+    session.begin_item_lifecycle(StopAction::NothingPlaying);
 
     // Simulate on_end_file drain path (displaced EndFile)
-    assert!(!session.load_state.is_ready());
-    match session.load_state.drain() {
-        Drained::HitZero => session.stop_report.reset(),
-        other => panic!("expected HitZero, got {other:?}"),
-    }
-    assert!(session.load_state.is_ready());
-    assert_eq!(session.stop_report, StopReport::NotSent);
+    assert!(!session.load_is_ready());
+    assert_eq!(session.on_drained(), Drained::HitZero);
+    assert!(session.load_is_ready());
+    assert_eq!(session.stop_report(), StopReport::NotSent);
 
     // Feed lifecycle state
     assert!(!session.reporter.has_session());

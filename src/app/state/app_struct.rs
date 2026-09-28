@@ -112,6 +112,8 @@ pub struct App {
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
+    pub(in crate::app) transport_rx: mpsc::Receiver<mbv_ctrl::TransportCommand>,
+    pub(in crate::app) transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
     pub(in crate::app) audiobookshelf_socket_rx:
         mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,

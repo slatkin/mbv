@@ -68,9 +68,7 @@ impl App {
             mbv_desktop::mpris::rebind(
                 handle,
                 std::sync::Arc::clone(&mpris_remote.status),
-                move |cmd| {
-                    let _ = mpris_remote.send_command(cmd);
-                },
+                move |transport| mpris_remote.send_transport(transport),
                 Some(disconnected),
             );
         }

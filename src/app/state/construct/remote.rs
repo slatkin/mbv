@@ -28,9 +28,7 @@ fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::
     let mpris_remote = remote.clone();
     mbv_desktop::mpris::start(
         std::sync::Arc::clone(&mpris_remote.status),
-        move |cmd| {
-            let _ = mpris_remote.send_command(cmd);
-        },
+        move |transport| mpris_remote.send_transport(transport),
         Some(remote.disconnected_flag()),
         crate::config::image_disk_cache_path,
     )
@@ -173,6 +171,7 @@ impl App {
         app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
+        let (transport_tx, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
@@ -215,6 +214,8 @@ impl App {
             player,
             player_rx,
             ws_rx,
+            transport_rx,
+            transport_tx,
             ws_send_tx: None,
             audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,

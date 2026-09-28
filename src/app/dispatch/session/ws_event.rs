@@ -1,5 +1,6 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, ModelContentEvent, PanelFocus};
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::Direction;
 #[cfg(test)]
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;
@@ -24,10 +25,18 @@ impl App {
                 self.player.set_paused(false);
             }
             WsEvent::NextTrack => {
-                self.player.next();
+                if self.player.is_remote() {
+                    self.player.next();
+                } else {
+                    self.request_relative_step(Direction::Next);
+                }
             }
             WsEvent::PreviousTrack => {
-                self.player.previous();
+                if self.player.is_remote() {
+                    self.player.previous();
+                } else {
+                    self.request_relative_step(Direction::Previous);
+                }
             }
             WsEvent::TogglePause => {
                 self.player.send_command(PlayerCommand::TogglePause);
@@ -193,7 +202,6 @@ mod tests {
     /// toggle, so `paused` is part of the fixture, not decoration.
     #[rstest]
     #[case::pause(false, 100, WsEvent::Pause, PlayerCommand::TogglePause)]
-    #[case::next_track(false, 100, WsEvent::NextTrack, PlayerCommand::Next)]
     #[case::seek_absolute(false, 100, WsEvent::Seek(30 * TICKS_PER_SECOND), PlayerCommand::SeekAbsolute(30.0))]
     #[case::set_volume_clamps_low(false, 100, WsEvent::SetVolume(-5), PlayerCommand::SetVolume(0))]
     #[case::set_audio(false, 100, WsEvent::SetAudio(3), PlayerCommand::SetAudio(3))]

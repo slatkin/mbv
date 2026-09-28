@@ -200,6 +200,29 @@ pub struct PlaybackIntent {
     pub action: PlaybackIntentAction,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Direction {
+    Next,
+    Previous,
+}
+
+/// A transport action resolved by the Player owner before reaching the run.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum TransportCommand {
+    Step(Direction),
+    Player(crate::player::PlayerCommand),
+}
+
+impl From<&PlaybackIntentAction> for Option<Direction> {
+    fn from(action: &PlaybackIntentAction) -> Self {
+        match action {
+            PlaybackIntentAction::Next => Some(Direction::Next),
+            PlaybackIntentAction::Previous => Some(Direction::Previous),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PlaybackIntentAction {
     Play {
@@ -304,8 +327,6 @@ impl WireCommand {
             | PlayerCommand::QueueMove(..)
             | PlayerCommand::JumpTo { .. }
             | PlayerCommand::LoadNew { .. }
-            | PlayerCommand::Next
-            | PlayerCommand::Previous
             | PlayerCommand::SubmitQueue { .. } => Err(cmd),
         }
     }

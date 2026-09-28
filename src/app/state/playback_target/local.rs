@@ -2,6 +2,7 @@ use super::LocalPlaybackTarget;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::Direction;
 use mbv_render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use mbv_ui_model::ui_util::take_chars;
 
@@ -36,16 +37,27 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn jump_track(app: &mut App, step: i64) {
-        if step >= 0 {
-            if app.player.is_remote() {
-                app.flash("Next requested".to_string(), ToastSeverity::Neutral);
+        if app.player.is_remote() {
+            app.flash(
+                if step >= 0 {
+                    "Next requested"
+                } else {
+                    "Previous requested"
+                }
+                .to_string(),
+                ToastSeverity::Neutral,
+            );
+            if step >= 0 {
+                app.player.next();
+            } else {
+                app.player.previous();
             }
-            app.player.next();
         } else {
-            if app.player.is_remote() {
-                app.flash("Previous requested".to_string(), ToastSeverity::Neutral);
-            }
-            app.player.previous();
+            app.request_relative_step(if step >= 0 {
+                Direction::Next
+            } else {
+                Direction::Previous
+            });
         }
     }
 

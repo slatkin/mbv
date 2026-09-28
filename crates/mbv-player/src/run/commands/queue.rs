@@ -2,6 +2,7 @@ use super::{
     mpv_err_str, mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     ExecSlot, Mpv, PlaybackRun, PlayerEvent, QueueSlotId,
 };
+use crate::run::ForcedJump;
 
 impl PlaybackRun {
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
@@ -29,27 +30,37 @@ impl PlaybackRun {
             reject_stale_jump(&self.event_tx, slot_id);
             return;
         };
-        self.forced_transition = Some(crate::transition::Transition::new(
-            request_id, generation, slot_id,
-        ));
+        let transition = crate::transition::Transition::new(request_id, generation, slot_id);
+        self.set_pending_playlist_jump(ForcedJump {
+            slot_id,
+            transition: Some(transition),
+            resume_ticks,
+            from_idle: false,
+        });
         if self.active_file {
-            self.cmd_jump_to_active_file(slot_id, mpv);
+            self.cmd_jump_to_active_file(slot_id, resume_ticks, Some(transition), mpv);
         } else {
             self.cmd_jump_to_playlist(slot_id, idx, resume_ticks, mpv);
         }
     }
 
-    fn cmd_jump_to_active_file(&mut self, slot_id: QueueSlotId, mpv: &Mpv) {
-        match self.select_active_slot(slot_id, mpv) {
+    pub(crate) fn set_pending_playlist_jump(&mut self, jump: ForcedJump) {
+        self.forced_jump = (!self.active_file).then_some(jump);
+    }
+
+    fn cmd_jump_to_active_file(
+        &mut self,
+        slot_id: QueueSlotId,
+        resume_ticks: Option<i64>,
+        transition: Option<crate::transition::Transition>,
+        mpv: &Mpv,
+    ) {
+        match self.select_active_slot_with_resume(slot_id, resume_ticks, mpv) {
             Ok(()) => {
                 let _ = mpv.set_property("pause", false);
                 // Active-file projection has no mpv playlist move to
-                // observe, so the JumpTo emits its TrackChanged
-                // observation here, shaped like the on_end_file settle
-                // (design D1). The tag stays on `forced_transition` so
-                // a duplicate settle path still carries it; the
-                // pipeline treats the second attempt as Ignored.
-                self.emit_track_changed(slot_id, self.forced_transition);
+                // observe, so emit the JumpTo observation here.
+                self.emit_track_changed(slot_id, transition);
             }
             Err(error) => {
                 log::warn!(target: "player", "active-file selection failed: {error}");
@@ -67,17 +78,19 @@ impl PlaybackRun {
         // mpv playlist indices are adapter coordinates; pin the
         // target slot identity before asking mpv to move. Idle jumps
         // settle on PlaybackRestart because no outgoing EndFile exists.
-        self.forced_jump_from_idle = !self.status.lock().unwrap().active;
-        if self.forced_jump_from_idle {
+        let from_idle = !self.status.lock().unwrap().active;
+        if from_idle {
             self.tracks_initialized = false;
         }
-        self.forced_slot_id = Some(slot_id);
-        self.forced_resume_ticks = resume_ticks;
+        let transition = self.forced_jump.and_then(|jump| jump.transition);
+        self.forced_jump = Some(super::super::ForcedJump {
+            slot_id,
+            transition,
+            resume_ticks,
+            from_idle,
+        });
         if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
-            self.forced_slot_id = None;
-            self.forced_jump_from_idle = false;
-            self.forced_transition = None;
-            self.forced_resume_ticks = None;
+            self.forced_jump = None;
             log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
             return;
         }
@@ -89,7 +102,7 @@ impl PlaybackRun {
             self.current_idx,
             self.queue_len(),
         );
-        if self.forced_jump_from_idle {
+        if from_idle {
             Self::play_from_idle_playlist(idx, mpv);
         }
         // Selecting a track should always start it playing, even if

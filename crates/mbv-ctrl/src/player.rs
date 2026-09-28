@@ -409,11 +409,6 @@ pub enum PlayerCommand {
         #[serde(default)]
         resume_ticks: Option<i64>,
     },
-    /// Relative single-step forward nav; carries no request identity (design D4:
-    /// relative nav correlates like natural advancement, not a repeated target).
-    Next,
-    /// Relative single-step backward nav; carries no request identity (see D4).
-    Previous,
     QueueAppend {
         items: Vec<ExecSlot>,
     },
