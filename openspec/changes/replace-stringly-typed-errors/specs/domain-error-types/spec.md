@@ -18,7 +18,9 @@ and equivalents for `mbv-core`, `mbv-remote-player`, `mbv-ui-model`,
 `mbv-visualizer`, `mbv-components`, `mbvd`), shaped as a struct wrapping a
 kind enum per `M-ERRORS-CANONICAL-STRUCTS`. The kind enum SHALL NOT be
 matched directly by other crates; each error type SHALL expose `is_*()`
-predicates for the kinds callers decide on. Every error type SHALL implement
+predicates for the kinds callers decide on, and a `kind_name()` returning a
+stable crate-qualified dotted name for each kind (the log `error.type`
+value). Every error type SHALL implement
 `Display` (one summary sentence), `std::error::Error` with the upstream cause
 available via `source()`, and `From` for each upstream error it converts
 (`M-FROM-ERROR`). No crate SHALL introduce `anyhow`, `thiserror`, or `eyre`.

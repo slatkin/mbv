@@ -4,13 +4,14 @@ Units run leaf-first; each owns a disjoint file set (except unit 7, which
 takes all remaining `src/` files). One commit per unit. Per-unit gates:
 `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo nextest run -p <touched packages>`, `cargo fmt`. Contracts name what
-each unit's tests own, per the test-ownership rule.
+each unit's tests own, per the test-ownership rule. Every introduced or
+extended error type includes `kind_name()` (design: Decisions).
 
 ## 1. Tiny crates (feed, ctrl, player, visualizer, components)
 
 - [ ] 1.1 Introduce `FeedError`, `CtrlError`, `PlayerError`,
   `VisualizerError`, `ComponentsError` (struct + private kind enum +
-  `is_*()` predicates + `Display` + `Error` + `From`), convert the 18
+  `is_*()` predicates + `kind_name()` + `Display` + `Error` + `From`), convert the 18
   `Result<_, String>` sites (`mbv-feed` 5, `mbv-ctrl` 5, `mbv-player` 5,
   `mbv-visualizer` 2, `mbv-components` 1), verify per-package nextest passes
   and `rg 'Result<.*, String>'` over the five crates returns zero
@@ -55,7 +56,7 @@ each unit's tests own, per the test-ownership rule.
   (10 sites in `mbv-daemon`), `UiModelError` (7 sites), convert the
   `mbv-core` contract-probe example (17 sites), verify per-package nextest
   passes and each area audits zero
-- [ ] 6.2 Extend `AudiobookshelfError` with real kinds for its 4 remaining
+- [ ] 6.2 Extend `AudiobookshelfError` with `kind_name()` and real kinds for its 4 remaining
   `Result<_, String>` sites, delete the lossy `From<String>` impl
   (collapses to `connectivity`), update its in-crate callers to classify
   properly (contract: no audiobookshelf failure is misclassified as

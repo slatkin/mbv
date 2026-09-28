@@ -49,6 +49,14 @@ AGENTS.md (custom domain error types, no `anyhow`/`thiserror`/`eyre`,
   enum private; `AudiobookshelfError` keeps its `pub class` field (renaming
   it would churn its callers for no behavioral gain) but new kinds are added
   as enum variants with covering predicates.
+- **Every error type exposes `kind_name(&self) -> &'static str`.** It
+  returns a stable, low-cardinality, crate-qualified dotted name (e.g.
+  `"config.parse"`, `"emby.timeout"`) for the OTel `error.type` log field
+  that structured logging (#845, `M-LOG-STRUCTURED`) records alongside
+  `error.message` (`Display`). A name, not the enum, so the private-kind
+  rule holds; qualified, so `io` kinds from different crates stay
+  distinguishable in logs. `AudiobookshelfError` gains it too. Renaming a
+  kind name is a log-format change, not a refactor.
 - **`From` conversions at the owning crate, `?` at call sites**
   (`M-FROM-ERROR`). `map_err` survives only where a foreign error needs
   context added at the boundary (e.g. which file failed to parse).
