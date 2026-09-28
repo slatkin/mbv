@@ -1,3 +1,5 @@
+pub mod spec;
+
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
