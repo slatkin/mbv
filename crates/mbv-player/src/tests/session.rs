@@ -493,3 +493,33 @@ fn standalone_natural_end_file_marks_status_inactive() {
     };
     assert!(played, "natural video EOF must surface as played");
 }
+
+/// Regression (2026-09-28 music queue): an active-file `JumpTo` left the status
+/// mirror on the queue's first item, so the playing row kept its duration.
+#[test]
+fn active_file_jump_points_status_at_jumped_item() {
+    let (mut session, status, _events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    let (first, target) = (
+        session.slot_id_at(0).unwrap(),
+        session.slot_id_at(1).unwrap(),
+    );
+    let target_item = mbv_emby_model::EmbyItem {
+        runtime_ticks: 158 * TICKS_PER_SECOND,
+        ..make_media_item("ep2")
+    };
+    session.queue = mbv_queue::ExecutionSequence::from_slot_items(
+        vec![
+            (first, QueueItem::Emby(Box::new(make_media_item("ep1")))),
+            (target, QueueItem::Emby(Box::new(target_item))),
+        ],
+        Some(target),
+    );
+    session.current_idx = 1;
+    for body in ["", "{}", "", "{}", ""] {
+        http.respond(200, body);
+    }
+
+    session.report_jumped_item(0, &mut noop_progress());
+
+    assert_eq!(status.lock().unwrap().runtime_ticks, 158 * TICKS_PER_SECOND);
+}

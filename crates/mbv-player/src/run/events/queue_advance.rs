@@ -424,7 +424,7 @@ impl PlaybackRun {
         false
     }
 
-    fn set_next_item_status(&mut self, next_item: &QueueItem) {
+    pub(crate) fn set_next_item_status(&mut self, next_item: &QueueItem) {
         let mut s = self.status.lock().unwrap();
         s.position_ticks = 0;
         s.runtime_ticks = next_item.runtime_ticks();
@@ -460,7 +460,7 @@ impl PlaybackRun {
     /// Point Emby reporting at the item now playing — or clear the session
     /// for a non-Emby item so the reporter becomes a no-op. The outgoing
     /// item's `report_stopped` was already sent with the original IDs.
-    fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
+    pub(crate) fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
         if let Some(emby) = next_item.as_emby() {
             let (urls, ok) = self.reporter.start_item(emby);
             self.ext_sub_urls = urls;
