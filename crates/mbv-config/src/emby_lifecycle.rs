@@ -85,7 +85,7 @@ pub fn clear_emby_owned_state() -> Result<(), ConfigError> {
     if let Some(bytes) = snapshot_file(&queue_state_path())? {
         let state: QueueState = serde_json::from_slice(&bytes)
             .map_err(|error| ConfigError::lifecycle(format!("parse Emby queue state: {error}")))?;
-        save_queue_state(&state.without_emby()).map_err(ConfigError::lifecycle)?;
+        save_queue_state(&state.without_emby())?;
     }
 
     for path in [token_cache_path(), library_position_state_path()] {
