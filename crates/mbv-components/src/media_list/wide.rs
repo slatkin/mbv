@@ -231,6 +231,11 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
         self.core.toggle_selection(target);
     }
 
+    pub fn select_all(&mut self) {
+        self.invalidate_paint();
+        self.core.select_all();
+    }
+
     pub fn clear_selection(&mut self) {
         self.core.clear_selection();
     }

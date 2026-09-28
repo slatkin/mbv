@@ -197,9 +197,11 @@ impl HomeContent {
                 None
             }
             Key::Char('.') => Some(self.open_context_menu()),
-            Key::Enter | Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(
-                Msg::Shell(Box::new(ShellRequest::HomeEnqueue(self.row_target()))),
-            ),
+            // Ctrl+A multi-selects the list via `handle_visual_key` above;
+            // Ctrl+Enter keeps the enqueue shortcut.
+            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
+                Box::new(ShellRequest::HomeEnqueue(self.row_target())),
+            )),
             Key::Enter => self.activate_selected_row(),
             Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
                 Box::new(ShellRequest::HomeToggleWatched(self.row_target())),
@@ -465,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn key_intents_use_selected_home_item_and_ctrl_enqueue() {
+    fn key_intents_use_selected_home_item_and_ctrl_enter_enqueues() {
         let item = QueueItem::Emby(Box::new(make_item("Film", "Movie")));
         let mut owner = owner_with_items(vec![item]);
         let key = |code, modifiers| KeyEvent { code, modifiers };
@@ -475,8 +477,26 @@ mod tests {
             Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomePlay(_))
         ));
         assert!(matches!(
-            owner.handle_key(&key(Key::Char('a'), KeyModifiers::CONTROL)),
+            owner.handle_key(&key(Key::Enter, KeyModifiers::CONTROL)),
             Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomeEnqueue(_))
         ));
+    }
+
+    #[test]
+    fn ctrl_a_multi_selects_the_entire_home_list() {
+        let items = vec![
+            QueueItem::Emby(Box::new(make_item("Film one", "Movie"))),
+            QueueItem::Emby(Box::new(make_item("Film two", "Movie"))),
+        ];
+        let mut owner = owner_with_items(items);
+        assert!(matches!(
+            owner.handle_key(&KeyEvent {
+                code: Key::Char('a'),
+                modifiers: KeyModifiers::CONTROL,
+            }),
+            Some(Msg::Shell(request))
+                if matches!(request.as_ref(), ShellRequest::SelectionProjection(summary) if summary.count == 2)
+        ));
+        assert_eq!(owner.carrier.multi_selection().len(), 2);
     }
 }

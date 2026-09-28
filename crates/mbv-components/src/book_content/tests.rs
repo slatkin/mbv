@@ -1,5 +1,6 @@
 use super::*;
 use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+use tuirealm::event::KeyModifiers;
 
 fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
@@ -53,7 +54,7 @@ fn book_slot_selector_and_hero_activation_emit_typed_intents() {
 }
 
 #[test]
-fn book_keys_emit_play_activate_enqueue_and_chapter_focus_intents() {
+fn book_keys_emit_play_activate_and_ctrl_a_select_all_intents() {
     let mut owner = BookContent::new();
     owner.set_content(&state_with_books(vec![book("book-a", "Adams")]), false);
 
@@ -69,12 +70,13 @@ fn book_keys_emit_play_activate_enqueue_and_chapter_focus_intents() {
             ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate,)
         )))
     );
-    assert_eq!(
+    // Ctrl+A multi-selects the entire book list; enqueue stays on the
+    // context menu.
+    assert!(matches!(
         owner.on_key(&key(Key::Char('a'), KeyModifiers::CONTROL)),
-        Some(Msg::Shell(Box::new(
-            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Enqueue,)
-        )))
-    );
+        Some(Msg::Shell(request))
+            if matches!(request.as_ref(), ShellRequest::SelectionProjection(summary) if summary.count == 1)
+    ));
 }
 
 #[test]
