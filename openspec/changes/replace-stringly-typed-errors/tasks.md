@@ -52,11 +52,11 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 6. Mid crates (remote-player, daemon, ui-model, core, audiobookshelf)
 
-- [ ] 6.1 Introduce `RemotePlayerError` (16 sites), `DaemonLibError`
+- [x] 6.1 Introduce `RemotePlayerError` (16 sites), `DaemonLibError`
   (10 sites in `mbv-daemon`), `UiModelError` (7 sites), convert the
   `mbv-core` contract-probe example (17 sites), verify per-package nextest
   passes and each area audits zero
-- [ ] 6.2 Extend `AudiobookshelfError` with `kind_name()` and real kinds for its 4 remaining
+- [x] 6.2 Extend `AudiobookshelfError` with `kind_name()` and real kinds for its 4 remaining
   `Result<_, String>` sites, delete the lossy `From<String>` impl
   (collapses to `connectivity`), update its in-crate callers to classify
   properly (contract: no audiobookshelf failure is misclassified as
