@@ -9,7 +9,7 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 1. Tiny crates (feed, ctrl, player, visualizer, components)
 
-- [ ] 1.1 Introduce `FeedError`, `CtrlError`, `PlayerError`,
+- [x] 1.1 Introduce `FeedError`, `CtrlError`, `PlayerError`,
   `VisualizerError`, `ComponentsError` (struct + private kind enum +
   `is_*()` predicates + `kind_name()` + `Display` + `Error` + `From`), convert the 18
   `Result<_, String>` sites (`mbv-feed` 5, `mbv-ctrl` 5, `mbv-player` 5,
