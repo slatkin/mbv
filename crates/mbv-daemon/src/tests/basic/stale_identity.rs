@@ -118,13 +118,15 @@ fn stale_stopped_run_observation_is_rejected() {
         ),
         None
     );
-    assert!(!stopped_owner
-        .core
-        .queue
-        .slot(stopped_slot)
-        .unwrap()
-        .item
-        .played());
+    assert!(
+        !stopped_owner
+            .core
+            .queue
+            .slot(stopped_slot)
+            .unwrap()
+            .item
+            .played()
+    );
     assert_eq!(
         apply_stopped_observation(
             &mut stopped_owner,

@@ -1,10 +1,10 @@
 use crate::components::modal_frame::render_modal_frame;
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 /// Paint the daemon-lost modal: centered 64×10 frame with diagnostics + hint.
 ///

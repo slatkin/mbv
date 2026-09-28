@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use mbv_text::fuzzy_match::{word_match_score, SkimMatcherV2};
+use mbv_text::fuzzy_match::{SkimMatcherV2, word_match_score};
 use ratatui::layout::Rect;
 
 use crate::list::{
@@ -170,15 +170,15 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             if nodes.is_empty() {
                 continue;
             }
-            if let Some(entry) = self.arena.get(&root) {
-                if let Some(structures) = self.root_structures.get(&entry.node.target) {
-                    output.extend(
-                        structures
-                            .iter()
-                            .enumerate()
-                            .map(|(index, _)| VisibleRow::Structural(root, index)),
-                    );
-                }
+            if let Some(entry) = self.arena.get(&root)
+                && let Some(structures) = self.root_structures.get(&entry.node.target)
+            {
+                output.extend(
+                    structures
+                        .iter()
+                        .enumerate()
+                        .map(|(index, _)| VisibleRow::Structural(root, index)),
+                );
             }
             output.extend(nodes.into_iter().map(VisibleRow::Node));
         }

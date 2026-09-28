@@ -14,10 +14,10 @@
 
 use std::time::Instant;
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
-use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
@@ -25,11 +25,11 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
+use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
-use mbv_render::PlaybackStripAreas;
-use mbv_render::{render_playback_header, render_player_panel, PlaybackRenderContext};
+use mbv_render::{PlaybackRenderContext, render_playback_header, render_player_panel};
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::UserEvent;
@@ -301,9 +301,9 @@ impl AppComponent<Msg, UserEvent> for QueuePlaybackPanel {
 mod tests {
     use super::*;
     use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
-    use ratatui::Terminal;
     use rstest::rstest;
     use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 

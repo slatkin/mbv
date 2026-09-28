@@ -567,15 +567,15 @@ impl<Target> TreeBrowser<Target> {
         let visible = self.visible_flow_rows();
         let mut settled = Vec::new();
         for &root in &self.roots {
-            if let Some(entry) = self.arena.get(&root) {
-                if let Some(structures) = self.root_structures.get(&entry.node.target) {
-                    settled.extend(
-                        structures
-                            .iter()
-                            .enumerate()
-                            .map(|(index, _)| VisibleRow::Structural(root, index)),
-                    );
-                }
+            if let Some(entry) = self.arena.get(&root)
+                && let Some(structures) = self.root_structures.get(&entry.node.target)
+            {
+                settled.extend(
+                    structures
+                        .iter()
+                        .enumerate()
+                        .map(|(index, _)| VisibleRow::Structural(root, index)),
+                );
             }
             let mut stack = vec![root];
             while let Some(id) = stack.pop() {

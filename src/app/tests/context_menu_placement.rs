@@ -8,8 +8,8 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::podcast::add_emby_movie_library;
 use super::*;
-use mbv_components::library_panel::LibraryPanel;
 use mbv_components::ContextMenuComponent;
+use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId};
 use ratatui::layout::Rect;
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
@@ -60,7 +60,7 @@ mod tests;
 #[cfg(any(test, feature = "test"))]
 pub use connect::connect_stub_daemon_pair;
 pub use connect::signal_local_daemon_service_setup;
-pub use connect::{resolve_library_route, DaemonEndpoint};
+pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {
@@ -356,10 +356,10 @@ impl RemotePlayer {
     /// Panics if the `control_stream` mutex is poisoned: a previous owner
     /// panicked while holding it.
     pub fn disconnect(&self) {
-        if let Some(stream) = self.control_stream.lock().unwrap().take() {
-            if let Err(e) = stream.shutdown() {
-                log::warn!(target: "remote", "control-socket shutdown failed: {e}");
-            }
+        if let Some(stream) = self.control_stream.lock().unwrap().take()
+            && let Err(e) = stream.shutdown()
+        {
+            log::warn!(target: "remote", "control-socket shutdown failed: {e}");
         }
     }
 

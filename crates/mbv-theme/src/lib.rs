@@ -61,11 +61,11 @@ pub const ACCENT_AUDIOBOOKSHELF: Color = Palette::Yellow.color(); // audiobooksh
 pub const PILL_ROW_BG: Color = Palette::Ink.color();
 pub const PILL_BG: Color = Palette::Ink.color();
 pub const PILL_SELECTED_BG: Color = Palette::Foam.color(); // selected pill-selector surface (#3a94c5);
-                                                           // shares `TEXT_METADATA`'s `Palette::Foam`
-                                                           // value today, kept separate from the
-                                                           // metadata text: the two are equal today
-                                                           // and independently editable, so an edit
-                                                           // to either moves it alone
+// shares `TEXT_METADATA`'s `Palette::Foam`
+// value today, kept separate from the
+// metadata text: the two are equal today
+// and independently editable, so an edit
+// to either moves it alone
 pub const PILL_SELECTED_FG: Color = Palette::Ink.color();
 /// The pill-selector's overflow/edge accent. A former value alias of the
 /// text green (`PILL_SELECTOR_OVERFLOW_FG = BG_GREEN`), now its own role: it
@@ -96,12 +96,12 @@ pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title
 pub const WORKSPACE_HEADER_FG: Color = Palette::Foam.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
-                                                              // deliberately not the focused surface's
-                                                              // `SURFACE_FOCUSED`, whose `Palette::Green1`
-                                                              // value it shares today: the two are equal
-                                                              // today and independently editable, so a
-                                                              // text-colour edit moves the text alone
-                                                              // (unify-surface-colour-neutral task 4.2)
+// deliberately not the focused surface's
+// `SURFACE_FOCUSED`, whose `Palette::Green1`
+// value it shares today: the two are equal
+// today and independently editable, so a
+// text-colour edit moves the text alone
+// (unify-surface-colour-neutral task 4.2)
 /// A playlist row whose playlist is currently loaded in the queue (F4 list).
 /// Its own role over the progress orange it shares today
 /// (`PROGRESS_PERCENT`): the loaded marker must read on the slate panel
@@ -144,11 +144,7 @@ pub const SELECTED_ROW_PROGRESS_FG: Color = Palette::Storm.color();
 /// the two surfaces that paint this bar.
 #[must_use]
 pub fn bar_role_fg(role: Color, on_bar: bool) -> Color {
-    if on_bar {
-        SELECTED_ROW_FG
-    } else {
-        role
-    }
+    if on_bar { SELECTED_ROW_FG } else { role }
 }
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta

@@ -1,6 +1,6 @@
 use super::*;
-use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use tuirealm::event::KeyModifiers;
 
 fn tree_point<Target: PartialEq>(browser: &TreeBrowser<Target>, target: &Target) -> Position {
@@ -100,12 +100,14 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
     component.set_content(context);
     assert_settled_show_tree(&component, &show, &season_target, &episode_target);
 
-    assert!(component
-        .test_key(&KeyEvent {
-            code: Key::Char('/'),
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
+    assert!(
+        component
+            .test_key(&KeyEvent {
+                code: Key::Char('/'),
+                modifiers: KeyModifiers::NONE,
+            })
+            .is_some()
+    );
     let mut context = show_context();
     context.set_tv_content_mode(Some(TvContentMode::All));
     component.set_content(context);

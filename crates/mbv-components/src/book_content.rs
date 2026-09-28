@@ -15,12 +15,12 @@ use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 
+use super::library_panel::HeroContentData;
 use super::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
@@ -272,10 +272,10 @@ impl BookContent {
     }
 
     pub fn select_bucket_edge(&mut self, end: bool) {
-        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
-            if bucket.end > bucket.start {
-                self.select_book_index(if end { bucket.end - 1 } else { bucket.start });
-            }
+        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied()
+            && bucket.end > bucket.start
+        {
+            self.select_book_index(if end { bucket.end - 1 } else { bucket.start });
         }
     }
 

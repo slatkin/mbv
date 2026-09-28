@@ -1,11 +1,11 @@
 use super::super::{
     TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation, TreeReconciliationError,
 };
-use super::{node, paint, Target};
+use super::{Target, node, paint};
 use mbv_render::components::media_list::MediaSemanticState;
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
-use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::component::Component;
 

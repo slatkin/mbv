@@ -13,15 +13,15 @@
 //! The Local/Remote queue-scope pills are queue concern and live in the
 //! `QueueColumn` footer (`QueueComponent`), never here.
 
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_render::{render_status_bar, StatusBarModel, StatusBarRegions};
+use mbv_render::{StatusBarModel, StatusBarRegions, render_status_bar};
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_msg::UserEvent;
@@ -130,10 +130,10 @@ impl AppComponent<Msg, UserEvent> for StatusBarPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::style::{Color, Style};
     use ratatui::text::Span;
-    use ratatui::Terminal;
 
     use mbv_theme as palette;
 

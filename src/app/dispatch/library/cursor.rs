@@ -1,7 +1,7 @@
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
-use mbv_render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
+use mbv_render::{LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, effective_sort_str};
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -360,12 +360,11 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
+            && !last.items.is_empty()
         {
-            if !last.items.is_empty() {
-                let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
-                last.set_resting_cursor(order[0]);
-            }
+            let mut order: Vec<usize> = (0..last.items.len()).collect();
+            order.sort_by_key(|&i| mbv_render::initial_group_artist_sort_key(&last.items[i]));
+            last.set_resting_cursor(order[0]);
         }
     }
 }

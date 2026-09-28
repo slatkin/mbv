@@ -289,14 +289,12 @@ impl Model {
         let owner_selection_is_artist = self
             .music_owner()
             .is_some_and(MusicContent::selected_is_artist);
-        if !owner_selection_is_artist {
-            if let Some(album) = context.selected_album.as_ref() {
-                if !self.app.album_tracks_cache.contains_key(&album.id)
-                    && !self.app.album_tracks_loading.contains(&album.id)
-                {
-                    self.app.fetch_album_tracks(album.id.clone());
-                }
-            }
+        if !owner_selection_is_artist
+            && let Some(album) = context.selected_album.as_ref()
+            && !self.app.album_tracks_cache.contains_key(&album.id)
+            && !self.app.album_tracks_loading.contains(&album.id)
+        {
+            self.app.fetch_album_tracks(album.id.clone());
         }
     }
 
@@ -379,10 +377,10 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::MusicEvent;
     use crate::app::shell::Model;
     use crate::app::state::service_runtime::EmbyRuntime;
     use crate::app::tests::render_fixtures::make_music_group_app;
-    use crate::app::MusicEvent;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
 

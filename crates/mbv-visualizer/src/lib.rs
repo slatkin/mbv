@@ -150,7 +150,7 @@ impl PipeWireWorker {
             Ok(error) => return Err(error),
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
-                return Err("PipeWire worker stopped unexpectedly".into())
+                return Err("PipeWire worker stopped unexpectedly".into());
             }
         }
 
@@ -329,10 +329,9 @@ fn handle_stream_state(
             if data.format.format() == AudioFormat::F32LE
                 && data.format.channels() == 2
                 && data.format.rate() != 0
+                && let Some(startup_tx) = data.startup_tx.take()
             {
-                if let Some(startup_tx) = data.startup_tx.take() {
-                    let _ = startup_tx.send(Startup::Ready);
-                }
+                let _ = startup_tx.send(Startup::Ready);
             }
         }
         pw::stream::StreamState::Error(error) => {
@@ -384,10 +383,10 @@ fn handle_stream_param(
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *buffer = StereoSampleBuffer::with_sample_rate(format.rate());
         data.format = format;
-        if data.streaming {
-            if let Some(startup_tx) = data.startup_tx.take() {
-                let _ = startup_tx.send(Startup::Ready);
-            }
+        if data.streaming
+            && let Some(startup_tx) = data.startup_tx.take()
+        {
+            let _ = startup_tx.send(Startup::Ready);
         }
         Ok(())
     })();
@@ -508,7 +507,7 @@ pub fn join_worker(handle: JoinHandle<()>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{capture_frame_bytes, StereoSample, StereoSampleBuffer};
+    use super::{StereoSample, StereoSampleBuffer, capture_frame_bytes};
     use pipewire::spa::param::audio::{AudioFormat, AudioInfoRaw};
 
     #[test]

@@ -204,10 +204,10 @@ fn configured_album_ancestors(
             })
             .collect());
     }
-    if let Some(index) = cached_album_index {
-        if let Some(entry) = index.get(&album.id) {
-            return Ok(entry.ancestors.clone());
-        }
+    if let Some(index) = cached_album_index
+        && let Some(entry) = index.get(&album.id)
+    {
+        return Ok(entry.ancestors.clone());
     }
     let mut fetch = |parent_id: &str, start: usize, limit: usize| {
         client.get_items_sorted(

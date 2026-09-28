@@ -264,12 +264,13 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
     let other_slot = app.player_tab.queue.slots()[1].slot_id;
     let _ = app.player_tab.queue.set_active_slot(other_slot);
 
-    assert!(app
-        .playback_queue()
-        .queue
-        .active_slot()
-        .and_then(|s| s.item.as_audiobookshelf())
-        .is_some_and(|e| e.episode_id != "episode-a"));
+    assert!(
+        app.playback_queue()
+            .queue
+            .active_slot()
+            .and_then(|s| s.item.as_audiobookshelf())
+            .is_some_and(|e| e.episode_id != "episode-a")
+    );
 
     // Fire the socket progress event.
     app.handle_audiobookshelf_socket_event(SocketEvent::ProgressUpdated(AudiobookshelfProgress {

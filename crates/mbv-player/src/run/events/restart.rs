@@ -1,7 +1,6 @@
 use super::super::{
-    auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, ForcedJump,
-    Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
-    StopReport,
+    Duration, ForcedJump, Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem,
+    QueueSlotId, StopReport, auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info,
 };
 use libmpv2::Mpv;
 
@@ -57,10 +56,10 @@ impl PlaybackRun {
         auto_select_tracks(mpv, &self.status, &prefs);
         self.tracks_initialized = true;
         self.apply_forced_resume(mpv);
-        if let Some(item) = self.active_item().cloned() {
-            if let Some(emby) = item.as_emby() {
-                send_ep_info(mpv, emby);
-            }
+        if let Some(item) = self.active_item().cloned()
+            && let Some(emby) = item.as_emby()
+        {
+            send_ep_info(mpv, emby);
         }
         if self.config.use_mpv_config {
             let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);

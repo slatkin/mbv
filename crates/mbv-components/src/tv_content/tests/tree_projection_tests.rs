@@ -31,9 +31,11 @@ fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
         component.toggle_tree_expansion(show_target.clone()),
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == show_target)));
     assert!(component.browser.is_expanded(&show_target));
-    assert!(component
-        .toggle_tree_expansion(show_target.clone())
-        .is_none());
+    assert!(
+        component
+            .toggle_tree_expansion(show_target.clone())
+            .is_none()
+    );
     assert!(!component.browser.is_expanded(&show_target));
 
     let mut season = make_item("Season 1", "Season");
@@ -113,9 +115,9 @@ fn duplicate_child_identities_are_scoped_to_their_parent(
 fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() {
     use crate::list::tree_browser::TreeOperation;
     use mbv_ui_msg::TvTreeTarget;
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
-    use ratatui::Terminal;
     use tuirealm::component::Component;
 
     let show = tv_show("Alpha", "show-a");

@@ -2,9 +2,9 @@
 //! completions, and all other player observations relayed to control clients.
 
 use super::super::{
-    apply_stopped_observation, apply_track_completed_observation, broadcast,
+    DaemonLoop, apply_stopped_observation, apply_track_completed_observation, broadcast,
     broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
-    complete_pending_idle_queue_load, settle_and_redispatch, DaemonLoop,
+    complete_pending_idle_queue_load, settle_and_redispatch,
 };
 use super::EventOutcome;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
@@ -79,17 +79,15 @@ impl DaemonLoop {
                     current.generation,
                 )
             })
-        {
-            if let Some(event) =
+            && let Some(event) =
                 self.owner
                     .intents
                     .applied_if_current(connection_id, request_id, generation)
-            {
-                self.ctrl_clients
-                    .lock()
-                    .unwrap()
-                    .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-            }
+        {
+            self.ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
         }
         EventOutcome::CONTINUE
     }
@@ -103,15 +101,15 @@ impl DaemonLoop {
         episode: i64,
     ) -> EventOutcome {
         let active_idx = self.owner.core.queue.active_index().unwrap_or(0);
-        if let Some(slot) = self.owner.core.queue.slots().get(active_idx + 1) {
-            if let Some(emby) = slot.item.as_emby() {
-                self.player.send_command(PlayerCommand::NextUpShow {
-                    item_id: emby.id.clone(),
-                    show_title: emby.series_name.clone(),
-                    ep_title: emby.name.clone(),
-                    artist: emby.artist.clone(),
-                });
-            }
+        if let Some(slot) = self.owner.core.queue.slots().get(active_idx + 1)
+            && let Some(emby) = slot.item.as_emby()
+        {
+            self.player.send_command(PlayerCommand::NextUpShow {
+                item_id: emby.id.clone(),
+                show_title: emby.series_name.clone(),
+                ep_title: emby.name.clone(),
+                artist: emby.artist.clone(),
+            });
         }
         broadcast(
             &self.ctrl_clients,
@@ -127,15 +125,15 @@ impl DaemonLoop {
     /// `PlayerEvent::QueueNextUp`: show the Next-Up card for the peeked
     /// ordinal, then relay the event.
     pub(super) fn handle_queue_next_up(&mut self, next_idx: usize) -> EventOutcome {
-        if let Some(slot) = self.owner.core.queue.slots().get(next_idx) {
-            if let Some(emby) = slot.item.as_emby() {
-                self.player.send_command(PlayerCommand::NextUpShow {
-                    item_id: emby.id.clone(),
-                    show_title: emby.series_name.clone(),
-                    ep_title: emby.name.clone(),
-                    artist: emby.artist.clone(),
-                });
-            }
+        if let Some(slot) = self.owner.core.queue.slots().get(next_idx)
+            && let Some(emby) = slot.item.as_emby()
+        {
+            self.player.send_command(PlayerCommand::NextUpShow {
+                item_id: emby.id.clone(),
+                show_title: emby.series_name.clone(),
+                ep_title: emby.name.clone(),
+                artist: emby.artist.clone(),
+            });
         }
         broadcast(
             &self.ctrl_clients,
@@ -160,17 +158,17 @@ impl DaemonLoop {
                 .lock()
                 .unwrap()
                 .send_to_client(connection_id, &CtrlEvent::PipePlaybackStatus(status));
-            if delay.is_none() {
-                if let Some(current) = self.owner.intents.current.as_ref() {
-                    self.ctrl_clients.lock().unwrap().send_to_client(
-                        current.connection_id,
-                        &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
-                            request_id: current.request_id,
-                            generation: current.generation,
-                            outcome: PlaybackIntentOutcome::Applied,
-                        }),
-                    );
-                }
+            if delay.is_none()
+                && let Some(current) = self.owner.intents.current.as_ref()
+            {
+                self.ctrl_clients.lock().unwrap().send_to_client(
+                    current.connection_id,
+                    &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                        request_id: current.request_id,
+                        generation: current.generation,
+                        outcome: PlaybackIntentOutcome::Applied,
+                    }),
+                );
             }
         }
         broadcast(
@@ -275,8 +273,8 @@ impl DaemonLoop {
     }
 
     fn settle_player_event_intent(&mut self, pe: &PlayerEvent) {
-        if let PlayerEvent::PausedChanged(paused) = pe {
-            if let Some((connection_id, request_id, generation)) = self
+        if let PlayerEvent::PausedChanged(paused) = pe
+            && let Some((connection_id, request_id, generation)) = self
                 .owner
                 .intents
                 .current
@@ -291,21 +289,18 @@ impl DaemonLoop {
                     }
                     _ => None,
                 })
-            {
-                if let Some(event) =
-                    self.owner
-                        .intents
-                        .applied_if_current(connection_id, request_id, generation)
-                {
-                    self.ctrl_clients
-                        .lock()
-                        .unwrap()
-                        .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-                }
-            }
+            && let Some(event) =
+                self.owner
+                    .intents
+                    .applied_if_current(connection_id, request_id, generation)
+        {
+            self.ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
         }
-        if matches!(pe, PlayerEvent::Stopped { .. }) {
-            if let Some((connection_id, request_id, generation)) = self
+        if matches!(pe, PlayerEvent::Stopped { .. })
+            && let Some((connection_id, request_id, generation)) = self
                 .owner
                 .intents
                 .current
@@ -318,18 +313,15 @@ impl DaemonLoop {
                         current.generation,
                     )
                 })
-            {
-                if let Some(event) =
-                    self.owner
-                        .intents
-                        .applied_if_current(connection_id, request_id, generation)
-                {
-                    self.ctrl_clients
-                        .lock()
-                        .unwrap()
-                        .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-                }
-            }
+            && let Some(event) =
+                self.owner
+                    .intents
+                    .applied_if_current(connection_id, request_id, generation)
+        {
+            self.ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
         }
     }
 

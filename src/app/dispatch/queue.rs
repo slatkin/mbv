@@ -52,10 +52,10 @@ impl App {
             // Slot identity was captured before the local removal above.
             // Prefer the unified remote path; the in-process command is now
             // slot-addressed too.
-            if let Some(sid) = slot_id {
-                if !self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid)) {
-                    self.player.send_command(PlayerCommand::QueueRemove(sid));
-                }
+            if let Some(sid) = slot_id
+                && !self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid))
+            {
+                self.player.send_command(PlayerCommand::QueueRemove(sid));
             }
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread

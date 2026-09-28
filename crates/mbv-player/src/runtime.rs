@@ -1,8 +1,8 @@
 use super::{
-    fs, mpv_err_str, Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus,
-    SessionReporter,
+    Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus, SessionReporter, fs,
+    mpv_err_str,
 };
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -78,13 +78,13 @@ fn is_mpv_ipc_config_line(line: &str) -> bool {
 
 fn sanitized_mpv_conf(user_conf: Option<&Path>, ipc_path: &str) -> String {
     let mut sanitized = String::new();
-    if let Some(path) = user_conf {
-        if let Ok(text) = fs::read_to_string(path) {
-            for line in text.lines() {
-                if !is_mpv_ipc_config_line(line) {
-                    sanitized.push_str(line);
-                    sanitized.push('\n');
-                }
+    if let Some(path) = user_conf
+        && let Ok(text) = fs::read_to_string(path)
+    {
+        for line in text.lines() {
+            if !is_mpv_ipc_config_line(line) {
+                sanitized.push_str(line);
+                sanitized.push('\n');
             }
         }
     }
@@ -281,10 +281,10 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
     ) {
         log::warn!(target: "player", "failed to set video back cache: {e}");
     }
-    if !config.use_mpv_config {
-        if let Err(e) = mpv.set_property("hwdec", "auto-safe") {
-            log::warn!(target: "player", "failed to set hwdec policy: {e}");
-        }
+    if !config.use_mpv_config
+        && let Err(e) = mpv.set_property("hwdec", "auto-safe")
+    {
+        log::warn!(target: "player", "failed to set hwdec policy: {e}");
     }
 }
 
@@ -399,7 +399,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
         macro_rules! opt {
-            ($k:expr, $v:expr) => {{
+            ($k:expr_2021, $v:expr_2021) => {{
                 let r = init.set_option($k, $v);
                 if let Err(ref e) = r {
                     init_err = Some(format!(
@@ -425,12 +425,13 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
             opt!("osc", "no");
             opt!("osd-bar", "no");
         }
-        if !no_scripts && !use_mpv_config {
-            if let Some(script) = resolve_overlay_scripts() {
-                opt!("scripts", script.to_str().unwrap_or(""));
-                let fonts = resolve_overlay_fonts();
-                opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-            }
+        if !no_scripts
+            && !use_mpv_config
+            && let Some(script) = resolve_overlay_scripts()
+        {
+            opt!("scripts", script.to_str().unwrap_or(""));
+            let fonts = resolve_overlay_fonts();
+            opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
         }
         Ok(())
     }) {
@@ -490,12 +491,14 @@ pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
 pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
-    let handle = thread::spawn(move || loop {
-        match stop_rx.recv_timeout(interval) {
-            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                reporter.report_progress("TimeUpdate");
-                reporter.report_ping();
+    let handle = thread::spawn(move || {
+        loop {
+            match stop_rx.recv_timeout(interval) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    reporter.report_progress("TimeUpdate");
+                    reporter.report_ping();
+                }
             }
         }
     });

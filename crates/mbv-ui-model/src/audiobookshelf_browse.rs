@@ -6,8 +6,8 @@ mod podcast;
 
 pub use books::{AudiobookshelfBookBrowseState, BookRow};
 pub use podcast::{
-    podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
-    PodcastDisplayRow,
+    AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,
+    podcast_display_rows,
 };
 
 /// The resolved browse kind for an Audiobookshelf library tab, derived once

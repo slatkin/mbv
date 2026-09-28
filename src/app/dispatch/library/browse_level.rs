@@ -28,14 +28,12 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
-        {
-            if last
+            && last
                 .items
                 .first()
                 .is_some_and(|item| item.item_type == "Episode")
-            {
-                sort_episodes(&mut last.items);
-            }
+        {
+            sort_episodes(&mut last.items);
         }
     }
 

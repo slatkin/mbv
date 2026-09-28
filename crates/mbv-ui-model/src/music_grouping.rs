@@ -99,10 +99,10 @@ pub fn derive_album_artist(item: &EmbyItem, resolved: Option<&str>) -> String {
     if !item.artist.is_empty() {
         return item.artist.clone();
     }
-    if let Some(artist) = resolved {
-        if !artist.is_empty() {
-            return artist.to_string();
-        }
+    if let Some(artist) = resolved
+        && !artist.is_empty()
+    {
+        return artist.to_string();
     }
     if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
         return artist;

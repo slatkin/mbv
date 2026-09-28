@@ -1,7 +1,7 @@
 use super::super::super::App;
 use mbv_images::{
-    cover_fill_hero_box, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
-    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER,
+    ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY,
+    RENDER_FILTER, cover_fill_hero_box,
 };
 use mbv_theme as palette;
 use ratatui_image::picker::Picker;
@@ -479,10 +479,12 @@ mod protocol_tests {
         assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
         assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&absent), 1);
-        assert!(absent
-            .images
-            .image(BASE_KEY)
-            .is_some_and(|entry| entry.applied_logo_key.is_none()));
+        assert!(
+            absent
+                .images
+                .image(BASE_KEY)
+                .is_some_and(|entry| entry.applied_logo_key.is_none())
+        );
 
         let mut failed = app_with_base();
         failed
@@ -491,9 +493,11 @@ mod protocol_tests {
         assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&failed), 1);
-        assert!(failed
-            .images
-            .image(BASE_KEY)
-            .is_some_and(|entry| entry.applied_logo_key.is_none()));
+        assert!(
+            failed
+                .images
+                .image(BASE_KEY)
+                .is_some_and(|entry| entry.applied_logo_key.is_none())
+        );
     }
 }

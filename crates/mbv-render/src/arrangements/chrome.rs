@@ -1,5 +1,5 @@
-use super::queue::{queue_panel_geometry, QueuePanelInputs};
-use crate::components::widgets::{queue_panel_inset, COLUMN_GAP};
+use super::queue::{QueuePanelInputs, queue_panel_geometry};
+use crate::components::widgets::{COLUMN_GAP, queue_panel_inset};
 use crate::layout::FrameChromeGeometry;
 use crate::layout::TABBAR_LEFT_RESERVE;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

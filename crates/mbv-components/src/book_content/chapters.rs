@@ -1,7 +1,7 @@
 use super::{
-    fmt_duration_gutter, AudiobookshelfBookBrowseState, AudiobookshelfBookMove, BookChapterTarget,
-    BookContent, BookRow, MediaKind, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState, Msg, ShellRequest,
+    AudiobookshelfBookBrowseState, AudiobookshelfBookMove, BookChapterTarget, BookContent, BookRow,
+    MediaKind, MediaListRow, MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Msg,
+    ShellRequest, fmt_duration_gutter,
 };
 
 /// Canonical row projection for one book's chapter/audio-part detail: one

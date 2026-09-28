@@ -1,5 +1,5 @@
 use super::cache::ImageCache;
-use super::{mem_key, CachedImage};
+use super::{CachedImage, mem_key};
 use ratatui_image::picker::Picker;
 
 impl ImageCache {
@@ -72,11 +72,11 @@ impl ImageCache {
             cover_box: None,
             applied_logo_key: None,
         };
-        if let Some(img) = entry.img.clone() {
-            if let Some(picker) = self.picker_for_suffix(suffix) {
-                let proto = self.build_protocol(bare_key, suffix, picker, img);
-                entry.protocols.insert(suffix, proto);
-            }
+        if let Some(img) = entry.img.clone()
+            && let Some(picker) = self.picker_for_suffix(suffix)
+        {
+            let proto = self.build_protocol(bare_key, suffix, picker, img);
+            entry.protocols.insert(suffix, proto);
         }
         entry
     }

@@ -4,8 +4,8 @@ use mbv_components::{
     ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, QueueComponent,
 };
 use mbv_ui_model::context_menu::{
-    is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
-    LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
+    ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
+    MultiSelectKind, MultiSelectPopup, is_bulk_action,
 };
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::ContextMenuIntent;
@@ -131,10 +131,10 @@ impl Model {
             (menu.anchor(), menu.entries().to_vec())
         };
         let rect = self.context_menu_rect(anchor, &entries);
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
-                menu.set_rect(rect);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
+        {
+            menu.set_rect(rect);
         }
         self.application.view(&id, f, f.area());
     }
@@ -148,10 +148,10 @@ impl Model {
         }
         match intent {
             ContextMenuIntent::MoveUp | ContextMenuIntent::MoveDown => {
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    if let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
-                        menu.move_cursor(matches!(intent, ContextMenuIntent::MoveDown));
-                    }
+                if let Some(comp) = self.application.get_component_mut(&id)
+                    && let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
+                {
+                    menu.move_cursor(matches!(intent, ContextMenuIntent::MoveDown));
                 }
             }
             ContextMenuIntent::Select => {
@@ -214,17 +214,17 @@ impl Model {
         self.visual_selection = None;
         match origin {
             mbv_ui_model::media_list::SelectionOrigin::Queue => {
-                if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
-                    if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                        queue.clear_selection();
-                    }
+                if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue)
+                    && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()
+                {
+                    queue.clear_selection();
                 }
             }
             mbv_ui_model::media_list::SelectionOrigin::Library(origin) => {
-                if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
-                    if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
-                        panel.clear_selection_for_origin(&origin);
-                    }
+                if let Some(comp) = self.application.get_component_mut(&ComponentId::Library)
+                    && let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>()
+                {
+                    panel.clear_selection_for_origin(&origin);
                 }
             }
         }
@@ -406,14 +406,14 @@ impl Model {
                 .expect("mount Multiselect");
             self.application.active(&id).expect("activate Multiselect");
         }
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>() {
-                multiselect.set_content(&MultiSelectPopup {
-                    kind,
-                    items,
-                    cursor: 0,
-                });
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>()
+        {
+            multiselect.set_content(&MultiSelectPopup {
+                kind,
+                items,
+                cursor: 0,
+            });
         }
     }
 
@@ -449,10 +449,10 @@ impl Model {
 
     fn set_library_routes_content(&mut self, popup: &LibraryRoutePopup) {
         let id = Self::library_routes_id();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(routes) = comp.as_any_mut().downcast_mut::<LibraryRoutesComponent>() {
-                routes.set_content(popup);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(routes) = comp.as_any_mut().downcast_mut::<LibraryRoutesComponent>()
+        {
+            routes.set_content(popup);
         }
     }
 
@@ -612,16 +612,14 @@ impl Model {
         };
         let cursor = self.library_routes_cursor();
 
-        if cursor > 0 {
-            if let Some((name, None)) = devices.get(cursor - 1) {
-                self.app.flash(
-                    format!(
-                        "{name} is not currently routable (no resolvable direct-connect endpoint)"
-                    ),
-                    crate::app::dispatch::notify::ToastSeverity::Neutral,
-                );
-                return;
-            }
+        if cursor > 0
+            && let Some((name, None)) = devices.get(cursor - 1)
+        {
+            self.app.flash(
+                format!("{name} is not currently routable (no resolvable direct-connect endpoint)"),
+                crate::app::dispatch::notify::ToastSeverity::Neutral,
+            );
+            return;
         }
 
         {

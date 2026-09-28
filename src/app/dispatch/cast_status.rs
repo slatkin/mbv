@@ -2,10 +2,10 @@
 // extrapolation (6.3, 6.4), matching a reported entry to a dispatched item
 // (6.5), and progress reporting to that item's provider (6.6).
 
+use crate::app::App;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
-use crate::app::App;
 use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_emby_model::seconds_to_ticks;
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn spawn_cast_status_poll_calls_keep_alive_and_status_on_the_transport() {
-        use crate::app::state::types::cast::{spawn_fake_cast_worker, FakeCastTransport};
+        use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {

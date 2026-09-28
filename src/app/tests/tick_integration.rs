@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use tuirealm::application::PollStrategy;
 use tuirealm::component::AppComponent;
 use tuirealm::event::{
@@ -175,10 +175,12 @@ fn live_tick_local_mutation_precedes_root_observation() {
     let second = harness.step();
 
     assert!(matches!(second.router, RouterOutcome::FallThrough));
-    assert!(second
-        .raw_messages
-        .iter()
-        .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
+    assert!(
+        second
+            .raw_messages
+            .iter()
+            .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+    );
     assert!(second.raw_messages.iter().any(|message| matches!(
         message,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
@@ -463,10 +465,12 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
     let mut harness = TickHarness::new(make_app_stub());
     harness.model_mut().mount_sidebar(SidebarId::Search);
     arm_search_query(&mut harness, "ab");
-    assert!(harness
-        .model_mut()
-        .tick_search_clock(Instant::now())
-        .is_none());
+    assert!(
+        harness
+            .model_mut()
+            .tick_search_clock(Instant::now())
+            .is_none()
+    );
 
     // Expire the deadline directly instead of sleeping out the 300ms
     // wall-clock debounce, and invoke the run-loop sweep directly: step()'s
@@ -543,7 +547,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(matches!(
        outcome.raw_messages.first(),
-       Some(Msg::Shell(ref shell_boxed))
+       Some(Msg::Shell(shell_boxed))
     if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
            ConfirmIntent::Accept
        ))));

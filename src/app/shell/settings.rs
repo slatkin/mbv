@@ -1,9 +1,9 @@
 use super::Model;
 use mbv_components::{SettingsComponent, SettingsSnapshot};
-use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
+use mbv_keybinds::{KEY_SECTIONS, KEYBIND_ACTIONS, KeybindAction};
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use mbv_ui_model::settings;
-use mbv_ui_model::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
+use mbv_ui_model::settings::{SERVICE_ENTRIES, SETTING_SECTIONS, SettingsDestination};
 use mbv_ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
@@ -30,10 +30,10 @@ impl Model {
         }
 
         let snapshot = self.settings_snapshot();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(settings) = comp.as_any_mut().downcast_mut::<SettingsComponent>() {
-                settings.set_content(snapshot);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(settings) = comp.as_any_mut().downcast_mut::<SettingsComponent>()
+        {
+            settings.set_content(snapshot);
         }
     }
 
@@ -319,12 +319,14 @@ mod tests {
             username: String::new(),
             password: String::new(),
         });
-        assert!(model
-            .app
-            .setup
-            .emby_setup_form
-            .as_ref()
-            .is_some_and(|form| !form.error.is_empty()));
+        assert!(
+            model
+                .app
+                .setup
+                .emby_setup_form
+                .as_ref()
+                .is_some_and(|form| !form.error.is_empty())
+        );
     }
 
     /// The settings main list's Keys row summarizes the live configuration
@@ -412,9 +414,11 @@ mod tests {
         assert_eq!(ids, expected_ids, "rows equal the registry set");
         // Every action row is cursor-activatable for selection (read-only:
         // no activation follows).
-        assert!(action_rows
-            .iter()
-            .all(|row| row.cursor.is_some() && !row.value.is_empty()));
+        assert!(
+            action_rows
+                .iter()
+                .all(|row| row.cursor.is_some() && !row.value.is_empty())
+        );
 
         let toggle = action_rows
             .iter()

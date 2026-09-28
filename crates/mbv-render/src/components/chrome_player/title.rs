@@ -1,16 +1,16 @@
 use super::super::chrome::play_icon;
 use super::super::marquee;
+use super::PlaybackRenderContext;
 use super::palette;
 use super::title_part_fg;
-use super::PlaybackRenderContext;
-use crate::arrangements::playback_transport::{transport_buttons_fit, TransportMeasure};
+use crate::arrangements::playback_transport::{TransportMeasure, transport_buttons_fit};
 use mbv_queue::PlaybackTitleParts;
 use mbv_ui_model::ui_util::fmt_duration_short;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 /// The transport control glyphs and their colours for one render context.

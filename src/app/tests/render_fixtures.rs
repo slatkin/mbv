@@ -7,8 +7,8 @@
 
 use crate::app::tests::make_app_stub;
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
-use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
+use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 
 pub fn make_movie_app() -> App {

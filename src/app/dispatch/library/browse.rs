@@ -5,7 +5,7 @@ mod tv;
 
 pub(in crate::app) use loading::{retain_grouped_music_items, retain_grouped_music_level_items};
 #[cfg(test)]
-pub(in crate::app) use navigation::{resolve_reveal_target, RevealTarget};
+pub(in crate::app) use navigation::{RevealTarget, resolve_reveal_target};
 #[cfg(test)]
 pub(in crate::app) use search::full_library_fetch_limit;
 pub(in crate::app) use search::{

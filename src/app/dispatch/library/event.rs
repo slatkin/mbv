@@ -4,8 +4,8 @@ use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::{
-    dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
-    FeedHomeVideoState, QueueScope,
+    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, FeedHomeVideoState, QueueScope,
+    dispatch::notify::ToastSeverity,
 };
 use mbv_ui_model::ui_util::sort_audio_tracks;
 
@@ -159,25 +159,24 @@ impl App {
         all_items: Vec<mbv_emby_model::EmbyItem>,
         groups: Vec<mbv_ui_model::feed::FeedHomeVideoGroup>,
     ) {
-        if let Some(lib) = self.libs.get_mut(lib_idx) {
-            if lib
+        if let Some(lib) = self.libs.get_mut(lib_idx)
+            && lib
                 .nav_stack
                 .first()
                 .is_some_and(|root| root.parent_id == parent_id)
-            {
-                let (selected_group, video_cursor, video_scroll) = lib
-                    .feed_home_video
-                    .as_ref()
-                    .map_or((0, 0, 0), feed_home_video_selection);
-                lib.feed_home_video = Some(FeedHomeVideoState {
-                    all_items,
-                    groups,
-                    loading: false,
-                    selected_group,
-                    video_cursor,
-                    video_scroll,
-                });
-            }
+        {
+            let (selected_group, video_cursor, video_scroll) = lib
+                .feed_home_video
+                .as_ref()
+                .map_or((0, 0, 0), feed_home_video_selection);
+            lib.feed_home_video = Some(FeedHomeVideoState {
+                all_items,
+                groups,
+                loading: false,
+                selected_group,
+                video_cursor,
+                video_scroll,
+            });
         }
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "aggregated");
@@ -359,10 +358,8 @@ impl App {
                 .get(idx)
                 .is_some_and(|lib| lib.library.id == library_id)
         });
-        if belongs_to_pending {
-            if let Some(idx) = self.pending_navigate_tab_switch.take() {
-                self.set_library_tab(idx + 1);
-            }
+        if belongs_to_pending && let Some(idx) = self.pending_navigate_tab_switch.take() {
+            self.set_library_tab(idx + 1);
         }
     }
 
@@ -464,12 +461,11 @@ impl App {
         parent_id: &str,
         items: Vec<mbv_emby_model::EmbyItem>,
     ) {
-        if let Some(lib) = self.libs.get_mut(lib_idx) {
-            if let Some(last) = lib.nav_stack.last_mut() {
-                if last.parent_id == parent_id {
-                    last.all_items = Some(items);
-                }
-            }
+        if let Some(lib) = self.libs.get_mut(lib_idx)
+            && let Some(last) = lib.nav_stack.last_mut()
+            && last.parent_id == parent_id
+        {
+            last.all_items = Some(items);
         }
     }
 

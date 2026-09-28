@@ -1,11 +1,11 @@
 use crate::app::App;
-use mbv_render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
+use mbv_render::arrangements::chrome::{ChromeGeometryInput, chrome_geometry};
 use mbv_render::arrangements::queue::{
-    queue_footer_row, queue_list_box, queue_panel_subareas, QueuePanelGeometry,
+    QueuePanelGeometry, queue_footer_row, queue_list_box, queue_panel_subareas,
 };
 use mbv_render::layout::{AppLayout, FrameChromeGeometry};
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 impl App {
     pub(in crate::app) fn compute_frame_layout(

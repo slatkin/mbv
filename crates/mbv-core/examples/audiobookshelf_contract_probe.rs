@@ -2,11 +2,11 @@
 //! IDs, user/device identity, titles, hostnames, response bodies, or paths.
 //! Run only against a disposable/controlled Audiobookshelf Service.
 
-use libmpv2::{events::Event, Mpv};
+use libmpv2::{Mpv, events::Event};
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config as config;
 use mbv_queue::ServiceKind;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::{
     collections::BTreeSet,
     io::{Read, Write},
@@ -250,7 +250,7 @@ fn wait_for_restart(mpv: &Mpv) -> Result<(), String> {
         match mpv.wait_event(0.25) {
             Some(Ok(Event::PlaybackRestart)) => return Ok(()),
             Some(Ok(Event::EndFile(reason))) => {
-                return Err(format!("libmpv ended before readiness: {reason:?}"))
+                return Err(format!("libmpv ended before readiness: {reason:?}"));
             }
             Some(Err(_)) => return Err("libmpv event error".into()),
             _ => {}

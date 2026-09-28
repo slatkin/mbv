@@ -74,13 +74,13 @@ pub fn html_to_text(html: &str) -> String {
         if let Some(name) = lower.strip_prefix('/') {
             if is_block_tag(name.trim()) {
                 result.push('\n');
-            } else if name.trim() == "a" {
-                if let Some(href) = pending_link.take() {
-                    result.extend((!result.is_empty() && !result.ends_with(' ')).then_some(' '));
-                    result.push('(');
-                    result.push_str(&href);
-                    result.push(')');
-                }
+            } else if name.trim() == "a"
+                && let Some(href) = pending_link.take()
+            {
+                result.extend((!result.is_empty() && !result.ends_with(' ')).then_some(' '));
+                result.push('(');
+                result.push_str(&href);
+                result.push(')');
             }
         } else {
             let name = lower

@@ -1,9 +1,9 @@
 //! Shell-invoked mouse effect handlers for migrated interactive surfaces.
 
-use crate::app::dispatch::action::Command;
 use crate::app::App;
+use crate::app::dispatch::action::Command;
 use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
+use mbv_emby_model::{EmbyItem, i64_to_f64_saturating, seconds_to_ticks};
 use mbv_ui_msg::TvHit;
 use std::time::{Duration, Instant};
 
@@ -43,12 +43,11 @@ impl App {
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).
-        if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
-            if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                if matches!(slot.item, mbv_queue::QueueItem::Feed(ref e) if e.feed_id.is_some()) {
-                    self.feed_seek_pending_slot = Some(slot_id);
-                }
-            }
+        if let Some(slot_id) = self.playback_queue().queue.active_slot_id()
+            && let Some(slot) = self.playback_queue().queue.slot(slot_id)
+            && matches!(slot.item, mbv_queue::QueueItem::Feed(ref e) if e.feed_id.is_some())
+        {
+            self.feed_seek_pending_slot = Some(slot_id);
         }
     }
 
@@ -58,11 +57,10 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
+            && let Some(target) = level.items.iter().position(|item| item.id == target)
         {
-            if let Some(target) = level.items.iter().position(|item| item.id == target) {
-                level.set_resting_cursor(target);
-                self.save_default_library_position(lib_idx);
-            }
+            level.set_resting_cursor(target);
+            self.save_default_library_position(lib_idx);
         }
     }
 
@@ -215,15 +213,14 @@ impl App {
                 // The component resolved the stable ID from its painted row;
                 // persist that resolved nav index rather than re-reading the
                 // shell's previous cursor. A stale target is a no-op.
-                if let Some((index, _)) = self.resolve_tv_series_target(lib_idx, &target) {
-                    if let Some(level) = self
+                if let Some((index, _)) = self.resolve_tv_series_target(lib_idx, &target)
+                    && let Some(level) = self
                         .libs
                         .get_mut(lib_idx)
                         .and_then(|lib| lib.nav_stack.last_mut())
-                    {
-                        level.set_resting_cursor(index);
-                        self.save_default_library_position(lib_idx);
-                    }
+                {
+                    level.set_resting_cursor(index);
+                    self.save_default_library_position(lib_idx);
                 }
             }
             TvHit::EpisodesPane => {}
@@ -250,10 +247,10 @@ impl App {
             // their synthesized stable target; Workspace episodes use the
             // season-detail cache. Both then take the same activation path.
             let item = self.resolve_tv_episode_target(lib_idx, &target);
-            if let Some(item) = item.filter(|item| item.item_type == "Episode") {
-                if !self.open_series_for_unplayable_episode(lib_idx, &item) {
-                    self.play_item(item);
-                }
+            if let Some(item) = item.filter(|item| item.item_type == "Episode")
+                && !self.open_series_for_unplayable_episode(lib_idx, &item)
+            {
+                self.play_item(item);
             }
         }
     }

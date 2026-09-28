@@ -1,12 +1,12 @@
 use super::*;
+use crate::app::AudiobookshelfEvent;
+use crate::app::SessionEvent;
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
 };
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_movie_app;
-use crate::app::AudiobookshelfEvent;
-use crate::app::SessionEvent;
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,

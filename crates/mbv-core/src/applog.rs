@@ -118,10 +118,10 @@ impl AppLog {
         if self.stderr {
             eprintln!("{}", format_stderr_line(entry.level, &line));
         }
-        if let Ok(mut guard) = self.file.lock() {
-            if let Some(f) = guard.as_mut() {
-                let _ = writeln!(f, "{line}");
-            }
+        if let Ok(mut guard) = self.file.lock()
+            && let Some(f) = guard.as_mut()
+        {
+            let _ = writeln!(f, "{line}");
         }
     }
 }

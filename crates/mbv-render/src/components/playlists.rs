@@ -3,11 +3,11 @@ use crate::components::modal_frame::render_modal_frame;
 use mbv_emby_model::EmbyItem;
 use mbv_theme as palette;
 use mbv_ui_model::ui_util::trunc_str;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 /// Geometry painted by the save-playlist modal, reused by its mouse
 /// hit-testing (task 5.1, design.md D6). The modal has no click targets —

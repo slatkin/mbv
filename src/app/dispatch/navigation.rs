@@ -79,13 +79,15 @@ impl App {
                 .feed_home_video_selected_items(lib_idx)
                 .iter()
                 .position(|i| i.id == item.id);
-            if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut()) {
+            if let Some(pos) = pos
+                && let Some(state) = self.libs[lib_idx].feed_home_video.as_mut()
+            {
                 state.video_cursor = pos;
             }
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                lvl.set_resting_cursor(pos);
-            }
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
+            && let Some(pos) = lvl.items.iter().position(|i| i.id == item.id)
+        {
+            lvl.set_resting_cursor(pos);
         }
     }
 
@@ -330,7 +332,8 @@ impl App {
             if lib.nav_stack.len() > 1 {
                 let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
                 lib.nav_stack.pop();
-                if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut())
+                if let Some(folder_id) = child_folder_id
+                    && let Some(parent) = lib.nav_stack.last_mut()
                 {
                     let _ = parent
                         .items
@@ -359,8 +362,8 @@ impl App {
                     .last()
                     .map(|l| l.parent_id.clone());
                 self.libs[lib_idx].nav_stack.pop();
-                if let (Some(fid), Some(parent)) =
-                    (child_id2, self.libs[lib_idx].nav_stack.last_mut())
+                if let Some(fid) = child_id2
+                    && let Some(parent) = self.libs[lib_idx].nav_stack.last_mut()
                 {
                     let _ = parent
                         .items

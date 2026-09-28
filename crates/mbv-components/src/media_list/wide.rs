@@ -5,8 +5,8 @@ use crate::list::{
     Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, Viewported,
 };
 use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};

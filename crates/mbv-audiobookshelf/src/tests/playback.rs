@@ -148,16 +148,20 @@ fn session_requests_are_bearer_post_json_and_bounded() {
         assert!(lower.contains("authorization: bearer secret\r\n"));
         assert!(lower.contains("content-type: application/json\r\n"));
     }
-    assert!(captured[0]
-        .starts_with("POST /api/items/%3CLIBRARY_ITEM_ID%3E/play/%3CEPISODE_ID%3E HTTP/1.1"));
+    assert!(
+        captured[0]
+            .starts_with("POST /api/items/%3CLIBRARY_ITEM_ID%3E/play/%3CEPISODE_ID%3E HTTP/1.1")
+    );
     // ureq 3.x's send_json pretty-prints the body (2.x sent compact JSON);
     // strip whitespace before matching so both formats pass.
     let no_ws = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
     assert!(no_ws(&captured[0]).contains("\"deviceId\":\"device\""));
     assert!(captured[1].starts_with("POST /api/session/%3CSESSION_ID%3E/sync HTTP/1.1"));
     assert!(captured[2].starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));
-    assert!(no_ws(&captured[1])
-        .contains("\"currentTime\":1.0,\"timeListened\":1.0,\"duration\":3054.336"));
+    assert!(
+        no_ws(&captured[1])
+            .contains("\"currentTime\":1.0,\"timeListened\":1.0,\"duration\":3054.336")
+    );
 
     let (client, _) = mock_client(vec![(401, fixture("authentication-failure.json"))]);
     let error = session_error(&client, "do-not-leak", Duration::from_secs(1));

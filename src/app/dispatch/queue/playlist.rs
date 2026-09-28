@@ -91,14 +91,14 @@ impl App {
             .map(|s| s.slot_id)
             .collect();
         for slot_id in slot_ids {
-            if let Some(slot) = self.player_tab.queue.slot(slot_id) {
-                if let QueueItem::Emby(mut item) = slot.item.clone() {
-                    item.playlist_item_id.clear();
-                    let _ = self
-                        .player_tab
-                        .queue
-                        .update_slot_item(slot_id, QueueItem::Emby(item));
-                }
+            if let Some(slot) = self.player_tab.queue.slot(slot_id)
+                && let QueueItem::Emby(mut item) = slot.item.clone()
+            {
+                item.playlist_item_id.clear();
+                let _ = self
+                    .player_tab
+                    .queue
+                    .update_slot_item(slot_id, QueueItem::Emby(item));
             }
         }
     }

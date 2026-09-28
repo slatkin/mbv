@@ -57,11 +57,11 @@ impl App {
                 u8::try_from(s.volume.clamp(0, 200)).expect("clamped player volume fits in u8")
             })
         };
-        if let Some(v) = player_vol {
-            if v != self.ui_volume {
-                self.ui_volume = v;
-                self.save_prefs();
-            }
+        if let Some(v) = player_vol
+            && v != self.ui_volume
+        {
+            self.ui_volume = v;
+            self.save_prefs();
         }
     }
 
@@ -180,10 +180,8 @@ impl App {
 
     fn handle_paused_changed(&mut self, paused: bool) {
         // Persist Feed position on pause (one write per pause event).
-        if paused {
-            if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
-                self.persist_feed_slot_position(slot_id);
-            }
+        if paused && let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
+            self.persist_feed_slot_position(slot_id);
         }
     }
 
@@ -265,11 +263,11 @@ impl App {
                         progress_report_accepted,
                     );
                 }
-                if preserve_local_state {
-                    if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                        self.last_played_item_id = Some(slot.item.id().to_string());
-                        self.last_played_completed = played;
-                    }
+                if preserve_local_state
+                    && let Some(slot) = self.playback_queue().queue.slot(slot_id)
+                {
+                    self.last_played_item_id = Some(slot.item.id().to_string());
+                    self.last_played_completed = played;
                 }
             }
             None => {
@@ -343,12 +341,12 @@ impl App {
         queue.clamp_cursor();
         // Persist Feed lifecycle state before any
         // consume/removal changes the queue.
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
-                let runtime = slot.item.runtime_ticks();
-                let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
-                self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
-            }
+        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+            && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
+        {
+            let runtime = slot.item.runtime_ticks();
+            let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
+            self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
         if played {
             log::info!(target: "player", "Stopped: marked played, position reset to 0");
@@ -375,14 +373,13 @@ impl App {
             // drop the slot from its own internal queue mirror and
             // mpv's playlist — that still depends on this event, since
             // nothing told it about the removal until now.
-            if let Some(deleted_slot) = deleted_slot {
-                if !self
+            if let Some(deleted_slot) = deleted_slot
+                && !self
                     .player
                     .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot))
-                {
-                    self.player
-                        .send_command(PlayerCommand::QueueRemove(deleted_slot));
-                }
+            {
+                self.player
+                    .send_command(PlayerCommand::QueueRemove(deleted_slot));
             }
         } else {
             let (should_consume, is_audio) = match slot_id {
@@ -444,12 +441,12 @@ impl App {
         // TrackCompleted with `played` means EOF; for Feed entries,
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if matches!(slot.item, mbv_queue::QueueItem::Feed(_)) {
-                let runtime = slot.item.runtime_ticks();
-                let feed_completed = played && runtime > 0;
-                self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
-            }
+        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+            && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
+        {
+            let runtime = slot.item.runtime_ticks();
+            let feed_completed = played && runtime > 0;
+            self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
         let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
         if should_consume {
@@ -496,18 +493,17 @@ impl App {
             self.bare_owner
                 .sync_canonical_queue(self.playback_queue().queue.clone());
             let _ = self.bare_owner.observe_track_change(target_slot_id);
-            if let Some((request_id, _generation)) = transition {
-                if let mbv_player::transition::SettleOutcome::Settled {
+            if let Some((request_id, _generation)) = transition
+                && let mbv_player::transition::SettleOutcome::Settled {
                     dispatch_next: Some(next),
                 } = self
                     .bare_owner
                     .settle_local_transition(request_id, target_slot_id)
-                {
-                    // Already accepted (settle promoted it into
-                    // in-flight): dispatch as-is, never re-mint or
-                    // re-accept.
-                    self.dispatch_jump(next);
-                }
+            {
+                // Already accepted (settle promoted it into
+                // in-flight): dispatch as-is, never re-mint or
+                // re-accept.
+                self.dispatch_jump(next);
             }
         }
         // Activate by owner-assigned identity. Slot identity is stable
@@ -533,10 +529,10 @@ impl App {
         if !self.queue_cursor_held_by_user() {
             self.playback_queue_mut().queue_cursor = adjusted;
         }
-        if !self.has_direct_remote_queue() {
-            if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
-                self.last_played_item_id = Some(item.id.clone());
-            }
+        if !self.has_direct_remote_queue()
+            && let Some(item) = self.playback_queue().emby_item_at(adjusted)
+        {
+            self.last_played_item_id = Some(item.id.clone());
         }
         if !self.has_direct_remote_queue() {
             let queue = self.playback_queue();
@@ -700,13 +696,12 @@ impl App {
     /// exists and carries a feed identity. Shared by the pause and
     /// seek-completion paths (extracted from `handle_player_event`).
     fn persist_feed_slot_position(&mut self, slot_id: mbv_queue::QueueSlotId) {
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-            if let mbv_queue::QueueItem::Feed(ref entry) = slot.item {
-                if entry.feed_id.is_some() {
-                    let pos_ticks = self.player.status.lock().unwrap().position_ticks;
-                    self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
-                }
-            }
+        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+            && let mbv_queue::QueueItem::Feed(ref entry) = slot.item
+            && entry.feed_id.is_some()
+        {
+            let pos_ticks = self.player.status.lock().unwrap().position_ticks;
+            self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
         }
     }
 }

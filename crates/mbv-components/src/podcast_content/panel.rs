@@ -2,8 +2,8 @@ use super::{
     AudiobookshelfEpisodeFilter, AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey,
     LaunchSelector, LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent,
     LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, PillSelection,
-    PodcastContent, PodcastEpisodeIntent, PodcastEpisodeTarget, SelectorIdentity, ShellRequest,
-    TerminalObserverEvent, STATE_PILL_COUNT,
+    PodcastContent, PodcastEpisodeIntent, PodcastEpisodeTarget, STATE_PILL_COUNT, SelectorIdentity,
+    ShellRequest, TerminalObserverEvent,
 };
 use crate::library_panel::HeroContentData;
 use mbv_render::components::tv_wide::HeroImageState;
@@ -55,10 +55,10 @@ impl LibraryContentOwner for PodcastContent {
             }
             _ => {}
         }
-        if let PillSelection::Show(id) = &self.pill {
-            if !self.state.detail_cache.contains_key(id) {
-                return false;
-            }
+        if let PillSelection::Show(id) = &self.pill
+            && !self.state.detail_cache.contains_key(id)
+        {
+            return false;
         }
         let selected = state
             .item

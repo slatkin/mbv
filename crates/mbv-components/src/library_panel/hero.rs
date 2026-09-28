@@ -9,7 +9,7 @@
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
 
-use mbv_render::components::hero_model::{emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES};
+use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
@@ -416,23 +416,23 @@ fn abs_book_meta_rows(
     }
     if book.is_finished {
         rows.push("Finished".into());
-    } else if book.position_ticks > 0 {
-        if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
-            let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
-            let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
-            let percent = (mbv_emby_model::ticks_to_seconds(numerator)
-                / mbv_emby_model::ticks_to_seconds(denominator))
-            .floor()
-            .clamp(1.0, 99.0);
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "percent is clamped to [1.0, 99.0] just above; the cast is exact"
-            )]
-            let pct = percent as u8;
-            progress_row = Some(rows.len());
-            rows.push(format!("{pct}%"));
-        }
+    } else if book.position_ticks > 0
+        && let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0)
+    {
+        let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
+        let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
+        let percent = (mbv_emby_model::ticks_to_seconds(numerator)
+            / mbv_emby_model::ticks_to_seconds(denominator))
+        .floor()
+        .clamp(1.0, 99.0);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "percent is clamped to [1.0, 99.0] just above; the cast is exact"
+        )]
+        let pct = percent as u8;
+        progress_row = Some(rows.len());
+        rows.push(format!("{pct}%"));
     }
     (rows, duration_row, progress_row)
 }

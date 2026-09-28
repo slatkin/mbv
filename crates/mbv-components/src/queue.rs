@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::Event;
@@ -16,7 +16,7 @@ use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box, queue_pa
 use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
-use mbv_render::components::media_list::{queue_row_zebra_stripe, WideMediaListPaintPolicy};
+use mbv_render::components::media_list::{WideMediaListPaintPolicy, queue_row_zebra_stripe};
 use mbv_render::components::queue::render_queue_status;
 use mbv_render::components::widgets::render_queue_panel_frame;
 use mbv_theme as palette;

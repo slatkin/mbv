@@ -3,13 +3,13 @@
 //! bar's `HitRegions` retained by the panel). Painters only: typed content in,
 //! painted rects out; no state, no effects, no destination arm.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::mouse::hit::HitRegions;
-use mbv_render::{render_pill_bar, PillBar, PillBarWindow};
+use mbv_render::{PillBar, PillBarWindow, render_pill_bar};
 use mbv_theme as palette;
 
 use super::content::SelectorRow;

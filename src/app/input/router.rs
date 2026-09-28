@@ -9,7 +9,7 @@
 use crossterm::event::KeyEvent;
 use mbv_keybinds::Keybinds;
 
-use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
+use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
 use crate::app::dispatch::action::Command;
 use mbv_ui_msg::ComponentId;
@@ -164,10 +164,10 @@ pub(in crate::app) fn resolve_armed_outcome(
                 .into_iter()
                 .map(KeyChord::from_keybinds_chord)
                 .find(|router| entry.gate.allows(*router, snapshot));
-            if let Some(firing) = firing {
-                if let Some(command) = command_for_policy(entry.binding, firing) {
-                    return RouterOutcome::PrefixDispatch(command);
-                }
+            if let Some(firing) = firing
+                && let Some(command) = command_for_policy(entry.binding, firing)
+            {
+                return RouterOutcome::PrefixDispatch(command);
             }
         }
     }

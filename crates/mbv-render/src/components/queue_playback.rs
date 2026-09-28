@@ -4,11 +4,11 @@
 //! on the chrome band. It never carries progress: the transport below owns
 //! the throbber, percent, and seekbar.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use mbv_theme as palette;

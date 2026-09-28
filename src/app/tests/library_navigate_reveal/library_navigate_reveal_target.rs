@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::dispatch::library::browse::{resolve_reveal_target, RevealTarget};
+use crate::app::dispatch::library::browse::{RevealTarget, resolve_reveal_target};
 use rstest::rstest;
 
 fn ancestor(id: &str, item_type: &str) -> EmbyItem {

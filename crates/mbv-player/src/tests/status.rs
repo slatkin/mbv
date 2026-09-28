@@ -214,7 +214,7 @@ fn disconnect_remote_disconnects_a_remote_player() {
     assert!(proxy.is_remote());
 
     proxy.disconnect_remote(); // must not panic; a stub has no real
-                               // socket, so this only exercises the
-                               // dispatch, not the shutdown itself
-                               // (that's covered by Task 2's tests).
+    // socket, so this only exercises the
+    // dispatch, not the shutdown itself
+    // (that's covered by Task 2's tests).
 }

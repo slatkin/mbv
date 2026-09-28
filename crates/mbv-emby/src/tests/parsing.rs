@@ -222,9 +222,11 @@ fn parse_item_artist_items_retained_when_present() {
 
 #[test]
 fn parse_item_artist_items_absent_default_empty() {
-    assert!(parse_item(&json!({"Type": "MusicAlbum"}))
-        .artist_items
-        .is_empty());
+    assert!(
+        parse_item(&json!({"Type": "MusicAlbum"}))
+            .artist_items
+            .is_empty()
+    );
 }
 
 // ── parse_video_info ─────────────────────────────────────────────────────

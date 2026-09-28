@@ -1,6 +1,6 @@
 // Per-Service secret files and the Local-daemon Control credential.
 
-use super::{state_dir, ServiceKind};
+use super::{ServiceKind, state_dir};
 use std::path::PathBuf;
 
 /// ── Per-Service secrets ──────────────────────────────────────────────

@@ -2,8 +2,8 @@
 //! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
 
 use super::super::{
-    arbitrate_key, fold_mouse_messages, service_startup, Model, MusicTrackFocusRequest,
-    RouterOutcome,
+    Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
+    service_startup,
 };
 use super::{Duration, IdleFeed, Instant, PollStrategy};
 use crate::app::dispatch::session::player_event::PlayerEventFlow;
@@ -305,12 +305,12 @@ impl Model {
     /// Periodic maintenance between ticks: delayed settings save, session
     /// and cast status polls, websocket keepalive, capability refresh.
     pub(super) fn run_periodic_maintenance(&mut self) {
-        if let Some(at) = self.app.settings_save_at {
-            if Instant::now() >= at {
-                let cfg = self.app.config.lock().unwrap().clone();
-                crate::config::save_config_with_ui(&cfg, &self.app.ui_config_snapshot());
-                self.app.settings_save_at = None;
-            }
+        if let Some(at) = self.app.settings_save_at
+            && Instant::now() >= at
+        {
+            let cfg = self.app.config.lock().unwrap().clone();
+            crate::config::save_config_with_ui(&cfg, &self.app.ui_config_snapshot());
+            self.app.settings_save_at = None;
         }
 
         // Periodic session poll when connected to a remote session
@@ -333,11 +333,11 @@ impl Model {
         }
 
         // Keep this session visible to other Emby clients
-        if let Some(ref tx) = self.app.ws_send_tx {
-            if self.app.last_keepalive.elapsed() >= Duration::from_secs(30) {
-                let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
-                self.app.last_keepalive = Instant::now();
-            }
+        if let Some(ref tx) = self.app.ws_send_tx
+            && self.app.last_keepalive.elapsed() >= Duration::from_secs(30)
+        {
+            let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
+            self.app.last_keepalive = Instant::now();
         }
         if self.app.ws_send_tx.is_some()
             && self.app.last_capabilities.elapsed() >= Duration::from_secs(600)

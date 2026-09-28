@@ -10,10 +10,10 @@ mod config;
 mod registry;
 
 pub use chord::{Chord, ChordParseError, Key, KeyMods};
-pub use config::{load, Keybinds, KeybindsError, RawKeybinds, RawSection, SectionBindings};
+pub use config::{Keybinds, KeybindsError, RawKeybinds, RawSection, SectionBindings, load};
 pub use registry::{
-    action_by_id, KeyGate, KeySection, KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS,
-    RESERVED_CHORDS,
+    KEY_SECTIONS, KEYBIND_ACTIONS, KeyGate, KeySection, KeybindAction, RESERVED_CHORDS,
+    action_by_id,
 };
 
 #[cfg(test)]

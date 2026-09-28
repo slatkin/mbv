@@ -5,7 +5,7 @@ pub(crate) mod state;
 
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
-    install_signal_handlers, start_quit_watchdog, QUIT_REQUESTED,
+    QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
@@ -14,7 +14,7 @@ pub use self::state::app_struct::App;
 mod test_seams;
 #[cfg(test)]
 pub(in crate::app) use self::test_seams::{
-    CastConnectFn, CAST_CONNECT_OVERRIDE, CAST_CONNECT_TEST_LOCK, DAEMON_ROUTE_CONNECT_OVERRIDE,
+    CAST_CONNECT_OVERRIDE, CAST_CONNECT_TEST_LOCK, CastConnectFn, DAEMON_ROUTE_CONNECT_OVERRIDE,
     DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE, LOCAL_PLAYER_PREPARE_OVERRIDE,
     SESSIONS_LOAD_OVERRIDE,
 };
@@ -46,8 +46,8 @@ use mbv_queue::RemoveSlotResult;
 #[cfg(test)]
 use mbv_ui_model::browse::restore_library_position;
 use mbv_ui_model::browse::{
-    restore_library_position_with_fetched_rows_for_kind, AlbumIndex, AlbumIndexState,
-    AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
+    AlbumIndex, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
+    restore_library_position_with_fetched_rows_for_kind,
 };
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]

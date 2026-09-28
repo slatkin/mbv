@@ -1,9 +1,9 @@
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 /// The remote-attachment indicator the queue footer paints: `Some` names
@@ -42,7 +42,10 @@ pub fn render_queue_status(
     let pill_w = pill
         .as_ref()
         .map_or(0, |s| u16::try_from(s.content.width()).unwrap_or(u16::MAX));
-    if let Some(pill) = pill.filter(|_| pill_w > 0 && pill_w < area.width) {
+    if let Some(pill) = pill
+        && pill_w > 0
+        && pill_w < area.width
+    {
         frame.render_widget(
             Paragraph::new(Line::from(vec![pill])),
             Rect {

@@ -4,7 +4,7 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
-use super::{apply_terminal_observer, AlbumCursorKind, Model, ToastSeverity};
+use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
@@ -263,14 +263,14 @@ impl Model {
     }
 
     fn handle_open_url_request(&mut self, url: &str) {
-        if mbv_components::library_panel::sanitize_url(url).is_some() {
-            if let Err(error) = crate::app::open_url(url) {
-                log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
-                self.app.flash(
-                    format!("Unable to open link: {error}"),
-                    ToastSeverity::Neutral,
-                );
-            }
+        if mbv_components::library_panel::sanitize_url(url).is_some()
+            && let Err(error) = crate::app::open_url(url)
+        {
+            log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
+            self.app.flash(
+                format!("Unable to open link: {error}"),
+                ToastSeverity::Neutral,
+            );
         }
     }
 
@@ -314,13 +314,17 @@ impl Model {
                 self.handle_emby_library_latest_exit(target);
             }
             ShellRequest::EmbyLibraryRowClick { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                    && let Some(target) = target
+                {
                     self.app.handle_mouse_single_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::EmbyLibraryRowActivate { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                if let Some(lib_idx) = self.app.tab.emby_library_index()
+                    && let Some(target) = target
+                {
                     self.app.handle_mouse_double_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();

@@ -14,7 +14,7 @@
 
 use super::palette::Palette;
 use super::surface::{FocusSource, Surface};
-use super::surface_table::{row, RESTING_DEVIATIONS};
+use super::surface_table::{RESTING_DEVIATIONS, row};
 use ratatui::style::Color;
 
 /// The resolved colour of one rendered surface for one frame.

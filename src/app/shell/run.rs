@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    init_terminal, install_signal_handlers, restore_terminal, service_startup, start_quit_watchdog,
-    IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED,
+    IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal,
+    install_signal_handlers, restore_terminal, service_startup, start_quit_watchdog,
 };
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
@@ -322,9 +322,9 @@ impl Model {
 
         self.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
-                                            // Printed only after the terminal is restored (task 7.2): anything
-                                            // written while still in the alternate screen would never be
-                                            // visible once it's left.
+        // Printed only after the terminal is restored (task 7.2): anything
+        // written while still in the alternate screen would never be
+        // visible once it's left.
         if let Some(msg) = self.app.pending_exit_message.take() {
             println!("{msg}");
         }

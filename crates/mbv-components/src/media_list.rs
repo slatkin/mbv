@@ -288,10 +288,11 @@ impl<Target> MediaList<Target> {
             }
             MediaListOperation::Context(target) => Some(self.context_intent(target)),
         };
-        if extends_range && self.live_range {
-            if let Some(target) = self.selected_target().cloned() {
-                self.extend_selection_to(&target);
-            }
+        if extends_range
+            && self.live_range
+            && let Some(target) = self.selected_target().cloned()
+        {
+            self.extend_selection_to(&target);
         }
         let after = self.selected_target().cloned();
         let disposition = if before.is_some()

@@ -163,17 +163,16 @@ impl App {
     /// `replace_queue_or_prompt`, which may raise its own save/discard prompt
     /// as a second step before this payload executes.
     pub(in crate::app) fn execute_queue_replacement(&mut self, action: PendingQueueAction) {
-        if self.has_direct_remote_queue() {
-            if let PendingQueueAction::PlayItems {
+        if self.has_direct_remote_queue()
+            && let PendingQueueAction::PlayItems {
                 items,
                 start_idx,
                 source,
                 ..
             } = &action
-            {
-                self.queue_source = source.clone();
-                self.replace_playback_queue(items.clone(), *start_idx);
-            }
+        {
+            self.queue_source = source.clone();
+            self.replace_playback_queue(items.clone(), *start_idx);
         }
         self.replace_queue_or_prompt(action);
     }

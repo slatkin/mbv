@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 
 impl App {
     pub(in crate::app) fn toggle_mute(&mut self) {

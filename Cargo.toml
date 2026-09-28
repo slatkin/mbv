@@ -4,7 +4,7 @@ default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybind
 
 [workspace.package]
 version = "0.21.3"
-edition = "2021"
+edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/slatkin/mbv"

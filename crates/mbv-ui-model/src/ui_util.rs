@@ -7,11 +7,7 @@ use unicode_width::UnicodeWidthStr;
 /// when Nerd Fonts are enabled, otherwise the Unicode house character.
 #[must_use]
 pub fn continue_tab_title(use_nerd_fonts: bool) -> &'static str {
-    if use_nerd_fonts {
-        "\u{f015}"
-    } else {
-        "⌂"
-    }
+    if use_nerd_fonts { "\u{f015}" } else { "⌂" }
 }
 
 /// Three-letter month names, indexed 0 = January (the same abbreviation

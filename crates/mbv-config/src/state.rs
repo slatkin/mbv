@@ -1,8 +1,8 @@
 // Queue, library-position, and last-remote-connection state persistence.
 
 use super::{
-    home_latest_launch_path, library_position_state_path, queue_state_path, state_dir,
-    stay_alive_queue_state_path, LibraryPositionState, QueueState,
+    LibraryPositionState, QueueState, home_latest_launch_path, library_position_state_path,
+    queue_state_path, state_dir, stay_alive_queue_state_path,
 };
 use std::path::PathBuf;
 

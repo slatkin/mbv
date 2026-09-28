@@ -1,7 +1,7 @@
-use super::{Model, DOUBLE_ESC_STOP_WINDOW};
+use super::{DOUBLE_ESC_STOP_WINDOW, Model};
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
-    resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
+    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
 
@@ -364,12 +364,12 @@ impl Model {
             return;
         }
         self.app.prefix_armed = false;
-        if let Some(id) = self.prefix_armed_focus.take() {
-            if self.application.mounted(&id) {
-                self.application
-                    .active(&id)
-                    .expect("restore prefix-displaced focus");
-            }
+        if let Some(id) = self.prefix_armed_focus.take()
+            && self.application.mounted(&id)
+        {
+            self.application
+                .active(&id)
+                .expect("restore prefix-displaced focus");
         }
     }
 

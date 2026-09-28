@@ -45,9 +45,9 @@ impl TestTempDir {
     /// the directory before the test body ran.
     #[must_use]
     pub fn as_xdg_home(mut self) -> Self {
-        std::env::set_var("XDG_STATE_HOME", &self.dir);
-        std::env::set_var("XDG_CONFIG_HOME", &self.dir);
-        std::env::remove_var("MBV_SYSTEM");
+        set_test_env_var("XDG_STATE_HOME", &self.dir);
+        set_test_env_var("XDG_CONFIG_HOME", &self.dir);
+        remove_test_env_var("MBV_SYSTEM");
         self.xdg_home = true;
         self
     }
@@ -85,9 +85,27 @@ impl Drop for TestTempDir {
 #[cfg(any(test, feature = "test"))]
 fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
     match value {
-        Some(value) => std::env::set_var(name, value),
-        None => std::env::remove_var(name),
+        Some(value) => set_test_env_var(name, value),
+        None => remove_test_env_var(name),
     }
+}
+
+/// Test-only `std::env::set_var`, the single place that owns its safety
+/// contract.
+///
+/// Callers must hold `tests::SYS_ENV_LOCK` and call only while no spawned
+/// worker thread is running (setup before spawn, teardown after join).
+#[cfg(any(test, feature = "test"))]
+pub fn set_test_env_var(name: &str, value: impl AsRef<std::ffi::OsStr>) {
+    // SAFETY: Callers hold SYS_ENV_LOCK with no worker threads running (see above).
+    unsafe { std::env::set_var(name, value) };
+}
+
+/// Test-only `std::env::remove_var`; same contract as [`set_test_env_var`].
+#[cfg(any(test, feature = "test"))]
+pub fn remove_test_env_var(name: &str) {
+    // SAFETY: Callers hold SYS_ENV_LOCK with no worker threads running (see `set_test_env_var`).
+    unsafe { std::env::remove_var(name) };
 }
 
 // Test-only escape hatch: `state_dir()` (and therefore `queue_state_path()`,

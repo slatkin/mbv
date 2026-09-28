@@ -1,8 +1,8 @@
 use super::core::DaemonEvent;
 use super::{
-    audio_only_rejection, dispatch_slot_jump, reset_slot_jumps, send_to, AuthorityHolder,
-    ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext, DaemonPlayerOwner,
-    PendingIdleQueueLoad, SharedQueueState,
+    AuthorityHolder, ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext,
+    DaemonPlayerOwner, PendingIdleQueueLoad, SharedQueueState, audio_only_rejection,
+    dispatch_slot_jump, reset_slot_jumps, send_to,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{CtrlCmd, CtrlEvent};
@@ -12,7 +12,7 @@ use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::ExecSlot;
 use mbv_queue::QueueSlotId;
 use mbv_queue::{PlaybackQueue, QueueItem};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 use super::control_queue::{
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, broadcast_queue_state,
@@ -203,12 +203,12 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
         &player_status,
     );
 
-    if ctx.role != crate::DaemonRole::Local && queue_state.items.is_empty() {
-        if let Some(existing) = mbv_config::load_queue_state() {
-            if !existing.items.is_empty() {
-                queue_state = existing;
-            }
-        }
+    if ctx.role != crate::DaemonRole::Local
+        && queue_state.items.is_empty()
+        && let Some(existing) = mbv_config::load_queue_state()
+        && !existing.items.is_empty()
+    {
+        queue_state = existing;
     }
 
     if let Err(e) = mbv_config::save_queue_state(&queue_state) {

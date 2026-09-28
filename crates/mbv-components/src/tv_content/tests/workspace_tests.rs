@@ -166,12 +166,14 @@ fn tv_grouped_rows_flatten_while_search_is_open_and_restore_after_close() {
     // Open the session through the owner's own chord; the same content now
     // pushes flat `Item`-only rows.
     component.set_focused(true);
-    assert!(component
-        .on_key(&KeyEvent {
-            code: Key::Char('/'),
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
+    assert!(
+        component
+            .on_key(&KeyEvent {
+                code: Key::Char('/'),
+                modifiers: KeyModifiers::NONE,
+            })
+            .is_some()
+    );
     assert!(component.inline_search.is_active());
     component.set_content(context());
     let rows = component.carrier.rows().to_vec();

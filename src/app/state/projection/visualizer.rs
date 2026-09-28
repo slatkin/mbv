@@ -1,8 +1,8 @@
 use crate::app::App;
 use mbv_visualizer::StereoSample;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::Frame;
 use std::collections::HashSet;
 
 const SILENCE_THRESHOLD: f32 = 0.0001;

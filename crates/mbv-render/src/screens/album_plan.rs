@@ -1,6 +1,6 @@
 use crate::{natural_sort_key, strip_article};
 use mbv_ui_model::music_grouping::{
-    derive_album_artist, derive_album_display_name, ArtistKey, GroupedAlbumCatalog,
+    ArtistKey, GroupedAlbumCatalog, derive_album_artist, derive_album_display_name,
 };
 use std::collections::HashMap;
 use std::hash::BuildHasher;

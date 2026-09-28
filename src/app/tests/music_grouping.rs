@@ -2,8 +2,8 @@ use super::{BrowseLevel, LibraryTab, TabSelection};
 use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
-use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::EmbyItem;
+use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 use std::time::{Duration, Instant};
 

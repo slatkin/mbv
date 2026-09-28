@@ -14,11 +14,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::mouse::hit::HitRegions;
-use mbv_render::arrangements::library::{wide_library_panes_with_selector, WideLibraryPanes};
+use mbv_render::arrangements::library::{WideLibraryPanes, wide_library_panes_with_selector};
 use mbv_render::arrangements::wide_hero::WideHeroBrowserPane;
 use mbv_render::{
-    render_placeholder, render_search_box, wide_hero_hero_pane, PillBarWindow, PANE_PAD_X,
-    PANE_PAD_Y,
+    PANE_PAD_X, PANE_PAD_Y, PillBarWindow, render_placeholder, render_search_box,
+    wide_hero_hero_pane,
 };
 use mbv_theme as palette;
 

@@ -2,12 +2,12 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    audiobookshelf_transaction, config_path, load_config, load_library_position_state,
-    load_service_secret, persist_audiobookshelf_setup_and_secret, persist_emby_setup_and_secret,
+    AudiobookshelfSetup, EmbySetup, TestStateDirGuard, audiobookshelf_transaction, config_path,
+    load_config, load_library_position_state, load_service_secret,
+    persist_audiobookshelf_setup_and_secret, persist_emby_setup_and_secret,
     persist_emby_setup_and_secret_at, remove_audiobookshelf_setup_and_secret_with_owned_state,
     replace_audiobookshelf_setup_and_secret, save_audiobookshelf_setup_at, save_emby_setup_at,
-    save_library_position_state, save_service_secret, service_secret_path, AudiobookshelfSetup,
-    EmbySetup, TestStateDirGuard,
+    save_library_position_state, save_service_secret, service_secret_path,
 };
 #[cfg(test)]
 use mbv_queue::{LibraryPosition, LibraryPositionLevel, LibraryPositionState, ServiceKind};
@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[test]
 fn library_position_state_round_trips_by_library() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    std::env::remove_var("MBV_SYSTEM");
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -25,7 +25,7 @@ fn library_position_state_round_trips_by_library() {
             .unwrap()
             .as_nanos()
     ));
-    std::env::set_var("XDG_STATE_HOME", &temp);
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     let mut state = LibraryPositionState::default();
     state.libraries.insert(
@@ -55,7 +55,7 @@ fn library_position_state_round_trips_by_library() {
 
     assert_eq!(load_library_position_state(), state);
 
-    std::env::remove_var("XDG_STATE_HOME");
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
 
@@ -228,9 +228,11 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
         doc["audiobookshelf"]["url"].as_str(),
         Some("https://books.example")
     );
-    assert!(!std::fs::read_to_string(config_path())
-        .unwrap()
-        .contains("books-secret"));
+    assert!(
+        !std::fs::read_to_string(config_path())
+            .unwrap()
+            .contains("books-secret")
+    );
     #[cfg(unix)]
     {
         assert_eq!(
@@ -320,7 +322,7 @@ fn failed_audiobookshelf_transaction_leaves_working_state() {
 #[test]
 fn load_library_position_state_defaults_for_missing_or_invalid_file() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    std::env::remove_var("MBV_SYSTEM");
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -330,7 +332,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
     ));
     let state_dir = temp.join("mbv");
     std::fs::create_dir_all(&state_dir).unwrap();
-    std::env::set_var("XDG_STATE_HOME", &temp);
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     assert_eq!(
         load_library_position_state(),
@@ -344,7 +346,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
         LibraryPositionState::default()
     );
 
-    std::env::remove_var("XDG_STATE_HOME");
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
 
@@ -356,7 +358,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
 #[test]
 fn legacy_nested_scope_shape_loads_as_empty_without_error() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    std::env::remove_var("MBV_SYSTEM");
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -366,7 +368,7 @@ fn legacy_nested_scope_shape_loads_as_empty_without_error() {
     ));
     let state_dir = temp.join("mbv");
     std::fs::create_dir_all(&state_dir).unwrap();
-    std::env::set_var("XDG_STATE_HOME", &temp);
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     let legacy = serde_json::json!({
         "libraries": {
@@ -389,6 +391,6 @@ fn legacy_nested_scope_shape_loads_as_empty_without_error() {
         "legacy nested scopes must not be salvaged -- library resets to root"
     );
 
-    std::env::remove_var("XDG_STATE_HOME");
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }

@@ -1,9 +1,9 @@
 #[cfg(any(test, feature = "test"))]
 use super::KeyEvent;
 use super::{
-    upcoming_episode_target, EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput,
-    Msg, Pane, Position, RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent,
-    TvDisplayMode, TvHit, TvTreeTarget,
+    EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, Pane, Position,
+    RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent, TvDisplayMode, TvHit,
+    TvTreeTarget, upcoming_episode_target,
 };
 
 impl TvContent {

@@ -105,10 +105,10 @@ impl App {
                 ModelContentEvent::HomeContentRefreshed(Box::new(content)),
             ));
         }
-        if self.last_played_completed {
-            if let Some(item_id) = self.last_played_item_id.clone() {
-                self.refresh_completed_feed_home_videos(&item_id);
-            }
+        if self.last_played_completed
+            && let Some(item_id) = self.last_played_item_id.clone()
+        {
+            self.refresh_completed_feed_home_videos(&item_id);
         }
         let fetches: Vec<BrowseRefresh> = self
             .libs

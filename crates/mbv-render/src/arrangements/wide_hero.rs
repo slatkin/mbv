@@ -4,11 +4,11 @@
 
 use super::padded_rect;
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 use textwrap::wrap;
 
 /// Minimum outer content-area height for the Wide hero arrangement's

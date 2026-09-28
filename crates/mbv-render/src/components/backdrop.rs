@@ -1,5 +1,5 @@
-use ratatui::style::Color;
 use ratatui::Frame;
+use ratatui::style::Color;
 
 fn dim(color: Color) -> Color {
     match color {

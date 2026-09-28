@@ -168,8 +168,7 @@ fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
         Some("show-a")
     );
     app.save_audiobookshelf_position(0);
-    let saved = &app.library_position_state.libraries
-        ["audiobookshelf:https://podcasts.example:abs-podcasts"];
+    let saved = &app.library_position_state.libraries["audiobookshelf:https://podcasts.example:abs-podcasts"];
     assert_eq!(saved.levels[0].focused_item_id, None);
 
     // A legacy saved position names a show id; restore ignores it instead of
