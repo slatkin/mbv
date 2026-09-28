@@ -13,10 +13,10 @@
 
 ## 3. Adopt let-chains (commit 3)
 
-- [ ] 3.1 Run `cargo clippy --fix --workspace --all-targets --allow-dirty`, then `cargo fmt --all`; verify the remaining `collapsible_if` warnings are listed by `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] 3.2 Hand-collapse remaining `collapsible_if` sites under `src/` into let-chains; verify `cargo clippy -p mbv --all-targets -- -D warnings` reports none in `src/`.
-- [ ] 3.3 Hand-collapse remaining `collapsible_if` sites under `crates/`; verify `cargo clippy --workspace --all-targets -- -D warnings` passes.
-- [ ] 3.4 Rewrite the let-chain forms clippy does not flag: tuple scrutinees `if let (Some(a), Some(b)) = (x, y)` (8 sites) → `if let Some(a) = x && let Some(b) = y`, and `if let Some(v) = expr.filter(|…| cond)` where the closure only adds a condition (15 sites) → `if let Some(v) = expr && cond`; leave a `.filter` whose predicate reads the bound value if the chain would be no clearer. Verify with `rg -n 'if let \(Some\(.*\), Some\(.*\)\) = \(' src crates` returning nothing and `cargo nextest run --workspace` passing.
+- [x] 3.1 Run `cargo clippy --fix --workspace --all-targets --allow-dirty`, then `cargo fmt --all`; verify the remaining `collapsible_if` warnings are listed by `cargo clippy --workspace --all-targets -- -D warnings`.
+- [x] 3.2 Hand-collapse remaining `collapsible_if` sites under `src/` into let-chains; verify `cargo clippy -p mbv --all-targets -- -D warnings` reports none in `src/`.
+- [x] 3.3 Hand-collapse remaining `collapsible_if` sites under `crates/`; verify `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- [x] 3.4 Rewrite the let-chain forms clippy does not flag: tuple scrutinees `if let (Some(a), Some(b)) = (x, y)` (8 sites) → `if let Some(a) = x && let Some(b) = y`, and `if let Some(v) = expr.filter(|…| cond)` where the closure only adds a condition (15 sites) → `if let Some(v) = expr && cond`; leave a `.filter` whose predicate reads the bound value if the chain would be no clearer. Verify with `rg -n 'if let \(Some\(.*\), Some\(.*\)\) = \(' src crates` returning nothing and `cargo nextest run --workspace` passing.
 
 ## 4. Verification
 
