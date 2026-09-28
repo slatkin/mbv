@@ -23,7 +23,6 @@ mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 unicode-width.workspace = true
 time.workspace = true
 ratatui.workspace = true
-log.workspace = true
 
 [features]
 test = []

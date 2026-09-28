@@ -69,17 +69,31 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
     {
         Ok(output) if output.status.success() => output,
         Ok(output) => {
-            log::warn!(target: "local_daemon", "systemctl --user show-environment failed: {}", output.status);
+            tracing::warn!(
+                name: "local_daemon.environment.query_failed",
+                target: "local_daemon",
+                status = %output.status,
+                "systemctl --user show-environment failed"
+            );
             return None;
         }
         Err(e) => {
-            log::warn!(target: "local_daemon", "cannot run systemctl --user show-environment: {e}");
+            tracing::warn!(
+                name: "local_daemon.environment.query_failed",
+                target: "local_daemon",
+                error = %e,
+                "cannot run systemctl --user show-environment"
+            );
             return None;
         }
     };
     let env = display_env_from(&String::from_utf8_lossy(&output.stdout));
     if env.is_none() {
-        log::warn!(target: "local_daemon", "systemd user manager exports no display; inheriting launcher's");
+        tracing::warn!(
+            name: "local_daemon.environment.display_missing",
+            target: "local_daemon",
+            "systemd user manager exports no display; inheriting launcher's"
+        );
     }
     env
 }
@@ -167,7 +181,7 @@ pub fn run_local_daemon_main() -> ! {
 
     let state_dir = crate::state_dir();
     mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
-    log::info!(target: "local_daemon", "local daemon starting");
+    tracing::info!(name: "local_daemon.process.starting", target: "local_daemon", "local daemon starting");
 
     let config = match crate::config::load_config() {
         Ok(c) => c,
@@ -194,7 +208,12 @@ pub fn run_local_daemon_main() -> ! {
         }
     };
     if let Err(e) = guard.write_pid() {
-        log::warn!(target: "local_daemon", "failed to write pid into lock file: {e}");
+        tracing::warn!(
+            name: "local_daemon.lock.write_failed",
+            target: "local_daemon",
+            error = %e,
+            "failed to write pid into lock file"
+        );
     }
     if let Err(e) = mbv_config::load_or_create_control_credential() {
         eprintln!("mbv: local daemon: cannot load Control credential: {e}");

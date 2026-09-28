@@ -162,7 +162,12 @@ fn write_crash_log(msg: &str) {
     // Write directly to stderr (async-signal-safe, no mutex)
     let _ = std::io::stderr().write_all(msg.as_bytes());
     let _ = std::io::stderr().write_all(b"\n");
-    log::error!(target: "crash", "{msg}");
+    tracing::error!(
+        name: "crash.log.failed",
+        target: "crash",
+        { error.message = %msg },
+        "fatal error"
+    );
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -321,7 +326,12 @@ fn main() {
             std::process::exit(1);
         }
     };
-    log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
+    tracing::info!(
+        name: "startup.config.loaded",
+        target: "startup",
+        summary = %config_diagnostic_summary(&config),
+        "configuration loaded"
+    );
     run_configured_startup(log_level, cli_daemon_endpoint, &config);
 }
 
@@ -342,18 +352,23 @@ fn run_configured_startup(
             })
         });
 
-    log::info!(target: "startup", "mbv starting");
+    tracing::info!(name: "startup.application.started", target: "startup", "mbv starting");
 
     // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
     // always wins: a thin client to `mbvd`, owning no Player and taking no
     // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
         let client = cached_emby_client(config);
-        log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
+        tracing::info!(
+            name: "startup.daemon.connecting",
+            target: "startup",
+            endpoint = %endpoint,
+            "connecting to explicit daemon endpoint"
+        );
         println!("Connecting to daemon at {endpoint}...");
         match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
             Ok((remote, player_rx)) => {
-                log::info!(target: "startup", "daemon endpoint connected");
+                tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
                 run_remote_app(client, remote, player_rx, &endpoint, config.clone());
                 return;
             }
@@ -378,7 +393,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec
             // A live local daemon exists: attach as a client alongside any
             // others already attached. Clients take no lock -- that is what
             // permits any number of them.
-            log::info!(target: "startup", "local daemon detected; attaching");
+            tracing::info!(name: "startup.local_daemon.detected", target: "startup", "local daemon detected; attaching");
             let client = cached_emby_client(config);
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
@@ -455,7 +470,12 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec
             }
 
             if let Err(e) = guard.write_pid() {
-                log::warn!(target: "startup", "failed to write pid into lock file: {e}");
+                tracing::warn!(
+                    name: "startup.lock.write_failed",
+                    target: "startup",
+                    error = %e,
+                    "failed to write pid into lock file"
+                );
             }
             let app = App::new_independent(config);
             run_tui(app);

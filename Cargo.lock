@@ -1740,6 +1740,7 @@ dependencies = [
  "textwrap",
  "time",
  "toml",
+ "tracing",
  "tui-scrollbar",
  "tuirealm",
  "unicode-width",
@@ -1807,13 +1808,13 @@ dependencies = [
 name = "mbv-config"
 version = "0.21.4"
 dependencies = [
- "log",
  "mbv-keybinds",
  "mbv-queue",
  "rstest",
  "serde",
  "serde_json",
  "toml",
+ "tracing",
  "uuid",
 ]
 
@@ -1878,11 +1879,11 @@ name = "mbv-desktop"
 version = "0.21.4"
 dependencies = [
  "ksni",
- "log",
  "mbv-ctrl",
  "mbv-emby-model",
  "mbv-images",
  "tokio",
+ "tracing",
  "zbus 4.4.0",
 ]
 
@@ -1945,9 +1946,9 @@ name = "mbv-images"
 version = "0.21.4"
 dependencies = [
  "image",
- "log",
  "ratatui",
  "ratatui-image",
+ "tracing",
 ]
 
 [[package]]
@@ -2052,7 +2053,6 @@ dependencies = [
 name = "mbv-ui-model"
 version = "0.21.4"
 dependencies = [
- "log",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
@@ -2079,8 +2079,8 @@ dependencies = [
 name = "mbv-visualizer"
 version = "0.21.4"
 dependencies = [
- "log",
  "pipewire",
+ "tracing",
 ]
 
 [[package]]

@@ -152,6 +152,7 @@ ratatui-image.workspace = true
 image.workspace = true
 unicode-width.workspace = true
 log.workspace = true
+tracing.workspace = true
 libc.workspace = true
 mimalloc.workspace = true
 nix.workspace = true

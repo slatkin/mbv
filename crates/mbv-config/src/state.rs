@@ -46,7 +46,13 @@ pub(super) fn load_json<T: serde::de::DeserializeOwned>(
     match serde_json::from_str(&text) {
         Ok(state) => Some(state),
         Err(e) => {
-            log::warn!(target: "queue", "{what} failed to parse, queue not restored: {e}");
+            tracing::warn!(
+                name: "queue.restore.failed",
+                target: "queue",
+                state = what,
+                error = %e,
+                "queue not restored"
+            );
             None
         }
     }
@@ -288,7 +294,12 @@ pub fn load_library_position_state() -> LibraryPositionState {
     match serde_json::from_str(&text) {
         Ok(state) => state,
         Err(e) => {
-            log::warn!(target: "library_position", "library_position_state.json failed to parse: {e}");
+            tracing::warn!(
+                name: "library_position.restore.failed",
+                target: "library_position",
+                error = %e,
+                "library position state failed to parse"
+            );
             LibraryPositionState::default()
         }
     }

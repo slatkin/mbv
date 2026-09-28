@@ -519,15 +519,20 @@ pub fn join_worker(handle: JoinHandle<()>) {
     let (done_tx, done_rx) = mpsc::channel();
     thread::spawn(move || {
         if handle.join().is_err() {
-            log::warn!(target: "visualizer", "PipeWire worker thread panicked");
+            tracing::warn!(
+                name: "visualizer.worker.panicked",
+                target: "visualizer",
+                "PipeWire worker thread panicked"
+            );
         }
         let _ = done_tx.send(());
     });
     if done_rx.recv_timeout(SHUTDOWN_TIMEOUT).is_err() {
-        log::warn!(
+        tracing::warn!(
+            name: "visualizer.worker.join_timed_out",
             target: "visualizer",
-            "PipeWire worker did not join within {}ms; detaching",
-            SHUTDOWN_TIMEOUT.as_millis()
+            timeout_ms = SHUTDOWN_TIMEOUT.as_millis(),
+            "PipeWire worker did not join; detaching"
         );
     }
 }
