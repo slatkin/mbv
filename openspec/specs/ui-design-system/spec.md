@@ -132,12 +132,12 @@ the ownership, semantic styling, and verification requirements.
 ### Requirement: UI development guidance is discoverable
 
 The repository SHALL provide mandatory UI rules in `AGENTS.md` and a committed
-`mbv-frontend` skill covering the component ownership model, the controlled-override
+frontend guide (`docs/architecture/tui-frontend.md`) covering the component ownership model, the controlled-override
 vocabulary, the reuse workflow, and verification expectations.
 
 #### Scenario: An agent starts a TUI change
 - **WHEN** an agent begins modifying a terminal UI screen
-- **THEN** the repository guidance directs it to the `mbv-frontend` workflow
+- **THEN** the repository guidance directs it to the frontend guide's workflow
 - **AND** the workflow requires checking for an existing component or arrangement
   before adding rendering code
 
@@ -334,7 +334,7 @@ colour value where a style is expected silently sets the foreground and leaves
 the intended background unpainted, so it is not conforming.
 
 Nothing enforces this set of rules mechanically. It is a review obligation
-carried by the module table and the `mbv-frontend` completion checklist; a green
+carried by the module table and the frontend guide's completion checklist; a green
 build is not evidence that it holds.
 
 Duplicated arrangement geometry and hit targets that have drifted from their
