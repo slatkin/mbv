@@ -59,8 +59,14 @@ pub fn render_tree_browser(
         left_inset: usize::from(content_rect.x.saturating_sub(claim_rect.x)),
         right_inset: usize::from(claim_rect.right().saturating_sub(content_rect.right())),
         content_width: usize::from(content_rect.width),
-        zebra: palette::surface_colors(palette::Surface::QueueColumn, focused).fill,
-        base: palette::surface_colors(palette::Surface::QueuePanel, focused).fill,
+        // The shared tree paints the library browser lists (Grouped Music, TV
+        // show modes), so it stripes with the browser pane's pair — the same
+        // `LibraryColumn`/`LibraryPanel` pair the flat carrier's Wide policy
+        // resolves — not the Queue pair, whose resting values are the two
+        // library fills swapped (the stripe would invert against the list box
+        // whenever the list rests).
+        zebra: palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
+        base: palette::surface_colors(palette::Surface::LibraryPanel, focused).fill,
         focused,
         marquee_text,
         marquee_started_at,

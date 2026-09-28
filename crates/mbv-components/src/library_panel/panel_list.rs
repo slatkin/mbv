@@ -317,6 +317,79 @@ mod panel_list_tests {
         }
     }
 
+    /// The shared tree stripes with the browser pane's library pair — the
+    /// same `LibraryColumn` stripe over the `LibraryPanel` box fill the flat
+    /// carrier resolves — in both focus states: group headings and the spacer
+    /// between groups keep the box fill, and each group's first member opens
+    /// the alternation on the stripe.
+    #[test]
+    fn shared_tree_stripes_with_the_library_browser_pair() {
+        use crate::list::tree_browser::{
+            TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation,
+        };
+
+        let node = |target: TreeTarget, title: &str| {
+            TreeNode::new(
+                target,
+                None,
+                title,
+                title,
+                MediaSemanticState::Ordinary,
+                TreeMarkPolicy::Direct,
+            )
+        };
+        let mut tree = TreeBrowser::new();
+        tree.reconcile(vec![
+            TreeEntry::Heading("A".into()),
+            TreeEntry::Node(node(TreeTarget::Root, "first")),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("B".into()),
+            TreeEntry::Node(node(TreeTarget::Child, "second")),
+        ])
+        .unwrap();
+        tree.apply(TreeOperation::Select(TreeTarget::Child));
+        let claim = Rect::new(1, 0, 18, 5);
+        let content = Rect::new(3, 0, 14, 5);
+        let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
+        for focused in [true, false] {
+            terminal
+                .draw(|frame| {
+                    PanelList::set_paint_policy(&mut tree, PanelListPaintPolicy::Wide { focused });
+                    PanelList::set_geometry(&mut tree, claim, content);
+                    PanelList::view(&mut tree, frame, claim);
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            let box_fill = palette::surface_colors(palette::Surface::LibraryPanel, focused).fill;
+            let stripe = palette::surface_colors(palette::Surface::LibraryColumn, focused).fill;
+            assert_eq!(
+                buf[(5, 0)].bg,
+                box_fill,
+                "the group heading keeps the box fill, focused={focused}"
+            );
+            assert_eq!(
+                buf[(5, 2)].bg,
+                box_fill,
+                "the spacer between groups keeps the box fill, focused={focused}"
+            );
+            assert_eq!(
+                buf[(5, 3)].bg,
+                box_fill,
+                "the next group's heading keeps the box fill, focused={focused}"
+            );
+            assert_eq!(
+                buf[(5, 1)].bg,
+                stripe,
+                "the group's first member opens on the stripe, focused={focused}"
+            );
+            assert_ne!(
+                buf[(5, 1)].bg,
+                box_fill,
+                "the stripe must be visible against the box fill, focused={focused}"
+            );
+        }
+    }
+
     /// The canonical-list contract, driven through the panel's object-safe
     /// surface: the same fixed-row owner remains active while its geometry
     /// changes, preserving selection and clamping on view.
