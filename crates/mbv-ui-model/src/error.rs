@@ -21,17 +21,6 @@ impl UiModelError {
         }
     }
 
-    pub fn operation_context<E>(context: &str, source: E) -> Self
-    where
-        E: Error + Send + Sync + 'static,
-    {
-        Self {
-            kind: UiModelErrorKind::Operation,
-            message: format!("{context}: {source}"),
-            source: Some(Box::new(source)),
-        }
-    }
-
     /// Wraps a domain error keeping its `Display` text as the message so the
     /// UI-visible string is unchanged while the cause stays inspectable.
     pub fn operation_source<E>(source: E) -> Self

@@ -16,6 +16,7 @@ enum EmbyErrorKind {
     Parse,
     Playlist,
     Playback,
+    Resolve,
 }
 
 impl EmbyError {
@@ -30,6 +31,13 @@ impl EmbyError {
     #[must_use]
     pub fn playback(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Playback, message)
+    }
+
+    /// A browse/reveal lookup failure inside the app: the server was not the
+    /// problem, the requested item or path simply cannot be resolved.
+    #[must_use]
+    pub fn resolve(message: impl Into<String>) -> Self {
+        Self::new(EmbyErrorKind::Resolve, message)
     }
 
     pub(crate) fn bounded_timeout(message: impl Into<String>) -> Self {
@@ -78,6 +86,7 @@ impl EmbyError {
             EmbyErrorKind::Parse => "emby.parse",
             EmbyErrorKind::Playlist => "emby.playlist",
             EmbyErrorKind::Playback => "emby.playback",
+            EmbyErrorKind::Resolve => "emby.resolve",
         }
     }
 

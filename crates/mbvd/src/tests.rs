@@ -77,21 +77,15 @@ fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
     ));
     assert_eq!(auth, "mbvd: Audiobookshelf authentication rejected");
 
-    for class in [
-        AudiobookshelfFailureClass::Connectivity,
-        AudiobookshelfFailureClass::Server,
-        AudiobookshelfFailureClass::Protocol,
-        AudiobookshelfFailureClass::MalformedResponse,
-        AudiobookshelfFailureClass::Unavailable,
+    // One representative of the single fallback branch: every non-auth class
+    // maps to the same message (Persistence included, added with its kind).
+    let other = classified_abs_error(&mbv_audiobookshelf::AudiobookshelfError::from_class(
         AudiobookshelfFailureClass::Persistence,
-    ] {
-        let other =
-            classified_abs_error(&mbv_audiobookshelf::AudiobookshelfError::from_class(class));
-        assert_eq!(
-            other,
-            "mbvd: Audiobookshelf server unavailable or returned an invalid response"
-        );
-    }
+    ));
+    assert_eq!(
+        other,
+        "mbvd: Audiobookshelf server unavailable or returned an invalid response"
+    );
 }
 
 #[test]

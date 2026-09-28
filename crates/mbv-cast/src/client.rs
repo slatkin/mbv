@@ -5,7 +5,8 @@
 // subtitle tracks or a queue-jump message; heartbeat requires an explicit
 // keep-alive pump).
 
-use crate::{CastError, TransportKind};
+use crate::CastError;
+use crate::error::TransportKind;
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
     Media, MediaQueue, PlayerState as CastPlayerState, QueueItem, QueueType, StatusEntry,

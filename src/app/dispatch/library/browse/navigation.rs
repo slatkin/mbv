@@ -37,7 +37,7 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "Series")
                 .map(|a| RevealTarget::Series(a.id.clone()))
-                .ok_or_else(|| mbv_emby::EmbyError::playback("Could not resolve the item's series"))
+                .ok_or_else(|| mbv_emby::EmbyError::resolve("Could not resolve the item's series"))
         }
         // A track reveals its album: `album_id` first, ancestors fallback.
         "Audio" => {
@@ -46,14 +46,14 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "MusicAlbum")
                 .map(|a| RevealTarget::Album(a.id.clone()))
-                .ok_or_else(|| mbv_emby::EmbyError::playback("Could not resolve the item's album"))
+                .ok_or_else(|| mbv_emby::EmbyError::resolve("Could not resolve the item's album"))
         }
         "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
         // An artist does not land (D1): it has no single owning album, and a
         // plain artist browse chain does not render on a grouped Music
         // surface (real-tick render check). The kind resolves to the
         // pre-U2 failure, flashing and leaving the active view unchanged.
-        "MusicArtist" => Err(mbv_emby::EmbyError::playback(
+        "MusicArtist" => Err(mbv_emby::EmbyError::resolve(
             "Could not resolve the artist's album",
         )),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
@@ -74,7 +74,7 @@ fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, mbv
         .get_items_by_ids(&[item_id.to_string()])?
         .into_iter()
         .next()
-        .ok_or_else(|| mbv_emby::EmbyError::playback(format!("Item {item_id} no longer exists")))
+        .ok_or_else(|| mbv_emby::EmbyError::resolve(format!("Item {item_id} no longer exists")))
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
@@ -136,7 +136,7 @@ fn landing_for_target(
                 fetch_reveal_item(client, &series_id)?
             };
             if series.item_type != "Series" {
-                return Err(mbv_emby::EmbyError::playback(format!(
+                return Err(mbv_emby::EmbyError::resolve(format!(
                     "Item {series_id} is not a Series"
                 )));
             }
@@ -160,7 +160,7 @@ fn landing_for_target(
             // (the album index builds its terminal level by `is_folder` for
             // the same reason), so a folder record is a valid album reveal.
             if album.item_type != "MusicAlbum" && !album.is_folder {
-                return Err(mbv_emby::EmbyError::playback(format!(
+                return Err(mbv_emby::EmbyError::resolve(format!(
                     "Item {album_id} is not an album"
                 )));
             }
@@ -232,7 +232,7 @@ fn configured_album_ancestors(
         .find(|entry| entry.album.id == album.id)
         .map(|entry| entry.ancestors)
         .ok_or_else(|| {
-            mbv_emby::EmbyError::playback(format!(
+            mbv_emby::EmbyError::resolve(format!(
                 "Could not reach '{}' through the configured music levels",
                 album.display_name()
             ))

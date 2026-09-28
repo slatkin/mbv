@@ -491,7 +491,7 @@ fn failed_bound_save_drops_the_deferred_replacement() {
             epoch: app.queue_epoch,
         },
         source_playlist_id: "playlist-1".into(),
-        result: Err(mbv_emby::EmbyError::playback("save failed")),
+        result: Err(mbv_emby::EmbyError::resolve("save failed")),
     });
     assert!(!app.queue_deferrals.is_save_deferred());
 

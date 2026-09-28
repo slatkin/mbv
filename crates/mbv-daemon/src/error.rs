@@ -23,12 +23,22 @@ impl DaemonLibError {
     pub(crate) fn queue_setup(message: impl Into<String>) -> Self {
         Self::new(DaemonLibErrorKind::QueueSetup, message)
     }
-
     fn new(kind: DaemonLibErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
             source: None,
+        }
+    }
+
+    fn with_source<E>(kind: DaemonLibErrorKind, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            message: source.to_string(),
+            source: Some(Box::new(source)),
         }
     }
 
@@ -59,20 +69,12 @@ impl Error for DaemonLibError {
 
 impl From<mbv_emby::EmbyError> for DaemonLibError {
     fn from(source: mbv_emby::EmbyError) -> Self {
-        Self {
-            kind: DaemonLibErrorKind::PlaybackLookup,
-            message: source.to_string(),
-            source: Some(Box::new(source)),
-        }
+        Self::with_source(DaemonLibErrorKind::PlaybackLookup, source)
     }
 }
 
 impl From<mbv_config::ConfigError> for DaemonLibError {
     fn from(source: mbv_config::ConfigError) -> Self {
-        Self {
-            kind: DaemonLibErrorKind::QueuePersistence,
-            message: source.to_string(),
-            source: Some(Box::new(source)),
-        }
+        Self::with_source(DaemonLibErrorKind::QueuePersistence, source)
     }
 }

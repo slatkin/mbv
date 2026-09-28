@@ -115,7 +115,7 @@ fn failed_album_index_becomes_unavailable() {
     );
     app.handle_lib_event(LibEvent::Music(MusicEvent::AlbumIndexBuilt {
         library_id: "music-lib".into(),
-        result: Err(mbv_emby::EmbyError::playback("index failed")),
+        result: Err(mbv_emby::EmbyError::resolve("index failed")),
     }));
 
     assert!(matches!(

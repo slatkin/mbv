@@ -16,7 +16,7 @@ enum CastErrorKind {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum TransportKind {
+pub(crate) enum TransportKind {
     Connect,
     ReceiverPlatformConnect,
     LaunchApp,
@@ -37,7 +37,6 @@ pub enum TransportKind {
     Status,
     StatusNoEntries,
     NoSessionId,
-    Command,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -87,32 +86,24 @@ impl CastError {
     }
 
     pub(crate) fn jump_no_queue() -> Self {
-        Self::new(
-            CastErrorKind::Transport(TransportKind::JumpNoQueue),
-            "cast jump failed: no dispatched queue to advance",
-        )
+        Self::transport_message(TransportKind::JumpNoQueue)
     }
 
     pub(crate) fn jump_no_adjacent() -> Self {
-        Self::new(
-            CastErrorKind::Transport(TransportKind::JumpNoAdjacent),
-            "cast jump failed: no adjacent queue item",
-        )
+        Self::transport_message(TransportKind::JumpNoAdjacent)
     }
 
     #[must_use]
     pub fn status_no_entries() -> Self {
-        Self::new(
-            CastErrorKind::Transport(TransportKind::StatusNoEntries),
-            "cast get_status returned no entries",
-        )
+        Self::transport_message(TransportKind::StatusNoEntries)
     }
 
     pub(crate) fn no_session_id() -> Self {
-        Self::new(
-            CastErrorKind::Transport(TransportKind::NoSessionId),
-            "cast command failed: nothing loaded yet",
-        )
+        Self::transport_message(TransportKind::NoSessionId)
+    }
+
+    fn transport_message(kind: TransportKind) -> Self {
+        Self::new(CastErrorKind::Transport(kind), kind.context())
     }
 
     #[must_use]
@@ -250,7 +241,6 @@ impl TransportKind {
             Self::Status => "cast get_status failed",
             Self::StatusNoEntries => "cast get_status returned no entries",
             Self::NoSessionId => "cast command failed: nothing loaded yet",
-            Self::Command => "cast command failed",
         }
     }
 
@@ -276,7 +266,6 @@ impl TransportKind {
             Self::Status => "cast.status",
             Self::StatusNoEntries => "cast.status_no_entries",
             Self::NoSessionId => "cast.no_session_id",
-            Self::Command => "cast.command",
         }
     }
 }
