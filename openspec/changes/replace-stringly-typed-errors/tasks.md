@@ -28,7 +28,7 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 3. Emby crate
 
-- [ ] 3.1 Introduce `EmbyError`, convert all 42 sites in `mbv-emby`
+- [x] 3.1 Introduce `EmbyError`, convert all 42 sites in `mbv-emby`
   (`client_library`, `client_sessions`, `client_playlists`, `client_auth`),
   verify `cargo nextest run -p mbv-emby` passes and crate `rg` audit zero
 
