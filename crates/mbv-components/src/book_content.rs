@@ -9,7 +9,7 @@ mod events;
 #[cfg(test)]
 mod tests;
 
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Key, KeyEvent};
 
 use mbv_config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
@@ -453,13 +453,8 @@ impl BookContent {
             Key::Enter => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
             ))),
-            Key::Char('a')
-                if !self.chapter_focused && key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                Some(Msg::Shell(Box::new(
-                    ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Enqueue),
-                )))
-            }
+            // Ctrl+A multi-selects the list via `handle_visual_key`; enqueue
+            // stays on the context menu here.
             _ => None,
         }
     }

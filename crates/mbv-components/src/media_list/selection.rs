@@ -84,6 +84,20 @@ impl<Target: Clone + Eq> MediaList<Target> {
         self.selection_anchor = Some(anchor);
     }
 
+    /// Multi-select every selectable row in display order (Ctrl+A), freezing
+    /// the full set: the cursor stays, `Esc` clears, `Space` toggles one row.
+    pub fn select_all(&mut self) {
+        let selected: Vec<Target> = self
+            .selectable
+            .iter()
+            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .collect();
+        self.selection_anchor = self.selected_target().cloned();
+        self.multi_selection.set_targets(selected.clone());
+        self.frozen_selection = selected;
+        self.live_range = false;
+    }
+
     /// Exit Visual mode and discard all selected targets.
     pub fn clear_selection(&mut self) {
         self.multi_selection.clear();
@@ -227,6 +241,42 @@ mod tests {
         list.toggle_selection(&5);
         list.extend_selection_to(&4);
         assert_eq!(list.multi_selection(), &[2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn select_all_marks_every_selectable_row_and_keeps_the_cursor() {
+        let mut list = list();
+        list.select_target(&5);
+        list.select_all();
+        assert_eq!(list.multi_selection(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert!(list.is_visual_mode());
+        assert_eq!(list.selected_target(), Some(&5));
+    }
+
+    #[test]
+    fn select_all_then_toggle_drops_one_row() {
+        let mut list = list();
+        list.select_all();
+        list.toggle_selection(&4);
+        assert_eq!(list.multi_selection(), &[1, 2, 3, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn ctrl_a_selects_all_through_the_carrier_visual_key() {
+        use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+
+        use super::super::carrier::MediaListCarrier;
+
+        let mut carrier = MediaListCarrier::<u8>::new();
+        carrier.set_content((1..=8).map(item).collect());
+        assert_eq!(
+            carrier.handle_visual_key(&KeyEvent {
+                code: Key::Char('a'),
+                modifiers: KeyModifiers::CONTROL,
+            }),
+            Some(8)
+        );
+        assert_eq!(carrier.multi_selection(), &[1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[test]

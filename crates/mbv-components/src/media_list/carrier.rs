@@ -119,6 +119,10 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
     }
 
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
+        if key.code == Key::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.select_all();
+            return Some(self.multi_selection().len());
+        }
         if matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT {
             self.enter_visual_mode();
             return Some(self.multi_selection().len());
@@ -142,6 +146,10 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
 
     pub fn toggle_selection(&mut self, target: &Target) {
         self.wide.toggle_selection(target);
+    }
+
+    pub fn select_all(&mut self) {
+        self.wide.select_all();
     }
 
     /// Clear the shared owner's selection (#729): one inherent name, so no

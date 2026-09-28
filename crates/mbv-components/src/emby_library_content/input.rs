@@ -184,7 +184,8 @@ impl EmbyLibraryContent {
         match key.code {
             Key::Enter => Some(ShellRequest::EmbyLibraryActivate { item }),
             Key::Char('p') if ctrl => Some(ShellRequest::EmbyLibraryPlay { item }),
-            Key::Char('a') if ctrl => Some(ShellRequest::EmbyLibraryEnqueue { item }),
+            // Ctrl+A multi-selects the list via `handle_visual_key`; enqueue
+            // stays on the context menu here.
             Key::Char('w') if ctrl => Some(ShellRequest::EmbyLibraryToggleWatched { item }),
             Key::Char('s') if ctrl => Some(ShellRequest::EmbyLibraryShuffle { item }),
             _ => None,

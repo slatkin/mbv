@@ -7,7 +7,7 @@ use super::{
 };
 use crate::library_panel::HeroContentData;
 use mbv_render::components::tv_wide::HeroImageState;
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Key, KeyEvent};
 
 impl LibraryContentOwner for PodcastContent {
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
@@ -298,11 +298,8 @@ impl LibraryContentOwner for PodcastContent {
                     PodcastEpisodeIntent::FocusOrPlay(self.episodes.selected_target().cloned()),
                 ),
             ))),
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
-                Box::new(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-                    PodcastEpisodeIntent::Enqueue(self.episodes.selected_target().cloned()),
-                )),
-            )),
+            // Ctrl+A multi-selects the list via `handle_visual_key`; enqueue
+            // stays on the context menu here.
             _ => None,
         }
     }
