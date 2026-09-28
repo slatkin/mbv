@@ -426,6 +426,17 @@ fn connect_stream(
     // moved into the writer thread below.
     let disconnect_stream = stream.try_clone()?;
 
+    // Correlation peer (D5 "Ctrl connections"): the owner joins its
+    // `ctrl.client.connected` line to this side's `ctrl.connected` line by
+    // an exact `peer=` match. Unix endpoints peer by this process's pid;
+    // TCP endpoints by this side's local `ip:port`, in the owner's format.
+    let peer = match &stream {
+        SocketStream::Unix(_) => std::process::id().to_string(),
+        SocketStream::Tcp(tcp) => tcp
+            .local_addr()
+            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
+    };
+
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
@@ -463,6 +474,12 @@ fn connect_stream(
         },
         DAEMON_HANDSHAKE_HARD_BOUND,
     )?;
+    tracing::info!(
+        name: "ctrl.connected",
+        target: "ctrl",
+        peer = %peer,
+        "ctrl connection established"
+    );
     apply_ctrl_event(
         state_event,
         &status,

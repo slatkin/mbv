@@ -25,3 +25,4 @@ mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-net = { path = "../mbv-net" }
 serde_json.workspace = true
 log.workspace = true
+tracing.workspace = true

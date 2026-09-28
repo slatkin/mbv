@@ -171,11 +171,19 @@ impl RemotePlayer {
     #[must_use]
     pub fn send_playback_intent(&self, intent: PlaybackIntent) -> bool {
         let request_id = intent.request_id;
+        let generation = intent.generation;
         self.pending_playback
             .lock()
             .unwrap()
             .insert(request_id, intent.clone());
         if self.cmd_tx.send(CtrlCmd::PlaybackIntent(intent)).is_ok() {
+            tracing::info!(
+                name: "ctrl.intent.sent",
+                target: "ctrl",
+                request = request_id,
+                generation = generation,
+                "playback intent sent"
+            );
             true
         } else {
             self.pending_playback.lock().unwrap().remove(&request_id);
@@ -442,6 +450,12 @@ impl RemotePlayer {
                 "could not send idle queue load to Player owner",
             ));
         }
+        tracing::info!(
+            name: "queue.load.sent",
+            target: "ctrl",
+            queue_request = request_id,
+            "idle queue load sent"
+        );
         Ok(())
     }
 
