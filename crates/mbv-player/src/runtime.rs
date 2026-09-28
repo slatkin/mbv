@@ -2,6 +2,7 @@ use super::{
     Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerError, PlayerEvent, PlayerStatus,
     SessionReporter, fs, mpv_err_str,
 };
+use mbv_core::applog as app_logging;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -26,12 +27,10 @@ impl ProgressGuard {
             let elapsed = start.elapsed();
             match result {
                 Ok(()) => {
-                    log::info!(target: "player", "progress_join: joined in {}ms (budget={}ms)",
-                    elapsed.as_millis(), budget.as_millis());
+                    tracing::info!(name: "player.progress_join.completed", target: "player", elapsed_ms = elapsed.as_millis(), budget_ms = budget.as_millis(), "progress reporter joined");
                 }
                 Err(e) => {
-                    log::warn!(target: "player", "progress_join: {e} after {}ms (budget={}ms)",
-                    elapsed.as_millis(), budget.as_millis());
+                    tracing::warn!(name: "player.progress_join.failed", target: "player", error = %e, elapsed_ms = elapsed.as_millis(), budget_ms = budget.as_millis(), "progress reporter join failed");
                 }
             }
         }
@@ -147,12 +146,12 @@ fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBu
                     let src = entry.path();
                     let dest = private_dir.join(&name);
                     if let Err(e) = symlink_mpv_config_entry(&src, &dest) {
-                        log::warn!(target: "player", "mpv config: failed to link {} into private config dir: {e}", src.display());
+                        tracing::warn!(name: "player.config.link_failed", target: "player", { file.path = %src.display(), error = %e }, "failed to link mpv config entry");
                     }
                 }
             }
             Err(e) => {
-                log::warn!(target: "player", "mpv config: cannot read user config dir {}: {e}", user_dir.display());
+                tracing::warn!(name: "player.config.read_failed", target: "player", { file.path = %user_dir.display(), error = %e }, "cannot read user config directory");
             }
         }
     }
@@ -198,20 +197,21 @@ fn resolve_overlay_scripts() -> Option<PathBuf> {
     let source = mbv_config::osc_script_source();
     let script = source.chosen;
     if !script.exists() {
-        log::warn!(
+        tracing::warn!(
+            name: "player.overlay_script.missing",
             target: "player",
-            "init: resolved mpv overlay script {} does not exist; mpv will run with no overlay scripts",
-            script.display()
+            { file.path = %script.display() },
+            "resolved mpv overlay script does not exist; mpv will run with no overlay scripts"
         );
         return None;
     }
-    log::info!(target: "player", "init: mpv overlay scripts: {}", script.display());
+    tracing::info!(name: "player.overlay_script.resolved", target: "player", { file.path = %script.display() }, "resolved mpv overlay script");
     if let Some(legacy) = source.unused_legacy {
-        log::warn!(
+        tracing::warn!(
+            name: "player.overlay_script.legacy_ignored",
             target: "player",
-            "init: ignoring leftover installer script copy {} (using {}); delete it to silence this warning",
-            legacy.display(),
-            script.display()
+            { legacy_path = %legacy.display(), file.path = %script.display() },
+            "ignoring leftover installer script copy"
         );
     }
     Some(script)
@@ -222,13 +222,13 @@ fn resolve_overlay_scripts() -> Option<PathBuf> {
 fn resolve_overlay_fonts() -> PathBuf {
     let source = mbv_config::osc_fonts_source();
     let fonts = source.chosen;
-    log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
+    tracing::info!(name: "player.overlay_fonts.resolved", target: "player", { file.path = %fonts.display() }, "resolved mpv overlay fonts");
     if let Some(legacy) = source.unused_legacy {
-        log::warn!(
+        tracing::warn!(
+            name: "player.overlay_fonts.legacy_ignored",
             target: "player",
-            "init: ignoring leftover installer font directory {} (using {}); delete it to silence this warning",
-            legacy.display(),
-            fonts.display()
+            { legacy_path = %legacy.display(), file.path = %fonts.display() },
+            "ignoring leftover installer font directory"
         );
     }
     fonts
@@ -246,10 +246,10 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
         // Audio-sized demuxer cache: a headless host has no video window to
         // justify the video-sized budget below.
         if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
-            log::warn!(target: "player", "failed to set headless forward cache: {e}");
+            tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_forward", error = %e, "failed to configure mpv cache");
         }
         if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
-            log::warn!(target: "player", "failed to set headless back cache: {e}");
+            tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_back", error = %e, "failed to configure mpv cache");
         }
         return;
     }
@@ -257,18 +257,18 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
         "demuxer-max-bytes",
         format!("{}M", config.video_cache_forward_mb),
     ) {
-        log::warn!(target: "player", "failed to set video forward cache: {e}");
+        tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "video_forward", error = %e, "failed to configure mpv cache");
     }
     if let Err(e) = mpv.set_property(
         "demuxer-max-back-bytes",
         format!("{}M", config.video_cache_back_mb),
     ) {
-        log::warn!(target: "player", "failed to set video back cache: {e}");
+        tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "video_back", error = %e, "failed to configure mpv cache");
     }
     if !config.use_mpv_config
         && let Err(e) = mpv.set_property("hwdec", "auto-safe")
     {
-        log::warn!(target: "player", "failed to set hwdec policy: {e}");
+        tracing::warn!(name: "player.hardware_decode.configure_failed", target: "player", error = %e, "failed to configure hardware decode policy");
     }
 }
 
@@ -285,7 +285,7 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
         if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
             return Err(PlayerError::set_audio_device(device, e));
         }
-        log::info!(target: "player", "clocked audio output: using ALSA device {device}");
+        tracing::info!(name: "player.audio_output.configured", target: "player", device = %device, "using clocked ALSA audio output");
         false
     } else {
         false
@@ -294,11 +294,7 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
         return Ok(false);
     }
     if let Err(e) = mpv.set_property("pause", true) {
-        log::warn!(
-            target: "player",
-            "audio pipe: failed to pre-pause startup: {}",
-            mpv_err_str(&e)
-        );
+        tracing::warn!(name: "player.audio_pipe.pause_failed", target: "player", error = %mpv_err_str(&e), "failed to pre-pause startup");
         return Ok(false);
     }
     Ok(true)
@@ -308,7 +304,7 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
 /// resampler. Returns `true` only when every output property was accepted.
 fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
     if let Err(e) = ensure_pipe(path) {
-        log::warn!(target: "player", "audio pipe disabled for this session: {e}");
+        tracing::warn!(name: "player.audio_pipe.disabled", target: "player", error = %e, "audio pipe disabled for this session");
         return false;
     }
     let rate = config.audio_pipe_samplerate.to_string();
@@ -345,10 +341,10 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
         failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
     }
     if failed.is_empty() {
-        log::info!(target: "player", "audio pipe: writing {rate}Hz/{bitdepth}-bit/stereo PCM to {path} (blocks until a reader attaches)");
+        tracing::info!(name: "player.audio_pipe.configured", target: "player", { sample_rate_hz = %rate, bit_depth = bitdepth, file.path = %path }, "writing stereo PCM; blocks until a reader attaches");
         true
     } else {
-        log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
+        tracing::warn!(name: "player.audio_pipe.configure_failed", target: "player", { file.path = %path, failures = %failed.join(", ") }, "failed to configure PCM output");
         false
     }
 }
@@ -359,23 +355,16 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError
     let ipc_existed = Path::new(&ipc_path).exists();
     if ipc_existed {
         let _ = std::fs::remove_file(&ipc_path);
-        log::info!(target: "player", "init: removed stale ipc socket {ipc_path}");
+        tracing::info!(name: "player.ipc_socket.stale_removed", target: "player", { file.path = %ipc_path }, "removed stale IPC socket");
     }
-    log::info!(target: "player", "init: ipc={ipc_path} (existed={ipc_existed})");
+    tracing::info!(name: "player.ipc_socket.checked", target: "player", { file.path = %ipc_path, existed = ipc_existed }, "checked IPC socket path");
 
     let no_scripts = config.no_scripts;
     let use_mpv_config = config.use_mpv_config;
     if no_scripts {
-        log::warn!(
-            target: "player",
-            "init: mpv overlay scripts disabled by config (no_scripts); resolved source {} will not be handed to mpv",
-            mbv_config::osc_script_source().chosen.display()
-        );
+        tracing::warn!(name: "player.overlay_script.disabled", target: "player", { file.path = %mbv_config::osc_script_source().chosen.display() }, "mpv overlay scripts disabled by config and will not be handed to mpv");
     } else if use_mpv_config {
-        log::warn!(
-            target: "player",
-            "init: user's mpv config manages scripts; mbv hands mpv no overlay scripts (no mbv OSD)"
-        );
+        tracing::warn!(name: "player.overlay_script.user_managed", target: "player", "user mpv config manages scripts; mbv hands mpv no overlay scripts");
     }
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
@@ -474,7 +463,7 @@ pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuar
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
     // The progress reporter outlives the slot, so it must not inherit the
     // spawning slot's `playback` span — dispatcher only (design D5).
-    let handle = thread::spawn(mbv_core::applog::carry_dispatcher(move || {
+    let handle = thread::spawn(app_logging::carry_dispatcher(move || {
         loop {
             match stop_rx.recv_timeout(interval) {
                 Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,

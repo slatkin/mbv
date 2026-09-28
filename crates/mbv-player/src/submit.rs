@@ -6,6 +6,7 @@ use super::{
     queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
     spawn_progress_reporter, start_queue_playback,
 };
+use mbv_core::applog as app_logging;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{Arc, Mutex, atomic::Ordering, mpsc};
 use std::thread;
@@ -247,7 +248,7 @@ fn make_reporter(
         let report_item = emby.clone();
         let media_source_id = info.media_source_id.clone();
         let session_id = info.session_id.clone();
-        thread::spawn(mbv_core::applog::carry_dispatcher(move || {
+        thread::spawn(app_logging::carry_dispatcher(move || {
             // `playback.report` from the ids this report sends (design D5);
             // the thread outlives the slot, so it inherits no `playback` span.
             let span =
@@ -255,11 +256,7 @@ fn make_reporter(
             let _entered = span.entered();
             let ok = report_client.report_start(&report_item, &media_source_id, &session_id);
             if !ok {
-                log::warn!(
-                    target: "player",
-                    "report_start failed for item={}",
-                    report_item.id,
-                );
+                tracing::warn!(name: "player.report_start.failed", target: "player", item = %report_item.id, "start report failed");
             }
         }));
         (
@@ -328,7 +325,7 @@ fn run_player_thread(mut start: PlayerThreadStart) {
         None => match init_mpv(&start.config) {
             Ok(value) => value,
             Err(error) => {
-                log::error!(target: "player", "{error}");
+                tracing::error!(name: "player.startup.failed", target: "player", error = %error, "mpv startup failed");
                 start.status.lock().unwrap().active = false;
                 let _ = start.event_tx.send(PlayerEvent::Stopped {
                     slot_id: None,
@@ -460,7 +457,7 @@ fn load_queue_sources(
             "loadfile",
             &[prepared.url.as_str(), mode, &position, &options],
         ) {
-            log::warn!(target: "player", "submit_queue loadfile error: {error} | mode={mode}");
+            tracing::warn!(name: "player.queue_load.failed", target: "player", error = %error, mode, "queue loadfile failed");
             if index == start.start_idx {
                 let mut prepared = prepared;
                 prepared.close(0.0);

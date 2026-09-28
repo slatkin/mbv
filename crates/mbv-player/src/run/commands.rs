@@ -101,12 +101,12 @@ impl PlaybackRun {
                 ep_title,
                 artist,
             } => {
-                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
+                tracing::warn!(name: "player.next_up.message_sent", target: "player", item = %item_id, show_title = %show_title, episode_title = %ep_title, "sending next-up script message");
                 let result = mpv.command(
                     "script-message",
                     &["mbv-next-up", &item_id, &show_title, &ep_title, &artist],
                 );
-                log::warn!(target: "player", "next-up: script-message result={result:?}");
+                tracing::warn!(name: "player.next_up.message_result", target: "player", result = ?result, "next-up script message result");
             }
             PlayerCommand::TogglePause => {
                 let paused = self.status.lock().unwrap().paused;
@@ -133,7 +133,9 @@ impl PlaybackRun {
                 let _ = mpv.command("seek", &[&seconds, mode]);
                 self.last_seek_at = Some(Instant::now());
             }
-            command => log::error!(target: "player", "unhandled command {command:?}"),
+            command => {
+                tracing::error!(name: "player.command.unhandled", target: "player", command = ?command, "unhandled player command");
+            }
         }
     }
 }

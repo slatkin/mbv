@@ -1974,7 +1974,6 @@ dependencies = [
  "libc",
  "libmpv2",
  "libmpv2-sys",
- "log",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",

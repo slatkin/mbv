@@ -314,11 +314,7 @@ impl PlaybackRun {
                 let (urls, ok) = this.reporter.start_item(&emby, &this.playback_span);
                 this.ext_sub_urls = urls;
                 if !ok {
-                    log::warn!(
-                        target: "player",
-                        "start_item failed for adopted item={}",
-                        emby.id
-                    );
+                    tracing::warn!(name: "player.report_start.failed", target: "player", item = %emby.id, "start report failed for adopted item");
                 }
             } else {
                 this.ext_sub_urls = vec![];
@@ -539,11 +535,7 @@ impl PlaybackRun {
             past,
         } = initial_item_state(&initial_item);
 
-        log::info!(
-            target: "player",
-            "playback init origin={origin:?} idx={start_idx} item_pos={}s",
-            initial_pos / mbv_emby_model::TICKS_PER_SECOND
-        );
+        tracing::info!(name: "player.playback.initialized", target: "player", origin = ?origin, index = start_idx, position_seconds = initial_pos / mbv_emby_model::TICKS_PER_SECOND, "playback initialized");
         let run_identity = status.lock().unwrap().sequence_generation;
         let active_file = queue.has_audiobookshelf_entries();
         let active_file_starting = active_file && prepared_source.is_some();
@@ -682,7 +674,7 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
 
 pub(crate) fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
     let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
-    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
+    tracing::debug!(name: "player.jump.stale_slot_rejected", target: "player", slot = ?slot_id, "jump rejected because slot is absent");
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 

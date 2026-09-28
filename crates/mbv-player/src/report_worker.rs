@@ -1,4 +1,4 @@
-use mbv_core::applog::carry_dispatcher;
+use mbv_core::applog as app_logging;
 use mbv_ctrl::player::PlayerStatus;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
@@ -84,11 +84,10 @@ fn execute_stopped_report(data: StoppedReportData) {
     {
         let _ = tx.flush(Duration::from_secs(1));
     }
-    log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
-        last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
+    tracing::info!(name: "player.report_stopped.sent", target: "player", item = %id, is_audio, last_valid_pos_seconds = last_valid_pos / TICKS_PER_SECOND, position_seconds = pos / TICKS_PER_SECOND, "sent stopped report");
     let ok = client.report_stopped(&id, &msid, pos, &sid, runtime_ticks);
     if !ok {
-        log::warn!(target: "player", "transition_to: report_stopped failed for prev item");
+        tracing::warn!(name: "player.report_stopped.failed", target: "player", "stopped report failed for previous item");
     }
 }
 
@@ -126,7 +125,7 @@ fn report_start_job(
 ) {
     let ok = client.report_start(item, media_source_id, session_id);
     if !ok {
-        log::warn!(target: "player", "transition_to: report_start failed for item={}", item.id);
+        tracing::warn!(name: "player.report_start.failed", target: "player", item = %item.id, "start report failed");
     }
 }
 
@@ -223,7 +222,9 @@ impl SessionReporter {
         let (job_tx, job_rx) = mpsc::channel::<ReportJob>();
         // The report worker outlives any slot, so it must not inherit the
         // spawning slot's `playback` span — dispatcher only (design D5).
-        thread::spawn(carry_dispatcher(move || run_report_worker(job_rx)));
+        thread::spawn(app_logging::carry_dispatcher(move || {
+            run_report_worker(job_rx);
+        }));
         SessionReporter {
             client,
             ws_tx,
@@ -342,8 +343,7 @@ impl SessionReporter {
         let Some(d) = self.stopped_report_data(last_valid_pos) else {
             return false;
         };
-        log::info!(target: "player", "report_stopped: item={} is_audio={} last_valid_pos={}s sending pos={}s",
-            d.id, d.is_audio, d.last_valid_pos / TICKS_PER_SECOND, d.pos / TICKS_PER_SECOND);
+        tracing::info!(name: "player.report_stopped.sent", target: "player", item = %d.id, is_audio = d.is_audio, last_valid_pos_seconds = d.last_valid_pos / TICKS_PER_SECOND, position_seconds = d.pos / TICKS_PER_SECOND, "sent stopped report");
         self.client
             .report_stopped(&d.id, &d.msid, d.pos, &d.sid, d.runtime_ticks)
     }
@@ -386,8 +386,7 @@ impl SessionReporter {
         let Some(d) = self.stopped_report_data(last_valid_pos) else {
             return false;
         };
-        log::info!(target: "player", "report_stopped shutdown: item={} is_audio={} last_valid_pos={}s sending pos={}s timeout={}ms",
-            d.id, d.is_audio, d.last_valid_pos / TICKS_PER_SECOND, d.pos / TICKS_PER_SECOND, timeout.as_millis());
+        tracing::info!(name: "player.report_stopped.sent", target: "player", item = %d.id, is_audio = d.is_audio, last_valid_pos_seconds = d.last_valid_pos / TICKS_PER_SECOND, position_seconds = d.pos / TICKS_PER_SECOND, timeout_ms = timeout.as_millis(), "sent shutdown stopped report");
         self.client.report_stopped_for_shutdown(
             &d.id,
             &d.msid,

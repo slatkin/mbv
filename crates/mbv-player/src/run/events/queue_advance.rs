@@ -42,7 +42,7 @@ impl PlaybackRun {
             return done;
         }
         if reason == mpv_end_file_reason::Error {
-            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
+            tracing::warn!(name: "player.end_file.playback_error", target: "player", "playback error; file may be unreadable or unsupported");
         }
 
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
@@ -58,8 +58,7 @@ impl PlaybackRun {
         }
 
         let completed_idx = completed_slot_id.and_then(|slot_id| self.queue.slot_index(slot_id));
-        log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={}",
-            self.last_valid_pos, self.status.lock().unwrap().runtime_ticks);
+        tracing::warn!(name: "player.queue_advance.started", target: "player", reason = ?reason, last_valid_position = self.last_valid_pos, runtime = self.status.lock().unwrap().runtime_ticks, "advancing queue after end-file");
         // H11: bounds-check completed_idx — QueueRemove can shrink the list
         // while the current track is finishing.
         let Some(completed_item) = completed_slot_id
@@ -104,11 +103,7 @@ impl PlaybackRun {
         }
         // Played stays video-only; consume is type-agnostic and gated per type
         // by the app layer.
-        log::info!(target: "consume", "on_end_file decision: idx={completed_idx:?} reason={reason:?} \
-            natural={natural} near_end={near_end} was_next_up={was_next_up} \
-            completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
-            => played_out={played_out} consume_track={consume_track}",
-            self.last_valid_pos, completed_runtime);
+        tracing::info!(name: "player.consume.decision", target: "consume", index = ?completed_idx, reason = ?reason, natural, near_end, was_next_up, is_audio = completed_is_audio, last_valid_position = self.last_valid_pos, runtime = completed_runtime, played = played_out, consume = consume_track, "computed completed-track outcome");
         let (next_idx, settling_transition) = self.settle_forced_jump();
         let end = QueueEndStop {
             completed_slot_id,
@@ -133,13 +128,7 @@ impl PlaybackRun {
         let next_idx = slot_id
             .and_then(|slot_id| self.queue.slot_index(slot_id))
             .unwrap_or(self.current_idx + 1);
-        log::info!(
-            target: "transition",
-            "on_end_file settle: forced_jump_slot={slot_id:?} next_idx={next_idx} current_idx={} queue_len={} settling_transition={}",
-            self.current_idx,
-            self.queue_len(),
-            transition.is_some(),
-        );
+        tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?slot_id, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = transition.is_some(), "settled forced jump on end-file");
         if next_idx < self.queue_len() {
             self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {
                 crate::run::ForcedJump {
@@ -219,7 +208,7 @@ impl PlaybackRun {
         self.start_next_item_reporting(&next_item);
         *progress = spawn_progress_reporter(self.reporter.clone());
 
-        log::info!(target: "player", "playlist track-transition idx={}", self.current_idx);
+        tracing::info!(name: "player.track.transitioned", target: "player", index = self.current_idx, "playlist track transitioned");
 
         if let Some(completed_slot_id) = end.completed_slot_id {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
@@ -299,8 +288,7 @@ impl PlaybackRun {
             self.last_valid_pos,
             completed_runtime,
         );
-        log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} stop_report={:?}",
-            self.last_valid_pos, completed_runtime, self.stop_report());
+        tracing::warn!(name: "player.queue.quit", target: "player", last_valid_position = self.last_valid_pos, runtime = completed_runtime, stop_report = ?self.stop_report(), "queue playback quit");
         if self.is_unreported() {
             // mpv-initiated quits (for example a compositor close request)
             // must not wait on Emby before mpv can finish its own shutdown.
@@ -323,8 +311,7 @@ impl PlaybackRun {
         completed_idx: Option<usize>,
         progress: &mut ProgressGuard,
     ) -> bool {
-        log::warn!(target: "player", "on_end_file: completed_idx={completed_idx:?} out of bounds (len={}), stopping",
-            self.queue_len());
+        tracing::warn!(name: "player.queue.completed_slot_missing", target: "player", index = ?completed_idx, queue_length = self.queue_len(), "completed item is out of bounds; stopping");
         progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
         self.mark_reported(StopReport::mark_sent(
@@ -363,19 +350,10 @@ impl PlaybackRun {
             // indistinguishable from a real stop here, and stopping the
             // run on a transient one would cost playback. The logged
             // ordinal makes the difference visible in the field.
-            log::info!(
-                target: "player",
-                "on_end_file: dropping superseded-jump EndFile (reason={reason:?}); \
-                 mpv drives the next start-file (mpv_pos={mpv_pos})",
-            );
+            tracing::info!(name: "player.jump.superseded_end_file_dropped", target: "player", reason = ?reason, mpv_position = ?mpv_pos, "dropping superseded jump end-file; mpv drives next start-file");
             return true;
         };
-        log::warn!(
-            target: "player",
-            "on_end_file: EndFile(Stop) abandoned the active entry; mpv is on entry {index} \
-             (was {}) — adopting it",
-            self.current_idx,
-        );
+        tracing::warn!(name: "player.playlist_entry.abandoned", target: "player", index, previous_index = self.current_idx, "mpv abandoned the active entry; adopting current entry");
         let abandoned_pos = self.last_valid_pos;
         self.report_stopped_and_adopt_mpv_entry(
             completed_slot_id,
@@ -461,7 +439,7 @@ impl PlaybackRun {
 
     fn mark_played_id_or_retry(&self, id: ItemId) {
         if let Err(e) = self.reporter.client.mark_played(id.as_str()) {
-            log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+            tracing::warn!(name: "player.mark_played.failed", target: "player", item = %id, error = %e, "mark played failed; scheduling retry");
             retry_mark_played(std::sync::Arc::clone(&self.reporter.client), id);
         }
     }
@@ -475,7 +453,7 @@ impl PlaybackRun {
                 let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
                 this.ext_sub_urls = urls;
                 if !ok {
-                    log::warn!(target: "player", "start_item failed for playlist track-transition item={}", emby.id);
+                    tracing::warn!(name: "player.report_start.failed", target: "player", item = %emby.id, "start report failed for playlist track transition");
                 }
                 return;
             }

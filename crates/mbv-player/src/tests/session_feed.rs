@@ -2,6 +2,7 @@ use super::*;
 use crate::run::StopAction;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use rstest::rstest;
+use tracing_log as tracing_bridge;
 
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────
 
@@ -579,12 +580,9 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
     });
 
     tracing::subscriber::with_default(subscriber, || {
-        // The report code still logs via `log::` (row 4.1 owns conversion);
-        // bridge it into the capture. Per-process init, safe under nextest's
-        // one-test-per-process model. Debug so the progress/ping lines (debug
-        // level in mbv-emby) are captured too.
-        let _ = tracing_log::LogTracer::init();
-        log::set_max_level(log::LevelFilter::Debug);
+        // mbv-emby is converted in a later unit, so bridge its log records into
+        // this capture subscriber while this regression exercises player spans.
+        let _ = tracing_bridge::LogTracer::init();
 
         // Session A's playback span, entered as the run loop would hold it.
         let span_a = PlaybackRun::new_playback_span(
@@ -618,7 +616,7 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
 
         // Non-deferred path: the stopped report for session A must carry its
         // own ids (its span is entered, not just created).
-        let stopped = wait_for_captured_line(&line_rx, "report_stopped: item=item-a");
+        let stopped = wait_for_captured_line(&line_rx, "sent stopped report");
         assert_report_line_correlated(&stopped, "item-a", "session-a", &["item-b", "session-b"]);
 
         let before = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
@@ -631,6 +629,16 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
         assert!(
             !before.contains("play_session="),
             "play_session recorded before get_playback_info resolved: {before}"
+        );
+        for value in ["item-a", "session-a"] {
+            assert!(
+                !before.contains(value),
+                "previous session value {value} leaked: {before}"
+            );
+        }
+        assert!(
+            !before.contains("slot="),
+            "playback span leaked onto deferred report line: {before}"
         );
         assert_report_line_correlated(&after, "item-b", "session-b", &["item-a", "session-a"]);
 
@@ -671,8 +679,7 @@ fn resolved_start_report_line_carries_resolved_item_and_session() {
     });
 
     tracing::subscriber::with_default(subscriber, || {
-        let _ = tracing_log::LogTracer::init();
-        log::set_max_level(log::LevelFilter::Info);
+        let _ = tracing_bridge::LogTracer::init();
 
         let span_a = PlaybackRun::new_playback_span(
             QueueSlotId::from_raw(7),

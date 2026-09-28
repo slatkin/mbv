@@ -76,13 +76,9 @@ impl PlaybackRun {
                 let _ = mpv.set_property("start", "0");
             }
             let title_opt = mpv_title_opt(&item.display_name());
-            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
+            tracing::info!(name: "player.load.started", target: "player", { url.path = %url, load_options = ?title_opt }, "loading media with mpv");
             if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
-                log::warn!(
-                    target: "player",
-                    "loadfile error: {} | opts={title_opt:?}",
-                    mpv_err_str(&e)
-                );
+                tracing::warn!(name: "player.load.failed", target: "player", error = %mpv_err_str(&e), load_options = ?title_opt, "mpv loadfile failed");
             }
             send_ep_info(mpv, item);
         });
@@ -111,7 +107,7 @@ impl PlaybackRun {
             .collect::<Option<Vec<_>>>()
         else {
             let reason = "Queue submission rejected: item has no direct mpv URL source".to_string();
-            log::warn!(target: "player", "{reason}");
+            tracing::warn!(name: "player.queue_submission.rejected", target: "player", reason = %reason, "queue submission rejected");
             let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
             return;
         };
@@ -146,10 +142,7 @@ impl PlaybackRun {
             let (mode, index) = queue_load_location(i, start_idx);
             let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
-                log::warn!(
-                    target: "player",
-                    "SubmitQueue loadfile error: {e} | mode={mode} opts={opts:?}",
-                );
+                tracing::warn!(name: "player.queue_load.failed", target: "player", error = %e, mode, load_options = ?opts, "mpv loadfile failed");
             }
         }
         // Design D3: every load above was no-play, so playback starts here,
@@ -190,11 +183,7 @@ impl PlaybackRun {
         );
 
         self.in_playback_span(|this| {
-            log::info!(
-                target: "player",
-                "SubmitQueue origin={origin:?} idx={start_idx} items={}",
-                this.queue_len(),
-            );
+            tracing::info!(name: "player.queue_submitted", target: "player", origin = ?origin, index = start_idx, item_count = this.queue_len(), "queue submitted");
         });
     }
 
@@ -230,11 +219,7 @@ impl PlaybackRun {
                 let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
                 this.ext_sub_urls = urls;
                 if !ok {
-                    log::warn!(
-                        target: "player",
-                        "start_item failed for SubmitQueue item={}",
-                        emby.id,
-                    );
+                    tracing::warn!(name: "player.report_start.failed", target: "player", item = %emby.id, "start report failed for submitted queue item");
                 }
             });
         } else {
@@ -276,7 +261,7 @@ impl PlaybackRun {
         let prepared = match self.prepare_item(&active_item) {
             Ok(prepared) => prepared,
             Err(error) => {
-                log::warn!(target: "player", "active-file replacement preparation failed: {error}");
+                tracing::warn!(name: "player.active_file.prepare_failed", target: "player", error = %error, "active-file replacement preparation failed");
                 self.accept_stopped_replacement(
                     items,
                     start_idx,
@@ -306,7 +291,7 @@ impl PlaybackRun {
         self.rebuild_playback_span();
         let installed = self.in_playback_span(|this| {
             if let Err(error) = this.install_active_projection(mpv, prepared, &active_item) {
-                log::warn!(target: "player", "active-file replacement failed: {error}");
+                tracing::warn!(name: "player.active_file.replacement_failed", target: "player", error = %error, "active-file replacement failed");
                 this.accept_stopped_replacement(
                     Vec::new(),
                     start_idx,

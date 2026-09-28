@@ -16,12 +16,7 @@ impl PlaybackRun {
         let tag = transition
             .filter(|t| t.target == slot_id)
             .map(|t| (t.request_id, t.generation));
-        log::info!(
-            target: "transition",
-            "track_changed: slot_id={:?} transition_tag={}",
-            slot_id,
-            tag.is_some(),
-        );
+        tracing::info!(name: "player.track.changed", target: "transition", slot = ?slot_id, has_transition = tag.is_some(), "track changed");
         let _ = self.event_tx.send(PlayerEvent::TrackChanged {
             slot_id,
             transition: tag,
@@ -50,7 +45,7 @@ impl PlaybackRun {
             let _ = self.event_tx.send(PlayerEvent::QueueNextUp { next_idx });
         } else if decision.arm {
             self.queue_next_up.arm();
-            log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
+            tracing::info!(name: "player.queue_next_up.armed", target: "player", index = self.current_idx + 1, "queue next-up armed");
         }
     }
 
@@ -60,7 +55,7 @@ impl PlaybackRun {
         let decision = standalone_next_up_decision(self.next_up, has_series, runtime, ticks);
         if let Some(NextUpFire::Standalone) = decision.fire {
             self.next_up.fire();
-            log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
+            tracing::warn!(name: "player.next_up.threshold_reached", target: "player", series = %self.series_id, "next-up threshold reached");
             let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
                 series_id: self.series_id.clone(),
                 season: self.season,
@@ -69,9 +64,9 @@ impl PlaybackRun {
         } else if decision.arm {
             self.next_up.arm();
             if has_series {
-                log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
+                tracing::info!(name: "player.next_up.armed", target: "player", series = %self.series_id, runtime_seconds = runtime / TICKS_PER_SECOND, "next-up armed");
             } else {
-                log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
+                tracing::warn!(name: "player.next_up.disabled", target: "player", "next-up disabled because episode has no series id");
             }
         }
     }
@@ -83,7 +78,7 @@ impl PlaybackRun {
             st.position_ticks = ticks;
             if pos_secs > 0.0 {
                 if self.last_valid_pos == 0 {
-                    log::info!(target: "player", "playlist last_valid_pos first non-zero: {}s idx={}", ticks / TICKS_PER_SECOND, self.current_idx);
+                    tracing::info!(name: "player.playback_position.initialized", target: "player", position_seconds = ticks / TICKS_PER_SECOND, index = self.current_idx, "first non-zero playback position");
                 }
                 self.last_valid_pos = ticks;
                 st.last_valid_pos = ticks;
