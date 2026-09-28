@@ -6,6 +6,7 @@ use mbv_emby_model::EmbyItem;
 // FeedEntry and QueueItem — the two item kinds a playback queue slot can
 // hold, plus QueueItem's custom (kind-tagged, legacy-fallback) Deserialize.
 mod audiobookshelf;
+pub use audiobookshelf::{AudiobookshelfEpisodeCatalog, EpisodeResume};
 mod items;
 pub use items::*;
 mod kinds;

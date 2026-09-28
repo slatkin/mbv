@@ -1,5 +1,5 @@
 use super::{AudiobookshelfClient, AudiobookshelfError};
-use mbv_queue::AudiobookshelfQueueItem;
+use mbv_queue::AudiobookshelfEpisodeCatalog;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;
@@ -46,11 +46,9 @@ pub struct AudiobookshelfProgress {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AudiobookshelfShelfEntry {
     Show(String),
-    /// A fully-populated episode entry: the fields needed to build an
-    /// `AudiobookshelfQueueItem` (for Home's per-library Latest pill) without
-    /// a follow-up fetch. Entries whose `media` payload is absent or partial
-    /// map to defaulted fields.
-    Episode(AudiobookshelfQueueItem),
+    /// A fully-populated episode entry with catalog fields and no user progress.
+    /// Entries whose `media` payload is absent or partial map to defaulted fields.
+    Episode(AudiobookshelfEpisodeCatalog),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +212,7 @@ pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShel
         .and_then(|m| m.cover_path.clone())
         .filter(|c| !c.is_empty());
     let duration_seconds = recent_episode.audio_file.as_ref().and_then(|a| a.duration);
-    AudiobookshelfShelfEntry::Episode(AudiobookshelfQueueItem {
+    AudiobookshelfShelfEntry::Episode(AudiobookshelfEpisodeCatalog {
         library_item_id: entry.id,
         episode_id: recent_episode.id,
         title: recent_episode
@@ -234,10 +232,7 @@ pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShel
             );
             u64::try_from(ticks).unwrap_or(0)
         }),
-        position_ticks: 0,
-        played: false,
         pub_date_secs: published_at_secs(recent_episode.published_at),
-        is_finished: false,
         cover_path,
     })
 }

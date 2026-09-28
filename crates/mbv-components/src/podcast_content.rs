@@ -12,7 +12,7 @@ use mbv_config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_seconds};
-use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
+use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem, EpisodeResume};
 
 use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
@@ -48,7 +48,7 @@ const STATE_PILL_COUNT: usize = AudiobookshelfEpisodeFilter::ALL.len();
 #[derive(Debug)]
 pub struct PodcastContent {
     pub state: AudiobookshelfBrowseState,
-    latest_items: Vec<AudiobookshelfQueueItem>,
+    latest_items: Vec<AudiobookshelfEpisodeCatalog>,
     latest_marker: bool,
     /// The active pill, stored by value and remembered across tab switches
     /// (design D3); reset to `All` on construction. The painted active
@@ -148,16 +148,8 @@ impl PodcastContent {
         self.latest_marker = marker;
     }
 
-    pub fn set_latest_items(&mut self, latest: &[QueueItem]) {
-        self.latest_items = latest
-            .iter()
-            .filter_map(|item| match item {
-                QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(item)) => {
-                    Some(item.clone())
-                }
-                _ => None,
-            })
-            .collect();
+    pub fn set_latest_items(&mut self, latest: &[AudiobookshelfEpisodeCatalog]) {
+        self.latest_items = latest.to_vec();
         self.rebuild_rows();
     }
 
@@ -451,41 +443,49 @@ impl PodcastContent {
     /// cover).
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
-        if self.on_latest() {
-            return self
-                .latest_items
+        let catalog = if self.on_latest() {
+            self.latest_items
                 .iter()
                 .find(|item| {
                     item.library_item_id == target.library_item_id()
                         && item.episode_id == target.episode_id()
-                })
-                .cloned();
-        }
-        let episode = self
+                })?
+                .clone()
+        } else {
+            let episode = self
+                .state
+                .episode_by_identity(target.library_item_id(), target.episode_id())?;
+            let show = self
+                .state
+                .shows
+                .iter()
+                .find(|show| show.library_item_id == episode.library_item_id);
+            AudiobookshelfEpisodeCatalog {
+                library_item_id: episode.library_item_id.clone(),
+                episode_id: episode.episode_id.clone(),
+                title: episode.title.clone(),
+                show_title: show.map(|show| show.title.clone()),
+                author: show.and_then(|show| show.author.clone()),
+                description: episode.description.clone(),
+                duration_ticks: episode.duration_seconds.map(|seconds| {
+                    let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).trunc());
+                    u64::try_from(ticks).unwrap_or(0)
+                }),
+                pub_date_secs: episode.published_at,
+                cover_path: show.and_then(|show| show.cover_path.clone()),
+            }
+        };
+        let resume = self
             .state
-            .episode_by_identity(target.library_item_id(), target.episode_id())?;
-        let show = self
-            .state
-            .shows
-            .iter()
-            .find(|show| show.library_item_id == episode.library_item_id);
-        Some(AudiobookshelfQueueItem {
-            library_item_id: episode.library_item_id.clone(),
-            episode_id: episode.episode_id.clone(),
-            title: episode.title.clone(),
-            show_title: show.map(|show| show.title.clone()),
-            author: show.and_then(|show| show.author.clone()),
-            description: episode.description.clone(),
-            duration_ticks: episode.duration_seconds.map(|seconds| {
-                let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).trunc());
-                u64::try_from(ticks).unwrap_or(0)
-            }),
-            position_ticks: 0,
-            played: false,
-            pub_date_secs: episode.published_at,
-            is_finished: false,
-            cover_path: show.and_then(|show| show.cover_path.clone()),
-        })
+            .progress
+            .get(&(
+                target.library_item_id().to_owned(),
+                target.episode_id().to_owned(),
+            ))
+            .map_or(EpisodeResume::NOT_STARTED, |progress| {
+                EpisodeResume::from_seconds(progress.current_time_seconds, progress.is_finished)
+            });
+        Some(AudiobookshelfQueueItem::from_catalog(catalog, resume))
     }
 
     pub fn hero_data(&mut self) -> Option<HeroContentData> {

@@ -65,6 +65,34 @@ fn empty_queue() -> PlaybackQueue {
     PlaybackQueue::from_queue_items(Vec::new(), None, revision_mint())
 }
 
+#[rstest::rstest]
+#[case::not_started(EpisodeResume::NOT_STARTED, 0, false)]
+#[case::resumed(EpisodeResume::from_seconds(90.0, true), 90 * TICKS_PER_SECOND, true)]
+fn from_catalog_applies_resume_state(
+    #[case] resume: EpisodeResume,
+    #[case] position_ticks: i64,
+    #[case] finished: bool,
+) {
+    let item = AudiobookshelfQueueItem::from_catalog(
+        AudiobookshelfEpisodeCatalog {
+            library_item_id: "show".into(),
+            episode_id: "episode".into(),
+            title: "Episode".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            cover_path: None,
+        },
+        resume,
+    );
+
+    assert_eq!(item.position_ticks, position_ticks);
+    assert_eq!(item.played, finished);
+    assert_eq!(item.is_finished, finished);
+}
+
 fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> AudiobookshelfQueueItem {
     AudiobookshelfQueueItem {
         library_item_id: library_item_id.into(),

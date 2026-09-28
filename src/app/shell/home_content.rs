@@ -176,8 +176,8 @@ impl Model {
                 .get(library_id)
                 .is_some_and(|items| {
                     items.iter().any(|item| {
-                        mbv_ui_model::home_latest::is_new_in_launch_window(
-                            item,
+                        mbv_ui_model::home_latest::timestamp_in_launch_window(
+                            item.pub_date_secs,
                             self.app.home_latest_launch_window,
                         )
                     })

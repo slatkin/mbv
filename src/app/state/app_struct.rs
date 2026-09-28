@@ -87,7 +87,7 @@ pub struct App {
     /// Audiobookshelf Latest pills from this cache — never a blocking network
     /// call — and the shelf-fetch handler refreshes it (Task 6.3).
     pub(in crate::app) audiobookshelf_shelf_cache:
-        std::collections::HashMap<String, Vec<mbv_queue::QueueItem>>,
+        std::collections::HashMap<String, Vec<mbv_queue::AudiobookshelfEpisodeCatalog>>,
     pub(in crate::app) audiobookshelf_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:

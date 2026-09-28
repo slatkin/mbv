@@ -1,5 +1,45 @@
 use super::items::{PlaybackTitleParts, QueueItemContentId, QueueItemKind, duration_ticks_as_i64};
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfEpisodeCatalog {
+    pub library_item_id: String,
+    pub episode_id: String,
+    pub title: String,
+    pub show_title: Option<String>,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub duration_ticks: Option<u64>,
+    pub pub_date_secs: Option<u64>,
+    pub cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EpisodeResume {
+    position_ticks: i64,
+    is_finished: bool,
+}
+
+impl EpisodeResume {
+    pub const NOT_STARTED: Self = Self {
+        position_ticks: 0,
+        is_finished: false,
+    };
+
+    #[must_use]
+    pub fn from_seconds(current_time_seconds: f64, is_finished: bool) -> Self {
+        Self {
+            position_ticks: if current_time_seconds.is_finite() && current_time_seconds >= 0.0 {
+                mbv_emby_model::saturating_i64_from_f64(
+                    (current_time_seconds * mbv_emby_model::TICKS_PER_SECOND_F64).round(),
+                )
+            } else {
+                0
+            },
+            is_finished,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AudiobookshelfQueueItem — identity, presentation, duration, progress,
 // completion, and Service-scoped artwork identity. Excludes credentials,
@@ -41,6 +81,24 @@ pub struct AudiobookshelfQueueItem {
 }
 
 impl AudiobookshelfQueueItem {
+    #[must_use]
+    pub fn from_catalog(catalog: AudiobookshelfEpisodeCatalog, resume: EpisodeResume) -> Self {
+        Self {
+            library_item_id: catalog.library_item_id,
+            episode_id: catalog.episode_id,
+            title: catalog.title,
+            show_title: catalog.show_title,
+            author: catalog.author,
+            description: catalog.description,
+            duration_ticks: catalog.duration_ticks,
+            position_ticks: resume.position_ticks,
+            played: resume.is_finished,
+            pub_date_secs: catalog.pub_date_secs,
+            is_finished: resume.is_finished,
+            cover_path: catalog.cover_path,
+        }
+    }
+
     #[must_use]
     pub fn content_id(&self) -> QueueItemContentId {
         QueueItemContentId::Audiobookshelf {

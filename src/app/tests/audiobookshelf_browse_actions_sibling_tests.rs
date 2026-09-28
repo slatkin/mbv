@@ -1,4 +1,45 @@
 #[test]
+fn shelf_cache_hit_carries_browse_progress() {
+    // Regression for 50c4d12d / issue #844: cached shelf content must not erase
+    // the current browse progress when it becomes a submitted QueueItem.
+    let mut app = super::podcast::audiobookshelf_app();
+    app.audiobookshelf_shelf_cache.insert(
+        "abs-podcasts".into(),
+        vec![mbv_queue::AudiobookshelfEpisodeCatalog {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-1".into(),
+            title: "Episode".into(),
+            show_title: Some("Show A".into()),
+            author: None,
+            description: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            cover_path: None,
+        }],
+    );
+    app.audiobookshelf_browse[0].progress.insert(
+        ("show-a".into(), "episode-1".into()),
+        mbv_audiobookshelf::AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-1".into(),
+            current_time_seconds: 90.0,
+            is_finished: true,
+        },
+    );
+
+    let item = app
+        .selected_audiobookshelf_queue_item_target(
+            0,
+            &mbv_ui_msg::PodcastEpisodeTarget::new("show-a".into(), "episode-1".into()),
+        )
+        .unwrap();
+    let item = item.as_audiobookshelf().unwrap();
+
+    assert_eq!(item.position_ticks, 90 * mbv_emby_model::TICKS_PER_SECOND);
+    assert!(item.played);
+}
+
+#[test]
 fn podcast_episode_targets_include_parent_show_identity() {
     let mut app = super::podcast::audiobookshelf_app();
     app.audiobookshelf_browse[0].detail_cache.insert(

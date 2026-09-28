@@ -25,10 +25,14 @@ pub fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
 }
 
 #[must_use]
-pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
+pub fn timestamp_in_launch_window(timestamp: Option<u64>, window: HomeLatestLaunchWindow) -> bool {
     let Some(previous) = window.previous else {
         return false;
     };
-    provider_timestamp_secs(item)
-        .is_some_and(|timestamp| previous < timestamp && timestamp <= window.current)
+    timestamp.is_some_and(|timestamp| previous < timestamp && timestamp <= window.current)
+}
+
+#[must_use]
+pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
+    timestamp_in_launch_window(provider_timestamp_secs(item), window)
 }

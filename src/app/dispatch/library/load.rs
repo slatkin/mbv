@@ -5,7 +5,6 @@ use crate::app::{
 };
 use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
-use mbv_queue::QueueItem;
 use std::collections::HashMap;
 
 impl App {
@@ -410,11 +409,11 @@ impl App {
         })
     }
 
-    /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
-    /// list when the shelf is absent (only that shelf feeds Home).
+    /// The `Newest Episodes` shelf's catalog entries, or an empty list when
+    /// the shelf is absent (only that shelf feeds Home).
     pub(in crate::app) fn newest_episodes_items(
         shelves: Vec<mbv_audiobookshelf::AudiobookshelfShelf>,
-    ) -> Vec<QueueItem> {
+    ) -> Vec<mbv_queue::AudiobookshelfEpisodeCatalog> {
         shelves
             .into_iter()
             .find(|shelf| shelf.label.eq_ignore_ascii_case("Newest episodes"))
@@ -423,9 +422,7 @@ impl App {
                     .entries
                     .into_iter()
                     .filter_map(|entry| match entry {
-                        mbv_audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => Some(
-                            QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(item)),
-                        ),
+                        mbv_audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => Some(item),
                         mbv_audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
                     })
                     .collect()
