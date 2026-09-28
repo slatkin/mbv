@@ -152,6 +152,7 @@ impl ImageCache {
         self.card_image_states.contains_key(key)
     }
 
+    #[must_use]
     pub fn image(&self, key: &str) -> Option<&CachedImage> {
         self.card_image_states.get(key)
     }
@@ -251,6 +252,7 @@ impl ImageCache {
         self.resize_response_rx.try_recv()
     }
 
+    #[must_use]
     pub fn card_image_tx(&self) -> &mpsc::Sender<(String, Option<image::DynamicImage>)> {
         &self.card_image_tx
     }
@@ -286,7 +288,9 @@ impl ImageCache {
     }
 
     #[cfg(not(any(test, feature = "test")))]
-    fn record_fetch_reservation(&mut self) {}
+    fn record_fetch_reservation(&mut self) {
+        let _ = self;
+    }
 
     #[cfg(any(test, feature = "test"))]
     pub fn card_image_fetch_calls(&self) -> u32 {
