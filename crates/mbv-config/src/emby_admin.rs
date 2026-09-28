@@ -70,7 +70,7 @@ fn migrate_legacy_emby_setup_and_token(
     legacy_setup: &EmbySetup,
 ) -> Result<(), String> {
     let setup_path = config_path();
-    let setup = load_config()?.emby_setup;
+    let setup = load_config().map_err(|error| error.to_string())?.emby_setup;
     let secret_path = service_secret_path(ServiceKind::Emby);
     let secret_file_exists = secret_path.exists();
     let secret = load_service_secret(ServiceKind::Emby);

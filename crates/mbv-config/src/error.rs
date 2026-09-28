@@ -144,3 +144,9 @@ impl From<serde_json::Error> for ConfigError {
         Self::state(error.to_string())
     }
 }
+
+impl From<mbv_keybinds::KeybindsError> for ConfigError {
+    fn from(error: mbv_keybinds::KeybindsError) -> Self {
+        Self::parse(error.to_string())
+    }
+}
