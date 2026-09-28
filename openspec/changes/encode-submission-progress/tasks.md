@@ -10,7 +10,7 @@ Final gate (end of group 2):
 
 ## 1. Types (design D1, D2)
 
-- [ ] 1.1 In `crates/mbv-queue/src/audiobookshelf.rs`, add
+- [x] 1.1 In `crates/mbv-queue/src/audiobookshelf.rs`, add
   `AudiobookshelfEpisodeCatalog`, `EpisodeResume` (private fields,
   `NOT_STARTED`, `from_seconds`), and `AudiobookshelfQueueItem::from_catalog`
   exactly per design D1. Re-export them from `crates/mbv-queue/src/lib.rs`
@@ -21,12 +21,12 @@ Final gate (end of group 2):
   `from_seconds(90.0, true)` → position is 90 s in ticks and
   `played == is_finished == true`. Verify: `cargo nextest run -p mbv-queue`
   passes.
-- [ ] 1.2 In `crates/mbv-audiobookshelf/src/catalog.rs`, change
+- [x] 1.2 In `crates/mbv-audiobookshelf/src/catalog.rs`, change
   `AudiobookshelfShelfEntry::Episode` to carry `AudiobookshelfEpisodeCatalog`.
   `shelf_entry_from_wire` builds it and drops the three zero fields. Update
   `src/tests/catalog.rs` to the new shape, keeping its assertions. Verify:
   `cargo nextest run -p mbv-audiobookshelf` passes.
-- [ ] 1.3 In `crates/mbv-ui-model/src/home_latest.rs`, add
+- [x] 1.3 In `crates/mbv-ui-model/src/home_latest.rs`, add
   `timestamp_in_launch_window(Option<u64>, HomeLatestLaunchWindow) -> bool`
   and make `is_new_in_launch_window` delegate to it. The existing
   `home_latest/tests.rs` table already owns the window arithmetic, so add no
@@ -34,12 +34,12 @@ Final gate (end of group 2):
 
 ## 2. Cache and callers (design D2, D3)
 
-- [ ] 2.1 Retype `audiobookshelf_shelf_cache` (`src/app/state/app_struct.rs`) to
+- [x] 2.1 Retype `audiobookshelf_shelf_cache` (`src/app/state/app_struct.rs`) to
   `HashMap<String, Vec<mbv_queue::AudiobookshelfEpisodeCatalog>>`. Update
   `newest_episodes_items` (`src/app/dispatch/library/load.rs`) to return that
   type, and `home_content.rs:175` to call `timestamp_in_launch_window(item.pub_date_secs, ..)`.
   Verify: `cargo check -p mbv` shows no errors in those three files.
-- [ ] 2.2 Rewrite `selected_audiobookshelf_queue_item_target`
+- [x] 2.2 Rewrite `selected_audiobookshelf_queue_item_target`
   (`src/app/dispatch/audiobookshelf/browse.rs`) per design D3: one `resume`,
   and both branches build a catalog and return
   `QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem::from_catalog(..)))`.
@@ -51,7 +51,7 @@ Final gate (end of group 2):
   asserts the returned item's `position_ticks` and `played`. Verify: the
   test passes and `rg -n "position_ticks\s*=" src/app/dispatch/audiobookshelf/browse.rs`
   is empty.
-- [ ] 2.3 `crates/mbv-components/src/podcast_content.rs`:
+- [x] 2.3 `crates/mbv-components/src/podcast_content.rs`:
   - `set_latest_items(&[AudiobookshelfEpisodeCatalog])`, with `latest_items`
     retyped.
   - `active_episodes` and the row show-title fallback read catalog fields.
