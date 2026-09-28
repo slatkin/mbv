@@ -104,8 +104,14 @@ unless named" rule, and a hand-written ~40-line matcher is simpler than wrapping
 Spans use the D4 target convention. A span entered only for a handler body would lose
 context wherever an operation hands off to another thread or resumes later on the event
 loop, so there are two propagation rules:
-- **Thread spawn**: code in these paths that calls `thread::spawn` captures
-  `tracing::Span::current()` before spawning and enters it first thing in the closure.
+- **Thread spawn**: code in these paths wraps its thread body in
+  `mbv_core::applog::carry_context(f)`. On the spawning thread, it captures both
+  `tracing::Span::current()` and the current dispatcher
+  (`tracing::dispatcher::get_default(Clone::clone)`). It returns a closure that runs `f`
+  under `tracing::dispatcher::with_default` with the span entered. The dispatcher has to
+  be carried too: an event goes to the default subscriber of the thread it's logged on,
+  so a test's `with_default` subscriber would not see events from a worker thread (review
+  N3). In production the global dispatcher is used either way.
 - **Event-loop rejoin**: a handler that finishes a deferred operation rebuilds the span
   from the ids the rejoining event or parked state already carries. It does not store the
   `Span` itself, which would duplicate those ids.
@@ -118,11 +124,20 @@ Boundaries:
     logs `ctrl.client.connected` with `client` and `peer`. For a Unix socket, `peer` is
     the process id from `SO_PEERCRED`, via `nix::sys::socket::getsockopt(…,
     PeerCredentials)`; the `socket` feature is already enabled. For TCP it is the peer
-    address.
-  - `RemotePlayer` logs `ctrl.connected` with `pid` (`std::process::id()`) each time it
-    connects.
-  - Chain for matching across processes: TUI `pid` → owner's `client` for that `peer`
-    → the `client`+`request` pair. No protocol change.
+    address from `TcpStream::peer_addr` (`ip:port`).
+  - Each time `RemotePlayer` connects (`crates/mbv-remote-player/src/connect.rs`, after
+    the handshake), it logs `ctrl.connected` with a `peer` field that uses the owner's
+    key and value format:
+    - Unix endpoint: its own process id (`std::process::id()`).
+    - TCP endpoint (`connect/endpoint.rs`, `SocketStream::Tcp`): its local address from
+      `TcpStream::local_addr` (`ip:port`).
+  - Matching is an exact `peer=` join between the TUI's `ctrl.connected` line and the
+    owner's `ctrl.client.connected` line, which gives the owner's `client`. Then the
+    `client`+`request` pair.
+  - Scope: guaranteed for Unix sockets. For TCP it is guaranteed only when no address
+    translation (NAT, proxy) sits between the TUI and the owner, because otherwise the
+    owner sees a translated address. With translation, lines can still be matched by
+    `request` and time, but that isn't guaranteed. No protocol change.
 - **Playback intent**:
   - TUI: `RemotePlayer::send_playback_intent` (`crates/mbv-remote-player/src/lib.rs`)
     logs `ctrl.intent.sent` with `request`, `generation`.
@@ -150,17 +165,33 @@ Boundaries:
     - the progress worker (`run/run_loop.rs`)
     - the report worker (`report_worker.rs` `SessionReporter::new`)
 
-    So they don't inherit the playback span. Instead each `SessionReporter` report method
-    enters a `playback.report` span built from the reporter's `ids` at call time (`item`,
-    `play_session`). Each queued `ReportJob` is handled inside a span built from the ids
-    the job carries. `item`/`play_session` link these lines to the `playback` span's
-    lines.
-- **HTTP**: every production agent is built by `mbv_net::native_tls_agent` (callers:
-  Emby `emby_agent`, Audiobookshelf `AudiobookshelfClient::new`, Feeds `tls_agent`, TUI
-  image fetching).
+    So they don't inherit the playback span. Instead they get a `playback.report` span
+    (`item`, `play_session`), built per call or per job. The rule differs by case,
+    because the shared `ids` can still name the previous session while a deferred Start
+    is resolving:
+    - `SessionReporter::report_progress` / `report_ping`: built from the shared `ids` at
+      call time. These are exactly the ids the report sends, so the label matches the
+      request even inside the deferred window.
+    - `ReportJob::Stopped(data)` and the `stopped` data in `ProgressJoinThenStopped`: from
+      `data.id` / `data.sid`.
+    - `ReportJob::Start` with `StartIds::Resolved`: from `item.id` and the resolved
+      `session_id`.
+    - `ReportJob::Start` with `StartIds::Deferred`: `item` comes from the new `item.id`,
+      and `play_session = Empty`. The shared `ids` are never read at job entry.
+      `play_session` is recorded with `Span::record` right after `get_playback_info`
+      returns (next to the existing `locked.2 = info.session_id` update in
+      `report_worker.rs`).
+
+    `item`/`play_session` link these lines to the `playback` span's lines.
+- **HTTP**: every production agent is built by `mbv_net::native_tls_agent`. Its callers
+  are Emby `emby_agent`, Audiobookshelf `AudiobookshelfClient::new`, Feeds `tls_agent`,
+  and two TUI sites that both call Emby: `image_fetch/protocol.rs` `fetch_url` (Emby
+  item images and child lookups) and `image_fetch/fetch/level_warmup.rs` (Emby
+  album-artist items).
   - Split it into `agent_config(service: HttpService, connect, global) -> ureq::config::Config`
-    plus the agent build. `HttpService` is a new enum: `Emby`, `Audiobookshelf`, `Feed`,
-    `Images`.
+    plus the agent build. `HttpService` is a new enum with one variant per `CONTEXT.md`
+    Service: `Emby`, `Audiobookshelf`, `Feeds`. It is logged as `service=emby`,
+    `service=audiobookshelf` or `service=feeds`. Both TUI sites pass `HttpService::Emby`.
   - `agent_config` installs the logging middleware. ureq 3.4.2 accepts a plain
     `Fn(Request, MiddlewareNext) -> Result<Response, Error>` (`ureq::middleware`).
   - The `service` argument is required, so no provider agent can be built without
@@ -231,10 +262,23 @@ Stderr sink behaviour is unchanged: `<prio>` + line, trace maps to `<7>`. The sy
 - Rejoin correlation (`mbv-daemon`, `src/tests/loop.rs` harness): a failed
   `PlaybackResolved` handled on the event loop logs a line carrying the intent's `client`
   and `request`. The test uses a thread-local capture subscriber.
-- Reporter correlation (`mbv-player`, existing `src/tests/` reporter fixtures): a report
-  job's event carries `item` and `play_session`.
+- Reporter correlation (`mbv-player`, existing `src/tests/` reporter fixtures): a deferred
+  `ReportJob::Start` for a new item, run with the shared `ids` still holding the previous
+  session:
+  - a line logged before `get_playback_info` returns carries the new `item` and no
+    `play_session`;
+  - a line logged after it returns carries the new `item` and the resolved
+    `play_session`.
+
+  The report worker runs on its own thread. The test sees its events because the spawn
+  goes through `carry_context`, which carries the test's `with_default` dispatcher.
+- `carry_context` (`mbv-core`): an event logged on a thread spawned through
+  `carry_context` reaches the spawning thread's `with_default` subscriber and carries the
+  spawner's span fields.
 - HTTP (`mbv-net`): an agent from `MockHttp::agent_for(HttpService::Emby)` given a 500
   logs `http.request.failed` with `service=emby` and `http.response.status_code=500`.
+- The connect lines have no unit test. The `peer` value comes straight from
+  `peer_addr`/`local_addr`/`SO_PEERCRED` and is checked manually (task 5.2).
 - CLI parse tests in `src/main.rs` and `crates/mbvd/src/tests.rs` switch to `LogSpec`
   (existing tests, extended with one directive case).
 - Call-site conversion itself gets no new tests. It is mechanical, and clippy plus

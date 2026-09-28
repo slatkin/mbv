@@ -24,8 +24,9 @@ file failures are silently ignored, and a long-running daemon never rotates its 
   owner's client id plus the existing request ids), playback sessions (slot, item, Emby
   play session), Emby progress reporting, and HTTP requests. The context is carried
   across the worker threads and event-loop handoffs each operation passes through. The
-  owner logs which process or address each client id belongs to, and the TUI logs its pid
-  on every connect. That lets you match TUI and owner lines without any protocol change.
+  owner and the TUI each log a matching `peer=` for every connection: the TUI's pid on a
+  local socket, or its `ip:port` over TCP when no address translation sits in between.
+  That lets you match TUI and owner lines without any protocol change.
 - `--log-level` accepts `trace` and per-target directives
   (`--log-level info,player=debug`). A plain level keeps working as it does today.
 - A log file that can't be opened or rotated produces one message on stderr. The file

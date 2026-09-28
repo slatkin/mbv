@@ -112,16 +112,25 @@ is handled later.
 Request ids are unique only within one client connection. So that lines can be matched
 across processes:
 - When a client connects, the Player owner SHALL log one line with `client` and `peer`:
-  the peer's process id for a local socket, or its remote address for a network
+  the peer's process id for a local socket, or the peer's `ip:port` for a network
   connection.
-- Each time `mbv` connects to a Player owner, it SHALL log one line with its own process
-  id as `pid`.
+- Each time `mbv` connects to a Player owner, it SHALL log one line with `peer` in the
+  same format: its own process id for a local socket, or its local `ip:port` for a
+  network connection.
+- An equal `peer=` value on the two lines SHALL identify the same connection. This is
+  guaranteed for local sockets, and for network connections with no address translation
+  between `mbv` and the owner.
 
 #### Scenario: One intent across processes
 - **WHEN** the TUI sends a playback intent and the daemon accepts and starts it
 - **THEN** the TUI's send line in `mbv.log` and the daemon's accept and start lines in its
   own log all carry the same `request=` value, and the daemon's lines carry the `client=`
-  whose connect line names the TUI's `pid`
+  whose connect line has the same `peer=` as the TUI's connect line
+
+#### Scenario: Remote TUI over the network
+- **WHEN** a TUI connects to `mbvd` over TCP with no address translation in between
+- **THEN** the TUI's connect line `peer=` (its local `ip:port`) equals the `peer=` on
+  the owner's connect line for that client
 
 #### Scenario: Two clients reuse a request id
 - **WHEN** two TUIs attached to the same `mbvd` each send a playback intent with request
@@ -138,6 +147,12 @@ across processes:
 - **WHEN** an Emby progress report fails on a reporting worker thread
 - **THEN** the failure line carries the `item=` and `play_session=` of the session being
   reported, even though the report code does not log them
+
+#### Scenario: Deferred start is not mislabelled
+- **WHEN** a start report for a new item is still resolving its play session while the
+  previous session's ids are still current
+- **THEN** its lines carry the new item's `item=`, and no `play_session=` until the new
+  session is known, never the previous session's values
 
 ### Requirement: Credentials are never logged
 Log output SHALL NOT contain access tokens, API keys, passwords, bearer tokens or the ctrl

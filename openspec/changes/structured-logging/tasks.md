@@ -27,8 +27,10 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   `stderr_line_has_systemd_priority_prefix` test, extended with a trace case.
 - [ ] 1.5 Rewrite `applog.rs`: the logfmt `Layer` (span fragments in extensions, D2), the
   `Registry` + filter, the `tracing-log` `LogTracer` bridge, and
-  `init(stderr, log_path, &LogSpec)`. Delete `applog::Level`, `LogEntry`, `GlobalLogger`.
-  Verify with the span-inheritance test (in-memory sink, `with_default`) and the rewritten
+  `init(stderr, log_path, &LogSpec)`, and `carry_context(f)` (design D5 thread-spawn rule:
+  carries the current span and dispatcher). Delete `applog::Level`, `LogEntry`,
+  `GlobalLogger`. Verify with the span-inheritance test (in-memory sink, `with_default`),
+  the `carry_context` cross-thread test, and the rewritten
   `init_at_info_disables_debug_records` test.
 
 ## 2. CLI plumbing
@@ -45,14 +47,15 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 ## 3. Correlation spans
 
 - [ ] 3.1 Ctrl connections, playback intent and queue load (D5).
-  - `mbv-remote-player`: the `ctrl.connected` (`pid`), `ctrl.intent.sent` and
+  - `mbv-remote-player`: the `ctrl.connected` event (`peer` = own pid on a Unix endpoint,
+    `TcpStream::local_addr` on a TCP endpoint), and the `ctrl.intent.sent` and
     `queue.load.sent` events.
   - `mbv-daemon`:
-    - `ctrl.client.connected` (`client`, `peer` via `SO_PEERCRED` or the TCP address)
-      where `ClientRegistry` registers a connection.
+    - `ctrl.client.connected` (`client`, and `peer` = `SO_PEERCRED` pid, or
+      `TcpStream::peer_addr`) where `ClientRegistry` registers a connection.
     - The `ctrl.intent` span (`client`, `request`, `generation`) around the handler that
       feeds `PlaybackIntentState::accept`.
-    - The thread-spawn rule in `spawn_item_lookup`.
+    - The thread-spawn rule (`carry_context`) in `spawn_item_lookup`.
     - The rejoin rule in `handle_playback_resolved`.
     - The `queue.load` span (`client`, `queue_request`) around `handle_queue_load_idle`.
     - The new `client_id` field on `PendingIdleQueueLoad`.
@@ -63,18 +66,28 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 - [ ] 3.2 Playback session and reporting spans in `mbv-player` (D5):
   - The `playback` span, created per active slot with `slot`, `item` and
     `play_session = Empty`, and `Span::record` when the Emby session id is assigned.
-  - The `playback.report` span, entered by each `SessionReporter` report method from its
-    current `ids`, and around each `ReportJob` from the job's ids. This covers the
-    progress reporter, the progress worker and the report worker threads.
+  - The `playback.report` span, following design D5's per-case rule:
+    - `report_progress`/`report_ping` use the shared `ids` at call time.
+    - `Stopped` uses the data's ids.
+    - `Start`/`Resolved` uses the item and the resolved session.
+    - `Start`/`Deferred` uses the new `item.id` with `play_session = Empty`, recorded after
+      `get_playback_info`. It never reads the shared `ids` at job entry.
+
+    Wrap the three reporter thread spawns (`spawn_progress_reporter`, the `run_loop.rs`
+    progress worker, and `SessionReporter::new`) in `carry_context`.
 
   Verify: the reporter-correlation test from design.md "Tests" passes, and clippy/nextest
   pass for `mbv-player`.
 - [ ] 3.3 HTTP logging in `mbv-net` (D5):
   - The `HttpService` enum and `agent_config(service, connect, global)`, which installs
     the middleware.
-  - `native_tls_agent` gains the required `service` argument. Update its callers: Emby
-    `emby_agent`, `AudiobookshelfClient::new`, Feeds `tls_agent`, and the two TUI image
-    fetch sites.
+  - `native_tls_agent` gains the required `service` argument, with variants `Emby`,
+    `Audiobookshelf`, `Feeds`. Update its callers:
+    - Emby `emby_agent`
+    - `AudiobookshelfClient::new`
+    - Feeds `tls_agent`
+    - the two TUI Emby sites, `image_fetch/protocol.rs` `fetch_url` and
+      `image_fetch/fetch/level_warmup.rs`, both passing `HttpService::Emby`.
   - `MockHttp::agent_for(service)` built from `agent_config`.
   - Events `http.request.done`/`http.request.failed` with `service`,
     `http.request.method`, `url.path`, `http.response.status_code`, `duration_ms`.
@@ -108,7 +121,9 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   bridge's `set_max_level`.
 - [ ] 5.2 Manual check (user): run `mbv --log-level info,player=debug`, play an Emby item,
   and confirm in `mbv.log` and `local-daemon.log` that the RFC 3339 `ts`, `event=`, and the
-  `request=` values match up across the two files (the local daemon's `client=` connect line names the TUI's `pid`), and that no `api_key`
-  value appears.
+  `request=` values match up across the two files, with the TUI's `ctrl.connected` line and
+  the local daemon's `ctrl.client.connected` line showing the same `peer=` (the TUI's
+  pid). Confirm that no `api_key` value appears. If a TCP `mbvd` is available, repeat the
+  connection and confirm both connect lines show the same `peer=` `ip:port`.
 - [ ] 5.3 Before pushing, run `make check-code-file-lines`. Split any file over 800 lines
   along responsibility seams.
