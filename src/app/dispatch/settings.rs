@@ -92,7 +92,7 @@ impl App {
     }
 
     fn cycle_image_protocol(&mut self) {
-        self.images.image_protocol = match self.images.image_protocol.as_deref() {
+        let protocol = match self.images.protocol_override() {
             None => Some("halfblocks".into()),
             Some("halfblocks") => Some("sixel".into()),
             Some("sixel") => Some("kitty".into()),
@@ -100,7 +100,8 @@ impl App {
             Some("iterm2") => Some("auto".into()),
             _ => None,
         };
-        self.images.image_protocol_enabled = self.images.image_protocol.is_some();
+        let enabled = protocol.is_some();
+        self.images.configure_protocol(protocol, enabled);
     }
 
     fn apply_subtitle_mode(&mut self) {

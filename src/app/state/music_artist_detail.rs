@@ -287,15 +287,14 @@ impl App {
             // path, whose `card_image_states` membership is its fetch dedup.
             let bitmap_cached = self
                 .images
-                .card_image_states
-                .get(&cache_key)
+                .image(&cache_key)
                 .is_some_and(|entry| entry.img.is_some());
             if *status != ArtistArtworkStatus::Ready || bitmap_cached {
                 return;
             }
             self.artist_artwork_status.remove(&key);
         }
-        if let Some(entry) = self.images.card_image_states.get(&cache_key) {
+        if let Some(entry) = self.images.image(&cache_key) {
             self.artist_artwork_status.insert(
                 key,
                 if entry.img.is_some() {

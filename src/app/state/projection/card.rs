@@ -45,7 +45,7 @@ impl App {
         left_align: bool,
     ) -> (u16, u16, bool) {
         let rect = queue_card_reserved_rect(
-            (self.images.last_card_height, self.images.last_card_width),
+            self.images.last_card_size(),
             self.terminal_height,
             area,
             left_align,
@@ -75,7 +75,7 @@ impl App {
         }
         if !projection.images_enabled {
             let rect = queue_card_reserved_rect(
-                (self.images.last_card_height, self.images.last_card_width),
+                self.images.last_card_size(),
                 self.terminal_height,
                 area,
                 left_align,
@@ -88,8 +88,7 @@ impl App {
         // a read, never a fetch.
         let artwork_key = projection.cache_key.clone().filter(|key| {
             self.images
-                .card_image_states
-                .get(key)
+                .image(key)
                 .is_none_or(|entry| entry.img.is_some())
         });
         let placeholder_slot = artwork_key.is_none();
@@ -103,8 +102,8 @@ impl App {
             projection.cache_key = None;
         }
         let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
-        let loading = !placeholder_slot && self.images.card_image_loading.contains(key);
-        let last_card = (self.images.last_card_height, self.images.last_card_width);
+        let loading = !placeholder_slot && self.images.is_loading(key);
+        let last_card = self.images.last_card_size();
         let terminal_height = self.terminal_height;
         let image = self.cached_image_protocol_mut(key);
         let (height, width, loading) = render_card_painting(
@@ -117,8 +116,7 @@ impl App {
             last_card,
             terminal_height,
         );
-        self.images.last_card_height = height;
-        self.images.last_card_width = width;
+        self.images.record_card_size(height, width);
         (height, width, loading)
     }
 

@@ -60,10 +60,7 @@ impl Model {
         };
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
-            (
-                self.app.images.last_card_height,
-                self.app.images.last_card_width,
-            ),
+            self.app.images.last_card_size(),
             self.app.terminal_height,
             slot_region,
             wide,

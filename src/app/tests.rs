@@ -82,7 +82,7 @@ pub(crate) fn make_app_stub() -> App {
     let mut app = make_built_app();
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
-    app.images.cache_size_total = 50;
+    app.images.set_cache_capacity_for_test(50);
     // Never start with a session poll already due.
     app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.

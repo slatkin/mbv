@@ -7,7 +7,7 @@ impl ImageCache {
     /// protocol override when one is set.
     fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.image_protocol.clone();
+        let protocol_override = self.protocol_override().map(str::to_owned);
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
         let proto = protocol_override
             .as_deref()
@@ -41,19 +41,16 @@ impl ImageCache {
             picker.protocol_type(),
             picker.font_size()
         );
-        self.image_picker = Some(picker);
-        self.halfblock_picker = Some(Picker::halfblocks());
+        self.initialize_image_pickers(picker, Picker::halfblocks());
     }
 
     /// The picker that encodes the given protocol suffix.
     #[must_use]
     pub fn picker_for_suffix(&self, suffix: &'static str) -> Option<&Picker> {
         if suffix == "halfblock" {
-            self.halfblock_picker
-                .as_ref()
-                .or(self.image_picker.as_ref())
+            self.halfblock_picker().or(self.image_picker())
         } else {
-            self.image_picker.as_ref()
+            self.image_picker()
         }
     }
 
@@ -93,27 +90,25 @@ impl ImageCache {
         img: image::DynamicImage,
     ) -> ratatui_image::thread::ThreadProtocol {
         #[cfg(any(test, feature = "test"))]
-        self.image_protocol_builds
-            .set(self.image_protocol_builds.get() + 1);
+        self.record_protocol_build();
         let mem_key = mem_key(bare_key, suffix);
         let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self.resize_register_tx.send((mem_key, req_rx));
+        let _ = self.resize_register_tx().send((mem_key, req_rx));
         ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
     #[must_use]
     pub fn is_halfblock_configured(&self) -> bool {
-        self.image_protocol
-            .as_deref()
+        self.protocol_override()
             .is_some_and(|s| s.eq_ignore_ascii_case("halfblocks"))
-            || self.image_picker.as_ref().is_some_and(|p| {
+            || self.image_picker().is_some_and(|p| {
                 p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks
             })
     }
 
     pub fn configured_protocol_name(&self) -> &'static str {
         use ratatui_image::picker::ProtocolType;
-        match self.image_picker.as_ref().map(Picker::protocol_type) {
+        match self.image_picker().map(Picker::protocol_type) {
             Some(ProtocolType::Sixel) => "sixel",
             Some(ProtocolType::Kitty) => "kitty",
             Some(ProtocolType::Iterm2) => "iterm2",
@@ -123,7 +118,7 @@ impl ImageCache {
 
     #[must_use]
     pub fn images_enabled(&self) -> bool {
-        self.image_protocol_enabled
+        self.protocol_enabled()
     }
 
     /// Resolve an optional Logo cache key to the key of a Logo that has decoded
@@ -131,11 +126,7 @@ impl ImageCache {
     /// decoration input, so the base-only protocol stays valid.
     pub fn ready_logo_key(&self, logo_cache_key: Option<&str>) -> Option<String> {
         logo_cache_key
-            .filter(|key| {
-                self.card_image_states
-                    .get(*key)
-                    .is_some_and(|entry| entry.img.is_some())
-            })
+            .filter(|key| self.image(key).is_some_and(|entry| entry.img.is_some()))
             .map(str::to_owned)
     }
 
@@ -148,7 +139,7 @@ impl ImageCache {
         logo_cache_key: Option<&str>,
     ) -> image::DynamicImage {
         let Some(logo) = logo_cache_key
-            .and_then(|key| self.card_image_states.get(key))
+            .and_then(|key| self.image(key))
             .and_then(|entry| entry.img.as_ref())
         else {
             return img;

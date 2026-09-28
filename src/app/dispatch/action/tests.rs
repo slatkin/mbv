@@ -18,18 +18,15 @@ fn key_ctrl(code: KeyCode) -> KeyChord {
 #[test]
 fn focus_panel_keeps_the_card_checkpoint() {
     let mut app = make_app_stub();
-    app.images.last_card_height = 17;
-    app.images.last_card_width = 34;
+    app.images.record_card_size(17, 34);
     app.dispatch(&Command::FocusPanel(
         mbv_ui_model::settings::PanelFocus::Library,
     ));
-    assert_eq!(app.images.last_card_height, 17);
-    assert_eq!(app.images.last_card_width, 34);
+    assert_eq!(app.images.last_card_size(), (17, 34));
     app.dispatch(&Command::FocusPanel(
         mbv_ui_model::settings::PanelFocus::Queue,
     ));
-    assert_eq!(app.images.last_card_height, 17);
-    assert_eq!(app.images.last_card_width, 34);
+    assert_eq!(app.images.last_card_size(), (17, 34));
 }
 
 #[test]

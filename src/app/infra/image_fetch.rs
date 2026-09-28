@@ -99,10 +99,10 @@ impl App {
         let Some(cache_key) = cache_key else {
             return State::None;
         };
-        if self.images.card_image_loading.contains(&cache_key) {
+        if self.images.is_loading(&cache_key) {
             return State::Loading;
         }
-        let Some(entry) = self.images.card_image_states.get(&cache_key) else {
+        let Some(entry) = self.images.image(&cache_key) else {
             return State::Loading;
         };
         let Some(source_img) = entry.img.as_ref() else {
@@ -123,7 +123,7 @@ impl App {
             artwork.painted_shape() == mbv_components::library_panel::ArtworkShape::Landscape;
         if !landscape {
             // Drop any stale cover crop so the plain fit protocol rebuilds.
-            if let Some(entry) = self.images.card_image_states.get_mut(&cache_key) {
+            if let Some(entry) = self.images.image_mut(&cache_key) {
                 if entry.cover_box.take().is_some() {
                     entry.protocols.clear();
                 }
@@ -282,7 +282,7 @@ mod tests {
             String::new(),
             &["Primary"],
         );
-        assert!(!app.images.card_image_loading.contains("recent-nav:P"));
-        assert!(!app.images.card_image_states.contains_key("recent-nav:P"));
+        assert!(!app.images.is_loading("recent-nav:P"));
+        assert!(!app.images.is_cached("recent-nav:P"));
     }
 }

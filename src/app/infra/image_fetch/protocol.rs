@@ -47,11 +47,7 @@ impl App {
     }
 
     pub(in crate::app) fn ensure_placeholder_card_image(&mut self) {
-        if self
-            .images
-            .card_image_states
-            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY)
-        {
+        if self.images.is_cached(QUEUE_CARD_PLACEHOLDER_KEY) {
             return;
         }
         if self.picker_and_suffix().is_none() {
@@ -66,23 +62,18 @@ impl App {
             self.current_protocol_suffix(),
         );
         self.images
-            .card_image_states
-            .insert(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), entry);
+            .insert_image(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), entry);
     }
 
     fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
         let use_halfblock = self.dim_backdrop_active
-            && self.images.image_protocol_enabled
+            && self.images.protocol_enabled()
             && !self.images.is_halfblock_configured();
         if use_halfblock {
-            self.images
-                .halfblock_picker
-                .as_ref()
-                .map(|p| (p, "halfblock"))
+            self.images.halfblock_picker().map(|p| (p, "halfblock"))
         } else {
             self.images
-                .image_picker
-                .as_ref()
+                .image_picker()
                 .map(|p| (p, self.images.configured_protocol_name()))
         }
     }
@@ -106,14 +97,12 @@ impl App {
         let picker = self.images.picker_for_suffix(suffix)?;
         let reencode = self
             .images
-            .card_image_states
-            .get(bare_key)
+            .image(bare_key)
             .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
         if reencode {
             let (img, cover_box, stored_logo_key) = self
                 .images
-                .card_image_states
-                .get(bare_key)
+                .image(bare_key)
                 .and_then(|e| {
                     e.img
                         .clone()
@@ -133,16 +122,12 @@ impl App {
             };
             let img = self.images.decorate_with_logo(img, logo_key.as_deref());
             let proto = self.images.build_protocol(bare_key, suffix, picker, img);
-            if let Some(entry) = self.images.card_image_states.get_mut(bare_key) {
+            if let Some(entry) = self.images.image_mut(bare_key) {
                 entry.protocols.insert(suffix, proto);
                 entry.applied_logo_key = logo_key;
             }
         }
-        self.images
-            .card_image_states
-            .get_mut(bare_key)?
-            .protocols
-            .get_mut(suffix)
+        self.images.image_mut(bare_key)?.protocols.get_mut(suffix)
     }
 
     /// The active picker's terminal font size — the cell-to-pixel ratio the
@@ -178,7 +163,7 @@ impl App {
         box_cells: (u16, u16),
         logo_cache_key: Option<&str>,
     ) -> bool {
-        let Some(entry) = self.images.card_image_states.get(cache_key) else {
+        let Some(entry) = self.images.image(cache_key) else {
             return false;
         };
         let Some(source) = entry.img.clone() else {
@@ -206,7 +191,7 @@ impl App {
         let proto = self
             .images
             .build_protocol(&bare_key, suffix, &picker, cropped);
-        if let Some(entry) = self.images.card_image_states.get_mut(cache_key) {
+        if let Some(entry) = self.images.image_mut(cache_key) {
             entry.protocols.clear();
             entry.protocols.insert(suffix, proto);
             entry.cover_box = Some(box_cells);
@@ -264,21 +249,16 @@ impl App {
     /// whenever an in-flight fetch completes and frees a slot (see the card-image
     /// receiver in `images.rs`).
     pub(in crate::app) fn drain_image_fetches(&mut self) {
-        while self.images.image_fetches_active < super::MAX_IMAGE_FETCHES {
-            let Some(req) = self.images.pending_image_fetches.pop_front() else {
-                break;
-            };
+        while let Some(req) = self.images.take_pending_fetch(super::MAX_IMAGE_FETCHES) {
             self.spawn_image_fetch(req);
         }
     }
 
     pub(super) fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
-        self.images.image_fetches_active += 1;
+        self.images.start_fetch();
         let (server_url, token) = if matches!(req.source, ImageSource::Emby) {
             let Some(client) = self.emby_client() else {
-                self.images.image_fetches_active =
-                    self.images.image_fetches_active.saturating_sub(1);
-                let _ = self.images.card_image_tx.send((req.cache_key, None));
+                self.images.fetch_start_failed(req.cache_key);
                 return;
             };
             let c = client.lock().unwrap();
@@ -286,7 +266,7 @@ impl App {
         } else {
             (String::new(), String::new())
         };
-        let tx = self.images.card_image_tx.clone();
+        let tx = self.images.card_image_tx().clone();
         std::thread::spawn(move || {
             // catch_unwind so a panic during fetch/decode still reports a result,
             // freeing the in-flight slot and the loading reservation (H9). Exactly
@@ -457,19 +437,18 @@ mod protocol_tests {
 
     fn app_with_base() -> App {
         let mut app = make_app_stub();
-        app.images.image_protocol_enabled = true;
         let mut picker = Picker::halfblocks();
         picker.set_protocol_type(ProtocolType::Kitty);
-        app.images.image_picker = Some(picker);
-        app.images.halfblock_picker = Some(Picker::halfblocks());
+        app.images.configure_protocol(None, true);
         app.images
-            .card_image_states
-            .insert(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
+            .set_image_pickers_for_test(picker, Picker::halfblocks());
+        app.images
+            .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
         app
     }
 
     fn build_count(app: &App) -> u32 {
-        app.images.image_protocol_builds.get()
+        app.images.image_protocol_builds()
     }
 
     #[test]
@@ -480,14 +459,12 @@ mod protocol_tests {
         assert_eq!(build_count(&app), 1);
 
         app.images
-            .card_image_states
-            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
+            .insert_image(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
         assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&app), 2);
         assert_eq!(
             app.images
-                .card_image_states
-                .get(BASE_KEY)
+                .image(BASE_KEY)
                 .and_then(|entry| entry.applied_logo_key.as_deref()),
             Some(LOGO_KEY)
         );
@@ -504,22 +481,19 @@ mod protocol_tests {
         assert_eq!(build_count(&absent), 1);
         assert!(absent
             .images
-            .card_image_states
-            .get(BASE_KEY)
+            .image(BASE_KEY)
             .is_some_and(|entry| entry.applied_logo_key.is_none()));
 
         let mut failed = app_with_base();
         failed
             .images
-            .card_image_states
-            .insert(LOGO_KEY.to_owned(), CachedImage::empty());
+            .insert_image(LOGO_KEY.to_owned(), CachedImage::empty());
         assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&failed), 1);
         assert!(failed
             .images
-            .card_image_states
-            .get(BASE_KEY)
+            .image(BASE_KEY)
             .is_some_and(|entry| entry.applied_logo_key.is_none()));
     }
 }

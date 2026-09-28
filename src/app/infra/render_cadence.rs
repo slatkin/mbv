@@ -20,8 +20,8 @@ impl App {
             mbv_render::indicators::IndicatorStyle::Powerline => "powerline",
         };
         crate::config::UiConfig {
-            image_protocol: self.images.image_protocol.clone(),
-            image_cache_size: self.images.cache_size,
+            image_protocol: self.images.protocol_override().map(str::to_owned),
+            image_cache_size: self.images.cache_size(),
             use_nerd_fonts: self.use_nerd_fonts,
             indicator_style: indicator_style.to_string(),
             visualizer_glyph: self.visualizer_glyph.clone(),
@@ -54,7 +54,7 @@ impl App {
         let playback = self.effective_playback_state();
         if playback.active
             || self.connected_session_state.is_some()
-            || !self.images.card_image_loading.is_empty()
+            || self.images.has_loading_images()
         {
             Duration::from_millis(150)
         } else {

@@ -8,9 +8,14 @@ use super::*;
 fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
     let mut app = make_app_stub();
     if image_loading {
-        app.images
-            .card_image_loading
-            .insert("movie-1:cmp_primary".into());
+        let req = mbv_images::ImageFetchReq {
+            cache_key: "movie-1:cmp_primary".into(),
+            item_id: "movie-1".into(),
+            series_id: String::new(),
+            types: vec!["Primary".into()],
+            source: mbv_images::ImageSource::Emby,
+        };
+        let _ = app.images.reserve_fetch(req, 0);
     }
     assert_eq!(app.render_interval(), expected);
 }

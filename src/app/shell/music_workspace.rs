@@ -415,7 +415,7 @@ mod tests {
     /// requests make are observable synchronously.
     fn settled_service_artist_app() -> crate::app::App {
         let mut app = make_music_group_app();
-        app.images.image_protocol_enabled = true;
+        app.images.configure_protocol(None, true);
         app.emby_runtime = ready_emby_runtime();
         {
             let level = app.libs[0].nav_stack.last_mut().unwrap();
@@ -481,7 +481,7 @@ mod tests {
             "the push dispatches the typed track request with the full identity"
         );
         assert!(
-            model.app.images.card_image_loading.contains(
+            model.app.images.is_loading(
                 &crate::app::state::music_artist_detail::artist_artwork_cache_key(
                     &destination,
                     generation.value(),

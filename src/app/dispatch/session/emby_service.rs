@@ -96,11 +96,7 @@ impl App {
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();
-        self.images.card_image_states.clear();
-        self.images.card_image_loading.clear();
-        self.images.image_lru.clear();
-        self.images.pending_image_fetches.clear();
-        self.images.image_fetches_active = 0;
+        self.images.clear_session_image_work();
         self.library_position_state = mbv_queue::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;

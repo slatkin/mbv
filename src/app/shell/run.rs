@@ -96,8 +96,7 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        self.app.images.card_image_states.clear();
-        self.app.images.card_image_loading.clear();
+        self.app.images.clear_images_and_loading();
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
@@ -164,24 +163,12 @@ impl Model {
     /// re-push. The infix is the only Series-family marker, so both live chains
     /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
     /// can drift from the key the painter builds.
-    fn evict_excess_card_images(&mut self) {
-        while self.app.images.image_lru.len() > self.app.images.cache_size_total {
-            let Some(evict) = self.app.images.image_lru.pop_front() else {
-                break;
-            };
-            self.app.images.card_image_states.remove(&evict);
-        }
-    }
-
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let mut series_image_changed = false;
         let mut drained = false;
-        while let Ok((cache_key, img_opt)) = self.app.images.card_image_rx.try_recv() {
+        while let Ok((cache_key, img_opt)) = self.app.images.try_recv_card_image() {
             drained = true;
             series_image_changed |= cache_key.contains(SERIES_IMAGE_CACHE_KEY_INFIX);
-            self.app.images.card_image_loading.remove(&cache_key);
-            self.app.images.image_fetches_active =
-                self.app.images.image_fetches_active.saturating_sub(1);
             let entry = self.app.images.build_cached_image(
                 &cache_key,
                 img_opt,
@@ -206,12 +193,7 @@ impl Model {
                             available: entry.img.is_some(),
                         })
                     });
-            if entry.img.is_some() {
-                self.app.images.image_lru.retain(|k| k != &cache_key);
-                self.app.images.image_lru.push_back(cache_key.clone());
-                self.evict_excess_card_images();
-            }
-            self.app.images.card_image_states.insert(cache_key, entry);
+            self.app.images.complete_fetch(cache_key, entry);
             if let Some(event) = artist_completion {
                 let _ = self.app.channels.lib_tx.send(event);
             }

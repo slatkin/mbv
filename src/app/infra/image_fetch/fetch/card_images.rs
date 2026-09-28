@@ -21,25 +21,6 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
-        if self.images.card_image_loading.contains(&cache_key)
-            || self.images.card_image_states.contains_key(&cache_key)
-        {
-            return;
-        }
-        // Test-only instrumentation: counts every reservation that proceeds
-        // past the dedup guard above, so a broken guard is visible even when
-        // the fixture has no Emby client (`spawn_image_fetch` balances
-        // `image_fetches_active` back to its prior value synchronously in
-        // that case, hiding a redundant reservation from the other counters).
-        // `project_hero_image` calls `fetch_card_image` unconditionally on
-        // every sync pass, so counting entry into this function (rather than
-        // past this guard) would also increment on every legitimate repaint.
-        #[cfg(test)]
-        {
-            self.images.card_image_fetch_calls += 1;
-        };
-        // Reserve the key immediately so duplicate (and queued) requests dedupe.
-        self.images.card_image_loading.insert(cache_key.clone());
         let req = ImageFetchReq {
             cache_key,
             item_id,
@@ -47,12 +28,11 @@ impl App {
             types: types.iter().map(ToString::to_string).collect(),
             source: ImageSource::Emby,
         };
-        if self.images.image_fetches_active >= MAX_IMAGE_FETCHES {
-            // Queue instead of dropping: a slot will pick it up on completion.
-            self.images.pending_image_fetches.push_back(req);
-            return;
+        if let mbv_images::cache::FetchReservation::Start(req) =
+            self.images.reserve_card_image_fetch(req, MAX_IMAGE_FETCHES)
+        {
+            self.spawn_image_fetch(req);
         }
-        self.spawn_image_fetch(req);
     }
 
     /// Triggers the plain (uncropped) Audiobookshelf cover fetch for
@@ -90,11 +70,9 @@ impl App {
         server_url: String,
         item_id: String,
     ) {
-        if !self.images.image_protocol_enabled {
-            return;
-        }
-        if self.images.card_image_loading.contains(&cache_key)
-            || self.images.card_image_states.contains_key(&cache_key)
+        if !self.images.protocol_enabled()
+            || self.images.is_loading(&cache_key)
+            || self.images.is_cached(&cache_key)
         {
             return;
         }
@@ -103,7 +81,7 @@ impl App {
             return;
         };
         let req = ImageFetchReq {
-            cache_key: cache_key.clone(),
+            cache_key,
             item_id,
             series_id: String::new(),
             types: Vec::new(),
@@ -112,10 +90,9 @@ impl App {
                 api_key,
             },
         };
-        self.images.card_image_loading.insert(cache_key);
-        if self.images.image_fetches_active >= MAX_IMAGE_FETCHES {
-            self.images.pending_image_fetches.push_back(req);
-        } else {
+        if let mbv_images::cache::FetchReservation::Start(req) =
+            self.images.reserve_fetch(req, MAX_IMAGE_FETCHES)
+        {
             self.spawn_image_fetch(req);
         }
     }
