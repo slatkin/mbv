@@ -370,7 +370,8 @@ consumes it through `color()` from roles and surface rows, never through an inde
 `Color::Rgb` literal for a palette colour SHALL appear outside the enum. Ratatui's own raw `Color::`
 specials (Black/White/Reset) SHALL stay outside the palette as mechanics. Adding, restoring, or
 re-valuing a variant or re-assigning a role SHALL happen in the theme alone. `docs/palette.json` is a
-maintainer reference, not a source or a guard; nothing enforces it against the enum.
+live maintainer reference, not a source or a guard: every `mbv-theme` test run regenerates its
+variant, role, role-set, and surface values from the theme, keeping the hand-written `uses` prose.
 
 #### Scenario: A variant is added or re-valued
 
