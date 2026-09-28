@@ -52,98 +52,80 @@ fn home_latest_launch_state_missing_or_malformed_has_no_baseline_and_round_trips
 #[test]
 fn is_system_instance_false_without_env_var() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert!(!is_system_instance());
 }
 
 #[test]
 fn is_system_instance_true_with_env_var() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let result = is_system_instance();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert!(result);
 }
 
 #[test]
 fn cache_dir_uses_system_path_when_mbv_system_set() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let path = cache_dir();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(path, std::path::PathBuf::from("/var/cache/mbv"));
 }
 
 #[test]
 fn cache_dir_uses_xdg_when_not_system() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CACHE_HOME", "/tmp/xdg-test-cache") };
+    crate::remove_test_env_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_CACHE_HOME", "/tmp/xdg-test-cache");
     let path = cache_dir();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CACHE_HOME") };
+    crate::remove_test_env_var("XDG_CACHE_HOME");
     assert_eq!(path, std::path::PathBuf::from("/tmp/xdg-test-cache/mbv"));
 }
 
 #[test]
 fn data_dir_system_or_local_uses_system_path_when_mbv_system_set() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let path = data_dir_system_or_local();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(path, std::path::PathBuf::from("/var/lib/mbv"));
 }
 
 #[test]
 fn config_path_uses_system_path_when_mbv_system_set() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let path = config_path();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(path, std::path::PathBuf::from("/etc/mbv/config.toml"));
 }
 
 #[test]
 fn mpv_ipc_path_uses_run_dir_when_mbv_system_set() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let path = mpv_ipc_path();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(path, "/run/mbv/mbv-mpv.sock");
 }
 
 #[test]
 fn control_socket_path_uses_run_dir_when_mbv_system_set() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let path = control_socket_path();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(path, "/run/mbv/mbv-ctrl.sock");
 }
 
 #[test]
 fn daemon_server_tcp_listen_defaults_for_system_instance() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    crate::set_test_env_var("MBV_SYSTEM", "1");
     let cfg = parse_config("[server]\nurl = \"http://host\"").unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     assert_eq!(
         cfg.daemon_server_tcp_listen,
         DEFAULT_SYSTEM_DAEMON_TCP_LISTEN
@@ -153,13 +135,10 @@ fn daemon_server_tcp_listen_defaults_for_system_instance() {
 #[test]
 fn mpv_ipc_path_uses_xdg_runtime_dir_when_not_system() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000") };
+    crate::remove_test_env_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_RUNTIME_DIR", "/run/user/1000");
     let path = mpv_ipc_path();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_RUNTIME_DIR") };
+    crate::remove_test_env_var("XDG_RUNTIME_DIR");
     assert_eq!(path, "/run/user/1000/mbv-mpv.sock");
 }
 

@@ -75,10 +75,8 @@ fn parse_video_cache_settings_and_save_round_trip() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
     std::fs::write(
         config_path(),
         "[library]\nhidden_libraries = [\"Live TV\"]\nhidden_latest = [\"Movies\"]\n",
@@ -97,8 +95,7 @@ fn parse_video_cache_settings_and_save_round_trip() {
     let reparsed = parse_config(&saved).unwrap();
     assert_eq!(reparsed.video_cache_forward_mb, 75);
     assert_eq!(reparsed.video_cache_back_mb, 125);
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -118,10 +115,8 @@ fn mouse_support_round_trips_and_defaults_on() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     let cfg = Config {
         mouse_support: false,
@@ -133,8 +128,7 @@ fn mouse_support_round_trips_and_defaults_on() {
     let reparsed = parse_config(&saved).unwrap();
     assert!(!reparsed.mouse_support);
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -305,10 +299,8 @@ fn save_config_settings_round_trips_consume_audio_flags() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     let mut cfg = Config {
         server_url: "http://localhost:8096".into(),
@@ -329,8 +321,7 @@ fn save_config_settings_round_trips_consume_audio_flags() {
     assert_eq!(reparsed.quit_timeout_secs, 7);
     assert_eq!(reparsed.audio_device, "alsa/hw:Loopback,0,0");
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -419,10 +410,8 @@ fn save_config_settings_round_trips_auto_reconnect_values() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     for auto_reconnect in [true, false] {
         let cfg = Config {
@@ -437,8 +426,7 @@ fn save_config_settings_round_trips_auto_reconnect_values() {
         assert_eq!(reparsed.auto_reconnect, auto_reconnect);
     }
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -453,10 +441,8 @@ fn save_config_settings_preserves_general_feed_view_when_auto_reconnect_exists()
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
     std::fs::write(
         config_path(),
         r#"
@@ -485,8 +471,7 @@ feed_view_libraries = ["YouTube"]
         "saved config should not overwrite the feed view selection with none:\n{saved}"
     );
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

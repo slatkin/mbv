@@ -336,13 +336,10 @@ fn handle_stream_state(
         }
         pw::stream::StreamState::Error(error) => {
             let message = format!("PipeWire capture stream failed: {error}");
-            match data.startup_tx.take() {
-                Some(startup_tx) => {
-                    let _ = startup_tx.send(Startup::Failed(message));
-                }
-                _ => {
-                    let _ = data.failure_tx.send(message);
-                }
+            if let Some(startup_tx) = data.startup_tx.take() {
+                let _ = startup_tx.send(Startup::Failed(message));
+            } else {
+                let _ = data.failure_tx.send(message);
             }
             if let Ok(mut buffer) = data.buffer.try_lock() {
                 buffer.clear();
@@ -394,13 +391,10 @@ fn handle_stream_param(
         Ok(())
     })();
     if let Err(message) = result {
-        match data.startup_tx.take() {
-            Some(startup_tx) => {
-                let _ = startup_tx.send(Startup::Failed(message));
-            }
-            _ => {
-                let _ = data.failure_tx.send(message);
-            }
+        if let Some(startup_tx) = data.startup_tx.take() {
+            let _ = startup_tx.send(Startup::Failed(message));
+        } else {
+            let _ = data.failure_tx.send(message);
         }
         mainloop.quit();
     }

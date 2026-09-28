@@ -403,47 +403,39 @@ impl App {
         // succeeds, so the tail can restore `player_tab` / queue source
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
-        match self.suspended_local.take() {
-            Some(suspended) => {
-                self.install_suspended_local(suspended);
-            }
-            _ => {
-                if self.home_is_local_daemon {
-                    // This app's baseline was never a genuinely local in-process
-                    // player -- it was an `App::new_remote` thin client attached to
-                    // the local daemon (`home_is_local_daemon`), so nothing was ever
-                    // suspended above. Reconnect to the local daemon directly so
-                    // "restore local mode" actually lands back on this app's real
-                    // baseline instead of leaving the player disconnected.
-                    match Self::try_daemon_route_connect(
-                        &mbv_remote_player::DaemonEndpoint::Local,
-                        "local daemon",
-                    ) {
-                        Ok((remote, remote_rx)) => {
-                            let initial_items = remote.items.lock().unwrap().clone();
-                            let initial_unified_state = remote.unified_queue_state();
-                            let initial_cursor = remote.status.lock().unwrap().current_idx;
-                            let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-                            let mut initial_tab = initial_unified_state.as_ref().map_or_else(
-                                || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                                PlayerTab::from_unified_state,
-                            );
-                            initial_tab.adopt_revision_mint(self.player_tab.revision_mint());
-                            let always_play_next = self.config.lock().unwrap().always_play_next;
-                            self.player = PlayerProxy::remote(remote, always_play_next);
-                            self.player_rx = remote_rx;
-                            self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
-                            debug_assert_eq!(
-                                self.player.is_remote(),
-                                self.player_endpoint.is_some()
-                            );
-                            self.sync_subtitle_prefs_to_player();
-                            reconnected_local_daemon = Some((initial_tab, remote_queue_source));
-                        }
-                        Err(_message) => {
-                            status = Self::strip_local_playback_claim(&status);
-                        }
-                    }
+        if let Some(suspended) = self.suspended_local.take() {
+            self.install_suspended_local(suspended);
+        } else if self.home_is_local_daemon {
+            // This app's baseline was never a genuinely local in-process
+            // player -- it was an `App::new_remote` thin client attached to
+            // the local daemon (`home_is_local_daemon`), so nothing was ever
+            // suspended above. Reconnect to the local daemon directly so
+            // "restore local mode" actually lands back on this app's real
+            // baseline instead of leaving the player disconnected.
+            match Self::try_daemon_route_connect(
+                &mbv_remote_player::DaemonEndpoint::Local,
+                "local daemon",
+            ) {
+                Ok((remote, remote_rx)) => {
+                    let initial_items = remote.items.lock().unwrap().clone();
+                    let initial_unified_state = remote.unified_queue_state();
+                    let initial_cursor = remote.status.lock().unwrap().current_idx;
+                    let remote_queue_source = remote.queue_source.lock().unwrap().clone();
+                    let mut initial_tab = initial_unified_state.as_ref().map_or_else(
+                        || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                        PlayerTab::from_unified_state,
+                    );
+                    initial_tab.adopt_revision_mint(self.player_tab.revision_mint());
+                    let always_play_next = self.config.lock().unwrap().always_play_next;
+                    self.player = PlayerProxy::remote(remote, always_play_next);
+                    self.player_rx = remote_rx;
+                    self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+                    debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+                    self.sync_subtitle_prefs_to_player();
+                    reconnected_local_daemon = Some((initial_tab, remote_queue_source));
+                }
+                Err(_message) => {
+                    status = Self::strip_local_playback_claim(&status);
                 }
             }
         }

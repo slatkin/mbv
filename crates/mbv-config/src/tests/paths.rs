@@ -17,8 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[test]
 fn library_position_state_round_trips_by_library() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -26,8 +25,7 @@ fn library_position_state_round_trips_by_library() {
             .unwrap()
             .as_nanos()
     ));
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_STATE_HOME", &temp) };
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     let mut state = LibraryPositionState::default();
     state.libraries.insert(
@@ -57,8 +55,7 @@ fn library_position_state_round_trips_by_library() {
 
     assert_eq!(load_library_position_state(), state);
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_STATE_HOME") };
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
 
@@ -325,8 +322,7 @@ fn failed_audiobookshelf_transaction_leaves_working_state() {
 #[test]
 fn load_library_position_state_defaults_for_missing_or_invalid_file() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -336,8 +332,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
     ));
     let state_dir = temp.join("mbv");
     std::fs::create_dir_all(&state_dir).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_STATE_HOME", &temp) };
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     assert_eq!(
         load_library_position_state(),
@@ -351,8 +346,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
         LibraryPositionState::default()
     );
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_STATE_HOME") };
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
 
@@ -364,8 +358,7 @@ fn load_library_position_state_defaults_for_missing_or_invalid_file() {
 #[test]
 fn legacy_nested_scope_shape_loads_as_empty_without_error() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("MBV_SYSTEM") };
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -375,8 +368,7 @@ fn legacy_nested_scope_shape_loads_as_empty_without_error() {
     ));
     let state_dir = temp.join("mbv");
     std::fs::create_dir_all(&state_dir).unwrap();
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::set_var("XDG_STATE_HOME", &temp) };
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
 
     let legacy = serde_json::json!({
         "libraries": {
@@ -399,7 +391,6 @@ fn legacy_nested_scope_shape_loads_as_empty_without_error() {
         "legacy nested scopes must not be salvaged -- library resets to root"
     );
 
-    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
-    unsafe { std::env::remove_var("XDG_STATE_HOME") };
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
