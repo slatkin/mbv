@@ -68,17 +68,26 @@ impl QueueRevision {
 pub struct QueueSlot {
     pub slot_id: QueueSlotId,
     pub item: QueueItem,
-    pub progress_state: ProgressState,
+    pending_sync: Option<SlotProgress>,
 }
 
 impl QueueSlot {
     fn new(slot_id: QueueSlotId, item: QueueItem) -> Self {
-        let progress_state = ProgressState::from_queue_item(&item);
         Self {
             slot_id,
             item,
-            progress_state,
+            pending_sync: None,
         }
+    }
+
+    #[must_use]
+    pub fn local_progress(&self) -> SlotProgress {
+        SlotProgress::from_queue_item(&self.item)
+    }
+
+    #[must_use]
+    pub fn pending_sync(&self) -> Option<SlotProgress> {
+        self.pending_sync
     }
 }
 
@@ -366,7 +375,7 @@ impl PlaybackQueue {
         if let Some((slot_id, played)) = self
             .slots
             .get(index)
-            .map(|slot| (slot.slot_id, slot.progress_state.local.played))
+            .map(|slot| (slot.slot_id, slot.local_progress().played))
         {
             let _ = self.apply_progress(slot_id, position_ticks, played);
         }
@@ -422,8 +431,11 @@ impl PlaybackQueue {
             return QueueMutationResult::NotFound;
         };
         let old_item = slot.item.clone();
+        let same_content = slot.item.content_id() == item.content_id();
         slot.item = item;
-        slot.progress_state.local = SlotProgress::from_queue_item(&slot.item);
+        if !same_content {
+            slot.pending_sync = None;
+        }
         if !queue_items_equal(&slot.item, &old_item) {
             self.revision.bump(&self.mint);
         }
@@ -440,28 +452,32 @@ impl PlaybackQueue {
             return QueueMutationResult::NotFound;
         };
         let old_item = slot.item.clone();
-        let old_progress = slot.progress_state.local;
-        slot.progress_state.local = SlotProgress {
-            position_ticks,
-            played,
-        };
-        slot.progress_state.apply_to_item(&mut slot.item);
-        if slot.progress_state.local != old_progress || !queue_items_equal(&slot.item, &old_item) {
+        apply_progress_to_queue_item(&mut slot.item, position_ticks, played);
+        if !queue_items_equal(&slot.item, &old_item) {
             self.revision.bump(&self.mint);
         }
         QueueMutationResult::Applied(())
     }
 
-    pub fn mark_progress_sync_pending(
+    pub fn record_reported_progress(
         &mut self,
         slot_id: QueueSlotId,
-    ) -> QueueMutationResult<SlotProgress> {
-        let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
-            return QueueMutationResult::NotFound;
-        };
-        let pending = slot.progress_state.local;
-        slot.progress_state.pending_sync = Some(pending);
-        QueueMutationResult::Applied(pending)
+        position_ticks: i64,
+        played: bool,
+        outcome: StopReportOutcome,
+    ) -> QueueMutationResult<()> {
+        let result = self.apply_progress(slot_id, position_ticks, played);
+        if result == QueueMutationResult::NotFound {
+            return result;
+        }
+        if outcome == StopReportOutcome::Accepted {
+            if let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) {
+                if matches!(slot.item, QueueItem::Emby(_)) {
+                    slot.pending_sync = Some(slot.local_progress());
+                }
+            }
+        }
+        QueueMutationResult::Applied(())
     }
 
     /// Applies a refresh to the specific queue slots captured before an
@@ -484,10 +500,10 @@ impl PlaybackQueue {
                 continue;
             }
             let old_item = slot.item.clone();
-            let old_progress = slot.progress_state.clone();
+            let previous_pending = slot.pending_sync;
             let updated_len = result.updated_slots.len();
             Self::merge_fetched_slot(slot, fetched_item, self.active_slot_id, &mut result);
-            if !queue_items_equal(&slot.item, &old_item) || slot.progress_state != old_progress {
+            if !queue_items_equal(&slot.item, &old_item) || slot.pending_sync != previous_pending {
                 changed = true;
             } else {
                 result.updated_slots.truncate(updated_len);
@@ -581,16 +597,18 @@ impl PlaybackQueue {
         result: &mut RefreshMergeResult,
     ) {
         let is_active = active_slot_id == Some(slot.slot_id);
-        if let Some(pending) = slot.progress_state.pending_sync {
+        if let Some(pending) = slot.pending_sync {
             if pending.matches_server_confirmation(&fetched_item) {
-                slot.progress_state.pending_sync = None;
-                let local_progress = SlotProgress::from_item(&fetched_item);
+                slot.pending_sync = None;
+                let local_progress = slot.local_progress();
                 slot.item = QueueItem::Emby(Box::new(fetched_item));
                 if is_active {
-                    slot.progress_state.apply_to_item(&mut slot.item);
+                    apply_progress_to_queue_item(
+                        &mut slot.item,
+                        local_progress.position_ticks,
+                        local_progress.played,
+                    );
                     result.protected_slots.push(slot.slot_id);
-                } else {
-                    slot.progress_state.local = local_progress;
                 }
                 result.pending_confirmed_slots.push(slot.slot_id);
                 result.updated_slots.push(slot.slot_id);
@@ -602,10 +620,13 @@ impl PlaybackQueue {
         }
 
         if is_active {
-            let local_progress = slot.progress_state.local;
+            let local_progress = slot.local_progress();
             slot.item = QueueItem::Emby(Box::new(fetched_item));
-            slot.progress_state.local = local_progress;
-            slot.progress_state.apply_to_item(&mut slot.item);
+            apply_progress_to_queue_item(
+                &mut slot.item,
+                local_progress.position_ticks,
+                local_progress.played,
+            );
             result.protected_slots.push(slot.slot_id);
             result.updated_slots.push(slot.slot_id);
             return;
@@ -620,9 +641,6 @@ impl PlaybackQueue {
                 fetched_item.playback_position_ticks.max(stored_position);
         }
         slot.item = QueueItem::Emby(Box::new(fetched_item));
-        if let QueueItem::Emby(ref emby) = slot.item {
-            slot.progress_state.local = SlotProgress::from_item(emby);
-        }
         result.updated_slots.push(slot.slot_id);
     }
 }
@@ -670,7 +688,7 @@ fn group_fetched_items_by_item_id(
 }
 
 fn should_protect_missing_slot(slot: &QueueSlot, active_slot_id: Option<QueueSlotId>) -> bool {
-    active_slot_id == Some(slot.slot_id) || slot.progress_state.pending_sync.is_some()
+    active_slot_id == Some(slot.slot_id) || slot.pending_sync.is_some()
 }
 
 #[cfg(test)]

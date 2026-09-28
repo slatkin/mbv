@@ -36,7 +36,7 @@ pub(crate) fn project_queue_state(
     let mut positions: HashMap<String, i64> = HashMap::new();
     for slot in slots {
         if slot.item.is_video() {
-            let pos = slot.progress_state.local.position_ticks;
+            let pos = slot.local_progress().position_ticks;
             if pos > 0 {
                 positions.insert(slot.item.id().to_string(), pos);
             }

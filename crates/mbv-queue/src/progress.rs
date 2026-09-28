@@ -86,48 +86,25 @@ impl SlotProgress {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ProgressState {
-    pub local: SlotProgress,
-    pub pending_sync: Option<SlotProgress>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopReportOutcome {
+    Accepted,
+    NotAccepted,
 }
 
-impl ProgressState {
-    /// Progress from any item kind. Feed and Audiobookshelf slots retain
-    /// local position and played state but never enter Emby sync
-    /// (`pending_sync` stays `None`).
-    pub(crate) fn from_queue_item(item: &QueueItem) -> Self {
-        match item {
-            QueueItem::Emby(emby) => Self {
-                local: SlotProgress::from_item(emby),
-                pending_sync: None,
-            },
-            QueueItem::Feed(entry) => Self {
-                local: SlotProgress {
-                    position_ticks: entry.position_ticks,
-                    played: entry.played,
-                },
-                pending_sync: None,
-            },
-            QueueItem::Audiobookshelf(item) => Self {
-                local: SlotProgress {
-                    position_ticks: item.playback_position_ticks(),
-                    played: item.played(),
-                },
-                pending_sync: None,
-            },
+impl StopReportOutcome {
+    #[must_use]
+    pub fn from_accepted(accepted: bool) -> Self {
+        if accepted {
+            Self::Accepted
+        } else {
+            Self::NotAccepted
         }
-    }
-
-    /// Applies progress back to the item. Feed and Audiobookshelf entries
-    /// never participate in Emby sync.
-    pub(crate) fn apply_to_item(&self, item: &mut QueueItem) {
-        apply_progress_to_queue_item(item, self.local.position_ticks, self.local.played);
     }
 }
 
 /// Writes a resolved position/played pair into whichever kind `item` is.
-/// Sole caller: [`ProgressState::apply_to_item`].
+/// Called by queue progress mutations and refresh reconciliation.
 pub(crate) fn apply_progress_to_queue_item(
     item: &mut QueueItem,
     position_ticks: i64,

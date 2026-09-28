@@ -13,7 +13,7 @@ use mbv_ctrl::{
     PlaybackIntentOutcome, PlaybackRequestId,
 };
 use mbv_ids::ItemId;
-use mbv_queue::QueueSlotId;
+use mbv_queue::{QueueSlotId, StopReportOutcome};
 use std::time::Duration;
 
 impl DaemonLoop {
@@ -194,6 +194,7 @@ impl DaemonLoop {
             position_ticks,
             played,
             consume,
+            progress_report_accepted,
             ..
         } = pe
         else {
@@ -216,6 +217,7 @@ impl DaemonLoop {
             played,
             consume,
             consume_policy,
+            StopReportOutcome::from_accepted(progress_report_accepted),
         ) {
             return EventOutcome::CONTINUE;
         }
@@ -230,6 +232,7 @@ impl DaemonLoop {
             run_identity,
             position_ticks,
             played,
+            progress_report_accepted,
             error,
             ..
         } = pe
@@ -260,6 +263,7 @@ impl DaemonLoop {
             *slot_id,
             *position_ticks,
             *played,
+            StopReportOutcome::from_accepted(*progress_report_accepted),
         )?;
         let replacement_committed = pending_idle_load_matches
             && complete_pending_idle_queue_load(
