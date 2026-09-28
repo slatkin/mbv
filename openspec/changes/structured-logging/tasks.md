@@ -47,7 +47,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
 ## 3. Correlation spans
 
-- [ ] 3.1 Ctrl connections, playback intent and queue load (D5).
+- [x] 3.1 Ctrl connections, playback intent and queue load (D5).
   - `mbv-remote-player`: the `ctrl.connected` event (`peer` = own pid on a Unix endpoint,
     `TcpStream::local_addr` on a TCP endpoint), and the `ctrl.intent.sent` and
     `queue.load.sent` events.
