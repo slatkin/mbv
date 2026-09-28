@@ -295,7 +295,10 @@ impl App {
                 candidate.user,
                 candidate.api_key,
             ),
-            || Self::persist_filtered_queue_abs(filtered.as_ref()),
+            || {
+                Self::persist_filtered_queue_abs(filtered.as_ref())
+                    .map_err(mbv_audiobookshelf::AudiobookshelfError::persistence)
+            },
             || {
                 // Restore in-memory queues on failure.
                 self.player_tab

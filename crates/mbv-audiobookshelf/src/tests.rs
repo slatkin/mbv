@@ -34,6 +34,17 @@ fn invalid_setup_candidate_does_not_change_persisted_setup() {
 }
 
 #[test]
+fn configuration_failure_keeps_a_non_connectivity_kind_and_original_message() {
+    let source = mbv_config::ConfigError::from(std::io::Error::other("save failed"));
+    let error = AudiobookshelfError::from(source);
+
+    assert_eq!(error.class, AudiobookshelfFailureClass::Persistence);
+    assert!(error.is_persistence());
+    assert_eq!(error.kind_name(), "audiobookshelf.persistence");
+    assert_eq!(error.to_string(), "save failed");
+}
+
+#[test]
 fn validated_setup_debug_redacts_api_key() {
     let setup = AudiobookshelfValidatedSetup::new(
         mbv_config::AudiobookshelfSetup::new("http://abs:13378"),

@@ -63,16 +63,16 @@ impl AudiobookshelfValidatedSetup {
 /// returned identity is runtime-only and is never serialized by this seam.
 pub fn commit_audiobookshelf_candidate(
     candidate: AudiobookshelfValidatedSetup,
-) -> Result<(AudiobookshelfUser, u64), String> {
+) -> Result<(AudiobookshelfUser, u64), AudiobookshelfError> {
     let (setup, user, api_key) = candidate.into_parts();
     let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)
-        .map_err(|error| error.to_string())?;
+        .map_err(AudiobookshelfError::from)?;
     Ok((user, revision))
 }
 
 pub fn repair_audiobookshelf_candidate(
     candidate: AudiobookshelfValidatedSetup,
-) -> Result<(AudiobookshelfUser, u64), String> {
+) -> Result<(AudiobookshelfUser, u64), AudiobookshelfError> {
     commit_audiobookshelf_candidate(candidate)
 }
 
@@ -83,9 +83,9 @@ pub fn replace_audiobookshelf_candidate<C, R>(
     candidate: AudiobookshelfValidatedSetup,
     clear_owned_state: C,
     restore_owned_state: R,
-) -> Result<(AudiobookshelfUser, u64), String>
+) -> Result<(AudiobookshelfUser, u64), AudiobookshelfError>
 where
-    C: FnOnce() -> Result<(), String>,
+    C: FnOnce() -> Result<(), AudiobookshelfError>,
     R: FnOnce(),
 {
     let (setup, user, api_key) = candidate.into_parts();
@@ -95,7 +95,7 @@ where
         clear_owned_state,
         restore_owned_state,
     )
-    .map_err(|error| error.to_string())?;
+    .map_err(AudiobookshelfError::from)?;
     Ok((user, revision))
 }
 
@@ -107,25 +107,30 @@ pub enum AudiobookshelfFailureClass {
     Protocol,
     MalformedResponse,
     Unavailable,
+    Persistence,
 }
 
 /// A redacted request failure. It contains a classification only: in
 /// particular, no ureq error, URL, header, or response body is retained.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AudiobookshelfError {
     pub class: AudiobookshelfFailureClass,
+    message: Option<String>,
 }
 
 impl std::fmt::Debug for AudiobookshelfError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AudiobookshelfError")
             .field("class", &self.class)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl std::fmt::Display for AudiobookshelfError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(message) = &self.message {
+            return f.write_str(message);
+        }
         f.write_str(match self.class {
             AudiobookshelfFailureClass::AuthenticationRejected => "authentication rejected",
             AudiobookshelfFailureClass::Connectivity => "server unavailable",
@@ -133,26 +138,68 @@ impl std::fmt::Display for AudiobookshelfError {
             AudiobookshelfFailureClass::Protocol => "unexpected server response",
             AudiobookshelfFailureClass::MalformedResponse => "malformed server response",
             AudiobookshelfFailureClass::Unavailable => "service unavailable",
+            AudiobookshelfFailureClass::Persistence => "persistence failure",
         })
     }
 }
 
 impl std::error::Error for AudiobookshelfError {}
 
-impl From<String> for AudiobookshelfError {
-    fn from(_: String) -> Self {
-        Self::connectivity()
+impl From<mbv_config::ConfigError> for AudiobookshelfError {
+    fn from(error: mbv_config::ConfigError) -> Self {
+        Self::with_message(AudiobookshelfFailureClass::Persistence, error.to_string())
     }
 }
 
 impl AudiobookshelfError {
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match self.class {
+            AudiobookshelfFailureClass::AuthenticationRejected => {
+                "audiobookshelf.authentication_rejected"
+            }
+            AudiobookshelfFailureClass::Connectivity => "audiobookshelf.connectivity",
+            AudiobookshelfFailureClass::Server => "audiobookshelf.server",
+            AudiobookshelfFailureClass::Protocol => "audiobookshelf.protocol",
+            AudiobookshelfFailureClass::MalformedResponse => "audiobookshelf.malformed_response",
+            AudiobookshelfFailureClass::Unavailable => "audiobookshelf.unavailable",
+            AudiobookshelfFailureClass::Persistence => "audiobookshelf.persistence",
+        }
+    }
+
+    #[must_use]
+    pub const fn is_persistence(&self) -> bool {
+        matches!(self.class, AudiobookshelfFailureClass::Persistence)
+    }
+
     #[must_use]
     pub const fn from_class(class: AudiobookshelfFailureClass) -> Self {
         Self::new(class)
     }
 
     const fn new(class: AudiobookshelfFailureClass) -> Self {
-        Self { class }
+        Self {
+            class,
+            message: None,
+        }
+    }
+
+    pub fn persistence(message: impl Into<String>) -> Self {
+        Self::with_message(AudiobookshelfFailureClass::Persistence, message)
+    }
+
+    pub(crate) fn timeout() -> Self {
+        Self::with_message(
+            AudiobookshelfFailureClass::Unavailable,
+            "server unavailable",
+        )
+    }
+
+    fn with_message(class: AudiobookshelfFailureClass, message: impl Into<String>) -> Self {
+        Self {
+            class,
+            message: Some(message.into()),
+        }
     }
 
     const fn connectivity() -> Self {
@@ -237,7 +284,11 @@ impl AudiobookshelfClient {
             return Err(AudiobookshelfError::protocol());
         }
         let client = self.clone();
-        mbv_net::bounded::run_with_hard_bound(move || client.me(&api_key), hard_bound)
+        mbv_net::bounded::run_with_hard_bound_or_error(
+            move || client.me(&api_key),
+            AudiobookshelfError::timeout,
+            hard_bound,
+        )
     }
 
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {

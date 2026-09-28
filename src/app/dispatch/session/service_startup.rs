@@ -71,17 +71,15 @@ pub(in crate::app) struct AudiobookshelfCatalogReceiver {
 fn audiobookshelf_client(
     config: &crate::config::Config,
 ) -> Result<(AudiobookshelfClient, String), mbv_audiobookshelf::AudiobookshelfError> {
-    let setup =
-        config
-            .audiobookshelf_setup
-            .as_ref()
-            .ok_or(mbv_audiobookshelf::AudiobookshelfError {
-                class: mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol,
-            })?;
+    let setup = config.audiobookshelf_setup.as_ref().ok_or(
+        mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol,
+        ),
+    )?;
     let key = load_service_secret(ServiceKind::Audiobookshelf).ok_or(
-        mbv_audiobookshelf::AudiobookshelfError {
-            class: mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-        },
+        mbv_audiobookshelf::AudiobookshelfError::from_class(
+            mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable,
+        ),
     )?;
     let client = AudiobookshelfClient::new(&setup.server_url)?;
     Ok((client, key))
@@ -260,7 +258,7 @@ pub(in crate::app) fn audiobookshelf_initial_state(
 }
 
 pub(in crate::app) fn classify_audiobookshelf_failure(
-    error: mbv_audiobookshelf::AudiobookshelfError,
+    error: &mbv_audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
         mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {

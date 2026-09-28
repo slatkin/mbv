@@ -129,7 +129,7 @@ impl AudiobookshelfClient {
         let episode_id = episode_id.to_owned();
         let cleanup_client = client.clone();
         let cleanup_key = api_key.clone();
-        mbv_net::bounded::run_with_hard_bound_or_cleanup(
+        mbv_net::bounded::run_with_hard_bound_or_cleanup_with_error(
             move || {
                 client.create_playback_session(
                     &api_key,
@@ -151,6 +151,7 @@ impl AudiobookshelfClient {
                     AudiobookshelfClient::REQUEST_HARD_BOUND,
                 );
             },
+            AudiobookshelfError::timeout,
             hard_bound,
         )
     }
@@ -175,7 +176,7 @@ impl AudiobookshelfClient {
         let library_item_id = library_item_id.to_owned();
         let cleanup_client = client.clone();
         let cleanup_key = api_key.clone();
-        mbv_net::bounded::run_with_hard_bound_or_cleanup(
+        mbv_net::bounded::run_with_hard_bound_or_cleanup_with_error(
             move || {
                 client.create_book_playback_session(
                     &api_key,
@@ -196,6 +197,7 @@ impl AudiobookshelfClient {
                     AudiobookshelfClient::REQUEST_HARD_BOUND,
                 );
             },
+            AudiobookshelfError::timeout,
             hard_bound,
         )
     }
@@ -227,8 +229,9 @@ impl AudiobookshelfClient {
     ) -> Result<(), AudiobookshelfError> {
         let url = url.to_owned();
         let client = self.clone();
-        mbv_net::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || client.wait_for_hls_ready(&url, hard_bound),
+            AudiobookshelfError::timeout,
             hard_bound,
         )
     }
@@ -491,7 +494,7 @@ impl AudiobookshelfClient {
         let client = self.clone();
         let api_key = api_key.to_owned();
         let session_id = session_id.to_owned();
-        mbv_net::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || {
                 client
                     .post_json(
@@ -504,6 +507,7 @@ impl AudiobookshelfClient {
                     )
                     .map(|_| ())
             },
+            AudiobookshelfError::timeout,
             hard_bound,
         )
     }

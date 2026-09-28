@@ -22,16 +22,29 @@ where
     E: From<String> + Send + 'static,
     F: FnOnce() -> Result<T, E> + Send + 'static,
 {
+    let timeout_message = format!("timed out after {}s", hard_bound.as_secs());
+    run_with_hard_bound_or_error(f, move || E::from(timeout_message), hard_bound)
+}
+
+/// Runs a bounded operation with an owning-crate timeout error constructor.
+pub fn run_with_hard_bound_or_error<T, F, E, X>(
+    f: F,
+    timeout_error: X,
+    hard_bound: Duration,
+) -> Result<T, E>
+where
+    T: Send + 'static,
+    E: Send + 'static,
+    F: FnOnce() -> Result<T, E> + Send + 'static,
+    X: FnOnce() -> E + Send + 'static,
+{
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let _ = tx.send(f());
     });
     match rx.recv_timeout(hard_bound) {
         Ok(result) => result,
-        Err(_) => Err(E::from(format!(
-            "timed out after {}s",
-            hard_bound.as_secs()
-        ))),
+        Err(_) => Err(timeout_error()),
     }
 }
 
@@ -49,6 +62,29 @@ where
     E: From<String> + Send + 'static,
     F: FnOnce() -> Result<T, E> + Send + 'static,
     C: FnOnce(T) + Send + 'static,
+{
+    let timeout_message = format!("timed out after {}s", hard_bound.as_secs());
+    run_with_hard_bound_or_cleanup_with_error(
+        f,
+        cleanup,
+        move || E::from(timeout_message),
+        hard_bound,
+    )
+}
+
+/// Cleanup-capable bounded operation with an owning-crate timeout constructor.
+pub fn run_with_hard_bound_or_cleanup_with_error<T, F, E, C, X>(
+    f: F,
+    cleanup: C,
+    timeout_error: X,
+    hard_bound: Duration,
+) -> Result<T, E>
+where
+    T: Send + 'static,
+    E: Send + 'static,
+    F: FnOnce() -> Result<T, E> + Send + 'static,
+    C: FnOnce(T) + Send + 'static,
+    X: FnOnce() -> E + Send + 'static,
 {
     struct Pending<T, C: FnOnce(T)> {
         value: Option<T>,
@@ -83,10 +119,7 @@ where
     match rx.recv_timeout(hard_bound) {
         Ok(Ok(pending)) => Ok(pending.accept()),
         Ok(Err(error)) => Err(error),
-        Err(_) => Err(E::from(format!(
-            "timed out after {}s",
-            hard_bound.as_secs()
-        ))),
+        Err(_) => Err(timeout_error()),
     }
 }
 
