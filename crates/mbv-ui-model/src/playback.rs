@@ -24,3 +24,15 @@ pub enum QueueScope {
     Local,
     Remote,
 }
+
+/// Volume change applied by one volume key press or status-bar pill notch.
+pub const VOLUME_STEP: i64 = 5;
+
+/// Per-slot render knobs for a queue card, owned by the shell and pushed to
+/// the render card painter.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct QueueCardProjection {
+    pub cache_key: Option<String>,
+    pub images_enabled: bool,
+    pub visualizer: bool,
+}

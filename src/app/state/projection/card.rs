@@ -9,7 +9,7 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use mbv_ui_model::queue_card::QueueCardProjection;
+use mbv_ui_model::playback::QueueCardProjection;
 
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {

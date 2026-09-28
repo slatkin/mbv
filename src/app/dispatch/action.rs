@@ -324,10 +324,10 @@ impl App {
             Command::RequestClearQueue => self.request_clear_queue(),
             Command::RefreshCurrentView => self.refresh_current_view(),
             Command::ToggleSettings => {
-                self.request_sidebar_toggle(mbv_ui_model::sidebar::SidebarId::Settings);
+                self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Settings);
             }
             Command::OpenSessions => {
-                self.request_sidebar_toggle(mbv_ui_model::sidebar::SidebarId::Sessions);
+                self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Sessions);
             }
             Command::OpenPlaylists => self.open_playlists_panel(),
             Command::OpenSearch => self.open_search_sidebar(),

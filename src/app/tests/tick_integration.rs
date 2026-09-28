@@ -18,7 +18,7 @@ use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_components::SearchSidebarComponent;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_msg::{
     ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
     UserEvent,

@@ -12,7 +12,7 @@ impl App {
             let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
-        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Settings);
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
 

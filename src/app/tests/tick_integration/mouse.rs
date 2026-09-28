@@ -15,7 +15,7 @@ use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_model::sidebar::SidebarId;
+use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, ShellRequest};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2

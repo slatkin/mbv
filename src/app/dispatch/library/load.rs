@@ -235,9 +235,9 @@ impl App {
     }
 
     pub(in crate::app) fn open_playlists_panel(&mut self) {
-        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Sessions);
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
         self.close_settings();
-        self.request_sidebar_open(mbv_ui_model::sidebar::SidebarId::Playlists);
+        self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }

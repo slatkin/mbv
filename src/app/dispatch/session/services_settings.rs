@@ -43,12 +43,12 @@ impl EmbySetupForm {
 
 impl App {
     pub(crate) fn open_services_settings(&mut self) {
-        self.request_sidebar_open(mbv_ui_model::sidebar::SidebarId::Settings);
+        self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
     }
 
     pub(crate) fn open_keys_settings(&mut self) {
-        self.request_sidebar_open(mbv_ui_model::sidebar::SidebarId::Settings);
+        self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Keys;
     }
 

@@ -162,7 +162,7 @@ mod tests {
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
         app.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(
-            mbv_ui_model::sidebar::SidebarId::Playlists,
+            mbv_ui_model::overlay::SidebarId::Playlists,
         ));
         let mut model = Model::new(app);
         model.sync_modal_requests();

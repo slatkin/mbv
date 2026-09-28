@@ -244,7 +244,7 @@ impl App {
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
-            queue_card_projection: mbv_ui_model::queue_card::QueueCardProjection::default(),
+            queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,
             settings_save_at: None,

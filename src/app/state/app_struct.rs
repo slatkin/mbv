@@ -256,7 +256,7 @@ pub struct App {
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
-    pub(in crate::app) queue_card_projection: mbv_ui_model::queue_card::QueueCardProjection,
+    pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
@@ -472,14 +472,14 @@ impl App {
 
     pub(in crate::app) fn request_sidebar_open(
         &mut self,
-        sidebar: mbv_ui_model::sidebar::SidebarId,
+        sidebar: mbv_ui_model::overlay::SidebarId,
     ) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
     pub(in crate::app) fn request_sidebar_dismiss(
         &mut self,
-        sidebar: mbv_ui_model::sidebar::SidebarId,
+        sidebar: mbv_ui_model::overlay::SidebarId,
     ) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
             sidebar,
@@ -488,7 +488,7 @@ impl App {
 
     pub(in crate::app) fn request_sidebar_toggle(
         &mut self,
-        sidebar: mbv_ui_model::sidebar::SidebarId,
+        sidebar: mbv_ui_model::overlay::SidebarId,
     ) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::ToggleSidebar(
             sidebar,

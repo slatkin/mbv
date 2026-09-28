@@ -1,6 +1,6 @@
 use mbv_images::RENDER_FILTER;
 use mbv_theme as palette;
-use mbv_ui_model::queue_card::QueueCardProjection;
+use mbv_ui_model::playback::QueueCardProjection;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;

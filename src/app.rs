@@ -58,11 +58,11 @@ use mbv_ui_model::feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use mbv_ui_model::library_tab::LibraryTab;
+pub(in crate::app) use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_model::playback::{PlaybackState, QueueScope};
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
-pub(in crate::app) use mbv_ui_model::sidebar::SidebarId;
 use mbv_ui_model::tab_selection::TabSelection;
 #[cfg(test)]
 use std::sync::Arc;

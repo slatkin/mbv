@@ -23,7 +23,7 @@ use tuirealm::state::State;
 
 use mbv_render::{render_status_bar, StatusBarModel, StatusBarRegions};
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_model::volume::VOLUME_STEP;
+use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 

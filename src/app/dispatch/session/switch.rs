@@ -109,7 +109,7 @@ impl App {
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
-        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Sessions);
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
             ToastSeverity::Success,
@@ -536,7 +536,7 @@ impl App {
         self.remote.remote_pos_s = sess.position_s;
         self.remote.remote_pos_at = Instant::now();
         self.remote.remote_api_pos_advanced_at = Instant::now();
-        self.request_sidebar_dismiss(mbv_ui_model::sidebar::SidebarId::Sessions);
+        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
         if let Some(error) = direct_upgrade_error {
             self.flash(
                 format!("Direct mbv control failed: {error}; using attached session {name}"),

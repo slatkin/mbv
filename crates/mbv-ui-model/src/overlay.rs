@@ -2,7 +2,15 @@ use crate::confirm::ConfirmModal;
 use crate::context_menu::{ContextMenu, MultiSelectKind};
 use crate::daemon_lost::DaemonLostModal;
 use crate::feed::SavePlaylistDialog;
-use crate::sidebar::SidebarId;
+
+/// Which sidebar overlay a shell handoff targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarId {
+    Settings,
+    Sessions,
+    Playlists,
+    Search,
+}
 
 /// Shell handoffs used while App action code is still called below Model.
 /// These are requests, not a second copy of component interaction state.
