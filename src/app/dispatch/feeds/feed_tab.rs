@@ -127,12 +127,13 @@ impl App {
             let tx = tx.clone();
             let kind = sub.kind;
             std::thread::spawn(move || {
-                let result = fetch_and_parse_entries(&url, kind, &feed_id)
-                    .map_err(|error| error.to_string());
+                let result = fetch_and_parse_entries(&url, kind, &feed_id);
                 let _ = tx.send(FeedTabRefreshResult {
                     feed_id,
                     subscription_index: idx,
-                    entries: result.map_err(mbv_ui_model::UiModelError::operation),
+                    entries: result.map_err(|error| {
+                        mbv_ui_model::UiModelError::operation(error.to_string())
+                    }),
                 });
             });
         }
