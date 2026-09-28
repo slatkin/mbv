@@ -41,12 +41,12 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 5. Daemon binary (kind-driven exit codes)
 
-- [ ] 5.1 Introduce `DaemonError` (or per-module errors if the 21 `mbvd`
+- [x] 5.1 Introduce `DaemonError` (or per-module errors if the 21 `mbvd`
   sites span disjoint failure domains), convert all sites, replace
   `exit_code_for_error`'s `contains` matching with `is_restart_required()` /
   `is_usage_error()` predicates preserving the 3/2/1 mapping and message
   text, verify `cargo nextest run -p mbvd` passes
-- [ ] 5.2 Rewrite the `error.contains(...)` exit-path tests to construct
+- [x] 5.2 Rewrite the `error.contains(...)` exit-path tests to construct
   each kind and assert its exit code (contract: exit codes derive from
   kinds, never message text), verify the rewritten tests pass
 
