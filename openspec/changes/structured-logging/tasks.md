@@ -7,7 +7,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
 ## 1. Logging core (`mbv-core`)
 
-- [ ] 1.1 Add `tracing = "0.1.44"` to `[workspace.dependencies]`. Add `tracing`,
+- [x] 1.1 Add `tracing = "0.1.44"` to `[workspace.dependencies]`. Add `tracing`,
   `tracing-subscriber` (`default-features = false`, features `registry`, `std`) and
   `tracing-log` to `crates/mbv-core/Cargo.toml`. Add the `formatting`, `local-offset` and
   `macros` features to the workspace `time`, add `time` to `mbv-core`, and remove `libc`
