@@ -166,14 +166,14 @@ impl App {
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Latest)) {
                         let items = client
                             .get_latest_episodes(&saved_level.parent_id, 30)
-                            .map_err(|e| mbv_ui_model::UiModelError::operation(e.to_string()))?;
+                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
                         let items = client
                             .get_upcoming(&saved_level.parent_id, 30)
-                            .map_err(|e| mbv_ui_model::UiModelError::operation(e.to_string()))?;
+                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
@@ -206,7 +206,7 @@ impl App {
                             name_ge,
                             name_lt,
                         })
-                        .map_err(|e| mbv_ui_model::UiModelError::operation(e.to_string()))?;
+                        .map_err(mbv_ui_model::UiModelError::operation_source)?;
                     let fetched_rows = items.len();
                     if total_count > fetched_rows {
                         let (items, total_count) = client
@@ -221,7 +221,7 @@ impl App {
                                 name_ge,
                                 name_lt,
                             })
-                            .map_err(|e| mbv_ui_model::UiModelError::operation(e.to_string()))?;
+                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
                         let fetched_rows = items.len();
                         Ok((items, total_count, fetched_rows))
                     } else {

@@ -64,13 +64,17 @@ impl App {
             .libs
             .iter()
             .find(|lib| lib.library.id == library_id)
-            .ok_or_else(|| format!("Could not find library {library_id}"))?;
+            .ok_or_else(|| {
+                mbv_ui_model::UiModelError::operation(format!(
+                    "Could not find library {library_id}"
+                ))
+            })?;
         if self.music_levels.is_empty()
             || self.music_levels.last().map(String::as_str) != Some("album")
         {
-            return Err("Could not resolve the configured music album level"
-                .to_string()
-                .into());
+            return Err(mbv_ui_model::UiModelError::operation(
+                "Could not resolve the configured music album level",
+            ));
         }
         if nav_stack.len() != self.music_levels.len()
             || lib.library.collection_type != "music"

@@ -9,6 +9,10 @@ enum ComponentsErrorKind {
 }
 
 impl ComponentsError {
+    pub fn search(message: impl Into<String>) -> Self {
+        Self(ComponentsErrorKind::Search(message.into()))
+    }
+
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
         "components.search"
@@ -24,9 +28,3 @@ impl fmt::Display for ComponentsError {
 }
 
 impl Error for ComponentsError {}
-
-impl From<String> for ComponentsError {
-    fn from(message: String) -> Self {
-        Self(ComponentsErrorKind::Search(message))
-    }
-}

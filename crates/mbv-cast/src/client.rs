@@ -5,7 +5,7 @@
 // subtitle tracks or a queue-jump message; heartbeat requires an explicit
 // keep-alive pump).
 
-use crate::CastError;
+use crate::{CastError, TransportKind};
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
     Media, MediaQueue, PlayerState as CastPlayerState, QueueItem, QueueType, StatusEntry,
@@ -81,19 +81,19 @@ impl CastClient {
     /// (connection, app launch, or app-transport handshake).
     pub fn connect(host: &str, port: u16) -> Result<Self, CastError> {
         let device = CastDevice::connect_without_host_verification(host.to_string(), port)
-            .map_err(|e| CastError::transport("connect", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Connect, e))?;
         device
             .connection
             .connect(RECEIVER_PLATFORM_ID)
-            .map_err(|e| CastError::transport("receiver-platform connect", e))?;
+            .map_err(|e| CastError::transport(TransportKind::ReceiverPlatformConnect, e))?;
         let app = device
             .receiver
             .launch_app(&CastDeviceApp::DefaultMediaReceiver)
-            .map_err(|e| CastError::transport("launch_app", e))?;
+            .map_err(|e| CastError::transport(TransportKind::LaunchApp, e))?;
         device
             .connection
             .connect(app.transport_id.as_str())
-            .map_err(|e| CastError::transport("app-transport connect", e))?;
+            .map_err(|e| CastError::transport(TransportKind::AppTransportConnect, e))?;
         Ok(Self {
             device,
             transport_id: app.transport_id,
@@ -110,7 +110,7 @@ impl CastClient {
         self.device
             .receiver
             .stop_app(self.session_id.as_str())
-            .map_err(|e| CastError::transport("teardown", e))
+            .map_err(|e| CastError::transport(TransportKind::Teardown, e))
     }
 
     /// Answers any heartbeat PING the receiver has sent since the last call
@@ -121,7 +121,7 @@ impl CastClient {
         self.device
             .heartbeat
             .pong()
-            .map_err(|e| CastError::transport("keep_alive", e))
+            .map_err(|e| CastError::transport(TransportKind::KeepAlive, e))
     }
 
     pub fn load(
@@ -142,7 +142,7 @@ impl CastClient {
                     autoplay: true,
                 },
             )
-            .map_err(|e| CastError::transport("load", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Load, e))?;
         self.adopt_status(&status);
         self.dispatched_queue = None;
         Ok(())
@@ -158,7 +158,7 @@ impl CastClient {
             .device
             .media
             .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| CastError::transport("load_queue", e))?;
+            .map_err(|e| CastError::transport(TransportKind::LoadQueue, e))?;
         self.adopt_status(&status);
         self.dispatched_queue = Some(DispatchedQueue {
             queue,
@@ -173,7 +173,7 @@ impl CastClient {
             .device
             .media
             .play(self.transport_id.as_str(), id)
-            .map_err(|e| CastError::transport("play", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Play, e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
@@ -184,7 +184,7 @@ impl CastClient {
             .device
             .media
             .pause(self.transport_id.as_str(), id)
-            .map_err(|e| CastError::transport("pause", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Pause, e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
@@ -195,7 +195,7 @@ impl CastClient {
             .device
             .media
             .stop(self.transport_id.as_str(), id)
-            .map_err(|e| CastError::transport("stop", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Stop, e))?;
         self.adopt_status_entry(&entry);
         self.dispatched_queue = None;
         Ok(())
@@ -207,7 +207,7 @@ impl CastClient {
             .device
             .media
             .seek(self.transport_id.as_str(), id, Some(position_seconds), None)
-            .map_err(|e| CastError::transport("seek", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Seek, e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
@@ -239,7 +239,7 @@ impl CastClient {
             .device
             .media
             .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| CastError::transport("jump", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Jump, e))?;
         self.adopt_status(&status);
         if let Some(dispatched) = &mut self.dispatched_queue {
             dispatched.current_index = next_index;
@@ -251,7 +251,7 @@ impl CastClient {
         self.device
             .receiver
             .set_volume(level)
-            .map_err(|e| CastError::transport("set_volume", e))
+            .map_err(|e| CastError::transport(TransportKind::SetVolume, e))
             .map(|_| ())
     }
 
@@ -259,7 +259,7 @@ impl CastClient {
         self.device
             .receiver
             .set_volume(muted)
-            .map_err(|e| CastError::transport("set_muted", e))
+            .map_err(|e| CastError::transport(TransportKind::SetMuted, e))
             .map(|_| ())
     }
 
@@ -268,7 +268,7 @@ impl CastClient {
             .device
             .media
             .get_status(self.transport_id.as_str(), self.media_session_id)
-            .map_err(|e| CastError::transport("get_status", e))?;
+            .map_err(|e| CastError::transport(TransportKind::Status, e))?;
         let entry = status
             .entries
             .first()

@@ -4,6 +4,7 @@ use std::{error::Error, fmt, io};
 pub struct ConfigError {
     kind: ConfigErrorKind,
     message: String,
+    source: Option<Box<dyn Error + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -23,6 +24,18 @@ impl ConfigError {
         Self {
             kind,
             message: message.into(),
+            source: None,
+        }
+    }
+
+    fn with_source<E>(kind: ConfigErrorKind, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            message: source.to_string(),
+            source: Some(Box::new(source)),
         }
     }
 
@@ -119,34 +132,40 @@ impl fmt::Display for ConfigError {
     }
 }
 
-impl Error for ConfigError {}
+impl Error for ConfigError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
+    }
+}
 
 impl From<io::Error> for ConfigError {
-    fn from(error: io::Error) -> Self {
-        Self::io(error.to_string())
+    fn from(source: io::Error) -> Self {
+        Self::with_source(ConfigErrorKind::Io, source)
     }
 }
 
 impl From<toml::de::Error> for ConfigError {
-    fn from(error: toml::de::Error) -> Self {
-        Self::parse(error.to_string())
+    fn from(source: toml::de::Error) -> Self {
+        Self::with_source(ConfigErrorKind::Parse, source)
     }
 }
 
 impl From<toml::ser::Error> for ConfigError {
-    fn from(error: toml::ser::Error) -> Self {
-        Self::save(error.to_string())
+    fn from(source: toml::ser::Error) -> Self {
+        Self::with_source(ConfigErrorKind::Save, source)
     }
 }
 
 impl From<serde_json::Error> for ConfigError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::state(error.to_string())
+    fn from(source: serde_json::Error) -> Self {
+        Self::with_source(ConfigErrorKind::State, source)
     }
 }
 
 impl From<mbv_keybinds::KeybindsError> for ConfigError {
-    fn from(error: mbv_keybinds::KeybindsError) -> Self {
-        Self::parse(error.to_string())
+    fn from(source: mbv_keybinds::KeybindsError) -> Self {
+        Self::with_source(ConfigErrorKind::Parse, source)
     }
 }

@@ -37,7 +37,7 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "Series")
                 .map(|a| RevealTarget::Series(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's series".to_string().into())
+                .ok_or_else(|| mbv_emby::EmbyError::playback("Could not resolve the item's series"))
         }
         // A track reveals its album: `album_id` first, ancestors fallback.
         "Audio" => {
@@ -46,14 +46,16 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "MusicAlbum")
                 .map(|a| RevealTarget::Album(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's album".to_string().into())
+                .ok_or_else(|| mbv_emby::EmbyError::playback("Could not resolve the item's album"))
         }
         "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
         // An artist does not land (D1): it has no single owning album, and a
         // plain artist browse chain does not render on a grouped Music
         // surface (real-tick render check). The kind resolves to the
         // pre-U2 failure, flashing and leaving the active view unchanged.
-        "MusicArtist" => Err("Could not resolve the artist's album".to_string().into()),
+        "MusicArtist" => Err(mbv_emby::EmbyError::playback(
+            "Could not resolve the artist's album",
+        )),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
         // Movie/generic: the ancestor-chain rebuild is already correct.
         _ => Ok(RevealTarget::Chain),
@@ -72,7 +74,7 @@ fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, mbv
         .get_items_by_ids(&[item_id.to_string()])?
         .into_iter()
         .next()
-        .ok_or_else(|| format!("Item {item_id} no longer exists").into())
+        .ok_or_else(|| mbv_emby::EmbyError::playback(format!("Item {item_id} no longer exists")))
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
@@ -134,7 +136,9 @@ fn landing_for_target(
                 fetch_reveal_item(client, &series_id)?
             };
             if series.item_type != "Series" {
-                return Err(format!("Item {series_id} is not a Series").into());
+                return Err(mbv_emby::EmbyError::playback(format!(
+                    "Item {series_id} is not a Series"
+                )));
             }
             // Deep selection (task 6.1, design D6): an Episode reveal rides
             // its own id on the Series landing; a Season reveal stays
@@ -156,7 +160,9 @@ fn landing_for_target(
             // (the album index builds its terminal level by `is_folder` for
             // the same reason), so a folder record is a valid album reveal.
             if album.item_type != "MusicAlbum" && !album.is_folder {
-                return Err(format!("Item {album_id} is not an album").into());
+                return Err(mbv_emby::EmbyError::playback(format!(
+                    "Item {album_id} is not an album"
+                )));
             }
             // The recursive activation consumes the configured album-index
             // entry shape (D7): the album plus the root→album folder chain
@@ -226,11 +232,10 @@ fn configured_album_ancestors(
         .find(|entry| entry.album.id == album.id)
         .map(|entry| entry.ancestors)
         .ok_or_else(|| {
-            format!(
+            mbv_emby::EmbyError::playback(format!(
                 "Could not reach '{}' through the configured music levels",
                 album.display_name()
-            )
-            .into()
+            ))
         })
 }
 

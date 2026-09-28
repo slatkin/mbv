@@ -157,7 +157,7 @@ pub fn signal_local_daemon_service_setup(
         })?;
     let (mut reader, _state, _compatibility) =
         perform_handshake(SocketStream::Unix(stream), || {
-            mbv_config::load_or_create_control_credential().map_err(crate::RemotePlayerError::from)
+            Ok(mbv_config::load_or_create_control_credential()?)
         })
         .map_err(|error| {
             crate::RemotePlayerError::restart_required(format!(
@@ -452,8 +452,7 @@ fn connect_stream(
     let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
             perform_handshake(handshake_stream, || {
-                mbv_config::load_or_create_control_credential()
-                    .map_err(crate::RemotePlayerError::from)
+                Ok(mbv_config::load_or_create_control_credential()?)
             })
         },
         || {

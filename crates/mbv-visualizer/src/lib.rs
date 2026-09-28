@@ -125,8 +125,7 @@ impl PipeWireWorker {
         let worker_buffer = Arc::clone(&buffer);
         let handle = thread::Builder::new()
             .name("mbv-pipewire-visualizer".into())
-            .spawn(move || run_worker(stop_rx, startup_tx, failure_tx, worker_buffer))
-            .map_err(VisualizerError::from)?;
+            .spawn(move || run_worker(stop_rx, startup_tx, failure_tx, worker_buffer))?;
 
         match startup_rx.recv_timeout(STARTUP_TIMEOUT) {
             Ok(Startup::Ready) => Ok(Self {

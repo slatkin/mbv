@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub struct UiModelError {
     kind: UiModelErrorKind,
     message: String,
+    source: Option<Box<dyn Error + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -16,6 +17,31 @@ impl UiModelError {
         Self {
             kind: UiModelErrorKind::Operation,
             message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn operation_context<E>(context: &str, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self {
+            kind: UiModelErrorKind::Operation,
+            message: format!("{context}: {source}"),
+            source: Some(Box::new(source)),
+        }
+    }
+
+    /// Wraps a domain error keeping its `Display` text as the message so the
+    /// UI-visible string is unchanged while the cause stays inspectable.
+    pub fn operation_source<E>(source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self {
+            kind: UiModelErrorKind::Operation,
+            message: source.to_string(),
+            source: Some(Box::new(source)),
         }
     }
 
@@ -33,10 +59,10 @@ impl fmt::Display for UiModelError {
     }
 }
 
-impl Error for UiModelError {}
-
-impl From<String> for UiModelError {
-    fn from(message: String) -> Self {
-        Self::operation(message)
+impl Error for UiModelError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
     }
 }

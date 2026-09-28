@@ -121,11 +121,11 @@ fn emby_setup_transaction_restores_exact_files_on_either_write_failure() {
         |_setup, _path| Err(crate::ConfigError::admin("setup write rejected")),
         |_token, _path| -> Result<(), crate::ConfigError> { Ok(()) },
     );
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("setup write rejected")
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
+    assert_eq!(
+        error.to_string(),
+        "persist Emby setup: setup write rejected"
     );
     assert_eq!(std::fs::read(&config).unwrap(), old_config);
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
@@ -138,11 +138,11 @@ fn emby_setup_transaction_restores_exact_files_on_either_write_failure() {
         save_emby_setup_at,
         |_token, _path| Err(crate::ConfigError::admin("secret write rejected")),
     );
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("secret write rejected")
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
+    assert_eq!(
+        error.to_string(),
+        "persist Emby secret: secret write rejected"
     );
     assert_eq!(std::fs::read(&config).unwrap(), old_config);
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
@@ -169,7 +169,8 @@ fn emby_setup_transaction_rejects_arbitrary_snapshot_read_errors_before_writing(
         },
         |_token, _path| -> Result<(), crate::ConfigError> { Ok(()) },
     );
-    assert!(result.unwrap_err().to_string().contains("read"));
+    let error = result.unwrap_err();
+    assert!(error.is_admin());
     assert!(!called.get());
     assert_eq!(std::fs::read(&secret).unwrap(), old_secret);
     let _ = std::fs::remove_dir_all(root);

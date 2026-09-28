@@ -6,4 +6,4 @@ mod error;
 pub use client::*;
 pub use discovery::*;
 pub use dispatch::*;
-pub use error::CastError;
+pub use error::{CastError, TransportKind};

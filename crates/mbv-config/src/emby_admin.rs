@@ -300,7 +300,7 @@ fn restore_removed_file(
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
             }
-            std::fs::rename(tmp, path).map_err(ConfigError::from)
+            Ok(std::fs::rename(tmp, path)?)
         }
         None => match std::fs::remove_file(path) {
             Ok(()) => Ok(()),
@@ -409,7 +409,7 @@ fn restore_emby_setup_file(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
         }
-        std::fs::rename(tmp, path).map_err(ConfigError::from)
+        Ok(std::fs::rename(tmp, path)?)
     } else {
         let _ = std::fs::remove_file(path);
         Ok(())

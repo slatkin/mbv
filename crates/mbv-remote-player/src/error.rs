@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub struct RemotePlayerError {
     kind: RemotePlayerErrorKind,
     message: String,
+    source: Option<Box<dyn Error + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -41,6 +42,18 @@ impl RemotePlayerError {
         Self {
             kind,
             message: message.into(),
+            source: None,
+        }
+    }
+
+    fn with_source<E>(kind: RemotePlayerErrorKind, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            message: source.to_string(),
+            source: Some(Box::new(source)),
         }
     }
 
@@ -63,28 +76,34 @@ impl fmt::Display for RemotePlayerError {
     }
 }
 
-impl Error for RemotePlayerError {}
+impl Error for RemotePlayerError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
+    }
+}
 
 impl From<mbv_ctrl::CtrlError> for RemotePlayerError {
-    fn from(error: mbv_ctrl::CtrlError) -> Self {
-        Self::new(RemotePlayerErrorKind::Control, error.to_string())
+    fn from(source: mbv_ctrl::CtrlError) -> Self {
+        Self::with_source(RemotePlayerErrorKind::Control, source)
     }
 }
 
 impl From<mbv_config::ConfigError> for RemotePlayerError {
-    fn from(error: mbv_config::ConfigError) -> Self {
-        Self::connection(error.to_string())
+    fn from(source: mbv_config::ConfigError) -> Self {
+        Self::with_source(RemotePlayerErrorKind::Connection, source)
     }
 }
 
 impl From<std::io::Error> for RemotePlayerError {
-    fn from(error: std::io::Error) -> Self {
-        Self::connection(error.to_string())
+    fn from(source: std::io::Error) -> Self {
+        Self::with_source(RemotePlayerErrorKind::Connection, source)
     }
 }
 
 impl From<serde_json::Error> for RemotePlayerError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::protocol(error.to_string())
+    fn from(source: serde_json::Error) -> Self {
+        Self::with_source(RemotePlayerErrorKind::Protocol, source)
     }
 }

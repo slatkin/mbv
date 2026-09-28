@@ -171,8 +171,12 @@ impl EmbyClient {
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, crate::EmbyError> {
         let mut clone = self.clone();
-        mbv_net::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || clone.authenticate().map(|()| clone),
+            {
+                let secs = hard_bound.as_secs();
+                move || crate::EmbyError::bounded_timeout(format!("timed out after {secs}s"))
+            },
             hard_bound,
         )
     }
@@ -187,7 +191,7 @@ impl EmbyClient {
     ) -> Result<EmbyClient, crate::EmbyError> {
         let mut clone = self.clone();
         clone.token = token;
-        mbv_net::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || {
                 let users: Value = clone
                     .get("/Users")
@@ -220,6 +224,10 @@ impl EmbyClient {
                     clone.config.username = name.to_string();
                 }
                 Ok(clone)
+            },
+            {
+                let secs = hard_bound.as_secs();
+                move || crate::EmbyError::bounded_timeout(format!("timed out after {secs}s"))
             },
             hard_bound,
         )
@@ -273,7 +281,7 @@ impl EmbyClient {
                 "server URL, username, and password are required",
             ));
         }
-        mbv_net::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || {
                 let resp: Value = client
                     .agent
@@ -308,6 +316,10 @@ impl EmbyClient {
                     user_id: user_id.to_string(),
                     token: token.to_string(),
                 })
+            },
+            {
+                let secs = hard_bound.as_secs();
+                move || crate::EmbyError::bounded_timeout(format!("timed out after {secs}s"))
             },
             hard_bound,
         )

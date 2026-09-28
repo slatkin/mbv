@@ -65,8 +65,7 @@ pub fn commit_audiobookshelf_candidate(
     candidate: AudiobookshelfValidatedSetup,
 ) -> Result<(AudiobookshelfUser, u64), AudiobookshelfError> {
     let (setup, user, api_key) = candidate.into_parts();
-    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)
-        .map_err(AudiobookshelfError::from)?;
+    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
     Ok((user, revision))
 }
 
@@ -94,8 +93,7 @@ where
         &api_key,
         clear_owned_state,
         restore_owned_state,
-    )
-    .map_err(AudiobookshelfError::from)?;
+    )?;
     Ok((user, revision))
 }
 
@@ -170,6 +168,14 @@ impl AudiobookshelfError {
     #[must_use]
     pub const fn is_persistence(&self) -> bool {
         matches!(self.class, AudiobookshelfFailureClass::Persistence)
+    }
+
+    #[must_use]
+    pub const fn is_authentication_rejected(&self) -> bool {
+        matches!(
+            self.class,
+            AudiobookshelfFailureClass::AuthenticationRejected
+        )
     }
 
     #[must_use]

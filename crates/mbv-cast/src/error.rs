@@ -16,7 +16,7 @@ enum CastErrorKind {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TransportKind {
+pub enum TransportKind {
     Connect,
     ReceiverPlatformConnect,
     LaunchApp,
@@ -79,36 +79,11 @@ impl CastError {
         }
     }
 
-    pub(crate) fn transport<E>(operation: &'static str, source: E) -> Self
+    pub(crate) fn transport<E>(kind: TransportKind, source: E) -> Self
     where
         E: Error + Send + Sync + 'static,
     {
-        let (operation_kind, context) = match operation {
-            "connect" => (TransportKind::Connect, "cast connect failed"),
-            "receiver-platform connect" => (
-                TransportKind::ReceiverPlatformConnect,
-                "cast receiver-platform connect failed",
-            ),
-            "launch_app" => (TransportKind::LaunchApp, "cast launch_app failed"),
-            "app-transport connect" => (
-                TransportKind::AppTransportConnect,
-                "cast app-transport connect failed",
-            ),
-            "teardown" => (TransportKind::Teardown, "cast teardown failed"),
-            "keep_alive" => (TransportKind::KeepAlive, "cast keep_alive failed"),
-            "load" => (TransportKind::Load, "cast load failed"),
-            "load_queue" => (TransportKind::LoadQueue, "cast load_queue failed"),
-            "play" => (TransportKind::Play, "cast play failed"),
-            "pause" => (TransportKind::Pause, "cast pause failed"),
-            "stop" => (TransportKind::Stop, "cast stop failed"),
-            "seek" => (TransportKind::Seek, "cast seek failed"),
-            "jump" => (TransportKind::Jump, "cast jump failed"),
-            "set_volume" => (TransportKind::SetVolume, "cast set_volume failed"),
-            "set_muted" => (TransportKind::SetMuted, "cast set_muted failed"),
-            "get_status" => (TransportKind::Status, "cast get_status failed"),
-            _ => (TransportKind::Command, "cast command failed"),
-        };
-        Self::with_source(CastErrorKind::Transport(operation_kind), context, source)
+        Self::with_source(CastErrorKind::Transport(kind), kind.context(), source)
     }
 
     pub(crate) fn jump_no_queue() -> Self {
@@ -253,6 +228,32 @@ impl CastErrorKind {
 }
 
 impl TransportKind {
+    fn context(self) -> &'static str {
+        match self {
+            Self::Connect => "cast connect failed",
+            Self::ReceiverPlatformConnect => "cast receiver-platform connect failed",
+            Self::LaunchApp => "cast launch_app failed",
+            Self::AppTransportConnect => "cast app-transport connect failed",
+            Self::Teardown => "cast teardown failed",
+            Self::KeepAlive => "cast keep_alive failed",
+            Self::Load => "cast load failed",
+            Self::LoadQueue => "cast load_queue failed",
+            Self::Play => "cast play failed",
+            Self::Pause => "cast pause failed",
+            Self::Stop => "cast stop failed",
+            Self::Seek => "cast seek failed",
+            Self::Jump => "cast jump failed",
+            Self::JumpNoQueue => "cast jump failed: no dispatched queue to advance",
+            Self::JumpNoAdjacent => "cast jump failed: no adjacent queue item",
+            Self::SetVolume => "cast set_volume failed",
+            Self::SetMuted => "cast set_muted failed",
+            Self::Status => "cast get_status failed",
+            Self::StatusNoEntries => "cast get_status returned no entries",
+            Self::NoSessionId => "cast command failed: nothing loaded yet",
+            Self::Command => "cast command failed",
+        }
+    }
+
     fn kind_name(self) -> &'static str {
         match self {
             Self::Connect => "cast.connect",

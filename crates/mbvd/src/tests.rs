@@ -72,7 +72,9 @@ fn connect_diagnostics_redact_candidate_and_remote_material() {
 fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
     use mbv_audiobookshelf::AudiobookshelfFailureClass;
 
-    let auth = classified_abs_error(AudiobookshelfFailureClass::AuthenticationRejected);
+    let auth = classified_abs_error(&mbv_audiobookshelf::AudiobookshelfError::from_class(
+        AudiobookshelfFailureClass::AuthenticationRejected,
+    ));
     assert_eq!(auth, "mbvd: Audiobookshelf authentication rejected");
 
     for class in [
@@ -81,8 +83,10 @@ fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
         AudiobookshelfFailureClass::Protocol,
         AudiobookshelfFailureClass::MalformedResponse,
         AudiobookshelfFailureClass::Unavailable,
+        AudiobookshelfFailureClass::Persistence,
     ] {
-        let other = classified_abs_error(class);
+        let other =
+            classified_abs_error(&mbv_audiobookshelf::AudiobookshelfError::from_class(class));
         assert_eq!(
             other,
             "mbvd: Audiobookshelf server unavailable or returned an invalid response"

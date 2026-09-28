@@ -27,8 +27,13 @@ impl EmbyError {
         Self::new(EmbyErrorKind::Playlist, message)
     }
 
-    pub(crate) fn playback(message: impl Into<String>) -> Self {
+    #[must_use]
+    pub fn playback(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Playback, message)
+    }
+
+    pub(crate) fn bounded_timeout(message: impl Into<String>) -> Self {
+        Self::new(EmbyErrorKind::BoundedTimeout, message)
     }
 
     pub(crate) fn playback_context<E>(context: &str, source: E) -> Self
@@ -143,11 +148,5 @@ impl From<crate::EmbyFailure> for EmbyError {
             crate::EmbyFailureClass::Unavailable => EmbyErrorKind::Http,
         };
         Self::new(kind, failure.message)
-    }
-}
-
-impl From<String> for EmbyError {
-    fn from(message: String) -> Self {
-        Self::new(EmbyErrorKind::BoundedTimeout, message)
     }
 }

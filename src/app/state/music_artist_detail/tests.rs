@@ -412,7 +412,7 @@ fn failed_artist_query_falls_back_to_per_album_fetches() {
         generation,
         "artist-alpha",
         7,
-        Err("unsupported".to_string().into()),
+        Err(mbv_emby::EmbyError::playback("unsupported")),
     );
     let key = ArtistDetailKey {
         destination,

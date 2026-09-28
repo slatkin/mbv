@@ -107,7 +107,7 @@ impl From<mbv_emby::EmbyError> for DaemonError {
 
 impl From<mbv_audiobookshelf::AudiobookshelfError> for DaemonError {
     fn from(source: mbv_audiobookshelf::AudiobookshelfError) -> Self {
-        let message = crate::classified_abs_error(source.class);
+        let message = crate::classified_abs_error(&source);
         Self {
             kind: DaemonErrorKind::Failure,
             message,

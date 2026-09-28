@@ -238,7 +238,7 @@ fn save_config_settings_reports_read_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-read-config-error-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let error = save_config_settings_at(&Config::default(), &dir).unwrap_err();
-    assert!(error.is_save());
+    assert!(error.is_io());
     let error = error.to_string();
     assert!(error.contains("read"));
     assert!(error.contains(dir.to_str().unwrap()));
@@ -252,7 +252,7 @@ fn save_config_settings_reports_parse_failure_with_path() {
     let path = dir.join("config.toml");
     std::fs::write(&path, "this = [is malformed").unwrap();
     let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
-    assert!(error.is_save());
+    assert!(error.is_parse());
     let error = error.to_string();
     assert!(error.contains("parse"));
     assert!(error.contains(path.to_str().unwrap()));

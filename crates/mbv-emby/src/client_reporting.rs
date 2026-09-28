@@ -230,13 +230,17 @@ impl EmbyClient {
             "outbound: Stopped shutdown pos={position_ticks} timeout={}ms",
             hard_bound.as_millis()
         );
-        let result = mbv_net::bounded::run_with_hard_bound(
+        let result = mbv_net::bounded::run_with_hard_bound_or_error(
             move || -> Result<_, crate::EmbyError> {
                 let status = client
                     .post("/Sessions/Playing/Stopped")
                     .send_json(body)?
                     .status();
                 Ok(status)
+            },
+            {
+                let secs = hard_bound.as_secs();
+                move || crate::EmbyError::bounded_timeout(format!("timed out after {secs}s"))
             },
             hard_bound,
         );

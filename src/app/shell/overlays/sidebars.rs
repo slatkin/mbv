@@ -209,8 +209,7 @@ impl Model {
             {
                 search.apply_drain(
                     &query,
-                    result
-                        .map_err(|error| mbv_ui_model::UiModelError::operation(error.to_string())),
+                    result.map_err(mbv_ui_model::UiModelError::operation_source),
                 );
             }
         }

@@ -258,14 +258,12 @@ impl super::Model {
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
             let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url)
-                .map_err(|error| mbv_ui_model::UiModelError::operation(error.to_string()))
+                .map_err(mbv_ui_model::UiModelError::operation_source)
             {
                 Ok(resolved_url) => {
                     let result = require_feed_entries(
                         mbv_feed::fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
-                            .map_err(|error| {
-                                mbv_ui_model::UiModelError::operation(error.to_string())
-                            }),
+                            .map_err(mbv_ui_model::UiModelError::operation_source),
                     );
                     (resolved_url, result)
                 }

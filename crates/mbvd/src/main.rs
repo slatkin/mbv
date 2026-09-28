@@ -246,9 +246,12 @@ fn exchange_emby_credentials(
     username: &str,
     password: &str,
 ) -> Result<mbv_emby::EmbyCredentialExchange, DaemonError> {
-    client
-        .exchange_credentials_bounded(server_url, username, password, Duration::from_secs(10))
-        .map_err(DaemonError::from)
+    Ok(client.exchange_credentials_bounded(
+        server_url,
+        username,
+        password,
+        Duration::from_secs(10),
+    )?)
 }
 
 fn commit_emby_setup(
@@ -313,22 +316,20 @@ fn connect_emby() -> Result<(), DaemonError> {
     Ok(())
 }
 
-fn classified_abs_error(class: mbv_audiobookshelf::AudiobookshelfFailureClass) -> String {
-    use mbv_audiobookshelf::AudiobookshelfFailureClass;
-    match class {
-        AudiobookshelfFailureClass::AuthenticationRejected => {
-            "mbvd: Audiobookshelf authentication rejected".into()
-        }
-        _ => "mbvd: Audiobookshelf server unavailable or returned an invalid response".into(),
+fn classified_abs_error(error: &mbv_audiobookshelf::AudiobookshelfError) -> String {
+    if error.is_authentication_rejected() {
+        "mbvd: Audiobookshelf authentication rejected".into()
+    } else {
+        "mbvd: Audiobookshelf server unavailable or returned an invalid response".into()
     }
 }
 
 fn clear_audiobookshelf_owned_state() -> Result<(), DaemonError> {
     match config::load_queue_state() {
         Some(state) if !state.items.is_empty() => {
-            config::save_queue_state(&state.without_audiobookshelf()).map_err(DaemonError::from)
+            Ok(config::save_queue_state(&state.without_audiobookshelf())?)
         }
-        _ => config::clear_queue_state().map_err(DaemonError::from),
+        _ => Ok(config::clear_queue_state()?),
     }
 }
 
@@ -353,8 +354,7 @@ fn connect_abs() -> Result<(), DaemonError> {
         &server_url,
         &api_key,
         Duration::from_secs(10),
-    )
-    .map_err(DaemonError::from)?;
+    )?;
     let (setup, _user, api_key) = validated.into_parts();
     let same_server = existing
         .as_ref()

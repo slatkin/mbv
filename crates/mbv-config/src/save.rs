@@ -3,11 +3,11 @@ use super::{Config, ConfigError, config_path};
 fn read_config_doc(path: &std::path::Path) -> Result<toml::Value, ConfigError> {
     match std::fs::read_to_string(path) {
         Ok(text) => toml::from_str(&text)
-            .map_err(|e| ConfigError::save(format!("parse {}: {e}", path.display()))),
+            .map_err(|e| ConfigError::parse(format!("parse {}: {e}", path.display()))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             Ok(toml::Value::Table(toml::map::Map::new()))
         }
-        Err(e) => Err(ConfigError::save(format!("read {}: {e}", path.display()))),
+        Err(e) => Err(ConfigError::io(format!("read {}: {e}", path.display()))),
     }
 }
 
