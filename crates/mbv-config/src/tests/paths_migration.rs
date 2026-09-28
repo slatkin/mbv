@@ -64,7 +64,7 @@ fn legacy_token_migration_with_empty_token_reports_error() {
     )
     .unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err();
+    let err = migrate_legacy_emby_token().unwrap_err().to_string();
     assert!(err.contains("empty"), "error must mention empty token");
     assert!(err.contains("token"), "error must mention 'token' field");
 
@@ -91,7 +91,7 @@ fn failed_new_secret_write_retains_legacy_token() {
     let secrets_path = state_dir().join("secrets");
     std::fs::write(&secrets_path, b"I am a file not a directory").unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err();
+    let err = migrate_legacy_emby_token().unwrap_err().to_string();
     assert!(
         err.contains("migrate"),
         "error must mention migration context"
@@ -127,7 +127,7 @@ fn failed_setup_write_retains_legacy_token() {
     .unwrap();
     std::fs::create_dir(config_path().with_extension("toml.tmp")).unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err();
+    let err = migrate_legacy_emby_token().unwrap_err().to_string();
     assert!(err.contains("setup") && err.contains("config.toml"));
     assert!(legacy.exists());
     assert!(!service_secret_path(ServiceKind::Emby).exists());
@@ -188,7 +188,7 @@ fn setup_only_migration_retains_conflicting_legacy_without_writing_secret() {
     )
     .unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err();
+    let err = migrate_legacy_emby_token().unwrap_err().to_string();
     assert!(err.contains("conflicts"));
     assert!(err.contains("config.toml"));
     assert!(legacy.exists());
@@ -206,7 +206,7 @@ fn secret_only_migration_retains_legacy_without_guessing_setup() {
     )
     .unwrap();
 
-    let err = migrate_legacy_emby_token().unwrap_err();
+    let err = migrate_legacy_emby_token().unwrap_err().to_string();
     assert!(err.contains("no persisted setup"));
     assert!(err.contains("emby.json"));
     assert!(legacy.exists());

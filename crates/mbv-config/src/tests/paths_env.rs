@@ -189,7 +189,9 @@ fn load_last_remote_connection_returns_none_when_no_file_exists() {
 fn save_last_remote_connection_reports_remove_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-save-state-error-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
-    let error = save_last_remote_connection_at(&dir, None).unwrap_err();
+    let error = save_last_remote_connection_at(&dir, None)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("remove"));
     assert!(error.contains(dir.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -199,7 +201,9 @@ fn save_last_remote_connection_reports_remove_failure_with_path() {
 fn load_last_remote_connection_reports_read_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-load-state-error-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
-    let error = load_last_remote_connection_at(&dir).unwrap_err();
+    let error = load_last_remote_connection_at(&dir)
+        .unwrap_err()
+        .to_string();
     assert!(error.starts_with("read "));
     assert!(error.contains(dir.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -214,7 +218,7 @@ fn save_config_settings_reports_rename_failure_with_path() {
     // tmp file alongside it as an orphan.
     let path = dir.join("config.toml");
     std::fs::create_dir_all(&path).unwrap();
-    let error = write_config_text_at(&path, "").unwrap_err();
+    let error = write_config_text_at(&path, "").unwrap_err().to_string();
     assert!(error.contains("rename"));
     assert!(error.contains(dir.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -224,7 +228,9 @@ fn save_config_settings_reports_rename_failure_with_path() {
 fn save_config_settings_reports_read_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-read-config-error-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
-    let error = save_config_settings_at(&Config::default(), &dir).unwrap_err();
+    let error = save_config_settings_at(&Config::default(), &dir)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("read"));
     assert!(error.contains(dir.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -236,7 +242,9 @@ fn save_config_settings_reports_parse_failure_with_path() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("config.toml");
     std::fs::write(&path, "this = [is malformed").unwrap();
-    let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
+    let error = save_config_settings_at(&Config::default(), &path)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("parse"));
     assert!(error.contains(path.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -249,7 +257,9 @@ fn save_config_settings_reports_write_failure_with_path() {
     let path = dir.join("config.toml");
     std::fs::write(&path, "").unwrap();
     std::fs::create_dir(path.with_extension("toml.tmp")).unwrap();
-    let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
+    let error = save_config_settings_at(&Config::default(), &path)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("write"));
     assert!(error.contains(path.with_extension("toml.tmp").to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();

@@ -184,7 +184,7 @@ pub fn replace_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(
     }
     match persist_emby_setup_and_secret(setup, token) {
         Ok(()) => Ok(()),
-        Err(error) => restore_after_failure(ConfigError::lifecycle(error), &snapshot),
+        Err(error) => restore_after_failure(error, &snapshot),
     }
 }
 
