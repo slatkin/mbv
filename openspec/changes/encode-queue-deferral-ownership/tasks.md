@@ -10,7 +10,7 @@ Final gate (end of group 2):
 
 ## 1. Deferral type (design D1)
 
-- [ ] 1.1 Create `src/app/state/queue_deferrals.rs` with `QueueDeferrals`,
+- [x] 1.1 Create `src/app/state/queue_deferrals.rs` with `QueueDeferrals`,
   `SaveDeferral`, `GatedReplacement`, `LocalPlay` and exactly the transitions
   in the design D1 table. Fields stay private to the module, and
   `QueueDeferrals` derives `Default`. Add `#[cfg(test)]` read-only accessors
@@ -18,7 +18,7 @@ Final gate (end of group 2):
   module in `src/app/state.rs` and re-export `QueueDeferrals` the way
   `PendingQueueAction` is re-exported. Verify: `cargo check -p mbv` reports
   errors only at the old field sites (`rg -n "pending_queue_action|pending_queue_replacement|pending_local_play" src --type rust`).
-- [ ] 1.2 In `src/app/state/app_struct.rs`, replace the three fields and their
+- [x] 1.2 In `src/app/state/app_struct.rs`, replace the three fields and their
   doc comments with one `queue_deferrals: QueueDeferrals` field. Its doc
   comment names the module as the only place slot ownership lives. In
   `construct.rs`, initialize it with `QueueDeferrals::default()`. Verify: the
@@ -26,7 +26,7 @@ Final gate (end of group 2):
 
 ## 2. Callers (design D1, D2)
 
-- [ ] 2.1 Writers:
+- [x] 2.1 Writers:
   - `replace_queue_or_prompt` → `defer_for_save_answer`.
   - `request_queue_replacement` → `hold_gated_replacement`. Keep its doc
     comment's reasoning and drop the field names.
@@ -35,7 +35,7 @@ Final gate (end of group 2):
   Make `save_playlist_to_emby` (`dispatch/queue/playlist.rs`) return
   `Option<u64>`: the enqueued `mutation_id`, or `None` on each early return.
   Verify: `cargo check -p mbv` shows no errors in those three files.
-- [ ] 2.2 Readers in `input/confirm_keys.rs`:
+- [x] 2.2 Readers in `input/confirm_keys.rs`:
   - `confirm_discard_or_save_dirty_playlist`: `save_answer_is_play`,
     `[s]` → `bind_to_save(self.save_playlist_to_emby())`, `[d]` →
     `take_on_discard`, and Esc/`[c]` → `cancel_save_answer`.
@@ -57,7 +57,7 @@ Final gate (end of group 2):
 
   Verify: `rg -n "pending_queue_action|pending_queue_replacement|pending_local_play" src crates --type rust -g '!**/tests/**' -g '!*tests.rs'`
   is empty.
-- [ ] 2.3 Tests:
+- [x] 2.3 Tests:
   - Move the existing assertions in `input/confirm_keys/tests.rs`,
     `dispatch/actions/tests/replacement_gate.rs` and
     `dispatch/actions/route_tests/{playback,library_routing}.rs` to the
