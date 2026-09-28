@@ -69,7 +69,8 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
 /// failure (deleted item, task 4.2).
 fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
     client
-        .get_items_by_ids(&[item_id.to_string()])?
+        .get_items_by_ids(&[item_id.to_string()])
+        .map_err(|e| e.to_string())?
         .into_iter()
         .next()
         .ok_or_else(|| format!("Item {item_id} no longer exists"))
@@ -95,7 +96,9 @@ fn build_navigate_landing(
     // The pure table decides first from the item's own back-references; the
     // round trip is paid only when a kind's fallback needs the chain.
     let reveal = resolve_reveal_target(item_type, &item, None).or_else(|_| {
-        let ancestors = client.get_ancestors(item_id)?;
+        let ancestors = client
+            .get_ancestors(item_id)
+            .map_err(|e| e.to_string())?;
         log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
@@ -193,7 +196,7 @@ fn configured_album_ancestors(
     cached_album_index: Option<&AlbumIndex>,
 ) -> Result<Vec<AlbumPathPart>, String> {
     if levels.last().map(String::as_str) != Some("album") {
-        let ancestors = client.get_ancestors(&album.id)?;
+        let ancestors = client.get_ancestors(&album.id).map_err(|e| e.to_string())?;
         let inside = ancestors_inside_library(&ancestors);
         return Ok(inside
             .iter()
@@ -210,15 +213,17 @@ fn configured_album_ancestors(
         return Ok(entry.ancestors.clone());
     }
     let mut fetch = |parent_id: &str, start: usize, limit: usize| {
-        client.get_items_sorted(
-            parent_id,
-            None,
-            false,
-            start,
-            limit,
-            "SortName",
-            "Ascending",
-        )
+        client
+            .get_items_sorted(
+                parent_id,
+                None,
+                false,
+                start,
+                limit,
+                "SortName",
+                "Ascending",
+            )
+            .map_err(|e| e.to_string())
     };
     let entries = build_album_index_with(library_id, levels, &mut fetch)?;
     entries
@@ -243,7 +248,7 @@ fn build_chain_nav_stack(
 ) -> Result<Vec<BrowseLevel>, String> {
     // Drop the last two ancestors (physical library folder + AggregateFolder
     // root); everything before those is navigable content inside the library.
-    let ancestors = client.get_ancestors(&item.id)?;
+    let ancestors = client.get_ancestors(&item.id).map_err(|e| e.to_string())?;
     let inside = ancestors_inside_library(&ancestors);
 
     // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
@@ -262,8 +267,9 @@ fn build_chain_nav_stack(
 
     let mut nav_stack: Vec<BrowseLevel> = Vec::new();
     for (parent_id, target_id) in parents.into_iter().zip(targets) {
-        let (mut items, total_count) =
-            client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")?;
+        let (mut items, total_count) = client
+            .get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")
+            .map_err(|e| e.to_string())?;
         if items.first().is_some_and(|it| it.item_type == "Episode") {
             sort_episodes(&mut items);
         }

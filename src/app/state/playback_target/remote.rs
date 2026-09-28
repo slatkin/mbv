@@ -5,12 +5,18 @@ use mbv_ui_model::ui_util::take_chars;
 impl RemotePlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_transport(&session_id, "PlayPause"));
+        app.do_session_command(move |c| {
+            c.session_transport(&session_id, "PlayPause")
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn stop(&self, app: &mut App) {
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_transport(&session_id, "Stop"));
+        app.do_session_command(move |c| {
+            c.session_transport(&session_id, "Stop")
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
@@ -20,7 +26,10 @@ impl RemotePlaybackTarget {
             .map_or(0, |s| s.position_s);
         let target = App::remote_seek_ticks(pos_s, delta);
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_seek(&session_id, target));
+        app.do_session_command(move |c| {
+            c.session_seek(&session_id, target)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
@@ -62,7 +71,10 @@ impl RemotePlaybackTarget {
             state.audio_index = next;
         }
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_set_audio_index(&session_id, next));
+        app.do_session_command(move |c| {
+            c.session_set_audio_index(&session_id, next)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
@@ -72,7 +84,10 @@ impl RemotePlaybackTarget {
             .map_or(50, |s| s.volume);
         let new_vol = (vol + delta).clamp(0, 100);
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_set_volume(&session_id, new_vol));
+        app.do_session_command(move |c| {
+            c.session_set_volume(&session_id, new_vol)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
@@ -93,7 +108,10 @@ impl RemotePlaybackTarget {
             state.sub_index = next;
         }
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_set_subtitle_index(&session_id, next));
+        app.do_session_command(move |c| {
+            c.session_set_subtitle_index(&session_id, next)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn displayed_volume(app: &App) -> i64 {

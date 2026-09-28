@@ -221,7 +221,7 @@ impl App {
             ) {
                 Ok(items) => items,
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                     return;
                 }
             };
@@ -237,7 +237,7 @@ impl App {
                 ) {
                     Ok((items, _)) => all_items = items,
                     Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e));
+                        let _ = tx.send(LibEvent::Error(e.to_string()));
                         return;
                     }
                 }
@@ -255,7 +255,7 @@ impl App {
                 let ancestors = match client.get_ancestors(&video.id) {
                     Ok(ancestors) => ancestors,
                     Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e));
+                        let _ = tx.send(LibEvent::Error(e.to_string()));
                         return;
                     }
                 };

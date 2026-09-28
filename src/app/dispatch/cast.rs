@@ -402,7 +402,9 @@ fn resolve_emby_cast_item(
         ));
     };
     let profile = build_cast_device_profile(CastSubtitleKind::None);
-    let info = client.get_playback_info_for_cast(&item.id, item.is_audio(), &profile)?;
+    let info = client
+        .get_playback_info_for_cast(&item.id, item.is_audio(), &profile)
+        .map_err(|e| e.to_string())?;
     Ok((
         info.item,
         CastProgressTarget::Emby {

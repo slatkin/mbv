@@ -216,7 +216,7 @@ fn exchange_emby_credentials(
 ) -> Result<mbv_emby::EmbyCredentialExchange, String> {
     client
         .exchange_credentials_bounded(server_url, username, password, Duration::from_secs(10))
-        .map_err(|error| classified_auth_error(&error))
+        .map_err(|error| classified_auth_error(&error.to_string()))
 }
 
 fn commit_emby_setup(

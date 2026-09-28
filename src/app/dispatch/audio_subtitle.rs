@@ -25,7 +25,10 @@ impl App {
         if let Some(ref mut state) = self.connected_session_state {
             state.muted = next;
         }
-        self.do_session_command(move |c| c.session_set_mute(&conn_id, next));
+        self.do_session_command(move |c| {
+            c.session_set_mute(&conn_id, next)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn cycle_audio(&mut self) {
@@ -159,7 +162,10 @@ impl App {
         if let Some(ref mut state) = self.connected_session_state {
             state.sub_index = next;
         }
-        self.do_session_command(move |c| c.session_set_subtitle_index(&conn_id, next));
+        self.do_session_command(move |c| {
+            c.session_set_subtitle_index(&conn_id, next)
+                .map_err(|e| e.to_string())
+        });
     }
 
     pub(in crate::app) fn cycle_sub(&mut self) {

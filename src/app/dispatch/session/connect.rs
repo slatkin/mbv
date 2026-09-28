@@ -55,7 +55,11 @@ impl App {
             return Err("Emby is unavailable".into());
         };
 
-        client.lock().unwrap().get_sessions_unfiltered()
+        client
+            .lock()
+            .unwrap()
+            .get_sessions_unfiltered()
+            .map_err(|e| e.to_string())
     }
 
     pub(in crate::app) fn connect_direct_endpoint(

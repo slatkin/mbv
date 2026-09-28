@@ -158,20 +158,22 @@ impl App {
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let tv_mode = (filter_kind == mbv_ui_model::sort_filter::LetterFilterKind::Tv)
-                        .then(|| {
-                            mbv_ui_model::sort_filter::resolve_tv_content_mode(
-                                saved_level.library_total.unwrap_or_default(),
-                                saved_level.tv_content_mode.as_ref(),
-                            )
-                        });
+                    let tv_mode = restored_tv_content_mode(
+                        filter_kind == mbv_ui_model::sort_filter::LetterFilterKind::Tv,
+                        saved_level.library_total,
+                        saved_level.tv_content_mode.as_ref(),
+                    );
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Latest)) {
-                        let items = client.get_latest_episodes(&saved_level.parent_id, 30)?;
+                        let items = client
+                            .get_latest_episodes(&saved_level.parent_id, 30)
+                            .map_err(|e| e.to_string())?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
-                        let items = client.get_upcoming(&saved_level.parent_id, 30)?;
+                        let items = client
+                            .get_upcoming(&saved_level.parent_id, 30)
+                            .map_err(|e| e.to_string())?;
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
@@ -192,8 +194,8 @@ impl App {
                     let (name_ge, name_lt) = letter_filter
                         .as_ref()
                         .map_or((None, None), |f| (f.name_ge, f.name_lt));
-                    let (items, total_count) =
-                        client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
+                    let (items, total_count) = client
+                        .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                             parent_id: &saved_level.parent_id,
                             item_types: saved_level.item_types.as_deref(),
                             unplayed_only: saved_level.unplayed_only,
@@ -203,11 +205,12 @@ impl App {
                             sort_order: &saved_level.sort_order,
                             name_ge,
                             name_lt,
-                        })?;
+                        })
+                        .map_err(|e| e.to_string())?;
                     let fetched_rows = items.len();
                     if total_count > fetched_rows {
-                        let (items, total_count) =
-                            client.get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
+                        let (items, total_count) = client
+                            .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
                                 parent_id: &saved_level.parent_id,
                                 item_types: saved_level.item_types.as_deref(),
                                 unplayed_only: saved_level.unplayed_only,
@@ -217,7 +220,8 @@ impl App {
                                 sort_order: &saved_level.sort_order,
                                 name_ge,
                                 name_lt,
-                            })?;
+                            })
+                            .map_err(|e| e.to_string())?;
                         let fetched_rows = items.len();
                         Ok((items, total_count, fetched_rows))
                     } else {
@@ -297,7 +301,7 @@ impl App {
                     }));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });
@@ -344,7 +348,7 @@ impl App {
                     }));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });

@@ -174,7 +174,7 @@ impl App {
                     let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoaded(items)));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });
@@ -196,7 +196,7 @@ impl App {
                     let _ = tx.send(LibEvent::Playlist(PlaylistEvent::ListLoaded(items)));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });

@@ -15,7 +15,7 @@ trait TvLatestSource {
 
 impl TvLatestSource for EmbyClient {
     fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        EmbyClient::get_latest_episodes(self, view_id, limit)
+        EmbyClient::get_latest_episodes(self, view_id, limit).map_err(|e| e.to_string())
     }
 }
 
@@ -25,7 +25,7 @@ trait TvUpcomingSource {
 
 impl TvUpcomingSource for EmbyClient {
     fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        EmbyClient::get_upcoming(self, parent_id, limit)
+        EmbyClient::get_upcoming(self, parent_id, limit).map_err(|e| e.to_string())
     }
 }
 
@@ -216,7 +216,7 @@ impl App {
                     ));
                 }
                 Err(error) => {
-                    let _ = tx.send(LibEvent::Error(error));
+                    let _ = tx.send(LibEvent::Error(error.to_string()));
                 }
             }
         });

@@ -8,7 +8,7 @@ impl App {
     pub(in crate::app) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
         let tx = self.channels.search_tx.clone();
         std::thread::spawn(move || {
-            let result = client.search_items(&query, 100);
+            let result = client.search_items(&query, 100).map_err(|e| e.to_string());
             let _ = tx.send((query, result));
         });
     }
@@ -92,15 +92,17 @@ impl App {
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let mut fetch = |parent_id: &str, start: usize, limit: usize| {
-                client.get_items_sorted(
-                    parent_id,
-                    None,
-                    false,
-                    start,
-                    limit,
-                    "SortName",
-                    "Ascending",
-                )
+                client
+                    .get_items_sorted(
+                        parent_id,
+                        None,
+                        false,
+                        start,
+                        limit,
+                        "SortName",
+                        "Ascending",
+                    )
+                    .map_err(|e| e.to_string())
             };
             let result = build_album_index_with(&library_id, &levels, &mut fetch);
             let _ = tx.send(LibEvent::Music(MusicEvent::AlbumIndexBuilt {
@@ -132,7 +134,9 @@ impl App {
         std::thread::spawn(move || {
             let fetch = |parent_id: &str| {
                 let mut call = |id: &str, start: usize, limit: usize| {
-                    client.get_items_sorted(id, None, false, start, limit, "SortName", "Ascending")
+                    client
+                        .get_items_sorted(id, None, false, start, limit, "SortName", "Ascending")
+                        .map_err(|e| e.to_string())
                 };
                 fetch_all_album_index_items(parent_id, &mut call)
             };
@@ -246,7 +250,7 @@ impl App {
                     }));
                 }
                 Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
         });

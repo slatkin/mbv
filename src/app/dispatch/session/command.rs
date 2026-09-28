@@ -14,7 +14,9 @@ impl App {
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
         self.do_session_command(move |client| {
-            client.session_play_items(&id, &item_ids, start_idx, start_ticks)
+            client
+                .session_play_items(&id, &item_ids, start_idx, start_ticks)
+                .map_err(|e| e.to_string())
         });
     }
 
@@ -35,7 +37,7 @@ impl App {
                 let _ = tx.send(SessionEvent::Loaded { sessions });
             }
             Err(e) => {
-                let _ = tx.send(SessionEvent::Error(e));
+                let _ = tx.send(SessionEvent::Error(e.to_string()));
             }
         });
     }
@@ -55,7 +57,10 @@ impl App {
         // Resolve the destination and payload directly from the visible queue.
         let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
-            self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
+            self.do_session_command(move |c| {
+                c.session_transport(&id, fallback_cmd)
+                    .map_err(|e| e.to_string())
+            });
             return;
         };
         let emby_items = self.player_tab.emby_items();
@@ -117,7 +122,7 @@ impl App {
                     let _ = tx.send(SessionEvent::Loaded { sessions });
                 }
                 Err(e) => {
-                    let _ = tx.send(SessionEvent::Error(e));
+                    let _ = tx.send(SessionEvent::Error(e.to_string()));
                 }
             }
         });

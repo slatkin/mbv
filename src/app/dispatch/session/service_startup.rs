@@ -299,12 +299,14 @@ pub(in crate::app) fn start_setup(
     std::thread::spawn(move || {
         let result = (|| {
             let probe = EmbyClient::new(config.clone());
-            let exchange = probe.exchange_credentials_bounded(
-                &server_url,
-                &username,
-                &password,
-                EmbyClient::AUTHENTICATE_HARD_BOUND,
-            )?;
+            let exchange = probe
+                .exchange_credentials_bounded(
+                    &server_url,
+                    &username,
+                    &password,
+                    EmbyClient::AUTHENTICATE_HARD_BOUND,
+                )
+                .map_err(|error| error.to_string())?;
             let setup = EmbySetup::new(&exchange.server_url, &exchange.user_id);
             let mut client = EmbyClient::new(config);
             client.apply_credential_exchange(&exchange);
