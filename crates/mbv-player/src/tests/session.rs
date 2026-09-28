@@ -428,7 +428,7 @@ fn ordinary_stop_marks_stop_report_accepted_not_sent() {
     // Regression test for a code-review finding: the non-shutdown (fast)
     // path in report_stop_now_or_background used to hardcode
     // StopReport::Sent, so progress_report_accepted was always false for
-    // an ordinary stop and mark_progress_sync_pending never fired —
+    // an ordinary stop and record_reported_progress never ran —
     // reopening the stale-overwrite race that pending-sync exists to
     // close. It's still fire-and-forget, but should optimistically mark
     // Accepted; see the call site's comment for why that's the safe

@@ -229,7 +229,7 @@ fn adopted_refresh_merges_positions_with_played_reset_authority(
     assert_eq!(emby.playback_position_ticks, expected_position);
     assert_eq!(emby.played, expected_played);
     assert_eq!(
-        slot.progress_state.local,
+        slot.local_progress(),
         mbv_queue::SlotProgress {
             position_ticks: expected_position,
             played: expected_played,
@@ -286,7 +286,9 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
         1,
     );
     let slot_id = owner.core.queue.slots()[0].slot_id;
-    owner.core.apply_completion_progress(slot_id, 9, true);
+    owner
+        .core
+        .apply_completion_progress(slot_id, 9, true, mbv_queue::StopReportOutcome::Accepted);
 
     let mut refresh_item = item("played", "Video", "Movie");
     refresh_item.playback_position_ticks = 2;

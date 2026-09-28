@@ -8,9 +8,9 @@
 use std::collections::BTreeMap;
 
 use ratatui::style::Color;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::{surface_colors, surface_table, Surface};
+use crate::{Surface, surface_colors, surface_table};
 
 const PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/palette.json");
 

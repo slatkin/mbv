@@ -54,8 +54,7 @@ fn stopped_with_accepted_report_marks_pending_sync_and_clears_active_slot() {
 
     let slot = app.player_tab.queue.slot(slot_id).unwrap();
     assert_eq!(
-        slot.progress_state
-            .pending_sync
+        slot.pending_sync()
             .as_ref()
             .map(|progress| progress.position_ticks),
         Some(600_000_000)

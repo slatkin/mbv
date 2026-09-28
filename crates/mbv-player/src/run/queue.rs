@@ -88,7 +88,7 @@ impl PlaybackRun {
                     stopped,
                 });
             // Fire-and-forget: we can't know synchronously whether Emby accepted
-            // this. Treat it as accepted anyway so mark_progress_sync_pending
+            // this. Treat it as accepted anyway so record_reported_progress
             // still protects the just-saved local position from being overwritten
             // by a queue refresh that lands before the background call completes.
             // If the call *does* fail, the slot's pending_sync just never gets

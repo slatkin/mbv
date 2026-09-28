@@ -334,10 +334,12 @@ impl App {
         };
         let position = observation.position_to_record(&slot.item);
         let queue = self.playback_queue_mut();
-        let _ = queue.queue.apply_progress(slot_id, position, played);
-        if progress_report_accepted {
-            let _ = queue.queue.mark_progress_sync_pending(slot_id);
-        }
+        let _ = queue.queue.record_reported_progress(
+            slot_id,
+            position,
+            played,
+            mbv_queue::StopReportOutcome::from_accepted(progress_report_accepted),
+        );
         queue.clamp_cursor();
         // Persist Feed lifecycle state before any
         // consume/removal changes the queue.
@@ -432,10 +434,12 @@ impl App {
         };
         let position = observation.position_to_record(&slot.item);
         let queue = self.playback_queue_mut();
-        let _ = queue.queue.apply_progress(slot_id, position, played);
-        if progress_report_accepted {
-            let _ = queue.queue.mark_progress_sync_pending(slot_id);
-        }
+        let _ = queue.queue.record_reported_progress(
+            slot_id,
+            position,
+            played,
+            mbv_queue::StopReportOutcome::from_accepted(progress_report_accepted),
+        );
         queue.clamp_cursor();
         // Persist Feed lifecycle state before any consume/removal.
         // TrackCompleted with `played` means EOF; for Feed entries,

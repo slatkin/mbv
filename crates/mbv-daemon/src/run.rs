@@ -12,7 +12,7 @@ use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
-use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
+use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId, StopReportOutcome};
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -51,6 +51,7 @@ pub(super) fn apply_track_completed_observation(
     was_played: bool,
     consume: bool,
     consume_policy: ConsumePolicy,
+    outcome: StopReportOutcome,
 ) -> bool {
     if !playback_run_identity_is_current(run_identity, player) {
         return false;
@@ -64,6 +65,7 @@ pub(super) fn apply_track_completed_observation(
             slot_id,
             observation.position_to_record(&slot.item),
             observation.played(),
+            outcome,
         );
     }
     if owner.core.consume_completed_slot(
@@ -85,6 +87,7 @@ pub(super) fn apply_stopped_observation(
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
     was_played: bool,
+    outcome: StopReportOutcome,
 ) -> Option<bool> {
     if !playback_run_identity_is_current(run_identity, player) {
         return None;
@@ -103,6 +106,7 @@ pub(super) fn apply_stopped_observation(
         slot_id,
         observation.position_to_record(&slot.item),
         observation.played(),
+        outcome,
     );
     Some(true)
 }

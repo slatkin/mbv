@@ -148,7 +148,7 @@ fn a_refresh_that_drops_the_show_pill_resets_to_all() {
 }
 
 #[test]
-fn episode_rows_are_split_rows_with_played_and_in_progress_state() {
+fn episode_rows_are_split_rows_with_played_and_resume_status() {
     let owner = owner();
     let rows = owner.episodes.rows().to_vec();
     let dated = rows
