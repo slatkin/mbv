@@ -11,6 +11,9 @@ use pw::spa::param::audio::{AudioFormat, AudioInfoRaw};
 use pw::spa::param::format::{MediaSubtype, MediaType};
 use pw::spa::pod::Pod;
 
+mod error;
+pub use error::VisualizerError;
+
 const STARTUP_TIMEOUT: Duration = Duration::from_millis(500);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 const SAMPLE_WINDOW_MS: usize = 33;
@@ -81,7 +84,7 @@ impl StereoSampleBuffer {
 
 enum Startup {
     Ready,
-    Failed(String),
+    Failed(VisualizerError),
 }
 
 enum Control {
@@ -93,12 +96,12 @@ struct WorkerData {
     streaming: bool,
     buffer: Arc<Mutex<StereoSampleBuffer>>,
     startup_tx: Option<Sender<Startup>>,
-    failure_tx: Sender<String>,
+    failure_tx: Sender<VisualizerError>,
 }
 
 pub struct PipeWireWorker {
     stop_tx: pw::channel::Sender<Control>,
-    failure_rx: Receiver<String>,
+    failure_rx: Receiver<VisualizerError>,
     buffer: Arc<Mutex<StereoSampleBuffer>>,
     handle: Option<JoinHandle<()>>,
 }
@@ -114,7 +117,7 @@ impl std::fmt::Debug for PipeWireWorker {
 }
 
 impl PipeWireWorker {
-    pub fn start() -> Result<Self, String> {
+    pub fn start() -> Result<Self, VisualizerError> {
         let (stop_tx, stop_rx) = pw::channel::channel();
         let (startup_tx, startup_rx) = mpsc::channel();
         let (failure_tx, failure_rx) = mpsc::channel();
@@ -123,7 +126,7 @@ impl PipeWireWorker {
         let handle = thread::Builder::new()
             .name("mbv-pipewire-visualizer".into())
             .spawn(move || run_worker(stop_rx, startup_tx, failure_tx, worker_buffer))
-            .map_err(|error| format!("failed to start PipeWire worker: {error}"))?;
+            .map_err(VisualizerError::from)?;
 
         match startup_rx.recv_timeout(STARTUP_TIMEOUT) {
             Ok(Startup::Ready) => Ok(Self {
@@ -140,24 +143,24 @@ impl PipeWireWorker {
             Err(error) => {
                 let _ = stop_tx.send(Control::Stop);
                 join_worker(handle);
-                Err(format!("PipeWire startup readiness timed out: {error}"))
+                Err(VisualizerError::from(error))
             }
         }
     }
 
-    pub fn take_latest_window(&self) -> Result<Option<StereoSampleWindow>, String> {
+    pub fn take_latest_window(&self) -> Result<Option<StereoSampleWindow>, VisualizerError> {
         match self.failure_rx.try_recv() {
             Ok(error) => return Err(error),
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
-                return Err("PipeWire worker stopped unexpectedly".into());
+                return Err(VisualizerError::worker_stopped());
             }
         }
 
         match self.buffer.try_lock() {
             Ok(buffer) => Ok(Some(buffer.snapshot())),
             Err(TryLockError::WouldBlock) => Ok(None),
-            Err(TryLockError::Poisoned(_)) => Err("PipeWire sample buffer was poisoned".into()),
+            Err(TryLockError::Poisoned(_)) => Err(VisualizerError::buffer_poisoned()),
         }
     }
 
@@ -211,13 +214,17 @@ fn capture_frame_bytes<'a>(
 /// out of the worker.
 fn try_startup_step<T>(
     startup_tx: &Sender<Startup>,
-    message: &str,
+    message: &'static str,
     step: impl FnOnce() -> Result<T, pw::Error>,
 ) -> Option<T> {
     match step() {
         Ok(value) => Some(value),
         Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!("{message}: {error}")));
+            let _ = startup_tx.send(Startup::Failed(VisualizerError::operation(
+                "visualizer.pipewire_startup",
+                message,
+                error,
+            )));
             None
         }
     }
@@ -226,7 +233,7 @@ fn try_startup_step<T>(
 fn run_worker(
     stop_rx: pw::channel::Receiver<Control>,
     startup_tx: Sender<Startup>,
-    failure_tx: Sender<String>,
+    failure_tx: Sender<VisualizerError>,
     buffer: Arc<Mutex<StereoSampleBuffer>>,
 ) {
     pw::init();
@@ -299,8 +306,10 @@ fn run_worker(
     let listener = match listener {
         Ok(listener) => listener,
         Err(error) => {
-            let _ = startup_error_tx.send(Startup::Failed(format!(
-                "failed to register PipeWire listener: {error}"
+            let _ = startup_error_tx.send(Startup::Failed(VisualizerError::operation(
+                "visualizer.listener_register",
+                "failed to register PipeWire listener",
+                error,
             )));
             return;
         }
@@ -336,10 +345,11 @@ fn handle_stream_state(
         }
         pw::stream::StreamState::Error(error) => {
             let message = format!("PipeWire capture stream failed: {error}");
+            let error = VisualizerError::startup_failed(message);
             if let Some(startup_tx) = data.startup_tx.take() {
-                let _ = startup_tx.send(Startup::Failed(message));
+                let _ = startup_tx.send(Startup::Failed(error));
             } else {
-                let _ = data.failure_tx.send(message);
+                let _ = data.failure_tx.send(error);
             }
             if let Ok(mut buffer) = data.buffer.try_lock() {
                 buffer.clear();
@@ -364,18 +374,32 @@ fn handle_stream_param(
     if id != pw::spa::param::ParamType::Format.as_raw() {
         return;
     }
-    let result = (|| {
+    let result = (|| -> Result<(), VisualizerError> {
         let (media_type, media_subtype) = pw::spa::param::format_utils::parse_format(param)
-            .map_err(|error| format!("failed to parse PipeWire media format: {error}"))?;
+            .map_err(|error| {
+                VisualizerError::operation(
+                    "visualizer.parse_media_format",
+                    "failed to parse PipeWire media format",
+                    error,
+                )
+            })?;
         if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
-            return Err("PipeWire negotiated a non-raw-audio format".to_string());
+            return Err(VisualizerError::startup_failed(
+                "PipeWire negotiated a non-raw-audio format".to_owned(),
+            ));
         }
         let mut format = AudioInfoRaw::new();
-        format
-            .parse(param)
-            .map_err(|error| format!("failed to parse PipeWire audio format: {error}"))?;
+        format.parse(param).map_err(|error| {
+            VisualizerError::operation(
+                "visualizer.parse_audio_format",
+                "failed to parse PipeWire audio format",
+                error,
+            )
+        })?;
         if format.format() != AudioFormat::F32LE || format.channels() != 2 || format.rate() == 0 {
-            return Err(format!("unsupported PipeWire capture format: {format:?}"));
+            return Err(VisualizerError::startup_failed(format!(
+                "unsupported PipeWire capture format: {format:?}"
+            )));
         }
         let mut buffer = data
             .buffer
@@ -390,11 +414,11 @@ fn handle_stream_param(
         }
         Ok(())
     })();
-    if let Err(message) = result {
+    if let Err(error) = result {
         if let Some(startup_tx) = data.startup_tx.take() {
-            let _ = startup_tx.send(Startup::Failed(message));
+            let _ = startup_tx.send(Startup::Failed(error));
         } else {
-            let _ = data.failure_tx.send(message);
+            let _ = data.failure_tx.send(error);
         }
         mainloop.quit();
     }
@@ -433,7 +457,7 @@ fn handle_stream_process(
             if let Ok(mut sample_buffer) = data.buffer.try_lock() {
                 sample_buffer.clear();
             }
-            let _ = data.failure_tx.send(error.into());
+            let _ = data.failure_tx.send(VisualizerError::capture_frame(error));
             mainloop.quit();
         }
     }
@@ -459,16 +483,18 @@ fn connect_capture_stream(
     ) {
         Ok((values, _)) => values.into_inner(),
         Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!(
-                "failed to serialize PipeWire format: {error}"
+            let _ = startup_tx.send(Startup::Failed(VisualizerError::operation(
+                "visualizer.serialize_format",
+                "failed to serialize PipeWire format",
+                error,
             )));
             return false;
         }
     };
     let Some(pod) = Pod::from_bytes(&values) else {
-        let _ = startup_tx.send(Startup::Failed(
+        let _ = startup_tx.send(Startup::Failed(VisualizerError::startup_failed(
             "failed to create PipeWire format pod".into(),
-        ));
+        )));
         return false;
     };
     let mut params = [pod];
@@ -480,8 +506,10 @@ fn connect_capture_stream(
             | pw::stream::StreamFlags::RT_PROCESS,
         &mut params,
     ) {
-        let _ = startup_tx.send(Startup::Failed(format!(
-            "failed to connect PipeWire capture stream: {error}"
+        let _ = startup_tx.send(Startup::Failed(VisualizerError::operation(
+            "visualizer.connect_stream",
+            "failed to connect PipeWire capture stream",
+            error,
         )));
         return false;
     }

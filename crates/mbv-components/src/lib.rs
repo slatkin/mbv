@@ -1,6 +1,9 @@
 //! `TuiRealm` interactive-component contracts: `ComponentId`, `Msg`, `UserEvent`
 //! (design `migrate-tui-to-tuirealm` D3–D5).
 
+mod error;
+pub use error::ComponentsError;
+
 pub mod book_content;
 pub mod confirm;
 pub mod context_menu;

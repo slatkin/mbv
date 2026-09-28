@@ -6,6 +6,8 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::CtrlError;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CtrlHello {
     pub protocol_version: u32,
@@ -46,25 +48,23 @@ impl CtrlHello {
         hello
     }
 
-    pub fn validate_peer(&self) -> Result<(), String> {
+    pub fn validate_peer(&self) -> Result<(), CtrlError> {
         self.compatibility()?;
         self.validate_required_capabilities()
     }
 
-    pub fn compatibility(&self) -> Result<CtrlCompatibility, String> {
+    pub fn compatibility(&self) -> Result<CtrlCompatibility, CtrlError> {
         CtrlCompatibility::for_peer(self.protocol_version)
     }
 
-    fn validate_required_capabilities(&self) -> Result<(), String> {
+    fn validate_required_capabilities(&self) -> Result<(), CtrlError> {
         for required in [
             CTRL_CAP_QUEUE_STATE,
             CTRL_CAP_START_INDEX,
             CTRL_CAP_STATUS_ONLY,
         ] {
             if !self.capabilities.iter().any(|cap| cap == required) {
-                return Err(format!(
-                    "peer missing daemon protocol capability: {required}"
-                ));
+                return Err(CtrlError::missing_capability(required));
             }
         }
         Ok(())
@@ -126,9 +126,9 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
     }
 
-    pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
+    pub fn validate_control_credential(&self, expected: &str) -> Result<(), CtrlError> {
         let Some(presented) = self.control_token.as_deref() else {
-            return Err("invalid Control credential".to_string());
+            return Err(CtrlError::invalid_credential());
         };
         if presented.len() == expected.len()
             && presented
@@ -142,7 +142,7 @@ impl CtrlHello {
         {
             Ok(())
         } else {
-            Err("invalid Control credential".to_string())
+            Err(CtrlError::invalid_credential())
         }
     }
 }
@@ -176,7 +176,7 @@ pub struct CtrlCompatibility {
 }
 
 impl CtrlCompatibility {
-    pub fn for_peer(peer_protocol_version: u32) -> Result<Self, String> {
+    pub fn for_peer(peer_protocol_version: u32) -> Result<Self, CtrlError> {
         match peer_protocol_version {
             CTRL_PROTOCOL_VERSION => Ok(Self {
                 peer_protocol_version,
@@ -193,9 +193,7 @@ impl CtrlCompatibility {
                 },
                 supports_owner_queue_load: false,
             }),
-            _ => Err(format!(
-                "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
-            )),
+            _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }
     }
 

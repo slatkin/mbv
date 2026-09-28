@@ -27,6 +27,7 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::ComponentsError;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use mbv_ui_model::search_sidebar::SearchSidebar;
@@ -90,9 +91,10 @@ impl SearchSidebarComponent {
     pub fn apply_drain(
         &mut self,
         query: &str,
-        result: Result<Vec<mbv_emby_model::EmbyItem>, String>,
+        result: Result<Vec<mbv_emby_model::EmbyItem>, ComponentsError>,
     ) {
-        self.sidebar.apply_drain(query, result);
+        self.sidebar
+            .apply_drain(query, result.map_err(|error| error.to_string()));
     }
 
     /// Handle a keyboard event. Local state changes return `None`; the root
@@ -463,7 +465,10 @@ mod tests {
         let mut comp = SearchSidebarComponent::new();
         comp.sidebar.query = "ab".into();
         comp.sidebar.cursor = 5;
-        comp.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
+        comp.apply_drain(
+            "a",
+            Ok::<_, super::ComponentsError>(vec![make_item("Stale", "Movie")]),
+        );
         assert_eq!(comp.sidebar.cursor, 5);
         assert!(comp.sidebar.results.is_empty());
     }

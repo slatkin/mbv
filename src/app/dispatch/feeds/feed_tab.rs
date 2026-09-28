@@ -127,7 +127,8 @@ impl App {
             let tx = tx.clone();
             let kind = sub.kind;
             std::thread::spawn(move || {
-                let result = fetch_and_parse_entries(&url, kind, &feed_id);
+                let result = fetch_and_parse_entries(&url, kind, &feed_id)
+                    .map_err(|error| error.to_string());
                 let _ = tx.send(FeedTabRefreshResult {
                     feed_id,
                     subscription_index: idx,

@@ -1,6 +1,6 @@
 use super::{
-    Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus, SessionReporter, fs,
-    mpv_err_str,
+    Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerError, PlayerEvent, PlayerStatus,
+    SessionReporter, fs, mpv_err_str,
 };
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -109,41 +109,29 @@ fn symlink_mpv_config_entry(src: &Path, dest: &Path) -> std::io::Result<()> {
     }
 }
 
-fn reset_private_mpv_config_dir(private_dir: &Path) -> Result<(), String> {
+fn reset_private_mpv_config_dir(private_dir: &Path) -> Result<(), PlayerError> {
     match fs::symlink_metadata(private_dir) {
         Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {
-            fs::remove_dir_all(private_dir).map_err(|e| {
-                format!(
-                    "failed to remove private mpv config dir '{}': {e}",
-                    private_dir.display()
-                )
-            })?;
+            fs::remove_dir_all(private_dir)
+                .map_err(|e| PlayerError::remove_directory(private_dir.display().to_string(), e))?;
         }
         Ok(_) => {
-            fs::remove_file(private_dir).map_err(|e| {
-                format!(
-                    "failed to remove private mpv config path '{}': {e}",
-                    private_dir.display()
-                )
-            })?;
+            fs::remove_file(private_dir)
+                .map_err(|e| PlayerError::remove_path(private_dir.display().to_string(), e))?;
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
-            return Err(format!(
-                "failed to inspect private mpv config dir '{}': {e}",
-                private_dir.display()
+            return Err(PlayerError::inspect_directory(
+                private_dir.display().to_string(),
+                e,
             ));
         }
     }
-    fs::create_dir_all(private_dir).map_err(|e| {
-        format!(
-            "failed to create private mpv config dir '{}': {e}",
-            private_dir.display()
-        )
-    })
+    fs::create_dir_all(private_dir)
+        .map_err(|e| PlayerError::create_directory(private_dir.display().to_string(), e))
 }
 
-fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBuf, String> {
+fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBuf, PlayerError> {
     let private_dir = mbv_config::mpv_config_dir();
     reset_private_mpv_config_dir(&private_dir)?;
 
@@ -174,31 +162,27 @@ fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBu
         .map(|dir| dir.join("mpv.conf"))
         .filter(|path| path.exists());
     let conf = sanitized_mpv_conf(user_conf.as_deref(), ipc_path);
-    fs::write(private_dir.join("mpv.conf"), conf).map_err(|e| {
-        format!(
-            "failed to write private mpv.conf in '{}': {e}",
-            private_dir.display()
-        )
-    })?;
+    fs::write(private_dir.join("mpv.conf"), conf)
+        .map_err(|e| PlayerError::write_config(private_dir.display().to_string(), e))?;
 
     Ok(private_dir)
 }
 
 // Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
 // already exist. Refuses to touch a path that exists but isn't a FIFO.
-fn ensure_pipe(path: &str) -> Result<(), String> {
+fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
     use std::os::unix::fs::FileTypeExt;
     match std::fs::metadata(path) {
         Ok(meta) if meta.file_type().is_fifo() => Ok(()),
-        Ok(_) => Err(format!("audio pipe path '{path}' exists and is not a FIFO")),
+        Ok(_) => Err(PlayerError::pipe_not_fifo(path)),
         Err(_) => {
-            let cpath = std::ffi::CString::new(path).map_err(|e| e.to_string())?;
+            let cpath = std::ffi::CString::new(path)?;
             // SAFETY: `cpath` is NUL-terminated and remains alive for the call.
             let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o644) };
             if rc != 0 {
-                Err(format!(
-                    "mkfifo({path}) failed: {}",
-                    std::io::Error::last_os_error()
+                Err(PlayerError::make_pipe(
+                    path,
+                    std::io::Error::last_os_error(),
                 ))
             } else {
                 Ok(())
@@ -292,17 +276,14 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
 /// (mutually exclusive with `audio_device`), else a clocked ALSA device.
 /// Returns whether startup must be pre-paused so the pipewriter's first read
 /// attaches before playback starts.
-fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, String> {
+fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, PlayerError> {
     let armed = if let Some(path) = &config.audio_pipe_path {
         configure_audio_pipe(mpv, path, config)
     } else if let Some(device) = &config.audio_device {
         // Clocked ALSA output: the device identifier alone selects the
         // backend, so `ao` is left to mpv's own negotiation.
         if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
-            return Err(format!(
-                "clocked audio output: failed to set audio-device '{device}': {}",
-                mpv_err_str(&e)
-            ));
+            return Err(PlayerError::set_audio_device(device, e));
         }
         log::info!(target: "player", "clocked audio output: using ALSA device {device}");
         false
@@ -372,7 +353,7 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
     }
 }
 
-pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
+pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError> {
     let ipc_path = mbv_config::mpv_ipc_path();
     let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
     let ipc_existed = Path::new(&ipc_path).exists();
@@ -439,7 +420,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         Err(e) => {
             let msg =
                 init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-            return Err(msg);
+            return Err(PlayerError::mpv_init(msg, e));
         }
     };
 

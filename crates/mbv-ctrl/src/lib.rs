@@ -19,7 +19,9 @@ pub use protocol::{
     QueueLoadRequestId, TransitionSummary, UnifiedQueueSlot, UnifiedQueueStateData, slot_id_to_u64,
 };
 
+mod error;
 mod hello;
+pub use error::CtrlError;
 pub use hello::{CtrlAudiobookshelfCapabilities, CtrlCompatibility, CtrlHello};
 
 pub mod player;
