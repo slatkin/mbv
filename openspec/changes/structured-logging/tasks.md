@@ -16,7 +16,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 - [x] 1.2 Add `applog/spec.rs`: `LogSpec`, `LogSpecError`, `parse`, `Display`
   round-trip, and the target filter (design D3). Verify with the `#[case]` parse tests and
   the filter tests named in design.md "Tests".
-- [ ] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
+- [x] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
   UTC fallback, D7; the old `unsafe` `now_ts` is deleted) and `applog/line.rs` (logfmt line
   formatter, value quoting/escaping, D6 URL/bearer redaction). Verify with the timestamp,
   line and redaction unit tests from design.md, including the unlisted `?password=` and
@@ -64,7 +64,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
   Verify: the rejoin-correlation test from design.md "Tests" passes in the
   `src/tests/loop.rs` harness, and clippy/nextest pass for both crates.
-- [ ] 3.2 Playback session and reporting spans in `mbv-player` (D5):
+- [x] 3.2 Playback session and reporting spans in `mbv-player` (D5):
   - The `playback` span, created per active slot with `slot`, `item` and
     `play_session = Empty`, and `Span::record` when the Emby session id is assigned.
   - The `playback.report` span, following design D5's per-case rule:
@@ -112,7 +112,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   empty in those paths, `mbv-ui-model` no longer lists `log`, and their checks pass.
 - [ ] 4.5 `src/app/dispatch/` (~119 sites). Verify: `rg 'log::' src/app/dispatch` is empty
   and `cargo nextest run -p mbv` passes.
-- [x] 4.6 The rest of `src/app/` (`shell/`, `state/`, `infra/`, ~40 sites). Verify: `rg 'log::' src` is empty, the root crate's `log`
+- [ ] 4.6 The rest of `src/app/` (`shell/`, `state/`, `infra/`, ~40 sites). Verify: `rg 'log::' src` is empty, the root crate's `log`
   dependency is removed, and `cargo nextest run -p mbv` passes.
 
 ## 5. Wrap-up
