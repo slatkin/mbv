@@ -297,7 +297,7 @@ impl Model {
         if let Err(e) =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {
-            tracing::warn!(name: "config.save.failed", target: "config", { error.message = %e }, "config save failed");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
     }
 
@@ -331,7 +331,7 @@ impl Model {
         let cfg = self.app.config.lock().unwrap().clone();
         if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
         {
-            tracing::warn!(name: "config.save.failed", target: "config", { error.message = %e }, "config save failed");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
         if let Ok(content) = self.app.fetch_home() {
             // The commit runs the fetch synchronously (order-sensitive

@@ -1987,6 +1987,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

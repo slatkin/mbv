@@ -76,7 +76,10 @@ impl PlaybackRun {
                 let _ = mpv.set_property("start", "0");
             }
             let title_opt = mpv_title_opt(&item.display_name());
-            tracing::info!(name: "player.load.started", target: "player", { url.path = %url, load_options = ?title_opt }, "loading media with mpv");
+            let path = url::Url::parse(url)
+                .map(|parsed| parsed.path().to_owned())
+                .unwrap_or_default();
+            tracing::info!(name: "player.load.started", target: "player", { url.path = %path, load_options = ?title_opt }, "loading media with mpv");
             if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
                 tracing::warn!(name: "player.load.failed", target: "player", error = %mpv_err_str(&e), load_options = ?title_opt, "mpv loadfile failed");
             }
