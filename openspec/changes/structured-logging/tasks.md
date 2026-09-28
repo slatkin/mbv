@@ -80,7 +80,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
   Verify: the reporter-correlation test from design.md "Tests" passes, and clippy/nextest
   pass for `mbv-player`.
-- [ ] 3.3 HTTP logging in `mbv-net` (D5):
+- [x] 3.3 HTTP logging in `mbv-net` (D5):
   - The `HttpService` enum and `agent_config(service, connect, global)`, which installs
     the middleware.
   - `native_tls_agent` gains the required `service` argument, with variants `Emby`,
