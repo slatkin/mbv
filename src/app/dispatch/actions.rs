@@ -427,9 +427,7 @@ impl App {
                 format!("Requesting playback: {label}"),
                 ToastSeverity::Neutral,
             );
-            self.do_session_command(move |c| {
-                c.session_play(&id, &item_id, start_ticks)
-            });
+            self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
             return;
         }
         if !item.series_id.is_empty() && self.player.always_play_next {

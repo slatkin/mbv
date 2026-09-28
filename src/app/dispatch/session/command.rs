@@ -55,9 +55,7 @@ impl App {
         // Resolve the destination and payload directly from the visible queue.
         let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
-            self.do_session_command(move |c| {
-                c.session_transport(&id, fallback_cmd)
-            });
+            self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
         };
         let emby_items = self.player_tab.emby_items();

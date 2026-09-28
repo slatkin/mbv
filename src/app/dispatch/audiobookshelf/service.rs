@@ -179,9 +179,7 @@ impl App {
         state: Option<&QueueState>,
     ) -> Result<(), mbv_config::ConfigError> {
         match state {
-            Some(state) if !state.items.is_empty() => {
-                mbv_config::save_queue_state(state)
-            }
+            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
             _ => mbv_config::clear_queue_state(),
         }
     }

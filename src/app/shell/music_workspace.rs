@@ -98,7 +98,8 @@ impl Model {
             .validate_grouped_music_landing(&library_id, &nav_stack)
         {
             self.app.pending_track_selection = None;
-            self.app.handle_lib_event(super::LibEvent::Error(error.to_string()));
+            self.app
+                .handle_lib_event(super::LibEvent::Error(error.to_string()));
             return;
         }
         let library_id_lookup = library_id.clone();

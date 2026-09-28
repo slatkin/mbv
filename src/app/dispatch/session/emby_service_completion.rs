@@ -269,7 +269,7 @@ impl App {
                 self.emby_runtime.state = completion.previous_state;
                 if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;
-                    form.error = error;
+                    form.error = error.to_string();
                     form.fields[2].clear();
                 }
                 None

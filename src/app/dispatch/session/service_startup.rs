@@ -282,7 +282,7 @@ pub(in crate::app) struct Startup {
 pub(in crate::app) struct SetupCompletion {
     pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) previous_state: ServiceState,
-    pub(in crate::app) result: Result<Startup, String>,
+    pub(in crate::app) result: Result<Startup, mbv_emby::EmbyError>,
 }
 
 pub(in crate::app) fn start_setup(
@@ -297,20 +297,17 @@ pub(in crate::app) fn start_setup(
     std::thread::spawn(move || {
         let result = (|| {
             let probe = EmbyClient::new(config.clone());
-            let exchange = probe
-                .exchange_credentials_bounded(
-                    &server_url,
-                    &username,
-                    &password,
-                    EmbyClient::AUTHENTICATE_HARD_BOUND,
-                )
-                .map_err(|error| error.to_string())?;
+            let exchange = probe.exchange_credentials_bounded(
+                &server_url,
+                &username,
+                &password,
+                EmbyClient::AUTHENTICATE_HARD_BOUND,
+            )?;
             let setup = EmbySetup::new(&exchange.server_url, &exchange.user_id);
             let mut client = EmbyClient::new(config);
             client.apply_credential_exchange(&exchange);
-            let bootstrap = client
-                .load_startup_data_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND)
-                .map_err(|error| error.to_string())?;
+            let bootstrap =
+                client.load_startup_data_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND)?;
             Ok(Startup {
                 client,
                 bootstrap,

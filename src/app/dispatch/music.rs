@@ -68,7 +68,9 @@ impl App {
         if self.music_levels.is_empty()
             || self.music_levels.last().map(String::as_str) != Some("album")
         {
-            return Err("Could not resolve the configured music album level".to_string().into());
+            return Err("Could not resolve the configured music album level"
+                .to_string()
+                .into());
         }
         if nav_stack.len() != self.music_levels.len()
             || lib.library.collection_type != "music"

@@ -28,10 +28,10 @@ pub fn load_ui_config() -> Result<UiConfig, mbv_config::ConfigError> {
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(UiConfig::default());
     };
-    parse_ui_config(&text).map_err(mbv_config::ConfigError::from)
+    parse_ui_config(&text)
 }
 
-fn parse_ui_config(text: &str) -> Result<UiConfig, toml::de::Error> {
+fn parse_ui_config(text: &str) -> Result<UiConfig, mbv_config::ConfigError> {
     let doc: toml::Value = toml::from_str(text)?;
     let display = doc.get("display");
 

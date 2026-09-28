@@ -65,7 +65,9 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     fn always_fail(
         _endpoint: &mbv_remote_player::DaemonEndpoint,
     ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-        crate::app::test_seams::DaemonRouteConnectOutcome::Failed("connection refused".to_string())
+        crate::app::test_seams::DaemonRouteConnectOutcome::Failed(
+            std::io::Error::other("connection refused").into(),
+        )
     }
 
     let _guard = crate::config::TestStateDirGuard::new();

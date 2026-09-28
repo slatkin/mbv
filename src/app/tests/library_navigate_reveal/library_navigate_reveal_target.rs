@@ -52,7 +52,7 @@ fn reveal_table(
         if chain.is_empty() { None } else { Some(&chain) },
     );
     match expected {
-        Ok(expected) => assert_eq!(got, Ok(expected)),
-        Err(msg) => assert_eq!(got.unwrap_err(), msg),
+        Ok(expected) => assert_eq!(got.unwrap(), expected),
+        Err(msg) => assert_eq!(got.unwrap_err().to_string(), msg),
     }
 }

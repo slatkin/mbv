@@ -67,10 +67,7 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
 
 /// Fetch one item by id; a miss (empty result, server error) is a resolve
 /// failure (deleted item, task 4.2).
-fn fetch_reveal_item(
-    client: &EmbyClient,
-    item_id: &str,
-) -> Result<EmbyItem, mbv_emby::EmbyError> {
+fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, mbv_emby::EmbyError> {
     client
         .get_items_by_ids(&[item_id.to_string()])?
         .into_iter()
@@ -213,16 +210,15 @@ fn configured_album_ancestors(
         return Ok(entry.ancestors.clone());
     }
     let mut fetch = |parent_id: &str, start: usize, limit: usize| {
-        client
-            .get_items_sorted(
-                parent_id,
-                None,
-                false,
-                start,
-                limit,
-                "SortName",
-                "Ascending",
-            )
+        client.get_items_sorted(
+            parent_id,
+            None,
+            false,
+            start,
+            limit,
+            "SortName",
+            "Ascending",
+        )
     };
     let entries = build_album_index_with(library_id, levels, &mut fetch)?;
     entries
@@ -267,9 +263,8 @@ fn build_chain_nav_stack(
 
     let mut nav_stack: Vec<BrowseLevel> = Vec::new();
     for (parent_id, target_id) in parents.into_iter().zip(targets) {
-        let (mut items, total_count) = client
-            .get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")
-            ?;
+        let (mut items, total_count) =
+            client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")?;
         if items.first().is_some_and(|it| it.item_type == "Episode") {
             sort_episodes(&mut items);
         }

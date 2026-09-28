@@ -73,13 +73,16 @@ impl App {
                 artist_id,
                 revision,
                 result,
-            } => self.handle_artist_tracks_fetched(
-                &destination,
-                generation,
-                &artist_id,
-                revision,
-                result,
-            ),
+            } => {
+                let result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_emby::EmbyError> = result;
+                self.handle_artist_tracks_fetched(
+                    &destination,
+                    generation,
+                    &artist_id,
+                    revision,
+                    result,
+                );
+            }
             MusicEvent::ArtistArtworkFetched {
                 destination,
                 generation,

@@ -43,35 +43,37 @@ impl App {
     /// library-route *resolution* itself no longer calls this (#256).
     pub(in crate::app) fn fetch_sessions_blocking(
         &self,
-    ) -> Result<Vec<mbv_emby::SessionInfo>, String> {
+    ) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError> {
         #[cfg(test)]
         if let Some(f) = *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
             let Some(client) = self.emby_client() else {
-                return Err("Emby is unavailable".into());
+                return Err(mbv_emby::EmbyError::from(
+                    mbv_emby::EmbyFailure::unavailable("Emby is unavailable"),
+                ));
             };
             return f(&client.lock().unwrap());
         }
         let Some(client) = self.emby_client() else {
-            return Err("Emby is unavailable".into());
+            return Err(mbv_emby::EmbyError::from(
+                mbv_emby::EmbyFailure::unavailable("Emby is unavailable"),
+            ));
         };
 
-        client
-            .lock()
-            .unwrap()
-            .get_sessions_unfiltered()
-            .map_err(|e| e.to_string())
+        client.lock().unwrap().get_sessions_unfiltered()
     }
 
     pub(in crate::app) fn connect_direct_endpoint(
         endpoint: &mbv_remote_player::DaemonEndpoint,
-    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+    ) -> Result<
+        (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
+        mbv_remote_player::RemotePlayerError,
+    > {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint);
         }
 
         mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
-            .map_err(|error| error.to_string())
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -86,7 +88,10 @@ impl App {
     ///
     fn connect_daemon_route_endpoint(
         endpoint: &mbv_remote_player::DaemonEndpoint,
-    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+    ) -> Result<
+        (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
+        mbv_remote_player::RemotePlayerError,
+    > {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint).into_result();
@@ -97,7 +102,6 @@ impl App {
             "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
         mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
-            .map_err(|error| error.to_string())
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named
@@ -122,18 +126,20 @@ impl App {
     pub(in crate::app) fn try_daemon_route_connect(
         endpoint: &mbv_remote_player::DaemonEndpoint,
         route_label: &str,
-    ) -> Result<(mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+    ) -> Result<
+        (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
+        mbv_remote_player::RemotePlayerError,
+    > {
         log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
         Self::connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
                 log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
             })
-            .map_err(|e| {
+            .inspect_err(|error| {
                 log::warn!(
                     target: "daemon_route",
-                    "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {e}"
+                    "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {error}"
                 );
-                format!("\u{26a0} {route_label} route unreachable, using local playback (mbv.log)")
             })
     }
 
@@ -292,7 +298,12 @@ impl App {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
-                    Err(message) => self.flash(message, ToastSeverity::Warning),
+                    Err(_) => self.flash(
+                        format!(
+                            "\u{26a0} {name} route unreachable, using local playback (mbv.log)"
+                        ),
+                        ToastSeverity::Warning,
+                    ),
                 }
             }
             mbv_config::LastRemoteConnection::DirectSession { device_name } => {

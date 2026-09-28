@@ -172,7 +172,9 @@ impl App {
 
     fn spawn_tv_content<F>(&self, lib_idx: usize, parent_id: String, title: String, build: F)
     where
-        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, mbv_emby::EmbyError> + Send + 'static,
+        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, mbv_emby::EmbyError>
+            + Send
+            + 'static,
     {
         let Some(client) = self.emby_snapshot() else {
             return;

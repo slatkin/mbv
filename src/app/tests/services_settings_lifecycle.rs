@@ -53,7 +53,7 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
                 message: "HTTP 401".into(),
             }),
         },
-        |_| Err("secret store unavailable".into()),
+        |_| Err(std::io::Error::other("secret store unavailable").into()),
     );
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
     assert_eq!(app.player.emby_credentials(), None);

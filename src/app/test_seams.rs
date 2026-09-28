@@ -8,7 +8,7 @@ pub(in crate::app) type DirectConnectFn = fn(
         mbv_remote_player::RemotePlayer,
         mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
-    String,
+    mbv_remote_player::RemotePlayerError,
 >;
 
 pub(in crate::app) static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> =
@@ -17,7 +17,7 @@ pub(in crate::app) static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>
 /// Test seam for local-player preparation. Production construction is still
 /// the ordinary `Player::new` path; tests can inject a construction failure
 /// without creating an mpv handle.
-pub(in crate::app) type LocalPlayerPrepareFn = fn() -> Result<(), String>;
+pub(in crate::app) type LocalPlayerPrepareFn = fn() -> Result<(), std::io::Error>;
 pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlayerPrepareFn>> =
     Mutex::new(None);
 
@@ -34,7 +34,7 @@ pub(in crate::app) enum DaemonRouteConnectOutcome {
         mbv_remote_player::RemotePlayer,
         mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ),
-    Failed(String),
+    Failed(mbv_remote_player::RemotePlayerError),
 }
 
 impl DaemonRouteConnectOutcome {
@@ -45,7 +45,7 @@ impl DaemonRouteConnectOutcome {
             mbv_remote_player::RemotePlayer,
             mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
         ),
-        String,
+        mbv_remote_player::RemotePlayerError,
     > {
         match self {
             Self::Connected(remote, events) => Ok((remote, events)),
@@ -66,7 +66,7 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 // `try_auto_reconnect`'s `DirectSession` lookup (#236) and the F2
 // "Library Routes" device picker (`enter_device_stage`, #256).
 pub(in crate::app) type SessionsLoadFn =
-    fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, String>;
+    fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 
 // Test seam for `App::connect_cast_receiver`'s resolve-and-connect step

@@ -257,21 +257,20 @@ impl super::Model {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let (resolved_url, result) =
-                match mbv_feed::normalize_feed_url(&url).map_err(|error| {
-                    mbv_ui_model::UiModelError::operation(error.to_string())
-                }) {
-                    Ok(resolved_url) => {
-                        let result = require_feed_entries(
-                            mbv_feed::fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
-                                .map_err(|error| {
-                                    mbv_ui_model::UiModelError::operation(error.to_string())
-                                }),
-                        );
-                        (resolved_url, result)
-                    }
-                    Err(error) => (url, Err(error)),
-                };
+            let (resolved_url, result) = match mbv_feed::normalize_feed_url(&url)
+                .map_err(|error| mbv_ui_model::UiModelError::operation(error.to_string()))
+            {
+                Ok(resolved_url) => {
+                    let result = require_feed_entries(
+                        mbv_feed::fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
+                            .map_err(|error| {
+                                mbv_ui_model::UiModelError::operation(error.to_string())
+                            }),
+                    );
+                    (resolved_url, result)
+                }
+                Err(error) => (url, Err(error)),
+            };
             let _ = tx.send(FeedAddResult {
                 id,
                 name,
