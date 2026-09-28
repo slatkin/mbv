@@ -115,6 +115,16 @@ impl DaemonLoop {
         generation: PlaybackGeneration,
         fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     ) -> EventOutcome {
+        // Rejoin rule (design D5): rebuild the intent span from the ids the
+        // resolved event already carries; no `Span` is stored anywhere.
+        let _intent_span = tracing::info_span!(
+            target: "ctrl",
+            "ctrl.intent",
+            client = %client_id,
+            request = %request_id,
+            generation = generation,
+        )
+        .entered();
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             self.owner.intents.invalidate_connection(client_id);
             return EventOutcome::CONTINUE;
@@ -138,7 +148,12 @@ impl DaemonLoop {
                     .unwrap()
                     .send_to_client(client_id, &CtrlEvent::PlaybackIntent(event));
             }
-            log::warn!(target: "daemon", "ctrl play resolution failed: {error}");
+            tracing::warn!(
+                name: "ctrl.intent.failed",
+                target: "daemon",
+                error = %error,
+                "ctrl play resolution failed"
+            );
             return EventOutcome::CONTINUE;
         }
         if let Ok(items_for_intent) = &fetched {

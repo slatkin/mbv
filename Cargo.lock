@@ -1866,8 +1866,11 @@ dependencies = [
  "mbv-player",
  "mbv-queue",
  "mbv-ws",
+ "nix 0.31.3",
  "rstest",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

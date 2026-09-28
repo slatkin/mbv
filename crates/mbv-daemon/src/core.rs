@@ -366,6 +366,7 @@ pub(super) struct DaemonPlayerOwner {
 }
 
 pub(crate) struct PendingIdleQueueLoad {
+    pub(super) client_id: CtrlClientId,
     pub(super) request_id: mbv_ctrl::QueueLoadRequestId,
     pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
     pub(super) cursor: usize,

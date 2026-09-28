@@ -25,7 +25,7 @@ pub(super) fn spawn_item_lookup<F>(
 {
     let tx = tx.clone();
     let lookup_client = client.lock().unwrap().clone();
-    std::thread::spawn(move || {
+    std::thread::spawn(mbv_core::applog::carry_context(move || {
         if let Some(event) = to_event(
             lookup_client
                 .get_items_by_ids(&item_ids)
@@ -33,7 +33,7 @@ pub(super) fn spawn_item_lookup<F>(
         ) {
             let _ = tx.send(event);
         }
-    });
+    }));
 }
 
 /// Plays a resolved-by-id playback intent. Replaces the legacy `PlayItems`
@@ -97,6 +97,16 @@ pub(crate) fn play_resolved_items(
 /// `PlayerCmd` so guarded actions cannot silently fall back to the old,
 /// unacknowledged command path.
 pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl::PlaybackIntent) {
+    // Correlation span (design D5): every line this handler logs carries the
+    // intent's client, request and generation.
+    let _intent_span = tracing::info_span!(
+        target: "ctrl",
+        "ctrl.intent",
+        client = %ctx.client_id,
+        request = %intent.request_id,
+        generation = intent.generation,
+    )
+    .entered();
     let pipe_output = ctx.client.lock().unwrap().config.audio_pipe_enabled;
     let intents = &mut ctx.owner.intents;
     let accepted = intents.accept(ctx.client_id, intent.clone(), pipe_output);

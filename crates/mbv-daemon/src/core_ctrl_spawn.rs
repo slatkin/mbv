@@ -76,6 +76,22 @@ fn send_initial_queue_state(
     }
 }
 
+/// The peer identity for the ctrl connect line (design D5): the Unix peer's
+/// process id from `SO_PEERCRED`, or the TCP peer address. Read before `stream`
+/// moves into the reader thread.
+fn ctrl_peer_identity(stream: &SocketStream) -> String {
+    match stream {
+        SocketStream::Unix(stream) => {
+            nix::sys::socket::getsockopt(stream, nix::sys::socket::sockopt::PeerCredentials)
+                .ok()
+                .map_or_else(|| "unknown".to_string(), |cred| cred.pid().to_string())
+        }
+        SocketStream::Tcp(stream) => stream
+            .peer_addr()
+            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
+    }
+}
+
 pub(crate) fn spawn_ctrl_client(
     stream: SocketStream,
     transport: CtrlTransport,
@@ -86,6 +102,7 @@ pub(crate) fn spawn_ctrl_client(
     shared_queue: SharedQueueState,
     audio_only: bool,
 ) {
+    let peer = ctrl_peer_identity(&stream);
     let Ok(writer_stream) = stream.try_clone() else {
         return;
     };
@@ -148,6 +165,13 @@ pub(crate) fn spawn_ctrl_client(
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+        );
+        tracing::info!(
+            name: "ctrl.client.connected",
+            target: "ctrl",
+            client = %client_id,
+            peer = %peer,
+            "ctrl client connected"
         );
 
         for line in lines {
