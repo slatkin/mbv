@@ -2037,6 +2037,7 @@ name = "mbv-theme"
 version = "0.21.3"
 dependencies = [
  "ratatui",
+ "serde_json",
 ]
 
 [[package]]

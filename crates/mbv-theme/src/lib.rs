@@ -3,6 +3,9 @@ mod surface;
 mod surface_resolve;
 mod surface_table;
 
+#[cfg(test)]
+mod palette_json;
+
 // The closed palette enum (openspec/changes/archive/2026-09-19-palette-enum).
 // The role tier
 // below derives from it; the surface tier follows in the same section.

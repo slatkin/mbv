@@ -126,6 +126,12 @@ macro_rules! declare_surfaces {
         pub enum Surface {
             $($variant),+
         }
+
+        #[cfg(test)]
+        impl Surface {
+            /// Every surface, in declaration order (`docs/palette.json` generator).
+            pub(crate) const ALL: &[Surface] = &[$(Surface::$variant),+];
+        }
     };
 }
 
