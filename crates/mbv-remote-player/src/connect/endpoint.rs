@@ -6,6 +6,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::RemotePlayerError;
 use mbv_net::stream::SocketStream;
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
@@ -66,14 +67,16 @@ pub enum DaemonEndpoint {
 }
 
 impl DaemonEndpoint {
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, crate::RemotePlayerError> {
         let value = value.trim();
         if value.is_empty() || value == "local" {
             return Ok(Self::Local);
         }
         if let Some(path) = value.strip_prefix("unix://") {
             if path.is_empty() {
-                return Err("daemon endpoint unix:// requires a socket path".to_string());
+                return Err(RemotePlayerError::endpoint(
+                    "daemon endpoint unix:// requires a socket path",
+                ));
             }
             return Ok(Self::Unix(PathBuf::from(path)));
         }
@@ -81,17 +84,19 @@ impl DaemonEndpoint {
             return Self::parse_tcp(value);
         }
         if value.contains("://") {
-            return Err(format!(
+            return Err(RemotePlayerError::endpoint(format!(
                 "daemon endpoint scheme is not supported yet: {value} (use local, unix:///path, tcp://127.0.0.1:port, or a plain socket path)"
-            ));
+            )));
         }
         Ok(Self::Unix(PathBuf::from(value)))
     }
 
-    fn parse_tcp(value: &str) -> Result<Self, String> {
+    fn parse_tcp(value: &str) -> Result<Self, crate::RemotePlayerError> {
         let value = value.trim();
         if value.is_empty() {
-            return Err("daemon endpoint tcp:// requires a host and port".to_string());
+            return Err(RemotePlayerError::endpoint(
+                "daemon endpoint tcp:// requires a host and port",
+            ));
         }
 
         let (host, port) = value
@@ -113,7 +118,7 @@ impl DaemonEndpoint {
         Ok(Self::Tcp(SocketAddr::from((ip, port))))
     }
 
-    pub(crate) fn connect_stream(&self) -> Result<SocketStream, String> {
+    pub(crate) fn connect_stream(&self) -> Result<SocketStream, crate::RemotePlayerError> {
         match self {
             Self::Local => {
                 let path = PathBuf::from(mbv_config::control_socket_path());
@@ -122,7 +127,9 @@ impl DaemonEndpoint {
                     match UnixStream::connect(&path) {
                         Ok(stream) => return Ok(SocketStream::Unix(stream)),
                         Err(e) if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT => {
-                            return Err(format!("cannot connect to daemon endpoint {self}: {e}"));
+                            return Err(RemotePlayerError::connection(format!(
+                                "cannot connect to daemon endpoint {self}: {e}"
+                            )));
                         }
                         Err(_) => std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL),
                     }
@@ -130,10 +137,18 @@ impl DaemonEndpoint {
             }
             Self::Unix(path) => UnixStream::connect(path)
                 .map(SocketStream::Unix)
-                .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
+                .map_err(|e| {
+                    RemotePlayerError::connection(format!(
+                        "cannot connect to daemon endpoint {self}: {e}"
+                    ))
+                }),
             Self::Tcp(addr) => TcpStream::connect_timeout(addr, DAEMON_TCP_CONNECT_TIMEOUT)
                 .map(SocketStream::Tcp)
-                .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
+                .map_err(|e| {
+                    RemotePlayerError::connection(format!(
+                        "cannot connect to daemon endpoint {self}: {e}"
+                    ))
+                }),
         }
     }
 

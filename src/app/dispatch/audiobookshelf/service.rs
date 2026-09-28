@@ -50,7 +50,7 @@ impl App {
             mbv_queue::ServiceKind::Audiobookshelf,
             revision,
         ) {
-            self.flash(error, ToastSeverity::Warning);
+            self.flash(error.to_string(), ToastSeverity::Warning);
         }
     }
 

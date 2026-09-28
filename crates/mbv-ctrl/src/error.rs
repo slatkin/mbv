@@ -50,10 +50,3 @@ impl fmt::Display for CtrlError {
 }
 
 impl Error for CtrlError {}
-
-// Older consumers stringify the ctrl handshake error at their boundary.
-impl From<CtrlError> for String {
-    fn from(error: CtrlError) -> Self {
-        error.to_string()
-    }
-}

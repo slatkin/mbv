@@ -71,6 +71,7 @@ impl App {
         }
 
         mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
+            .map_err(|error| error.to_string())
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -96,6 +97,7 @@ impl App {
             "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
         mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
+            .map_err(|error| error.to_string())
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named
