@@ -11,10 +11,10 @@
 //! `hero_header.rs`) instead of in `crates/mbv-render/src/components/`. It resolves
 //! theme roles only and owns no interaction state.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 
 use super::content::{
     HeroContent, PanelHeroImagePaint, PanelListPaintPolicy, Workspace, WorkspaceHeader,
@@ -24,7 +24,7 @@ use super::slots::paint_pill_bar_row;
 use crate::mouse::hit::HitRegions;
 use mbv_render::arrangements::padded_rect;
 use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::{place_media_list_below, PillBarWindow, PANE_PAD_X, PANE_PAD_Y};
+use mbv_render::{PANE_PAD_X, PANE_PAD_Y, PillBarWindow, place_media_list_below};
 use mbv_theme as palette;
 
 /// Blank rows between the header/overview content's painted bottom edge and

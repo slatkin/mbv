@@ -2,10 +2,10 @@
 //! intents, client disconnects, and graceful shutdown.
 
 use super::super::{
+    CtrlClientId, CtrlContext, CtrlSender, DaemonLoop, DaemonOwnerContext, DaemonRole,
     audio_only_rejection, handle_ctrl_for_role, install_daemon_audiobookshelf_context,
     owner_admin_transport_allowed, play_resolved_items, reconcile_packaged_audiobookshelf,
-    reconcile_packaged_emby, reset_slot_jumps, send_to, CtrlClientId, CtrlContext, CtrlSender,
-    DaemonLoop, DaemonOwnerContext, DaemonRole,
+    reconcile_packaged_emby, reset_slot_jumps, send_to,
 };
 use super::EventOutcome;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
@@ -217,10 +217,10 @@ impl DaemonLoop {
     /// deliberate shutdown, and stop the player.
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
         log::info!(target: "daemon", "graceful shutdown: stopping player");
-        if self.role == DaemonRole::Local {
-            if let Err(error) = self.persist_owner_queue() {
-                log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
-            }
+        if self.role == DaemonRole::Local
+            && let Err(error) = self.persist_owner_queue()
+        {
+            log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
         }
         // Announce the deliberate shutdown to every connected client
         // before closing their connections, so they exit cleanly

@@ -1,4 +1,4 @@
-use super::items::{duration_ticks_as_i64, PlaybackTitleParts, QueueItemContentId, QueueItemKind};
+use super::items::{PlaybackTitleParts, QueueItemContentId, QueueItemKind, duration_ticks_as_i64};
 
 // ---------------------------------------------------------------------------
 // AudiobookshelfQueueItem — identity, presentation, duration, progress,

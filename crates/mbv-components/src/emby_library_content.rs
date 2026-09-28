@@ -22,12 +22,12 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 
 use super::inline_search::InlineSearch;
-use super::media_list::{letter_grouped_rows, MediaListCarrier};
+use super::media_list::{MediaListCarrier, letter_grouped_rows};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
-use mbv_render::{effective_sort_str, LetterFilter};
+use mbv_render::{LetterFilter, effective_sort_str};
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_msg::{Msg, ShellRequest};
 

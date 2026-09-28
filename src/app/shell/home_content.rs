@@ -154,10 +154,10 @@ impl Model {
         source: DestinationLatestSource,
     ) {
         self.acknowledged_home_latest_sources.insert(source.clone());
-        if let DestinationLatestSource::Emby(library_id) = source {
-            if let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id) {
-                snapshot.has_new_content = false;
-            }
+        if let DestinationLatestSource::Emby(library_id) = source
+            && let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id)
+        {
+            snapshot.has_new_content = false;
         }
     }
 

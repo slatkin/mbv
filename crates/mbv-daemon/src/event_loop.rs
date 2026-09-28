@@ -1,10 +1,11 @@
 use super::{
-    broadcast_queue_state, cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
-    expire_pending_idle_queue_load, persist_stay_alive_owner_queue, AudiobookshelfOwnerContext,
-    ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole, EmbyOwnerContext, SharedQueueState,
+    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
+    EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
+    cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
+    expire_pending_idle_queue_load, persist_stay_alive_owner_queue,
 };
-use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::CtrlEvent;
+use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
 use std::sync::mpsc;
@@ -177,10 +178,11 @@ impl DaemonLoop {
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 
-        if self.role == DaemonRole::Local && outcome.owner_queue_dirty {
-            if let Err(error) = self.persist_owner_queue() {
-                log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
-            }
+        if self.role == DaemonRole::Local
+            && outcome.owner_queue_dirty
+            && let Err(error) = self.persist_owner_queue()
+        {
+            log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
         }
 
         outcome.flow

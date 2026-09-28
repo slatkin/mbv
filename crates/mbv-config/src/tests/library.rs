@@ -2,8 +2,8 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    config_path, load_config, load_queue_state, parse_config, save_config_settings,
-    save_emby_setup, EmbySetup, FeedKind, TestStateDirGuard,
+    EmbySetup, FeedKind, TestStateDirGuard, config_path, load_config, load_queue_state,
+    parse_config, save_config_settings, save_emby_setup,
 };
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,7 +41,7 @@ fn parse_always_play_next_in_wrong_section_is_ignored() {
 #[test]
 fn load_queue_state_backfills_missing_cursor() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
-    std::env::remove_var("MBV_SYSTEM");
+    crate::remove_test_env_var("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
         SystemTime::now()
@@ -51,7 +51,7 @@ fn load_queue_state_backfills_missing_cursor() {
     ));
     let state_dir = temp.join("mbv");
     std::fs::create_dir_all(&state_dir).unwrap();
-    std::env::set_var("XDG_STATE_HOME", &temp);
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
     std::fs::write(
             state_dir.join("queue_state.json"),
             r#"{"source":{"type":"unknown"},"last_played_item_id":null,"last_played_completed":false,"positions":{}}"#,
@@ -64,7 +64,7 @@ fn load_queue_state_backfills_missing_cursor() {
     assert!(state.items.is_empty());
     assert_eq!(state.cursor, 0);
 
-    std::env::remove_var("XDG_STATE_HOME");
+    crate::remove_test_env_var("XDG_STATE_HOME");
     let _ = std::fs::remove_dir_all(temp);
 }
 
@@ -147,8 +147,8 @@ fn save_config_settings_round_trips_feeds_and_preserves_rest() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &dir);
-    std::env::remove_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
     std::fs::write(
         config_path(),
         r#"
@@ -181,7 +181,7 @@ kind = "video"
     assert_eq!(reparsed.feeds[0].name, "Nova");
     assert_eq!(reparsed.feeds[0].kind, FeedKind::Video);
 
-    std::env::remove_var("XDG_CONFIG_HOME");
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -196,8 +196,8 @@ fn save_config_settings_removes_feeds_key_when_empty() {
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &dir);
-    std::env::remove_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
     std::fs::write(
         config_path(),
         r#"
@@ -224,7 +224,7 @@ url = "https://example.com/feed/"
     assert!(reparsed.feeds.is_empty());
     assert_eq!(reparsed.server_url, "http://localhost:8096");
 
-    std::env::remove_var("XDG_CONFIG_HOME");
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -275,8 +275,8 @@ kind = "audio"
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &dir);
-    std::env::remove_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     save_config_settings(&cfg).unwrap();
 
@@ -297,7 +297,7 @@ kind = "audio"
     assert_eq!(reparsed.feeds.len(), 1);
     assert_eq!(reparsed.feeds[0].name, "Feed A");
 
-    std::env::remove_var("XDG_CONFIG_HOME");
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -328,8 +328,8 @@ consume_audio = true
             .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &dir);
-    std::env::remove_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     save_config_settings(&cfg).unwrap();
 
@@ -355,7 +355,7 @@ consume_audio = true
         Some("tcp://192.168.0.104:47788")
     );
 
-    std::env::remove_var("XDG_CONFIG_HOME");
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -1,6 +1,7 @@
 use std::sync::{
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -11,12 +12,13 @@ use std::{
 };
 
 use libmpv2::{
+    EndFileReason, Format, Mpv,
     events::{Event, PropertyData},
-    mpv_end_file_reason, EndFileReason, Format, Mpv,
+    mpv_end_file_reason,
 };
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_emby::EmbyClient;
-use mbv_emby_model::{seconds_to_ticks, ticks_to_seconds, EmbyItem, TICKS_PER_SECOND};
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seconds};
 #[cfg(test)]
 use mbv_queue::QueueMutationResult;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
@@ -270,8 +272,8 @@ mod sources;
 pub use sources::*;
 mod runtime;
 pub(crate) use runtime::{
-    handle_intro, init_mpv, init_volume, observe_properties, shift_index_for_move,
-    spawn_progress_reporter, MpvRunConfig, ProgressGuard,
+    MpvRunConfig, ProgressGuard, handle_intro, init_mpv, init_volume, observe_properties,
+    shift_index_for_move, spawn_progress_reporter,
 };
 mod report_worker;
 use report_worker::{ReportJob, SessionReporter};
@@ -283,12 +285,13 @@ pub(crate) use reporting::{
 mod run;
 #[cfg(test)]
 pub(crate) use run::{
-    active_item_state, advance_decision, is_clocked_audio_error, is_superseded_jump_end_file,
-    provider_lifecycle_close_pos, queue_next_up_decision, reject_stale_jump, resolve_jump_target,
-    seek_decision, standalone_next_up_decision, volume_decision, AdvanceDecisionInput,
-    CompletedMedia, Drained, FinishReason, NextUp, NextUpDecision, NextUpFire, StopReport,
+    AdvanceDecisionInput, CompletedMedia, Drained, FinishReason, NextUp, NextUpDecision,
+    NextUpFire, StopReport, active_item_state, advance_decision, is_clocked_audio_error,
+    is_superseded_jump_end_file, provider_lifecycle_close_pos, queue_next_up_decision,
+    reject_stale_jump, resolve_jump_target, seek_decision, standalone_next_up_decision,
+    volume_decision,
 };
-pub(crate) use run::{mpv_url_for_queue_item, IntroState, PlaybackOrigin, PlaybackRun, RunInit};
+pub(crate) use run::{IntroState, PlaybackOrigin, PlaybackRun, RunInit, mpv_url_for_queue_item};
 // `run/` keeps the hot-loop files physically grouped while the controller and
 // submission concerns remain sibling modules.
 mod controller;

@@ -1,9 +1,9 @@
 use super::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 use crate::app::{BrowseEvent, MusicEvent};
+use mbv_components::SearchPool;
 use mbv_components::inline_search::InlineSearchHost;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_components::SearchPool;
 use mbv_ui_msg::ComponentId;
 
 impl Model {

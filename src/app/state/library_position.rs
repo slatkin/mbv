@@ -140,18 +140,18 @@ impl App {
     }
 
     fn normalize_saved_tv_mode(saved: Option<&mut mbv_queue::LibraryPosition>) {
-        if let Some(position) = saved {
-            if let Some(root) = position.levels.first_mut() {
-                let mode = mbv_ui_model::sort_filter::resolve_tv_content_mode(
-                    root.library_total.unwrap_or_default(),
-                    root.tv_content_mode.as_ref(),
-                );
-                root.letter_filter_index = match mode {
-                    mbv_queue::TvContentMode::Range(index) => Some(index),
-                    _ => None,
-                };
-                root.tv_content_mode = Some(mode);
-            }
+        if let Some(position) = saved
+            && let Some(root) = position.levels.first_mut()
+        {
+            let mode = mbv_ui_model::sort_filter::resolve_tv_content_mode(
+                root.library_total.unwrap_or_default(),
+                root.tv_content_mode.as_ref(),
+            );
+            root.letter_filter_index = match mode {
+                mbv_queue::TvContentMode::Range(index) => Some(index),
+                _ => None,
+            };
+            root.tv_content_mode = Some(mode);
         }
     }
 
@@ -159,13 +159,13 @@ impl App {
         if current_is_none {
             self.ensure_lib_loaded_for(lib_idx);
         } else if self.is_feed_home_video_library(lib_idx) {
-            if let Some(lib) = self.libs.get_mut(lib_idx) {
-                if lib.feed_home_video.is_none() {
-                    lib.feed_home_video = Some(FeedHomeVideoState {
-                        loading: true,
-                        ..FeedHomeVideoState::default()
-                    });
-                }
+            if let Some(lib) = self.libs.get_mut(lib_idx)
+                && lib.feed_home_video.is_none()
+            {
+                lib.feed_home_video = Some(FeedHomeVideoState {
+                    loading: true,
+                    ..FeedHomeVideoState::default()
+                });
             }
             self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         }

@@ -109,7 +109,7 @@ impl CastPlaybackTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::state::types::cast::{spawn_fake_cast_worker, FakeCastTransport};
+    use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
     use crate::app::tests::make_app_stub;
     use std::sync::{Arc, Mutex};
 
@@ -194,11 +194,13 @@ mod tests {
             "set_muted(true)",
         );
         assert!(CastPlaybackTarget::displayed_mute(&app));
-        assert!(calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|c| c.starts_with("set_muted(true)")));
+        assert!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("set_muted(true)"))
+        );
     }
 
     #[test]
@@ -208,11 +210,13 @@ mod tests {
         CastPlaybackTarget::adjust_volume(&mut app, 10);
         wait_for_cast_call(&calls, |c| c.starts_with("set_volume("), "set_volume(");
         assert_eq!(CastPlaybackTarget::displayed_volume(&app), 60);
-        assert!(calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|c| c.starts_with("set_volume(")));
+        assert!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("set_volume("))
+        );
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use mbv_emby::EmbyClient;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
-use crate::app::state::playback::HomeContent;
 use crate::app::App;
+use crate::app::state::playback::HomeContent;
 
 impl App {
     pub(in crate::app) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
@@ -103,7 +103,9 @@ impl App {
                         .update_emby_credentials(String::new(), String::new());
                     let deletion = delete_secret(mbv_queue::ServiceKind::Emby);
                     let message = match deletion {
-                        Ok(()) => format!("Emby rejected its saved credential: {error}; set up Emby again"),
+                        Ok(()) => format!(
+                            "Emby rejected its saved credential: {error}; set up Emby again"
+                        ),
                         Err(delete_error) => format!(
                             "Emby rejected its saved credential: {error}; could not remove the saved secret ({delete_error}); set up Emby again"
                         ),

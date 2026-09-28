@@ -92,10 +92,10 @@ fn repeated_next_intent_coalesces_while_relative_transition_is_unsettled() {
     // already-queued events without ever blocking on recv.
     let mut state = None;
     while let Ok(outbound) = client_rx.try_recv() {
-        if let CtrlOutbound::Event(json) = outbound {
-            if let CtrlEvent::UnifiedQueueState(s) = serde_json::from_str(&json).unwrap() {
-                state = Some(s);
-            }
+        if let CtrlOutbound::Event(json) = outbound
+            && let CtrlEvent::UnifiedQueueState(s) = serde_json::from_str(&json).unwrap()
+        {
+            state = Some(s);
         }
     }
     let state = state.expect("a UnifiedQueueState snapshot was broadcast");

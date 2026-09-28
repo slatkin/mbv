@@ -2,10 +2,10 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::active_item_state;
 use super::{
-    end_file_stop_report_context, ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence,
-    IntroState, ItemLifecycleState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource,
-    ProgressGuard, QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport,
-    StopReportContext,
+    ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence, IntroState,
+    ItemLifecycleState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
+    QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
+    end_file_stop_report_context,
 };
 use crate::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
@@ -46,11 +46,11 @@ impl PlaybackRun {
     }
 
     fn report_stopped_for_current_context(&self) -> bool {
-        if let Some(timeout) = *self.shutdown_report_timeout.lock().unwrap() {
-            self.reporter
-                .report_stopped_for_shutdown(self.last_valid_pos, timeout)
-        } else {
-            self.reporter.report_stopped(self.last_valid_pos)
+        match *self.shutdown_report_timeout.lock().unwrap() {
+            Some(timeout) => self
+                .reporter
+                .report_stopped_for_shutdown(self.last_valid_pos, timeout),
+            _ => self.reporter.report_stopped(self.last_valid_pos),
         }
     }
 

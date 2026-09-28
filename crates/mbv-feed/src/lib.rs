@@ -122,15 +122,15 @@ pub fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
         }
     }
 
-    if items.is_empty() {
-        if let Some(start) = body.find("<entry>") {
-            let rest = &body[start..];
-            for entry_match in rest.split("<entry>").skip(1) {
-                let title = extract_tag(entry_match, "title");
-                let link = extract_atom_link(entry_match);
-                if let Some(title) = title {
-                    items.push(IdleFeedItem { title, link });
-                }
+    if items.is_empty()
+        && let Some(start) = body.find("<entry>")
+    {
+        let rest = &body[start..];
+        for entry_match in rest.split("<entry>").skip(1) {
+            let title = extract_tag(entry_match, "title");
+            let link = extract_atom_link(entry_match);
+            if let Some(title) = title {
+                items.push(IdleFeedItem { title, link });
             }
         }
     }

@@ -3,7 +3,7 @@
 use super::support::*;
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
-    resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
+    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
@@ -34,7 +34,7 @@ fn playback_gating_esc_falls_through_to_consumed_leaf() {
     );
     assert_eq!(out.len(), 1);
     assert!(
-        matches!(&out[0], Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryBack))
+        matches!(&out[0], Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryBack))
     );
 }
 #[test]

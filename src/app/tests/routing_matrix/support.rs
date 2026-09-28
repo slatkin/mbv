@@ -24,7 +24,7 @@
 //! candidate resolves as `Deferred`.
 
 use crate::app::input::router::{
-    resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
+    RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

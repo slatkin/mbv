@@ -17,10 +17,10 @@ struct ListeningTime {
 
 impl ListeningTime {
     fn observe(&mut self, now: std::time::Instant, playing: bool) {
-        if let Some(previous) = self.last_observed {
-            if self.playing {
-                self.accumulated += now.saturating_duration_since(previous).as_secs_f64();
-            }
+        if let Some(previous) = self.last_observed
+            && self.playing
+        {
+            self.accumulated += now.saturating_duration_since(previous).as_secs_f64();
         }
         self.last_observed = Some(now);
         self.playing = playing;

@@ -2,10 +2,9 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    clear_control_credential_result, clear_service_secret, control_credential_path,
-    load_control_credential, load_or_create_control_credential, load_service_secret,
-    save_control_credential, save_service_secret, service_secret_path, ServiceKind,
-    TestStateDirGuard,
+    ServiceKind, TestStateDirGuard, clear_control_credential_result, clear_service_secret,
+    control_credential_path, load_control_credential, load_or_create_control_credential,
+    load_service_secret, save_control_credential, save_service_secret, service_secret_path,
 };
 #[cfg(all(test, unix))]
 use std::os::unix::fs::PermissionsExt;
@@ -70,8 +69,8 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     let old_state_home = std::env::var_os("XDG_STATE_HOME");
     let old_system = std::env::var_os("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!("mbv-control-race-{}", uuid::Uuid::new_v4()));
-    std::env::set_var("XDG_STATE_HOME", &temp);
-    std::env::remove_var("MBV_SYSTEM");
+    crate::set_test_env_var("XDG_STATE_HOME", &temp);
+    crate::remove_test_env_var("MBV_SYSTEM");
 
     let start = std::sync::Arc::new(std::sync::Barrier::new(3));
     let workers: Vec<_> = (0..2)
@@ -100,12 +99,12 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     clear_control_credential_result().unwrap();
     let _ = std::fs::remove_dir_all(&temp);
     match old_state_home {
-        Some(value) => std::env::set_var("XDG_STATE_HOME", value),
-        None => std::env::remove_var("XDG_STATE_HOME"),
+        Some(value) => crate::set_test_env_var("XDG_STATE_HOME", value),
+        None => crate::remove_test_env_var("XDG_STATE_HOME"),
     }
     match old_system {
-        Some(value) => std::env::set_var("MBV_SYSTEM", value),
-        None => std::env::remove_var("MBV_SYSTEM"),
+        Some(value) => crate::set_test_env_var("MBV_SYSTEM", value),
+        None => crate::remove_test_env_var("MBV_SYSTEM"),
     }
 }
 

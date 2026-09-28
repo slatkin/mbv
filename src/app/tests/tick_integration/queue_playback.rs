@@ -2,9 +2,9 @@
 //! its own retained geometry, in the layouts the panel paints it: `both` and
 //! mini-view `queue-only`. A collapsed (idle) panel's rows resolve nothing.
 
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::tests::make_app_stub;
@@ -130,10 +130,12 @@ mod strip_hits {
         terminal
             .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
             .unwrap();
-        assert!(!harness
-            .model()
-            .application
-            .mounted(&ComponentId::LibraryPlaybackPanel));
+        assert!(
+            !harness
+                .model()
+                .application
+                .mounted(&ComponentId::LibraryPlaybackPanel)
+        );
         (harness, strip)
     }
 

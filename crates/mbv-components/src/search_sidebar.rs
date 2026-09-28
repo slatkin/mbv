@@ -19,8 +19,8 @@
 
 use std::time::{Duration, Instant};
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};

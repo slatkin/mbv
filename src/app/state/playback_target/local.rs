@@ -1,9 +1,9 @@
 use super::LocalPlaybackTarget;
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
-use mbv_ctrl::player::PlayerCommand;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_ctrl::Direction;
-use mbv_render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
+use mbv_ctrl::player::PlayerCommand;
+use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
@@ -106,12 +106,12 @@ impl LocalPlaybackTarget {
             app.pre_mute_volume = Some(app.ui_volume);
             app.player.send_command(PlayerCommand::SetVolume(0));
             app.ui_volume = 0;
-        } else if current_id == 0 {
-            if let Some(v) = app.pre_mute_volume.take() {
-                app.player
-                    .send_command(PlayerCommand::SetVolume(i64::from(v)));
-                app.ui_volume = v;
-            }
+        } else if current_id == 0
+            && let Some(v) = app.pre_mute_volume.take()
+        {
+            app.player
+                .send_command(PlayerCommand::SetVolume(i64::from(v)));
+            app.ui_volume = v;
         }
         app.player.send_command(PlayerCommand::SetAudio(next_id));
     }
@@ -154,11 +154,7 @@ impl LocalPlaybackTarget {
     pub(in crate::app) fn displayed_volume(app: &App) -> i64 {
         let s = app.player.status.lock().unwrap();
         if s.active {
-            if s.muted {
-                0
-            } else {
-                s.volume
-            }
+            if s.muted { 0 } else { s.volume }
         } else if app.mute_on {
             // Idle mute (`m` key or persisted pref): read 0 so the volume
             // indicator agrees with the mute pill instead of showing the

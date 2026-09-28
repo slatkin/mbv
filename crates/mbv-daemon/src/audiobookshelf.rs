@@ -1,5 +1,5 @@
 use super::core::{
-    broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress, DaemonEvent,
+    DaemonEvent, broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress,
 };
 use super::{AudiobookshelfOwnerContext, ClientRegistry};
 use mbv_player::Player;

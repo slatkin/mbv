@@ -25,8 +25,8 @@
 //! several words (`vu` for "Velvet Underground") no longer matches, because
 //! those letters live in two words. Words are the unit; that is the point.
 
-pub use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+pub use fuzzy_matcher::skim::SkimMatcherV2;
 
 /// Scores `text` against `query` by matching every word of `query` inside a
 /// single word of `text`, in order, or `None` when that is impossible.

@@ -9,8 +9,8 @@
 //! component owns its rect and hit test, replacing the old
 //! `layout.context_menu_rect` global).
 
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 #[cfg(test)]

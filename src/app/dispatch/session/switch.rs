@@ -369,6 +369,21 @@ impl App {
         self.execute_pending_queue_action(action);
     }
 
+    fn strip_local_playback_claim(status: &str) -> String {
+        // The generic message from try_daemon_route_connect claims "using local
+        // playback" but that is wrong here: there is no suspended local player
+        // and the Local daemon is unreachable, so local playback is not actually
+        // available. Strip any such claim from the route-failure message that
+        // was threaded through as `status` (the double-failure path from
+        // `apply_route_for_playback`), and always surface that the Local daemon
+        // is unavailable.
+        if status.contains("using local playback") {
+            status.replace("using local playback", "local daemon unavailable")
+        } else {
+            format!("{status}; local daemon unavailable")
+        }
+    }
+
     pub(in crate::app) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
         log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
@@ -420,20 +435,7 @@ impl App {
                     reconnected_local_daemon = Some((initial_tab, remote_queue_source));
                 }
                 Err(_message) => {
-                    // The generic message from try_daemon_route_connect
-                    // claims "using local playback" but that is wrong here:
-                    // there is no suspended local player and the Local
-                    // daemon is unreachable, so local playback is not
-                    // actually available. Strip any such claim from the
-                    // route-failure message that was threaded through as
-                    // `status` (the double-failure path from
-                    // `apply_route_for_playback`), and always surface that
-                    // the Local daemon is unavailable.
-                    if status.contains("using local playback") {
-                        status = status.replace("using local playback", "local daemon unavailable");
-                    } else {
-                        status = format!("{status}; local daemon unavailable");
-                    }
+                    status = Self::strip_local_playback_claim(&status);
                 }
             }
         }
@@ -501,22 +503,22 @@ impl App {
         // strand the connection on the plain `AttachedSession` path with no
         // queue management. Only a genuinely different remote target
         // should skip this.
-        if self.player_owner_is_on_this_machine() {
-            if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                match Self::connect_direct_endpoint(&endpoint) {
-                    Ok((remote, remote_rx)) => {
-                        self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
-                        return;
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            target: "sessions",
-                            "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
-                            sess.device_name,
-                            e
-                        );
-                        direct_upgrade_error = Some(e);
-                    }
+        if self.player_owner_is_on_this_machine()
+            && let Some(endpoint) = self.session_direct_endpoint(sess)
+        {
+            match Self::connect_direct_endpoint(&endpoint) {
+                Ok((remote, remote_rx)) => {
+                    self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
+                    return;
+                }
+                Err(e) => {
+                    log::warn!(
+                        target: "sessions",
+                        "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
+                        sess.device_name,
+                        e
+                    );
+                    direct_upgrade_error = Some(e);
                 }
             }
         }

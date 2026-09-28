@@ -341,11 +341,7 @@ fn revealed_parts(
     row_selected: bool,
 ) -> &[(String, Color)] {
     let hidden = title_reveal == MediaListTitleReveal::OnSelection && !row_selected;
-    if hidden {
-        &parts[..1]
-    } else {
-        parts
-    }
+    if hidden { &parts[..1] } else { parts }
 }
 
 fn title_spans(

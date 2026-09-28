@@ -1,6 +1,6 @@
 use crate::app::AudiobookshelfEvent;
 use mbv_audiobookshelf::AudiobookshelfClient;
-use mbv_config::{load_service_secret, EmbySetup};
+use mbv_config::{EmbySetup, load_service_secret};
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_emby::EmbyClient;
 use mbv_emby::{EmbyFailure, EmbyFailureClass};

@@ -202,7 +202,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     assert!(matches!(
         move_request,
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
-            hit: mbv_ui_msg::TvHit::SeriesRow(ref target)
+            hit: mbv_ui_msg::TvHit::SeriesRow(target)
         } if target == "movie-second")));
     model
         .app

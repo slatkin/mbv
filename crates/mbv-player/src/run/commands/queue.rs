@@ -1,6 +1,6 @@
 use super::{
-    mpv_err_str, mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
-    ExecSlot, Mpv, PlaybackRun, PlayerEvent, QueueSlotId,
+    ExecSlot, Mpv, PlaybackRun, PlayerEvent, QueueSlotId, mpv_err_str, mpv_load_opts,
+    mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
 };
 use crate::run::ForcedJump;
 

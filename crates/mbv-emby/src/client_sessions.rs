@@ -1,4 +1,4 @@
-use super::{parse_item, parse_session_media_info, EmbyClient, SessionInfo};
+use super::{EmbyClient, SessionInfo, parse_item, parse_session_media_info};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_ids::ItemId;
 use serde_json::Value;

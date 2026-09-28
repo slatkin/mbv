@@ -8,14 +8,14 @@
 use super::*;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::{LibraryTab, PanelFocus};
-use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_components::library_panel::LibraryPanel;
+use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_msg::AlbumCursorKind;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use tuirealm::component::Component;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 

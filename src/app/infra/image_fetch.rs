@@ -123,10 +123,10 @@ impl App {
             artwork.painted_shape() == mbv_components::library_panel::ArtworkShape::Landscape;
         if !landscape {
             // Drop any stale cover crop so the plain fit protocol rebuilds.
-            if let Some(entry) = self.images.image_mut(&cache_key) {
-                if entry.cover_box.take().is_some() {
-                    entry.protocols.clear();
-                }
+            if let Some(entry) = self.images.image_mut(&cache_key)
+                && entry.cover_box.take().is_some()
+            {
+                entry.protocols.clear();
             }
         } else if mbv_render::wide_hero_fits(panel_area) {
             if let Some(panes) = mbv_render::arrangements::library::wide_library_panes(

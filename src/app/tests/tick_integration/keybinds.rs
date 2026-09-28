@@ -75,10 +75,12 @@ fn configured_rebind_fires_through_tick() {
         RouterOutcome::FallThrough,
         "the declared default of a rebound action is inert"
     );
-    assert!(!harness
-        .model()
-        .application
-        .mounted(&mbv_ui_msg::ComponentId::Overlay(OverlayId::Help)));
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Overlay(OverlayId::Help))
+    );
 }
 
 /// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set; the default

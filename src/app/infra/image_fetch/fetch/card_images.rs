@@ -1,6 +1,6 @@
 use super::{
-    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, App, ImageFetchReq,
-    ImageSource, Instant, MAX_IMAGE_FETCHES, NAV_IMAGE_FETCH_IDLE_DELAY,
+    App, ImageFetchReq, ImageSource, Instant, MAX_IMAGE_FETCHES, NAV_IMAGE_FETCH_IDLE_DELAY,
+    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key,
 };
 
 impl App {

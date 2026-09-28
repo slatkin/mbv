@@ -19,12 +19,14 @@ fn filter_escape_closes_search_and_tree_navigation_returns_selection() {
     );
     assert!(!owner.inline_search.is_active());
 
-    assert!(owner
-        .on_filter_key(&KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
+    assert!(
+        owner
+            .on_filter_key(&KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            })
+            .is_some()
+    );
 }
 
 #[test]

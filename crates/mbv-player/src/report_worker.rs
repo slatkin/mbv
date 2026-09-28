@@ -3,8 +3,9 @@ use mbv_emby::EmbyClient;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc,
 };
 use std::thread;
 use std::time::Duration;
@@ -68,10 +69,10 @@ fn execute_stopped_report(data: StoppedReportData) {
         pos,
         runtime_ticks,
     } = data;
-    if let Some(ref tx) = ws_tx {
-        if tx.is_connected() {
-            let _ = tx.flush(Duration::from_secs(1));
-        }
+    if let Some(ref tx) = ws_tx
+        && tx.is_connected()
+    {
+        let _ = tx.flush(Duration::from_secs(1));
     }
     log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
         last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
@@ -262,11 +263,11 @@ impl SessionReporter {
             session_id: sid,
             event_name: event_name.to_string(),
         };
-        if let Some(ref tx) = self.ws_tx {
-            if tx.is_connected() {
-                self.client.report_progress_ws(&report, tx);
-                return;
-            }
+        if let Some(ref tx) = self.ws_tx
+            && tx.is_connected()
+        {
+            self.client.report_progress_ws(&report, tx);
+            return;
         }
         self.client.report_progress_http(&report);
     }

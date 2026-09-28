@@ -4,11 +4,11 @@ use mbv_queue::FeedKind;
 use mbv_theme as palette;
 use mbv_ui_model::feeds_manage::{FeedFormField, FeedsManageStage};
 use mbv_ui_model::ui_util::trunc_str;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 #[derive(Debug)]
 pub struct FeedsManageRenderModel<'a> {

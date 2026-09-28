@@ -4,10 +4,10 @@ use tuirealm::event::{Key, KeyEvent};
 
 use super::EmbyLibraryContent;
 use crate::inline_search::{InlineSearch, InlineSearchHost};
+use crate::library_panel::HeroContentData;
 use crate::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
 use crate::library_panel::hero::hero_content_emby;
 use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
-use crate::library_panel::HeroContentData;
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_render::components::tv_wide::HeroImageState;

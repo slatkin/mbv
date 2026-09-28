@@ -11,13 +11,13 @@ use mbv_audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
-use mbv_emby_model::{saturating_i64_from_f64, ticks_to_seconds, TICKS_PER_SECOND_F64};
+use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_seconds};
 use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
 
+use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
 use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
-use super::library_panel::HeroContentData;
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
@@ -25,8 +25,8 @@ use mbv_render::components::media_list::{
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::current_time_secs;
 use mbv_ui_model::audiobookshelf_browse::{
-    podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
-    PodcastDisplayRow,
+    AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,
+    podcast_display_rows,
 };
 use mbv_ui_model::ui_util::{fmt_publish_date_short, trunc_str};
 use mbv_ui_msg::{
@@ -355,11 +355,7 @@ impl PodcastContent {
         let count = 1 + STATE_PILL_COUNT + self.state.shows.len();
         let current = self.active_pill_index().unwrap_or(0);
         let next = if delta < 0 {
-            if current == 0 {
-                count - 1
-            } else {
-                current - 1
-            }
+            if current == 0 { count - 1 } else { current - 1 }
         } else {
             (current + 1) % count
         };

@@ -1,7 +1,7 @@
 //! Interactive Component for a nested Settings Multiselect popup.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
@@ -10,7 +10,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use mbv_render::{render_multiselect_content, MultiSelectRenderModel};
+use mbv_render::{MultiSelectRenderModel, render_multiselect_content};
 use mbv_ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg};

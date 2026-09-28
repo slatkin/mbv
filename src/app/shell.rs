@@ -2,12 +2,12 @@ use mbv_theme as palette;
 use std::time::Duration;
 
 use super::{
-    init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
-};
-use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
     PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage,
     SidebarId, TabSelection, ToastSeverity,
+};
+use super::{
+    QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
 #[cfg(test)]
 pub(in crate::app) use crate::app::dispatch::action::Command;

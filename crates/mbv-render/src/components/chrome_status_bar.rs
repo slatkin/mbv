@@ -8,11 +8,11 @@
 //! (`render_queue_status`), never here.
 
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 fn status_width(spans: &[Span]) -> u16 {
@@ -263,18 +263,18 @@ fn render_status_bar_left(
             height: 1,
         });
     }
-    if matches!(segments.fits, StatusBarFit::All | StatusBarFit::WithoutMute) {
-        if let Some(mute) = segments.mute {
-            let mute_x = area.x + status_width(&spans);
-            let mute_width = status_width(&mute);
-            append_status(&mut spans, mute);
-            regions.mute = Some(Rect {
-                x: mute_x,
-                y: area.y,
-                width: mute_width,
-                height: 1,
-            });
-        }
+    if matches!(segments.fits, StatusBarFit::All | StatusBarFit::WithoutMute)
+        && let Some(mute) = segments.mute
+    {
+        let mute_x = area.x + status_width(&spans);
+        let mute_width = status_width(&mute);
+        append_status(&mut spans, mute);
+        regions.mute = Some(Rect {
+            x: mute_x,
+            y: area.y,
+            width: mute_width,
+            height: 1,
+        });
     }
 
     // `left_content_w` tracks how far the left segment actually extends after

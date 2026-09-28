@@ -6,11 +6,11 @@
 //! shared visible-window computation, so the keyboard tab-cycling path
 //! (`App::ensure_tab_visible`) and the painted bar cannot drift.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Tabs};
-use ratatui::Frame;
 
 use mbv_theme as palette;
 

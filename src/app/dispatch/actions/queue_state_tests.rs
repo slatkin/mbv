@@ -1,8 +1,8 @@
 use super::*;
-use crate::app::tests::confirm_replace_queue;
 use crate::app::ContextAction;
-use mbv_emby_model::test_support::make_item;
+use crate::app::tests::confirm_replace_queue;
 use mbv_emby_model::EmbyItem;
+use mbv_emby_model::test_support::make_item;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
@@ -22,8 +22,8 @@ impl XdgHomeGuard {
     pub(super) fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("XDG_CONFIG_HOME", &dir);
-        std::env::remove_var("MBV_SYSTEM");
+        mbv_config::set_test_env_var("XDG_CONFIG_HOME", &dir);
+        mbv_config::remove_test_env_var("MBV_SYSTEM");
         let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
         Self {
             dir,
@@ -34,7 +34,7 @@ impl XdgHomeGuard {
 
 impl Drop for XdgHomeGuard {
     fn drop(&mut self) {
-        std::env::remove_var("XDG_CONFIG_HOME");
+        mbv_config::remove_test_env_var("XDG_CONFIG_HOME");
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }

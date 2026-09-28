@@ -3,8 +3,8 @@ use super::*;
 // External crate imports needed across test files
 use mbv_config::{Config, StayAliveQueueState};
 use mbv_core::service_runtime::SetupGeneration;
-use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_ctrl::DisconnectReason;
+use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome,
     WireCommand,
@@ -22,16 +22,16 @@ use mbv_queue::{
 };
 use mbv_ws::WsEvent;
 use rstest::rstest;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 // Daemon module items used across test files (from the old shared `use super::*;` scope)
 use crate::{
+    AuthorityHolder, CtrlClients, CtrlContext, CtrlTransport, DaemonEvent, DaemonLoop,
+    DaemonPlayerOwner, LoopFlow, PendingIdleQueueLoad, PlaybackIntentState, SharedQueueState,
     apply_audiobookshelf_book_progress, apply_audiobookshelf_progress, apply_queue_enriched,
     apply_stopped_observation, apply_track_completed_observation, audio_only_rejection, broadcast,
-    handle_ctrl_for_role, handle_ws, take_authority_for_emby_remote, AuthorityHolder, CtrlClients,
-    CtrlContext, CtrlTransport, DaemonEvent, DaemonLoop, DaemonPlayerOwner, LoopFlow,
-    PendingIdleQueueLoad, PlaybackIntentState, SharedQueueState,
+    handle_ctrl_for_role, handle_ws, take_authority_for_emby_remote,
 };
 
 mod basic;

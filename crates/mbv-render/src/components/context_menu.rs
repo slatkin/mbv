@@ -1,7 +1,7 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Clear, List, ListItem};
-use ratatui::Frame;
 
 use crate::components::backdrop::dim_backdrop;
 use crate::palette;

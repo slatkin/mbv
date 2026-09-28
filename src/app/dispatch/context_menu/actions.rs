@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::ModelContentEvent;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
     RoutedReplacementPrep,
@@ -312,7 +312,9 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
-                if let Some(lib_idx) = lib_idx.filter(|_| played) {
+                if let Some(lib_idx) = lib_idx
+                    && played
+                {
                     self.remove_played_item_from_library(lib_idx, item_id);
                 }
                 if self.tab.is_home() {
@@ -354,12 +356,11 @@ impl App {
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
+            && lvl.unplayed_only
         {
-            if lvl.unplayed_only {
-                let id = item_id.to_string();
-                lvl.items.retain(|item| item.id != id);
-                lvl.total_count = lvl.total_count.saturating_sub(1);
-            }
+            let id = item_id.to_string();
+            lvl.items.retain(|item| item.id != id);
+            lvl.total_count = lvl.total_count.saturating_sub(1);
         }
     }
 
@@ -480,13 +481,12 @@ impl App {
             }
             self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
             self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            if lvl.unplayed_only {
-                if let Some(pos) = lvl.items.iter().position(|item| item.id == item_id) {
-                    lvl.items.remove(pos);
-                    lvl.total_count = lvl.total_count.saturating_sub(1);
-                }
-            }
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
+            && lvl.unplayed_only
+            && let Some(pos) = lvl.items.iter().position(|item| item.id == item_id)
+        {
+            lvl.items.remove(pos);
+            lvl.total_count = lvl.total_count.saturating_sub(1);
         }
     }
 

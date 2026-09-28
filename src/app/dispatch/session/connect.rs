@@ -54,8 +54,8 @@ impl App {
         let Some(client) = self.emby_client() else {
             return Err("Emby is unavailable".into());
         };
-        let result = client.lock().unwrap().get_sessions_unfiltered();
-        result
+
+        client.lock().unwrap().get_sessions_unfiltered()
     }
 
     pub(in crate::app) fn connect_direct_endpoint(

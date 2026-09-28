@@ -389,11 +389,13 @@ fn book_list_page_parses_author_name_and_rich_metadata() {
     assert_eq!(metadata.narrator.as_deref(), Some("Peter Hessler"));
     assert_eq!(metadata.published_year.as_deref(), Some("2024"));
     assert_eq!(metadata.genres.as_ref().unwrap().len(), 2);
-    assert!(metadata
-        .description
-        .as_deref()
-        .unwrap()
-        .contains("teaching"));
+    assert!(
+        metadata
+            .description
+            .as_deref()
+            .unwrap()
+            .contains("teaching")
+    );
     assert_eq!(wire.media.as_ref().unwrap().duration, Some(48720.17));
 }
 

@@ -1,6 +1,6 @@
 use super::{
-    clear_service_secret_result, config_path, load_config, save_service_secret_at,
-    service_secret_path, write_config_text_at, AudiobookshelfSetup, ServiceKind,
+    AudiobookshelfSetup, ServiceKind, clear_service_secret_result, config_path, load_config,
+    save_service_secret_at, service_secret_path, write_config_text_at,
 };
 
 pub(super) fn save_audiobookshelf_setup_at(

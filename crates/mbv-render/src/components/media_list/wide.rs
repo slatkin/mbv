@@ -3,10 +3,10 @@ use crate::components::media_list::{
     MediaListRow, RowGeometry, SelectedRowSurface, WideMediaListPaintPolicy,
 };
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::widgets::{List, ListItem};
-use ratatui::Frame;
 
 /// Resolved paint output for [`render_wide_media_list`]: the flow geometry the
 /// painter laid out and the selected row's absolute rect within the hit/scroll

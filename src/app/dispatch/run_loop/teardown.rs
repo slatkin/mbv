@@ -76,10 +76,10 @@ impl App {
         quit_timeout: Duration,
         launch_state: Option<mbv_config::TuiLaunchState>,
     ) {
-        if let Some(state) = launch_state {
-            if let Err(error) = mbv_config::save_tui_launch_state(&state) {
-                log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
-            }
+        if let Some(state) = launch_state
+            && let Err(error) = mbv_config::save_tui_launch_state(&state)
+        {
+            log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
         }
         self.teardown_inner(quit_timeout);
     }

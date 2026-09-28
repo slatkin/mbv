@@ -9,25 +9,25 @@ impl Model {
             return;
         }
         let panel = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>() {
-                playlists.set_content(PlaylistsContent {
-                    playlists: self.app.playlists.clone(),
-                    cursor: self.app.playlists_cursor,
-                    scroll: self.app.playlists_scroll,
-                    loading: self.app.playlists_loading,
-                    open: self.app.playlists_open.clone(),
-                    open_items: self.app.playlists_open_items.clone(),
-                    open_cursor: self.app.playlists_open_cursor,
-                    open_scroll: self.app.playlists_open_scroll,
-                    open_loading: self.app.playlists_open_loading,
-                    loaded_id: match &self.app.queue_source {
-                        mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
-                        _ => None,
-                    },
-                });
-                playlists.set_panel_area(panel);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>()
+        {
+            playlists.set_content(PlaylistsContent {
+                playlists: self.app.playlists.clone(),
+                cursor: self.app.playlists_cursor,
+                scroll: self.app.playlists_scroll,
+                loading: self.app.playlists_loading,
+                open: self.app.playlists_open.clone(),
+                open_items: self.app.playlists_open_items.clone(),
+                open_cursor: self.app.playlists_open_cursor,
+                open_scroll: self.app.playlists_open_scroll,
+                open_loading: self.app.playlists_open_loading,
+                loaded_id: match &self.app.queue_source {
+                    mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
+                    _ => None,
+                },
+            });
+            playlists.set_panel_area(panel);
         }
     }
 

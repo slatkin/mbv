@@ -1,10 +1,10 @@
 use mbv_images::RENDER_FILTER;
 use mbv_theme as palette;
 use mbv_ui_model::playback::QueueCardProjection;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
-use ratatui::Frame;
 
 /// The rectangle the queue card reserves for artwork: the last rendered
 /// image/visualizer size, or the full reserved slot (capped like the artwork

@@ -4,15 +4,15 @@
 //! same surface identities the Wide list pane uses, and no Hero pane is
 //! painted beside it.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 use mbv_render::arrangements::wide_hero::wide_hero_browser_pane_with_selector;
 
 use super::content::LibraryPanelContent;
 use super::wide::{
-    paint_browser_pane, selector_row_visible, BrowserPanePaintParams, SkeletonHits,
-    SkeletonPillWindows, WideSkeletonGeometry,
+    BrowserPanePaintParams, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry,
+    paint_browser_pane, selector_row_visible,
 };
 
 /// Paint the non-Wide Library skeleton: the panel is the whole browser pane,

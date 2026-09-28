@@ -1,6 +1,6 @@
 use super::{
-    fmt_duration_gutter, fmt_publish_date_short, Date, EmbyItem, MediaKind, MediaListRow,
-    MediaListTrailing, MediaSemanticState, Pane, QueueItem, TvContent, TICKS_PER_SECOND,
+    Date, EmbyItem, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, Pane,
+    QueueItem, TICKS_PER_SECOND, TvContent, fmt_duration_gutter, fmt_publish_date_short,
 };
 use mbv_render::effective_sort_str;
 use mbv_ui_model::ui_util::natural_sort_key;

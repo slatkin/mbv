@@ -10,15 +10,15 @@
 //! its side effects. This replaces the deleted the deleted tabs hit map
 //! side channel and the shell's `MouseClick` tab-click path.
 
-use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_render::{render_tab_bar, TabBarModel};
+use mbv_render::{TabBarModel, render_tab_bar};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, ShellRequest};
 
@@ -154,8 +154,8 @@ impl AppComponent<Msg, UserEvent> for TabPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     fn titles() -> Vec<String> {
         ["Continue", "Movies", "TV Shows", "Music", "Feeds"]

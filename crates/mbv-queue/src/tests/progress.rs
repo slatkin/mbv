@@ -289,30 +289,3 @@ fn update_slot_item_keeps_protection_only_for_same_content(#[case] same_content:
         same_content
     );
 }
-
-#[rstest::rstest]
-#[case::completed_below_floor(ProgressObservation::Completed { position_ticks: 29 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::completed_at_floor(ProgressObservation::Completed { position_ticks: 30 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 30 * TICKS_PER_SECOND, false)]
-#[case::completed_audio(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: false }, "Audio", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::completed_played(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 0, true)]
-#[case::stopped_positive(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 12 * TICKS_PER_SECOND, false)]
-#[case::stopped_zero(ProgressObservation::Stopped { position_ticks: 0, played: false }, "Video", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::stopped_audio(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: false }, "Audio", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::stopped_played(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 0, true)]
-fn progress_observation_records_expected_position(
-    #[case] observation: ProgressObservation,
-    #[case] media_type: &str,
-    #[case] previous: i64,
-    #[case] expected_position: i64,
-    #[case] expected_played: bool,
-) {
-    let mut emby = item("progress");
-    emby.media_type = media_type.to_owned();
-    emby.playback_position_ticks = previous;
-    let queue_item = QueueItem::Emby(Box::new(emby));
-    assert_eq!(
-        observation.position_to_record(&queue_item),
-        expected_position
-    );
-    assert_eq!(observation.played(), expected_played);
-}

@@ -3,8 +3,8 @@ use super::{
     NAV_IMAGE_FETCH_IDLE_DELAY, PAGE_SIZE,
 };
 use crate::app::{MusicEvent, SeriesEvent};
-use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
 use mbv_images::{ImageFetchReq, ImageSource};
+use mbv_images::{audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key};
 
 mod card_images;
 mod level_artists;

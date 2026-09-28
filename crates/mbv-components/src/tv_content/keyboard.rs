@@ -285,12 +285,11 @@ impl TvContent {
         target: Option<TvTreeTarget>,
         item: Option<EmbyItem>,
     ) -> Msg {
-        if let Some(target) = target {
-            if !self.browser.is_expanded(&target) {
-                if let Some(message) = self.toggle_tree_expansion(target) {
-                    return message;
-                }
-            }
+        if let Some(target) = target
+            && !self.browser.is_expanded(&target)
+            && let Some(message) = self.toggle_tree_expansion(target)
+        {
+            return message;
         }
         let intent = self.browser.apply(TreeOperation::Right).external_intent;
         let activation = match intent {

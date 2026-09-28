@@ -1,6 +1,6 @@
 use super::*;
-use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use tuirealm::event::{KeyModifiers, MouseButton};
 
 fn key(code: Key) -> Event<UserEvent> {

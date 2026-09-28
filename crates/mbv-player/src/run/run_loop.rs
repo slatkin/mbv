@@ -1,6 +1,6 @@
 use super::super::{
-    mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread, Duration, Event,
-    Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
+    Duration, Event, Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
+    mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread,
 };
 use super::{PlaybackRun, ProgressGuard};
 use libmpv2::Mpv;
@@ -92,16 +92,18 @@ impl PlaybackRun {
             });
         }
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| loop {
-            if self.run_tick(
-                &mpv,
-                &mut progress,
-                &progress_report_tx,
-                stop_rx,
-                cmd_rx,
-                wakeup_read_fd,
-            ) {
-                return;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            loop {
+                if self.run_tick(
+                    &mpv,
+                    &mut progress,
+                    &progress_report_tx,
+                    stop_rx,
+                    cmd_rx,
+                    wakeup_read_fd,
+                ) {
+                    return;
+                }
             }
         })); // end catch_unwind
         if wakeup_read_fd >= 0 {

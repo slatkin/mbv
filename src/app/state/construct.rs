@@ -1,14 +1,14 @@
 use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::service_setup::StartupRequest;
-use crate::app::{spawn_resize_worker, App, AppInit, SuspendedLocalSession};
+use crate::app::{App, AppInit, SuspendedLocalSession, spawn_resize_worker};
 use mbv_player::{Player, PlayerProxy};
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::playback::QueueScope;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 mod remote;

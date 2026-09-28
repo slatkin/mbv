@@ -155,7 +155,9 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     }));
 
     assert!(app.libs[0].nav_stack.is_empty());
-    assert!(!crate::config::load_library_position_state()
-        .libraries
-        .contains_key("lib-movies"));
+    assert!(
+        !crate::config::load_library_position_state()
+            .libraries
+            .contains_key("lib-movies")
+    );
 }

@@ -87,7 +87,7 @@ struct XdgStateHomeGuard {
 impl XdgStateHomeGuard {
     fn new() -> Self {
         let dir = tempfile_dir();
-        std::env::remove_var("MBV_SYSTEM");
+        mbv_config::remove_test_env_var("MBV_SYSTEM");
         let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
         Self {
             dir,

@@ -1,10 +1,10 @@
 use mbv_theme as palette;
 use mbv_ui_model::ui_util::trunc_str;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
-use ratatui::Frame;
 use tui_scrollbar::GlyphSet;
 
 #[must_use]

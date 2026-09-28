@@ -22,9 +22,9 @@ use mbv_cast::client::{CastClient, CastMediaItem, CastStatus};
 use mbv_cast::discovery::CastReceiver;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 use mbv_queue::QueueItemContentId;
-use std::sync::mpsc::Sender;
 #[cfg(test)]
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 /// The cast operations App state needs, decoupled from the concrete

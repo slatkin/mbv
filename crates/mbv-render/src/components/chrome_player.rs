@@ -1,11 +1,11 @@
 use crate::arrangements::playback_transport::transport_rows;
 use mbv_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 mod title;
 
@@ -137,20 +137,20 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
             } else {
                 render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
             }
-        } else if !ctx.controls.show {
-            if let Some((title, _has_link)) = ctx.controls.idle_feed_title.clone() {
-                let spans = marquee_spans(
-                    &mut ctx,
-                    &[(title, palette::ACCENT)],
-                    title_area.width as usize,
-                );
-                frame.render_widget(
-                    Paragraph::new(Line::from(spans))
-                        .style(Style::default().bg(panel_bg))
-                        .alignment(Alignment::Center),
-                    title_area,
-                );
-            }
+        } else if !ctx.controls.show
+            && let Some((title, _has_link)) = ctx.controls.idle_feed_title.clone()
+        {
+            let spans = marquee_spans(
+                &mut ctx,
+                &[(title, palette::ACCENT)],
+                title_area.width as usize,
+            );
+            frame.render_widget(
+                Paragraph::new(Line::from(spans))
+                    .style(Style::default().bg(panel_bg))
+                    .alignment(Alignment::Center),
+                title_area,
+            );
         }
     }
 

@@ -1,14 +1,14 @@
-use super::core::{bind_ctrl_listener, broadcast, DaemonEvent};
+use super::core::{DaemonEvent, bind_ctrl_listener, broadcast};
 use super::{
-    broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file, project_queue_state,
-    setup_shutdown_signal, spawn_ctrl_client, AudiobookshelfOwnerContext, CtrlTransport,
-    DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner, DaemonRole, DaemonRuntimeHooks,
-    DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
+    AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
+    DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
+    SharedQueueState, broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file,
+    project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
 };
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
-use mbv_emby::{mbv_direct_tcp_port_command, EmbyClient};
+use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
@@ -379,7 +379,7 @@ fn start_local_control_server(
 }
 
 fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<TcpListener> {
-    let tcp_listener = if listen.trim().is_empty() {
+    if listen.trim().is_empty() {
         None
     } else {
         match TcpListener::bind(listen.trim()) {
@@ -404,9 +404,7 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
                 None
             }
         }
-    };
-
-    tcp_listener
+    }
 }
 
 fn register_capabilities(
@@ -470,13 +468,15 @@ fn spawn_status_broadcast(
         std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
     let player_status = Arc::clone(&player.status);
     let ctrl_clients = Arc::clone(clients);
-    std::thread::spawn(move || loop {
-        std::thread::sleep(broadcast_interval);
-        if !ctrl_clients.lock().unwrap().has_driver() {
-            continue;
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(broadcast_interval);
+            if !ctrl_clients.lock().unwrap().has_driver() {
+                continue;
+            }
+            let status = player_status.lock().unwrap().clone();
+            broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
         }
-        let status = player_status.lock().unwrap().clone();
-        broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
     });
 }
 

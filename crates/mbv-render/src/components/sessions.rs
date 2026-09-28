@@ -1,10 +1,10 @@
 use super::chrome;
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 /// Paint sidebar chrome and empty/loading content. Populated rows belong to
 /// the embedded `ThreeLineFlatList` painter.

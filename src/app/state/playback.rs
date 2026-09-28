@@ -4,7 +4,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::{QueueItem, QueueSlotId};
-use mbv_ui_model::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
+use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, is_new_in_launch_window};
 use mbv_ui_model::playback::QueueScope;
 use mbv_ws::WsEvent;
 use std::collections::VecDeque;

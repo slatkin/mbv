@@ -9,9 +9,9 @@ use tuirealm::props::{AttrValue, Attribute};
 use crate::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
 use crate::media_list::MediaListCarrier;
 use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use std::cell::RefCell;
 use std::rc::Rc;
 use tuirealm::event::MouseButton;
@@ -668,12 +668,14 @@ fn overlay_dismissal_handles_escape_backdrop_destination_and_missing_parent() {
 
     panel.test_open_hero_overlay();
     panel.attr(Attribute::Focus, AttrValue::Flag(true));
-    assert!(panel
-        .on(&Event::Keyboard(KeyEvent::new(
-            Key::Esc,
-            KeyModifiers::NONE,
-        )))
-        .is_some());
+    assert!(
+        panel
+            .on(&Event::Keyboard(KeyEvent::new(
+                Key::Esc,
+                KeyModifiers::NONE,
+            )))
+            .is_some()
+    );
     assert!(!panel.test_hero_overlay_open());
 
     panel.test_open_hero_overlay();

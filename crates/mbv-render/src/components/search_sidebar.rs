@@ -4,11 +4,11 @@ use mbv_emby_model::EmbyItem;
 use mbv_theme as palette;
 use mbv_ui_model::search_sidebar::SearchSidebar;
 use mbv_ui_model::ui_util::trunc_str;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 const HINTS: &str = "[\u{2191}\u{2193}]select [\u{21e5}]type [\u{21b5}]open [Esc]close";
 

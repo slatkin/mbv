@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
@@ -30,7 +30,7 @@ const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 mod endpoint;
 
-pub use endpoint::{resolve_library_route, DaemonEndpoint};
+pub use endpoint::{DaemonEndpoint, resolve_library_route};
 
 /// Performs the daemon control-protocol handshake (hello exchange, then the
 /// initial state) on `stream`, returning a reader ready for the long-running
@@ -162,7 +162,7 @@ fn await_service_setup_acknowledgement(reader: &mut BufReader<SocketStream>) -> 
             CtrlEvent::ServiceSetupRejected { reason, .. } => {
                 return Err(format!(
                     "restart required (live setup rejected: {reason:?})"
-                ))
+                ));
             }
             _ => {}
         }

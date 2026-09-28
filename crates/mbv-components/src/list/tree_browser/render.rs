@@ -1,7 +1,7 @@
 //! `TuiRealm` component and retained-frame painting for the tree owner.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};

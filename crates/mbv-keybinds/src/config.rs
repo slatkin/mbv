@@ -2,7 +2,7 @@
 /// prefix-namespace assignments, each mapping a declared action id to its
 /// configured chord.
 use super::chord::Chord;
-use super::registry::{action_by_id, KeySection, KeybindAction, KEYBIND_ACTIONS, RESERVED_CHORDS};
+use super::registry::{KEYBIND_ACTIONS, KeySection, KeybindAction, RESERVED_CHORDS, action_by_id};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SectionBindings {
@@ -182,7 +182,10 @@ impl std::fmt::Display for KeybindsError {
                 chord,
                 entry,
                 reason,
-            } => write!(f, "keys: `{entry}` has unparseable chord `{chord}`: {reason}"),
+            } => write!(
+                f,
+                "keys: `{entry}` has unparseable chord `{chord}`: {reason}"
+            ),
             Self::UnknownAction { action, section } => write!(
                 f,
                 "keys: unknown action `{action}` in section `keys.{section}`"

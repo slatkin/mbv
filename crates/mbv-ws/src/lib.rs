@@ -1,7 +1,8 @@
 use std::io::ErrorKind;
 use std::sync::{
+    Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc,
+    mpsc,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -361,10 +362,10 @@ fn read_message(
     match socket.read() {
         Ok(Message::Text(txt)) => {
             *last_activity = Instant::now();
-            if let Some(ev) = parse(&txt) {
-                if event_tx.send(ev).is_err() {
-                    return ReadResult::EventReceiverClosed;
-                }
+            if let Some(ev) = parse(&txt)
+                && event_tx.send(ev).is_err()
+            {
+                return ReadResult::EventReceiverClosed;
             }
         }
         Ok(Message::Ping(data)) => {

@@ -1,5 +1,5 @@
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
@@ -9,7 +9,7 @@ use tuirealm::state::State;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use mbv_emby_model::EmbyItem;
-use mbv_render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
+use mbv_render::{PlaylistsRenderGeometry, PlaylistsViewState, render_playlists_content};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 

@@ -42,10 +42,10 @@ impl super::Model {
         self.push_feeds_manage_content();
         // A fresh component starts with no stage; open the popup at the List
         // stage (task 5.3d — no per-tick stage mirror).
-        if let Some(component) = self.feeds_manage_component_mut() {
-            if component.stage_clone().is_none() {
-                component.set_stage(FeedsManageStage::List);
-            }
+        if let Some(component) = self.feeds_manage_component_mut()
+            && component.stage_clone().is_none()
+        {
+            component.set_stage(FeedsManageStage::List);
         }
     }
 

@@ -29,7 +29,7 @@ pub use content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot,
     PanelHeroImagePaint, SelectorRow, Workspace,
 };
-pub use hero::{hero_content_emby, HeroContentData};
+pub use hero::{HeroContentData, hero_content_emby};
 pub use overview_box::sanitize_url;
 pub use owner::{LibraryContentOwner, LibrarySlotEvent};
 pub use panel::LibraryPanel;

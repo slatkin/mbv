@@ -226,19 +226,19 @@ fn paint_overview_credits(
     };
     let credits_start = text_rows + gap_rows;
     let first_visible = offset.saturating_sub(credits_start).min(credits.len());
-    if first_visible < credits.len() {
-        if let Some(y) = visible_overview_row(inner, credits_start + first_visible, offset) {
-            paint_credits_from(
-                f,
-                Rect {
-                    y,
-                    height: inner.bottom().saturating_sub(y),
-                    ..inner
-                },
-                credits,
-                first_visible,
-            );
-        }
+    if first_visible < credits.len()
+        && let Some(y) = visible_overview_row(inner, credits_start + first_visible, offset)
+    {
+        paint_credits_from(
+            f,
+            Rect {
+                y,
+                height: inner.bottom().saturating_sub(y),
+                ..inner
+            },
+            credits,
+            first_visible,
+        );
     }
 }
 

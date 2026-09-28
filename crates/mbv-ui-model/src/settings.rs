@@ -420,11 +420,7 @@ pub fn fmt_library_routes(routes: &std::collections::BTreeMap<String, String>) -
 
 #[must_use]
 pub fn bool_val(v: bool) -> String {
-    if v {
-        "on".into()
-    } else {
-        "off".into()
-    }
+    if v { "on".into() } else { "off".into() }
 }
 
 #[must_use]

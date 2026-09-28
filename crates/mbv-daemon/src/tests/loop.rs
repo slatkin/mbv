@@ -271,15 +271,16 @@ fn stopped_stale_run_persists_nothing() {
         }));
 
     assert_eq!(flow, LoopFlow::Continue);
-    assert!(!t
-        .event_loop
-        .owner
-        .core
-        .queue
-        .slot(slot)
-        .unwrap()
-        .item
-        .played());
+    assert!(
+        !t.event_loop
+            .owner
+            .core
+            .queue
+            .slot(slot)
+            .unwrap()
+            .item
+            .played()
+    );
     assert!(t.persisted.borrow().is_empty());
 }
 

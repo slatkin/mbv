@@ -173,10 +173,11 @@ fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
         "an mpv-initiated move is announced as a natural track change"
     );
     // The abandoned item was actually reported stopped, not just left behind.
-    assert!(http
-        .requests()
-        .iter()
-        .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),);
+    assert!(
+        http.requests()
+            .iter()
+            .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),
+    );
 }
 
 #[test]

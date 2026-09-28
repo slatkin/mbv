@@ -1,11 +1,11 @@
 //! Shared search-row painting.
 
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 
 pub fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
     if area.width == 0 || area.height == 0 {

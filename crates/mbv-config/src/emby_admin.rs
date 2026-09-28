@@ -2,9 +2,9 @@
 // setup+secret writes.
 
 use super::{
-    clear_service_secret_result, config_path, load_config, load_service_secret,
-    save_service_secret, save_service_secret_at, service_secret_path, token_cache_path, EmbySetup,
-    ServiceKind,
+    EmbySetup, ServiceKind, clear_service_secret_result, config_path, load_config,
+    load_service_secret, save_service_secret, save_service_secret_at, service_secret_path,
+    token_cache_path,
 };
 
 /// ── Legacy Emby token migration ──────────────────────────────────────
@@ -25,8 +25,8 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
 }
 
 // Read and validate the legacy record before inspecting or writing new state.
-fn read_legacy_emby_setup_and_token(
-) -> Result<Option<(std::path::PathBuf, String, EmbySetup)>, String> {
+fn read_legacy_emby_setup_and_token()
+-> Result<Option<(std::path::PathBuf, String, EmbySetup)>, String> {
     let legacy_path = token_cache_path();
     let text = match std::fs::read_to_string(&legacy_path) {
         Ok(t) => t,
@@ -44,7 +44,7 @@ fn read_legacy_emby_setup_and_token(
             return Err(format!(
                 "legacy token {} has empty or missing 'token' field",
                 legacy_path.display()
-            ))
+            ));
         }
     };
 
@@ -121,14 +121,14 @@ fn migrate_legacy_emby_setup_and_token(
 // Delete the old record only after the new setup and secret are durable.
 fn remove_migrated_legacy_emby_token(legacy_path: &std::path::Path) -> Result<(), String> {
     // If removal fails the new secret is already safe on disk; inform the caller but do not roll back.
-    if let Err(e) = std::fs::remove_file(legacy_path) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            return Err(format!(
-                "token migrated to {}, but could not remove legacy {}: {e}",
-                service_secret_path(ServiceKind::Emby).display(),
-                legacy_path.display()
-            ));
-        }
+    if let Err(e) = std::fs::remove_file(legacy_path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(format!(
+            "token migrated to {}, but could not remove legacy {}: {e}",
+            service_secret_path(ServiceKind::Emby).display(),
+            legacy_path.display()
+        ));
     }
     Ok(())
 }

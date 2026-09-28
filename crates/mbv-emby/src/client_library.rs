@@ -1,4 +1,4 @@
-use super::{parse_item, EmbyClient};
+use super::{EmbyClient, parse_item};
 use mbv_emby_model::EmbyItem;
 use serde_json::Value;
 

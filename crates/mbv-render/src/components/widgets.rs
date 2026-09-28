@@ -2,11 +2,11 @@ use super::chrome::thin_vertical_thumb;
 use crate::components::media_list::queue_row_background;
 use mbv_core::service_runtime::ServiceState;
 use mbv_theme as palette;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
-use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 

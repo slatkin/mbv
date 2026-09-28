@@ -5,9 +5,9 @@ use tuirealm::application::PollStrategy;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::listener::{EventListenerCfg, Poll, PortResult};
 
-use crate::app::input::router::RouterOutcome;
-use crate::app::shell::{fold_mouse_messages, Model};
 use crate::app::App;
+use crate::app::input::router::RouterOutcome;
+use crate::app::shell::{Model, fold_mouse_messages};
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
 const INJECT_PORT_INTERVAL: Duration = Duration::from_millis(1);

@@ -1,13 +1,13 @@
 use super::{
-    active_file_load_location, init_mpv, init_volume, make_wakeup_pipe, observe_properties,
-    prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
-    spawn_progress_reporter, start_queue_playback, AudiobookshelfPlayerContext, EmbyClient,
-    EmbyItem, ExecSlot, Mpv, MpvRunConfig, PlaybackOrigin, PlaybackRun, Player, PlayerCommand,
-    PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard, QueueItem, QueueSlotId, RunInit,
-    SessionReporter, SubtitlePrefs,
+    AudiobookshelfPlayerContext, EmbyClient, EmbyItem, ExecSlot, Mpv, MpvRunConfig, PlaybackOrigin,
+    PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
+    QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs, active_file_load_location,
+    init_mpv, init_volume, make_wakeup_pipe, observe_properties, prepare_source,
+    queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
+    spawn_progress_reporter, start_queue_playback,
 };
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
-use std::sync::{atomic::Ordering, mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::Ordering, mpsc};
 use std::thread;
 use std::time::Duration;
 

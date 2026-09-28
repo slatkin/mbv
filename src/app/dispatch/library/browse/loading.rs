@@ -60,41 +60,39 @@ impl App {
             return;
         }
         if self.libs[idx].nav_stack.is_empty() {
-            if let Some(saved) = self.saved_library_position(idx) {
-                if let Some(root) = saved.levels.first() {
-                    let filter_kind =
-                        mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
-                            self.libs[idx].library.collection_type.as_str(),
-                        );
-                    self.libs[idx].library_total = root.library_total;
-                    self.libs[idx].tv_content_mode = restored_tv_content_mode(
-                        self.libs[idx].library.collection_type == "tvshows",
-                        root.library_total,
-                        root.tv_content_mode.as_ref(),
-                    );
-                    let letter_filter =
-                        restored_letter_filter(root.letter_filter_index, filter_kind);
-                    self.libs[idx].nav_stack.push(BrowseLevel {
-                        parent_id: root.parent_id.clone(),
-                        title: root.title.clone(),
-                        items: Vec::new(),
-                        fetched_rows: 0,
-                        total_count: 0,
-                        resting: BrowseResting::new(0, 0),
-                        item_types: root.item_types.clone(),
-                        unplayed_only: root.unplayed_only,
-                        sort_by: root.sort_by.clone(),
-                        sort_order: root.sort_order.clone(),
-                        loading: true,
+            if let Some(saved) = self.saved_library_position(idx)
+                && let Some(root) = saved.levels.first()
+            {
+                let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
+                    self.libs[idx].library.collection_type.as_str(),
+                );
+                self.libs[idx].library_total = root.library_total;
+                self.libs[idx].tv_content_mode = restored_tv_content_mode(
+                    self.libs[idx].library.collection_type == "tvshows",
+                    root.library_total,
+                    root.tv_content_mode.as_ref(),
+                );
+                let letter_filter = restored_letter_filter(root.letter_filter_index, filter_kind);
+                self.libs[idx].nav_stack.push(BrowseLevel {
+                    parent_id: root.parent_id.clone(),
+                    title: root.title.clone(),
+                    items: Vec::new(),
+                    fetched_rows: 0,
+                    total_count: 0,
+                    resting: BrowseResting::new(0, 0),
+                    item_types: root.item_types.clone(),
+                    unplayed_only: root.unplayed_only,
+                    sort_by: root.sort_by.clone(),
+                    sort_order: root.sort_order.clone(),
+                    loading: true,
 
-                        all_items: None,
-                        letter_filter,
-                        tv_content_mode: root.tv_content_mode.clone(),
-                        music_grouping: None,
-                    });
-                    self.spawn_restore_library_position(idx, saved);
-                    return;
-                }
+                    all_items: None,
+                    letter_filter,
+                    tv_content_mode: root.tv_content_mode.clone(),
+                    music_grouping: None,
+                });
+                self.spawn_restore_library_position(idx, saved);
+                return;
             }
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();

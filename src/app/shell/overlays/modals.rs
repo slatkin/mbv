@@ -126,10 +126,10 @@ impl Model {
                 .expect("mount ContextMenu");
             self.application.active(&id).expect("activate ContextMenu");
         }
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(context_menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
-                context_menu.set_content(menu.anchor, menu.entries, menu.cursor);
-            }
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(context_menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
+        {
+            context_menu.set_content(menu.anchor, menu.entries, menu.cursor);
         }
     }
 

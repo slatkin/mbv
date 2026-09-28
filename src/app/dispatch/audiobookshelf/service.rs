@@ -1,5 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::service_runtime::ServiceState;
 use mbv_queue::QueueState;
 
@@ -297,10 +297,10 @@ impl App {
                 // Restore in-memory queues on failure.
                 self.player_tab
                     .set_queue_items(old_player_items.clone(), old_player_cursor);
-                if let Some((items, cursor)) = old_remote_items.clone() {
-                    if let Some(tab) = self.remote_player_tab.as_mut() {
-                        tab.set_queue_items(items, cursor);
-                    }
+                if let Some((items, cursor)) = old_remote_items.clone()
+                    && let Some(tab) = self.remote_player_tab.as_mut()
+                {
+                    tab.set_queue_items(items, cursor);
                 }
                 if let Some(q) = old_queue.as_ref() {
                     let _ = mbv_config::save_queue_state(q);
@@ -456,10 +456,10 @@ impl App {
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) {
         // Task 3.3: drop events from a superseded connection generation.
-        let Some(gen) = self.audiobookshelf_socket_generation else {
+        let Some(r#gen) = self.audiobookshelf_socket_generation else {
             return;
         };
-        if !self.audiobookshelf_runtime.accepts(gen) {
+        if !self.audiobookshelf_runtime.accepts(r#gen) {
             return;
         }
 

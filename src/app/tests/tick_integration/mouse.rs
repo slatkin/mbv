@@ -1,6 +1,6 @@
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::tests::make_app_stub;
@@ -8,8 +8,8 @@ use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::tick_integration::search_component_mut;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
-use mbv_components::library_panel::LibraryPanel;
 use mbv_components::QueueComponent;
+use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry};
@@ -449,18 +449,22 @@ fn tick_chrome_panels_mount_only_where_the_root_places_them() {
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
-    assert!(!harness
-        .model()
-        .application
-        .mounted(&ComponentId::StatusBarPanel));
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&ComponentId::StatusBarPanel)
+    );
 
     // The library-visible counterpart mounts both.
     let harness = drawn_tab_harness();
     assert!(harness.model().application.mounted(&ComponentId::TabPanel));
-    assert!(harness
-        .model()
-        .application
-        .mounted(&ComponentId::StatusBarPanel));
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&ComponentId::StatusBarPanel)
+    );
 }
 
 /// Review of tasks 2.1-2.2: the sync pass decides the chrome-panel mounts
@@ -487,10 +491,12 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
-    assert!(!harness
-        .model()
-        .application
-        .mounted(&ComponentId::StatusBarPanel));
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&ComponentId::StatusBarPanel)
+    );
 
     // Cross the threshold upward without drawing: the very next sync must
     // see the wide placements and mount both panels, before any draw
@@ -536,7 +542,7 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
         !outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))),
+            .any(|msg| matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))),
         "the queue handles an eligible wheel locally without a shell relay"
     );
 
@@ -638,14 +644,14 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
+            .any(|msg| matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
         "a click on Queue's painted row must resolve through Queue"
     );
     assert!(
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "the click on Queue must not also resolve through Library"
     );
     apply_outcome(&mut harness, outcome);
@@ -668,14 +674,14 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "a blank Library click must not claim without a resolved target"
     );
     assert!(
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
         "the click on Library must not also resolve through Queue"
     );
     apply_outcome(&mut harness, outcome);

@@ -158,19 +158,18 @@ impl Model {
             .queue_boundary
             .unwrap_or_default();
         let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(boundary) = comp
+        if let Some(comp) = self.application.get_component_mut(&id)
+            && let Some(boundary) = comp
                 .as_any_mut()
                 .downcast_mut::<mbv_components::QueueBoundaryComponent>()
-            {
-                boundary.sync(
-                    area,
-                    self.app.layout.left_area.x,
-                    self.app.terminal_width,
-                    self.app.queue_column_width,
-                    enabled,
-                );
-            }
+        {
+            boundary.sync(
+                area,
+                self.app.layout.left_area.x,
+                self.app.terminal_width,
+                self.app.queue_column_width,
+                enabled,
+            );
         }
     }
 
