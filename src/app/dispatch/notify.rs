@@ -94,10 +94,7 @@ impl App {
         resolved_name: Option<&String>,
     ) -> bool {
         if self.in_non_library_thin_client_mode() {
-            log::info!(
-                target: "library_route",
-                "route conflict check skipped: non-library thin-client owns playback"
-            );
+            tracing::info!(name: "library_route.conflict_check.skipped", target: "library_route", reason = "non_library_thin_client_owns_playback", "route conflict check skipped");
             return false;
         }
         if resolved_name == self.active_route.as_ref() {

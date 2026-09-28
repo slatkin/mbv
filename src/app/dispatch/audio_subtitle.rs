@@ -79,7 +79,7 @@ impl App {
         let prefs = match client.lock().unwrap().get_user_subtitle_prefs() {
             Ok(prefs) => prefs,
             Err(error) => {
-                log::warn!(target: "startup", "could not load Emby subtitle preferences: {error}");
+                tracing::warn!(name: "startup.emby.subtitle_preferences_load_failed", target: "startup", error = %error, "could not load Emby subtitle preferences");
                 return;
             }
         };
@@ -115,7 +115,7 @@ impl App {
         if let Err(e) =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {
-            log::warn!(target: "config", "config save failed: {e}");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
         self.flash(format!("Subtitle mode: {new_mode}"), ToastSeverity::Neutral);
     }

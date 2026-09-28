@@ -32,7 +32,7 @@ impl App {
             c.clone()
         };
         if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Feeds) {
-            log::warn!(target: "config", "config save failed: {e}");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
             self.flash(
                 format!("Feed change saved but config save failed ({e})"),
                 ToastSeverity::Error,

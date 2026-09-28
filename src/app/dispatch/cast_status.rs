@@ -53,7 +53,7 @@ impl App {
         let tx = self.channels.cast_tx.clone();
         let _ = client.send(Box::new(move |transport| {
             if let Err(e) = transport.keep_alive() {
-                log::warn!(target: "cast", "cast keep_alive failed: {e}");
+                tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %e, "cast keep-alive failed");
             }
             let status = transport.status();
             let _ = tx.send(CastEvent::StatusUpdated {
@@ -89,7 +89,7 @@ impl App {
                 // (`player_tab.queue`, untouched here) are left exactly as
                 // they were; only progress reporting and further polling
                 // stop.
-                log::warn!(target: "cast", "cast status poll failed: {e}");
+                tracing::warn!(name: "cast.status_poll.failed", target: "cast", error = %e, "cast status poll failed");
                 attachment.disconnected = true;
                 attachment.client = None;
             }

@@ -245,8 +245,7 @@ impl App {
         else {
             return false;
         };
-        log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
-            position_ticks / mbv_emby_model::TICKS_PER_SECOND);
+        tracing::info!(name: "player.stopped.received", target: "player", { slot = ?slot_id, position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, played, error.message = %error.as_deref().unwrap_or("none") }, "player stopped");
         if self.player.is_remote_disconnected() {
             return self.handle_stopped_remote_disconnected();
         }
@@ -271,8 +270,7 @@ impl App {
                 }
             }
             None => {
-                log::warn!(target: "player", "Stopped: no live slot reported; \
-                    skipping progress update");
+                tracing::warn!(name: "player.stopped.slot_missing", target: "player", "stopped event has no live slot; skipping progress update");
             }
         }
         self.next_up_item = None;
@@ -351,11 +349,11 @@ impl App {
             self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
         if played {
-            log::info!(target: "player", "Stopped: marked played, position reset to 0");
+            tracing::info!(name: "player.stopped.progress_marked_played", target: "player", "stopped item marked played");
         } else if position_ticks > 0 {
-            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_emby_model::TICKS_PER_SECOND);
+            tracing::info!(name: "player.stopped.progress_saved", target: "player", position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, "stopped position saved");
         } else {
-            log::info!(target: "player", "Stopped: position not saved (position_ticks={position_ticks})");
+            tracing::info!(name: "player.stopped.progress_not_saved", target: "player", position_ticks, "stopped position not saved");
         }
     }
 
@@ -392,11 +390,9 @@ impl App {
                 let slot_id = slot_id.expect("should_consume implies a resolved slot");
                 let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                 self.playback_queue_mut().clamp_cursor();
-                log::info!(target: "consume", "Stopped-path: removed slot_id={slot_id:?} \
-                    removed_id={removed_id:?}");
+                tracing::info!(name: "consume.stopped.slot_removed", target: "consume", slot = ?slot_id, removed_item = ?removed_id, "stopped item removed from queue");
                 if removed_id.is_none() {
-                    log::warn!(target: "consume", "Stopped-path: slot_id={slot_id:?} not \
-                        found, removal SKIPPED");
+                    tracing::warn!(name: "consume.stopped.slot_removal_skipped", target: "consume", slot = ?slot_id, "stopped slot not found; removal skipped");
                 }
                 if is_audio {
                     self.on_audio_consumed();
@@ -422,7 +418,7 @@ impl App {
             return;
         };
         if self.playback_queue().queue.slot(slot_id).is_none() {
-            log::warn!(target: "consume", "TrackCompleted: slot_id={slot_id:?} maps to no live slot; dropping");
+            tracing::warn!(name: "consume.track_completed.slot_missing", target: "consume", slot = ?slot_id, "completed track has no live slot; dropping");
             return;
         }
         let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
@@ -464,7 +460,7 @@ impl App {
                 }
             } else {
                 let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?} removed_id={removed_id:?}");
+                tracing::info!(name: "consume.track_completed.slot_removed", target: "consume", slot = ?slot_id, removed_item = ?removed_id, "completed track removed from queue");
                 if is_audio {
                     self.on_audio_consumed();
                 } else {
@@ -523,8 +519,7 @@ impl App {
                 .slot_index(target_slot_id)
                 .unwrap_or(0)
         } else {
-            log::warn!(target: "player", "TrackChanged: slot_id={target_slot_id:?} maps to \
-                no live slot; skipping activation");
+            tracing::warn!(name: "player.track_changed.slot_missing", target: "player", slot = ?target_slot_id, "track change has no live slot; skipping activation");
             self.playback_queue().queue.active_index().unwrap_or(0)
         };
         if !self.player.is_remote() {
@@ -540,8 +535,7 @@ impl App {
         }
         if !self.has_direct_remote_queue() {
             let queue = self.playback_queue();
-            log::info!(target: "consume", "TrackChanged: post-save queue len={} ids={:?}",
-                queue.total_queue_len(), queue.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>());
+            tracing::info!(name: "consume.track_changed.queue_saved", target: "consume", queue_length = queue.total_queue_len(), item_ids = ?queue.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>(), "queue saved after track change");
             self.save_queue_state();
         }
     }
@@ -549,7 +543,7 @@ impl App {
     /// Handle a `PlayerEvent::NextUpPlay` (extracted from
     /// `handle_player_event`).
     fn handle_next_up_play(&mut self) {
-        log::warn!(target: "app", "next-up: play triggered");
+        tracing::warn!(name: "app.next_up.play_triggered", target: "app", "next-up play triggered");
         if let Some(item) = self.next_up_item.take() {
             let label = item.playback_label();
             if let Some(idx) =
@@ -575,10 +569,10 @@ impl App {
                     );
                 }
             } else {
-                log::warn!(target: "app", "next-up: item not in queue, cannot jump");
+                tracing::warn!(name: "app.next_up.item_not_in_queue", target: "app", "next-up item not in queue; cannot jump");
             }
         } else {
-            log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
+            tracing::warn!(name: "app.next_up.item_missing", target: "app", "next-up play event has no item");
         }
     }
 

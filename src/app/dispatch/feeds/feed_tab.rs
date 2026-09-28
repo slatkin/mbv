@@ -219,14 +219,7 @@ impl App {
         if let Some(state) = self.feed_entry_state.get(&user_id, &feed_id, &entry.guid) {
             entry.position_ticks = state.position_ticks;
             entry.played = state.played;
-            log::info!(
-                target: "feed_state",
-                "hydrated feed entry guid={} feed_id={} pos={}s played={}",
-                entry.guid,
-                feed_id,
-                state.position_ticks / mbv_emby_model::TICKS_PER_SECOND,
-                state.played,
-            );
+            tracing::info!(name: "feed_state.entry.hydrated", target: "feed_state", guid = %entry.guid, feed_id = %feed_id, position_seconds = state.position_ticks / mbv_emby_model::TICKS_PER_SECOND, played = state.played, "feed entry state hydrated");
         }
         entry
     }
@@ -257,10 +250,7 @@ impl App {
             }
         }
         if hydrated > 0 {
-            log::info!(
-                target: "feed_state",
-                "bulk-hydrated {hydrated} entries for feed_id={feed_id}",
-            );
+            tracing::info!(name: "feed_state.entries.hydrated", target: "feed_state", entry_count = hydrated, feed_id = %feed_id, "feed entry states hydrated");
         }
     }
 
@@ -285,18 +275,12 @@ impl App {
             },
         );
         match self.feed_entry_state.save() {
-            Ok(()) => log::info!(
-                target: "feed_state",
-                "wrote feed entry state guid={} feed_id={} pos={}s played={}",
-                entry_guid,
-                feed_id,
-                position_ticks / mbv_emby_model::TICKS_PER_SECOND,
-                played,
-            ),
-            Err(error) => log::warn!(
-                target: "feed_state",
-                "feed state write failed guid={entry_guid} feed_id={feed_id}: {error}",
-            ),
+            Ok(()) => {
+                tracing::info!(name: "feed_state.entry.saved", target: "feed_state", guid = %entry_guid, feed_id = %feed_id, position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, played, "feed entry state saved");
+            }
+            Err(error) => {
+                tracing::warn!(name: "feed_state.entry.save_failed", target: "feed_state", guid = %entry_guid, feed_id = %feed_id, error = %error, "feed entry state save failed");
+            }
         }
     }
 

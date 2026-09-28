@@ -43,7 +43,7 @@ impl App {
     ) -> Option<HomeContent> {
         use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
-            log::debug!(target: "startup", "ignored stale Emby startup completion");
+            tracing::debug!(name: "startup.emby.stale_startup_completion_ignored", target: "startup", "ignored stale Emby startup completion");
             return None;
         }
         match result {
@@ -76,7 +76,7 @@ impl App {
                 self.spawn_music_group_warmup();
                 self.sync_subtitle_prefs_from_emby();
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
-                log::info!(target: "startup", "Emby startup completed");
+                tracing::info!(name: "startup.emby.completed", target: "startup", "Emby startup completed");
                 // `App::new_independent`'s launch (no daemon attached at
                 // construction) has no Emby client yet when it's built, so
                 // it can't call `try_auto_reconnect` synchronously the way
@@ -112,7 +112,7 @@ impl App {
                 } else {
                     self.flash(format!("Emby unavailable: {error}"), ToastSeverity::Warning);
                 }
-                log::warn!(target: "startup", "Emby startup failed ({state:?}): {error}");
+                tracing::warn!(name: "startup.emby.failed", target: "startup", state = ?state, error = %error, "Emby startup failed");
                 None
             }
         }
@@ -181,7 +181,7 @@ impl App {
     ) -> Option<HomeContent> {
         use crate::app::dispatch::notify::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
-            log::debug!(target: "startup", "ignored stale Emby setup completion");
+            tracing::debug!(name: "startup.emby.stale_setup_completion_ignored", target: "startup", "ignored stale Emby setup completion");
             return None;
         }
         match completion.result {

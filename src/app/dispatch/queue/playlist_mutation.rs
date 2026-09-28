@@ -42,7 +42,7 @@ impl App {
                 PlaylistMutation::Replace { origin, .. } => !self.origin_is_current(*origin),
             });
         if stale {
-            log::debug!(target: "playlist", "discarding stale queued playlist mutation for {playlist_id}");
+            tracing::debug!(name: "playlist.mutation.stale_discarded", target: "playlist", playlist = %playlist_id, "stale queued playlist mutation discarded");
             if let Some(mutation_id) = self
                 .playlist_mutations
                 .get(playlist_id)
@@ -247,10 +247,10 @@ impl App {
             if self.connected_session_id.is_none()
                 && let Err(e) = crate::config::clear_queue_state()
             {
-                log::warn!(target: "queue", "failed to clear queue state: {e}");
+                tracing::warn!(name: "queue.state.clear_failed", target: "queue", error = %e, "queue state clear failed");
             }
         } else if let Err(e) = crate::config::save_queue_state(&state) {
-            log::warn!(target: "queue", "failed to save queue state: {e}");
+            tracing::warn!(name: "queue.state.save_failed", target: "queue", error = %e, "queue state save failed");
         }
     }
 
@@ -269,7 +269,7 @@ impl App {
         if !state.items.is_empty()
             && let Err(e) = crate::config::save_queue_state(&state)
         {
-            log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
+            tracing::warn!(name: "queue.state.save_failed", target: "queue", reason = "no_clear", error = %e, "queue state save failed");
         }
     }
 
@@ -289,11 +289,11 @@ impl App {
             return;
         }
         let Some(state) = crate::config::load_queue_state() else {
-            log::info!(target: "queue", "restore: no queue_state.json found, nothing to restore");
+            tracing::info!(name: "queue.state.restore_skipped", target: "queue", reason = "file_missing", "queue state restore skipped");
             return;
         };
         if state.items.is_empty() {
-            log::info!(target: "queue", "restore: queue_state.json has no items, nothing to restore");
+            tracing::info!(name: "queue.state.restore_skipped", target: "queue", reason = "empty", "queue state restore skipped");
             return;
         }
         let queue_items = state.items;
@@ -310,7 +310,7 @@ impl App {
         self.set_queue_source_if_not_local_daemon(state.source);
         self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
-        log::info!(target: "queue", "restore: restored {restored_count} item(s), cursor={cursor}");
+        tracing::info!(name: "queue.state.restored", target: "queue", item_count = restored_count, cursor, "queue state restored");
         self.spawn_enrich_queue_state(state.positions);
     }
 
@@ -342,7 +342,7 @@ impl App {
             let mut items = match client.get_items_by_ids(&item_ids) {
                 Ok(items) => items,
                 Err(e) => {
-                    log::warn!(target: "queue", "restore: enrichment fetch failed: {e}");
+                    tracing::warn!(name: "queue.state.enrichment_failed", target: "queue", error = %e, "queue state enrichment fetch failed");
                     return;
                 }
             };
@@ -353,10 +353,7 @@ impl App {
                     .get(&item.id)
                     .filter(|&&saved_pos| saved_pos > item.playback_position_ticks)
                 {
-                    log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
-                        saved_pos / mbv_emby_model::TICKS_PER_SECOND,
-                        item.playback_position_ticks / mbv_emby_model::TICKS_PER_SECOND,
-                        item.id);
+                    tracing::info!(name: "player.position.saved_value_applied", target: "player", position_seconds = saved_pos / mbv_emby_model::TICKS_PER_SECOND, emby_position_seconds = item.playback_position_ticks / mbv_emby_model::TICKS_PER_SECOND, item = %item.id, "applying saved playback position");
                     item.playback_position_ticks = saved_pos;
                 }
             }
@@ -380,7 +377,7 @@ impl App {
         if !is_playable(&item) {
             return;
         }
-        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=home", item.id, item.name);
+        tracing::info!(name: "library_route.enqueue.requested", target: "library_route", item = %item.id, item_name = %item.name, source = "home", "enqueue requested");
         let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
@@ -401,7 +398,7 @@ impl App {
         if !is_playable(&item) {
             return;
         }
-        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
+        tracing::info!(name: "library_route.enqueue.requested", target: "library_route", item = %item.id, item_name = %item.name, source = "library_view", "enqueue requested");
         let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;

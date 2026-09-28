@@ -222,10 +222,7 @@ impl App {
         self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
-        log::info!(
-            target: "library_route",
-            "switched playback route previous={previous_route:?} next={library_name:?}"
-        );
+        tracing::info!(name: "library_route.playback_route.switched", target: "library_route", previous_route = ?previous_route, next_route = %library_name, "playback route switched");
         self.flash(
             format!("Routed to {library_name} daemon"),
             ToastSeverity::Success,
@@ -386,7 +383,7 @@ impl App {
 
     pub(in crate::app) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
-        log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
+        tracing::info!(name: "library_route.playback_route.restoring_local", target: "library_route", previous_route = ?previous_route, reason = %status, "restoring local playback");
         if !self.player.is_remote() {
             self.reset_bare_transitions();
             self.player.stop();
@@ -458,7 +455,7 @@ impl App {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
             (Some((name, _)), Some(current)) if name == current => {
-                log::info!(target: "library_route", "already-active route no-op route={name:?} item_id={:?}", item.id);
+                tracing::info!(name: "library_route.playback_route.already_active", target: "library_route", route = %name, item = %item.id, "playback route already active");
             }
             (Some((name, endpoint)), was_routed) => {
                 match Self::try_daemon_route_connect(&endpoint, &name) {
@@ -466,10 +463,7 @@ impl App {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
                     Err(error) => {
-                        log::warn!(
-                            target: "library_route",
-                            "connect to library route {name:?} endpoint {endpoint} failed: {error}"
-                        );
+                        tracing::warn!(name: "library_route.connect.failed", target: "library_route", route = %name, endpoint = %endpoint, error = %error, "library route connection failed");
                         let warning = format!(
                             "\u{26a0} {name} route unreachable, using local playback (mbv.log)"
                         );
@@ -482,11 +476,11 @@ impl App {
                 }
             }
             (None, Some(current)) => {
-                log::info!(target: "library_route", "no route resolved while routed current={current:?}; restoring local item_id={:?}", item.id);
+                tracing::info!(name: "library_route.playback_route.unresolved", target: "library_route", current_route = %current, item = %item.id, "no route resolved while routed; restoring local");
                 self.restore_local_mode("Local playback restored");
             }
             (None, None) => {
-                log::info!(target: "library_route", "no route resolved while local item_id={:?}; staying local", item.id);
+                tracing::info!(name: "library_route.playback_route.unresolved", target: "library_route", item = %item.id, "no route resolved while local; staying local");
             }
         }
     }
@@ -515,12 +509,7 @@ impl App {
                     return;
                 }
                 Err(e) => {
-                    log::warn!(
-                        target: "sessions",
-                        "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
-                        sess.device_name,
-                        e
-                    );
+                    tracing::warn!(name: "sessions.direct_daemon_upgrade.failed", target: "sessions", device = %sess.device_name, endpoint = %endpoint, error = %e, "direct daemon upgrade failed");
                     direct_upgrade_error = Some(e);
                 }
             }
@@ -528,12 +517,7 @@ impl App {
 
         let id = sess.id.clone();
         let name = sess.device_name.clone();
-        log::info!(
-            target: "sessions",
-            "connect: device={name:?} pos={}s runtime={}s",
-            sess.position_s,
-            sess.runtime_s
-        );
+        tracing::info!(name: "sessions.connect.started", target: "sessions", device = %name, position_seconds = sess.position_s, runtime_seconds = sess.runtime_s, "connecting to session");
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
         self.advance_queue_epoch();
