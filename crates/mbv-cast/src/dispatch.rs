@@ -3,7 +3,7 @@
 // and which items cannot be cast at all. See
 // openspec/changes/add-chromecast-target/specs/cast-media-dispatch/spec.md.
 
-use crate::client::CastMediaItem;
+use crate::{CastError, client::CastMediaItem};
 use mbv_audiobookshelf::{AudiobookshelfAudioSource, AudiobookshelfSourceMethod};
 use mbv_queue::{AudiobookshelfBookQueueItem, FeedEntry};
 
@@ -58,10 +58,10 @@ pub fn build_cast_device_profile(subtitles: CastSubtitleKind) -> CastDeviceProfi
 }
 
 /// Resolves a feed entry's existing enclosure URL for cast dispatch.
-pub fn resolve_feed_dispatch(entry: &FeedEntry) -> Result<CastMediaItem, String> {
+pub fn resolve_feed_dispatch(entry: &FeedEntry) -> Result<CastMediaItem, CastError> {
     let url = entry
         .primary_source()
-        .ok_or_else(|| format!("\"{}\" has no media URL to cast", entry.title))?;
+        .ok_or_else(|| CastError::feed_no_url(&entry.title))?;
     Ok(CastMediaItem {
         url: url.to_string(),
         content_type: feed_content_type(entry),
@@ -87,9 +87,9 @@ fn feed_content_type(entry: &FeedEntry) -> String {
 pub fn resolve_audiobookshelf_episode_dispatch(
     source: &AudiobookshelfAudioSource,
     api_key: &str,
-) -> Result<CastMediaItem, String> {
+) -> Result<CastMediaItem, CastError> {
     if source.method != AudiobookshelfSourceMethod::Direct {
-        return Err("Audiobookshelf HLS renditions are not castable".to_string());
+        return Err(CastError::audiobookshelf_hls());
     }
     Ok(CastMediaItem {
         url: append_token(&source.url, api_key),
@@ -109,11 +109,8 @@ fn append_token(url: &str, api_key: &str) -> String {
 /// session or otherwise touches the book's stored position.
 pub fn resolve_audiobookshelf_book_dispatch(
     book: &AudiobookshelfBookQueueItem,
-) -> Result<CastMediaItem, String> {
-    Err(format!(
-        "\"{}\" is a multi-file audiobook and can't be cast",
-        book.title
-    ))
+) -> Result<CastMediaItem, CastError> {
+    Err(CastError::audiobookshelf_book(&book.title))
 }
 
 /// One item's outcome when deciding whether it can be dispatched to a cast
@@ -122,7 +119,7 @@ pub fn resolve_audiobookshelf_book_dispatch(
 #[derive(Debug)]
 pub struct CastDispatchItem {
     pub name: String,
-    pub result: Result<CastMediaItem, String>,
+    pub result: Result<CastMediaItem, CastError>,
 }
 
 /// Splits a selection's per-item resolutions into the media to dispatch and
@@ -136,7 +133,7 @@ pub fn partition_cast_dispatch(
     for item in items {
         match item.result {
             Ok(media) => dispatchable.push(media),
-            Err(reason) => uncastable.push((item.name, reason)),
+            Err(reason) => uncastable.push((item.name, reason.to_string())),
         }
     }
     (dispatchable, uncastable)
@@ -231,7 +228,7 @@ mod tests {
         let Err(error) = resolve_feed_dispatch(&entry) else {
             panic!("expected an uncastable result");
         };
-        assert!(error.contains("Episode"));
+        assert!(error.to_string().contains("Episode"));
     }
 
     // ── 4.4 Audiobookshelf episode dispatch ─────────────────────────────
@@ -295,7 +292,7 @@ mod tests {
         let Err(error) = resolve_audiobookshelf_book_dispatch(&book) else {
             panic!("expected an uncastable result");
         };
-        assert!(error.contains("Book"));
+        assert!(error.to_string().contains("Book"));
     }
 
     #[test]
@@ -319,7 +316,7 @@ mod tests {
             },
             CastDispatchItem {
                 name: "Uncastable".into(),
-                result: Err("no media URL".into()),
+                result: Err(CastError::feed_no_url("Uncastable")),
             },
         ];
         let (dispatchable, uncastable) = partition_cast_dispatch(items);
@@ -327,7 +324,10 @@ mod tests {
         assert_eq!(dispatchable[0].url, "https://a");
         assert_eq!(
             uncastable,
-            vec![("Uncastable".to_string(), "no media URL".to_string())]
+            vec![(
+                "Uncastable".to_string(),
+                "\"Uncastable\" has no media URL to cast".to_string(),
+            )]
         );
     }
 }

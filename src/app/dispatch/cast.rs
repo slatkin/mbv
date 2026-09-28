@@ -12,6 +12,7 @@ use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
 use mbv_audiobookshelf::AudiobookshelfClient;
+use mbv_cast::CastError;
 use mbv_cast::client::CastMediaItem;
 use mbv_cast::dispatch::{self, CastSubtitleKind, build_cast_device_profile};
 use mbv_emby::EmbyClient;
@@ -48,7 +49,7 @@ pub(in crate::app) struct AbsCastContext {
 struct ResolvedCastItem {
     name: String,
     content_id: mbv_queue::QueueItemContentId,
-    result: Result<(CastMediaItem, CastProgressTarget), String>,
+    result: Result<(CastMediaItem, CastProgressTarget), CastError>,
 }
 
 impl App {
@@ -163,7 +164,7 @@ impl App {
             let Some(client) = client else {
                 let _ = tx.send(CastEvent::Dispatched {
                     receiver_id,
-                    outcome: Err("not connected to the receiver yet".to_string()),
+                    outcome: Err(CastError::not_connected()),
                     uncastable,
                 });
                 return;
@@ -182,7 +183,7 @@ impl App {
             if sent.is_err() {
                 let _ = tx.send(CastEvent::Dispatched {
                     receiver_id: String::new(),
-                    outcome: Err("cast worker is gone".to_string()),
+                    outcome: Err(CastError::worker_gone()),
                     uncastable: Vec::new(),
                 });
             }
@@ -279,7 +280,7 @@ impl App {
     fn apply_cast_dispatch(
         &mut self,
         receiver_id: &str,
-        outcome: Result<Vec<DispatchedCastItem>, String>,
+        outcome: Result<Vec<DispatchedCastItem>, CastError>,
         uncastable: &[(String, String)],
     ) {
         let attached = self
@@ -315,7 +316,7 @@ impl App {
     /// the transport hasn't connected yet.
     pub(in crate::app) fn send_cast_command(
         &self,
-        f: impl FnOnce(&mut dyn CastTransport) -> Result<(), String> + Send + 'static,
+        f: impl FnOnce(&mut dyn CastTransport) -> Result<(), CastError> + Send + 'static,
     ) {
         let Some(client) = self.cast_attachment.as_ref().and_then(|a| a.client.clone()) else {
             return;
@@ -339,9 +340,9 @@ impl App {
 fn resolve_and_connect_cast_receiver(
     id: &str,
     timeout: Duration,
-) -> Result<Sender<CastJob>, String> {
+) -> Result<Sender<CastJob>, CastError> {
     let receiver = mbv_cast::discovery::resolve_cast_receiver(id, timeout)
-        .ok_or_else(|| "receiver not found".to_string())?;
+        .ok_or_else(CastError::receiver_not_found)?;
     crate::app::state::types::cast::spawn_cast_worker(move || {
         mbv_cast::client::CastClient::connect(&receiver.host, receiver.port)
     })
@@ -354,7 +355,7 @@ fn cast_connect_fn() -> crate::app::CastConnectFn {
 }
 
 #[cfg(not(test))]
-fn cast_connect_fn() -> fn(&str, Duration) -> Result<Sender<CastJob>, String> {
+fn cast_connect_fn() -> fn(&str, Duration) -> Result<Sender<CastJob>, CastError> {
     resolve_and_connect_cast_receiver
 }
 
@@ -379,10 +380,9 @@ fn resolve_cast_dispatch_item(
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
             resolve_abs_episode_cast_item(episode, abs)
         }
-        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => Err(format!(
-            "\"{}\" is a multi-file audiobook and can't be cast",
-            book.title
-        )),
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => {
+            Err(CastError::audiobookshelf_book(&book.title))
+        }
     };
     ResolvedCastItem {
         name,
@@ -394,17 +394,14 @@ fn resolve_cast_dispatch_item(
 fn resolve_emby_cast_item(
     item: &EmbyItem,
     emby: Option<&EmbyClient>,
-) -> Result<(CastMediaItem, CastProgressTarget), String> {
+) -> Result<(CastMediaItem, CastProgressTarget), CastError> {
     let Some(client) = emby else {
-        return Err(format!(
-            "\"{}\" needs Emby, which isn't connected",
-            item.name
-        ));
+        return Err(CastError::emby_unavailable(&item.name));
     };
     let profile = build_cast_device_profile(CastSubtitleKind::None);
     let info = client
         .get_playback_info_for_cast(&item.id, item.is_audio(), &profile)
-        .map_err(|e| e.to_string())?;
+        .map_err(CastError::emby_playback_info)?;
     Ok((
         info.item,
         CastProgressTarget::Emby {
@@ -419,12 +416,9 @@ fn resolve_emby_cast_item(
 fn resolve_abs_episode_cast_item(
     episode: &AudiobookshelfQueueItem,
     abs: Option<&AbsCastContext>,
-) -> Result<(CastMediaItem, CastProgressTarget), String> {
+) -> Result<(CastMediaItem, CastProgressTarget), CastError> {
     let Some(ctx) = abs else {
-        return Err(format!(
-            "\"{}\" needs Audiobookshelf, which isn't connected",
-            episode.title
-        ));
+        return Err(CastError::audiobookshelf_unavailable(&episode.title));
     };
     let session = ctx
         .client
@@ -436,7 +430,7 @@ fn resolve_abs_episode_cast_item(
             false,
             AudiobookshelfClient::REQUEST_HARD_BOUND,
         )
-        .map_err(|e| format!("\"{}\" Audiobookshelf session failed: {e}", episode.title))?;
+        .map_err(|e| CastError::audiobookshelf_session(&episode.title, e))?;
     let media =
         dispatch::resolve_audiobookshelf_episode_dispatch(&session.source, &ctx.credential)?;
     Ok((
@@ -484,7 +478,7 @@ fn partition_dispatch_with_start(
                 });
                 media.push(cast_media);
             }
-            Err(reason) => uncastable.push((item.name, reason)),
+            Err(reason) => uncastable.push((item.name, reason.to_string())),
         }
     }
     (media, uncastable, start_index, dispatched)
@@ -496,12 +490,12 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use mbv_queue::FeedEntry;
 
-    fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-        Err("not reached by this test".to_string())
+    fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, CastError> {
+        Err(CastError::receiver_not_found())
     }
 
-    fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-        Err("receiver not found".to_string())
+    fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, CastError> {
+        Err(CastError::receiver_not_found())
     }
 
     fn feed_item(guid: &str, url: Option<&str>) -> QueueItem {
@@ -646,7 +640,7 @@ mod tests {
             ResolvedCastItem {
                 name: "Uncastable".into(),
                 content_id: mbv_queue::QueueItemContentId::Feed("a".into()),
-                result: Err("no url".into()),
+                result: Err(CastError::feed_no_url("Uncastable")),
             },
             ResolvedCastItem {
                 name: "Castable".into(),
@@ -669,7 +663,10 @@ mod tests {
         assert_eq!(start_index, 0);
         assert_eq!(
             uncastable,
-            vec![("Uncastable".to_string(), "no url".to_string())]
+            vec![(
+                "Uncastable".to_string(),
+                "\"Uncastable\" has no media URL to cast".to_string(),
+            )]
         );
         assert_eq!(dispatched.len(), 1);
         assert_eq!(dispatched[0].url, "https://b");

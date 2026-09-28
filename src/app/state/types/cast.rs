@@ -18,6 +18,7 @@
 // inside the same closure that spawns the worker thread, rather than
 // capturing an already-built one, is what keeps this compiling.
 
+use mbv_cast::CastError;
 use mbv_cast::client::{CastClient, CastMediaItem, CastStatus};
 use mbv_cast::discovery::CastReceiver;
 use mbv_ids::{EmbySessionId, MediaSourceId};
@@ -32,51 +33,51 @@ use std::time::Instant;
 /// receiver connection. No `Send` bound: see the threading-model note above
 /// -- a `CastTransport` never crosses a thread boundary after construction.
 pub(in crate::app) trait CastTransport {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), String>;
-    fn play(&mut self) -> Result<(), String>;
-    fn pause(&mut self) -> Result<(), String>;
-    fn stop(&mut self) -> Result<(), String>;
-    fn seek(&mut self, position_seconds: f32) -> Result<(), String>;
-    fn skip_next(&mut self) -> Result<(), String>;
-    fn skip_previous(&mut self) -> Result<(), String>;
-    fn set_volume(&self, level: f32) -> Result<(), String>;
-    fn set_muted(&self, muted: bool) -> Result<(), String>;
-    fn status(&mut self) -> Result<CastStatus, String>;
-    fn keep_alive(&self) -> Result<(), String>;
+    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError>;
+    fn play(&mut self) -> Result<(), CastError>;
+    fn pause(&mut self) -> Result<(), CastError>;
+    fn stop(&mut self) -> Result<(), CastError>;
+    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError>;
+    fn skip_next(&mut self) -> Result<(), CastError>;
+    fn skip_previous(&mut self) -> Result<(), CastError>;
+    fn set_volume(&self, level: f32) -> Result<(), CastError>;
+    fn set_muted(&self, muted: bool) -> Result<(), CastError>;
+    fn status(&mut self) -> Result<CastStatus, CastError>;
+    fn keep_alive(&self) -> Result<(), CastError>;
 }
 
 impl CastTransport for CastClient {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), String> {
+    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError> {
         CastClient::load_queue(self, items, start_index)
     }
-    fn play(&mut self) -> Result<(), String> {
+    fn play(&mut self) -> Result<(), CastError> {
         CastClient::play(self)
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), CastError> {
         CastClient::pause(self)
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), CastError> {
         CastClient::stop(self)
     }
-    fn seek(&mut self, position_seconds: f32) -> Result<(), String> {
+    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         CastClient::seek(self, position_seconds)
     }
-    fn skip_next(&mut self) -> Result<(), String> {
+    fn skip_next(&mut self) -> Result<(), CastError> {
         CastClient::skip_next(self)
     }
-    fn skip_previous(&mut self) -> Result<(), String> {
+    fn skip_previous(&mut self) -> Result<(), CastError> {
         CastClient::skip_previous(self)
     }
-    fn set_volume(&self, level: f32) -> Result<(), String> {
+    fn set_volume(&self, level: f32) -> Result<(), CastError> {
         CastClient::set_volume(self, level)
     }
-    fn set_muted(&self, muted: bool) -> Result<(), String> {
+    fn set_muted(&self, muted: bool) -> Result<(), CastError> {
         CastClient::set_muted(self, muted)
     }
-    fn status(&mut self) -> Result<CastStatus, String> {
+    fn status(&mut self) -> Result<CastStatus, CastError> {
         CastClient::status(self)
     }
-    fn keep_alive(&self) -> Result<(), String> {
+    fn keep_alive(&self) -> Result<(), CastError> {
         CastClient::keep_alive(self)
     }
 }
@@ -139,13 +140,13 @@ pub(in crate::app) type CastJob = Box<dyn FnOnce(&mut dyn CastTransport) + Send>
 /// every caller that must not block its own thread (all of them so far)
 /// invokes this from a background thread of its own, the way
 /// `App::connect_cast_receiver` does.
-pub(in crate::app) fn spawn_cast_worker<T, F>(build: F) -> Result<Sender<CastJob>, String>
+pub(in crate::app) fn spawn_cast_worker<T, F>(build: F) -> Result<Sender<CastJob>, CastError>
 where
     T: CastTransport,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
+    F: FnOnce() -> Result<T, CastError> + Send + 'static,
 {
     let (tx, rx) = std::sync::mpsc::channel::<CastJob>();
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), CastError>>();
     std::thread::spawn(move || match build() {
         Ok(mut transport) => {
             if ready_tx.send(Ok(())).is_err() {
@@ -161,7 +162,7 @@ where
     });
     match ready_rx.recv() {
         Ok(result) => result.map(|()| tx),
-        Err(_) => Err("cast worker thread exited before reporting readiness".to_string()),
+        Err(_) => Err(CastError::worker_not_ready()),
     }
 }
 
@@ -192,14 +193,14 @@ pub(in crate::app) struct CastAttachment {
 pub(in crate::app) enum CastEvent {
     Dispatched {
         receiver_id: String,
-        outcome: Result<Vec<DispatchedCastItem>, String>,
+        outcome: Result<Vec<DispatchedCastItem>, CastError>,
         uncastable: Vec<(String, String)>,
     },
     StatusUpdated {
         receiver_id: String,
-        status: Result<CastStatus, String>,
+        status: Result<CastStatus, CastError>,
     },
-    TransportError(String),
+    TransportError(CastError),
     /// A background resolve-and-connect (`App::connect_cast_receiver`)
     /// succeeded: `client` is the worker's job sender, ready for
     /// `App::attach_cast`/`set_cast_client` (7.3, and task 8.3's reuse).
@@ -211,7 +212,7 @@ pub(in crate::app) enum CastEvent {
     /// found by a fresh discovery browse (7.5's "unavailable" case).
     ConnectFailed {
         receiver_id: String,
-        error: String,
+        error: CastError,
     },
     /// A background cast discovery browse (`cast_actions::spawn_cast_discovery`)
     /// completed -- possibly empty, since `browse_cast_receivers` never
@@ -230,7 +231,7 @@ pub(in crate::app) struct FakeCastTransport {
     // `spawn_fake_cast_worker` -- matching the real `CastTransport`'s
     // never-leaves-its-thread shape.
     pub(in crate::app) calls: Arc<std::sync::Mutex<Vec<String>>>,
-    pub(in crate::app) status: Result<CastStatus, String>,
+    pub(in crate::app) status: Option<CastStatus>,
 }
 
 #[cfg(test)]
@@ -238,65 +239,67 @@ impl Default for FakeCastTransport {
     fn default() -> Self {
         Self {
             calls: Arc::new(std::sync::Mutex::new(Vec::new())),
-            status: Err("no status set".to_string()),
+            status: None,
         }
     }
 }
 
 #[cfg(test)]
 impl CastTransport for FakeCastTransport {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), String> {
+    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("load_queue({}, {start_index})", items.len()));
         Ok(())
     }
-    fn play(&mut self) -> Result<(), String> {
+    fn play(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("play".to_string());
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("pause".to_string());
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("stop".to_string());
         Ok(())
     }
-    fn seek(&mut self, position_seconds: f32) -> Result<(), String> {
+    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("seek({position_seconds})"));
         Ok(())
     }
-    fn skip_next(&mut self) -> Result<(), String> {
+    fn skip_next(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("skip_next".to_string());
         Ok(())
     }
-    fn skip_previous(&mut self) -> Result<(), String> {
+    fn skip_previous(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("skip_previous".to_string());
         Ok(())
     }
-    fn set_volume(&self, level: f32) -> Result<(), String> {
+    fn set_volume(&self, level: f32) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("set_volume({level})"));
         Ok(())
     }
-    fn set_muted(&self, muted: bool) -> Result<(), String> {
+    fn set_muted(&self, muted: bool) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("set_muted({muted})"));
         Ok(())
     }
-    fn status(&mut self) -> Result<CastStatus, String> {
-        self.status.clone()
+    fn status(&mut self) -> Result<CastStatus, CastError> {
+        self.status
+            .clone()
+            .ok_or_else(CastError::receiver_not_found)
     }
-    fn keep_alive(&self) -> Result<(), String> {
+    fn keep_alive(&self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("keep_alive".to_string());
         Ok(())
     }

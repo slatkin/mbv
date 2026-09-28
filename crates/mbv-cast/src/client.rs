@@ -5,6 +5,7 @@
 // subtitle tracks or a queue-jump message; heartbeat requires an explicit
 // keep-alive pump).
 
+use crate::CastError;
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
     Media, MediaQueue, PlayerState as CastPlayerState, QueueItem, QueueType, StatusEntry,
@@ -78,21 +79,21 @@ impl CastClient {
     /// Connects to a receiver at `host:port` and launches the default media
     /// receiver app. Returns an error rather than panicking on any failure
     /// (connection, app launch, or app-transport handshake).
-    pub fn connect(host: &str, port: u16) -> Result<Self, String> {
+    pub fn connect(host: &str, port: u16) -> Result<Self, CastError> {
         let device = CastDevice::connect_without_host_verification(host.to_string(), port)
-            .map_err(|e| format!("cast connect failed: {e}"))?;
+            .map_err(|e| CastError::transport("connect", e))?;
         device
             .connection
             .connect(RECEIVER_PLATFORM_ID)
-            .map_err(|e| format!("cast receiver-platform connect failed: {e}"))?;
+            .map_err(|e| CastError::transport("receiver-platform connect", e))?;
         let app = device
             .receiver
             .launch_app(&CastDeviceApp::DefaultMediaReceiver)
-            .map_err(|e| format!("cast launch_app failed: {e}"))?;
+            .map_err(|e| CastError::transport("launch_app", e))?;
         device
             .connection
             .connect(app.transport_id.as_str())
-            .map_err(|e| format!("cast app-transport connect failed: {e}"))?;
+            .map_err(|e| CastError::transport("app-transport connect", e))?;
         Ok(Self {
             device,
             transport_id: app.transport_id,
@@ -105,29 +106,29 @@ impl CastClient {
     /// Stops the launched receiver app. Never called on mbv's own exit while
     /// attached (design.md "exit orphans the session") -- this is for
     /// explicit teardown paths only.
-    pub fn teardown(&self) -> Result<(), String> {
+    pub fn teardown(&self) -> Result<(), CastError> {
         self.device
             .receiver
             .stop_app(self.session_id.as_str())
-            .map_err(|e| format!("cast teardown failed: {e}"))
+            .map_err(|e| CastError::transport("teardown", e))
     }
 
     /// Answers any heartbeat PING the receiver has sent since the last call
     /// with a PONG, keeping the connection alive. A real device drops an
     /// unanswered sender within roughly a minute; callers on a status-poll
     /// cadence (design.md targets 5-10s) should call this every tick.
-    pub fn keep_alive(&self) -> Result<(), String> {
+    pub fn keep_alive(&self) -> Result<(), CastError> {
         self.device
             .heartbeat
             .pong()
-            .map_err(|e| format!("cast keep_alive failed: {e}"))
+            .map_err(|e| CastError::transport("keep_alive", e))
     }
 
     pub fn load(
         &mut self,
         item: &CastMediaItem,
         start_position_seconds: f64,
-    ) -> Result<(), String> {
+    ) -> Result<(), CastError> {
         let media = build_media(&item.url, &item.content_type);
         let status = self
             .device
@@ -141,19 +142,23 @@ impl CastClient {
                     autoplay: true,
                 },
             )
-            .map_err(|e| format!("cast load failed: {e}"))?;
+            .map_err(|e| CastError::transport("load", e))?;
         self.adopt_status(&status);
         self.dispatched_queue = None;
         Ok(())
     }
 
-    pub fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), String> {
+    pub fn load_queue(
+        &mut self,
+        items: &[CastMediaItem],
+        start_index: u16,
+    ) -> Result<(), CastError> {
         let queue = build_queue(items, start_index);
         let status = self
             .device
             .media
             .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| format!("cast load_queue failed: {e}"))?;
+            .map_err(|e| CastError::transport("load_queue", e))?;
         self.adopt_status(&status);
         self.dispatched_queue = Some(DispatchedQueue {
             queue,
@@ -162,47 +167,47 @@ impl CastClient {
         Ok(())
     }
 
-    pub fn play(&mut self) -> Result<(), String> {
+    pub fn play(&mut self) -> Result<(), CastError> {
         let id = self.require_media_session_id()?;
         let entry = self
             .device
             .media
             .play(self.transport_id.as_str(), id)
-            .map_err(|e| format!("cast play failed: {e}"))?;
+            .map_err(|e| CastError::transport("play", e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
 
-    pub fn pause(&mut self) -> Result<(), String> {
+    pub fn pause(&mut self) -> Result<(), CastError> {
         let id = self.require_media_session_id()?;
         let entry = self
             .device
             .media
             .pause(self.transport_id.as_str(), id)
-            .map_err(|e| format!("cast pause failed: {e}"))?;
+            .map_err(|e| CastError::transport("pause", e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
 
-    pub fn stop(&mut self) -> Result<(), String> {
+    pub fn stop(&mut self) -> Result<(), CastError> {
         let id = self.require_media_session_id()?;
         let entry = self
             .device
             .media
             .stop(self.transport_id.as_str(), id)
-            .map_err(|e| format!("cast stop failed: {e}"))?;
+            .map_err(|e| CastError::transport("stop", e))?;
         self.adopt_status_entry(&entry);
         self.dispatched_queue = None;
         Ok(())
     }
 
-    pub fn seek(&mut self, position_seconds: f32) -> Result<(), String> {
+    pub fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         let id = self.require_media_session_id()?;
         let entry = self
             .device
             .media
             .seek(self.transport_id.as_str(), id, Some(position_seconds), None)
-            .map_err(|e| format!("cast seek failed: {e}"))?;
+            .map_err(|e| CastError::transport("seek", e))?;
         self.adopt_status_entry(&entry);
         Ok(())
     }
@@ -210,31 +215,31 @@ impl CastClient {
     /// Advances to the next entry of the queue this client last loaded, by
     /// reloading it with a shifted `start_index`. `rust_cast` 0.21 has no
     /// `QUEUE_UPDATE/jump` message; see design.md Risks.
-    pub fn skip_next(&mut self) -> Result<(), String> {
+    pub fn skip_next(&mut self) -> Result<(), CastError> {
         self.jump(1)
     }
 
-    pub fn skip_previous(&mut self) -> Result<(), String> {
+    pub fn skip_previous(&mut self) -> Result<(), CastError> {
         self.jump(-1)
     }
 
-    fn jump(&mut self, delta: i32) -> Result<(), String> {
+    fn jump(&mut self, delta: i32) -> Result<(), CastError> {
         let Some(dispatched) = &self.dispatched_queue else {
-            return Err("cast jump failed: no dispatched queue to advance".to_string());
+            return Err(CastError::jump_no_queue());
         };
         let Some(next_index) = next_queue_index(
             dispatched.current_index,
             dispatched.queue.items.len(),
             delta,
         ) else {
-            return Err("cast jump failed: no adjacent queue item".to_string());
+            return Err(CastError::jump_no_adjacent());
         };
         let queue = dispatched.queue.clone();
         let status = self
             .device
             .media
             .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| format!("cast jump failed: {e}"))?;
+            .map_err(|e| CastError::transport("jump", e))?;
         self.adopt_status(&status);
         if let Some(dispatched) = &mut self.dispatched_queue {
             dispatched.current_index = next_index;
@@ -242,32 +247,32 @@ impl CastClient {
         Ok(())
     }
 
-    pub fn set_volume(&self, level: f32) -> Result<(), String> {
+    pub fn set_volume(&self, level: f32) -> Result<(), CastError> {
         self.device
             .receiver
             .set_volume(level)
-            .map_err(|e| format!("cast set_volume failed: {e}"))
+            .map_err(|e| CastError::transport("set_volume", e))
             .map(|_| ())
     }
 
-    pub fn set_muted(&self, muted: bool) -> Result<(), String> {
+    pub fn set_muted(&self, muted: bool) -> Result<(), CastError> {
         self.device
             .receiver
             .set_volume(muted)
-            .map_err(|e| format!("cast set_muted failed: {e}"))
+            .map_err(|e| CastError::transport("set_muted", e))
             .map(|_| ())
     }
 
-    pub fn status(&mut self) -> Result<CastStatus, String> {
+    pub fn status(&mut self) -> Result<CastStatus, CastError> {
         let status = self
             .device
             .media
             .get_status(self.transport_id.as_str(), self.media_session_id)
-            .map_err(|e| format!("cast get_status failed: {e}"))?;
+            .map_err(|e| CastError::transport("get_status", e))?;
         let entry = status
             .entries
             .first()
-            .ok_or_else(|| "cast get_status returned no entries".to_string())?;
+            .ok_or_else(CastError::status_no_entries)?;
         self.adopt_status_entry(entry);
         Ok(cast_status_from_entry(entry))
     }
@@ -282,9 +287,8 @@ impl CastClient {
         self.media_session_id = Some(entry.media_session_id);
     }
 
-    fn require_media_session_id(&self) -> Result<i32, String> {
-        self.media_session_id
-            .ok_or_else(|| "cast command failed: nothing loaded yet".to_string())
+    fn require_media_session_id(&self) -> Result<i32, CastError> {
+        self.media_session_id.ok_or_else(CastError::no_session_id)
     }
 }
 
