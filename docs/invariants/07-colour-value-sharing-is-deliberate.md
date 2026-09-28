@@ -110,9 +110,6 @@ The enforcement that does exist is narrower:
   consumer cannot bypass the role tier.
 - The one closed surface resolver (`surface_colors`) keeps paint sites from
   naming roles for surfaces at all.
-- The `Palette` uniqueness and `docs/palette.json` drift tests landed by
-  `palette-enum` were deleted in the #801 test prune; nothing currently pins
-  the value tier against the name table or `docs/palette.json`.
 
 `#1e2326`'s four symbols are the live gap: nothing records whether the tab-bar
 background and the three pill-selector symbols are independent or bonded.
