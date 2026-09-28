@@ -100,24 +100,24 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
 
 ## 4. Call-site conversion (design D4; drop the crate's `log` dependency when it has no `log::` uses left)
 
-- [ ] 4.1 `mbv-player` (~103 sites). Verify: `rg 'log::' crates/mbv-player/src` is empty and
+- [x] 4.1 `mbv-player` (~103 sites). Verify: `rg 'log::' crates/mbv-player/src` is empty and
   the crate's checks pass.
-- [ ] 4.2 `mbv-daemon`, `mbvd`, `mbv-remote-player` (~54 sites). Verify: `rg 'log::'` is
+- [x] 4.2 `mbv-daemon`, `mbvd`, `mbv-remote-player` (~54 sites). Verify: `rg 'log::'` is
   empty in all three and their checks pass.
-- [ ] 4.3 `mbv-emby`, `mbv-audiobookshelf`, `mbv-ws`, `mbv-net`, `mbv-cast`, `mbv-feed`
+- [x] 4.3 `mbv-emby`, `mbv-audiobookshelf`, `mbv-ws`, `mbv-net`, `mbv-cast`, `mbv-feed`
   (~76 sites). Verify: `rg 'log::'` is empty in all six and their checks pass.
-- [ ] 4.4 `mbv-config`, `mbv-desktop`, `mbv-visualizer`, `mbv-images`, and the TUI's
+- [x] 4.4 `mbv-config`, `mbv-desktop`, `mbv-visualizer`, `mbv-images`, and the TUI's
   `src/main.rs`, `src/local_daemon.rs`, `src/config.rs` (~23 sites). Also remove the unused
   `log.workspace = true` from `crates/mbv-ui-model/Cargo.toml`. Verify: `rg 'log::'` is
   empty in those paths, `mbv-ui-model` no longer lists `log`, and their checks pass.
-- [ ] 4.5 `src/app/dispatch/` (~119 sites). Verify: `rg 'log::' src/app/dispatch` is empty
+- [x] 4.5 `src/app/dispatch/` (~119 sites). Verify: `rg 'log::' src/app/dispatch` is empty
   and `cargo nextest run -p mbv` passes.
-- [ ] 4.6 The rest of `src/app/` (`shell/`, `state/`, `infra/`, ~40 sites). Verify: `rg 'log::' src` is empty, the root crate's `log`
+- [x] 4.6 The rest of `src/app/` (`shell/`, `state/`, `infra/`, ~40 sites). Verify: `rg 'log::' src` is empty, the root crate's `log`
   dependency is removed, and `cargo nextest run -p mbv` passes.
 
 ## 5. Wrap-up
 
-- [ ] 5.1 Workspace gate: `cargo clippy --workspace --all-targets -- -D warnings`,
+- [x] 5.1 Workspace gate: `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass. `rg -l '"log"|log\.workspace'
   crates/*/Cargo.toml Cargo.toml` lists only `mbv-core`, which still needs `log` for the
   bridge's `set_max_level`.
@@ -127,5 +127,5 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   the local daemon's `ctrl.client.connected` line showing the same `peer=` (the TUI's
   pid). Confirm that no `api_key` value appears. If a TCP `mbvd` is available, repeat the
   connection and confirm both connect lines show the same `peer=` `ip:port`.
-- [ ] 5.3 Before pushing, run `make check-code-file-lines`. Split any file over 800 lines
+- [x] 5.3 Before pushing, run `make check-code-file-lines`. Split any file over 800 lines
   along responsibility seams.
