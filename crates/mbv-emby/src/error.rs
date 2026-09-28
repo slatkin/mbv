@@ -28,13 +28,12 @@ impl EmbyError {
         Self::new(EmbyErrorKind::Playlist, message)
     }
 
-    #[must_use]
     pub(crate) fn playback(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Playback, message)
     }
 
-    /// An app-side lookup or operation failure with no server fault, e.g. an
-    /// item or path that cannot be resolved or a local action that failed.
+    /// An app-side lookup failure: the requested item or path cannot be
+    /// resolved. The server was not at fault.
     #[must_use]
     pub fn resolve(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Resolve, message)
