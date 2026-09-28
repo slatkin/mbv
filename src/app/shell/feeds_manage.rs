@@ -269,7 +269,7 @@ impl super::Model {
                 name,
                 url: resolved_url,
                 kind,
-                result,
+                result: result.map_err(mbv_ui_model::UiModelError::operation),
             });
         });
         if let Some(component) = self.feeds_manage_component_mut() {

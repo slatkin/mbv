@@ -50,7 +50,7 @@ impl SearchSidebar {
         self.last_drain_error = None;
     }
 
-    pub fn apply_drain(&mut self, query: &str, result: Result<Vec<EmbyItem>, String>) {
+    pub fn apply_drain(&mut self, query: &str, result: Result<Vec<EmbyItem>, crate::UiModelError>) {
         // A faster keystroke can dispatch a newer query while an older one
         // is still in flight; responses race on arrival order, not send
         // order. Discard anything that isn't answering the live query,
@@ -72,7 +72,7 @@ impl SearchSidebar {
                 self.last_drain_error = None;
             }
             Err(error) => {
-                self.last_drain_error = Some(error);
+                self.last_drain_error = Some(error.to_string());
             }
         }
     }
@@ -158,7 +158,7 @@ mod tests {
         let prior = vec![make_item("Previous", "Movie")];
         sidebar.results = prior.clone();
 
-        sidebar.apply_drain("", Err("API timeout".into()));
+        sidebar.apply_drain("", Err(crate::UiModelError::operation("API timeout")));
 
         assert!(!sidebar.loading);
         assert_eq!(sidebar.last_drain_error.as_deref(), Some("API timeout"));

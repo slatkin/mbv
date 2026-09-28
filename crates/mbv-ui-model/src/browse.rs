@@ -295,9 +295,11 @@ pub fn restore_library_position<F>(
     saved: &mbv_queue::LibraryPosition,
     visible_rows: usize,
     mut fetch_level: F,
-) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, String>
+) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, crate::UiModelError>
 where
-    F: FnMut(&mbv_queue::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
+    F: FnMut(
+        &mbv_queue::LibraryPositionLevel,
+    ) -> Result<(Vec<EmbyItem>, usize), crate::UiModelError>,
 {
     restore_library_position_with_fetched_rows_for_kind(
         saved,
@@ -317,9 +319,11 @@ pub fn restore_library_position_with_fetched_rows_for_kind<F>(
     visible_rows: usize,
     filter_kind: crate::sort_filter::LetterFilterKind,
     mut fetch_level: F,
-) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, String>
+) -> Result<Option<(mbv_queue::LibraryPosition, Vec<BrowseLevel>)>, crate::UiModelError>
 where
-    F: FnMut(&mbv_queue::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
+    F: FnMut(
+        &mbv_queue::LibraryPositionLevel,
+    ) -> Result<(Vec<EmbyItem>, usize, usize), crate::UiModelError>,
 {
     if saved.levels.is_empty() {
         return Ok(None);

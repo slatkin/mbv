@@ -24,6 +24,8 @@ pub mod browse;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
+mod error;
+pub use error::UiModelError;
 pub mod feed;
 pub mod feed_age;
 pub mod feed_tab;

@@ -93,8 +93,10 @@ impl SearchSidebarComponent {
         query: &str,
         result: Result<Vec<mbv_emby_model::EmbyItem>, ComponentsError>,
     ) {
-        self.sidebar
-            .apply_drain(query, result.map_err(|error| error.to_string()));
+        self.sidebar.apply_drain(
+            query,
+            result.map_err(|error| mbv_ui_model::UiModelError::operation(error.to_string())),
+        );
     }
 
     /// Handle a keyboard event. Local state changes return `None`; the root
