@@ -27,10 +27,13 @@ struct InitialItemState {
 impl PlaybackRun {
     /// The `playback` correlation span for one active slot (design D5):
     /// `slot`, `item` and a `play_session` field left `Empty` until the Emby
-    /// session id is assigned.
+    /// session id is assigned. The span is a root (`parent: None`) so a span
+    /// rebuilt while the previous slot's span is still entered does not nest
+    /// under it — the rendered scope is the rebuilt span alone.
     pub(crate) fn new_playback_span(slot_id: QueueSlotId, item: &QueueItem) -> tracing::Span {
         tracing::info_span!(
             target: "player",
+            parent: None,
             "playback",
             slot = slot_id.raw(),
             item = %item.id(),
@@ -46,6 +49,17 @@ impl PlaybackRun {
         if let (Some(slot_id), Some(item)) = (self.active_slot_id(), self.active_item()) {
             self.playback_span = Self::new_playback_span(slot_id, item);
         }
+    }
+
+    /// Run `f` under the active slot's `playback` span (design D5). After a
+    /// mid-tick `rebuild_playback_span`, the run loop's tick guard still holds
+    /// the previous slot's span, so operations that report or load for the
+    /// new slot enter the rebuilt span explicitly; the event's rendered scope
+    /// is the rebuilt span alone (it is a root span).
+    pub(crate) fn in_playback_span<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let span = self.playback_span.clone();
+        let _guard = span.enter();
+        f(self)
     }
 
     pub(crate) fn queue_len(&self) -> usize {
@@ -295,20 +309,22 @@ impl PlaybackRun {
     /// session for a non-Emby item — the same switch a track transition makes,
     /// so reporting identity always names the item playback is on.
     pub(crate) fn report_active_item(&mut self) {
-        if let Some(QueueItem::Emby(emby)) = self.active_item().cloned() {
-            let (urls, ok) = self.reporter.start_item(&emby, &self.playback_span);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(
-                    target: "player",
-                    "start_item failed for adopted item={}",
-                    emby.id
-                );
+        self.in_playback_span(|this| {
+            if let Some(QueueItem::Emby(emby)) = this.active_item().cloned() {
+                let (urls, ok) = this.reporter.start_item(&emby, &this.playback_span);
+                this.ext_sub_urls = urls;
+                if !ok {
+                    log::warn!(
+                        target: "player",
+                        "start_item failed for adopted item={}",
+                        emby.id
+                    );
+                }
+            } else {
+                this.ext_sub_urls = vec![];
+                this.reporter.clear_session();
             }
-        } else {
-            self.ext_sub_urls = vec![];
-            self.reporter.clear_session();
-        }
+        });
     }
 
     pub(crate) fn prepare_item(

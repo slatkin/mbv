@@ -470,19 +470,21 @@ impl PlaybackRun {
     /// for a non-Emby item so the reporter becomes a no-op. The outgoing
     /// item's `report_stopped` was already sent with the original IDs.
     pub(crate) fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
-        if let Some(emby) = next_item.as_emby() {
-            let (urls, ok) = self.reporter.start_item(emby, &self.playback_span);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(target: "player", "start_item failed for playlist track-transition item={}", emby.id);
+        self.in_playback_span(|this| {
+            if let Some(emby) = next_item.as_emby() {
+                let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
+                this.ext_sub_urls = urls;
+                if !ok {
+                    log::warn!(target: "player", "start_item failed for playlist track-transition item={}", emby.id);
+                }
+                return;
             }
-            return;
-        }
-        self.ext_sub_urls = vec![];
-        // Feed item: clear Emby session IDs so the progress reporter
-        // (if any) becomes a no-op.  The old item's report_stopped has
-        // already been sent above with the original IDs.
-        self.reporter.clear_session();
+            this.ext_sub_urls = vec![];
+            // Feed item: clear Emby session IDs so the progress reporter
+            // (if any) becomes a no-op.  The old item's report_stopped has
+            // already been sent above with the original IDs.
+            this.reporter.clear_session();
+        });
     }
 }
 

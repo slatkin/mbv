@@ -77,7 +77,8 @@ fn execute_stopped_report(data: StoppedReportData) {
     } = data;
     // `playback.report` correlation span (design D5): the stopped data's own
     // ids, so the lines match the session actually being reported.
-    let _report_span = report_span(id.as_str(), Some(&sid));
+    let span = report_span(id.as_str(), Some(&sid));
+    let _entered = span.entered();
     if let Some(ref tx) = ws_tx
         && tx.is_connected()
     {
@@ -101,10 +102,12 @@ pub(crate) fn record_play_session(span: &tracing::Span, session_id: &EmbySession
 
 /// The `playback.report` correlation span for one report (design D5): the
 /// `item` and `play_session` of the session being reported. An `Empty`
-/// `play_session` stays unrecorded until the session id is known.
+/// `play_session` stays unrecorded until the session id is known. The span is
+/// a root (`parent: None`), so report lines never inherit a `playback` span.
 pub(crate) fn report_span(item: &str, session: Option<&EmbySessionId>) -> tracing::Span {
     let span = tracing::info_span!(
         target: "player",
+        parent: None,
         "playback.report",
         item = %item,
         play_session = tracing::field::Empty,
@@ -136,7 +139,8 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
                     media_source_id,
                     session_id,
                 } => {
-                    let _report_span = report_span(item.id.as_str(), Some(&session_id));
+                    let span = report_span(item.id.as_str(), Some(&session_id));
+                    let _entered = span.entered();
                     report_start_job(&client, &item, &media_source_id, &session_id);
                 }
                 StartIds::Deferred {
@@ -304,7 +308,8 @@ impl SessionReporter {
             .clone();
         // `playback.report` from the shared ids at call time — exactly the
         // ids this report sends (design D5).
-        let _report_span = report_span(id.as_str(), Some(&sid));
+        let span = report_span(id.as_str(), Some(&sid));
+        let _entered = span.entered();
         let (pos, runtime, paused) = {
             let s = self
                 .status
@@ -401,7 +406,8 @@ impl SessionReporter {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             (ids.0.clone(), ids.2.clone())
         };
-        let _report_span = report_span(id.as_str(), Some(&sid));
+        let span = report_span(id.as_str(), Some(&sid));
+        let _entered = span.entered();
         self.client.report_ping(&sid);
     }
 

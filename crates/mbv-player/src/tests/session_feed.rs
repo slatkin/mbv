@@ -527,18 +527,45 @@ fn wait_for_captured_line(rx: &mpsc::Receiver<String>, needle: &str) -> String {
     }
 }
 
+/// Asserts a report line names the reported session's item and play session,
+/// carries no `slot` field, and carries nothing from `forbidden` (the other
+/// session's values).
+fn assert_report_line_correlated(line: &str, item: &str, session: &str, forbidden: &[&str]) {
+    assert!(
+        line.contains(&format!("item={item}")),
+        "reported item missing: {line}"
+    );
+    assert!(
+        line.contains(&format!("play_session={session}")),
+        "reported play_session missing: {line}"
+    );
+    for value in forbidden {
+        assert!(
+            !line.contains(value),
+            "foreign value {value} leaked: {line}"
+        );
+    }
+    assert!(
+        !line.contains("slot="),
+        "playback span leaked onto report line: {line}"
+    );
+}
+
 #[test]
 fn deferred_start_report_lines_carry_new_item_not_previous_session() {
     use tracing_subscriber::prelude::*;
 
     let http = mbv_net::mock_http::MockHttp::new();
     // The worker consumes, in order: the previous session's stopped report,
-    // the deferred start's PlaybackInfo fetch, then the start report itself.
+    // the deferred start's PlaybackInfo fetch, then the start report itself;
+    // the direct progress and ping calls follow once the ids hold session B.
     http.respond(200, "");
     http.respond(
         200,
         r#"{"MediaSources":[{"Id":"msid-b"}],"PlaySessionId":"session-b"}"#,
     );
+    http.respond(200, "");
+    http.respond(200, "");
     http.respond(200, "");
     let cfg = mbv_config::Config {
         server_url: "http://127.0.0.1:1".into(),
@@ -554,9 +581,10 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
     tracing::subscriber::with_default(subscriber, || {
         // The report code still logs via `log::` (row 4.1 owns conversion);
         // bridge it into the capture. Per-process init, safe under nextest's
-        // one-test-per-process model.
+        // one-test-per-process model. Debug so the progress/ping lines (debug
+        // level in mbv-emby) are captured too.
         let _ = tracing_log::LogTracer::init();
-        log::set_max_level(log::LevelFilter::Info);
+        log::set_max_level(log::LevelFilter::Debug);
 
         // Session A's playback span, entered as the run loop would hold it.
         let span_a = PlaybackRun::new_playback_span(
@@ -588,29 +616,107 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
         );
         reporter.transition_to_deferred(&make_media_item("item-b"), 0, span_b);
 
+        // Non-deferred path: the stopped report for session A must carry its
+        // own ids (its span is entered, not just created).
+        let stopped = wait_for_captured_line(&line_rx, "report_stopped: item=item-a");
+        assert_report_line_correlated(&stopped, "item-a", "session-a", &["item-b", "session-b"]);
+
         let before = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
         let after = wait_for_captured_line(&line_rx, "Playing item=item-b");
 
-        for line in [&before, &after] {
-            assert!(line.contains("item=item-b"), "new item missing: {line}");
-            assert!(!line.contains("item-a"), "previous item leaked: {line}");
-            assert!(
-                !line.contains("session-a"),
-                "previous session leaked: {line}"
-            );
-            assert!(
-                !line.contains("slot="),
-                "playback span leaked onto report line: {line}"
-            );
-        }
+        assert!(
+            before.contains("item=item-b"),
+            "new item missing before resolution: {before}"
+        );
         assert!(
             !before.contains("play_session="),
             "play_session recorded before get_playback_info resolved: {before}"
         );
-        assert!(
-            after.contains("play_session=session-b"),
-            "resolved session missing: {after}"
+        assert_report_line_correlated(&after, "item-b", "session-b", &["item-a", "session-a"]);
+
+        // After the deferred job the shared ids hold session B, so the direct
+        // progress and ping calls must carry B's ids.
+        reporter.report_progress("TimeUpdate");
+        let progress = wait_for_captured_line(&line_rx, "outbound: Progress");
+        assert_report_line_correlated(&progress, "item-b", "session-b", &["item-a", "session-a"]);
+
+        reporter.report_ping();
+        let ping = wait_for_captured_line(&line_rx, "outbound: Ping session=session-b");
+        assert_report_line_correlated(&ping, "item-b", "session-b", &["item-a", "session-a"]);
+    });
+}
+
+#[test]
+fn resolved_start_report_line_carries_resolved_item_and_session() {
+    use tracing_subscriber::prelude::*;
+
+    let http = mbv_net::mock_http::MockHttp::new();
+    // transition_to fetches PlaybackInfo synchronously on the calling
+    // thread; the worker then consumes the stopped and start reports.
+    http.respond(
+        200,
+        r#"{"MediaSources":[{"Id":"msid-b"}],"PlaySessionId":"session-b"}"#,
+    );
+    http.respond(200, "");
+    http.respond(200, "");
+    let cfg = mbv_config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..mbv_config::Config::default()
+    };
+    let client = Arc::new(EmbyClient::new(cfg).with_test_agent(http.agent()));
+
+    let (line_tx, line_rx) = mpsc::channel();
+    let subscriber = tracing_subscriber::registry().with(CaptureLayer {
+        lines: Mutex::new(line_tx),
+    });
+
+    tracing::subscriber::with_default(subscriber, || {
+        let _ = tracing_log::LogTracer::init();
+        log::set_max_level(log::LevelFilter::Info);
+
+        let span_a = PlaybackRun::new_playback_span(
+            QueueSlotId::from_raw(7),
+            &QueueItem::Emby(Box::new(make_media_item("item-a"))),
         );
+        span_a.record("play_session", "session-a");
+        let _entered_a = span_a.enter();
+
+        let status = Arc::new(Mutex::new(PlayerStatus::default()));
+        let reporter = SessionReporter::new(
+            Arc::clone(&client),
+            None,
+            ItemId::new("item-a"),
+            MediaSourceId::new("msid-a"),
+            EmbySessionId::new("session-a"),
+            false,
+            status,
+        );
+
+        // Synchronously resolved transition: the run loop rebuilt and entered
+        // the new slot's span before the call, and the resolved session id is
+        // already known at job entry.
+        let span_b = PlaybackRun::new_playback_span(
+            QueueSlotId::from_raw(8),
+            &QueueItem::Emby(Box::new(make_media_item("item-b"))),
+        );
+        let _entered_b = span_b.enter();
+        reporter.transition_to(&make_media_item("item-b"), 0, &span_b);
+
+        let playback_info = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
+        assert!(
+            playback_info.contains("slot=8"),
+            "new slot missing: {playback_info}"
+        );
+        assert!(
+            !playback_info.contains("slot=7"),
+            "old slot leaked: {playback_info}"
+        );
+        assert!(
+            !playback_info.contains("item=item-a"),
+            "old item leaked: {playback_info}"
+        );
+        let start = wait_for_captured_line(&line_rx, "Playing item=item-b");
+        assert_report_line_correlated(&start, "item-b", "session-b", &["item-a", "session-a"]);
     });
 }
 

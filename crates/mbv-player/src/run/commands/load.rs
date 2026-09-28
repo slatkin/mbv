@@ -37,46 +37,55 @@ impl PlaybackRun {
         // Rebuild the correlation span for the new slot before the reporting
         // transition, so the session assignment records into it (design D5).
         self.rebuild_playback_span();
-        if self.config.audio_pipe_path.is_some() {
-            self.reporter.transition_to_deferred(
-                item,
-                self.last_valid_pos,
-                self.playback_span.clone(),
-            );
-            self.ext_sub_urls = vec![];
-        } else {
-            self.ext_sub_urls =
-                self.reporter
-                    .transition_to(item, self.last_valid_pos, &self.playback_span);
-        }
-        *progress = spawn_progress_reporter(self.reporter.clone());
+        // The run loop's tick guard still holds the previous slot's span, so
+        // the reporting transition and the loadfile lines run under the
+        // rebuilt span explicitly (design D5).
+        self.in_playback_span(|this| {
+            if this.config.audio_pipe_path.is_some() {
+                this.reporter.transition_to_deferred(
+                    item,
+                    this.last_valid_pos,
+                    this.playback_span.clone(),
+                );
+                this.ext_sub_urls = vec![];
+            } else {
+                this.ext_sub_urls =
+                    this.reporter
+                        .transition_to(item, this.last_valid_pos, &this.playback_span);
+            }
+            *progress = spawn_progress_reporter(this.reporter.clone());
 
-        self.load_active_item_state();
-        self.pending_initial_playlist_layout = false;
-        self.begin_item_lifecycle(StopAction::Deferred);
-        {
-            let mut st = self.status.lock().unwrap();
-            st.runtime_ticks = item.runtime_ticks;
-            st.position_ticks = item.playback_position_ticks;
-            st.current_idx = 0;
-            st.queue_len = 1;
-            st.set_current_item_metadata(item);
-        };
+            this.load_active_item_state();
+            this.pending_initial_playlist_layout = false;
+            this.begin_item_lifecycle(StopAction::Deferred);
+            {
+                let mut st = this.status.lock().unwrap();
+                st.runtime_ticks = item.runtime_ticks;
+                st.position_ticks = item.playback_position_ticks;
+                st.current_idx = 0;
+                st.queue_len = 1;
+                st.set_current_item_metadata(item);
+            };
 
-        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-        let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
 
-        if start_pos > 0.0 {
-            let _ = mpv.set_property("start", format!("{start_pos:.0}"));
-        } else {
-            let _ = mpv.set_property("start", "0");
-        }
-        let title_opt = mpv_title_opt(&item.display_name());
-        log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-        if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
-            log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-        }
-        send_ep_info(mpv, item);
+            if start_pos > 0.0 {
+                let _ = mpv.set_property("start", format!("{start_pos:.0}"));
+            } else {
+                let _ = mpv.set_property("start", "0");
+            }
+            let title_opt = mpv_title_opt(&item.display_name());
+            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
+            if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
+                log::warn!(
+                    target: "player",
+                    "loadfile error: {} | opts={title_opt:?}",
+                    mpv_err_str(&e)
+                );
+            }
+            send_ep_info(mpv, item);
+        });
     }
 
     /// Item-generic queue submission: replace the current queue with `items`
@@ -180,11 +189,13 @@ impl PlaybackRun {
             true,
         );
 
-        log::info!(
-            target: "player",
-            "SubmitQueue origin={origin:?} idx={start_idx} items={}",
-            self.queue_len(),
-        );
+        self.in_playback_span(|this| {
+            log::info!(
+                target: "player",
+                "SubmitQueue origin={origin:?} idx={start_idx} items={}",
+                this.queue_len(),
+            );
+        });
     }
 
     fn initialize_queue_start(
@@ -215,15 +226,17 @@ impl PlaybackRun {
             progress.stop_and_join(Self::progress_join_budget());
         }
         if let Some(emby) = active_as_emby {
-            let (urls, ok) = self.reporter.start_item(emby, &self.playback_span);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(
-                    target: "player",
-                    "start_item failed for SubmitQueue item={}",
-                    emby.id,
-                );
-            }
+            self.in_playback_span(|this| {
+                let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
+                this.ext_sub_urls = urls;
+                if !ok {
+                    log::warn!(
+                        target: "player",
+                        "start_item failed for SubmitQueue item={}",
+                        emby.id,
+                    );
+                }
+            });
         } else {
             self.ext_sub_urls = vec![];
             self.reporter.clear_session();
@@ -288,16 +301,26 @@ impl PlaybackRun {
         );
         self.current_idx = start_idx;
         self.active_file = true;
-        if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
-            log::warn!(target: "player", "active-file replacement failed: {error}");
-            self.accept_stopped_replacement(
-                Vec::new(),
-                start_idx,
-                &active_item,
-                mpv,
-                progress,
-                format!("failed to load media: {error}"),
-            );
+        // New active slot: rebuild the correlation span before the projection
+        // install, so its failure lines carry the incoming slot (design D5).
+        self.rebuild_playback_span();
+        let installed = self.in_playback_span(|this| {
+            if let Err(error) = this.install_active_projection(mpv, prepared, &active_item) {
+                log::warn!(target: "player", "active-file replacement failed: {error}");
+                this.accept_stopped_replacement(
+                    Vec::new(),
+                    start_idx,
+                    &active_item,
+                    mpv,
+                    progress,
+                    format!("failed to load media: {error}"),
+                );
+                false
+            } else {
+                true
+            }
+        });
+        if !installed {
             return;
         }
         self.origin = if self.queue_len() == 1 {
