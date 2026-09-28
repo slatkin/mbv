@@ -13,7 +13,7 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   `macros` features to the workspace `time`, add `time` to `mbv-core`, and remove `libc`
   from `mbv-core` (D7). Verify with `cargo check -p mbv-core` and confirm
   `cargo tree -p mbv-core -e normal | rg -c 'tokio|regex'` finds nothing new.
-- [ ] 1.2 Add `applog/spec.rs`: `LogSpec`, `LogSpecError`, `parse`, `Display`
+- [x] 1.2 Add `applog/spec.rs`: `LogSpec`, `LogSpecError`, `parse`, `Display`
   round-trip, and the target filter (design D3). Verify with the `#[case]` parse tests and
   the filter tests named in design.md "Tests".
 - [ ] 1.3 Add `applog/time.rs` (`format_ts` over `time::OffsetDateTime`, `now_local` with a
