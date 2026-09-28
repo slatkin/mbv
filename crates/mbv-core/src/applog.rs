@@ -1,3 +1,6 @@
+mod line;
+mod time;
+
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -61,21 +64,6 @@ pub struct LogEntry {
     pub msg: String,
 }
 
-fn now_ts() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as libc::time_t;
-    // SAFETY: `libc::tm` is a C POD struct; zero is a valid initial value for
-    // passing it as the output buffer to `localtime_r`.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    // SAFETY: `secs` and `tm` are valid pointers for the duration of the call,
-    // and `localtime_r` writes the broken-down time into `tm`.
-    unsafe { libc::localtime_r(&raw const secs, &raw mut tm) };
-    format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
-}
-
 #[derive(Clone, Debug)]
 pub struct AppLog {
     stderr: bool,
@@ -107,14 +95,16 @@ impl AppLog {
     }
 
     fn push_entry(&self, mut entry: LogEntry) {
-        entry.ts = now_ts();
-        let line = format!(
-            "ts={} level={} source={} msg=\"{}\"",
-            entry.ts,
-            entry.level.logfmt(),
-            entry.source,
-            entry.msg.replace('\\', "\\\\").replace('"', "\\\"")
-        );
+        entry.ts = time::format_ts(time::now_local());
+        let line = line::format_line(&line::Line {
+            ts: &entry.ts,
+            level: entry.level.logfmt(),
+            source: &entry.source,
+            event: None,
+            fields: &[],
+            spans: &[],
+            message: &entry.msg,
+        });
         if self.stderr {
             eprintln!("{}", format_stderr_line(entry.level, &line));
         }
