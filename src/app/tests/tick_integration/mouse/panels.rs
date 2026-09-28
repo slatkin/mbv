@@ -92,8 +92,8 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
             ) && !matches!(
                 msg,
                 Msg::Queue(mbv_ui_msg::QueueRequest::ResizeColumnEnd(_))
-            ) && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))
-                && !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))
+            ) && !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))
+                && !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))
         }));
     }
     assert_eq!(harness.model().app.queue_column_width, width);
@@ -159,7 +159,7 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "a blank wide-list click must not claim without a resolved target"
     );
     apply_outcome(&mut harness, outcome);
@@ -201,7 +201,7 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "a click at the old wide-list position must not resolve through stale wide geometry \
          after the narrow repaint"
     );
@@ -259,6 +259,6 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. }))));
+        .any(|message| matches!(message, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. }))));
     apply_outcome(&mut harness, outcome);
 }

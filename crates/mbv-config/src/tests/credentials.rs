@@ -70,8 +70,10 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     let old_state_home = std::env::var_os("XDG_STATE_HOME");
     let old_system = std::env::var_os("MBV_SYSTEM");
     let temp = std::env::temp_dir().join(format!("mbv-control-race-{}", uuid::Uuid::new_v4()));
-    std::env::set_var("XDG_STATE_HOME", &temp);
-    std::env::remove_var("MBV_SYSTEM");
+    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+    unsafe { std::env::set_var("XDG_STATE_HOME", &temp) };
+    // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+    unsafe { std::env::remove_var("MBV_SYSTEM") };
 
     let start = std::sync::Arc::new(std::sync::Barrier::new(3));
     let workers: Vec<_> = (0..2)
@@ -100,12 +102,16 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     clear_control_credential_result().unwrap();
     let _ = std::fs::remove_dir_all(&temp);
     match old_state_home {
-        Some(value) => std::env::set_var("XDG_STATE_HOME", value),
-        None => std::env::remove_var("XDG_STATE_HOME"),
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        Some(value) => unsafe { std::env::set_var("XDG_STATE_HOME", value) },
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        None => unsafe { std::env::remove_var("XDG_STATE_HOME") },
     }
     match old_system {
-        Some(value) => std::env::set_var("MBV_SYSTEM", value),
-        None => std::env::remove_var("MBV_SYSTEM"),
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        Some(value) => unsafe { std::env::set_var("MBV_SYSTEM", value) },
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        None => unsafe { std::env::remove_var("MBV_SYSTEM") },
     }
 }
 

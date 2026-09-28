@@ -247,7 +247,8 @@ fn connect_emby() -> Result<(), String> {
         return Err("mbvd: --connect emby requires an interactive terminal".into());
     }
     // The packaged command always uses the daemon's system-instance paths.
-    std::env::set_var("MBV_SYSTEM", "1");
+    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("emby")?;
     let server_url = prompt("Emby server URL")?;
     let username = prompt("Username")?;
@@ -297,7 +298,8 @@ fn connect_abs() -> Result<(), String> {
         return Err("mbvd: --connect abs requires an interactive terminal".into());
     }
     // The packaged command always uses the daemon's system-instance paths.
-    std::env::set_var("MBV_SYSTEM", "1");
+    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let server_url = prompt("Audiobookshelf server URL")?;
     let api_key = prompt_secret("Audiobookshelf API key")?;
@@ -350,7 +352,8 @@ fn disconnect_abs() -> Result<(), String> {
     if !interactive_terminal() {
         return Err("mbvd: --disconnect abs requires an interactive terminal".into());
     }
-    std::env::set_var("MBV_SYSTEM", "1");
+    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let config = config::load_config()
         .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;

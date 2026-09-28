@@ -399,7 +399,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
         macro_rules! opt {
-            ($k:expr, $v:expr) => {{
+            ($k:expr_2021, $v:expr_2021) => {{
                 let r = init.set_option($k, $v);
                 if let Err(ref e) = r {
                     init_err = Some(format!(

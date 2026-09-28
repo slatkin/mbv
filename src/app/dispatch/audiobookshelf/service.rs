@@ -456,10 +456,10 @@ impl App {
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) {
         // Task 3.3: drop events from a superseded connection generation.
-        let Some(gen) = self.audiobookshelf_socket_generation else {
+        let Some(r#gen) = self.audiobookshelf_socket_generation else {
             return;
         };
-        if !self.audiobookshelf_runtime.accepts(gen) {
+        if !self.audiobookshelf_runtime.accepts(r#gen) {
             return;
         }
 

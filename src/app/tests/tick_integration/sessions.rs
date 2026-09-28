@@ -178,7 +178,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     assert!(first_click
         .messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
     assert_eq!(
         sessions_component_mut(&mut harness)
             .selection_and_offset_for_test()
@@ -195,7 +195,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     let second_click = harness.step();
     assert!(second_click.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "second"))));
+        Msg::Shell(shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "second"))));
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
     assert!(stale_click
         .raw_messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
 
     draw(&mut harness, 100, 24);
     assert_eq!(
@@ -251,7 +251,7 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
     let repainted_click = harness.step();
     assert!(repainted_click.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "replacement"))));
+        Msg::Shell(shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "replacement"))));
 }
 
 #[test]
@@ -295,7 +295,7 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
     assert!(click
         .raw_messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
 }
 
 #[test]

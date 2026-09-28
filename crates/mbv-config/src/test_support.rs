@@ -45,9 +45,12 @@ impl TestTempDir {
     /// the directory before the test body ran.
     #[must_use]
     pub fn as_xdg_home(mut self) -> Self {
-        std::env::set_var("XDG_STATE_HOME", &self.dir);
-        std::env::set_var("XDG_CONFIG_HOME", &self.dir);
-        std::env::remove_var("MBV_SYSTEM");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::set_var("XDG_STATE_HOME", &self.dir) };
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &self.dir) };
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::remove_var("MBV_SYSTEM") };
         self.xdg_home = true;
         self
     }
@@ -85,8 +88,10 @@ impl Drop for TestTempDir {
 #[cfg(any(test, feature = "test"))]
 fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
     match value {
-        Some(value) => std::env::set_var(name, value),
-        None => std::env::remove_var(name),
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        Some(value) => unsafe { std::env::set_var(name, value) },
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        None => unsafe { std::env::remove_var(name) },
     }
 }
 

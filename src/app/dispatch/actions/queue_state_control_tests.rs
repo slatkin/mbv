@@ -9,8 +9,10 @@ impl XdgHomeGuard {
     fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("XDG_CONFIG_HOME", &dir);
-        std::env::remove_var("MBV_SYSTEM");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::remove_var("MBV_SYSTEM") };
         Self {
             _state_dir: crate::config::TestStateDirGuard::new_at(dir.join("mbv")),
             dir,
@@ -20,7 +22,8 @@ impl XdgHomeGuard {
 
 impl Drop for XdgHomeGuard {
     fn drop(&mut self) {
-        std::env::remove_var("XDG_CONFIG_HOME");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }

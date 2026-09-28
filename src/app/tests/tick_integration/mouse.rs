@@ -536,7 +536,7 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
         !outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))),
+            .any(|msg| matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))),
         "the queue handles an eligible wheel locally without a shell relay"
     );
 
@@ -638,14 +638,14 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
+            .any(|msg| matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
         "a click on Queue's painted row must resolve through Queue"
     );
     assert!(
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "the click on Queue must not also resolve through Library"
     );
     apply_outcome(&mut harness, outcome);
@@ -668,14 +668,14 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { .. }))),
         "a blank Library click must not claim without a resolved target"
     );
     assert!(
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueRowClick { .. }))),
         "the click on Library must not also resolve through Queue"
     );
     apply_outcome(&mut harness, outcome);

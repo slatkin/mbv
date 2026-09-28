@@ -349,9 +349,11 @@ fn device_name_trims_hostname_env_var() {
     // in its device_name field.
     let name = {
         let _g = mbv_config::tests::SYS_ENV_LOCK.lock().unwrap();
-        std::env::set_var("HOSTNAME", "  trimtest  \n");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::set_var("HOSTNAME", "  trimtest  \n") };
         let c = EmbyClient::new(mbv_config::Config::default());
-        std::env::remove_var("HOSTNAME");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::remove_var("HOSTNAME") };
         c.device_name
     };
     // device_name should never embed raw whitespace

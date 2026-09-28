@@ -24,7 +24,7 @@ extern "C" fn handle_quit_signal(signum: i32) {
 }
 
 pub(in crate::app) fn install_signal_handlers() {
-    extern "C" {
+    unsafe extern "C" {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
     unsafe {

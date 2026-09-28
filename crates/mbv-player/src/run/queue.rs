@@ -46,12 +46,12 @@ impl PlaybackRun {
     }
 
     fn report_stopped_for_current_context(&self) -> bool {
-        if let Some(timeout) = *self.shutdown_report_timeout.lock().unwrap() {
+        match *self.shutdown_report_timeout.lock().unwrap() { Some(timeout) => {
             self.reporter
                 .report_stopped_for_shutdown(self.last_valid_pos, timeout)
-        } else {
+        } _ => {
             self.reporter.report_stopped(self.last_valid_pos)
-        }
+        }}
     }
 
     /// True once `Player::stop_for_shutdown` has armed a deadline — a real

@@ -388,9 +388,9 @@ impl App {
         // succeeds, so the tail can restore `player_tab` / queue source
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
-        if let Some(suspended) = self.suspended_local.take() {
+        match self.suspended_local.take() { Some(suspended) => {
             self.install_suspended_local(suspended);
-        } else if self.home_is_local_daemon {
+        } _ => if self.home_is_local_daemon {
             // This app's baseline was never a genuinely local in-process
             // player -- it was an `App::new_remote` thin client attached to
             // the local daemon (`home_is_local_daemon`), so nothing was ever
@@ -436,7 +436,7 @@ impl App {
                     }
                 }
             }
-        }
+        }}
         self.finish_local_mode(status, reconnected_local_daemon);
     }
 

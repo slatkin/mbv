@@ -377,7 +377,7 @@ impl App {
     /// and preserves the Continue Watching column cursor at the assignment.
     pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
-        let (continue_items, all_views) = if let Some(client) = self.emby_client() {
+        let (continue_items, all_views) = match self.emby_client() { Some(client) => {
             emby_fetched = true;
             let client = client.lock().unwrap();
             let views = match client.get_views_classified() {
@@ -389,9 +389,9 @@ impl App {
                 }
             };
             (client.get_continue_watching(20).unwrap_or_default(), views)
-        } else {
+        } _ => {
             (Vec::new(), Vec::new())
-        };
+        }};
 
         // Library tabs are Emby-modeled state; only rebuild them from the
         // freshly fetched views when Emby was actually reachable, so a broken

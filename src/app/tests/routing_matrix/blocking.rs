@@ -30,7 +30,7 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     assert_eq!(out.len(), 1, "the overlay's own request must stand");
     assert!(matches!(
         &out[0],
-        Msg::Shell(ref shell_boxed)
+        Msg::Shell(shell_boxed)
      if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss))));
 }
 #[test]
@@ -58,7 +58,7 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
     );
     assert!(matches!(
         &out[0],
-        Msg::Shell(ref shell_boxed)
+        Msg::Shell(shell_boxed)
      if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(ConfirmIntent::Accept))));
 }
 #[test]
@@ -126,7 +126,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
     assert!(
-        matches!(&out[0], Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::Quit))
+        matches!(&out[0], Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::Quit))
     );
 }
 #[test]

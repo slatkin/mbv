@@ -543,7 +543,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(matches!(
        outcome.raw_messages.first(),
-       Some(Msg::Shell(ref shell_boxed))
+       Some(Msg::Shell(shell_boxed))
     if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
            ConfirmIntent::Accept
        ))));

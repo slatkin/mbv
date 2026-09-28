@@ -159,7 +159,7 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
   attribute in any form, no loosening `[lints]`, and never edit `clippy.toml`
   (thresholds included) unless the user explicitly asks. Fix the cause
   (params struct, delete dead code and its tests, drop the unused import).
-* format: `cargo fmt` per Rust change (stock edition-2021, max-width-100); accept
+* format: `cargo fmt` per Rust change (stock edition-2024, max-width-100); accept
   all reflow, never revert it; `cargo fmt --all -- --check` = read-only check.
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
 * module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files; a module with children is `foo.rs` plus a `foo/` directory holding them (tests as `foo/tests.rs`, or `foo/tests.rs` + `foo/tests/` when split); never `mod.rs`

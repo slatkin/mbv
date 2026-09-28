@@ -87,7 +87,8 @@ struct XdgStateHomeGuard {
 impl XdgStateHomeGuard {
     fn new() -> Self {
         let dir = tempfile_dir();
-        std::env::remove_var("MBV_SYSTEM");
+        // SAFETY: This test accesses process environment on its test thread; any spawned workers are not running during this call.
+        unsafe { std::env::remove_var("MBV_SYSTEM") };
         let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
         Self {
             dir,
