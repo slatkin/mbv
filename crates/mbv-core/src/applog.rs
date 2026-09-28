@@ -7,8 +7,11 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod sink;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Level {
+    Trace,
     Debug,
     Info,
     Warn,
@@ -19,6 +22,7 @@ impl Level {
     #[must_use]
     pub fn logfmt(self) -> &'static str {
         match self {
+            Level::Trace => "trace",
             Level::Error => "error",
             Level::Warn => "warn",
             Level::Info => "info",
@@ -39,6 +43,7 @@ impl Level {
 
     fn max_level_filter(self) -> log::LevelFilter {
         match self {
+            Level::Trace => log::LevelFilter::Trace,
             Level::Error => log::LevelFilter::Error,
             Level::Warn => log::LevelFilter::Warn,
             Level::Info => log::LevelFilter::Info,
@@ -53,7 +58,8 @@ impl From<log::Level> for Level {
             log::Level::Error => Level::Error,
             log::Level::Warn => Level::Warn,
             log::Level::Info => Level::Info,
-            log::Level::Debug | log::Level::Trace => Level::Debug,
+            log::Level::Debug => Level::Debug,
+            log::Level::Trace => Level::Trace,
         }
     }
 }
@@ -123,7 +129,7 @@ fn format_stderr_line(level: Level, line: &str) -> String {
         Level::Error => 3,
         Level::Warn => 4,
         Level::Info => 6,
-        Level::Debug => 7,
+        Level::Trace | Level::Debug => 7,
     };
     format!("<{priority}>{line}")
 }
@@ -176,8 +182,8 @@ mod tests {
     // ── log::Level conversion ─────────────────────────────────────────────────
 
     #[test]
-    fn level_from_log_trace_maps_to_debug() {
-        assert_eq!(Level::from(log::Level::Trace), Level::Debug);
+    fn level_from_log_trace_maps_to_trace() {
+        assert_eq!(Level::from(log::Level::Trace), Level::Trace);
     }
 
     #[test]
@@ -192,6 +198,7 @@ mod tests {
     #[case(Level::Warn, "<4>line")]
     #[case(Level::Info, "<6>line")]
     #[case(Level::Debug, "<7>line")]
+    #[case(Level::Trace, "<7>line")]
     fn stderr_line_has_systemd_priority_prefix(#[case] level: Level, #[case] expected: &str) {
         assert_eq!(format_stderr_line(level, "line"), expected);
     }
