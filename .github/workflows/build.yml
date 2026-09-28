@@ -6,6 +6,11 @@ on:
       - main
     tags:
       - 'v*'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'openspec/**'
+      - 'assets/**'
   workflow_dispatch:
 
 # One commit means one build. tools/release.sh pushes main and then the tag,
