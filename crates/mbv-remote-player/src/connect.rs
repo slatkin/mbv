@@ -140,7 +140,7 @@ pub fn signal_local_daemon_service_setup(
         .map_err(|error| format!("restart required (cannot read local daemon ctrl): {error}"))?;
     let (mut reader, _state, _compatibility) =
         perform_handshake(SocketStream::Unix(stream), || {
-            mbv_config::load_or_create_control_credential()
+            mbv_config::load_or_create_control_credential().map_err(|error| error.to_string())
         })
         .map_err(|error| format!("restart required (local daemon handshake failed): {error}"))?;
     let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
@@ -413,7 +413,7 @@ fn connect_stream(
     let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound(
         move || {
             perform_handshake(handshake_stream, || {
-                mbv_config::load_or_create_control_credential()
+                mbv_config::load_or_create_control_credential().map_err(|error| error.to_string())
             })
         },
         DAEMON_HANDSHAKE_HARD_BOUND,

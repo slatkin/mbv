@@ -18,11 +18,9 @@ impl App {
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
-        self.transition_emby_failure(
-            Some(completion.generation),
-            completion.result,
-            mbv_config::clear_service_secret_result,
-        )
+        self.transition_emby_failure(Some(completion.generation), completion.result, |kind| {
+            mbv_config::clear_service_secret_result(kind).map_err(|error| error.to_string())
+        })
     }
 
     #[cfg(test)]
@@ -124,7 +122,7 @@ impl App {
     /// Only classified failures reach this path; ordinary empty results do not.
     pub(in crate::app) fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
         self.transition_emby_failure(None, Err(error), |kind| {
-            mbv_config::clear_service_secret_result(kind)
+            mbv_config::clear_service_secret_result(kind).map_err(|error| error.to_string())
         });
     }
 
@@ -218,7 +216,7 @@ impl App {
                     self.emby_runtime.state = completion.previous_state;
                     if let Some(form) = self.setup.emby_setup_form.as_mut() {
                         form.busy = false;
-                        form.error = error;
+                        form.error = error.to_string();
                         form.fields[2].clear();
                     }
                     return None;

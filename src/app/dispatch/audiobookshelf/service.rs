@@ -64,6 +64,7 @@ impl App {
         self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
         mbv_config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
+            .map_err(|error| error.to_string())
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
@@ -175,8 +176,10 @@ impl App {
     /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
     fn persist_filtered_queue_abs(state: Option<&QueueState>) -> Result<(), String> {
         match state {
-            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
-            _ => mbv_config::clear_queue_state(),
+            Some(state) if !state.items.is_empty() => {
+                mbv_config::save_queue_state(state).map_err(|error| error.to_string())
+            }
+            _ => mbv_config::clear_queue_state().map_err(|error| error.to_string()),
         }
     }
 

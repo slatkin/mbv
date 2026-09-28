@@ -20,7 +20,7 @@ pub mod tests {
 pub use mbv_ui_model::UiConfig;
 
 pub fn load_config() -> Result<Config, String> {
-    mbv_config::load_config()
+    mbv_config::load_config().map_err(|error| error.to_string())
 }
 
 pub fn load_ui_config() -> Result<UiConfig, String> {
@@ -71,7 +71,7 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
 }
 
 pub fn save_config_section(cfg: &Config, section: mbv_config::ConfigSection) -> Result<(), String> {
-    mbv_config::save_config_section(cfg, section)
+    mbv_config::save_config_section(cfg, section).map_err(|error| error.to_string())
 }
 
 pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {

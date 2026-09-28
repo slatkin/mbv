@@ -65,7 +65,8 @@ pub fn commit_audiobookshelf_candidate(
     candidate: AudiobookshelfValidatedSetup,
 ) -> Result<(AudiobookshelfUser, u64), String> {
     let (setup, user, api_key) = candidate.into_parts();
-    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
+    let revision = mbv_config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)
+        .map_err(|error| error.to_string())?;
     Ok((user, revision))
 }
 
@@ -93,7 +94,8 @@ where
         &api_key,
         clear_owned_state,
         restore_owned_state,
-    )?;
+    )
+    .map_err(|error| error.to_string())?;
     Ok((user, revision))
 }
 

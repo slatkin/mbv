@@ -28,7 +28,8 @@ struct LiveClient {
 
 impl LiveClient {
     fn load() -> Result<Self, String> {
-        let setup = config::load_config()?
+        let setup = config::load_config()
+            .map_err(|error| error.to_string())?
             .audiobookshelf_setup
             .ok_or("Audiobookshelf Service is not configured")?;
         let token = config::load_service_secret(ServiceKind::Audiobookshelf)

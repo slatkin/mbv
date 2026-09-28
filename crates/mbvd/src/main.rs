@@ -290,8 +290,9 @@ fn clear_audiobookshelf_owned_state() -> Result<(), String> {
     match config::load_queue_state() {
         Some(state) if !state.items.is_empty() => {
             config::save_queue_state(&state.without_audiobookshelf())
+                .map_err(|error| error.to_string())
         }
-        _ => config::clear_queue_state(),
+        _ => config::clear_queue_state().map_err(|error| error.to_string()),
     }
 }
 
@@ -540,7 +541,7 @@ fn run() -> Result<(), String> {
         return Err("mbvd: a daemon is already running".to_string());
     }
 
-    let config = config::load_config()?;
+    let config = config::load_config().map_err(|error| error.to_string())?;
     let is_system = config::is_system_instance();
     let log_path = (!is_system).then(log_path);
     applog::init(is_system, log_path, log_level);
