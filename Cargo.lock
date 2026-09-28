@@ -1986,7 +1986,6 @@ dependencies = [
  "rstest",
  "serde_json",
  "tracing",
- "tracing-log",
  "tracing-subscriber",
 ]
 

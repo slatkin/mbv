@@ -2,7 +2,6 @@ use super::*;
 use crate::run::StopAction;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use rstest::rstest;
-use tracing_log as tracing_bridge;
 
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────
 
@@ -508,9 +507,10 @@ where
     }
 }
 
-/// Blocks until a captured line containing `needle` arrives. The reporter
-/// worker logs the awaited lines unconditionally, so the receive is the seam
-/// observing the worker's progress — no sleeps.
+/// Blocks until a captured line containing `needle` arrives. Needles are D4
+/// event names, not message text, so message rewording cannot silently hang tests.
+/// The reporter worker logs the awaited lines unconditionally, so the receive is
+/// the seam observing the worker's progress — no sleeps.
 fn wait_for_captured_line(rx: &mpsc::Receiver<String>, needle: &str) -> String {
     let mut seen = 0;
     loop {
@@ -580,10 +580,6 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
     });
 
     tracing::subscriber::with_default(subscriber, || {
-        // mbv-emby is converted in a later unit, so bridge its log records into
-        // this capture subscriber while this regression exercises player spans.
-        let _ = tracing_bridge::LogTracer::init();
-
         // Session A's playback span, entered as the run loop would hold it.
         let span_a = PlaybackRun::new_playback_span(
             QueueSlotId::from_raw(7),
@@ -619,8 +615,8 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
         let stopped = wait_for_captured_line(&line_rx, "sent stopped report");
         assert_report_line_correlated(&stopped, "item-a", "session-a", &["item-b", "session-b"]);
 
-        let before = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
-        let after = wait_for_captured_line(&line_rx, "Playing item=item-b");
+        let before = wait_for_captured_line(&line_rx, "event=emby.playback_info.requested");
+        let after = wait_for_captured_line(&line_rx, "event=emby.playback_start.requested");
 
         assert!(
             before.contains("item=item-b"),
@@ -645,11 +641,11 @@ fn deferred_start_report_lines_carry_new_item_not_previous_session() {
         // After the deferred job the shared ids hold session B, so the direct
         // progress and ping calls must carry B's ids.
         reporter.report_progress("TimeUpdate");
-        let progress = wait_for_captured_line(&line_rx, "outbound: Progress");
+        let progress = wait_for_captured_line(&line_rx, "event=emby.progress.requested");
         assert_report_line_correlated(&progress, "item-b", "session-b", &["item-a", "session-a"]);
 
         reporter.report_ping();
-        let ping = wait_for_captured_line(&line_rx, "outbound: Ping session=session-b");
+        let ping = wait_for_captured_line(&line_rx, "event=emby.ping.requested");
         assert_report_line_correlated(&ping, "item-b", "session-b", &["item-a", "session-a"]);
     });
 }
@@ -665,7 +661,12 @@ fn resolved_start_report_line_carries_resolved_item_and_session() {
         200,
         r#"{"MediaSources":[{"Id":"msid-b"}],"PlaySessionId":"session-b"}"#,
     );
-    http.respond(200, "");
+    // The stopped report runs concurrently with the synchronous playback-info
+    // fetch; either may consume the first scripted response.
+    http.respond(
+        200,
+        r#"{"MediaSources":[{"Id":"msid-b"}],"PlaySessionId":"session-b"}"#,
+    );
     http.respond(200, "");
     let cfg = mbv_config::Config {
         server_url: "http://127.0.0.1:1".into(),
@@ -679,8 +680,6 @@ fn resolved_start_report_line_carries_resolved_item_and_session() {
     });
 
     tracing::subscriber::with_default(subscriber, || {
-        let _ = tracing_bridge::LogTracer::init();
-
         let span_a = PlaybackRun::new_playback_span(
             QueueSlotId::from_raw(7),
             &QueueItem::Emby(Box::new(make_media_item("item-a"))),
@@ -709,7 +708,7 @@ fn resolved_start_report_line_carries_resolved_item_and_session() {
         let _entered_b = span_b.enter();
         reporter.transition_to(&make_media_item("item-b"), 0, &span_b);
 
-        let playback_info = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
+        let playback_info = wait_for_captured_line(&line_rx, "event=emby.playback_info.requested");
         assert!(
             playback_info.contains("slot=8"),
             "new slot missing: {playback_info}"
@@ -722,7 +721,7 @@ fn resolved_start_report_line_carries_resolved_item_and_session() {
             !playback_info.contains("item=item-a"),
             "old item leaked: {playback_info}"
         );
-        let start = wait_for_captured_line(&line_rx, "Playing item=item-b");
+        let start = wait_for_captured_line(&line_rx, "event=emby.playback_start.requested");
         assert_report_line_correlated(&start, "item-b", "session-b", &["item-a", "session-a"]);
     });
 }
