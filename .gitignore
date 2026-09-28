@@ -25,3 +25,6 @@ session-log.md
 
 # Local pi-lens tooling probe output
 .pi-lens-probe-home/
+# t-plan: private runtime state — never commit or publish
+plan_*.md
+plan.md
