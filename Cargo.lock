@@ -1751,7 +1751,6 @@ dependencies = [
 name = "mbv-audiobookshelf"
 version = "0.21.4"
 dependencies = [
- "log",
  "mbv-config",
  "mbv-emby-model",
  "mbv-net",
@@ -1761,6 +1760,7 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
+ "tracing",
  "tungstenite",
  "ureq",
 ]
@@ -1890,7 +1890,6 @@ dependencies = [
 name = "mbv-emby"
 version = "0.21.4"
 dependencies = [
- "log",
  "mbv-cast",
  "mbv-config",
  "mbv-ctrl",
@@ -1904,6 +1903,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "tracing",
  "ureq",
  "uuid",
 ]

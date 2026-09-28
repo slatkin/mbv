@@ -171,9 +171,14 @@ impl EmbyClient {
         let mut resp = match resp_result {
             Ok(resp) => resp,
             Err(error) => {
-                log::warn!(
+                tracing::warn!(
+                    name: "emby.items_sorted.request_failed",
                     target: "api",
-                    "get_items_sorted: parent={parent_id} types={item_types:?} err after {call_ms}ms: {error}"
+                    parent = %parent_id,
+                    item_types = ?item_types,
+                    duration_ms = call_ms,
+                    error = %error,
+                    "sorted items request failed"
                 );
                 return Err(error.into());
             }
@@ -187,10 +192,20 @@ impl EmbyClient {
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default();
         let parse_ms = parse_started.elapsed().as_millis();
-        log::info!(
+        tracing::info!(
+            name: "emby.items_sorted.loaded",
             target: "api",
-            "get_items_sorted: parent={parent_id} types={item_types:?} start={start_index} limit={limit} name_ge={name_ge:?} name_lt={name_lt:?} -> {} items (total={total}) http={call_ms}ms parse={parse_ms}ms",
-            items.len()
+            parent = %parent_id,
+            item_types = ?item_types,
+            start_index,
+            limit,
+            name_ge = ?name_ge,
+            name_lt = ?name_lt,
+            count = items.len(),
+            total,
+            http_duration_ms = call_ms,
+            parse_duration_ms = parse_ms,
+            "loaded sorted items"
         );
         Ok((items, total))
     }
