@@ -2,10 +2,10 @@
 
 ## 1. Edition bump (commit 1)
 
-- [ ] 1.1 Run `cargo fix --edition --workspace --all-targets` on edition 2021, then set `edition = "2024"` in root `Cargo.toml` `[workspace.package]`; verify `cargo check --workspace --all-targets` passes.
-- [ ] 1.2 Read every `tail_expr_drop_order` and `if_let_rescope` site `cargo fix` reported (design.md lists the ones known so far); keep 2024 drop order unless the earlier drop is observably wrong, in which case bind the temporary explicitly; verify each site was reviewed by listing it in the commit message.
-- [ ] 1.3 Wrap the `std::env::set_var`/`remove_var` calls in `crates/mbv-config/src/test_support.rs` (and any others `cargo fix` flagged) in `unsafe` blocks with a `// SAFETY:` note; fix any RPIT capture errors with `use<..>`; verify `cargo check --workspace --all-targets` passes with no new `#[allow]`/`#[expect]`.
-- [ ] 1.4 Update the format line in `AGENTS.md` from "stock edition-2021" to "stock edition-2024"; commit 1.1–1.4 together; verify `rg -n 'edition-2021' AGENTS.md` returns nothing.
+- [x] 1.1 Run `cargo fix --edition --workspace --all-targets` on edition 2021, then set `edition = "2024"` in root `Cargo.toml` `[workspace.package]`; verify `cargo check --workspace --all-targets` passes.
+- [x] 1.2 Read every `tail_expr_drop_order` and `if_let_rescope` site `cargo fix` reported (design.md lists the ones known so far); keep 2024 drop order unless the earlier drop is observably wrong, in which case bind the temporary explicitly; verify each site was reviewed by listing it in the commit message.
+- [x] 1.3 Wrap the `std::env::set_var`/`remove_var` calls in `crates/mbv-config/src/test_support.rs` (and any others `cargo fix` flagged) in `unsafe` blocks with a `// SAFETY:` note; fix any RPIT capture errors with `use<..>`; verify `cargo check --workspace --all-targets` passes with no new `#[allow]`/`#[expect]`.
+- [x] 1.4 Update the format line in `AGENTS.md` from "stock edition-2021" to "stock edition-2024"; commit 1.1–1.4 together; verify `rg -n 'edition-2021' AGENTS.md` returns nothing.
 
 ## 2. Reformat (commit 2)
 
