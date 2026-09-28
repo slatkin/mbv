@@ -466,16 +466,16 @@ impl PlaybackQueue {
         played: bool,
         outcome: StopReportOutcome,
     ) -> QueueMutationResult<()> {
-        let result = self.apply_progress(slot_id, position_ticks, played);
-        if result == QueueMutationResult::NotFound {
-            return result;
+        let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
+            return QueueMutationResult::NotFound;
+        };
+        let old_item = slot.item.clone();
+        apply_progress_to_queue_item(&mut slot.item, position_ticks, played);
+        if outcome == StopReportOutcome::Accepted && slot.item.is_emby() {
+            slot.pending_sync = Some(slot.local_progress());
         }
-        if outcome == StopReportOutcome::Accepted {
-            if let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) {
-                if matches!(slot.item, QueueItem::Emby(_)) {
-                    slot.pending_sync = Some(slot.local_progress());
-                }
-            }
+        if !queue_items_equal(&slot.item, &old_item) {
+            self.revision.bump(&self.mint);
         }
         QueueMutationResult::Applied(())
     }
