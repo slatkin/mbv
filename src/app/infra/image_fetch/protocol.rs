@@ -341,7 +341,7 @@ fn fetch_emby_image(
 ) -> Option<Vec<u8>> {
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
         // Local-only cache hits power dim-then-undim cycles for warm-cache modals.
-        log::debug!(target: "images", "image disk cache hit for {cache_key}");
+        tracing::debug!(name: "images.disk_cache.hit", target: "images", item = %item_id, "image disk cache hit");
         return Some(cached);
     }
     let fetched = types

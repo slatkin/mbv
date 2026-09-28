@@ -1704,7 +1704,6 @@ dependencies = [
  "crossterm",
  "image",
  "libc",
- "log",
  "mbv-audiobookshelf",
  "mbv-cast",
  "mbv-components",

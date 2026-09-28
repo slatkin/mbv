@@ -63,20 +63,20 @@ impl App {
     ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         let name = library_name.trim();
         if name.is_empty() {
-            log::info!(target: "library_route", "route resolution skipped: empty library name");
+            tracing::info!(name: "library_route.route.skipped", target: "library_route", "empty library name");
             return None;
         }
         let Some(raw) = self.library_routes.get(&name.to_lowercase()) else {
-            log::info!(target: "library_route", "configured library missing library={name:?}");
+            tracing::info!(name: "library_route.route.missing", target: "library_route", library = %name, "configured library missing");
             return None;
         };
         let Ok(endpoint @ mbv_remote_player::DaemonEndpoint::Tcp(_)) =
             mbv_remote_player::DaemonEndpoint::parse(raw)
         else {
-            log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
+            tracing::warn!(name: "library_route.endpoint.malformed", target: "library_route", library = %name, endpoint = %raw, "malformed endpoint; expected tcp://host:port");
             return None;
         };
-        log::info!(target: "library_route", "accepted endpoint library={name:?} endpoint={endpoint}");
+        tracing::info!(name: "library_route.endpoint.accepted", target: "library_route", library = %name, endpoint = %endpoint, "accepted endpoint");
         Some((name.to_lowercase(), endpoint))
     }
 
@@ -115,7 +115,7 @@ impl App {
         // would pay a blocking network call that can never resolve to
         // anything for a user who never opted into library routing.
         if self.library_routes.is_empty() {
-            log::info!(target: "library_route", "route table empty item_id={item_id:?}; staying local");
+            tracing::info!(name: "library_route.route.empty", target: "library_route", item = %item_id, "route table empty; staying local");
             return None;
         }
         if self.library_route_cache.len() >= LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
@@ -132,17 +132,17 @@ impl App {
         }
         if let Some((cached, cached_at)) = self.library_route_cache.get(item_id) {
             if Instant::now().duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL {
-                log::info!(target: "library_route", "ancestor cache hit item_id={item_id:?} library={cached:?}");
+                tracing::info!(name: "library_route.ancestor_cache.hit", target: "library_route", item = %item_id, library = ?cached, "ancestor cache hit");
                 return cached
                     .clone()
                     .and_then(|name| self.resolve_route_for_library(&name));
             }
-            log::info!(target: "library_route", "ancestor cache expired item_id={item_id:?}");
+            tracing::info!(name: "library_route.ancestor_cache.expired", target: "library_route", item = %item_id, "ancestor cache expired");
             // Expired -- fall through and re-resolve as a normal cache miss,
             // so a mid-session library reorganization on the Emby server
             // self-heals without requiring an app restart.
         }
-        log::info!(target: "library_route", "ancestor cache miss item_id={item_id:?}");
+        tracing::info!(name: "library_route.ancestor_cache.miss", target: "library_route", item = %item_id, "ancestor cache miss");
         let ancestors = {
             let client = self.emby_client()?;
 
@@ -154,9 +154,11 @@ impl App {
                 .find(|a| a.item_type == "CollectionFolder")
                 .map(|a| a.name),
             Err(e) => {
-                log::warn!(
+                tracing::warn!(
+                    name: "library_route.ancestors.failed",
                     target: "library_route",
-                    "get_ancestors failed for item {item_id:?}: {e}"
+                    { item = %item_id, error.message = %e },
+                    "ancestor lookup failed"
                 );
                 // Per #223's post-grilling revision: a transient lookup
                 // failure is never cached -- only a successful
@@ -170,7 +172,7 @@ impl App {
         };
         self.library_route_cache
             .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
-        log::info!(target: "library_route", "ancestor resolution succeeded item_id={item_id:?} library={library_name:?}");
+        tracing::info!(name: "library_route.ancestor_resolution.succeeded", target: "library_route", item = %item_id, library = ?library_name, "ancestor resolution succeeded");
         library_name.and_then(|name| self.resolve_route_for_library(&name))
     }
 
@@ -190,19 +192,19 @@ impl App {
         &mut self,
         item: &mbv_emby_model::EmbyItem,
     ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
-        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.tab.to_position_with_counts(self.libs.len(), self.feeds_tab_pos()));
+        tracing::info!(name: "library_route.route_resolution.started", target: "library_route", item = %item.id, item_name = %item.name, library_tab = self.tab.to_position_with_counts(self.libs.len(), self.feeds_tab_pos()), "route resolution");
         if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-            log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
+            tracing::info!(name: "library_route.route_resolution.queue", target: "library_route", item = %item.id, "resolution path: queue");
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
                 .or_else(|| self.route_for_item_via_ancestors(&item.id))
         } else if self.tab.is_home() {
-            log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
+            tracing::info!(name: "library_route.route_resolution.ancestor", target: "library_route", item = %item.id, "resolution path: ancestor");
             self.route_for_item_via_ancestors(&item.id)
         } else {
             let lib_idx = self.tab.emby_library_index().unwrap();
-            log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
+            tracing::info!(name: "library_route.route_resolution.library", target: "library_route", item = %item.id, library_index = lib_idx, "resolution path: library");
             self.route_for_active_library_view(lib_idx)
         }
     }

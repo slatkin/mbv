@@ -12,7 +12,7 @@ extern "C" fn handle_quit_signal(signum: i32) {
         15 => "SIGTERM",
         _ => "unknown",
     };
-    // SAFETY: log::info is not async-signal-safe, but we only reach this
+    // SAFETY: eprintln! is not async-signal-safe, but we only reach this
     // from SIGTERM/SIGHUP where the process is about to exit anyway;
     // a worst-case torn write is acceptable for diagnostics.
     eprintln!("mbv: received {name} (signal {signum}), requesting quit");
