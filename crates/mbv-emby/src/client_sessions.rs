@@ -62,17 +62,12 @@ impl EmbyClient {
     fn get_sessions_with_active_within(
         &self,
         active_within_secs: Option<&str>,
-    ) -> Result<Vec<SessionInfo>, String> {
+    ) -> Result<Vec<SessionInfo>, crate::EmbyError> {
         let mut req = self.get("/Sessions");
         if let Some(secs) = active_within_secs {
             req = req.query("ActiveWithinSeconds", secs);
         }
-        let arr: Value = req
-            .call()
-            .map_err(|e| e.to_string())?
-            .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+        let arr: Value = req.call()?.body_mut().read_json()?;
         let sessions = arr
             .as_array()
             .map(|a| {
@@ -135,7 +130,7 @@ impl EmbyClient {
         Ok(sessions)
     }
 
-    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
+    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, crate::EmbyError> {
         self.get_sessions_with_active_within(Some("600"))
     }
 
@@ -146,73 +141,72 @@ impl EmbyClient {
     /// `App::try_auto_reconnect`'s `DirectSession` lookup (#236) and by
     /// library-route device resolution (#239) -- the Sessions-panel (F3) UI
     /// should keep using the filtered `get_sessions` above.
-    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
+    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, crate::EmbyError> {
         self.get_sessions_with_active_within(None)
     }
 
-    pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
+    pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Playing/{cmd}",
             mbv_net::encode_path_segment(id)
         ))
-        .send("")
-        .map_err(|e| e.to_string())?;
+        .send("")?;
         Ok(())
     }
 
-    pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), String> {
+    pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Playing/Seek",
             mbv_net::encode_path_segment(id)
         ))
         .query("SeekPositionTicks", ticks.to_string())
-        .send("")
-        .map_err(|e| e.to_string())?;
+        .send("")?;
         Ok(())
     }
 
-    pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
+    pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Command/SetVolume",
             mbv_net::encode_path_segment(id)
         ))
-        .send_json(serde_json::json!({"Arguments":{"Volume": vol.to_string()}}))
-        .map_err(|e| e.to_string())?;
+        .send_json(serde_json::json!({"Arguments":{"Volume": vol.to_string()}}))?;
         Ok(())
     }
 
-    pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), String> {
+    pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Command/SetSubtitleStreamIndex",
             mbv_net::encode_path_segment(id)
         ))
-        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
-        .map_err(|e| e.to_string())?;
+        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))?;
         Ok(())
     }
 
-    pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
+    pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Command/SetAudioStreamIndex",
             mbv_net::encode_path_segment(id)
         ))
-        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
-        .map_err(|e| e.to_string())?;
+        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))?;
         Ok(())
     }
 
-    pub fn session_set_mute(&self, id: &str, muted: bool) -> Result<(), String> {
+    pub fn session_set_mute(&self, id: &str, muted: bool) -> Result<(), crate::EmbyError> {
         let cmd = if muted { "Mute" } else { "Unmute" };
         self.post(&format!(
             "/Sessions/{}/Command/{cmd}",
             mbv_net::encode_path_segment(id)
         ))
-        .send("")
-        .map_err(|e| e.to_string())?;
+        .send("")?;
         Ok(())
     }
 
-    pub fn session_play(&self, id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
+    pub fn session_play(
+        &self,
+        id: &str,
+        item_id: &str,
+        start_ticks: i64,
+    ) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Playing",
             mbv_net::encode_path_segment(id)
@@ -221,8 +215,7 @@ impl EmbyClient {
             "PlayCommand": "PlayNow",
             "ItemIds": [item_id],
             "StartPositionTicks": start_ticks
-        }))
-        .map_err(|e| e.to_string())?;
+        }))?;
         Ok(())
     }
 
@@ -232,7 +225,7 @@ impl EmbyClient {
         item_ids: &[String],
         start_idx: usize,
         start_ticks: i64,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::EmbyError> {
         self.post(&format!(
             "/Sessions/{}/Playing",
             mbv_net::encode_path_segment(id)
@@ -242,8 +235,7 @@ impl EmbyClient {
             "ItemIds": item_ids,
             "StartIndex": start_idx,
             "StartPositionTicks": start_ticks
-        }))
-        .map_err(|e| e.to_string())?;
+        }))?;
         Ok(())
     }
 }
