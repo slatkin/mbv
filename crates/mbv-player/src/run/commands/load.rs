@@ -24,14 +24,6 @@ impl PlaybackRun {
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join(Self::progress_join_budget());
-        if self.config.audio_pipe_path.is_some() {
-            self.reporter
-                .transition_to_deferred(item, self.last_valid_pos);
-            self.ext_sub_urls = vec![];
-        } else {
-            self.ext_sub_urls = self.reporter.transition_to(item, self.last_valid_pos);
-        }
-        *progress = spawn_progress_reporter(self.reporter.clone());
 
         // ponytail: run-side slot-id minting. PlayerCommand::LoadNew has had no
         // in-process constructor since task 1.5 dropped its wire command; the
@@ -42,6 +34,23 @@ impl PlaybackRun {
             Some(slot_id),
         );
         self.current_idx = 0;
+        // Rebuild the correlation span for the new slot before the reporting
+        // transition, so the session assignment records into it (design D5).
+        self.rebuild_playback_span();
+        if self.config.audio_pipe_path.is_some() {
+            self.reporter.transition_to_deferred(
+                item,
+                self.last_valid_pos,
+                self.playback_span.clone(),
+            );
+            self.ext_sub_urls = vec![];
+        } else {
+            self.ext_sub_urls =
+                self.reporter
+                    .transition_to(item, self.last_valid_pos, &self.playback_span);
+        }
+        *progress = spawn_progress_reporter(self.reporter.clone());
+
         self.load_active_item_state();
         self.pending_initial_playlist_layout = false;
         self.begin_item_lifecycle(StopAction::Deferred);
@@ -197,12 +206,16 @@ impl PlaybackRun {
             StopAction::NothingPlaying
         };
         self.begin_item_lifecycle(action);
+        // New queue: rebuild the playback correlation span for the incoming
+        // slot; the outgoing session's stop report above already ran under the
+        // previous span (design D5).
+        self.rebuild_playback_span();
         self.pending_initial_playlist_layout = false;
         if join_progress {
             progress.stop_and_join(Self::progress_join_budget());
         }
         if let Some(emby) = active_as_emby {
-            let (urls, ok) = self.reporter.start_item(emby);
+            let (urls, ok) = self.reporter.start_item(emby, &self.playback_span);
             self.ext_sub_urls = urls;
             if !ok {
                 log::warn!(

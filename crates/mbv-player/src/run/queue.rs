@@ -25,6 +25,29 @@ struct InitialItemState {
 }
 
 impl PlaybackRun {
+    /// The `playback` correlation span for one active slot (design D5):
+    /// `slot`, `item` and a `play_session` field left `Empty` until the Emby
+    /// session id is assigned.
+    pub(crate) fn new_playback_span(slot_id: QueueSlotId, item: &QueueItem) -> tracing::Span {
+        tracing::info_span!(
+            target: "player",
+            "playback",
+            slot = slot_id.raw(),
+            item = %item.id(),
+            play_session = tracing::field::Empty,
+        )
+    }
+
+    /// (Re)create the `playback` span for the currently active slot (design
+    /// D5). Called on every slot change; `play_session` stays `Empty` until a
+    /// reporting assignment records it, so a stale session id is never
+    /// carried into a new slot's lines.
+    pub(crate) fn rebuild_playback_span(&mut self) {
+        if let (Some(slot_id), Some(item)) = (self.active_slot_id(), self.active_item()) {
+            self.playback_span = Self::new_playback_span(slot_id, item);
+        }
+    }
+
     pub(crate) fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
@@ -154,6 +177,7 @@ impl PlaybackRun {
             return false;
         }
         self.current_idx = idx;
+        self.rebuild_playback_span();
         self.sync_status_position();
         true
     }
@@ -272,7 +296,7 @@ impl PlaybackRun {
     /// so reporting identity always names the item playback is on.
     pub(crate) fn report_active_item(&mut self) {
         if let Some(QueueItem::Emby(emby)) = self.active_item().cloned() {
-            let (urls, ok) = self.reporter.start_item(&emby);
+            let (urls, ok) = self.reporter.start_item(&emby, &self.playback_span);
             self.ext_sub_urls = urls;
             if !ok {
                 log::warn!(
@@ -409,6 +433,7 @@ impl PlaybackRun {
         let (item, prepared) = self.prepare_active_slot_with_resume(slot_id, resume_ticks)?;
         self.install_active_projection(mpv, prepared, &item)?;
         let _ = self.queue.set_active_slot(slot_id);
+        self.rebuild_playback_span();
         // Resolve the just-selected slot to this run's mpv-local coordinate
         // (command target -> ordinal is the permitted direction, design D2);
         // never recompute the coordinate from the observed active slot.
@@ -513,11 +538,12 @@ impl PlaybackRun {
                 .as_mut()
                 .and_then(PreparedSource::take_lifecycle),
         );
-        PlaybackRun {
+        let mut run = PlaybackRun {
             origin,
             run_identity,
             config,
             reporter,
+            playback_span: tracing::Span::none(),
             event_tx,
             status,
             subtitle_prefs,
@@ -556,7 +582,20 @@ impl PlaybackRun {
             intro_end,
             intro_state: IntroState::new(past),
             osd_title,
-        }
+        };
+        run.rebuild_playback_span();
+        // The initial Emby session was resolved before the run existed
+        // (`make_reporter`), and no deferred start can be in flight for a
+        // freshly built reporter, so the span adopts the id it already holds.
+        let initial_session = run
+            .reporter
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .2
+            .clone();
+        crate::report_worker::record_play_session(&run.playback_span, &initial_session);
+        run
     }
 }
 

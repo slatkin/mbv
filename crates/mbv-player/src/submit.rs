@@ -247,7 +247,11 @@ fn make_reporter(
         let report_item = emby.clone();
         let media_source_id = info.media_source_id.clone();
         let session_id = info.session_id.clone();
-        thread::spawn(move || {
+        thread::spawn(mbv_core::applog::carry_dispatcher(move || {
+            // `playback.report` from the ids this report sends (design D5);
+            // the thread outlives the slot, so it inherits no `playback` span.
+            let _report_span =
+                crate::report_worker::report_span(report_item.id.as_str(), Some(&session_id));
             let ok = report_client.report_start(&report_item, &media_source_id, &session_id);
             if !ok {
                 log::warn!(
@@ -256,7 +260,7 @@ fn make_reporter(
                     report_item.id,
                 );
             }
-        });
+        }));
         (
             ItemId::new(emby.id.clone()),
             info.media_source_id,

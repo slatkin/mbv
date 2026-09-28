@@ -472,7 +472,9 @@ pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
 pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
-    let handle = thread::spawn(move || {
+    // The progress reporter outlives the slot, so it must not inherit the
+    // spawning slot's `playback` span — dispatcher only (design D5).
+    let handle = thread::spawn(mbv_core::applog::carry_dispatcher(move || {
         loop {
             match stop_rx.recv_timeout(interval) {
                 Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -482,7 +484,7 @@ pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuar
                 }
             }
         }
-    });
+    }));
     ProgressGuard {
         stop_tx,
         handle: Some(handle),

@@ -429,6 +429,191 @@ fn make_no_session_reporter_with_ids() -> (SessionReporter, mbv_net::mock_http::
     )
 }
 
+// ── Reporter correlation (structured-logging design D5) ───────────────────
+
+/// Rendered fields of one span, kept in its registry extensions so `on_record`
+/// can append and `on_event` can render enclosing spans outer→inner.
+struct CapturedFields(Vec<(String, String)>);
+
+struct FieldPairs<'a>(&'a mut Vec<(String, String)>);
+
+impl tracing::field::Visit for FieldPairs<'_> {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.push((field.name().to_owned(), value.to_owned()));
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.push((field.name().to_owned(), format!("{value:?}")));
+    }
+}
+
+/// Capture layer for the reporter-correlation test: every event becomes one
+/// `key=value` fragment line (event fields, then enclosing spans outer→inner)
+/// sent to the test thread over a channel, so worker-thread events can be
+/// awaited without sleeps.
+struct CaptureLayer {
+    lines: Mutex<mpsc::Sender<String>>,
+}
+
+impl<S> tracing_subscriber::Layer<S> for CaptureLayer
+where
+    S: tracing::Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+{
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::Id,
+        ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = Vec::new();
+        attrs.record(&mut FieldPairs(&mut fields));
+        if let Some(span) = ctx.span(id) {
+            span.extensions_mut().insert(CapturedFields(fields));
+        }
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::Id,
+        values: &tracing::span::Record<'_>,
+        ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let Some(span) = ctx.span(id) else {
+            return;
+        };
+        let mut fields = Vec::new();
+        values.record(&mut FieldPairs(&mut fields));
+        if let Some(existing) = span.extensions_mut().get_mut::<CapturedFields>() {
+            existing.0.append(&mut fields);
+        }
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        let mut fields = vec![("event".to_owned(), event.metadata().name().to_owned())];
+        event.record(&mut FieldPairs(&mut fields));
+        if let Some(scope) = ctx.event_scope(event) {
+            for span in scope.from_root() {
+                if let Some(captured) = span.extensions().get::<CapturedFields>() {
+                    fields.extend(captured.0.iter().cloned());
+                }
+            }
+        }
+        let line = fields
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let _ = self.lines.lock().unwrap().send(line);
+    }
+}
+
+/// Blocks until a captured line containing `needle` arrives. The reporter
+/// worker logs the awaited lines unconditionally, so the receive is the seam
+/// observing the worker's progress — no sleeps.
+fn wait_for_captured_line(rx: &mpsc::Receiver<String>, needle: &str) -> String {
+    let mut seen = 0;
+    loop {
+        let line = rx
+            .recv()
+            .expect("capture channel closed before the expected line");
+        if line.contains(needle) {
+            return line;
+        }
+        seen += 1;
+        assert!(
+            seen < 200,
+            "line containing {needle} never captured; last: {line}"
+        );
+    }
+}
+
+#[test]
+fn deferred_start_report_lines_carry_new_item_not_previous_session() {
+    use tracing_subscriber::prelude::*;
+
+    let http = mbv_net::mock_http::MockHttp::new();
+    // The worker consumes, in order: the previous session's stopped report,
+    // the deferred start's PlaybackInfo fetch, then the start report itself.
+    http.respond(200, "");
+    http.respond(
+        200,
+        r#"{"MediaSources":[{"Id":"msid-b"}],"PlaySessionId":"session-b"}"#,
+    );
+    http.respond(200, "");
+    let cfg = mbv_config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..mbv_config::Config::default()
+    };
+    let client = Arc::new(EmbyClient::new(cfg).with_test_agent(http.agent()));
+
+    let (line_tx, line_rx) = mpsc::channel();
+    let subscriber = tracing_subscriber::registry().with(CaptureLayer {
+        lines: Mutex::new(line_tx),
+    });
+
+    tracing::subscriber::with_default(subscriber, || {
+        // The report code still logs via `log::` (row 4.1 owns conversion);
+        // bridge it into the capture. Per-process init, safe under nextest's
+        // one-test-per-process model.
+        let _ = tracing_log::LogTracer::init();
+        log::set_max_level(log::LevelFilter::Info);
+
+        // Session A's playback span, entered as the run loop would hold it.
+        let span_a = PlaybackRun::new_playback_span(
+            QueueSlotId::from_raw(7),
+            &QueueItem::Emby(Box::new(make_media_item("item-a"))),
+        );
+        span_a.record("play_session", "session-a");
+        let _entered_a = span_a.enter();
+
+        let status = Arc::new(Mutex::new(PlayerStatus::default()));
+        let reporter = SessionReporter::new(
+            Arc::clone(&client),
+            None,
+            ItemId::new("item-a"),
+            MediaSourceId::new("msid-a"),
+            EmbySessionId::new("session-a"),
+            false,
+            status,
+        );
+
+        // The run loop rebuilt the span for the new slot before handing the
+        // deferred start to the worker (cmd_load_new order); the shared ids
+        // still hold session A. The worker runs on its own thread and reaches
+        // this subscriber because its spawn goes through `carry_dispatcher`,
+        // which carries the dispatcher but not session A's span.
+        let span_b = PlaybackRun::new_playback_span(
+            QueueSlotId::from_raw(8),
+            &QueueItem::Emby(Box::new(make_media_item("item-b"))),
+        );
+        reporter.transition_to_deferred(&make_media_item("item-b"), 0, span_b);
+
+        let before = wait_for_captured_line(&line_rx, "PlaybackInfo item=item-b");
+        let after = wait_for_captured_line(&line_rx, "Playing item=item-b");
+
+        for line in [&before, &after] {
+            assert!(line.contains("item=item-b"), "new item missing: {line}");
+            assert!(!line.contains("item-a"), "previous item leaked: {line}");
+            assert!(
+                !line.contains("session-a"),
+                "previous session leaked: {line}"
+            );
+            assert!(
+                !line.contains("slot="),
+                "playback span leaked onto report line: {line}"
+            );
+        }
+        assert!(
+            !before.contains("play_session="),
+            "play_session recorded before get_playback_info resolved: {before}"
+        );
+        assert!(
+            after.contains("play_session=session-b"),
+            "resolved session missing: {after}"
+        );
+    });
+}
+
 // ── QueueAppend must not drop appended Feed items ───────────────────────────
 
 #[test]

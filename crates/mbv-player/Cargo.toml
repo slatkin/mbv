@@ -33,9 +33,12 @@ libmpv2-sys.workspace = true
 libc.workspace = true
 serde_json.workspace = true
 log.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 mbv-remote-player = { path = "../mbv-remote-player", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }
 mbv-net = { path = "../mbv-net", features = ["test"] }

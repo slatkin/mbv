@@ -471,7 +471,7 @@ impl PlaybackRun {
     /// item's `report_stopped` was already sent with the original IDs.
     pub(crate) fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
         if let Some(emby) = next_item.as_emby() {
-            let (urls, ok) = self.reporter.start_item(emby);
+            let (urls, ok) = self.reporter.start_item(emby, &self.playback_span);
             self.ext_sub_urls = urls;
             if !ok {
                 log::warn!(target: "player", "start_item failed for playlist track-transition item={}", emby.id);

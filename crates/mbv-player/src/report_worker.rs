@@ -1,3 +1,4 @@
+use mbv_core::applog::carry_dispatcher;
 use mbv_ctrl::player::PlayerStatus;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
@@ -38,6 +39,11 @@ pub(super) enum StartIds {
     Deferred {
         ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
         is_audio: Arc<AtomicBool>,
+        /// The playback span of the slot this start belongs to; the worker
+        /// records `play_session` into it once the session id resolves
+        /// (design D5 — the shared `ids` may still hold the previous session
+        /// at job entry, so they are never read for the span here).
+        playback_span: tracing::Span,
     },
 }
 
@@ -69,6 +75,9 @@ fn execute_stopped_report(data: StoppedReportData) {
         pos,
         runtime_ticks,
     } = data;
+    // `playback.report` correlation span (design D5): the stopped data's own
+    // ids, so the lines match the session actually being reported.
+    let _report_span = report_span(id.as_str(), Some(&sid));
     if let Some(ref tx) = ws_tx
         && tx.is_connected()
     {
@@ -82,35 +91,79 @@ fn execute_stopped_report(data: StoppedReportData) {
     }
 }
 
+/// Fill a span's `play_session` field once the Emby session id is known.
+/// Empty ids (feed-only playback) leave the field unrecorded.
+pub(crate) fn record_play_session(span: &tracing::Span, session_id: &EmbySessionId) {
+    if !session_id.as_str().is_empty() {
+        span.record("play_session", session_id.as_str());
+    }
+}
+
+/// The `playback.report` correlation span for one report (design D5): the
+/// `item` and `play_session` of the session being reported. An `Empty`
+/// `play_session` stays unrecorded until the session id is known.
+pub(crate) fn report_span(item: &str, session: Option<&EmbySessionId>) -> tracing::Span {
+    let span = tracing::info_span!(
+        target: "player",
+        "playback.report",
+        item = %item,
+        play_session = tracing::field::Empty,
+    );
+    if let Some(sid) = session {
+        record_play_session(&span, sid);
+    }
+    span
+}
+
+fn report_start_job(
+    client: &EmbyClient,
+    item: &EmbyItem,
+    media_source_id: &MediaSourceId,
+    session_id: &EmbySessionId,
+) {
+    let ok = client.report_start(item, media_source_id, session_id);
+    if !ok {
+        log::warn!(target: "player", "transition_to: report_start failed for item={}", item.id);
+    }
+}
+
 fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
     for job in rx {
         match job {
             ReportJob::Stopped(data) => execute_stopped_report(data),
-            ReportJob::Start { client, item, ids } => {
-                let (media_source_id, session_id) = match ids {
-                    StartIds::Resolved {
-                        media_source_id,
-                        session_id,
-                    } => (media_source_id, session_id),
-                    StartIds::Deferred { ids, is_audio } => {
-                        let info = client.get_playback_info(&item.id);
-                        {
-                            let mut locked = ids
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            locked.0 = ItemId::new(item.id.clone());
-                            locked.1 = info.media_source_id.clone();
-                            locked.2 = info.session_id.clone();
-                        };
-                        is_audio.store(item.is_audio(), Ordering::Relaxed);
-                        (info.media_source_id, info.session_id)
-                    }
-                };
-                let ok = client.report_start(&item, &media_source_id, &session_id);
-                if !ok {
-                    log::warn!(target: "player", "transition_to: report_start failed for item={}", item.id);
+            ReportJob::Start { client, item, ids } => match ids {
+                StartIds::Resolved {
+                    media_source_id,
+                    session_id,
+                } => {
+                    let _report_span = report_span(item.id.as_str(), Some(&session_id));
+                    report_start_job(&client, &item, &media_source_id, &session_id);
                 }
-            }
+                StartIds::Deferred {
+                    ids,
+                    is_audio,
+                    playback_span,
+                } => {
+                    // The shared ids can still name the previous session
+                    // here, so the span carries only the new item until the
+                    // fetch resolves the new session id (design D5).
+                    let report_span = report_span(item.id.as_str(), None);
+                    let _entered = report_span.enter();
+                    let info = client.get_playback_info(&item.id);
+                    record_play_session(&report_span, &info.session_id);
+                    record_play_session(&playback_span, &info.session_id);
+                    {
+                        let mut locked = ids
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        locked.0 = ItemId::new(item.id.clone());
+                        locked.1 = info.media_source_id.clone();
+                        locked.2 = info.session_id.clone();
+                    };
+                    is_audio.store(item.is_audio(), Ordering::Relaxed);
+                    report_start_job(&client, &item, &info.media_source_id, &info.session_id);
+                }
+            },
             ReportJob::ProgressJoinThenStopped {
                 handle,
                 budget,
@@ -164,7 +217,9 @@ impl SessionReporter {
         status: Arc<Mutex<PlayerStatus>>,
     ) -> Self {
         let (job_tx, job_rx) = mpsc::channel::<ReportJob>();
-        thread::spawn(move || run_report_worker(job_rx));
+        // The report worker outlives any slot, so it must not inherit the
+        // spawning slot's `playback` span — dispatcher only (design D5).
+        thread::spawn(carry_dispatcher(move || run_report_worker(job_rx)));
         SessionReporter {
             client,
             ws_tx,
@@ -247,6 +302,9 @@ impl SessionReporter {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
+        // `playback.report` from the shared ids at call time — exactly the
+        // ids this report sends (design D5).
+        let _report_span = report_span(id.as_str(), Some(&sid));
         let (pos, runtime, paused) = {
             let s = self
                 .status
@@ -336,12 +394,14 @@ impl SessionReporter {
     }
 
     pub(super) fn report_ping(&self) {
-        let sid = self
-            .ids
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .2
-            .clone();
+        let (id, sid) = {
+            let ids = self
+                .ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (ids.0.clone(), ids.2.clone())
+        };
+        let _report_span = report_span(id.as_str(), Some(&sid));
         self.client.report_ping(&sid);
     }
 
@@ -349,7 +409,11 @@ impl SessionReporter {
     // *before* the network call so the progress reporter thread never sends
     // stale IDs to Emby.
     // Returns (ext_sub_urls, success).
-    pub(super) fn start_item(&self, item: &EmbyItem) -> (Vec<String>, bool) {
+    pub(super) fn start_item(
+        &self,
+        item: &EmbyItem,
+        playback_span: &tracing::Span,
+    ) -> (Vec<String>, bool) {
         let info = self.client.get_playback_info(&item.id);
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
@@ -362,6 +426,7 @@ impl SessionReporter {
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
         };
+        record_play_session(playback_span, &info.session_id);
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
         let ok = self
             .client
@@ -373,7 +438,12 @@ impl SessionReporter {
     // both pure Emby bookkeeping, so both fire on background threads. Only
     // get_playback_info runs synchronously here — the session needs its ids
     // and ext_sub_urls before loadfile can be issued for the new item.
-    pub(super) fn transition_to(&self, new_item: &EmbyItem, last_valid_pos: i64) -> Vec<String> {
+    pub(super) fn transition_to(
+        &self,
+        new_item: &EmbyItem,
+        last_valid_pos: i64,
+        playback_span: &tracing::Span,
+    ) -> Vec<String> {
         self.report_stopped_background(last_valid_pos);
         let info = self.client.get_playback_info(&new_item.id);
         let ext_sub_urls = info.external_subtitle_urls;
@@ -386,6 +456,7 @@ impl SessionReporter {
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
         };
+        record_play_session(playback_span, &info.session_id);
         self.is_audio.store(new_item.is_audio(), Ordering::Relaxed);
         self.report_start_background(new_item, &info.media_source_id, &info.session_id);
         ext_sub_urls
@@ -395,7 +466,12 @@ impl SessionReporter {
     // are irrelevant (audio-only) and the progress reporter can tolerate briefly
     // stale ids. Moves get_playback_info off the player thread so loadfile can be
     // issued immediately.
-    pub(super) fn transition_to_deferred(&self, new_item: &EmbyItem, last_valid_pos: i64) {
+    pub(super) fn transition_to_deferred(
+        &self,
+        new_item: &EmbyItem,
+        last_valid_pos: i64,
+        playback_span: tracing::Span,
+    ) {
         self.report_stopped_background(last_valid_pos);
         let _ = self.job_tx.send(ReportJob::Start {
             client: Arc::clone(&self.client),
@@ -403,6 +479,7 @@ impl SessionReporter {
             ids: StartIds::Deferred {
                 ids: Arc::clone(&self.ids),
                 is_audio: Arc::clone(&self.is_audio),
+                playback_span,
             },
         });
     }

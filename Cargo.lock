@@ -1986,6 +1986,9 @@ dependencies = [
  "mbv-ws",
  "rstest",
  "serde_json",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
 ]
 
 [[package]]

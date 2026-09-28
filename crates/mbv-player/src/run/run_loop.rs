@@ -74,11 +74,13 @@ impl PlaybackRun {
         // progress_report_tx is dropped at the end of run().
         let (progress_report_tx, progress_report_rx) = mpsc::channel::<String>();
         let progress_worker_reporter = self.reporter.clone();
-        thread::spawn(move || {
+        // The progress worker outlives the slot, so it must not inherit the
+        // spawning slot's `playback` span — dispatcher only (design D5).
+        thread::spawn(mbv_core::applog::carry_dispatcher(move || {
             for event_name in progress_report_rx {
                 progress_worker_reporter.report_progress(&event_name);
             }
-        });
+        }));
 
         if wakeup_write_fd >= 0 {
             mpv.set_wakeup_callback(move || {
@@ -94,6 +96,10 @@ impl PlaybackRun {
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             loop {
+                // Playback correlation span (design D5): re-entered each tick,
+                // so a slot change's rebuilt span takes over on the next pass.
+                let playback = self.playback_span.clone();
+                let _playback = playback.enter();
                 if self.run_tick(
                     &mpv,
                     &mut progress,

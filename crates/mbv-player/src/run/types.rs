@@ -48,6 +48,10 @@ pub(crate) struct PlaybackRun {
     pub(crate) run_identity: mbv_ctrl::PlaybackGeneration,
     pub(crate) config: MpvRunConfig,
     pub(crate) reporter: SessionReporter,
+    /// Correlation span for the active slot (`slot`, `item`, `play_session`,
+    /// design D5). Rebuilt on every slot change; the run loop enters it each
+    /// tick, and the Emby session id is recorded when it is assigned.
+    pub(crate) playback_span: tracing::Span,
     pub(crate) event_tx: mpsc::Sender<PlayerEvent>,
     pub(crate) status: Arc<Mutex<PlayerStatus>>,
     pub(crate) subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
