@@ -1,6 +1,6 @@
 # Invariant 8 — Server-row accounting is distinct from retained browse items
 
-**Scope:** `BrowseLevel` pagination and exhaustion (`src/app/state/types/browse.rs`,
+**Scope:** `BrowseLevel` pagination and exhaustion (`crates/mbv-ui-model/src/browse.rs`,
 `src/app/dispatch/library/event.rs`, `src/app/dispatch/library/browse.rs`, and
 `src/app/dispatch/library/search.rs`).
 

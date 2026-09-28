@@ -51,7 +51,7 @@ accordingly.
 
 An Interactive Component owns its private presentation state, event
 interpretation, local updates, rendering, viewport, and render-derived hit
-geometry. It emits a typed `Msg` (`crates/mbv-components/src/msg/`) for anything
+geometry. It emits a typed `Msg` (`crates/mbv-ui-msg/src/`) for anything
 crossing that boundary. The shell `Model` (`src/app/shell/`) owns `App`,
 terminal/Service/worker lifecycle, Player and canonical queue authority,
 persistence, and external effects.
@@ -172,9 +172,9 @@ Before writing rendering code for a screen:
    `crates/mbv-render/src/components.rs` and `crates/mbv-render/src/arrangements.rs`
    for something that already paints this shape (a row, a card, a modal
    frame, a hero pane). Reuse it before writing a new painter — for a
-   hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`
-   (`arrangements/hero_left.rs`) for the pane itself and the `Hero` trait
-   (`components/hero_model.rs`) for its content, not a bespoke layout.
+   hero-bearing surface this means `wide_hero_presentation`/`WideHeroPanes`
+   (`arrangements/wide_hero.rs`) for the panes and `components/hero_model.rs`
+   for its content rows, not a bespoke layout.
 2. **If it almost fits, check for a policy or variant** (see the decision
    table below) before reaching for a screen-local branch.
 3. **If nothing fits, add centrally** — a new component/arrangement function,
@@ -203,9 +203,9 @@ None of these rows permit screen-owned geometry, raw Ratatui calls, or raw
   Pass the subtitle into the existing modal's content model; do not add a
   `subtitle_color: Option<Color>` parameter to `render_modal_frame`.
 - *"This row should look focused or muted depending on state."* Named policy.
-  Use the existing `focused_or_muted`/`focused_or_subtle` style pair in
-  `components/list_rows.rs` rather than inlining
-  `if focused { palette::X } else { palette::Y }` in the screen.
+  Derive the style once in the owning painter (e.g. `components/list_rows.rs`)
+  rather than inlining `if focused { palette::X } else { palette::Y }` in the
+  screen.
 - *"This destination wants a different Hero arm."* Defect. Derive the arm from
   shared content policy in the Library Panel; do not add a caller-owned choice.
 - *"Nothing existing places two panes side by side with this sizing rule."*
@@ -230,7 +230,7 @@ self.render_some_row(f, area, &model); // defined in components/
 
 // crates/mbv-render/src/components/some_component.rs
 pub fn render_some_row(f: &mut Frame, area: Rect, model: &SomeRowModel) {
-    let fg = focused_or_muted(model.focused); // named policy, not a raw Color
+    let fg = row_fg(model.focused); // painter-owned named policy, not a raw Color
     f.render_widget(Paragraph::new(model.text.clone()).style(Style::default().fg(fg)), area);
 }
 ```
@@ -240,7 +240,7 @@ pub fn render_some_row(f: &mut Frame, area: Rect, model: &SomeRowModel) {
 let [left, right] = Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(area);
 
 // Right: an arrangement owns the split, screen calls it.
-let hero = hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly); // arrangements/hero_left.rs
+let panes = wide_hero_presentation(area, None); // arrangements/wide_hero.rs
 ```
 
 ```rust
@@ -248,7 +248,7 @@ let hero = hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly); // arrangements/
 Style::default().fg(palette::ACCENT_ACTIVE).bg(Color::Rgb(20, 20, 20))
 
 // Right: screen passes semantic focus state; the component resolves the role.
-// (Raw Color primitives are private to theme/ and cannot be named outside it.)
+// (Raw palette values are private to crates/mbv-theme/ and cannot be named outside it.)
 Style::default().fg(if focused { palette::ACCENT_ACTIVE } else { palette::TEXT_PRIMARY })
 ```
 
@@ -257,8 +257,9 @@ Style::default().fg(if focused { palette::ACCENT_ACTIVE } else { palette::TEXT_P
 One mechanism enforces this boundary on its own, and its limits matter more
 than a second check that does not exist:
 
-1. **The compiler** — private theme primitives. A raw `Color` outside
-   `crates/mbv-theme/` is a compile error. Cannot be bypassed.
+1. **The compiler** — private theme primitives. The `Palette` enum is private
+   to `crates/mbv-theme/`, so naming a palette value outside it is a compile
+   error. It does not stop a literal `Color::Rgb(..)` elsewhere; review does.
 
 Nothing else is checked mechanically. A `screens/` module importing ratatui,
 constructing a `Rect`, calling `render_widget`, or reaching for `buffer_mut()`
@@ -307,7 +308,7 @@ requirements or constants plus explicit slack; do not add a general size
 abstraction. Semantic glyph assertions remain only in the owning painter test
 when the glyph is that painter's own semantic output; remove glyphs used as
 locators. Do not use whole-frame equality or snapshots: use focused
-buffer/content checks, with `buffer_to_string` only for focused checks.
+buffer/content checks.
 
 Mounting/focus/subscription/routing changes need real `Application::tick()`
 integration tests (`src/app/tests/tick_integration/`) through the shell sync

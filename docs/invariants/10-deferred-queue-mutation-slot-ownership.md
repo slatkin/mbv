@@ -1,15 +1,15 @@
 # Invariant 10 — A deferred queue mutation executes only through its owning boundary, from a slot exactly one writer and one reader own
 
-**Scope:** `App::pending_queue_action` (`src/app/state/app_struct.rs:345`) and its
+**Scope:** `App::pending_queue_action` (`src/app/state/app_struct.rs`) and its
 save/discard writer and `SessionEvent::PlaylistMutationComplete` reader
-(`src/app/dispatch/run_loop/session.rs:191-194`), versus the D6 gate's
+(`src/app/dispatch/run_loop/session.rs`), versus the D6 gate's
 `App::pending_queue_replacement`
-(`src/app/state/app_struct.rs:354`, typed
+(`src/app/state/app_struct.rs`, typed
 `Option<(PendingQueueAction, ReplacementExecutor)>`), written only by
-`App::request_queue_replacement` (`src/app/dispatch/queue.rs:391`) and
+`App::request_queue_replacement` (`src/app/dispatch/queue/replacement.rs`) and
 read/taken only by the `ConfirmAction::ReplacePopulatedQueue` arm
-(`src/app/input/confirm_keys.rs:178` take-on-confirm, `:183`
-clear-on-cancel-or-dismiss, both handing the `(action, executor)` payload to
+(`confirm_replace_populated_queue` in `src/app/input/confirm_keys.rs`:
+take-on-confirm, clear-on-cancel-or-dismiss, both handing the `(action, executor)` payload to
 `run_replacement`, which dispatches to the executor the entry point chose).
 
 ## The invariant
@@ -54,7 +54,7 @@ playback, because there is no signal at all.
 ## How the code maintains it today
 
 - **Two slots, two lifecycles.** `pending_queue_replacement` is written
-  only in `request_queue_replacement` (`dispatch/queue.rs:391`) when the
+  only in `request_queue_replacement` (`dispatch/queue/replacement.rs`) when the
   gate decides confirmation is needed, as an `(action, executor)` tuple
   whose executor is the entry point's `ReplacementExecutor`. The
   `ReplacePopulatedQueue` arm in `input/confirm_keys.rs` takes it on
@@ -65,19 +65,19 @@ playback, because there is no signal at all.
   the slot, so no executable payload survives a closed modal.
   `pending_queue_action` is written by the save/discard flow and consumed
   only at the `PlaylistMutationComplete` boundary
-  (`run_loop_events_session.rs:191-194`), which executes it only after
+  (`dispatch/run_loop/session.rs`), which executes it only after
   lineage and playlist-identity checks.
 - **Comment-anchored intent.** Both sites state the exclusivity in place:
-  `state/types/confirm.rs:32` documents that the gate uses its own
+  `crates/mbv-ui-model/src/confirm.rs` documents that the gate uses its own
   `pending_queue_replacement` slot so the save-deferral slot stays with its
-  own callers, and `dispatch/queue.rs` documents why the shared deferral
+  own callers, and `dispatch/queue/replacement.rs` documents why the shared deferral
   slot must not carry a gated replacement. These comments are the only
   barrier against a future "simplification" back into one slot.
 - **Tests.** `input/confirm_keys/tests.rs` pins both slots' independence
-  (confirm/cancel paths assert `pending_queue_replacement` alone moves) and
-  (`src/app/tests/tick_integration/music_mouse.rs:947-998` drives the gate
-  through real `tick()` composition, asserting the slot is taken exactly
-  once.
+  (confirm/cancel paths assert `pending_queue_replacement` alone moves), and
+  `src/app/dispatch/actions/tests/replacement_gate.rs` pins ask-then-execute
+  per entry point. The former `tick()`-level gate test in
+  `tick_integration/music_mouse.rs` was removed in the #819 test prune.
 
 ## Where it still fails / what to watch
 

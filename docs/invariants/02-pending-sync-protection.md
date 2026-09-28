@@ -88,7 +88,7 @@ equality exists because position-within-3s with a flipped watched flag is
 ## Where it currently fails
 
 1. **`update_slot_item` drops `pending_sync` silently**
-   (`playback_queue.rs:445`). It overwrites `slot.item` and rebuilds
+   (`crates/mbv-queue/src/lib.rs`). It overwrites `slot.item` and rebuilds
    `local` but leaves a stale `pending_sync` (or, reading the other way,
    discards the *meaning* of the pending snapshot while keeping the flag, so
    the slot stays protected by a position that no longer describes it).
@@ -112,5 +112,5 @@ equality exists because position-within-3s with a flipped watched flag is
 4. **`set_slot_progress_by_index` / `set_item_at` (test helpers) bypass the
    coupling.** They mutate `local`/item without touching `pending_sync`,
    which is fine for tests *as long as no merge test relies on them to set
-   up pending state* — worth knowing when reading `playback_queue_tests.rs`
+   up pending state* — worth knowing when reading `crates/mbv-queue/src/tests.rs`
    setup code, not a production hole.
