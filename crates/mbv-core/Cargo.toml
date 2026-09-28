@@ -16,6 +16,10 @@ workspace = true
 [dependencies]
 log.workspace = true
 libc.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-log = "0.2"
+time.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
