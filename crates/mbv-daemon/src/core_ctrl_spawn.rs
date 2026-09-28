@@ -14,16 +14,16 @@ fn ctrl_client_capabilities(
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if let Err(e) = info.validate_peer() {
-                log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", error = %e, "ctrl client rejected");
                 return None;
             }
             if let Some(control_credential) = control_credential {
                 if info.control_token.is_none() {
-                    log::warn!(target: "daemon", "rejecting ctrl client: missing Control credential");
+                    tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", "ctrl client rejected: missing Control credential");
                     return None;
                 }
                 if let Err(e) = info.validate_control_credential(control_credential) {
-                    log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                    tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", error = %e, "ctrl client rejected");
                     return None;
                 }
             }
@@ -38,11 +38,11 @@ fn ctrl_client_capabilities(
             ))
         }
         Ok(_) => {
-            log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
+            tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", "ctrl client rejected: missing protocol hello");
             None
         }
         Err(e) => {
-            log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
+            tracing::warn!(name: "daemon.ctrl_client_hello.invalid", target: "daemon", error = %e, "invalid ctrl protocol hello");
             None
         }
     }
@@ -189,10 +189,13 @@ pub(crate) fn spawn_ctrl_client(
                     // on both ends: the log for operators, CommandRejected for
                     // the client's toast — the serde error names the
                     // field/variant that drifted.
-                    log::warn!(
+                    tracing::warn!(
+                        name: "daemon.ctrl_command_parse.failed",
                         target: "daemon",
-                        "unparsable ctrl line from client {client_id} ({} bytes): {e}",
-                        line.len(),
+                        client = %client_id,
+                        bytes = line.len(),
+                        error = %e,
+                        "ctrl command parse failed"
                     );
                     if let Ok(json) = serde_json::to_string(&CtrlEvent::CommandRejected(format!(
                         "mbvd ignored an unparsable control command: {e}"

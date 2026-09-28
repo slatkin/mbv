@@ -31,10 +31,7 @@ impl DaemonLoop {
         // observed slot (design D6).
         let Some((observed_idx, resolved_slot_id)) = self.owner.core.observe_track_change(slot_id)
         else {
-            log::warn!(
-                target: "queue",
-                "discarding TrackChanged for unknown slot {slot_id:?}"
-            );
+            tracing::warn!(name: "daemon.queue_track_change.discarded", target: "queue", slot = ?slot_id, "discarding track change for unknown slot");
             return EventOutcome::CONTINUE;
         };
         broadcast(
@@ -153,7 +150,7 @@ impl DaemonLoop {
             .audio_pipe_playout_delay_ms
             .map(Duration::from_millis);
         if let Some((connection_id, status)) = self.owner.intents.output_started_if_current(delay) {
-            log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, self.owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+            tracing::info!(name: "daemon.pipe_latency.status", target: "pipe_latency", request = %status.request_id, generation = status.generation, phase = ?status.phase, elapsed_ms = self.owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default(), "pipe playback status");
             self.ctrl_clients
                 .lock()
                 .unwrap()

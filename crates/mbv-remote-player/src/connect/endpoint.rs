@@ -44,17 +44,11 @@ pub fn resolve_library_route(
     match DaemonEndpoint::parse(raw) {
         Ok(endpoint @ DaemonEndpoint::Tcp(_)) => Some(endpoint),
         Ok(other) => {
-            log::warn!(
-                target: "library_route",
-                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
-            );
+            tracing::warn!(name: "remote.library_route_resolve.skipped", target: "library_route", entry = %raw, parsed_endpoint = ?other, "library route is TCP-only; skipping");
             None
         }
         Err(e) => {
-            log::warn!(
-                target: "library_route",
-                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
-            );
+            tracing::warn!(name: "remote.library_route_resolve.failed", target: "library_route", entry = %raw, error = %e, "library route is not a valid TCP endpoint; skipping");
             None
         }
     }

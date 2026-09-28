@@ -167,12 +167,9 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
 /// Returns `false` when the request was rejected; the caller then sends no
 /// further reply.
 fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
-    log::info!(
-        target: "daemon",
-        "RequestShutdown received from ctrl client {}", ctx.client_id
-    );
+    tracing::info!(name: "daemon.shutdown_request.received", target: "daemon", client = %ctx.client_id, "shutdown request received");
     if ctx.stay_alive {
-        log::info!(target: "daemon", "RequestShutdown rejected: daemon is in stay-alive mode");
+        tracing::info!(name: "daemon.shutdown_request.rejected", target: "daemon", "shutdown request rejected: daemon is in stay-alive mode");
         send_to(
             ctx.reply_tx,
             &CtrlEvent::ShutdownRejected {
@@ -212,10 +209,7 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     }
 
     if let Err(e) = mbv_config::save_queue_state(&queue_state) {
-        log::error!(
-            target: "daemon",
-            "coordinated shutdown rejected: queue persistence failed: {e}"
-        );
+        tracing::error!(name: "daemon.shutdown_queue_persist.failed", target: "daemon", error = %e, "coordinated shutdown rejected: queue persistence failed");
         send_to(
             ctx.reply_tx,
             &CtrlEvent::ShutdownRejected {
@@ -293,7 +287,7 @@ fn dispatch_ctrl_command(
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
-            log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
+            tracing::warn!(name: "daemon.ctrl_client_hello.unexpected", target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
         CtrlCmd::UnifiedAdoptQueue {
             items,

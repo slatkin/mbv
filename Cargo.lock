@@ -1854,7 +1854,6 @@ name = "mbv-daemon"
 version = "0.21.4"
 dependencies = [
  "libc",
- "log",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
@@ -2006,7 +2005,6 @@ dependencies = [
 name = "mbv-remote-player"
 version = "0.21.4"
 dependencies = [
- "log",
  "mbv-config",
  "mbv-ctrl",
  "mbv-emby",
@@ -2102,7 +2100,6 @@ name = "mbvd"
 version = "0.21.4"
 dependencies = [
  "libc",
- "log",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
@@ -2113,6 +2110,7 @@ dependencies = [
  "mimalloc",
  "nix 0.31.3",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

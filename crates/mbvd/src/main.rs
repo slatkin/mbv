@@ -559,7 +559,7 @@ fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("PANIC: {info}");
         eprintln!("{msg}");
-        log::error!(target: "crash", "{msg}");
+        tracing::error!(name: "mbvd.panic.captured", target: "crash", error = %msg, "panic captured");
     }));
 }
 
@@ -630,7 +630,7 @@ fn run() -> Result<(), DaemonError> {
     let is_system = config::is_system_instance();
     let log_path = (!is_system).then(log_path);
     applog::init(is_system, log_path, &log_level);
-    log::info!(target: "startup", "mbvd starting");
+    tracing::info!(name: "mbvd.startup.started", target: "startup", "mbvd starting");
 
     mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),

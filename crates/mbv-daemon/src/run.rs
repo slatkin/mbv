@@ -74,7 +74,7 @@ pub(super) fn apply_track_completed_observation(
         consume_policy.videos,
         consume_policy.audio,
     ) {
-        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+        tracing::info!(name: "daemon.queue_slot.consumed", target: "consume", slot = ?slot_id, "completed track consumed");
     }
     shared_queue.publish_observed(&owner.core);
     true
@@ -319,7 +319,7 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
                 lineage: initial_lineage,
             })
         {
-            log::error!(target: "queue", "failed to initialize Stay-alive queue state: {error}");
+            tracing::error!(name: "daemon.queue_state_initialization.failed", target: "queue", error = %error, "failed to initialize Stay-alive queue state");
         }
         player.set_initial_queue(
             &initial_queue
@@ -387,20 +387,12 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
                 let port = listener.local_addr().map_or(0, |addr| addr.port());
                 if port > 0 {
                     direct_commands.push(mbv_direct_tcp_port_command(port));
-                    log::info!(
-                        target: "daemon",
-                        "daemon tcp control listening on {}",
-                        listener
-                            .local_addr().map_or_else(|_| listen.to_string(), |addr| addr.to_string())
-                    );
+                    tracing::info!(name: "daemon.ctrl_tcp_listen.started", target: "daemon", address = %listener.local_addr().map_or_else(|_| listen.to_string(), |addr| addr.to_string()), "daemon TCP control listening");
                 }
                 Some(listener)
             }
             Err(e) => {
-                log::warn!(
-                    target: "daemon",
-                    "daemon tcp control bind failed for {listen}: {e}"
-                );
+                tracing::warn!(name: "daemon.ctrl_tcp_bind.failed", target: "daemon", address = %listen, error = %e, "daemon TCP control bind failed");
                 None
             }
         }

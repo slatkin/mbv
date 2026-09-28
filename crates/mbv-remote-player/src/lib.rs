@@ -229,19 +229,13 @@ impl RemotePlayer {
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..) => {
-                log::warn!(
-                    target: "remote",
-                    "queue mutation not sendable over legacy ctrl; caller must use a unified queue command"
-                );
+                tracing::warn!(name: "remote.command_send.refused", target: "remote", "queue mutation not sendable over legacy ctrl; use a unified queue command");
                 return false;
             }
             cmd => match WireCommand::try_from_player_command(cmd) {
                 Ok(wire) => wire,
                 Err(refused) => {
-                    log::warn!(
-                        target: "remote",
-                        "command has no ctrl wire form; refused without delivery: {refused:?}"
-                    );
+                    tracing::warn!(name: "remote.command_send.refused", target: "remote", reason = ?refused, "command has no ctrl wire form; refused without delivery");
                     return false;
                 }
             },
@@ -369,7 +363,7 @@ impl RemotePlayer {
         if let Some(stream) = self.control_stream.lock().unwrap().take()
             && let Err(e) = stream.shutdown()
         {
-            log::warn!(target: "remote", "control-socket shutdown failed: {e}");
+            tracing::warn!(name: "remote.control_socket_shutdown.failed", target: "remote", error = %e, "control-socket shutdown failed");
         }
     }
 

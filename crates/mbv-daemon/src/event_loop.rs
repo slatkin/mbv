@@ -103,7 +103,7 @@ impl DaemonLoop {
         cancel_pending_idle_queue_load_if_run_changed(&mut self.owner, &self.player);
         expire_pending_idle_queue_load(&mut self.owner, now);
         if let Some((connection_id, event)) = self.owner.intents.settle_buffering_if_due() {
-            log::info!(target: "pipe_latency", "request={} generation={} outcome=settled", event.request_id, event.generation);
+            tracing::info!(name: "daemon.pipe_latency.settled", target: "pipe_latency", request = %event.request_id, generation = event.generation, outcome = "settled", "pipe playback settled");
             let clients = self.ctrl_clients.lock().unwrap();
             if clients.has_client(connection_id) {
                 clients.send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
@@ -182,7 +182,7 @@ impl DaemonLoop {
             && outcome.owner_queue_dirty
             && let Err(error) = self.persist_owner_queue()
         {
-            log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
+            tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue");
         }
 
         outcome.flow

@@ -26,7 +26,7 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
 libc.workspace = true
-log.workspace = true
+tracing.workspace = true
 mimalloc.workspace = true
 nix.workspace = true
 serde_json.workspace = true

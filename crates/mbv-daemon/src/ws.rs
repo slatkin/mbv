@@ -112,7 +112,7 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         match c.get_items_by_ids(&item_ids) {
             Ok(items) => items,
             Err(error) => {
-                log::warn!(target: "daemon", "play error: {error}");
+                tracing::warn!(name: "daemon.websocket_play.failed", target: "daemon", error = %error, "websocket play failed");
                 return;
             }
         }
@@ -126,7 +126,7 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         .map(|item| QueueItem::Emby(Box::new(item)))
         .collect();
     if let Some(reason) = audio_only_rejection(audio_only, &queue_items) {
-        log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
+        tracing::warn!(name: "daemon.websocket_play.rejected", target: "daemon", reason = %reason, "websocket play request rejected");
         return;
     }
     let mint = queue.revision_mint();
@@ -192,7 +192,7 @@ fn handle_ws_control(
             if let Some(sid) = sid {
                 player.send_command(PlayerCommand::SetSub(sid))
             } else {
-                log::warn!(target: "daemon", "subtitle stream index {index} did not match any mpv subtitle track");
+                tracing::warn!(name: "daemon.subtitle_stream_resolve.failed", target: "daemon", index, "subtitle stream index did not match any mpv subtitle track");
                 false
             }
         }

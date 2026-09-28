@@ -120,7 +120,7 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
         send_to(ctx.reply_tx, &CtrlEvent::PlaybackIntent(event));
     }
     if let Some(status) = intents.pipe_status() {
-        log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+        tracing::info!(name: "daemon.pipe_latency.status", target: "pipe_latency", request = %status.request_id, generation = status.generation, phase = ?status.phase, elapsed_ms = intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default(), "pipe playback status");
         send_to(ctx.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
     }
     if coalesced {
@@ -173,7 +173,7 @@ fn resolve_play_intent(
     let intents = &mut ctx.owner.intents;
     intents.mark_resolving(request_id);
     if let Some(status) = intents.pipe_status() {
-        log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+        tracing::info!(name: "daemon.pipe_latency.status", target: "pipe_latency", request = %status.request_id, generation = status.generation, phase = ?status.phase, elapsed_ms = intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default(), "pipe playback status");
         send_to(ctx.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
     }
     let client_id = ctx.client_id;
@@ -207,16 +207,17 @@ fn step_to_neighbor_slot(
     let transitions = &ctx.owner.core.transitions;
     let observed_active_slot = ctx.owner.core.observed_active_slot();
     let target = ctx.owner.core.relative_step_target(direction);
-    log::info!(
+    tracing::info!(
+        name: "daemon.transition_step.requested",
         target: "transition",
-        "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} target={:?} queue_len={}",
-        action,
-        transitions.queued_latest().map(|t| t.target),
-        transitions.in_flight().map(|t| t.target),
-        observed_active_slot,
-        queue.active_slot_id(),
-        target,
-        queue.len(),
+        action = ?action,
+        queued_latest = ?transitions.queued_latest().map(|t| t.target),
+        in_flight = ?transitions.in_flight().map(|t| t.target),
+        observed_active_slot = ?observed_active_slot,
+        queue_active_slot = ?queue.active_slot_id(),
+        target_slot = ?target,
+        queue_len = queue.len(),
+        "playback intent step requested"
     );
     if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {
         dispatch_slot_jump(

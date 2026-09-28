@@ -189,7 +189,7 @@ impl DaemonLoop {
         }
         self.owner.intents.mark_starting(request_id);
         if let Some(status) = self.owner.intents.pipe_status() {
-            log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, self.owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+            tracing::info!(name: "daemon.pipe_latency.status", target: "pipe_latency", request = %status.request_id, generation = status.generation, phase = ?status.phase, elapsed_ms = self.owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default(), "pipe playback status");
             self.ctrl_clients
                 .lock()
                 .unwrap()
@@ -231,11 +231,11 @@ impl DaemonLoop {
     /// `DaemonEvent::Shutdown`: persist the Stay-alive queue, announce the
     /// deliberate shutdown, and stop the player.
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
-        log::info!(target: "daemon", "graceful shutdown: stopping player");
+        tracing::info!(name: "daemon.shutdown.started", target: "daemon", "graceful shutdown: stopping player");
         if self.role == DaemonRole::Local
             && let Err(error) = self.persist_owner_queue()
         {
-            log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
+            tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue on shutdown");
         }
         // Announce the deliberate shutdown to every connected client
         // before closing their connections, so they exit cleanly

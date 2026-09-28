@@ -30,11 +30,7 @@ pub(super) fn handle_adopt_queue(
     } = &mut *ctx.owner;
     // Adoption only applies to a Cold daemon — one with no queue yet.
     if !queue.is_empty() {
-        log::warn!(
-            target: "daemon",
-            "ignoring UnifiedAdoptQueue: daemon already has a queue ({} slot(s))",
-            queue.len()
-        );
+        tracing::warn!(name: "daemon.queue_adoption.ignored", target: "daemon", slots = queue.len(), "queue adoption ignored: daemon already has a queue");
         reject_command(
             &RejectContext {
                 reply_tx: ctx.reply_tx,
@@ -140,7 +136,7 @@ fn enrich_adopted_emby_slots(
             Some(DaemonEvent::QueueEnriched(enriched))
         }
         Err(error) => {
-            log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
+            tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", error = %error, "adopted queue enrichment fetch failed");
             None
         }
     });
