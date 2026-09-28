@@ -101,7 +101,7 @@ Final gate (end of group 2):
 
 ## 3. Docs
 
-- [ ] 3.1 Rewrite `docs/invariants/02-pending-sync-protection.md` to cover only
+- [x] 3.1 Rewrite `docs/invariants/02-pending-sync-protection.md` to cover only
   what types don't enforce:
   - the player-thread optimistic-accept policy behind the wire bool
     (`crates/mbv-player/src/run/queue.rs`);
