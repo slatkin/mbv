@@ -13,11 +13,28 @@ enum EmbyErrorKind {
     Timeout,
     Http,
     Parse,
+    Playlist,
+    Playback,
 }
 
 impl EmbyError {
     pub(crate) fn auth(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Auth, message)
+    }
+
+    pub(crate) fn playlist(message: impl Into<String>) -> Self {
+        Self::new(EmbyErrorKind::Playlist, message)
+    }
+
+    pub(crate) fn playback(message: impl Into<String>) -> Self {
+        Self::new(EmbyErrorKind::Playback, message)
+    }
+
+    pub(crate) fn playback_context<E>(context: &str, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self::with_context(EmbyErrorKind::Playback, context, source)
     }
 
     pub(crate) fn auth_context<E>(context: &str, source: E) -> Self
@@ -53,6 +70,8 @@ impl EmbyError {
             EmbyErrorKind::Timeout => "emby.timeout",
             EmbyErrorKind::Http => "emby.http",
             EmbyErrorKind::Parse => "emby.parse",
+            EmbyErrorKind::Playlist => "emby.playlist",
+            EmbyErrorKind::Playback => "emby.playback",
         }
     }
 
@@ -105,6 +124,16 @@ impl From<serde_json::Error> for EmbyError {
             message,
             source: Some(Box::new(source)),
         }
+    }
+}
+
+impl From<crate::EmbyFailure> for EmbyError {
+    fn from(failure: crate::EmbyFailure) -> Self {
+        let kind = match failure.class {
+            crate::EmbyFailureClass::AuthenticationRejected => EmbyErrorKind::Auth,
+            crate::EmbyFailureClass::Unavailable => EmbyErrorKind::Http,
+        };
+        Self::new(kind, failure.message)
     }
 }
 

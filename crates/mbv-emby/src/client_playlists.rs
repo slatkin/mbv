@@ -93,7 +93,7 @@ impl EmbyClient {
         item_id: &str,
         is_audio: bool,
         profile: &mbv_cast::dispatch::CastDeviceProfile,
-    ) -> Result<CastPlaybackInfo, String> {
+    ) -> Result<CastPlaybackInfo, crate::EmbyError> {
         let mut body = serde_json::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140_000_000,
@@ -111,13 +111,15 @@ impl EmbyClient {
                 mbv_net::encode_path_segment(item_id)
             ))
             .send_json(body)
-            .map_err(|e| format!("cast PlaybackInfo failed: {e}"))?
+            .map_err(|e| crate::EmbyError::playback_context("cast PlaybackInfo failed", e))?
             .body_mut()
             .read_json()
-            .map_err(|e| format!("cast PlaybackInfo parse failed: {e}"))?;
+            .map_err(|e| crate::EmbyError::playback_context("cast PlaybackInfo parse failed", e))?;
         let media_source = resp["MediaSources"][0].take();
         if media_source.is_null() {
-            return Err("cast PlaybackInfo returned no media source".to_string());
+            return Err(crate::EmbyError::playback(
+                "cast PlaybackInfo returned no media source",
+            ));
         }
         let media_source_id = media_source["Id"].as_str().unwrap_or(item_id).to_string();
         let session_id = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
@@ -140,7 +142,9 @@ impl EmbyClient {
             }
         } else {
             let transcoding_url = media_source["TranscodingUrl"].as_str().ok_or_else(|| {
-                "cast PlaybackInfo requires transcoding but returned no TranscodingUrl".to_string()
+                crate::EmbyError::playback(
+                    "cast PlaybackInfo requires transcoding but returned no TranscodingUrl",
+                )
             })?;
             mbv_cast::client::CastMediaItem {
                 url: format!("{}{}", self.config.server_url, transcoding_url),
@@ -156,7 +160,7 @@ impl EmbyClient {
 
     // ── Playlists ────────────────────────────────────────────────────────────
 
-    pub fn get_playlists(&self) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_playlists(&self) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         self.fetch_items(
             &format!(
                 "/Users/{}/Items",
@@ -170,7 +174,11 @@ impl EmbyClient {
         )
     }
 
-    pub fn create_playlist(&self, name: &str, item_ids: &[String]) -> Result<String, String> {
+    pub fn create_playlist(
+        &self,
+        name: &str,
+        item_ids: &[String],
+    ) -> Result<String, crate::EmbyError> {
         let body = serde_json::json!({
             "Name": name,
             "Ids": item_ids.join(","),
@@ -178,47 +186,47 @@ impl EmbyClient {
         });
         let resp: Value = self
             .post("/Playlists")
-            .send_json(body)
-            .map_err(|e| e.to_string())?
+            .send_json(body)?
             .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+            .read_json()?;
         resp["Id"]
             .as_str()
             .map(str::to_string)
-            .ok_or_else(|| "no Id in response".to_string())
+            .ok_or_else(|| crate::EmbyError::playlist("no Id in response"))
     }
 
-    pub fn delete_playlist(&self, playlist_id: &str) -> Result<(), String> {
+    pub fn delete_playlist(&self, playlist_id: &str) -> Result<(), crate::EmbyError> {
         self.delete(&format!(
             "/Items/{}",
             mbv_net::encode_path_segment(playlist_id)
         ))
-        .call()
-        .map_err(|e| e.to_string())?;
+        .call()?;
         Ok(())
     }
 
-    pub fn rename_playlist(&self, playlist_id: &str, new_name: &str) -> Result<(), String> {
+    pub fn rename_playlist(
+        &self,
+        playlist_id: &str,
+        new_name: &str,
+    ) -> Result<(), crate::EmbyError> {
         let body = serde_json::json!({"Name": new_name});
         self.post(&format!(
             "/Items/{}",
             mbv_net::encode_path_segment(playlist_id)
         ))
-        .send_json(body)
-        .map_err(|e| e.to_string())?;
+        .send_json(body)?;
         Ok(())
     }
 
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
-    pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", mbv_net::encode_path_segment(playlist_id)))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds")
             .query("EnableUserData", "true")
-            .call().map_err(|e| e.to_string())?
-            .body_mut().read_json().map_err(|e| e.to_string())?;
+            .call()?
+            .body_mut().read_json()?;
         Ok(resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -229,7 +237,7 @@ impl EmbyClient {
         &self,
         playlist_id: &str,
         item_ids: &[String],
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::EmbyError> {
         // Get current playlist entry ids
         let resp: serde_json::Value = self
             .get(&format!(
@@ -237,11 +245,9 @@ impl EmbyClient {
                 mbv_net::encode_path_segment(playlist_id)
             ))
             .query("UserId", &self.user_id)
-            .call()
-            .map_err(|e| e.to_string())?
+            .call()?
             .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+            .read_json()?;
         let entry_ids: Vec<String> = resp["Items"]
             .as_array()
             .map(|arr| {
@@ -258,8 +264,7 @@ impl EmbyClient {
                 mbv_net::encode_path_segment(playlist_id)
             ))
             .query("EntryIds", entry_ids.join(","))
-            .call()
-            .map_err(|e| e.to_string())?;
+            .call()?;
         }
         // Add new items in order
         if !item_ids.is_empty() {
@@ -269,15 +274,14 @@ impl EmbyClient {
             ))
             .query("Ids", item_ids.join(","))
             .query("UserId", &self.user_id)
-            .send_empty()
-            .map_err(|e| e.to_string())?;
+            .send_empty()?;
         }
         Ok(())
     }
 
     // ── Series / episodes / chapters ────────────────────────────────────────
 
-    pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -296,18 +300,16 @@ impl EmbyClient {
         Ok(items)
     }
 
-    pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<EmbyItem>, String> {
+    pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<EmbyItem>, crate::EmbyError> {
         let resp: Value = self
             .get(&format!(
                 "/Items/{}/Ancestors",
                 mbv_net::encode_path_segment(item_id)
             ))
             .query("Fields", "SortName")
-            .call()
-            .map_err(|e| e.to_string())?
+            .call()?
             .body_mut()
-            .read_json()
-            .map_err(|e| e.to_string())?;
+            .read_json()?;
         Ok(resp
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
