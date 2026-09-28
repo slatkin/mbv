@@ -64,7 +64,7 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 7. Remaining src integration
 
-- [ ] 7.1 Convert all remaining `src/` `Result<_, String>` sites (~59:
+- [x] 7.1 Convert all remaining `src/` `Result<_, String>` sites (~59:
   library browse dispatch, session connect/startup/switch, state events,
   `config.rs`, overlays, feeds) to the unit 1–6 domain types, formatting via
   `Display` at UI boundaries with no new `String` errors, verify
