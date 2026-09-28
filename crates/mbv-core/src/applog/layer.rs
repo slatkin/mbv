@@ -25,6 +25,10 @@ struct SpanFields(Vec<(String, String)>);
 struct FieldVisitor {
     fields: Vec<(String, String)>,
     message: Option<String>,
+    /// Set for records bridged from `log` by `tracing-log`; the bridge
+    /// dispatches every record through one static "log event" callsite with
+    /// target "log", and carries the real target in the `log.target` field.
+    log_target: Option<String>,
 }
 
 impl FieldVisitor {
@@ -32,14 +36,17 @@ impl FieldVisitor {
         Self {
             fields: Vec::new(),
             message: None,
+            log_target: None,
         }
     }
 
     fn push(&mut self, field: &Field, value: String) {
-        if field.name() == "message" {
-            self.message = Some(value);
-        } else {
-            self.fields.push((field.name().to_owned(), value));
+        match field.name() {
+            "message" => self.message = Some(value),
+            "log.target" => self.log_target = Some(value),
+            // The bridge's synthetic `log.*` context fields never render.
+            name if name.starts_with("log.") => {}
+            name => self.fields.push((name.to_owned(), value)),
         }
     }
 }
@@ -128,10 +135,17 @@ where
         let metadata = event.metadata();
         let level = level_name(*metadata.level());
         let ts = time::format_ts(time::now_local());
-        // Without `name:`, tracing names the event after its message; only an
-        // explicit name becomes the `event` field (design D4).
-        let name = metadata.name();
-        let event_name = (visitor.message.as_deref() != Some(name)).then_some(name);
+        let source = visitor.log_target.as_deref().unwrap_or(metadata.target());
+        // Without `name:`, tracing names the event `event <file>:<line>`
+        // (tracing 0.1.44's synthesized default); only an explicit name
+        // becomes the `event` field (design D4).
+        let default_name = format!(
+            "event {}:{}",
+            metadata.file().unwrap_or_default(),
+            metadata.line().unwrap_or_default()
+        );
+        let event_name = (visitor.log_target.is_none() && metadata.name() != default_name.as_str())
+            .then_some(metadata.name());
         let spans: Vec<String> = ctx
             .event_scope(event)
             .map(|scope| {
@@ -148,7 +162,7 @@ where
         let rendered = line::format_line(&Line {
             ts: &ts,
             level,
-            source: metadata.target(),
+            source,
             event: event_name,
             fields: &visitor.fields,
             spans: &spans,

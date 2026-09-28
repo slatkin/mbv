@@ -56,20 +56,31 @@ impl LogSpec {
     /// Returns the effective level for a target.
     #[must_use]
     pub fn level_for_target(&self, target: &str) -> tracing::level_filters::LevelFilter {
-        if let Some((_, level)) = self
-            .directives
+        self.directive_level_for_target(target).unwrap_or_else(|| {
+            if target.contains("::") {
+                self.default.min(tracing::level_filters::LevelFilter::WARN)
+            } else {
+                self.default
+            }
+        })
+    }
+
+    /// The effective level for span metadata: directives and default, without
+    /// the third-party warn cap.
+    fn span_level_for_target(&self, target: &str) -> tracing::level_filters::LevelFilter {
+        self.directive_level_for_target(target)
+            .unwrap_or(self.default)
+    }
+
+    fn directive_level_for_target(
+        &self,
+        target: &str,
+    ) -> Option<tracing::level_filters::LevelFilter> {
+        self.directives
             .iter()
             .filter(|(prefix, _)| target_matches(target, prefix))
             .max_by_key(|(prefix, _)| prefix.len())
-        {
-            return *level;
-        }
-
-        if target.contains("::") {
-            self.default.min(tracing::level_filters::LevelFilter::WARN)
-        } else {
-            self.default
-        }
+            .map(|(_, level)| *level)
     }
 }
 
@@ -89,6 +100,13 @@ impl<S: tracing::Subscriber> Filter<S> for LogSpec {
         meta: &tracing::Metadata<'_>,
         _: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
+        if meta.is_span() {
+            // The third-party warn cap (design D3) is about messages. A span
+            // without an explicit bare target gets a module-path target, and
+            // capping it would silently drop the D5 correlation fields it
+            // carries — so spans use the plain directive/default level.
+            return *meta.level() <= self.span_level_for_target(meta.target());
+        }
         *meta.level() <= self.level_for_target(meta.target())
     }
 }

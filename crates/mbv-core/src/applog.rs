@@ -97,6 +97,7 @@ fn spec_max_level(spec: &LogSpec) -> log::LevelFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log::Log as _;
     use std::sync::{Arc, Mutex};
     use tracing_subscriber::Registry;
 
@@ -110,6 +111,76 @@ mod tests {
 
     fn captured_lines(capture: &Mutex<Vec<String>>) -> Vec<String> {
         capture.lock().expect("capture lock").clone()
+    }
+
+    /// Test subscriber with the real layer under a `LogSpec` filter.
+    fn filtered_capturing_subscriber(
+        spec: &LogSpec,
+    ) -> (impl tracing::Subscriber, Arc<Mutex<Vec<String>>>) {
+        let capture = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = layer::LogfmtLayer::capturing(Arc::clone(&capture))
+            .with_filter(spec.clone())
+            .with_subscriber(Registry::default());
+        (subscriber, capture)
+    }
+
+    // ── unnamed and bridged events ────────────────────────────────────────────────
+
+    #[test]
+    fn unnamed_event_has_no_event_field() {
+        let (subscriber, capture) = capturing_subscriber();
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(target: "test", "plain message");
+        });
+
+        let lines = captured_lines(&capture);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("source=test"));
+        assert!(lines[0].contains("msg=\"plain message\""));
+        assert!(!lines[0].contains("event="));
+    }
+
+    // `tracing-log` dispatches every `log` record through one static "log
+    // event" callsite with target "log"; the line must carry the record's
+    // real `log.target` as `source` and none of the synthetic `log.*` fields.
+    #[test]
+    fn bridged_log_record_uses_log_target_as_source() {
+        let (subscriber, capture) = capturing_subscriber();
+        tracing::subscriber::with_default(subscriber, || {
+            let record = log::Record::builder()
+                .level(log::Level::Warn)
+                .target("ureq")
+                .module_path(Some("ureq::agent"))
+                .args(format_args!("connection failed"))
+                .build();
+            tracing_log::LogTracer::default().log(&record);
+        });
+
+        let lines = captured_lines(&capture);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("level=warn source=ureq"));
+        assert!(lines[0].contains("msg=\"connection failed\""));
+        assert!(!lines[0].contains("event="));
+        assert!(!lines[0].contains("log."));
+    }
+
+    // ── filter: spans are not third-party capped ─────────────────────────────
+
+    #[test]
+    fn module_path_span_is_created_while_module_path_event_stays_capped() {
+        let spec = LogSpec::parse("info").expect("valid spec");
+        let (subscriber, capture) = filtered_capturing_subscriber(&spec);
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!(target: "mbv_daemon::control", "correlation", slot = 12);
+            let _entered = span.enter();
+            tracing::info!(target: "mbv_daemon::control", "capped noise");
+            tracing::info!(name: "app.done", target: "app", "done");
+        });
+
+        let lines = captured_lines(&capture);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("source=app event=app.done"));
+        assert!(lines[0].contains("slot=12"));
     }
 
     // ── init and the log bridge ───────────────────────────────────────────────
