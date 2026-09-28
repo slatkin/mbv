@@ -9,7 +9,7 @@
 
 ## 2. Reformat (commit 2)
 
-- [ ] 2.1 Run `cargo fmt --all` (2024 style follows the edition) and commit the result alone; verify `cargo fmt --all -- --check` passes and the commit contains only formatting changes.
+- [x] 2.1 Run `cargo fmt --all` (2024 style follows the edition) and commit the result alone; verify `cargo fmt --all -- --check` passes and the commit contains only formatting changes.
 
 ## 3. Adopt let-chains (commit 3)
 
