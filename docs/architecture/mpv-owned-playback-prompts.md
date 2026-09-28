@@ -22,7 +22,7 @@ lifecycle without the TUI:
 
 | | skip intro | next up |
 | --- | --- | --- |
-| Shown by | `script-message mbv-skip-intro <end_secs>` (`player_runtime.rs`) | `PlayerCommand::NextUpShow` → `script-message mbv-next-up` |
+| Shown by | `script-message mbv-skip-intro <end_secs>` (`crates/mbv-player/src/runtime.rs`) | `PlayerCommand::NextUpShow` → `script-message mbv-next-up` |
 | Drawn by | `scripts/mbv_intro.lua` | `scripts/mbv_visibility.lua` |
 | Accepted by | `mbtn_left` → seeks locally, emits `mbv-skip-intro-play` | `mbtn_left` → emits `mbv-next-up-play` |
 | Self-dismisses on | `seek` | `start-file` |

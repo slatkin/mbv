@@ -1,10 +1,9 @@
 # Invariant 7 — A shared colour value is a deliberate split; an alias is a deliberate bond
 
 **Scope:** `crates/mbv-theme/src/` — the value tier (the `Palette` enum in
-`palette.rs`, landed by `palette-enum`), the role tier (`theme.rs`, 51 role
+`palette.rs`, landed by `palette-enum`), the role tier (`lib.rs`, 51 role
 consts), and the surface tier (`surface.rs` level fills, `surface_table.rs`
-rows, `surface_resolve.rs`) — plus the re-export bridge in `src/app.rs` (`use self::infra::{… palette …}`)
-and every `palette::` consumer.
+rows, `surface_resolve.rs`) — plus every `palette::` consumer.
 
 ## The invariant
 
@@ -111,9 +110,9 @@ The enforcement that does exist is narrower:
   consumer cannot bypass the role tier.
 - The one closed surface resolver (`surface_colors`) keeps paint sites from
   naming roles for surfaces at all.
-- The `Palette` uniqueness and `docs/palette.json` drift tests
-  (`theme/palette.rs`), landed by `palette-enum`, pin the value tier against
-  the approved name table and the docs.
+- The `Palette` uniqueness and `docs/palette.json` drift tests landed by
+  `palette-enum` were deleted in the #801 test prune; nothing currently pins
+  the value tier against the name table or `docs/palette.json`.
 
 `#1e2326`'s four symbols are the live gap: nothing records whether the tab-bar
 background and the three pill-selector symbols are independent or bonded.

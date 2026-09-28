@@ -35,8 +35,8 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `src/app/shell/` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
   runtime lifecycle, projections, dispatch, effects, and the single tick/draw
   path (`shell/run.rs`, `shell/draw.rs`).
-* `crates/mbv-components/` — Interactive Components + typed `Msg`s; embedded
-  list controls and pointer primitives.
+* `crates/mbv-components/` — TuiRealm Interactive Components, local interaction
+  state, embedded list controls and pointer primitives (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/` — `screens/` prepare content, `arrangements/` place it,
   `components/` paint it, `layout.rs` composes layouts.
 * `src/app/input/` — the only keyboard routing site (`router.rs` precedence,
@@ -63,11 +63,9 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `crates/mbv-desktop/` — MPRIS D-Bus server and system tray (owns zbus/tokio/ksni).
 * `crates/mbv-text/` — fuzzy-match acceptance and control-character predicates for text input.
 * `crates/mbv-theme/` — semantic theme roles and palette values.
-* `crates/mbv-images/` — shared image loading and image-processing primitives.
+* `crates/mbv-images/` — image cache, loading/processing, terminal image protocol support.
 * `crates/mbv-ui-model/` — plain presentation models shared by UI crates.
-* `crates/mbv-render/` — TUI screens, arrangements, painters, and layout.
 * `crates/mbv-ui-msg/` — typed messages crossing the interactive-component boundary.
-* `crates/mbv-components/` — TuiRealm Interactive Components and local interaction state.
 
 ## Interactive architecture
 
@@ -132,7 +130,7 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
   jobs, Makefile targets) and never one as proof; verify with unit tests unless
   the user explicitly asks for a script, per request.
 * check: `cargo check -p <package>`
-* test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment); use `cargo llvm-cov` to check coverage.
+* test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo nextest run --release --test-threads=4` (fd-budget throttling, see `build.yml` comment); use `cargo llvm-cov` to check coverage.
 * **A test owns a contract or does not exist.** Before adding a test, name
   the contract and the layer that owns it (mbv-frontend skill, Tests matrix);
   if another test already covers the claim, extend that test or add nothing.

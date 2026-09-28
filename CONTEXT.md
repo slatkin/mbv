@@ -129,7 +129,7 @@ refused). When a Client explicitly plays a video through an eligible ctrl
 attachment or controlled Emby session, mbv prompts with the owner and selection
 named; confirmation stops the owner, ends the attachment, and plays locally,
 while a decline changes nothing. The Stay-alive process is never audio-only.
-See `openspec/changes/play-locally-when-owner-cannot` for this shipped behavior.
+See `openspec/changes/archive/2026-09-16-play-locally-when-owner-cannot` for this shipped behavior.
 _Avoid_: audio daemon, headless audio owner, mbvd audio mode
 
 **Playback run**:
@@ -432,7 +432,7 @@ they supply no tree behavior of their own. Like MediaList it is embedded — nev
 independently mounted, focused, subscribed, or given a ComponentId. Its
 `Component::view` is the only interactive view entry point and delegates
 painting to one shared destination-neutral Render Component under
-`crates/mbv-render/src/components/tree_browser/`.
+`crates/mbv-render/src/components/tree_browser.rs`.
 
 **TV show tree**:
 The show-mode TV browser: one shared TreeBrowser projecting shows as selectable expandable roots, their seasons as expandable children, and loaded episodes as leaf children, with the established show group headings and between-group spacers as structural rows. Show modes (`All` and the alphabet ranges) use it in every Panel mode; `Latest`, `Upcoming`, Inline Search, and the Hero's season pills and episode Workspace remain flat and outside it, and inline tree episodes deliberately duplicate Workspace episode rows. Row identity is a closed `TvTreeTarget` that scopes seasons and episodes to their show and season. A season's children are loaded only when its branch is expanded.
