@@ -474,7 +474,7 @@ impl App {
     fn handle_album_index_built(
         &mut self,
         library_id: String,
-        result: Result<Vec<AlbumSearchEntry>, String>,
+        result: Result<Vec<AlbumSearchEntry>, mbv_emby::EmbyError>,
     ) {
         let rebuild_pending = matches!(
             self.album_indexes.get(&library_id),

@@ -5,12 +5,14 @@ use mbv_queue::QueueItem;
 use mbv_queue::{QueueState, ServiceKind};
 
 impl App {
-    fn persist_filtered_queue(state: Option<&QueueState>) -> Result<(), String> {
+    fn persist_filtered_queue(
+        state: Option<&QueueState>,
+    ) -> Result<(), mbv_config::ConfigError> {
         match state {
             Some(state) if !state.items.is_empty() => {
-                mbv_config::save_queue_state(state).map_err(|error| error.to_string())
+                mbv_config::save_queue_state(state)
             }
-            _ => mbv_config::clear_queue_state().map_err(|error| error.to_string()),
+            _ => mbv_config::clear_queue_state(),
         }
     }
 
@@ -125,7 +127,6 @@ impl App {
         let old_queue = mbv_config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
         if let Err(error) = mbv_config::remove_emby_setup_and_secret()
-            .map_err(|error| error.to_string())
             .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
         {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
@@ -158,12 +159,8 @@ impl App {
         let replacement = candidate.setup.clone();
         let token = candidate.client.token.clone();
         let result = mbv_config::remove_emby_setup_and_secret()
-            .map_err(|error| error.to_string())
             .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
-            .and_then(|()| {
-                mbv_config::persist_emby_setup_and_secret(&replacement, &token)
-                    .map_err(|error| error.to_string())
-            });
+            .and_then(|()| mbv_config::persist_emby_setup_and_secret(&replacement, &token));
         if let Err(error) = result {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());

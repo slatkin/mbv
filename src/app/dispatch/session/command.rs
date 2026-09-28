@@ -14,9 +14,7 @@ impl App {
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
         self.do_session_command(move |client| {
-            client
-                .session_play_items(&id, &item_ids, start_idx, start_ticks)
-                .map_err(|e| e.to_string())
+            client.session_play_items(&id, &item_ids, start_idx, start_ticks)
         });
     }
 
@@ -59,7 +57,6 @@ impl App {
         else {
             self.do_session_command(move |c| {
                 c.session_transport(&id, fallback_cmd)
-                    .map_err(|e| e.to_string())
             });
             return;
         };
@@ -105,7 +102,7 @@ impl App {
 
     pub(in crate::app) fn do_session_command(
         &mut self,
-        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
+        f: impl FnOnce(&EmbyClient) -> Result<(), mbv_emby::EmbyError> + Send + 'static,
     ) {
         let Some(client) = self.emby_snapshot() else {
             return;
@@ -113,7 +110,9 @@ impl App {
         let tx = self.channels.sessions_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {
-                let _ = tx.send(SessionEvent::CommandError { error: e });
+                let _ = tx.send(SessionEvent::CommandError {
+                    error: e.to_string(),
+                });
                 return;
             }
             // Refresh the directly observed Session state after a successful command.

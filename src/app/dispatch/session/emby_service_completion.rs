@@ -19,7 +19,7 @@ impl App {
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(Some(completion.generation), completion.result, |kind| {
-            mbv_config::clear_service_secret_result(kind).map_err(|error| error.to_string())
+            mbv_config::clear_service_secret_result(kind)
         })
     }
 
@@ -27,7 +27,7 @@ impl App {
     pub(in crate::app) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(Some(completion.generation), completion.result, delete)
     }
@@ -39,7 +39,7 @@ impl App {
             crate::app::dispatch::session::service_startup::Startup,
             mbv_emby::EmbyFailure,
         >,
-        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) -> Option<HomeContent> {
         use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
@@ -122,7 +122,7 @@ impl App {
     /// Only classified failures reach this path; ordinary empty results do not.
     pub(in crate::app) fn handle_emby_runtime_failure(&mut self, error: mbv_emby::EmbyFailure) {
         self.transition_emby_failure(None, Err(error), |kind| {
-            mbv_config::clear_service_secret_result(kind).map_err(|error| error.to_string())
+            mbv_config::clear_service_secret_result(kind)
         });
     }
 
@@ -130,7 +130,7 @@ impl App {
     pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
         &mut self,
         error: mbv_emby::EmbyFailure,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), String>,
+        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) {
         self.transition_emby_failure(None, Err(error), delete);
     }

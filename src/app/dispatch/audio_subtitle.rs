@@ -27,7 +27,6 @@ impl App {
         }
         self.do_session_command(move |c| {
             c.session_set_mute(&conn_id, next)
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -164,7 +163,6 @@ impl App {
         }
         self.do_session_command(move |c| {
             c.session_set_subtitle_index(&conn_id, next)
-                .map_err(|e| e.to_string())
         });
     }
 

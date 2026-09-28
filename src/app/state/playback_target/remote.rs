@@ -7,7 +7,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_transport(&session_id, "PlayPause")
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -15,7 +14,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_transport(&session_id, "Stop")
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -28,7 +26,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_seek(&session_id, target)
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -73,7 +70,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_set_audio_index(&session_id, next)
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -86,7 +82,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_set_volume(&session_id, new_vol)
-                .map_err(|e| e.to_string())
         });
     }
 
@@ -110,7 +105,6 @@ impl RemotePlaybackTarget {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| {
             c.session_set_subtitle_index(&session_id, next)
-                .map_err(|e| e.to_string())
         });
     }
 

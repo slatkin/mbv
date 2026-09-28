@@ -54,7 +54,9 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
+    pub(in crate::app) fn clear_audiobookshelf_authentication(
+        &mut self,
+    ) -> Result<(), mbv_config::ConfigError> {
         let current_generation = self.audiobookshelf_runtime.generation();
         self.stop_audiobookshelf_socket();
         self.audiobookshelf_runtime
@@ -64,7 +66,6 @@ impl App {
         self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
         mbv_config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
-            .map_err(|error| error.to_string())
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
@@ -174,12 +175,14 @@ impl App {
 
     /// Helper that persists a filtered queue or clears the file when empty.
     /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
-    fn persist_filtered_queue_abs(state: Option<&QueueState>) -> Result<(), String> {
+    fn persist_filtered_queue_abs(
+        state: Option<&QueueState>,
+    ) -> Result<(), mbv_config::ConfigError> {
         match state {
             Some(state) if !state.items.is_empty() => {
-                mbv_config::save_queue_state(state).map_err(|error| error.to_string())
+                mbv_config::save_queue_state(state)
             }
-            _ => mbv_config::clear_queue_state().map_err(|error| error.to_string()),
+            _ => mbv_config::clear_queue_state(),
         }
     }
 
@@ -296,8 +299,9 @@ impl App {
                 candidate.api_key,
             ),
             || {
-                Self::persist_filtered_queue_abs(filtered.as_ref())
-                    .map_err(mbv_audiobookshelf::AudiobookshelfError::persistence)
+                Self::persist_filtered_queue_abs(filtered.as_ref()).map_err(|error| {
+                    mbv_audiobookshelf::AudiobookshelfError::persistence(error.to_string())
+                })
             },
             || {
                 // Restore in-memory queues on failure.

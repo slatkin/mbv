@@ -429,7 +429,6 @@ impl App {
             );
             self.do_session_command(move |c| {
                 c.session_play(&id, &item_id, start_ticks)
-                    .map_err(|e| e.to_string())
             });
             return;
         }

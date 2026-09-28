@@ -3,7 +3,7 @@ use crate::app::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, Li
 use mbv_emby_model::EmbyItem;
 
 pub(super) type AlbumIndexFetch<'a> =
-    dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), String> + 'a;
+    dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), mbv_emby::EmbyError> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 // Visibility bump: private -> `pub(in crate::app)`. Exercised directly by
 // `actions_tests.rs` (a submodule of `actions.rs`, so it needs an explicit
@@ -39,7 +39,7 @@ pub(in crate::app) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLev
 pub(in crate::app) fn fetch_all_album_index_items(
     parent_id: &str,
     fetch: &mut AlbumIndexFetch<'_>,
-) -> Result<Vec<EmbyItem>, String> {
+) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
     let mut items = Vec::new();
     loop {
         let (page, total) = fetch(parent_id, items.len(), ALBUM_INDEX_PAGE_SIZE)?;
@@ -61,7 +61,7 @@ pub(in crate::app) fn build_album_index_with(
     library_id: &str,
     levels: &[String],
     fetch: &mut AlbumIndexFetch<'_>,
-) -> Result<Vec<AlbumSearchEntry>, String> {
+) -> Result<Vec<AlbumSearchEntry>, mbv_emby::EmbyError> {
     fn visit(
         parent_id: &str,
         depth: usize,
@@ -69,7 +69,7 @@ pub(in crate::app) fn build_album_index_with(
         ancestors: &mut Vec<AlbumPathPart>,
         entries: &mut Vec<AlbumSearchEntry>,
         fetch: &mut AlbumIndexFetch<'_>,
-    ) -> Result<(), String> {
+    ) -> Result<(), mbv_emby::EmbyError> {
         let items = fetch_all_album_index_items(parent_id, fetch)?;
         if depth + 1 == levels.len() {
             // The terminal configured level is "album" by position, not by

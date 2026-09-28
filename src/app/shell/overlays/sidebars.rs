@@ -1,8 +1,7 @@
 use super::super::Model;
 use super::super::SidebarId;
 use mbv_components::{
-    ComponentsError, HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent,
-    SettingsComponent,
+    HelpComponent, PlaylistsComponent, SearchSidebarComponent, SessionsComponent, SettingsComponent,
 };
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, UserEvent};
 use tuirealm::component::AppComponent;
@@ -208,7 +207,12 @@ impl Model {
             if let Some(comp) = self.application.get_component_mut(&id)
                 && let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()
             {
-                search.apply_drain(&query, result.map_err(ComponentsError::from));
+                search.apply_drain(
+                    &query,
+                    result.map_err(|error| {
+                        mbv_ui_model::UiModelError::operation(error.to_string())
+                    }),
+                );
             }
         }
         received > 0

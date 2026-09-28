@@ -450,9 +450,7 @@ fn spawn_playlist_save(
     ids: Vec<String>,
 ) {
     std::thread::spawn(move || {
-        let result = client
-            .update_playlist_items(&playlist_id, &ids)
-            .map_err(|e| e.to_string());
+        let result = client.update_playlist_items(&playlist_id, &ids);
         let _ = tx.send(SessionEvent::PlaylistMutationComplete {
             mutation_id,
             playlist_id,
@@ -476,9 +474,7 @@ fn spawn_playlist_create(
     ids: Vec<String>,
 ) {
     std::thread::spawn(move || {
-        let result = client
-            .create_playlist(&name, &ids)
-            .map_err(|e| e.to_string());
+        let result = client.create_playlist(&name, &ids);
         let _ = tx.send(SessionEvent::PlaylistCreateComplete {
             mutation_id,
             coordinator_key,
@@ -504,8 +500,7 @@ fn spawn_playlist_replace(
     std::thread::spawn(move || {
         let result = client
             .delete_playlist(&playlist_id)
-            .and_then(|()| client.create_playlist(&name, &ids))
-            .map_err(|e| e.to_string());
+            .and_then(|()| client.create_playlist(&name, &ids));
         let _ = tx.send(SessionEvent::PlaylistReplacementComplete {
             mutation_id,
             playlist_id,

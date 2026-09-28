@@ -31,7 +31,7 @@ impl App {
             self.remote.remote_pos_s = remote_pos_s;
             self.remote.remote_pos_at = Instant::now();
             self.remote.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
-            self.do_session_command(move |c| c.session_seek(&id, ticks).map_err(|e| e.to_string()));
+            self.do_session_command(move |c| c.session_seek(&id, ticks));
             return;
         }
         let runtime_ticks = self.player.status.lock().unwrap().runtime_ticks;

@@ -26,7 +26,7 @@ pub(in crate::app) fn resolve_reveal_target(
     item_type: &str,
     item: &EmbyItem,
     ancestors: Option<&[EmbyItem]>,
-) -> Result<RevealTarget, String> {
+) -> Result<RevealTarget, mbv_emby::EmbyError> {
     match item_type {
         // Episode/Season reveal their owning Series: the item's own
         // `series_id` decides without an ancestors round trip; the chain is
@@ -37,7 +37,7 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "Series")
                 .map(|a| RevealTarget::Series(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's series".to_string())
+                .ok_or_else(|| "Could not resolve the item's series".to_string().into())
         }
         // A track reveals its album: `album_id` first, ancestors fallback.
         "Audio" => {
@@ -46,14 +46,14 @@ pub(in crate::app) fn resolve_reveal_target(
             }
             owning_ancestor(ancestors, "MusicAlbum")
                 .map(|a| RevealTarget::Album(a.id.clone()))
-                .ok_or_else(|| "Could not resolve the item's album".to_string())
+                .ok_or_else(|| "Could not resolve the item's album".to_string().into())
         }
         "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
         // An artist does not land (D1): it has no single owning album, and a
         // plain artist browse chain does not render on a grouped Music
         // surface (real-tick render check). The kind resolves to the
         // pre-U2 failure, flashing and leaving the active view unchanged.
-        "MusicArtist" => Err("Could not resolve the artist's album".to_string()),
+        "MusicArtist" => Err("Could not resolve the artist's album".to_string().into()),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
         // Movie/generic: the ancestor-chain rebuild is already correct.
         _ => Ok(RevealTarget::Chain),
@@ -67,13 +67,15 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
 
 /// Fetch one item by id; a miss (empty result, server error) is a resolve
 /// failure (deleted item, task 4.2).
-fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
+fn fetch_reveal_item(
+    client: &EmbyClient,
+    item_id: &str,
+) -> Result<EmbyItem, mbv_emby::EmbyError> {
     client
-        .get_items_by_ids(&[item_id.to_string()])
-        .map_err(|e| e.to_string())?
+        .get_items_by_ids(&[item_id.to_string()])?
         .into_iter()
         .next()
-        .ok_or_else(|| format!("Item {item_id} no longer exists"))
+        .ok_or_else(|| format!("Item {item_id} no longer exists").into())
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
@@ -88,7 +90,7 @@ fn build_navigate_landing(
     lib_id: &str,
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<NavigateLanding, String> {
+) -> Result<NavigateLanding, mbv_emby::EmbyError> {
     // The item's own record supplies the back-references (D1: no ancestors
     // round trip when present); the fetch doubles as the deleted-item check.
     let item = fetch_reveal_item(client, item_id)?;
@@ -96,9 +98,7 @@ fn build_navigate_landing(
     // The pure table decides first from the item's own back-references; the
     // round trip is paid only when a kind's fallback needs the chain.
     let reveal = resolve_reveal_target(item_type, &item, None).or_else(|_| {
-        let ancestors = client
-            .get_ancestors(item_id)
-            .map_err(|e| e.to_string())?;
+        let ancestors = client.get_ancestors(item_id)?;
         log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
@@ -123,7 +123,7 @@ fn landing_for_target(
     lib_id: &str,
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<NavigateLanding, String> {
+) -> Result<NavigateLanding, mbv_emby::EmbyError> {
     match reveal {
         RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
             .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
@@ -137,7 +137,7 @@ fn landing_for_target(
                 fetch_reveal_item(client, &series_id)?
             };
             if series.item_type != "Series" {
-                return Err(format!("Item {series_id} is not a Series"));
+                return Err(format!("Item {series_id} is not a Series").into());
             }
             // Deep selection (task 6.1, design D6): an Episode reveal rides
             // its own id on the Series landing; a Season reveal stays
@@ -159,7 +159,7 @@ fn landing_for_target(
             // (the album index builds its terminal level by `is_folder` for
             // the same reason), so a folder record is a valid album reveal.
             if album.item_type != "MusicAlbum" && !album.is_folder {
-                return Err(format!("Item {album_id} is not an album"));
+                return Err(format!("Item {album_id} is not an album").into());
             }
             // The recursive activation consumes the configured album-index
             // entry shape (D7): the album plus the root→album folder chain
@@ -194,9 +194,9 @@ fn configured_album_ancestors(
     levels: &[String],
     album: &EmbyItem,
     cached_album_index: Option<&AlbumIndex>,
-) -> Result<Vec<AlbumPathPart>, String> {
+) -> Result<Vec<AlbumPathPart>, mbv_emby::EmbyError> {
     if levels.last().map(String::as_str) != Some("album") {
-        let ancestors = client.get_ancestors(&album.id).map_err(|e| e.to_string())?;
+        let ancestors = client.get_ancestors(&album.id)?;
         let inside = ancestors_inside_library(&ancestors);
         return Ok(inside
             .iter()
@@ -223,7 +223,6 @@ fn configured_album_ancestors(
                 "SortName",
                 "Ascending",
             )
-            .map_err(|e| e.to_string())
     };
     let entries = build_album_index_with(library_id, levels, &mut fetch)?;
     entries
@@ -235,6 +234,7 @@ fn configured_album_ancestors(
                 "Could not reach '{}' through the configured music levels",
                 album.display_name()
             )
+            .into()
         })
 }
 
@@ -245,10 +245,10 @@ fn build_chain_nav_stack(
     client: &EmbyClient,
     item: &EmbyItem,
     lib_id: &str,
-) -> Result<Vec<BrowseLevel>, String> {
+) -> Result<Vec<BrowseLevel>, mbv_emby::EmbyError> {
     // Drop the last two ancestors (physical library folder + AggregateFolder
     // root); everything before those is navigable content inside the library.
-    let ancestors = client.get_ancestors(&item.id).map_err(|e| e.to_string())?;
+    let ancestors = client.get_ancestors(&item.id)?;
     let inside = ancestors_inside_library(&ancestors);
 
     // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
@@ -269,7 +269,7 @@ fn build_chain_nav_stack(
     for (parent_id, target_id) in parents.into_iter().zip(targets) {
         let (mut items, total_count) = client
             .get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")
-            .map_err(|e| e.to_string())?;
+            ?;
         if items.first().is_some_and(|it| it.item_type == "Episode") {
             sort_episodes(&mut items);
         }
@@ -358,7 +358,7 @@ impl App {
                     landing,
                     switch_tab: true,
                 }),
-                Err(e) => LibEvent::Error(e),
+                Err(e) => LibEvent::Error(e.to_string()),
             };
             let _ = tx.send(event);
         });

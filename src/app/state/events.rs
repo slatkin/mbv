@@ -134,7 +134,7 @@ pub enum BrowseEvent {
 pub enum MusicEvent {
     AlbumIndexBuilt {
         library_id: String,
-        result: Result<Vec<AlbumSearchEntry>, String>,
+        result: Result<Vec<AlbumSearchEntry>, mbv_emby::EmbyError>,
     },
     RecursiveAlbumActivated {
         library_id: String,
@@ -177,7 +177,7 @@ pub enum MusicEvent {
         generation: mbv_core::service_runtime::SetupGeneration,
         artist_id: String,
         revision: u64,
-        result: Result<Vec<EmbyItem>, String>,
+        result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
     },
     /// Completion notification emitted after the shared image/cache boundary
     /// has stored an artist's stable-ID artwork (task 6.2).
@@ -333,14 +333,14 @@ pub enum SessionEvent {
         playlist_id: String,
         origin: crate::app::state::queue_owner::QueueOrigin,
         source_playlist_id: String,
-        result: Result<(), String>,
+        result: Result<(), mbv_emby::EmbyError>,
     },
     PlaylistReplacementComplete {
         mutation_id: u64,
         playlist_id: String,
         origin: crate::app::state::queue_owner::QueueOrigin,
         name: String,
-        result: Result<String, String>,
+        result: Result<String, mbv_emby::EmbyError>,
     },
     PlaylistCreateComplete {
         mutation_id: u64,
@@ -348,7 +348,7 @@ pub enum SessionEvent {
         name: String,
         origin: crate::app::state::queue_owner::QueueOrigin,
         source_playlist_id: Option<String>,
-        result: Result<String, String>,
+        result: Result<String, mbv_emby::EmbyError>,
     },
     Error(String),
 }

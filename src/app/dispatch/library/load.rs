@@ -374,7 +374,9 @@ impl App {
     /// shell assigns it to `Model.home_content` (directly for shell-side
     /// callers, via `LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed)` for App-internal ones)
     /// and preserves the Continue Watching column cursor at the assignment.
-    pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, String> {
+    pub(in crate::app) fn fetch_home(
+        &mut self,
+    ) -> Result<HomeContent, mbv_emby::EmbyFailure> {
         let mut emby_fetched = false;
         let (continue_items, all_views) = match self.emby_client() {
             Some(client) => {
@@ -385,7 +387,7 @@ impl App {
                     Err(error) => {
                         drop(client);
                         self.handle_emby_runtime_failure(error.clone());
-                        return Err(error.to_string());
+                        return Err(error);
                     }
                 };
                 (client.get_continue_watching(20).unwrap_or_default(), views)

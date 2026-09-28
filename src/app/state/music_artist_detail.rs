@@ -206,9 +206,7 @@ impl App {
         let revision = key.revision;
         let artist_id = key.artist_id.clone();
         std::thread::spawn(move || {
-            let result = client
-                .get_artist_audio_tracks(&artist_id)
-                .map_err(|e| e.to_string());
+            let result = client.get_artist_audio_tracks(&artist_id);
             let _ = tx.send(LibEvent::Music(MusicEvent::ArtistTracksFetched {
                 destination,
                 generation,
@@ -325,7 +323,7 @@ impl App {
         generation: SetupGeneration,
         artist_id: &str,
         revision: u64,
-        result: Result<Vec<EmbyItem>, String>,
+        result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
     ) {
         let key = ArtistDetailKey {
             destination: destination.clone(),

@@ -10,22 +10,38 @@ type BrowseRefresh = (
     Option<mbv_queue::TvContentMode>,
 );
 trait TvLatestSource {
-    fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String>;
+    fn get_latest_episodes(
+        &self,
+        view_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError>;
 }
 
 impl TvLatestSource for EmbyClient {
-    fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        EmbyClient::get_latest_episodes(self, view_id, limit).map_err(|e| e.to_string())
+    fn get_latest_episodes(
+        &self,
+        view_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
+        EmbyClient::get_latest_episodes(self, view_id, limit)
     }
 }
 
 trait TvUpcomingSource {
-    fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String>;
+    fn get_upcoming(
+        &self,
+        parent_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError>;
 }
 
 impl TvUpcomingSource for EmbyClient {
-    fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        EmbyClient::get_upcoming(self, parent_id, limit).map_err(|e| e.to_string())
+    fn get_upcoming(
+        &self,
+        parent_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
+        EmbyClient::get_upcoming(self, parent_id, limit)
     }
 }
 
@@ -33,7 +49,7 @@ fn build_tv_latest_level<S: TvLatestSource>(
     source: &S,
     parent_id: String,
     title: String,
-) -> Result<BrowseLevel, String> {
+) -> Result<BrowseLevel, mbv_emby::EmbyError> {
     let items = source.get_latest_episodes(&parent_id, 30)?;
     let total_count = items.len();
     Ok(BrowseLevel {
@@ -59,7 +75,7 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
     source: &S,
     parent_id: String,
     title: String,
-) -> Result<BrowseLevel, String> {
+) -> Result<BrowseLevel, mbv_emby::EmbyError> {
     let items = source.get_upcoming(&parent_id, 30)?;
     let total_count = items.len();
     Ok(BrowseLevel {
@@ -156,7 +172,7 @@ impl App {
 
     fn spawn_tv_content<F>(&self, lib_idx: usize, parent_id: String, title: String, build: F)
     where
-        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, String> + Send + 'static,
+        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, mbv_emby::EmbyError> + Send + 'static,
     {
         let Some(client) = self.emby_snapshot() else {
             return;
@@ -171,7 +187,7 @@ impl App {
                 }));
             }
             Err(e) => {
-                let _ = tx.send(LibEvent::Error(e));
+                let _ = tx.send(LibEvent::Error(e.to_string()));
             }
         });
     }
@@ -254,7 +270,7 @@ mod tv_latest_tests {
             &self,
             view_id: &str,
             limit: usize,
-        ) -> Result<Vec<EmbyItem>, String> {
+        ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
             *self.request.borrow_mut() = Some((view_id.into(), limit));
             Ok(self.items.clone())
         }
