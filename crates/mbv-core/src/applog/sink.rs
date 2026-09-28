@@ -71,9 +71,24 @@ impl FileSink {
         }
     }
 
-    // Returns true only when rotation and reopening succeed; failures preserve the open file.
+    // A rename-chain failure keeps writing to the current file (design D8);
+    // only `adopt_reopen` may retire the handle.
     fn rotate(&mut self) -> bool {
-        let result = rotate_paths(&self.path).and_then(|()| open_append(&self.path));
+        match rotate_paths(&self.path) {
+            Err(error) => {
+                self.warn(&error);
+                false
+            }
+            Ok(()) => self.adopt_reopen(open_append(&self.path)),
+        }
+    }
+
+    // Contract: a reopen failure after a successful rename chain must drop the
+    // stale handle. It points at the file just renamed to `.log.1`, so keeping
+    // it would append every later line into a rotated generation that the next
+    // rotation deletes, without ever recreating `path`. The sink degrades to
+    // stderr-only output instead.
+    fn adopt_reopen(&mut self, result: std::io::Result<(File, u64)>) -> bool {
         match result {
             Ok((file, len)) => {
                 self.file = Some(file);
@@ -81,6 +96,7 @@ impl FileSink {
                 true
             }
             Err(error) => {
+                self.file = None;
                 self.warn(&error);
                 false
             }
@@ -171,6 +187,38 @@ mod tests {
             "two\n"
         );
         assert!(!generation_path(&path, 4).exists());
+
+        drop(sink);
+        fs::remove_dir_all(dir).expect("remove temp directory");
+    }
+
+    // Contract: after a successful rename chain, a failed reopen leaves the
+    // sink with no file handle, so later `write_line` calls write nothing —
+    // no line lands in a rotated generation and `path` is not recreated.
+    // Regression guard for the unit 1.4 review finding that a retained stale
+    // handle made every later write shift the renamed file through
+    // `.log.1/.2/.3` into deletion. The real filesystem cannot hermetically
+    // fail `open` after a successful rename (the chain always vacates `path`,
+    // and recreating it needs exactly the directory permissions the renames
+    // needed), so the reopen result is injected at the `adopt_reopen` seam
+    // that `rotate()` itself uses.
+    #[test]
+    fn failed_reopen_after_rename_chain_drops_handle_and_writes_nothing() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).expect("create temp directory");
+        let path = dir.join("mbv.log");
+        let mut sink = FileSink::new(path.clone(), 1000);
+        sink.write_line("before");
+
+        sink.adopt_reopen(Err(std::io::Error::other("reopen failed")));
+
+        assert!(sink.file.is_none());
+        sink.write_line("lost");
+        sink.write_line("still lost");
+        assert_eq!(fs::read_to_string(&path).expect("current log"), "before\n");
+        assert!(!generation_path(&path, 1).exists());
+        assert!(!generation_path(&path, 2).exists());
+        assert!(!generation_path(&path, 3).exists());
 
         drop(sink);
         fs::remove_dir_all(dir).expect("remove temp directory");
