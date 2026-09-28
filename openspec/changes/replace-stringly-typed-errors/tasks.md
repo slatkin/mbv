@@ -34,7 +34,7 @@ extended error type includes `kind_name()` (design: Decisions).
 
 ## 4. Cast crate plus its src consumers
 
-- [ ] 4.1 Introduce `CastError`, convert the 22 `mbv-cast` sites, then
+- [x] 4.1 Introduce `CastError`, convert the 22 `mbv-cast` sites, then
   convert the cast-domain `src/` consumers to it
   (`src/app/state/types/cast.rs` 39 sites, `src/app/dispatch/cast.rs`
   9 sites), verify touched-package nextest passes and both areas audit zero
