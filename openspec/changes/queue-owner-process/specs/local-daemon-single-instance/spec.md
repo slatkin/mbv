@@ -3,8 +3,9 @@
 ### Requirement: Resolution probes the control socket
 When the lock is already held, mbv SHALL decide what to do by attempting to connect to the user's
 control socket. Socket-file existence SHALL NOT be treated as evidence of a live daemon; only a
-successful connection SHALL count. A connection the daemon refuses as an exclusive owner SHALL be
-treated as a refusal to start, not as an attach failure.
+successful connection SHALL count. A successful connection leads to an attach attempt; the daemon
+may still refuse that attach, as an exclusive owner (mbv SHALL refuse to start) or as shutting down
+(mbv SHALL retry resolution for a bounded period, per the `daemon-lifecycle` capability).
 
 #### Scenario: Lock is free
 - **WHEN** the lock can be acquired

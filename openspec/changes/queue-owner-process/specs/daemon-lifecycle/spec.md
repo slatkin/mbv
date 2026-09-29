@@ -81,8 +81,11 @@ The local daemon SHALL start and remain available without a configured, authenti
 ### Requirement: The daemon reads Stay Alive when it decides
 
 The local daemon SHALL read the current `stay_alive` setting each time it makes a lifetime decision:
-admitting a client, losing its last client, and evaluating a coordinated shutdown request. It
-SHALL NOT act on a value captured when it started.
+admitting a client, losing its last client, and evaluating a coordinated shutdown request, and
+SHALL read the current consume settings each time it applies consume policy. It SHALL NOT act on
+values captured when it started. When the settings cannot be read, it SHALL use the values it last
+read successfully. Packaged `mbvd` SHALL keep its current behaviour: it is never exclusive and
+never ends because its last client left.
 
 #### Scenario: Stay Alive turned off after the daemon started with it on
 
@@ -90,11 +93,29 @@ SHALL NOT act on a value captured when it started.
 - **WHEN** the user turns Stay Alive off and quits the TUI
 - **THEN** the daemon SHALL accept the coordinated shutdown request and exit
 
+#### Scenario: Consume setting changed during the session
+
+- **WHEN** the user turns Consume audio on while the local daemon is playing audio
+- **THEN** the next completed audio item SHALL be consumed
+
 #### Scenario: Stay Alive turned on after the daemon started with it off
 
 - **WHEN** the local daemon started while `stay_alive` was false
 - **WHEN** the user turns Stay Alive on and quits the TUI
 - **THEN** the daemon SHALL keep running and playback SHALL continue
+
+### Requirement: A shutting-down daemon admits no client
+
+Once the local daemon begins a shutdown, it SHALL refuse every new connection with a reason
+stating that it is shutting down, before any queue or playback state is sent. A TUI refused this
+way SHALL retry resolution for a bounded period and SHALL start a fresh local daemon once the old
+one has released the lock.
+
+#### Scenario: Relaunch right after quitting with Stay Alive off
+
+- **WHEN** the user quits with `stay_alive` false and immediately starts mbv again while the old daemon is still stopping
+- **THEN** the old daemon SHALL refuse the new connection as shutting down
+- **THEN** mbv SHALL start a fresh local daemon once the old one exits and attach to it
 
 ### Requirement: Stay Alive off admits one client
 
@@ -109,6 +130,12 @@ attached.
 - **WHEN** `stay_alive` is false, one TUI is attached, and the user starts mbv in another terminal
 - **THEN** the daemon SHALL refuse the new connection with the exclusive-owner reason
 - **THEN** the first TUI SHALL remain attached and playback SHALL be unaffected
+
+#### Scenario: Packaged mbvd with Stay Alive off
+
+- **WHEN** `stay_alive` is false and a second client attaches to packaged `mbvd`
+- **THEN** `mbvd` SHALL admit it
+- **THEN** `mbvd` SHALL keep running when every client has left
 
 #### Scenario: Stay Alive turned off with two clients attached
 

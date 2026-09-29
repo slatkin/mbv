@@ -1,5 +1,46 @@
 ## ADDED Requirements
 
+### Requirement: Relative navigation is resolved by the daemon Player owner
+
+Next and Previous SHALL be resolved by the Player owner against its canonical queue, whatever sent them: keyboard, mouse, MPRIS, the tray, or an Emby remote-control command. This SHALL hold for the local daemon, whatever `stay_alive` is set to, and for packaged `mbvd`. The owner SHALL turn the step into a slot jump with its own request identity, dispatched and settled like any other slot jump. The Playback run SHALL NOT pick a neighbouring slot itself.
+
+The neighbour SHALL be found from the latest requested target: the queued transition's target, else the in-flight transition's target, else the observed active slot. Next SHALL do nothing at the last slot and Previous SHALL do nothing at the first slot.
+
+#### Scenario: MPRIS Next while attached to a Stay-alive daemon
+
+- **WHEN** the TUI is attached to a Stay-alive daemon and the user invokes Next through MPRIS
+- **THEN** the daemon's Player owner SHALL advance to the next canonical slot
+- **AND** the request SHALL NOT be refused for lacking a ctrl wire form
+
+#### Scenario: Emby remote Next under Stay-alive
+
+- **WHEN** an Emby remote-control Next arrives at a Stay-alive daemon
+- **THEN** the daemon's Player owner SHALL resolve the neighbour and dispatch a slot jump
+- **AND** the target SHALL resume from the canonical queue
+
+#### Scenario: Tray Next
+
+- **WHEN** the user selects Next from the Local daemon's tray
+- **THEN** the daemon's Player owner SHALL resolve and dispatch the step
+- **AND** every attached client SHALL observe the resulting track change
+
+#### Scenario: Keyboard Next
+
+- **WHEN** the user presses Next in a Client attached to the local daemon
+- **THEN** the local daemon SHALL resolve the neighbour and dispatch a slot jump with canonical resume
+
+#### Scenario: Previous right after Next
+
+- **WHEN** Next has been requested and not yet confirmed, and the user invokes Previous
+- **THEN** Previous SHALL resolve from the requested Next target
+- **AND** playback SHALL return to the slot that was playing before Next
+
+#### Scenario: Next at the end of the queue
+
+- **WHEN** the latest requested target is the last canonical slot and Next is invoked
+- **THEN** no transition SHALL be dispatched
+
+
 ### Requirement: Client-initiated slot jumps are requested from the Player owner
 
 A Client SHALL request every user-initiated jump to a canonical slot from the Player owner that
@@ -61,7 +102,7 @@ A Client's displayed queue for each queue scope SHALL change only by adopting a 
 
 ### Requirement: Queue edits are answered before the next input
 
-Every queue edit a Client sends SHALL carry an identity, and the Player owner SHALL answer the sending Client with that identity and either the resulting snapshot or a rejection; other attached Clients SHALL receive the resulting snapshot as usual. The Client SHALL adopt the answer before handling its next input, so an accepted edit is visible in the next frame after the owner applies it. The Client SHALL wait for the answer for a bounded time only; when the bound passes, it SHALL report that the owner did not respond, keep showing the owner's last accepted state, and continue to adopt later snapshots. A remote Player owner that does not advertise answered queue edits SHALL still receive the edit, and the Client SHALL NOT wait for an answer from it.
+Every queue edit a Client sends, other than loading a playlist without starting playback, SHALL carry an identity, and the Player owner SHALL answer the sending Client with that identity and either the resulting snapshot or a rejection; other attached Clients SHALL receive the resulting snapshot as usual. The Client SHALL adopt the answer before handling its next input, so an accepted edit is visible in the next frame after the owner applies it. The Client SHALL wait for the answer for a bounded time only; when the bound passes, it SHALL report that the owner did not respond, keep showing the owner's last accepted state, and continue to adopt later snapshots, including a late answer to that edit. Loading a playlist without starting playback SHALL keep its own load result: the Client SHALL NOT wait for it before handling input, and SHALL NOT show the load as applied until that result or an owner snapshot contains it. A remote Player owner that does not advertise answered queue edits SHALL still receive the edit, and the Client SHALL NOT wait for an answer from it.
 
 #### Scenario: Rapid repeated removals
 
@@ -79,6 +120,17 @@ Every queue edit a Client sends SHALL carry an identity, and the Player owner SH
 - **WHEN** the owner does not answer a queue edit within the bound
 - **THEN** the Client SHALL report that the owner did not respond
 - **AND** SHALL NOT show the edit as applied until an owner snapshot contains it
+
+#### Scenario: Late answer arrives
+
+- **WHEN** the owner's answer to an edit arrives after the Client stopped waiting
+- **THEN** the Client SHALL adopt that answer's state like any other owner snapshot
+
+#### Scenario: Idle load while an item plays
+
+- **WHEN** the user loads a playlist without starting playback while the owner is still stopping the playing item
+- **THEN** the Client SHALL keep handling input
+- **AND** SHALL show the loaded playlist once the owner's load result or snapshot contains it
 
 #### Scenario: Older remote owner
 
@@ -132,6 +184,10 @@ Undoing a queue edit SHALL send the inverse edit to the Player owner and SHALL f
 - **AND** the Client SHALL report that the undo did not apply
 
 ## REMOVED Requirements
+
+### Requirement: Relative navigation is resolved by the Player owner
+**Reason**: Its "Bare keyboard Next" scenario named the app process as a Player owner.
+**Migration**: Replaced by "Relative navigation is resolved by the daemon Player owner".
 
 ### Requirement: A client-initiated slot jump dispatches by where the Player owner runs
 **Reason**: The terminal UI process is never a Player owner, so there is no longer a branch for a local jump.
