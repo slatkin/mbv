@@ -151,6 +151,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
 fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
+    app.player.status.lock().unwrap().active = false;
     app.player_tab.set_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
@@ -302,6 +303,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
+    app.player.status.lock().unwrap().active = false;
     app.player_tab.set_items(vec![audio("existing")], 0);
 
     app.execute_context_action(
