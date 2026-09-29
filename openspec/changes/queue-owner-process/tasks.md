@@ -4,7 +4,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 1. Owner lifetime and settings (crates/mbv-daemon, mbv-ctrl, mbv-remote-player, src/local_daemon.rs)
 
-- [ ] 1.1 Add the `OwnerSettings { stay_alive, consume_videos, consume_audio }` reader, `Arc<dyn Fn() -> OwnerSettings + Send + Sync>` (design D2).
+- [x] 1.1 Add the `OwnerSettings { stay_alive, consume_videos, consume_audio }` reader, `Arc<dyn Fn() -> OwnerSettings + Send + Sync>` (design D2).
   - It replaces `DaemonLoop.stay_alive` (`crates/mbv-daemon/src/event_loop.rs`), `CtrlContext.stay_alive` (`control.rs`), and the spawn-time `consume_*` read (`event_loop/player_events.rs`, the `ConsumePolicy` block).
   - `DaemonRole::Local` reads the config file on each call, falling back to the last successful read and then to the spawn config.
   - `DaemonRole::Packaged` returns the spawn config with `stay_alive: true`.
@@ -13,9 +13,9 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - a loop test flips the reader from true to false, and `RequestShutdown` is accepted;
     - a loop test flips `consume_audio` on, and the next completion consumes;
     - a Packaged-role test: the reader reports `stay_alive: true` whatever the config says.
-- [ ] 1.2 In `src/app/dispatch/settings.rs`, make toggling `StayAlive`, `ConsumeVideos` or `ConsumeAudio` flush the debounced settings save (`settings_save_at`) at once. Make teardown flush any pending save before `request_teardown_shutdown`.
+- [x] 1.2 In `src/app/dispatch/settings.rs`, make toggling `StayAlive`, `ConsumeVideos` or `ConsumeAudio` flush the debounced settings save (`settings_save_at`) at once. Make teardown flush any pending save before `request_teardown_shutdown`.
   - Test with `mbv_config::TestStateDirGuard`: the toggled value is on disk right after the toggle.
-- [ ] 1.3 Add `DaemonEvent::LastClientGone` (design D3, "Last client lost").
+- [x] 1.3 Add `DaemonEvent::LastClientGone` (design D3, "Last client lost").
   - Replace `CtrlClients::default()` in `run.rs` with a constructor taking `merged_tx`.
   - Emit the event whenever `remove` or any of the four `retain` sites (`broadcast_to_all`, `broadcast_state_gated`, `broadcast_progress_gated`, `broadcast_book_progress_gated`) leaves the registry empty after it has held a client.
   - The loop handles it: if the role is Local, `!stay_alive`, and the registry is still empty, run the `DaemonEvent::Shutdown` handling.
@@ -24,7 +24,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - a fresh registry emits none;
     - with the Local role and the reader false, the loop persists through the injected `store` and shuts down;
     - with the reader true, or the Packaged role, it continues.
-- [ ] 1.4 Add admission (design D3).
+- [x] 1.4 Add admission (design D3).
   - Add `DisconnectReason::ExclusiveOwner { pid: u32 }` and `DisconnectReason::OwnerShuttingDown` (`crates/mbv-ctrl/src/events.rs`), with explicit serde renames.
   - Add a `shutting_down` flag to `CtrlClients`, set as the first step of `handle_shutdown`.
   - In `core_ctrl_spawn.rs`, after `Hello` validation and **before** `send_initial_queue_state`: take the registry lock; refuse on `shutting_down`; refuse with `ExclusiveOwner{pid: std::process::id()}` when the role is Local, `!stay_alive`, and a client is attached; otherwise `connect` under the same lock.
@@ -34,7 +34,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - admission is refused while shutting down. Owns "A shutting-down daemon admits no client".
     - a refused connection receives no queue state.
     - `connect_endpoint` maps both reasons.
-- [ ] 1.5 Local-role startup settings in `crates/mbv-daemon/src/run.rs` and `src/local_daemon.rs`:
+- [x] 1.5 Local-role startup settings in `crates/mbv-daemon/src/run.rs` and `src/local_daemon.rs`:
   - honour `show_audio_window` for `DaemonRole::Local`, keeping it forced off for `Packaged`;
   - start the tray only when `stay_alive` is true at startup.
   - Verify with `cargo check`, plus the manual checks in 8.2. No unit test: the audio window and the tray are real externals.
