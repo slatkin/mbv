@@ -299,6 +299,6 @@ The Client stops writing to queue slots at every event-driven site, and keeps th
 2. Client attach-always, home-link retention and the Bare deletion (groups 3 and 4) ship in the same release as `queue_op` and `QueueView` (groups 5 and 6). An intermediate commit may use fire-and-forget, but no release ships without answered ops.
 3. **Rollback** is reverting the Client commits. The owner changes are backward compatible, and the Bare queue file is never deleted.
 
-## Open Questions
+### D10 — Glossary: Owner process
 
-- **CONTEXT.md naming.** "Stay-alive process" names the owner process even when Stay Alive is off. The docs task proposes **Owner process**, with Stay-alive as a lifetime policy only, and "Stay-alive process"/"Bare mode" becoming _Avoid_ aliases. This glossary rename needs the maintainer's approval before the CONTEXT.md edit. The specs keep "local daemon" either way.
+The maintainer approved this rename. CONTEXT.md introduces **Owner process**: the per-user local process that is the Player owner for every terminal UI launched on this machine. **Stay-alive** becomes only the lifetime policy that decides whether the Owner process outlives its Clients. "Stay-alive process" and "Bare mode" become _Avoid_ aliases. The specs keep their existing "local daemon" wording.
