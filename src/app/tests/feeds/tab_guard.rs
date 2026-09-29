@@ -159,6 +159,10 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 #[test]
 fn feed_selection_enqueue_preserves_supplied_order() {
     let mut app = make_app_stub();
+    // Hold the owner command channel so the post-append owner sync
+    // reports success instead of a dropped-peer disconnect (Unit 4
+    // deleted the in-process Bare player the stub used to carry).
+    let _cmd_rx = super::super::live_owner_channel(&mut app);
     app.enqueue_feed_entries(vec![
         playable_feed_entry("feed-first"),
         playable_feed_entry("feed-second"),

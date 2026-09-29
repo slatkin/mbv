@@ -302,6 +302,9 @@ fn tick_clicks_play_pause_and_the_seekbar_in_mini_view_queue_only() {
 #[test]
 fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     let mut app = make_app_stub();
+    // Collapsed means idle: the stub player starts active (a remote-owner
+    // stand-in), which would paint the transport this test expects hidden.
+    app.player.status.lock().unwrap().active = false;
     app.terminal_width = 80;
     app.terminal_height = 40;
     let mut harness = TickHarness::new(app);

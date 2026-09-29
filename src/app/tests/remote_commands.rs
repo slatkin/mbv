@@ -7,6 +7,10 @@ use mbv_net::mock_http::MockHttp;
 
 fn attached_app() -> App {
     let mut app = make_app_stub();
+    // The stub player starts active (a remote-owner stand-in); this
+    // scenario watches a remote session, so park the local player idle
+    // to reach the session-reported now-playing path.
+    app.player.status.lock().unwrap().active = false;
     app.connected_session_id = Some("session".into());
     app.connected_session_state = Some(mbv_emby::test_support::make_session("Client", "Emby"));
     app.terminal_width = 160;

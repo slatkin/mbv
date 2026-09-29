@@ -128,7 +128,12 @@ mod tests {
     #[test]
     fn continue_watching_effects_use_the_resolved_item_target() {
         let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
+        let mut app = make_app_stub();
+        // Hold the owner command channel so the enqueue's post-append
+        // owner sync reports success instead of a dropped-peer disconnect
+        // (Unit 4 deleted the in-process Bare player the stub used to carry).
+        let _cmd_rx = crate::app::tests::live_owner_channel(&mut app);
+        let mut model = Model::new(app);
         model.home_content.continue_items = make_items(3);
 
         model.handle_home_request(ShellRequest::HomeEnqueue(target("id2")));

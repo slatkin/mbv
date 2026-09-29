@@ -72,6 +72,11 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
 /// construction (`make_built_app`) plus the stub-friendly defaults below.
 pub(crate) fn make_app_stub() -> App {
     let mut app = make_built_app();
+    apply_app_stub_defaults(&mut app);
+    app
+}
+
+fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
     app.images.set_cache_capacity_for_test(50);
@@ -83,7 +88,20 @@ pub(crate) fn make_app_stub() -> App {
     // without arming focus explicitly. The refocus guard itself is tested
     // directly in input_music_track_focus_tests.
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
-    app
+}
+
+/// Re-anchor a stub app onto a fresh remote stub with a live command
+/// channel, returning the receiver the test must hold so owner-bound
+/// commands report success instead of a dropped-peer disconnect. Unit 4
+/// deleted Bare ownership, so `make_app_stub`'s player is a
+/// `RemotePlayer::stub` whose command channel is already dropped.
+pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd> {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.status.lock().unwrap().volume_max = 100;
+    app.player = mbv_player::PlayerProxy::remote(remote, false);
+    app.player_rx = player_rx;
+    cmd_rx
 }
 
 #[test]

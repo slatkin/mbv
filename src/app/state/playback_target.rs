@@ -297,8 +297,10 @@ mod now_playing_status_tests {
     #[test]
     fn now_playing_status_covers_the_three_states() {
         // Idle: nothing active — an unreachable stale `paused` flag still
-        // reads as Idle.
+        // reads as Idle. The stub player starts active (a remote-owner
+        // stand-in), so park it idle first: this test owns the status.
         let app = app();
+        set_player(&app, false, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);
         set_player(&app, false, true);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);

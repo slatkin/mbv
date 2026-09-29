@@ -16,8 +16,12 @@ use rstest::{fixture, rstest};
 /// Set up the app with a known socket generation and a matching
 /// browse progress entry so the merge will recognise the episode.
 #[fixture]
-fn make_socket_merge_ready_app() -> App {
+fn make_socket_merge_ready_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let mut app = super::podcast::audiobookshelf_app();
+    // Hold the owner command channel so the enqueue's post-append owner
+    // sync reports success instead of a dropped-peer disconnect (Unit 4
+    // deleted the in-process Bare player the stub used to carry).
+    let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
     app.audiobookshelf_browse[0].progress.insert(
         ("show-a".into(), "episode-a".into()),
@@ -28,12 +32,14 @@ fn make_socket_merge_ready_app() -> App {
             is_finished: false,
         },
     );
-    app
+    (app, cmd_rx)
 }
 
 #[rstest]
-fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_ready_app: App) {
-    let mut app = make_socket_merge_ready_app;
+fn socket_progress_updates_matching_inactive_queued_episode(
+    make_socket_merge_ready_app: (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>),
+) {
+    let (mut app, _cmd_rx) = make_socket_merge_ready_app;
     // Enqueue the known episode as an inactive slot.
     app.enqueue_selected_audiobookshelf_episode(
         0,
