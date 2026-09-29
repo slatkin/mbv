@@ -214,12 +214,28 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
+fn remote_stub_config() -> crate::config::Config {
+    crate::config::Config::default()
+}
+
+fn close_initial_services(app: &mut App) {
+    app.close_settings();
+    app.pending_overlay = None;
+}
+
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
-    use crate::config::Config;
+    make_remote_app_stub_at_index(local_items, remote_items, 0)
+}
+
+pub(crate) fn make_remote_app_stub_at_index(
+    local_items: Vec<EmbyItem>,
+    remote_items: Vec<EmbyItem>,
+    current_idx: usize,
+) -> App {
     use mbv_emby::EmbyClient;
 
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(remote_items, 0);
-    let config = Config::default();
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(remote_items, current_idx);
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -227,6 +243,7 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
+    close_initial_services(&mut app);
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
@@ -239,12 +256,11 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    use crate::config::Config;
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
-    let config = Config::default();
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -252,6 +268,7 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
+    close_initial_services(&mut app);
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
@@ -264,12 +281,11 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    use crate::config::Config;
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
-    let config = Config::default();
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -277,6 +293,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
+    close_initial_services(&mut app);
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
@@ -303,17 +320,18 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
         mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
     let config = Config {
         stay_alive: true,
-        ..Default::default()
+        ..remote_stub_config()
     };
     // A local-daemon stub is always stay-alive: tests that model this
     // path must never send RequestShutdown to the real daemon socket.
-    let app = App::new_remote_with_config(
+    let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
         &mbv_remote_player::DaemonEndpoint::Local,
         config,
     );
+    close_initial_services(&mut app);
     (app, cmd_rx)
 }
 

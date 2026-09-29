@@ -607,8 +607,27 @@ impl RemotePlayer {
         items: impl AsRef<[EmbyItem]>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let queue_len = items.as_ref().len();
-        let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
+        let slots: Vec<_> = items
+            .as_ref()
+            .iter()
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: index as u64 + 1,
+                item: QueueItem::Emby(Box::new(item.clone())),
+            })
+            .collect();
+        let status = Self::stub_status(current_idx, slots.len());
+        let unified_queue = mbv_ctrl::UnifiedQueueStateData {
+            status: status.clone(),
+            active_slot: slots.get(current_idx).map(|slot| slot.slot_id),
+            slots,
+            revision: 0,
+            source: QueueSource::Unknown,
+            lineage: QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        let status = Arc::new(Mutex::new(status));
         let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -621,7 +640,7 @@ impl RemotePlayer {
             RemotePlayer {
                 status,
                 subtitle_prefs,
-                unified_queue: Arc::new(Mutex::new(None)),
+                unified_queue: Arc::new(Mutex::new(Some(unified_queue))),
                 cmd_tx,
                 disconnected,
                 shutdown_announced,

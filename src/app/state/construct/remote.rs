@@ -137,6 +137,30 @@ fn remote_services(
     }
 }
 
+fn initialize_service_startup(
+    app: &mut App,
+    audiobookshelf_startup_requested: bool,
+    emby_configured_without_client: bool,
+    should_open_services: bool,
+) {
+    let config = app.config.lock().unwrap().clone();
+    app.setup.emby_startup_request = emby_configured_without_client.then_some(
+        crate::app::state::service_setup::StartupRequest {
+            config: config.clone(),
+            generation: app.emby_runtime.generation(),
+        },
+    );
+    app.setup.audiobookshelf_startup_request = audiobookshelf_startup_requested.then_some(
+        crate::app::state::service_setup::StartupRequest {
+            config,
+            generation: app.audiobookshelf_runtime.generation(),
+        },
+    );
+    if should_open_services {
+        app.open_services_settings();
+    }
+}
+
 impl App {
     /// `endpoint` is the daemon endpoint the remote player is connected to.
     /// The endpoint's `is_local()` distinguishes local-daemon attach
@@ -175,6 +199,10 @@ impl App {
         let library_routes = app_config.library_routes.clone();
         let music_levels = app_config.music_levels.clone();
         let always_play_next = app_config.always_play_next;
+        let emby_configured_without_client = client.is_none() && app_config.emby_setup.is_some();
+        let should_open_services =
+            crate::app::dispatch::session::service_startup::should_open_services(&app_config);
+        let system_notifications = !app_config.stay_alive && app_config.system_notifications;
         // Both side effects below touch real system state, so test builds
         // must never run them (issue #757): the eviction thread scans and
         // prunes the user's real image-cache dir, and `mpris::start` claims
@@ -205,6 +233,8 @@ impl App {
         #[cfg(test)]
         let mpris_handle = None;
         let player = PlayerProxy::remote(remote, always_play_next);
+        let audiobookshelf_startup_requested =
+            services.audiobookshelf_configured && services.audiobookshelf_credential_present;
         let (player_tab, remote_player_tab) =
             snapshot.tabs(endpoint.is_local(), local_daemon_bootstrap.as_ref());
         let mut app = Self::build(AppInit {
@@ -223,7 +253,7 @@ impl App {
             player_tab,
             remote_player_tab,
             initial_queue_scope,
-            system_notifications: false,
+            system_notifications,
             image_protocol: ui_config.image_protocol.clone(),
             image_protocol_enabled: ui_config.image_protocol.is_some(),
             hidden_libraries,
@@ -257,12 +287,68 @@ impl App {
         } else {
             app.queue_source = remote_queue_source;
         }
-        app.setup.audiobookshelf_startup_request = (services.audiobookshelf_configured
-            && services.audiobookshelf_credential_present)
-            .then_some(crate::app::state::service_setup::StartupRequest {
-                config: app.config.lock().unwrap().clone(),
-                generation: app.audiobookshelf_runtime.generation(),
-            });
+        initialize_service_startup(
+            &mut app,
+            audiobookshelf_startup_requested,
+            emby_configured_without_client,
+            should_open_services,
+        );
         app
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn construct(config: crate::config::Config) -> App {
+        let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+        App::new_remote_optional_with_config(
+            None,
+            remote,
+            player_rx,
+            &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+            config,
+        )
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_uses_system_notifications_when_stay_alive_is_off()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            system_notifications: true,
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(app.system_notifications);
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_suppresses_notifications_when_stay_alive_is_on()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            stay_alive: true,
+            system_notifications: true,
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(!app.system_notifications);
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_requests_startup_when_configured_without_client()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            emby_setup: Some(mbv_config::EmbySetup::new("https://emby.example", "user")),
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(app.setup.emby_startup_request.is_some());
     }
 }

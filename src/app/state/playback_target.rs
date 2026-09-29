@@ -295,7 +295,7 @@ impl App {
 #[cfg(test)]
 mod now_playing_status_tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub};
+    use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub_at_index};
 
     fn app() -> App {
         make_app_stub()
@@ -409,7 +409,7 @@ mod now_playing_status_tests {
     /// bare run only; daemon snapshots are authoritative.
     #[test]
     fn queue_row_playback_state_stays_active_for_direct_remote_queue() {
-        let app = make_remote_app_stub(make_items(1), make_items(3));
+        let app = make_remote_app_stub_at_index(make_items(1), make_items(3), 1);
         assert!(app.player.is_remote());
         {
             let mut status = app.player.status.lock().unwrap();

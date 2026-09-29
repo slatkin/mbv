@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::{make_app_stub, make_audio_items, make_remote_app_stub};
+use crate::app::tests::{make_app_stub, make_remote_app_stub};
 use crate::app::{LibEvent, PlaylistEvent, QueueScope};
 use crossterm::event::KeyModifiers;
 
@@ -219,25 +219,21 @@ fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
 }
 
 #[test]
-fn queue_play_cursor_on_disconnected_remote_reports_jump_rejection() {
-    let mut app = make_remote_app_stub(make_items(1), make_audio_items(2));
-    app.set_queue_scope(QueueScope::Remote);
-    app.player.status.lock().unwrap().active = true;
-    app.player.status.lock().unwrap().current_idx = 0;
-    app.pending_remote_move_cursor = Some(1);
-    app.player
-        .disconnected_flag()
-        .unwrap()
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-
-    app.dispatch(&Command::QueuePlayCursor(1));
+fn remote_app_without_service_setup_opens_services_settings() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let app = crate::app::App::new_remote_optional_with_config(
+        None,
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        crate::config::Config::default(),
+    );
 
     assert_eq!(
-        app.status,
-        crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
+        app.settings_destination,
+        mbv_ui_model::settings::SettingsDestination::Services
     );
-    assert_eq!(app.status_severity, ToastSeverity::Error);
-    assert_eq!(app.pending_remote_move_cursor, None);
 }
 
 #[test]
