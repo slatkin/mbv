@@ -135,11 +135,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
         2,
         "confirming the delete must remove the active now-playing slot immediately"
     );
-    assert_eq!(
-        app.queue_undo_stack.len(),
-        1,
-        "delete must push an undo entry immediately, not after Stopped"
-    );
+    // Row 4.1 removed the in-process undo push; undo returns as an owner op in Unit 5.2.
     assert!(
         app.pending_delete_slot.is_some(),
         "the pending delete must be recorded so the eventual Stopped event recognizes it"
@@ -162,7 +158,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
     );
     assert_eq!(
         app.queue_undo_stack.len(),
-        1,
+        0,
         "the Stopped event must not push a second undo entry"
     );
     assert!(

@@ -14,12 +14,7 @@ pub(super) fn stub_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
 }
 
-#[test]
-fn remote_slot_state_is_off_for_local_only_app() {
-    let app = make_app_stub();
-    assert_eq!(app.remote_slot_state(), RemoteSlotState::Off);
-    assert!(!app.can_disconnect_remote());
-}
+// Row 4.1/design D1 deleted Bare: every launch attaches, so RemoteSlotState::Off has no test.
 
 #[test]
 fn app_stub_starts_with_no_active_library_route() {
