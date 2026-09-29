@@ -85,14 +85,14 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 3. Every local launch attaches to the local daemon (design D1, D4, D8)
 
-- [ ] 3.1 In `src/main.rs`:
+- [x] 3.1 In `src/main.rs`:
   - `Fresh` always releases the guard, spawns (`local_daemon::spawn_detached`), and attaches. Delete the `App::new_independent` branch.
   - `ExclusiveOwner{pid}` prints the refusal required by `local-daemon-single-instance` "Refusing a second terminal explains how to proceed" and exits 1.
   - `OwnerShuttingDown` makes it re-run `single_instance::resolve` every 100 ms for up to 10 s, then show the refusal naming `mbv -q`.
   - `Resolution::Refuse` prints that the owner process is not accepting connections and names `mbv -q`.
   - The `-q` help text drops "bare mbv".
   - Verify with `cargo check -p mbv`, plus the manual checks in 8.2.
-- [ ] 3.2 Parity in `App::new_remote_optional_with_config` (`src/app/state/construct/remote.rs`):
+- [x] 3.2 Parity in `App::new_remote_optional_with_config` (`src/app/state/construct/remote.rs`):
   - call `should_open_services`/`open_services_settings`;
   - set `setup.emby_startup_request` when Emby is configured and no client was passed in;
   - set `system_notifications` from config when `stay_alive` is false, and `false` otherwise.
@@ -100,7 +100,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - with no Emby setup, services settings open;
     - with `stay_alive` false and `system_notifications` true, the flag is true;
     - with Emby configured and no client, an Emby startup request is set.
-- [ ] 3.3 Make `SuspendedLocalSession` link-only (`src/app/state/playback.rs`): delete `player_tab`, `queue_source`, and the other queue/WS fields that only Bare used, plus their write-back in `install_suspended_local` (`switch.rs`).
+- [x] 3.3 Make `SuspendedLocalSession` link-only (`src/app/state/playback.rs`): delete `player_tab`, `queue_source`, and the other queue/WS fields that only Bare used, plus their write-back in `install_suspended_local` (`switch.rs`).
   - Home-link suspension: `switch_to_direct_remote`, the Library-route switch and `connect_daemon_route_endpoint` (`connect.rs`) move a current home link into `SuspendedLocalSession` instead of `disconnect_remote()`, sending Stop first only when `stay_alive` is false.
   - Any path that would connect to `DaemonEndpoint::Local` while a home link exists (the `endpoint.is_local()` branch of `switch_to_direct_remote`, `connect_daemon_route_endpoint` with `Local`, `restore_local_mode`) reinstates the suspended link instead.
   - `restore_local_mode` keeps the owner-lost restart path (`daemon_restart.rs`) for when the home link is gone.
@@ -108,7 +108,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - switching from the home link keeps it suspended and connected;
     - a route to `Local` while suspended reinstates it and opens no new connection;
     - with `stay_alive` false, switching away sends Stop.
-- [ ] 3.4 In `src/app/shell/run/drains.rs`, add `drain_suspended_home_events`, which drains the suspended home link **until empty** every tick:
+- [x] 3.4 In `src/app/shell/run/drains.rs`, add `drain_suspended_home_events`, which drains the suspended home link **until empty** every tick:
   - `UnifiedQueueUpdated` and `QueueOpResult` go to a new `adopt_home_snapshot`, which writes only the Local queue (`player_tab` until group 6) and never `self.player.status`;
   - `RemoteDisconnected` goes to `raise_daemon_lost_modal`;
   - `DaemonShutdownAnnounced` goes to the clean-exit path;
@@ -117,9 +117,9 @@ Every new test names the spec requirement it owns, in a comment or in its name (
   - Tests:
     - a suspended-link snapshot updates the Local queue while Remote is viewed, and leaves `player.status` alone. Owns `local-daemon-thin-client` "Every local Client shows the owner's accepted queue".
     - a suspended-link disconnect raises the owner-lost modal.
-- [ ] 3.5 Teardown (`src/app/dispatch/run_loop/teardown.rs`): send `RequestShutdown` over the home link, current or suspended, and delete the short-lived `DaemonEndpoint::Local` path.
+- [x] 3.5 Teardown (`src/app/dispatch/run_loop/teardown.rs`): send `RequestShutdown` over the home link, current or suspended, and delete the short-lived `DaemonEndpoint::Local` path.
   - Test: `stay_alive` false while routed remote sends the request over the suspended link. Owns `daemon-lifecycle` "Quitting with Stay Alive off stops this machine's local daemon".
-- [ ] 3.6 Fall-through (`switch.rs` `prepare_local_player`, `play_pending_local_play`):
+- [x] 3.6 Fall-through (`switch.rs` `prepare_local_player`, `play_pending_local_play`):
   - When the current player **is** the home link, return "already local": stop only the controlled Emby session, and neither stop nor disconnect the home link.
   - When the home link is suspended, reinstate it.
   - Otherwise (explicit-endpoint launch), run the local-launch resolution and return `Err` on refusal.
