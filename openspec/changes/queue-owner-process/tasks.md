@@ -148,7 +148,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 5. Answered edits and event side effects in the Client (design D6, D7, D9)
 
-- [ ] 5.1 Add `App::queue_op(scope, QueueOp)` and `await_queue_op` (`src/app/dispatch/queue/queue_op.rs`), and `App.deferred_player_events: VecDeque<PlayerEvent>`.
+- [x] 5.1 Add `App::queue_op(scope, QueueOp)` and `await_queue_op` (`src/app/dispatch/queue/queue_op.rs`), and `App.deferred_player_events: VecDeque<PlayerEvent>`.
   - The pump reads `queue_link(scope)`'s receiver until `QueueOpResult{op: id}` or `QUEUE_OP_ANSWER_BOUND = 250 ms`:
     - it adopts `UnifiedQueueUpdated` inline (through `adopt_home_snapshot` for a suspended link);
     - it adopts the matching result as the own answer;
@@ -160,19 +160,19 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - an interleaved `RemoteDisconnected` is deferred to the next tick, not handled in the pump;
     - a timeout flashes and leaves the view unchanged, and a late `Applied` is adopted afterwards;
     - `None` (legacy) returns without waiting.
-- [ ] 5.2 Move removal, range removal, move and undo onto `queue_op` in `src/app/dispatch/queue.rs` (`remove_from_queue`, `remove_slots_from_queue`, move handlers) and the undo handler.
+- [x] 5.2 Move removal, range removal, move and undo onto `queue_op` in `src/app/dispatch/queue.rs` (`remove_from_queue`, `remove_slots_from_queue`, move handlers) and the undo handler.
   - Delete the local `remove_slot_at`/`move_slot`/`insert_item_at` calls, `sync_playback_queue_items_after_append`, `queue_edit_reaches_player`, and `queue_edits_reach_owner`.
   - `UndoEntry` becomes `Remove{item, index}` / `Move{slot_id, from}` (design D7).
   - Tests:
     - three consecutive removals each act on the answered state (scenario "Rapid repeated removals");
     - undoing a removal sends `Append{before}` anchored at the slot now at that index. Owns "Queue undo is an owner operation".
-- [ ] 5.3 Move append/enqueue, clear (`UnifiedQueueClearOp`), replace (`replace_playback_queue`, `dispatch/queue/replacement.rs`, `pending_playback.rs`), play-slot, source update (`apply_saved_playlist_source`) and refresh (`dispatch/library/load.rs` `refresh_queue`) onto `queue_op`.
+- [x] 5.3 Move append/enqueue, clear (`UnifiedQueueClearOp`), replace (`replace_playback_queue`, `dispatch/queue/replacement.rs`, `pending_playback.rs`), play-slot, source update (`apply_saved_playlist_source`) and refresh (`dispatch/library/load.rs` `refresh_queue`) onto `queue_op`.
   - Idle loads keep their existing `UnifiedQueueLoadIdle` request/result path, unblocked.
   - Delete `App::merge_refreshed_queue`.
   - Tests:
     - refresh sends `UnifiedQueueRefresh` and doesn't change the view before the answer. Owns "Clients hold no editable queue", scenario "Queue refresh".
     - an idle load doesn't block input. Owns scenario "Idle load while an item plays".
-- [ ] 5.4 Event-driven queue writes, per the design D9 table:
+- [x] 5.4 Event-driven queue writes, per the design D9 table:
   - Delete the Client queue-slot writes in `player_event.rs` (`record_reported_progress` and the consume removal `consume_slot_from_active_playback_queue`), feed hydrate (`action.rs`), `feed_tab.rs`, `event_reconcile.rs`, and `playlist.rs`.
   - Keep `on_video_consumed`/`on_audio_consumed`, `FeedEntryStore` writes, and `last_played_item_id` as table-listed side effects.
   - Relay ABS Socket.IO `user_item_progress_updated` to the home owner as `UnifiedQueueApplyProgress`, fire-and-forget, keeping the browse-state merge.
