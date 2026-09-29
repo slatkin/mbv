@@ -34,7 +34,7 @@ fn run_queue_cmd(
             ctrl_clients: registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );
@@ -66,7 +66,7 @@ fn run_queue_cmd_with_shared(
             ctrl_clients: registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );

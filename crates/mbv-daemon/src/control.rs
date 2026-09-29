@@ -83,7 +83,7 @@ pub(super) struct CtrlContext<'a> {
     pub(super) ctrl_clients: &'a ClientRegistry,
     pub(super) has_audiobookshelf: bool,
     pub(super) merged_tx: &'a mpsc::Sender<DaemonEvent>,
-    pub(super) stay_alive: bool,
+    pub(super) owner_settings: super::OwnerSettingsReader,
     pub(super) role: crate::DaemonRole,
 }
 
@@ -194,7 +194,7 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
 /// further reply.
 fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     tracing::info!(name: "daemon.shutdown_request.received", target: "daemon", client = %ctx.client_id, "shutdown request received");
-    if ctx.stay_alive {
+    if (ctx.owner_settings)().stay_alive {
         tracing::info!(name: "daemon.shutdown_request.rejected", target: "daemon", "shutdown request rejected: daemon is in stay-alive mode");
         send_to(
             ctx.reply_tx,

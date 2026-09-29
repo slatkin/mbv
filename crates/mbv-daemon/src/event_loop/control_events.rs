@@ -12,6 +12,7 @@ use crate::control::intent_span;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use std::sync::Arc;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise
@@ -94,7 +95,7 @@ impl DaemonLoop {
                 ctrl_clients: &self.ctrl_clients,
                 has_audiobookshelf: self.audiobookshelf_runtime.is_some(),
                 merged_tx: &self.merged_tx,
-                stay_alive: self.stay_alive,
+                owner_settings: Arc::clone(&self.owner_settings),
                 role: self.role,
             },
         );

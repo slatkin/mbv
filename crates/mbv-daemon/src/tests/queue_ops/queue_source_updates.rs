@@ -176,7 +176,7 @@ impl SourceUpdateFixture {
                 ctrl_clients: &self.registry,
                 has_audiobookshelf: false,
                 merged_tx: &self.merged_tx,
-                stay_alive: true,
+                owner_settings: crate::owner_settings::fixed_reader(true),
                 role: crate::DaemonRole::Local,
             },
         );

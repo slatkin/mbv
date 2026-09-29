@@ -1,5 +1,6 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
+use crate::OwnerSettingsReader;
 use crate::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
 use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use mbv_net::stream::SocketStream;
@@ -101,6 +102,7 @@ pub(crate) fn spawn_ctrl_client(
     player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
     audio_only: bool,
+    owner_settings: OwnerSettingsReader,
 ) {
     let peer = ctrl_peer_identity(&stream);
     let Ok(writer_stream) = stream.try_clone() else {
@@ -141,6 +143,7 @@ pub(crate) fn spawn_ctrl_client(
         let _ = w.shutdown();
     });
     std::thread::spawn(move || {
+        let _settings_reader = owner_settings;
         let reader = BufReader::new(stream);
         let mut lines = reader.lines();
         let Some(Ok(line)) = lines.next() else {

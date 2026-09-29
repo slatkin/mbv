@@ -52,7 +52,7 @@ fn repeated_next_intent_coalesces_while_relative_transition_is_unsettled() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );
@@ -78,7 +78,7 @@ fn repeated_next_intent_coalesces_while_relative_transition_is_unsettled() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );
@@ -167,7 +167,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );

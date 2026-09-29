@@ -126,7 +126,7 @@ fn replace_queue_succeeds_unconditionally() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );

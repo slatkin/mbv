@@ -32,7 +32,7 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Packaged,
         },
     );
@@ -66,7 +66,7 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Packaged,
         },
     );
@@ -118,7 +118,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -172,7 +172,7 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -236,7 +236,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -389,7 +389,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
                 ctrl_clients: &registry,
                 has_audiobookshelf: false,
                 merged_tx: &merged_tx,
-                stay_alive: true,
+                owner_settings: crate::owner_settings::fixed_reader(true),
                 role: crate::DaemonRole::Local,
             },
         );
@@ -413,7 +413,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -459,7 +459,7 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -507,7 +507,7 @@ fn pending_idle_load_does_not_block_request_shutdown() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -525,7 +525,7 @@ fn pending_idle_load_does_not_block_request_shutdown() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );
@@ -576,7 +576,7 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
         },
     );

@@ -66,7 +66,7 @@ pub(crate) struct DaemonLoop {
     pub(super) merged_tx: mpsc::Sender<DaemonEvent>,
     pub(super) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(super) direct_commands: Vec<String>,
-    pub(super) stay_alive: bool,
+    pub(super) owner_settings: super::OwnerSettingsReader,
     pub(super) role: DaemonRole,
     pub(super) audio_only: bool,
     pub(super) last_keepalive: Instant,

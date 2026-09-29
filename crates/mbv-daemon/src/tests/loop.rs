@@ -37,6 +37,8 @@ impl RecordedSnapshot {
 struct TestLoop {
     event_loop: DaemonLoop,
     persisted: Persisted,
+    settings: Arc<Mutex<OwnerSettings>>,
+    merged_rx: mpsc::Receiver<DaemonEvent>,
 }
 
 fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
@@ -46,7 +48,13 @@ fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
 fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: usize) -> TestLoop {
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
-    let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
+    let settings = Arc::new(Mutex::new(OwnerSettings {
+        stay_alive: false,
+        consume_videos: false,
+        consume_audio: false,
+    }));
+    let current_settings = Arc::clone(&settings);
     let event_loop = DaemonLoop {
         owner: owner_with(items, active),
         player: cold_player(),
@@ -58,7 +66,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         merged_tx,
         ws_send_tx: None,
         direct_commands: Vec::new(),
-        stay_alive: false,
+        owner_settings: Arc::new(move || *current_settings.lock().unwrap()),
         role,
         audio_only: false,
         last_keepalive: Instant::now(),
@@ -71,6 +79,8 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     TestLoop {
         event_loop,
         persisted,
+        settings,
+        merged_rx,
     }
 }
 
@@ -150,7 +160,7 @@ fn websocket_next_dispatches_owner_resolved_jump_not_run_step() {
 }
 
 #[test]
-fn track_completed_current_run_consumes_slot_and_persists_once() {
+fn daemon_reads_consume_audio_turned_on_during_the_session() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![
@@ -159,7 +169,7 @@ fn track_completed_current_run_consumes_slot_and_persists_once() {
         ],
         0,
     );
-    t.event_loop.client.lock().unwrap().config.consume_audio = true;
+    t.settings.lock().unwrap().consume_audio = true;
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
 
     let flow = t
@@ -179,6 +189,46 @@ fn track_completed_current_run_consumes_slot_and_persists_once() {
     assert_eq!(t.persisted.borrow().len(), 1);
     assert_eq!(t.persisted.borrow()[0].item_ids, vec!["next".to_string()]);
     assert_eq!(t.persisted.borrow()[0].cursor, 0);
+}
+
+#[test]
+fn daemon_reads_stay_alive_when_it_decides_to_accept_shutdown() {
+    let _state_dir = mbv_config::TestStateDirGuard::new();
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: true,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    assert!((t.event_loop.owner_settings)().stay_alive);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: false,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+
+    let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::RequestShutdown,
+        client_id,
+        reply_tx,
+    ));
+
+    assert_eq!(flow, LoopFlow::Continue);
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
+    assert!(matches!(t.merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
+}
+
+#[test]
+fn packaged_daemon_reads_stay_alive_as_true_regardless_of_spawn_config() {
+    let config = Config {
+        stay_alive: false,
+        ..Config::default()
+    };
+    let settings = crate::owner_settings::reader(crate::DaemonRole::Packaged, &config);
+
+    assert!((settings)().stay_alive);
 }
 
 #[test]

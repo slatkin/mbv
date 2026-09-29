@@ -9,8 +9,12 @@ pub(crate) use ctrl::{
 
 mod context;
 mod error;
+mod owner_settings;
 pub use context::{AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext};
 pub use error::DaemonLibError;
+#[cfg(test)]
+pub(crate) use owner_settings::OwnerSettings;
+pub(crate) use owner_settings::OwnerSettingsReader;
 mod core;
 #[cfg(test)]
 pub(crate) use core::PlaybackIntentState;

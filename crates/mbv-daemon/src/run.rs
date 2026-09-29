@@ -350,6 +350,7 @@ fn start_local_control_server(
     player: &Player,
     shared_queue: &SharedQueueState,
     control_credential: Option<&String>,
+    owner_settings: crate::OwnerSettingsReader,
 ) {
     // Bind and start the control socket only once the daemon can immediately
     // accept and speak the protocol, so local clients never connect and hang
@@ -361,6 +362,7 @@ fn start_local_control_server(
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
+            let settings_reader = owner_settings;
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
@@ -372,6 +374,7 @@ fn start_local_control_server(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    Arc::clone(&settings_reader),
                 );
             }
         });
@@ -424,6 +427,7 @@ fn serve_tcp_control(
     player: &Player,
     shared_queue: &SharedQueueState,
     control_credential: Option<&String>,
+    owner_settings: crate::OwnerSettingsReader,
 ) {
     if let Some(listener) = listener {
         let ctrl_clients = Arc::clone(ctrl_clients);
@@ -432,6 +436,7 @@ fn serve_tcp_control(
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
+            let settings_reader = owner_settings;
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
@@ -443,6 +448,7 @@ fn serve_tcp_control(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    Arc::clone(&settings_reader),
                 );
             }
         });
@@ -492,6 +498,7 @@ pub fn run_with_options(
         _tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
+    let owner_settings = crate::owner_settings::reader(role, &config);
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
     start_local_control_server(
         audio_only,
@@ -500,6 +507,7 @@ pub fn run_with_options(
         &player,
         &shared_queue,
         control_credential.as_ref(),
+        Arc::clone(&owner_settings),
     );
 
     let mut direct_commands = Vec::new();
@@ -516,6 +524,7 @@ pub fn run_with_options(
         &player,
         &shared_queue,
         control_credential.as_ref(),
+        Arc::clone(&owner_settings),
     );
     spawn_status_broadcast(&client, &player, &ctrl_clients);
 
@@ -530,7 +539,7 @@ pub fn run_with_options(
         merged_tx,
         ws_send_tx,
         direct_commands,
-        stay_alive: config.stay_alive,
+        owner_settings,
         role,
         audio_only,
         last_keepalive: Instant::now(),

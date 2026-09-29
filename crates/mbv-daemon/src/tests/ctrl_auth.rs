@@ -20,6 +20,7 @@ fn start_ctrl_auth_test_peer(
         player.status,
         shared_queue_state(),
         audio_only,
+        crate::owner_settings::fixed_reader(false),
     );
     (client, merged_rx)
 }

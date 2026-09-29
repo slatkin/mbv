@@ -62,7 +62,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
         },
     );
