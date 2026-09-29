@@ -437,8 +437,8 @@ fn dispatch_ctrl_command(
             start_idx,
             new_source,
         ),
-        CtrlCmd::UnifiedQueueAppend { items, .. } => {
-            queue_setup::handle_queue_append(ctx, queue_lineage, items);
+        CtrlCmd::UnifiedQueueAppend { items, before, .. } => {
+            queue_setup::handle_queue_append(ctx, queue_lineage, items, before);
         }
         CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } => {
             queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id);

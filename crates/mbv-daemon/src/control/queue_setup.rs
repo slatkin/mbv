@@ -5,6 +5,7 @@ use super::{
     daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
 };
 use mbv_emby::EmbyClient;
+use mbv_player::Player;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -336,13 +337,50 @@ pub(super) fn handle_queue_replace(
     );
 }
 
+fn append_index(
+    ctx: &CtrlContext<'_>,
+    lineage: mbv_queue::QueueLineage,
+    before: Option<u64>,
+) -> Option<usize> {
+    before.map_or_else(
+        || Some(ctx.owner.core.queue.len()),
+        |raw_slot_id| {
+            let slot_id = QueueSlotId::from_raw(raw_slot_id);
+            ctx.owner.core.queue.slot_index(slot_id).or_else(|| {
+                reject_command(
+                    &ctx.rejection_context(lineage),
+                    "slot not found; append anchor is stale",
+                );
+                None
+            })
+        },
+    )
+}
+
+fn forward_queue_append(player: &Player, items: Vec<ExecSlot>, before: Option<u64>, index: usize) {
+    let inserted_slot_ids: Vec<_> = items.iter().map(|slot| slot.slot_id).collect();
+    player.send_command(PlayerCommand::QueueAppend { items });
+    if before.is_some() {
+        for (offset, slot_id) in inserted_slot_ids.into_iter().enumerate() {
+            player.send_command(PlayerCommand::QueueMove(slot_id, index + offset));
+        }
+    }
+}
+
 /// `CtrlCmd::UnifiedQueueAppend`: append item-generic values to the tail of
 /// the queue.
 pub(super) fn handle_queue_append(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
+    before: Option<u64>,
 ) {
+    if items.is_empty() {
+        return;
+    }
+    let Some(index) = append_index(ctx, lineage, before) else {
+        return;
+    };
     let has_emby = ctx.has_emby();
     let DaemonPlayerOwner {
         core:
@@ -354,9 +392,6 @@ pub(super) fn handle_queue_append(
             },
         ..
     } = &mut *ctx.owner;
-    if items.is_empty() {
-        return;
-    }
     let supports_abs_queue = ctx
         .ctrl_clients
         .lock()
@@ -424,8 +459,9 @@ pub(super) fn handle_queue_append(
     // queue, and hand the same ids to the Playback run.
     let items_for_player: Vec<ExecSlot> = items
         .into_iter()
-        .map(|item| {
-            let slot_id = queue.append(item.clone());
+        .enumerate()
+        .map(|(offset, item)| {
+            let slot_id = queue.insert(index + offset, item.clone());
             ExecSlot { slot_id, item }
         })
         .collect();
@@ -439,7 +475,6 @@ pub(super) fn handle_queue_append(
         ctx.op.get().map(|_| ctx.client_id),
     );
     // Append to the player's queue rather than replacing the whole queue.
-    ctx.player.send_command(PlayerCommand::QueueAppend {
-        items: items_for_player,
-    });
+    // A following move keeps the run's order aligned with canonical inserts.
+    forward_queue_append(ctx.player, items_for_player, before, index);
 }

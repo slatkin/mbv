@@ -80,6 +80,104 @@ fn unified_queue_append_adds_slots_and_forwards_to_player() {
 }
 
 #[test]
+fn unified_playback_queue_edits_are_answered_before_the_next_input_append_before_keeps_owner_and_player_order()
+ {
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, reply_tx, reply_rx) = connect_op_requester(&mut registry.lock().unwrap());
+    let mut owner = owner_with(
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("anchor", "Video", "Movie"),
+        ],
+        0,
+    );
+    let anchor = owner.core.queue.slots()[1].slot_id;
+
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueAppend {
+            items: vec![emby_qi("inserted", "Video", "Movie")],
+            before: Some(anchor.raw()),
+            op: Some(mbv_ctrl::QueueOpId(44)),
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| slot.item.id())
+            .collect::<Vec<_>>(),
+        vec!["a", "inserted", "anchor"],
+    );
+    let inserted_slot = owner.core.queue.slots()[1].slot_id;
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::QueueAppend { items } => {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].item.id(), "inserted");
+            assert_eq!(items[0].slot_id, inserted_slot);
+        }
+        _ => panic!("expected QueueAppend before QueueMove"),
+    }
+    assert!(matches!(
+        cmd_rx.recv().unwrap(),
+        PlayerCommand::QueueMove(slot_id, 1) if slot_id == inserted_slot
+    ));
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(44),
+            outcome: mbv_ctrl::QueueOpOutcome::Applied(_),
+        }
+    ));
+}
+
+#[test]
+fn unified_playback_queue_edits_are_answered_before_the_next_input_stale_append_anchor_rejects_with_op()
+ {
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, reply_tx, reply_rx) = connect_op_requester(&mut registry.lock().unwrap());
+    let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
+
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueAppend {
+            items: vec![emby_qi("inserted", "Video", "Movie")],
+            before: Some(u64::MAX),
+            op: Some(mbv_ctrl::QueueOpId(45)),
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+
+    assert_eq!(owner.core.queue.len(), 1);
+    assert_eq!(cmd_rx.try_recv().unwrap_err(), mpsc::TryRecvError::Empty);
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(45),
+            outcome: mbv_ctrl::QueueOpOutcome::Rejected(reason),
+        } if reason == "slot not found; append anchor is stale"
+    ));
+}
+
+#[test]
 fn unified_queue_append_rejects_when_nothing_is_admissible() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
