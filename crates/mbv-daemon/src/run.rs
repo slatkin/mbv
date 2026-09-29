@@ -142,6 +142,7 @@ struct DaemonStarted {
     merged_tx: mpsc::Sender<DaemonEvent>,
     merged_rx: mpsc::Receiver<DaemonEvent>,
     ws_send_tx: Option<mbv_ws::WsSender>,
+    owner_settings: crate::OwnerSettingsReader,
     _tray: Option<Box<dyn Send>>,
 }
 
@@ -156,9 +157,30 @@ fn forward_transport(
     });
 }
 
+fn prewarm_player(player: &Player, config: &mbv_config::Config) {
+    player.pre_warm(
+        config.audio_pipe_target(),
+        config.audio_pipe_samplerate,
+        config.audio_pipe_bitdepth,
+    );
+}
+
+fn start_tray(
+    owner_settings: &crate::OwnerSettingsReader,
+    on_tray_ready: impl FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>,
+    shutdown_signal_tx: mpsc::SyncSender<()>,
+) -> Option<Box<dyn Send>> {
+    if owner_settings().stay_alive {
+        on_tray_ready(shutdown_signal_tx)
+    } else {
+        None
+    }
+}
+
 fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
     let role = startup.role;
     let config = startup.config;
+    let owner_settings = crate::owner_settings::reader(role, &config);
     let emby_runtime = startup.emby;
     let audiobookshelf_runtime = startup.audiobookshelf;
     std::fs::write(pid_file(), std::process::id().to_string())
@@ -188,8 +210,8 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         .map(|_| mbv_ws::start(client.lock().unwrap().ws_url(), ws_tx_chan));
 
     let mut client_locked = client.lock().unwrap().clone();
-    // Daemon always runs headless — ignore user's show_audio_window setting.
-    client_locked.config.show_audio_window = false;
+    // Packaged mbvd stays headless; Local honors the user's audio-window setting.
+    client_locked.config.show_audio_window = role == DaemonRole::Local && config.show_audio_window;
     // always_play_next, always_skip_intro, and subtitle/audio-lang prefs are
     // controlling-client preferences, not daemon config — mbvd never reads
     // them from its own host config.toml, regardless of what's in it.
@@ -213,11 +235,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         client_locked.config.video_cache_back_mb,
     )
     .with_audio_device(audio_device);
-    player.pre_warm(
-        client_locked.config.audio_pipe_target(),
-        client_locked.config.audio_pipe_samplerate,
-        client_locked.config.audio_pipe_bitdepth,
-    );
+    prewarm_player(&player, &client_locked.config);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let player_status = Arc::clone(&player.status);
     let (transport_tx, transport_rx) = mpsc::channel();
@@ -226,7 +244,11 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         transport_tx,
     });
 
-    let tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
+    let tray = start_tray(
+        &owner_settings,
+        hooks.on_tray_ready,
+        shutdown_signal_tx.clone(),
+    );
     forward_transport(transport_rx, merged_tx.clone());
 
     let tx = merged_tx.clone();
@@ -270,6 +292,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         merged_tx,
         merged_rx,
         ws_send_tx,
+        owner_settings,
         _tray: tray,
     }
 }
@@ -499,10 +522,10 @@ pub fn run_with_options(
         merged_tx,
         merged_rx,
         ws_send_tx,
+        owner_settings,
         _tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
-    let owner_settings = crate::owner_settings::reader(role, &config);
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
         role,
