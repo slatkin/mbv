@@ -131,14 +131,14 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 4. Delete Bare ownership (compiler-driven; design D1)
 
-- [ ] 4.1 In `crates/mbv-player/src/proxy.rs`, delete `PlayerProxy::local`, `PlayerProxyInner::Local`, `inhibit_mpv`, and `PlayerProxy::is_remote()`. Then fix every compile error under `src/app/dispatch/` (production and test files), deleting the in-process branches: local stop/join, `stop_for_shutdown`, and Bare transitions.
+- [x] 4.1 In `crates/mbv-player/src/proxy.rs`, delete `PlayerProxy::local`, `PlayerProxyInner::Local`, `inhibit_mpv`, and `PlayerProxy::is_remote()`. Then fix every compile error under `src/app/dispatch/` (production and test files), deleting the in-process branches: local stop/join, `stop_for_shutdown`, and Bare transitions.
   - Verify: `cargo check -p mbv --all-targets 2>&1 | rg 'src/app/dispatch/'` is empty.
-- [ ] 4.2 Fix the remaining `--all-targets` compile errors in the rest of `src/app` and `src/main.rs`.
+- [x] 4.2 Fix the remaining `--all-targets` compile errors in the rest of `src/app` and `src/main.rs`.
   - Production: `state/playback_target*`, `shell/`, `state/construct*`.
   - Test harnesses: `tests/tick_integration/harness.rs`, `tests/audiobookshelf_runtime.rs`, `tests/actions_tests_queue_state_reseat.rs`, and any others.
   - Delete `bare_owner`, `reset_bare_transitions`, `expire_bare_transition` (with its call in `shell/run.rs`), `bare_in_flight_slot`, `App::new_independent`, and the `ThisProcess` branch of `local_queue_is_owner_queue`.
   - Verify: `cargo check -p mbv --all-targets` and `cargo nextest run -p mbv` pass, and `rg 'new_independent|PlayerProxy::local|is_remote\(\)|bare_owner|bare_transition' src` is empty.
-- [ ] 4.3 Delete Client queue persistence and the fence:
+- [x] 4.3 Delete Client queue persistence and the fence:
   - `save_queue_state*`, `restore_queue_state`, `build_queue_state`, `persist_local_queue_state_if_needed`, `spawn_enrich_queue_state`, `handle_queue_enriched`;
   - `PlayerTab.sequence_generation` and `stamp_queue_generation`;
   - `LocalQueueOwner` with `owns_local_persistence`, with `QueueOrigin` becoming a struct `{ epoch, lineage }`;
