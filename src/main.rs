@@ -220,8 +220,7 @@ fn print_usage() {
     println!(
         "      --log-level <level[,target=level...]>\n\n     Set the log level, e.g. info or info,player=debug.\n     Levels: error, warn, info (default), debug, trace."
     );
-    println!("  -q                        Stop the running Player owner (bare mbv, or the local");
-    println!("                             daemon in stay-alive mode).");
+    println!("  -q                        Stop the running local Player owner.");
     println!("      --connect-daemon <endpoint>");
     println!("                             Attach as a client to a running mbvd daemon at");
     println!("                             <endpoint> instead of owning a local Player.");
@@ -332,11 +331,11 @@ fn main() {
         summary = %config_diagnostic_summary(&config),
         "configuration loaded"
     );
-    run_configured_startup(log_level, cli_daemon_endpoint, &config);
+    run_configured_startup(log_level.as_ref(), cli_daemon_endpoint, &config);
 }
 
 fn run_configured_startup(
-    log_level: Option<applog::LogSpec>,
+    log_level: Option<&applog::LogSpec>,
     cli_daemon_endpoint: Option<String>,
     config: &config::Config,
 ) {
@@ -382,112 +381,103 @@ fn run_configured_startup(
     run_local_instance(config, log_level);
 }
 
-fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec>) {
-    // Single-instance resolution (ADR 0006): advisory flock + control-socket
-    // connectability. Independent of stay-alive; always on.
+fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpec>) {
+    // Every local launch is a Client; a fresh launch transfers the lock to
+    // the owner process before attaching.
     let lock_path = single_instance::lock_path();
     let socket_path = single_instance::socket_path();
-
-    match single_instance::resolve(&socket_path, &lock_path) {
-        Ok(single_instance::Resolution::Attach) => {
-            // A live local daemon exists: attach as a client alongside any
-            // others already attached. Clients take no lock -- that is what
-            // permits any number of them.
-            tracing::info!(name: "startup.local_daemon.detected", target: "startup", "local daemon detected; attaching");
-            let client = cached_emby_client(config);
-            match remote_player::RemotePlayer::connect_endpoint(
-                &remote_player::DaemonEndpoint::Local,
-            ) {
-                Ok((remote, player_rx)) => {
-                    run_remote_app(
-                        client,
-                        remote,
-                        player_rx,
-                        &remote_player::DaemonEndpoint::Local,
-                        config.clone(),
-                    );
-                }
-                Err(e) => {
-                    eprintln!("mbv: failed to attach to local daemon: {e}");
-                    std::process::exit(1);
-                }
-            }
-        }
-        Ok(single_instance::Resolution::Refuse) => {
-            eprintln!("mbv: another mbv instance already owns playback in a foreground terminal.");
-            match single_instance::read_pid(&lock_path) {
-                Some(pid) => eprintln!(
-                    "mbv: that instance's PID is {pid} (per {}).",
-                    lock_path.display()
-                ),
-                None => {
-                    eprintln!(
-                        "mbv: could not determine that instance's PID from {}.",
-                        lock_path.display()
-                    );
-                }
-            }
-            eprintln!(
-                "mbv: only one process can own playback at a time. Close it, stop it with \
-                 `mbv -q`, or enable `stay_alive` in config to run several terminals against a local daemon."
-            );
+    let mut resolution = match single_instance::resolve(&socket_path, &lock_path) {
+        Ok(resolution) => resolution,
+        Err(error) => {
+            eprintln!("mbv: single-instance check failed: {error}");
             std::process::exit(1);
         }
-        Ok(single_instance::Resolution::Fresh(mut guard)) => {
-            let stay_alive = config.stay_alive;
+    };
+    let mut shutdown_deadline = None;
 
-            if stay_alive {
-                let client = cached_emby_client(config);
-                // This process was just a liveness probe: release the lock
-                // immediately (the local daemon reacquires it for real,
-                // becoming the actual Player-owning process) and attach to
-                // it as a client ourselves.
+    loop {
+        match resolution {
+            single_instance::Resolution::Fresh(guard) => {
+                // The owner reacquires the lock as part of its own startup.
                 drop(guard);
-                if let Err(e) =
-                    local_daemon::spawn_detached(&socket_path.to_string_lossy(), log_level)
+                if let Err(error) =
+                    local_daemon::spawn_detached(&socket_path.to_string_lossy(), log_level.cloned())
                 {
-                    eprintln!("mbv: failed to start local daemon: {e}");
+                    eprintln!("mbv: failed to start local daemon: {error}");
                     std::process::exit(1);
                 }
-                match remote_player::RemotePlayer::connect_endpoint(
-                    &remote_player::DaemonEndpoint::Local,
-                ) {
-                    Ok((remote, player_rx)) => {
-                        run_remote_app(
-                            client,
-                            remote,
-                            player_rx,
-                            &remote_player::DaemonEndpoint::Local,
-                            config.clone(),
-                        );
-                        return;
-                    }
-                    Err(e) => {
-                        eprintln!("mbv: failed to attach to local daemon: {e}");
+            }
+            single_instance::Resolution::Attach => {
+                tracing::info!(name: "startup.local_daemon.detected", target: "startup", "local daemon detected; attaching");
+            }
+            single_instance::Resolution::Refuse => refuse_local_owner(&lock_path),
+        }
+
+        match attach_local_daemon(config) {
+            Ok(()) => return,
+            Err(error) if error.kind_name() == "remote-player.owner_shutting_down" => {
+                let deadline = *shutdown_deadline.get_or_insert_with(|| {
+                    std::time::Instant::now() + std::time::Duration::from_secs(10)
+                });
+                if std::time::Instant::now() >= deadline {
+                    eprintln!(
+                        "mbv: the local owner is still shutting down; use `mbv -q` to stop it."
+                    );
+                    std::process::exit(1);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                resolution = match single_instance::resolve(&socket_path, &lock_path) {
+                    Ok(resolution) => resolution,
+                    Err(resolve_error) => {
+                        eprintln!("mbv: single-instance check failed: {resolve_error}");
                         std::process::exit(1);
                     }
-                }
+                };
             }
-
-            if let Err(e) = guard.write_pid() {
-                tracing::warn!(
-                    name: "startup.lock.write_failed",
-                    target: "startup",
-                    error = %e,
-                    "failed to write pid into lock file"
+            Err(error) if error.kind_name() == "remote-player.exclusive_owner" => {
+                eprintln!("mbv: refusing a second terminal: {error}.");
+                eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
+                eprintln!(
+                    "mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
                 );
+                std::process::exit(1);
             }
-            let app = App::new_independent(config);
-            run_tui(app);
-            // `guard` drops here (end of scope) at real process exit,
-            // releasing the flock -- also happens automatically on any
-            // process death (ADR 0006).
-        }
-        Err(e) => {
-            eprintln!("mbv: single-instance check failed: {e}");
-            std::process::exit(1);
+            Err(error) => {
+                eprintln!("mbv: failed to attach to local daemon: {error}");
+                std::process::exit(1);
+            }
         }
     }
+}
+
+fn attach_local_daemon(config: &config::Config) -> Result<(), remote_player::RemotePlayerError> {
+    let client = cached_emby_client(config);
+    let (remote, player_rx) =
+        remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;
+    run_remote_app(
+        client,
+        remote,
+        player_rx,
+        &remote_player::DaemonEndpoint::Local,
+        config.clone(),
+    );
+    Ok(())
+}
+
+fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
+    eprintln!("mbv: the local owner process is not accepting connections.");
+    match single_instance::read_pid(lock_path) {
+        Some(pid) => eprintln!(
+            "mbv: owner process PID is {pid} (per {}).",
+            lock_path.display()
+        ),
+        None => eprintln!(
+            "mbv: could not determine the owner process PID from {}.",
+            lock_path.display()
+        ),
+    }
+    eprintln!("mbv: use `mbv -q` to stop the owner, then try again.");
+    std::process::exit(1);
 }
 
 #[cfg(test)]
