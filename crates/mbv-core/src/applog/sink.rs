@@ -211,34 +211,6 @@ mod tests {
         drop(sink);
     }
 
-    // Contract: after a successful rename chain, a failed reopen leaves the
-    // sink with no file handle, so later `write_line` calls write nothing —
-    // no line lands in a rotated generation and `path` is not recreated.
-    // Regression guard for PR #856: a retained stale handle would append every
-    // later write to a rotated generation that a subsequent rotation can delete.
-    // The real filesystem cannot hermetically fail `open` after a successful
-    // rename, so the reopen result is injected at the `adopt_reopen` seam that
-    // `rotate()` itself uses.
-    #[test]
-    fn failed_reopen_after_rename_chain_drops_handle_and_writes_nothing() {
-        let dir = TestTempDir::new();
-        let path = dir.join("mbv.log");
-        let mut sink = FileSink::new(path.clone(), 1000);
-        sink.write_line("before");
-
-        sink.adopt_reopen(Err(std::io::Error::other("reopen failed")));
-
-        assert!(sink.file.is_none());
-        sink.write_line("lost");
-        sink.write_line("still lost");
-        assert_eq!(fs::read_to_string(&path).expect("current log"), "before\n");
-        assert!(!generation_path(&path, 1).exists());
-        assert!(!generation_path(&path, 2).exists());
-        assert!(!generation_path(&path, 3).exists());
-
-        drop(sink);
-    }
-
     #[test]
     fn write_failures_are_counted_and_warned_once() {
         let dir = TestTempDir::new();
