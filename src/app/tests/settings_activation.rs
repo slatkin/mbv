@@ -20,6 +20,30 @@ fn image_protocol_activation_cycles_through_supported_values(
     assert_eq!(app.images.protocol_enabled(), expected.is_some());
 }
 
+fn owner_setting_value(config: &crate::config::Config, key: SettingKey) -> bool {
+    match key {
+        SettingKey::StayAlive => config.stay_alive,
+        SettingKey::ConsumeVideos => config.consume_videos,
+        SettingKey::ConsumeAudio => config.consume_audio,
+        _ => unreachable!(),
+    }
+}
+
+#[rstest]
+#[case(SettingKey::StayAlive)]
+#[case(SettingKey::ConsumeVideos)]
+#[case(SettingKey::ConsumeAudio)]
+fn owner_settings_are_persisted_to_disk_before_toggle_returns(#[case] key: SettingKey) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let expected = !owner_setting_value(&app.config.lock().unwrap(), key);
+
+    app.handle_settings_activate(key);
+
+    let saved = crate::config::load_config().unwrap();
+    assert_eq!(owner_setting_value(&saved, key), expected);
+}
+
 #[test]
 fn mouse_support_activation_updates_config_and_defers_terminal_flip() {
     let mut app = make_app_stub();

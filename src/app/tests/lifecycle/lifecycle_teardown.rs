@@ -1,6 +1,18 @@
 use super::*;
 
 #[test]
+fn teardown_flushes_pending_settings_save() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().consume_audio = true;
+    app.settings_save_at = Some(Instant::now());
+
+    app.teardown(Duration::from_secs(1), None);
+
+    assert!(crate::config::load_config().unwrap().consume_audio);
+}
+
+#[test]
 fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();

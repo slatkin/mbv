@@ -133,6 +133,7 @@ impl App {
         };
         let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
         tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", home_is_local_daemon = self.home_is_local_daemon, stay_alive, should_request_shutdown, "daemon shutdown policy evaluated");
+        self.flush_settings_save();
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
         if self.player.is_remote() {
