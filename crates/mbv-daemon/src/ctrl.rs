@@ -29,6 +29,8 @@ pub(crate) enum AuthorityHolder {
 pub(crate) struct CtrlClients {
     next_id: CtrlClientId,
     connection: Vec<CtrlClient>,
+    held_client: bool,
+    merged_tx: Option<mpsc::Sender<crate::DaemonEvent>>,
     pub(crate) authority: AuthorityHolder,
 }
 
@@ -67,6 +69,23 @@ pub(crate) fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
 }
 
 impl CtrlClients {
+    pub(crate) fn new(merged_tx: mpsc::Sender<crate::DaemonEvent>) -> Self {
+        Self {
+            merged_tx: Some(merged_tx),
+            ..Self::default()
+        }
+    }
+
+    fn notify_last_client_gone(&self, was_nonempty: bool) {
+        if was_nonempty
+            && self.connection.is_empty()
+            && self.held_client
+            && let Some(merged_tx) = &self.merged_tx
+        {
+            let _ = merged_tx.send(crate::DaemonEvent::LastClientGone);
+        }
+    }
+
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
@@ -80,6 +99,7 @@ impl CtrlClients {
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
+        self.held_client = true;
         self.connection.push(CtrlClient {
             id,
             tx,
@@ -94,7 +114,9 @@ impl CtrlClients {
     }
 
     pub(crate) fn remove(&mut self, id: CtrlClientId) {
+        let was_nonempty = !self.connection.is_empty();
         self.connection.retain(|c| c.id != id);
+        self.notify_last_client_gone(was_nonempty);
         if self.connection.is_empty() && self.authority == AuthorityHolder::Ctrl {
             self.authority = AuthorityHolder::None;
         }
@@ -156,8 +178,10 @@ impl CtrlClients {
     /// Broadcast `json` to all connected ctrl clients. Removes any client
     /// whose channel has failed (broken pipe / disconnected).
     pub(crate) fn broadcast_to_all(&mut self, json: &str) {
+        let was_nonempty = !self.connection.is_empty();
         self.connection
             .retain(|c| c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok());
+        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Broadcasts a state event gated per client:
@@ -174,6 +198,7 @@ impl CtrlClients {
         unified_book_json: &str,
         unified_json: &str,
     ) {
+        let was_nonempty = !self.connection.is_empty();
         self.connection.retain(|c| {
             let json = match (c.audiobookshelf.queue, c.audiobookshelf.book_queue) {
                 (true, true) => unified_full_json,
@@ -183,6 +208,7 @@ impl CtrlClients {
             };
             c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
+        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Sends redacted Audiobookshelf progress `json` only to clients that
@@ -190,23 +216,27 @@ impl CtrlClients {
     /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
     /// drop-on-failed-send semantics for the peers that do receive it.
     pub(crate) fn broadcast_progress_gated(&mut self, json: &str) {
+        let was_nonempty = !self.connection.is_empty();
         self.connection.retain(|c| {
             if !c.audiobookshelf.progress {
                 return true;
             }
             c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
+        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Sends redacted Audiobookshelf book progress `json` only to clients
     /// that advertised `abs-book-progress` at Hello.
     pub(crate) fn broadcast_book_progress_gated(&mut self, json: &str) {
+        let was_nonempty = !self.connection.is_empty();
         self.connection.retain(|c| {
             if !c.audiobookshelf.book_progress {
                 return true;
             }
             c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
+        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Broadcast a `Disconnected` notification to all connected ctrl clients

@@ -125,3 +125,34 @@ fn sole_client_disconnect_clears_registry_without_touching_playback() {
     assert!(!clients.has_driver());
     assert!(!clients.has_client(id));
 }
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_emits_when_gated_broadcast_prunes_last_client() {
+    let (merged_tx, merged_rx) = mpsc::channel();
+    let mut clients = CtrlClients::new(merged_tx);
+    let (_id, client_rx) = connect_client(&mut clients);
+    drop(client_rx);
+
+    clients.broadcast_state_gated("full", "abs", "book", "legacy");
+
+    assert!(matches!(
+        merged_rx.try_recv(),
+        Ok(DaemonEvent::LastClientGone)
+    ));
+    assert!(matches!(
+        merged_rx.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_fresh_registry_emits_nothing() {
+    let (merged_tx, merged_rx) = mpsc::channel();
+    let clients = CtrlClients::new(merged_tx);
+
+    assert!(!clients.has_driver());
+    assert!(matches!(
+        merged_rx.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+}

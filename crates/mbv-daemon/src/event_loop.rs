@@ -175,6 +175,16 @@ impl DaemonLoop {
                 fetched,
             ),
             DaemonEvent::CtrlDisconnected(client_id) => self.handle_ctrl_disconnected(client_id),
+            DaemonEvent::LastClientGone => {
+                if self.role == DaemonRole::Local
+                    && !(self.owner_settings)().stay_alive
+                    && !self.ctrl_clients.lock().unwrap().has_driver()
+                {
+                    self.handle_shutdown()
+                } else {
+                    EventOutcome::CONTINUE
+                }
+            }
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 

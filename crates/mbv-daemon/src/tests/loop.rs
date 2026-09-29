@@ -59,7 +59,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         owner: owner_with(items, active),
         player: cold_player(),
         shared_queue: shared_queue_state(),
-        ctrl_clients: Arc::new(Mutex::new(CtrlClients::default())),
+        ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone()))),
         client: Arc::new(Mutex::new(EmbyClient::new(Config::default()))),
         emby_runtime: None,
         audiobookshelf_runtime: None,
@@ -218,6 +218,49 @@ fn daemon_reads_stay_alive_when_it_decides_to_accept_shutdown() {
     assert_eq!(flow, LoopFlow::Continue);
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
     assert!(matches!(t.merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_local_role_persists_and_shuts_down_when_stay_alive_is_off() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![emby_qi("persist-on-disconnect", "Audio", "Audio")],
+        0,
+    );
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert!(matches!(event, DaemonEvent::LastClientGone));
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Shutdown);
+    assert_eq!(t.persisted.borrow().len(), 1);
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_when_reader_says_stay_alive() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: true,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Continue);
+    assert!(t.persisted.borrow().is_empty());
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_for_packaged_role() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Packaged);
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Continue);
+    assert!(t.persisted.borrow().is_empty());
 }
 
 #[test]

@@ -499,7 +499,7 @@ pub fn run_with_options(
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     let owner_settings = crate::owner_settings::reader(role, &config);
-    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
         audio_only,
         &merged_tx,

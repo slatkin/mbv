@@ -68,6 +68,7 @@ pub(super) enum DaemonEvent {
         fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     },
     CtrlDisconnected(CtrlClientId),
+    LastClientGone,
     Shutdown,
 }
 
