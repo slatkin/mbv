@@ -121,11 +121,12 @@ names) and D6 (credential-named fields are removed). Each task ends with `cargo 
   `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass. `rg -l '"log"|log\.workspace'
   crates/*/Cargo.toml Cargo.toml` lists only `mbv-core`, which still needs `log` for the
   bridge's `set_max_level`.
-- [ ] 5.2 Manual check (user): run `mbv --log-level info,player=debug`, play an Emby item,
+- [x] 5.2 Manual check (user): run `mbv --log-level info,player=debug`, play an Emby item,
   and confirm in `mbv.log` and `local-daemon.log` that the RFC 3339 `ts`, `event=`, and the
   `request=` values match up across the two files, with the TUI's `ctrl.connected` line and
   the local daemon's `ctrl.client.connected` line showing the same `peer=` (the TUI's
   pid). Confirm that no `api_key` value appears. If a TCP `mbvd` is available, repeat the
   connection and confirm both connect lines show the same `peer=` `ip:port`.
+  (Passed by user 2026-09-29.)
 - [x] 5.3 Before pushing, run `make check-code-file-lines`. Split any file over 800 lines
   along responsibility seams.
