@@ -25,7 +25,7 @@ fn next_up_accept_on_out_of_process_owner_requests_unified_queue_play_slot() {
             cmd_rx
                 .recv_timeout(Duration::from_secs(1))
                 .expect("accept must request the jump from the out-of-process owner"),
-            mbv_ctrl::CtrlCmd::UnifiedQueuePlaySlot { slot_id }
+            mbv_ctrl::CtrlCmd::UnifiedQueuePlaySlot { slot_id, op: _ }
                 if slot_id == mbv_ctrl::slot_id_to_u64(expected_slot)
         ),
         "accept must request UnifiedQueuePlaySlot for the next-up slot"
