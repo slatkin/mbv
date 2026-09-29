@@ -5,7 +5,7 @@
 //! receiver until the correlated `QueueOpResult` arrives or
 //! [`QUEUE_OP_ANSWER_BOUND`] passes. Snapshots seen along the way are adopted
 //! inline so the answer applies to current state; every other event is
-//! deferred to [`App::deferred_player_events`] for the next tick's drain.
+//! deferred to the drain for the link that produced it.
 
 use super::{App, QueueScope, ToastSeverity};
 use mbv_ctrl::player::PlayerEvent;
@@ -94,8 +94,9 @@ impl App {
 
     /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or
     /// [`QUEUE_OP_ANSWER_BOUND`]. Adopted inline: `UnifiedQueueUpdated` and
-    /// the matching `Applied`. Deferred to the next tick: every other event.
-    /// Returns whether the matching answer was `Applied`; a late or unmatched
+    /// the matching `Applied`. Other events are deferred to the next tick's
+    /// drain for the link that produced them. Returns whether the matching
+    /// answer was `Applied`; a late or unmatched
     /// `Applied` is adopted as a background snapshot, a late `Rejected`
     /// reports nothing more.
     pub(in crate::app) fn await_queue_op(&mut self, scope: QueueScope, id: QueueOpId) -> bool {
@@ -115,10 +116,12 @@ impl App {
 
     /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or `bound`.
     /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`.
-    /// Deferred to the next tick: every other event. Returns whether the
-    /// matching answer was `Applied`; a late or unmatched `Applied` is adopted
-    /// as a background snapshot, a late `Rejected` reports nothing more.
+    /// Deferred to the next tick's source-link drain: every other event.
+    /// Returns whether the matching answer was `Applied`; a late or unmatched
+    /// `Applied` is adopted as a background snapshot, a late `Rejected`
+    /// reports nothing more.
     fn pump_queue_op_answer(&mut self, scope: QueueScope, id: QueueOpId, bound: Duration) -> bool {
+        let deferred_home = scope == QueueScope::Local && self.suspended_local.is_some();
         let deadline = Instant::now() + bound;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -145,7 +148,11 @@ impl App {
                     }
                 }
                 Ok(other) => {
-                    self.deferred_player_events.push_back(other);
+                    if deferred_home {
+                        self.deferred_home_events.push_back(other);
+                    } else {
+                        self.deferred_player_events.push_back(other);
+                    }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     self.flash(

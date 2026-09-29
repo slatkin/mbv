@@ -78,11 +78,13 @@ impl Model {
         let mut had_events = false;
         loop {
             let event = if self.app.suspended_local.is_some() {
-                self.app
-                    .queue_link(crate::app::QueueScope::Local)
-                    .1
-                    .try_recv()
-                    .ok()
+                self.app.deferred_home_events.pop_front().or_else(|| {
+                    self.app
+                        .queue_link(crate::app::QueueScope::Local)
+                        .1
+                        .try_recv()
+                        .ok()
+                })
             } else {
                 None
             };

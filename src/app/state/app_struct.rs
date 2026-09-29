@@ -110,6 +110,9 @@ pub struct App {
     /// `player_rx`, so deferred disconnects, restarts, and projections keep
     /// running at the tick level, in order.
     pub(in crate::app) deferred_player_events: std::collections::VecDeque<PlayerEvent>,
+    /// Player events deferred from the suspended home link during a Local
+    /// queue-op answer pump; only the home-link drain may interpret them.
+    pub(in crate::app) deferred_home_events: std::collections::VecDeque<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) transport_rx: mpsc::Receiver<mbv_ctrl::TransportCommand>,
     pub(in crate::app) transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,

@@ -177,16 +177,25 @@ impl App {
         consume: bool,
     ) -> (bool, bool) {
         let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
+        let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
-        let should_consume = consume && item.is_some_and(|item| item.is_audio() || item.is_video());
+        let (consume_videos, consume_audio) = {
+            let config = self.config.lock().unwrap();
+            (config.consume_videos, config.consume_audio)
+        };
+        let should_consume =
+            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
         tracing::info!(
             name: "consume.slot.checked",
             target: "consume",
             slot = ?slot_id,
             consume,
+            is_video,
+            consume_videos,
             is_audio,
+            consume_audio,
             should_consume,
-            "consume reaction resolved"
+            "consume check"
         );
         (should_consume, is_audio)
     }

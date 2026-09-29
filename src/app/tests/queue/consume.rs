@@ -198,6 +198,31 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
 }
 
 #[test]
+fn a_video_consume_flag_is_ignored_when_video_consumption_is_disabled() {
+    // queue-owner-process design D9: client consume side effects follow the
+    // owner-provided consume flag only when this media kind is enabled.
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.config.lock().unwrap().consume_videos = false;
+    app.config.lock().unwrap().save_playlist_on_consume = true;
+
+    app.handle_player_event(PlayerEvent::TrackCompleted {
+        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+        run_identity: 0,
+        position_ticks: 0,
+        played: true,
+        consume: true,
+        progress_report_accepted: false,
+    });
+
+    assert!(
+        !app.queue_dirty,
+        "disabled video consumption has no consume reaction"
+    );
+}
+
+#[test]
 fn consuming_a_video_without_autosave_marks_queue_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);

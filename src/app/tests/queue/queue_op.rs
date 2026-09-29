@@ -136,6 +136,50 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
 }
 
 #[test]
+fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
+    // queue-owner-process design D4/D6: a suspended home-link event stays on
+    // the home drain and cannot disconnect the currently viewed remote owner.
+    let (mut app, _cmd_rx) = answered_local_daemon_app();
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
+    app.switch_to_direct_remote(
+        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+        remote,
+        remote_rx,
+        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    let (tx, rx) = mpsc::channel();
+    app.suspended_local.as_mut().unwrap().player_rx = rx;
+    tx.send(PlayerEvent::RemoteDisconnected("home owner lost".into()))
+        .unwrap();
+    tx.send(applied(1, snapshot(2))).unwrap();
+
+    app.queue_op(
+        QueueScope::Local,
+        QueueOp::Append {
+            items: one_queue_item(),
+            before: None,
+        },
+    );
+
+    assert!(
+        app.deferred_player_events.is_empty(),
+        "a suspended home's disconnect must not be replayed through the live player"
+    );
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    assert!(harness.model().app.suspended_local.is_none());
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Modal(
+                mbv_ui_msg::ModalId::DaemonLost
+            ))
+    );
+}
+
+#[test]
 fn await_queue_op_defers_an_interleaved_remote_disconnected_to_the_next_tick() {
     // unified-playback-queue "Queue edits are answered before the next input":
     // an event that is not the answer (here `RemoteDisconnected`) is not
