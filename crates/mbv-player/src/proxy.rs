@@ -114,7 +114,7 @@ impl PlayerProxy {
     }
 
     pub fn supports_queue_append(&self) -> bool {
-        true
+        self.remote.supports_queue_append()
     }
 
     pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
