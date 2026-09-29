@@ -188,9 +188,7 @@ impl App {
         endpoint: &mbv_remote_player::DaemonEndpoint,
         attempt: usize,
     ) {
-        let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         let mpris_remote = remote.clone();
         // #233: tear down the dead connection before replacing it so its
@@ -209,10 +207,9 @@ impl App {
                 Some(disconnected),
             );
         }
-        let mut tab = initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        );
+        let mut tab = initial_unified_state
+            .as_ref()
+            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
         if let Some(previous_tab) = &self.remote_player_tab {
             tab.adopt_revision_mint(previous_tab.revision_mint());
         }

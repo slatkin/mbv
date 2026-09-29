@@ -199,6 +199,7 @@ pub struct CtrlCompatibility {
     pub supports_control_auth: bool,
     pub audiobookshelf: CtrlAudiobookshelfCapabilities,
     pub supports_owner_queue_load: bool,
+    pub supports_answered_queue_ops: bool,
 }
 
 impl CtrlCompatibility {
@@ -218,6 +219,7 @@ impl CtrlCompatibility {
                     book_progress: true,
                 },
                 supports_owner_queue_load: false,
+                supports_answered_queue_ops: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

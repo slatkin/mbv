@@ -16,10 +16,12 @@ impl App {
     ) {
         self.stop_visualizer_capture();
         self.player_endpoint = Some(endpoint.clone());
-        let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_cursor = remote.status.lock().unwrap().current_idx;
-        let initial_queue_source = remote.queue_source.lock().unwrap().clone();
+        let initial_queue_source = initial_unified_state
+            .as_ref()
+            .map_or(mbv_queue::QueueSource::Unknown, |state| {
+                state.source.clone()
+            });
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
         // MPRIS (if this session has a live registration) must follow this
@@ -73,10 +75,9 @@ impl App {
             );
         }
 
-        let mut daemon_tab = initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        );
+        let mut daemon_tab = initial_unified_state
+            .as_ref()
+            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
@@ -140,10 +141,12 @@ impl App {
         self.stop_visualizer_capture();
         self.player_endpoint = Some(endpoint.clone());
         let previous_route = self.active_route.clone();
-        let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_cursor = remote.status.lock().unwrap().current_idx;
-        let initial_queue_source = remote.queue_source.lock().unwrap().clone();
+        let initial_queue_source = initial_unified_state
+            .as_ref()
+            .map_or(mbv_queue::QueueSource::Unknown, |state| {
+                state.source.clone()
+            });
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
@@ -195,10 +198,9 @@ impl App {
             );
         }
 
-        let mut daemon_tab = initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        );
+        let mut daemon_tab = initial_unified_state
+            .as_ref()
+            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
@@ -414,14 +416,15 @@ impl App {
                 "local daemon",
             ) {
                 Ok((remote, remote_rx)) => {
-                    let initial_items = remote.items.lock().unwrap().clone();
                     let initial_unified_state = remote.unified_queue_state();
-                    let initial_cursor = remote.status.lock().unwrap().current_idx;
-                    let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-                    let mut initial_tab = initial_unified_state.as_ref().map_or_else(
-                        || PlayerTab::from_emby_items(initial_items, initial_cursor),
-                        PlayerTab::from_unified_state,
-                    );
+                    let remote_queue_source = initial_unified_state
+                        .as_ref()
+                        .map_or(mbv_queue::QueueSource::Unknown, |state| {
+                            state.source.clone()
+                        });
+                    let mut initial_tab = initial_unified_state
+                        .as_ref()
+                        .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
                     initial_tab.adopt_revision_mint(self.player_tab.revision_mint());
                     let always_play_next = self.config.lock().unwrap().always_play_next;
                     self.player = PlayerProxy::remote(remote, always_play_next);

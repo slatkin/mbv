@@ -102,6 +102,10 @@ impl App {
             PlayerEvent::UnifiedQueueUpdated(unified) => {
                 flow_after(self.handle_unified_queue_updated(&unified))
             }
+            PlayerEvent::QueueOpResult { .. } => {
+                // Deliberately ignored until App's queue-op correlation path is added.
+                PlayerEventFlow::Proceed
+            }
             PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
                 self.handle_unified_queue_load_result(result);
                 PlayerEventFlow::Proceed

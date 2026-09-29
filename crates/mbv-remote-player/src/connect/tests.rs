@@ -1,5 +1,7 @@
 use super::*;
+use crate::QueueOp;
 use mbv_emby_model::EmbyImageTags;
+use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
@@ -199,9 +201,8 @@ fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
         commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
     ));
-    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
-    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
+    assert!(remote.unified_queue_state().is_none());
 }
 
 #[test]
@@ -216,9 +217,113 @@ fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })
     ));
-    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
-    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
+    assert!(remote.unified_queue_state().is_none());
+}
+
+#[test]
+fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.ctrl_compatibility.supports_answered_queue_ops = true;
+    let op = remote
+        .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+        .unwrap();
+    let Some(expected) = op else {
+        panic!("current peer advertises answered queue operations");
+    };
+    assert_eq!(expected.0, 1);
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueRemoveSlot {
+            slot_id: 17,
+            op: Some(id)
+        }) if id == expected
+    ));
+}
+
+#[test]
+fn legacy_queue_op_sends_without_an_operation_id() {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.ctrl_compatibility.supports_answered_queue_ops = false;
+    assert_eq!(
+        remote
+            .send_queue_op(QueueOp::RemoveSlot { slot_id: 17 })
+            .unwrap(),
+        None
+    );
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueRemoveSlot {
+            slot_id: 17,
+            op: None
+        })
+    ));
+}
+
+#[test]
+fn inbound_queue_op_result_follows_prior_state_event() {
+    let (remote, events, mut daemon) = connected_pair_for_disconnect_test();
+    let state = UnifiedQueueStateData {
+        status: PlayerStatus::default(),
+        slots: Vec::new(),
+        active_slot: None,
+        revision: 3,
+        source: QueueSource::Unknown,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+    let mut earlier_state = state.clone();
+    earlier_state.revision = 2;
+    writeln!(
+        daemon,
+        "{}",
+        serde_json::to_string(&CtrlEvent::UnifiedQueueState(earlier_state)).unwrap()
+    )
+    .unwrap();
+    writeln!(
+        daemon,
+        "{}",
+        serde_json::to_string(&CtrlEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(7),
+            outcome: mbv_ctrl::QueueOpOutcome::Applied(Box::new(state)),
+        })
+        .unwrap()
+    )
+    .unwrap();
+    assert!(matches!(
+        events.recv().unwrap(),
+        PlayerEvent::UnifiedQueueUpdated(_)
+    ));
+    assert!(matches!(
+        events.recv().unwrap(),
+        PlayerEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(7),
+            ..
+        }
+    ));
+    assert_eq!(remote.unified_queue_state().unwrap().revision, 3);
+}
+
+#[test]
+fn adopt_queue_does_not_write_projection_before_owner_snapshot() {
+    let (remote, _events, commands) =
+        RemotePlayer::stub_with_command_rx(vec![make_media_item("existing")], 0);
+    assert!(remote.adopt_queue(
+        vec![QueueItem::Emby(Box::new(make_media_item("replacement")))],
+        0,
+        QueueSource::Album,
+    ));
+    let status = remote.status.lock().unwrap();
+    assert_eq!(status.current_idx, 0);
+    assert_eq!(status.queue_len, 1);
+    assert!(status.active);
+    drop(status);
+    assert!(remote.unified_queue_state().is_none());
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedAdoptQueue { .. })
+    ));
 }
 
 #[test]
@@ -419,6 +524,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     let (_reader, _state, compatibility) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(compatibility.supports_audio_only);
+    assert!(compatibility.supports_answered_queue_ops);
     peer.join().unwrap();
 }
 
@@ -431,8 +537,16 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
-        let hello = CtrlEvent::Hello(CtrlHello::current());
-        writeln!(writer, "{}", serde_json::to_string(&hello).unwrap()).unwrap();
+        let mut hello = CtrlHello::current();
+        hello
+            .capabilities
+            .retain(|cap| cap != mbv_ctrl::CTRL_CAP_ANSWERED_QUEUE_OPS);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
@@ -451,6 +565,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
     let (_reader, _state, compatibility) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(!compatibility.supports_audio_only);
+    assert!(!compatibility.supports_answered_queue_ops);
     peer.join().unwrap();
 }
 
@@ -468,17 +583,13 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
 #[test]
 fn status_only_preserves_event_confirmed_current_index() {
     let status = Arc::new(Mutex::new(status_with_idx(3)));
-    let items = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
     apply_ctrl_event(
         CtrlEvent::StatusOnly(status_with_idx(5)),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -490,17 +601,13 @@ fn status_only_preserves_event_confirmed_current_index() {
 #[test]
 fn status_only_preserves_current_idx_and_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
-    let items = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
     apply_ctrl_event(
         CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -518,9 +625,7 @@ fn track_changed_leaves_status_mirror_for_app_to_rederive() {
     // mirror. `App::handle_player_event` re-derives `current_idx` from its
     // canonical queue instead (client-side mirror removal is Section 4).
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
-    let items = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
     apply_ctrl_event(
@@ -529,9 +634,7 @@ fn track_changed_leaves_status_mirror_for_app_to_rederive() {
             transition: None,
         }),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -545,17 +648,13 @@ fn track_changed_leaves_status_mirror_for_app_to_rederive() {
 #[test]
 fn command_rejected_forwards_reason_as_player_event() {
     let status = Arc::new(Mutex::new(status_with_idx(0)));
-    let items = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
     apply_ctrl_event(
         CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -574,9 +673,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
-    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
     let pending_playback = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
@@ -603,9 +700,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     apply_ctrl_event(
         CtrlEvent::UnifiedQueueState(reconnect_snapshot),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &pending_playback,
         true,
@@ -651,14 +746,11 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 
     let status = Arc::new(Mutex::new(status_with_idx(0)));
-    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
     // Mixed queue: [Emby(e0), Feed(f1), Emby(e2), Feed(f3)]. The active
-    // Feed slot must retain its canonical index; it cannot be represented by
-    // an index into the legacy Emby-only projection.
+    // Feed slot retains its canonical index in the unified snapshot.
     let e0 = make_media_item("e0");
     let e2 = make_media_item("e2");
     let f1 = make_feed_entry("f1");
@@ -698,36 +790,16 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     apply_ctrl_event(
         CtrlEvent::UnifiedQueueState(unified),
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
-    );
-
-    // queue_source carried from unified state
-    assert!(
-        matches!(
-            *queue_source.lock().unwrap(),
-            QueueSource::Playlist {
-                id: Some(ref id),
-                ..
-            } if id == "pl-1"
-        ),
-        "queue_source should be carried from UnifiedQueueStateData"
     );
 
     // queue_len from canonical slots
     assert_eq!(status.lock().unwrap().queue_len, 4);
 
     assert_eq!(status.lock().unwrap().current_idx, 1);
-
-    // Emby-only items: Feed entries stripped
-    let emby = items.lock().unwrap();
-    assert_eq!(emby.len(), 2, "only Emby items in legacy projection");
-    assert_eq!(emby[0].id, "e0");
-    assert_eq!(emby[1].id, "e2");
 
     let canonical = unified_queue.lock().unwrap().clone().unwrap();
     assert_eq!(canonical.active_slot, Some(20));

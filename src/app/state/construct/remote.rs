@@ -37,16 +37,12 @@ fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::
 /// The daemon-side queue snapshot an attaching session seeds its queue
 /// scope, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
-    items: Vec<mbv_emby_model::EmbyItem>,
-    cursor: usize,
     unified_state: Option<mbv_ctrl::UnifiedQueueStateData>,
 }
 
 impl RemoteSnapshot {
     fn take(remote: &mbv_remote_player::RemotePlayer) -> Self {
         Self {
-            items: remote.items.lock().unwrap().clone(),
-            cursor: remote.status.lock().unwrap().current_idx,
             unified_state: remote.unified_queue_state(),
         }
     }
@@ -55,7 +51,7 @@ impl RemoteSnapshot {
     fn has_items(&self) -> bool {
         self.unified_state
             .as_ref()
-            .map_or(!self.items.is_empty(), |state| !state.slots.is_empty())
+            .is_some_and(|state| !state.slots.is_empty())
     }
 
     /// The queue scope the session opens in: remote when a network daemon
@@ -72,7 +68,7 @@ impl RemoteSnapshot {
     /// `App::build`.
     fn local_bootstrap(&self, source: &mbv_queue::QueueSource) -> LocalDaemonBootstrap {
         self.unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(self.items.clone(), self.cursor, source.clone()),
+            || bootstrap_legacy_queue(Vec::new(), 0, source.clone()),
             bootstrap_unified_queue,
         )
     }
@@ -96,10 +92,9 @@ impl RemoteSnapshot {
             // user can browse locally while the daemon plays elsewhere.
             (
                 PlayerTab::default(),
-                Some(self.unified_state.as_ref().map_or_else(
-                    || PlayerTab::from_emby_items(self.items, self.cursor),
-                    PlayerTab::from_unified_state,
-                )),
+                Some(self.unified_state.map_or_else(PlayerTab::default, |state| {
+                    PlayerTab::from_unified_state(&state)
+                })),
             )
         }
     }
@@ -194,8 +189,13 @@ impl App {
         let client_arc = client.map(|client| Arc::new(Mutex::new(client)));
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
-        let remote_queue_source = remote.queue_source.lock().unwrap().clone();
         let snapshot = RemoteSnapshot::take(&remote);
+        let remote_queue_source = snapshot
+            .unified_state
+            .as_ref()
+            .map_or(mbv_queue::QueueSource::Unknown, |state| {
+                state.source.clone()
+            });
         let initial_queue_scope = snapshot.scope(endpoint.is_local());
         let local_daemon_bootstrap = endpoint
             .is_local()

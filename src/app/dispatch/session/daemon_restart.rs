@@ -57,12 +57,9 @@ impl App {
                 std::io::Error::other(format!("failed to attach to local daemon: {error}"))
             })?;
 
-        let remote_items = remote.items.lock().unwrap().clone();
-        let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_unified_state = remote.unified_queue_state();
-        let remote_queue_source = remote.queue_source.lock().unwrap().clone();
         let bootstrap = remote_unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(remote_items, remote_cursor, remote_queue_source),
+            || bootstrap_legacy_queue(Vec::new(), 0, mbv_queue::QueueSource::Unknown),
             bootstrap_unified_queue,
         );
 
