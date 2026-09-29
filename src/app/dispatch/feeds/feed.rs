@@ -10,28 +10,12 @@ use std::time::Instant;
 impl App {
     pub(in crate::app) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
         let Some(lib) = self.libs.get(lib_idx) else {
-            log::debug!(target: "feedhv", "{context}: lib_idx={lib_idx} missing");
+            tracing::debug!(name: "feed.home_video.state_missing", target: "feedhv", context, library_index = lib_idx, "feed home-video state missing");
             return;
         };
         let root = lib.nav_stack.first();
         let feed = lib.feed_home_video.as_ref();
-        log::debug!(
-            target: "feedhv",
-            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
-            lib.library.name,
-            lib.nav_stack.len(),
-            root.map_or("", |lvl| lvl.parent_id.as_str()),
-            root.map_or(0, |lvl| lvl.items.len()),
-            root.is_some_and(|lvl| lvl.loading),
-            feed.is_some(),
-            feed.is_some_and(|state| state.loading),
-            feed.map_or(0, |state| state.selected_group),
-            feed.map_or(0, |state| state.groups.len()),
-            feed.map_or(0, |state| state.all_items.len()),
-            feed.map_or(0, |state| state.video_cursor),
-            feed.map_or(0, |state| state.video_scroll),
-            self.is_feed_home_video_group_view(lib_idx),
-        );
+        tracing::debug!(name: "feed.home_video.state_observed", target: "feedhv", context, library_index = lib_idx, library = %lib.library.name, navigation_length = lib.nav_stack.len(), root_parent = root.map_or("", |level| level.parent_id.as_str()), root_item_count = root.map_or(0, |level| level.items.len()), root_loading = root.is_some_and(|level| level.loading), feed_present = feed.is_some(), feed_loading = feed.is_some_and(|state| state.loading), selected_group = feed.map_or(0, |state| state.selected_group), group_count = feed.map_or(0, |state| state.groups.len()), item_count = feed.map_or(0, |state| state.all_items.len()), video_cursor = feed.map_or(0, |state| state.video_cursor), video_scroll = feed.map_or(0, |state| state.video_scroll), group_view = self.is_feed_home_video_group_view(lib_idx), "feed home-video state observed");
     }
 
     fn feed_home_video_visible_group_count(&self, lib_idx: usize) -> usize {
@@ -453,7 +437,7 @@ impl App {
             let items = match fetch_and_parse_rss(&rss_url) {
                 Ok(items) => items,
                 Err(e) => {
-                    log::warn!(target: "idle_feed", "Failed to fetch RSS feed: {e}");
+                    tracing::warn!(name: "idle_feed.fetch.failed", target: "idle_feed", error = %e, "RSS feed fetch failed");
                     Vec::new()
                 }
             };
@@ -483,7 +467,7 @@ impl App {
         };
 
         if let Err(error) = crate::app::open_url(&link) {
-            log::warn!(target: "idle_feed", "Failed to open feed link {link:?}: {error}");
+            tracing::warn!(name: "idle_feed.link_open.failed", target: "idle_feed", { url.path = %mbv_core::applog::UrlPath(&link), error = %error }, "feed link open failed");
             self.flash(
                 format!("Unable to open feed link: {error}"),
                 ToastSeverity::Neutral,

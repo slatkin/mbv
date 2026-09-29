@@ -122,6 +122,21 @@ impl MockHttp {
         };
         Agent::with_parts(Config::default(), connector, DefaultResolver::default())
     }
+
+    /// Like [`MockHttp::agent`], but built from the production
+    /// [`agent_config`](crate::agent_config) for `service`, so tests exercise
+    /// the real TLS/timeout/logging configuration.
+    #[must_use]
+    pub fn agent_for(&self, service: crate::HttpService) -> Agent {
+        let connector = MockConnector {
+            shared: Arc::clone(&self.shared),
+        };
+        Agent::with_parts(
+            crate::agent_config(service, None, None),
+            connector,
+            DefaultResolver::default(),
+        )
+    }
 }
 
 impl Shared {

@@ -7,7 +7,7 @@ impl EmbyClient {
     /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.
     /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.
     pub fn get_episodes_from(&self, series_id: &ItemId, from_item_id: &ItemId) -> Vec<EmbyItem> {
-        log::debug!(target: "api", "outbound: EpisodesFrom series={series_id} from={from_item_id}");
+        tracing::debug!(name: "emby.episodes_from.requested", target: "api", series = %series_id, from_item = %from_item_id, "requesting episodes");
         let resp: Value = match self
             .get(&format!(
                 "/Shows/{}/Episodes",
@@ -23,12 +23,12 @@ impl EmbyClient {
             Ok(mut r) => match r.body_mut().read_json() {
                 Ok(v) => v,
                 Err(e) => {
-                    log::warn!(target: "api", "err: EpisodesFrom parse: {e}");
+                    tracing::warn!(name: "emby.episodes_from.parse_failed", target: "api", error = %e, "failed to parse episodes response");
                     return vec![];
                 }
             },
             Err(e) => {
-                log::warn!(target: "api", "err: EpisodesFrom: {e}");
+                tracing::warn!(name: "emby.episodes_from.request_failed", target: "api", error = %e, "episodes request failed");
                 return vec![];
             }
         };
@@ -50,10 +50,10 @@ impl EmbyClient {
             .collect();
         if items.is_empty() {
             // from_item_id not in series — return everything as a fallback
-            log::warn!(target: "api", "inbound: EpisodesFrom: from_item_id not found, returning all");
+            tracing::warn!(name: "emby.episodes_from.item_not_found", target: "api", from_item = %from_item_id, "starting item not found; returning all episodes");
             return all.iter().map(parse_item).collect();
         }
-        log::info!(target: "api", "inbound: EpisodesFrom: {} episodes from '{}'", items.len(), items[0].display_name());
+        tracing::info!(name: "emby.episodes_from.loaded", target: "api", count = items.len(), first_item = %items[0].display_name(), "loaded episodes");
         items
     }
 

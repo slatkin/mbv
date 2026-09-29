@@ -80,13 +80,7 @@ fn read_server_hello(
     compatibility.supports_audio_only = info.supports_audio_only();
     compatibility.supports_control_auth = info.supports_control_auth();
     compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
-    log::info!(
-        target: "remote",
-        "daemon protocol ok: version={} app={} capabilities={:?}",
-        info.protocol_version,
-        info.app_version,
-        info.capabilities
-    );
+    tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }
 
@@ -221,7 +215,7 @@ fn apply_ctrl_event(
 ) {
     match ev {
         CtrlEvent::Hello(_) => {
-            log::warn!(target: "remote", "unexpected daemon protocol hello after negotiation");
+            tracing::warn!(name: "remote.daemon_protocol_hello.unexpected", target: "remote", "unexpected daemon protocol hello after negotiation");
         }
         CtrlEvent::StatusOnly(s) => {
             let mut current = status.lock().unwrap();
@@ -251,7 +245,7 @@ fn apply_ctrl_event(
             //, not by the general event loop.
         }
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
-            log::debug!(target: "remote", "ignoring owner-service reconciliation event");
+            tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
         }
         CtrlEvent::Disconnected { reason } => {
             apply_disconnected_event(reason, event_tx, notify);
@@ -397,7 +391,7 @@ pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let stream = endpoint.connect_stream()?;
-    log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
+    tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
     connect_stream(stream)
 }
 
@@ -425,6 +419,18 @@ fn connect_stream(
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
     let disconnect_stream = stream.try_clone()?;
+
+    // Correlation peer (D5 "Ctrl connections"): the owner joins its
+    // `ctrl.client.connected` line to this side's
+    // `ctrl.connection.established` line by an exact `peer=` match.
+    // Unix endpoints peer by this process's pid; TCP endpoints by this side's
+    // local `ip:port`, in the owner's format.
+    let peer = match &stream {
+        SocketStream::Unix(_) => std::process::id().to_string(),
+        SocketStream::Tcp(tcp) => tcp
+            .local_addr()
+            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
+    };
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
@@ -463,6 +469,12 @@ fn connect_stream(
         },
         DAEMON_HANDSHAKE_HARD_BOUND,
     )?;
+    tracing::info!(
+        name: "ctrl.connection.established",
+        target: "ctrl",
+        peer = %peer,
+        "ctrl connection established"
+    );
     apply_ctrl_event(
         state_event,
         &status,
@@ -541,7 +553,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
             Ok(l) if l.is_empty() => {}
             Ok(l) => {
                 let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
-                    log::warn!(target: "remote", "unrecognized event from daemon: {l}");
+                    tracing::warn!(name: "remote.daemon_event_parse.failed", target: "remote", bytes = l.len(), "unrecognized event from daemon");
                     continue;
                 };
 
@@ -595,7 +607,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
         let _ = tx.send(crate::ShutdownResponse::Disconnected);
     }
 
-    log::info!(target: "remote", "daemon disconnected");
+    tracing::info!(name: "remote.daemon_connection.ended", target: "remote", "daemon disconnected");
     if expected_disconnect {
         // An "expected"/structured disconnect (e.g. an Emby Remote
         // takeover, or a deliberate daemon shutdown) never sends a
@@ -634,7 +646,7 @@ fn write_remote_commands(
             continue;
         };
         if let Err(error) = writeln!(stream, "{json}") {
-            log::warn!(target: "remote", "failed to write command to daemon: {error}");
+            tracing::warn!(name: "remote.daemon_command_write.failed", target: "remote", error = %error, "failed to write command to daemon");
             disconnected.store(true, Ordering::SeqCst);
             if !disconnect_notified.swap(true, Ordering::SeqCst) {
                 let _ = event_tx.send(PlayerEvent::RemoteDisconnected(

@@ -109,7 +109,7 @@ impl App {
         start_position_ticks: i64,
         start_index: usize,
     ) {
-        log::info!(target: "ws", "Play: {} id(s), play_now={play_now}", item_ids.len());
+        tracing::info!(name: "ws.play.requested", target: "ws", item_count = item_ids.len(), play_now, "play request received");
         if !play_now {
             return;
         }
@@ -131,7 +131,7 @@ impl App {
             }
         };
         if items.is_empty() {
-            log::warn!(target: "ws", "Play: no items found for ids={}", item_ids.join(","));
+            tracing::warn!(name: "ws.play.items_not_found", target: "ws", item_ids = %item_ids.join(","), "play request items not found");
             return;
         }
         let start_idx = start_index.min(items.len().saturating_sub(1));
@@ -150,7 +150,7 @@ impl App {
                 mbv_queue::QueueSource::Remote,
             );
         } else {
-            log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
+            tracing::info!(name: "ws.play.multiple_items", target: "ws", item_count = items.len(), start_index = start_idx, "playing multiple items");
             // Always hand the whole list to play_queue (not just the clicked
             // item) so the remote-controlled queue continues past start_idx.
             // play_queue already handles the "something is already playing"

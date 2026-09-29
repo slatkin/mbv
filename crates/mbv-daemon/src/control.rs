@@ -5,7 +5,7 @@ use super::{
     dispatch_slot_jump, reset_slot_jumps, send_to,
 };
 use mbv_ctrl::player::PlayerCommand;
-use mbv_ctrl::{CtrlCmd, CtrlEvent};
+use mbv_ctrl::{CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::{Player, PlayerOwnerState};
@@ -23,6 +23,32 @@ mod playback;
 mod queue_edit;
 mod queue_load;
 mod queue_setup;
+
+pub(crate) fn queue_load_span(
+    client_id: CtrlClientId,
+    request_id: QueueLoadRequestId,
+) -> tracing::Span {
+    tracing::info_span!(
+        target: "ctrl",
+        "queue.load",
+        client = %client_id,
+        queue_request = request_id,
+    )
+}
+
+pub(crate) fn intent_span(
+    client_id: CtrlClientId,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+) -> tracing::Span {
+    tracing::info_span!(
+        target: "ctrl",
+        "ctrl.intent",
+        client = %client_id,
+        request = %request_id,
+        generation = generation,
+    )
+}
 
 pub(crate) use playback::play_resolved_items;
 pub(crate) use queue_load::{
@@ -167,12 +193,9 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
 /// Returns `false` when the request was rejected; the caller then sends no
 /// further reply.
 fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
-    log::info!(
-        target: "daemon",
-        "RequestShutdown received from ctrl client {}", ctx.client_id
-    );
+    tracing::info!(name: "daemon.shutdown_request.received", target: "daemon", client = %ctx.client_id, "shutdown request received");
     if ctx.stay_alive {
-        log::info!(target: "daemon", "RequestShutdown rejected: daemon is in stay-alive mode");
+        tracing::info!(name: "daemon.shutdown_request.rejected", target: "daemon", "shutdown request rejected: daemon is in stay-alive mode");
         send_to(
             ctx.reply_tx,
             &CtrlEvent::ShutdownRejected {
@@ -212,10 +235,7 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     }
 
     if let Err(e) = mbv_config::save_queue_state(&queue_state) {
-        log::error!(
-            target: "daemon",
-            "coordinated shutdown rejected: queue persistence failed: {e}"
-        );
+        tracing::error!(name: "daemon.shutdown_queue_persist.failed", target: "daemon", error = %e, "coordinated shutdown rejected: queue persistence failed");
         send_to(
             ctx.reply_tx,
             &CtrlEvent::ShutdownRejected {
@@ -293,7 +313,7 @@ fn dispatch_ctrl_command(
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
-            log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
+            tracing::warn!(name: "daemon.ctrl_client_hello.unexpected", target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
         CtrlCmd::UnifiedAdoptQueue {
             items,

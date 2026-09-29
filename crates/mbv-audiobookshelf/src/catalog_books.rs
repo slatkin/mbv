@@ -228,7 +228,7 @@ impl AudiobookshelfClient {
                 .body_mut()
                 .read_json()
                 .map_err(|error| {
-                    log::debug!(target: "audiobookshelf", "invalid book catalog response: {error}");
+                    tracing::debug!(name: "audiobookshelf.book_catalog.response_invalid", target: "audiobookshelf", error = %error, "invalid book catalog response");
                     AudiobookshelfError::malformed()
                 })?;
         if response.limit == 0 {
@@ -295,7 +295,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-                log::debug!(target: "audiobookshelf", "invalid book detail response: {error}");
+                tracing::debug!(name: "audiobookshelf.book_detail.response_invalid", target: "audiobookshelf", error = %error, "invalid book detail response");
                 AudiobookshelfError::malformed()
             })?;
         if response.id != id {
@@ -334,7 +334,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-                log::debug!(target: "audiobookshelf", "invalid book progress response: {error}");
+                tracing::debug!(name: "audiobookshelf.book_progress.response_invalid", target: "audiobookshelf", error = %error, "invalid book progress response");
                 AudiobookshelfError::malformed()
             })?;
         Ok(response

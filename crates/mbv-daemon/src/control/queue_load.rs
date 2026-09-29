@@ -125,6 +125,9 @@ pub(crate) fn complete_pending_idle_queue_load(
         return false;
     }
     let pending = owner.pending_idle_load.take().expect("checked above");
+    // Rejoin rule (design D5): rebuild the queue-load span from the ids the
+    // parked state already carries; no `Span` is stored anywhere.
+    let _load_span = super::queue_load_span(pending.client_id, pending.request_id).entered();
     if let Some(reason) = failure {
         reject_queue_load(&pending.reply_tx, pending.request_id, reason);
         return true;
@@ -152,6 +155,9 @@ pub(super) fn handle_queue_load_idle(
     cursor: usize,
     new_source: mbv_queue::QueueSource,
 ) {
+    // Correlation span (design D5): every line this handler logs carries the
+    // load's client and queue request id.
+    let _load_span = super::queue_load_span(ctx.client_id, request_id).entered();
     let (supports_operation, supports_abs_queue, supports_abs_book_queue) = {
         let clients = ctx.ctrl_clients.lock().unwrap();
         (
@@ -198,6 +204,7 @@ pub(super) fn handle_queue_load_idle(
     let stopped_run = ctx.player.status.lock().unwrap().sequence_generation;
     if ctx.player.status.lock().unwrap().active {
         ctx.owner.pending_idle_load = Some(PendingIdleQueueLoad {
+            client_id: ctx.client_id,
             request_id,
             slots: admitted,
             cursor: next_cursor,

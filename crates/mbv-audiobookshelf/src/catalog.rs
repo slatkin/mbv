@@ -396,7 +396,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-            log::debug!("malformed Audiobookshelf response: {error}");
+            tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
             AudiobookshelfError::malformed()
         })?;
         Ok(response
@@ -425,7 +425,7 @@ impl AudiobookshelfClient {
                 .body_mut()
                 .read_json()
                 .map_err(|error| {
-                    log::debug!("malformed Audiobookshelf response: {error}");
+                    tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
                     AudiobookshelfError::malformed()
                 })?;
         if response.limit == 0 {
@@ -471,7 +471,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-                log::debug!("malformed Audiobookshelf response: {error}");
+                tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
                 AudiobookshelfError::malformed()
             })?;
         if response.id != id {
@@ -501,7 +501,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-                log::debug!("malformed Audiobookshelf response: {error}");
+                tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
                 AudiobookshelfError::malformed()
             })?;
         Ok(response
@@ -535,7 +535,7 @@ impl AudiobookshelfClient {
             .body_mut()
             .read_json()
             .map_err(|error| {
-                log::debug!("malformed Audiobookshelf response: {error}");
+                tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
                 AudiobookshelfError::malformed()
             })?;
         Ok(response
@@ -557,7 +557,7 @@ impl AudiobookshelfClient {
             .into_reader()
             .read_to_end(&mut bytes)
             .map_err(|error| {
-                log::debug!("malformed Audiobookshelf response: {error}");
+                tracing::debug!(name: "audiobookshelf.catalog.response_malformed", error = %error, "malformed catalog response");
                 AudiobookshelfError::malformed()
             })?;
         Ok(bytes)

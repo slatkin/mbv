@@ -50,7 +50,7 @@ impl PlaybackRun {
         let prefs = self.subtitle_prefs.lock().unwrap().clone();
         for url in &self.ext_sub_urls {
             if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
-                log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
+                tracing::warn!(name: "player.subtitle.add_failed", target: "player", { url.path = %mbv_core::applog::UrlPath(url), error = ?e }, "failed to add external subtitle");
             }
         }
         auto_select_tracks(mpv, &self.status, &prefs);
@@ -82,7 +82,7 @@ impl PlaybackRun {
         self.forced_jump = None;
         let seconds = mbv_emby_model::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
-            log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
+            tracing::warn!(name: "player.resume_seek.failed", target: "player", position_seconds = seconds, error = %mpv_err_str(&e), "resume seek failed");
             return;
         }
         // Arms the same seek-settle guard below, so this restart
@@ -146,10 +146,7 @@ impl PlaybackRun {
         };
         if self.startup_pause.is_holding() {
             self.startup_pause.clear();
-            log::info!(
-                target: "player",
-                "audio pipe: startup gate cleared on PlaybackRestart (playlist)"
-            );
+            tracing::info!(name: "player.audio_pipe.startup_gate_cleared", target: "player", "startup gate cleared on playback restart");
             let _ = mpv.set_property("pause", false);
         }
         let mut event_name = "TimeUpdate";

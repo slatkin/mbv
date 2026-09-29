@@ -339,17 +339,20 @@ pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
     match serde_json::from_str::<TuiLaunchState>(&text) {
         Ok(state) if state.version == TUI_LAUNCH_STATE_VERSION => Some(state),
         Ok(state) => {
-            log::warn!(
+            tracing::warn!(
+                name: "launch_state.restore.unsupported_version",
                 target: "launch_state",
-                "tui_launch_state.json version {} unsupported, launch state not restored",
-                state.version
+                version = state.version,
+                "launch state not restored"
             );
             None
         }
         Err(e) => {
-            log::warn!(
+            tracing::warn!(
+                name: "launch_state.restore.failed",
                 target: "launch_state",
-                "tui_launch_state.json failed to parse, launch state not restored: {e}"
+                error = %e,
+                "launch state not restored"
             );
             None
         }

@@ -351,9 +351,18 @@ impl App {
         };
         let should_consume =
             consume && ((is_video && consume_videos) || (is_audio && consume_audio));
-        log::info!(target: "consume", "consume check: slot_id={slot_id:?} consume={consume} \
-            is_video={is_video} consume_videos={consume_videos} \
-            is_audio={is_audio} consume_audio={consume_audio} => {should_consume}");
+        tracing::info!(
+            name: "consume.slot.checked",
+            target: "consume",
+            slot = ?slot_id,
+            consume,
+            is_video,
+            consume_videos,
+            is_audio,
+            consume_audio,
+            should_consume,
+            "consume check"
+        );
         (should_consume, is_audio)
     }
 

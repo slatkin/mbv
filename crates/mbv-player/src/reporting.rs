@@ -187,7 +187,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
                 ));
             }
         } else {
-            log::warn!(target: "player", "Audiobookshelf progress synchronization failed");
+            tracing::warn!(name: "player.audiobookshelf_progress.sync_failed", target: "player", "Audiobookshelf progress synchronization failed");
         }
     }
 
@@ -196,7 +196,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
             return;
         }
         self.closed = true;
-        log::debug!(target: "player", "closing Audiobookshelf lifecycle generation={}", self.generation.value());
+        tracing::debug!(name: "player.audiobookshelf_lifecycle.closing", target: "player", generation = self.generation.value(), "closing Audiobookshelf playback lifecycle");
         let now = std::time::Instant::now();
         self.observe(now, false);
         self.sync_final(position_ticks, now);

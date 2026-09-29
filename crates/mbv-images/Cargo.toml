@@ -20,4 +20,4 @@ workspace = true
 ratatui.workspace = true
 ratatui-image.workspace = true
 image.workspace = true
-log.workspace = true
+tracing.workspace = true

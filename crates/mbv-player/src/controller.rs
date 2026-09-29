@@ -44,7 +44,7 @@ pub(super) fn make_wakeup_pipe() -> Option<(RawFd, WakeupWriter)> {
     let mut fds = [-1i32; 2];
     // SAFETY: `fds` points to two writable i32 slots as required by pipe(2).
     if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
-        log::warn!(target: "player", "wakeup pipe: pipe(2) failed: {}", std::io::Error::last_os_error());
+        tracing::warn!(name: "player.wakeup_pipe.create_failed", target: "player", error = %std::io::Error::last_os_error(), "pipe creation failed");
         return None;
     }
     for fd in fds {
@@ -229,11 +229,11 @@ impl Player {
         };
         match init_mpv(&config) {
             Ok(warmed) => {
-                log::info!(target: "player", "pre-warmed mpv for pipe output");
+                tracing::info!(name: "player.mpv.prewarmed", target: "player", "pre-warmed mpv for pipe output");
                 *self.pre_warmed_mpv.lock().unwrap() = Some(warmed);
             }
             Err(e) => {
-                log::warn!(target: "player", "pre-warm failed: {e}");
+                tracing::warn!(name: "player.mpv.prewarm_failed", target: "player", error = %e, "mpv pre-warm failed");
             }
         }
     }

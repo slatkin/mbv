@@ -10,19 +10,13 @@ impl PlaybackRun {
             || !self.load_is_ready()
             || self.forced_jump.is_some()
         {
-            log::debug!(
-                target: "player",
-                "ignoring transient playlist-pos={pos} while queue transition is pending"
-            );
+            tracing::debug!(name: "player.playlist_position.ignored", target: "player", position = pos, "ignoring transient playlist position during queue transition");
             return;
         }
         let queue_len = self.queue_len();
         let Some(index) = divergent_entry(pos, self.current_idx, queue_len) else {
             if usize::try_from(pos).is_ok_and(|index| index >= queue_len) {
-                log::warn!(
-                    target: "player",
-                    "ignoring out-of-range playlist-pos={pos} for queue len {queue_len}"
-                );
+                tracing::warn!(name: "player.playlist_position.out_of_range", target: "player", position = pos, queue_length = queue_len, "ignoring out-of-range playlist position");
             }
             return;
         };
@@ -34,10 +28,7 @@ impl PlaybackRun {
         let previous = self.current_idx;
         let previous_slot = self.slot_id_at(previous);
         let previous_pos = self.last_valid_pos;
-        log::warn!(
-            target: "player",
-            "playlist-pos={index}: mpv moved off the active entry (was {previous}); reporting now follows it"
-        );
+        tracing::warn!(name: "player.playlist_position.diverged", target: "player", position = index, previous_index = previous, "mpv moved off the active entry; reporting follows it");
         self.report_stopped_and_adopt_mpv_entry(previous_slot, previous_pos, index, mpv_pos_ticks);
     }
 
@@ -51,7 +42,7 @@ impl PlaybackRun {
         let old_n = self.queue_len();
         if count < old_n {
             let removed = old_n - count;
-            log::warn!(target: "player", "playlist-count dropped from {old_n} to {count}: {removed} item(s) removed externally");
+            tracing::warn!(name: "player.playlist_count.decreased", target: "player", previous_count = old_n, count, removed, "mpv playlist entries removed externally");
             let removed_slot_ids: Vec<_> = self
                 .queue
                 .slots()
@@ -81,7 +72,7 @@ impl PlaybackRun {
             )));
         } else {
             let added = count - old_n;
-            log::warn!(target: "player", "playlist-count increased from {old_n} to {count}: {added} item(s) added externally");
+            tracing::warn!(name: "player.playlist_count.increased", target: "player", previous_count = old_n, count, added, "mpv playlist entries added externally");
             // We cannot reconstruct the added EmbyItems from mpv's playlist,
             // so we keep the queue as-is. Clamp current_idx to the last
             // known item in case the external tool also changed position.

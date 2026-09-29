@@ -25,6 +25,43 @@ struct InitialItemState {
 }
 
 impl PlaybackRun {
+    /// The `playback` correlation span for one active slot (design D5):
+    /// `slot`, `item` and a `play_session` field left `Empty` until the Emby
+    /// session id is assigned. The span is a root (`parent: None`) so a span
+    /// rebuilt while the previous slot's span is still entered does not nest
+    /// under it — the rendered scope is the rebuilt span alone.
+    pub(crate) fn new_playback_span(slot_id: QueueSlotId, item: &QueueItem) -> tracing::Span {
+        tracing::info_span!(
+            target: "player",
+            parent: None,
+            "playback",
+            slot = slot_id.raw(),
+            item = %item.id(),
+            play_session = tracing::field::Empty,
+        )
+    }
+
+    /// (Re)create the `playback` span for the currently active slot (design
+    /// D5). Called on every slot change; `play_session` stays `Empty` until a
+    /// reporting assignment records it, so a stale session id is never
+    /// carried into a new slot's lines.
+    pub(crate) fn rebuild_playback_span(&mut self) {
+        if let (Some(slot_id), Some(item)) = (self.active_slot_id(), self.active_item()) {
+            self.playback_span = Self::new_playback_span(slot_id, item);
+        }
+    }
+
+    /// Run `f` under the active slot's `playback` span (design D5). After a
+    /// mid-tick `rebuild_playback_span`, the run loop's tick guard still holds
+    /// the previous slot's span, so operations that report or load for the
+    /// new slot enter the rebuilt span explicitly; the event's rendered scope
+    /// is the rebuilt span alone (it is a root span).
+    pub(crate) fn in_playback_span<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let span = self.playback_span.clone();
+        let _guard = span.enter();
+        f(self)
+    }
+
     pub(crate) fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
@@ -154,6 +191,7 @@ impl PlaybackRun {
             return false;
         }
         self.current_idx = idx;
+        self.rebuild_playback_span();
         self.sync_status_position();
         true
     }
@@ -271,20 +309,18 @@ impl PlaybackRun {
     /// session for a non-Emby item — the same switch a track transition makes,
     /// so reporting identity always names the item playback is on.
     pub(crate) fn report_active_item(&mut self) {
-        if let Some(QueueItem::Emby(emby)) = self.active_item().cloned() {
-            let (urls, ok) = self.reporter.start_item(&emby);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(
-                    target: "player",
-                    "start_item failed for adopted item={}",
-                    emby.id
-                );
+        self.in_playback_span(|this| {
+            if let Some(QueueItem::Emby(emby)) = this.active_item().cloned() {
+                let (urls, ok) = this.reporter.start_item(&emby, &this.playback_span);
+                this.ext_sub_urls = urls;
+                if !ok {
+                    tracing::warn!(name: "player.report_start.failed", target: "player", phase = "adopted_item", item = %emby.id, "start report failed for adopted item");
+                }
+            } else {
+                this.ext_sub_urls = vec![];
+                this.reporter.clear_session();
             }
-        } else {
-            self.ext_sub_urls = vec![];
-            self.reporter.clear_session();
-        }
+        });
     }
 
     pub(crate) fn prepare_item(
@@ -409,6 +445,7 @@ impl PlaybackRun {
         let (item, prepared) = self.prepare_active_slot_with_resume(slot_id, resume_ticks)?;
         self.install_active_projection(mpv, prepared, &item)?;
         let _ = self.queue.set_active_slot(slot_id);
+        self.rebuild_playback_span();
         // Resolve the just-selected slot to this run's mpv-local coordinate
         // (command target -> ordinal is the permitted direction, design D2);
         // never recompute the coordinate from the observed active slot.
@@ -498,11 +535,7 @@ impl PlaybackRun {
             past,
         } = initial_item_state(&initial_item);
 
-        log::info!(
-            target: "player",
-            "playback init origin={origin:?} idx={start_idx} item_pos={}s",
-            initial_pos / mbv_emby_model::TICKS_PER_SECOND
-        );
+        tracing::info!(name: "player.playback.initialized", target: "player", origin = ?origin, index = start_idx, position_seconds = initial_pos / mbv_emby_model::TICKS_PER_SECOND, "playback initialized");
         let run_identity = status.lock().unwrap().sequence_generation;
         let active_file = queue.has_audiobookshelf_entries();
         let active_file_starting = active_file && prepared_source.is_some();
@@ -513,11 +546,12 @@ impl PlaybackRun {
                 .as_mut()
                 .and_then(PreparedSource::take_lifecycle),
         );
-        PlaybackRun {
+        let mut run = PlaybackRun {
             origin,
             run_identity,
             config,
             reporter,
+            playback_span: tracing::Span::none(),
             event_tx,
             status,
             subtitle_prefs,
@@ -556,7 +590,20 @@ impl PlaybackRun {
             intro_end,
             intro_state: IntroState::new(past),
             osd_title,
-        }
+        };
+        run.rebuild_playback_span();
+        // The initial Emby session was resolved before the run existed
+        // (`make_reporter`), and no deferred start can be in flight for a
+        // freshly built reporter, so the span adopts the id it already holds.
+        let initial_session = run
+            .reporter
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .2
+            .clone();
+        crate::report_worker::record_play_session(&run.playback_span, &initial_session);
+        run
     }
 }
 
@@ -627,7 +674,7 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
 
 pub(crate) fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
     let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
-    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
+    tracing::debug!(name: "player.jump.stale_slot_rejected", target: "player", slot = ?slot_id, "jump rejected because slot is absent");
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 

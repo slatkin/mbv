@@ -86,7 +86,7 @@ pub enum WsEvent {
 fn parse(text: &str) -> Option<WsEvent> {
     let v: Value = serde_json::from_str(text).ok()?;
     let msg_type = v["MessageType"].as_str()?;
-    log::debug!(target: "ws", "inbound: {msg_type}");
+    tracing::debug!(name: "ws.message.received", target: "ws", message_type = msg_type, "inbound message");
 
     match msg_type {
         "Play" => parse_play(&v["Data"]),
@@ -118,7 +118,7 @@ fn parse_play(data: &Value) -> Option<WsEvent> {
         })
         .unwrap_or_default();
     if item_ids.is_empty() {
-        log::warn!(target: "ws", "Play: no ItemIds — raw data: {data}");
+        tracing::warn!(name: "ws.play.invalid", target: "ws", "play message has no item ids");
         return None;
     }
     let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
@@ -135,7 +135,7 @@ fn parse_play(data: &Value) -> Option<WsEvent> {
 
 fn parse_playstate(data: &Value) -> Option<WsEvent> {
     let cmd = data["Command"].as_str().unwrap_or("");
-    log::debug!(target: "ws", "Playstate cmd={cmd}");
+    tracing::debug!(name: "ws.playstate.received", target: "ws", command = cmd, "playstate command");
     match cmd {
         "Stop" => Some(WsEvent::Stop),
         "Pause" => Some(WsEvent::Pause),
@@ -149,7 +149,7 @@ fn parse_playstate(data: &Value) -> Option<WsEvent> {
         "Rewind" => Some(WsEvent::SeekRelative(-10.0)),
         "FastForward" => Some(WsEvent::SeekRelative(10.0)),
         other => {
-            log::warn!(target: "ws", "Playstate: unhandled cmd={other}");
+            tracing::warn!(name: "ws.playstate.unhandled", target: "ws", command = other, "unhandled playstate command");
             None
         }
     }
@@ -157,7 +157,7 @@ fn parse_playstate(data: &Value) -> Option<WsEvent> {
 
 fn parse_general_command(data: &Value) -> Option<WsEvent> {
     let name = data["Name"].as_str().unwrap_or("");
-    log::debug!(target: "ws", "GeneralCommand name={name}");
+    tracing::debug!(name: "ws.command.received", target: "ws", command = name, "general command");
     match name {
         "PlayPause" => Some(WsEvent::TogglePause),
         "SetVolume" => {
@@ -190,7 +190,7 @@ fn parse_general_command(data: &Value) -> Option<WsEvent> {
             Some(WsEvent::SetSub(idx))
         }
         other => {
-            log::warn!(target: "ws", "GeneralCommand: unhandled name={other}");
+            tracing::warn!(name: "ws.command.unhandled", target: "ws", command = other, "unhandled general command");
             None
         }
     }
@@ -226,7 +226,7 @@ fn reconnect_loop(
     let mut backoff_secs: u64 = 1;
     loop {
         connected.store(false, Ordering::Relaxed);
-        log::info!(target: "ws", "connecting…");
+        tracing::info!(name: "ws.connection.starting", target: "ws", "connecting");
         match tungstenite::connect(ws_url) {
             Ok((mut socket, _)) => {
                 // Successful connection — reset backoff.
@@ -239,14 +239,16 @@ fn reconnect_loop(
                 }
                 connected.store(false, Ordering::Relaxed);
                 if result == ConnectionResult::Shutdown {
-                    log::info!(target: "ws", "shutdown requested, exiting reconnect loop");
+                    tracing::info!(name: "ws.connection.shutdown", target: "ws", "shutdown requested");
                     return;
                 }
             }
-            Err(e) => log::warn!(target: "ws", "connect failed: {e}"),
+            Err(e) => {
+                tracing::warn!(name: "ws.connection.failed", target: "ws", error = %e, "connect failed");
+            }
         }
         // M3: Exponential backoff with jitter, max 60s.
-        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, "ws");
+        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, mbv_net::ReconnectTarget::Ws);
     }
 }
 
@@ -262,7 +264,7 @@ fn prepare_connection(socket: &WsSocket, out_rx: &mpsc::Receiver<OutboundMessage
         }
         _ => {}
     }
-    log::info!(target: "ws", "connected");
+    tracing::info!(name: "ws.connection.connected", target: "ws", "connected");
 
     // Drop any stale outbound text messages buffered while disconnected so
     // an old progress update is never replayed after reconnect.
@@ -314,7 +316,7 @@ fn drain_outbound(
         match msg {
             OutboundMessage::Text(msg) => {
                 if socket.send(Message::Text(msg.into())).is_err() {
-                    log::warn!(target: "ws", "send error, reconnecting");
+                    tracing::warn!(name: "ws.message.send_failed", target: "ws", "send failed; reconnecting");
                     return OutboundResult::Reconnect;
                 }
             }
@@ -332,7 +334,7 @@ fn send_heartbeat(socket: &mut WsSocket, last_ping: &mut Instant, interval: Dura
         return true;
     }
     if socket.send(Message::Ping(vec![].into())).is_err() {
-        log::warn!(target: "ws", "ping send failed, reconnecting");
+        tracing::warn!(name: "ws.heartbeat.failed", target: "ws", "ping send failed; reconnecting");
         return false;
     }
     *last_ping = Instant::now();
@@ -343,8 +345,7 @@ fn connection_timed_out(last_activity: Instant, timeout: Duration) -> bool {
     if last_activity.elapsed() < timeout {
         return false;
     }
-    log::warn!(target: "ws", "no response for {:.0}s, reconnecting",
-        last_activity.elapsed().as_secs_f64());
+    tracing::warn!(name: "ws.connection.timed_out", target: "ws", timeout_secs = last_activity.elapsed().as_secs_f64(), "no response; reconnecting");
     true
 }
 
@@ -374,13 +375,13 @@ fn read_message(
         }
         Ok(Message::Pong(_)) => *last_activity = Instant::now(),
         Ok(Message::Close(_)) => {
-            log::info!(target: "ws", "closed by server, reconnecting");
+            tracing::info!(name: "ws.connection.closed", target: "ws", "closed by server; reconnecting");
             return ReadResult::Reconnect;
         }
         Err(tungstenite::Error::Io(e))
             if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
         Err(e) => {
-            log::warn!(target: "ws", "error: {e}, reconnecting");
+            tracing::warn!(name: "ws.connection.failed", target: "ws", error = %e, "connection error; reconnecting");
             return ReadResult::Reconnect;
         }
         _ => {}

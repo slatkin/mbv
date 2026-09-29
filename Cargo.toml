@@ -30,7 +30,8 @@ pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 rstest = { version = "0.27", default-features = false }
 fuzzy-matcher = "0.3"
-time = { version = "0.3", features = ["parsing"] }
+time = { version = "0.3", features = ["parsing", "formatting", "local-offset", "macros"] }
+tracing = "0.1.44"
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -150,7 +151,7 @@ textwrap.workspace = true
 ratatui-image.workspace = true
 image.workspace = true
 unicode-width.workspace = true
-log.workspace = true
+tracing.workspace = true
 libc.workspace = true
 mimalloc.workspace = true
 nix.workspace = true

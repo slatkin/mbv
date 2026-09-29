@@ -24,14 +24,6 @@ impl PlaybackRun {
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join(Self::progress_join_budget());
-        if self.config.audio_pipe_path.is_some() {
-            self.reporter
-                .transition_to_deferred(item, self.last_valid_pos);
-            self.ext_sub_urls = vec![];
-        } else {
-            self.ext_sub_urls = self.reporter.transition_to(item, self.last_valid_pos);
-        }
-        *progress = spawn_progress_reporter(self.reporter.clone());
 
         // ponytail: run-side slot-id minting. PlayerCommand::LoadNew has had no
         // in-process constructor since task 1.5 dropped its wire command; the
@@ -42,32 +34,54 @@ impl PlaybackRun {
             Some(slot_id),
         );
         self.current_idx = 0;
-        self.load_active_item_state();
-        self.pending_initial_playlist_layout = false;
-        self.begin_item_lifecycle(StopAction::Deferred);
-        {
-            let mut st = self.status.lock().unwrap();
-            st.runtime_ticks = item.runtime_ticks;
-            st.position_ticks = item.playback_position_ticks;
-            st.current_idx = 0;
-            st.queue_len = 1;
-            st.set_current_item_metadata(item);
-        };
+        // Rebuild the correlation span for the new slot before the reporting
+        // transition, so the session assignment records into it (design D5).
+        self.rebuild_playback_span();
+        // The run loop's tick guard still holds the previous slot's span, so
+        // the reporting transition and the loadfile lines run under the
+        // rebuilt span explicitly (design D5).
+        self.in_playback_span(|this| {
+            if this.config.audio_pipe_path.is_some() {
+                this.reporter.transition_to_deferred(
+                    item,
+                    this.last_valid_pos,
+                    this.playback_span.clone(),
+                );
+                this.ext_sub_urls = vec![];
+            } else {
+                this.ext_sub_urls =
+                    this.reporter
+                        .transition_to(item, this.last_valid_pos, &this.playback_span);
+            }
+            *progress = spawn_progress_reporter(this.reporter.clone());
 
-        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-        let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+            this.load_active_item_state();
+            this.pending_initial_playlist_layout = false;
+            this.begin_item_lifecycle(StopAction::Deferred);
+            {
+                let mut st = this.status.lock().unwrap();
+                st.runtime_ticks = item.runtime_ticks;
+                st.position_ticks = item.playback_position_ticks;
+                st.current_idx = 0;
+                st.queue_len = 1;
+                st.set_current_item_metadata(item);
+            };
 
-        if start_pos > 0.0 {
-            let _ = mpv.set_property("start", format!("{start_pos:.0}"));
-        } else {
-            let _ = mpv.set_property("start", "0");
-        }
-        let title_opt = mpv_title_opt(&item.display_name());
-        log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-        if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
-            log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-        }
-        send_ep_info(mpv, item);
+            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+
+            if start_pos > 0.0 {
+                let _ = mpv.set_property("start", format!("{start_pos:.0}"));
+            } else {
+                let _ = mpv.set_property("start", "0");
+            }
+            let title_opt = mpv_title_opt(&item.display_name());
+            tracing::info!(name: "player.load.started", target: "player", { url.path = %mbv_core::applog::UrlPath(url), load_options = ?title_opt }, "loading media with mpv");
+            if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
+                tracing::warn!(name: "player.load.failed", target: "player", error = %mpv_err_str(&e), load_options = ?title_opt, "mpv loadfile failed");
+            }
+            send_ep_info(mpv, item);
+        });
     }
 
     /// Item-generic queue submission: replace the current queue with `items`
@@ -93,7 +107,7 @@ impl PlaybackRun {
             .collect::<Option<Vec<_>>>()
         else {
             let reason = "Queue submission rejected: item has no direct mpv URL source".to_string();
-            log::warn!(target: "player", "{reason}");
+            tracing::warn!(name: "player.queue_submission.rejected", target: "player", reason = %reason, "queue submission rejected");
             let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
             return;
         };
@@ -128,10 +142,7 @@ impl PlaybackRun {
             let (mode, index) = queue_load_location(i, start_idx);
             let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
-                log::warn!(
-                    target: "player",
-                    "SubmitQueue loadfile error: {e} | mode={mode} opts={opts:?}",
-                );
+                tracing::warn!(name: "player.queue_load.failed", target: "player", error = %e, mode, load_options = ?opts, "mpv loadfile failed");
             }
         }
         // Design D3: every load above was no-play, so playback starts here,
@@ -171,11 +182,9 @@ impl PlaybackRun {
             true,
         );
 
-        log::info!(
-            target: "player",
-            "SubmitQueue origin={origin:?} idx={start_idx} items={}",
-            self.queue_len(),
-        );
+        self.in_playback_span(|this| {
+            tracing::info!(name: "player.queue.submitted", target: "player", origin = ?origin, index = start_idx, item_count = this.queue_len(), "queue submitted");
+        });
     }
 
     fn initialize_queue_start(
@@ -197,20 +206,22 @@ impl PlaybackRun {
             StopAction::NothingPlaying
         };
         self.begin_item_lifecycle(action);
+        // New queue: rebuild the playback correlation span for the incoming
+        // slot; the outgoing session's stop report above already ran under the
+        // previous span (design D5).
+        self.rebuild_playback_span();
         self.pending_initial_playlist_layout = false;
         if join_progress {
             progress.stop_and_join(Self::progress_join_budget());
         }
         if let Some(emby) = active_as_emby {
-            let (urls, ok) = self.reporter.start_item(emby);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(
-                    target: "player",
-                    "start_item failed for SubmitQueue item={}",
-                    emby.id,
-                );
-            }
+            self.in_playback_span(|this| {
+                let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
+                this.ext_sub_urls = urls;
+                if !ok {
+                    tracing::warn!(name: "player.report_start.failed", target: "player", phase = "submitted_queue", item = %emby.id, "start report failed for submitted queue item");
+                }
+            });
         } else {
             self.ext_sub_urls = vec![];
             self.reporter.clear_session();
@@ -250,7 +261,7 @@ impl PlaybackRun {
         let prepared = match self.prepare_item(&active_item) {
             Ok(prepared) => prepared,
             Err(error) => {
-                log::warn!(target: "player", "active-file replacement preparation failed: {error}");
+                tracing::warn!(name: "player.active_file.prepare_failed", target: "player", error = %error, "active-file replacement preparation failed");
                 self.accept_stopped_replacement(
                     items,
                     start_idx,
@@ -275,16 +286,26 @@ impl PlaybackRun {
         );
         self.current_idx = start_idx;
         self.active_file = true;
-        if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
-            log::warn!(target: "player", "active-file replacement failed: {error}");
-            self.accept_stopped_replacement(
-                Vec::new(),
-                start_idx,
-                &active_item,
-                mpv,
-                progress,
-                format!("failed to load media: {error}"),
-            );
+        // New active slot: rebuild the correlation span before the projection
+        // install, so its failure lines carry the incoming slot (design D5).
+        self.rebuild_playback_span();
+        let installed = self.in_playback_span(|this| {
+            if let Err(error) = this.install_active_projection(mpv, prepared, &active_item) {
+                tracing::warn!(name: "player.active_file.replacement_failed", target: "player", error = %error, "active-file replacement failed");
+                this.accept_stopped_replacement(
+                    Vec::new(),
+                    start_idx,
+                    &active_item,
+                    mpv,
+                    progress,
+                    format!("failed to load media: {error}"),
+                );
+                false
+            } else {
+                true
+            }
+        });
+        if !installed {
             return;
         }
         self.origin = if self.queue_len() == 1 {

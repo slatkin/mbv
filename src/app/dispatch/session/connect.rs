@@ -20,13 +20,7 @@ impl App {
                     std::net::SocketAddr::from((ip, port)),
                 ));
             }
-            log::warn!(
-                target: "sessions",
-                "mbv session {:?} advertised direct tcp port {} but host {:?} was not an IPv4 address",
-                sess.device_name,
-                port,
-                sess.host
-            );
+            tracing::warn!(name: "sessions.direct_endpoint.invalid_host", target: "sessions", device = %sess.device_name, port, host = %sess.host, "session advertised direct TCP port with invalid host");
         }
         let client = self.emby_client()?;
         let client = client.lock().unwrap();
@@ -97,10 +91,7 @@ impl App {
             return connect(endpoint).into_result();
         }
 
-        log::info!(
-            target: "daemon_route",
-            "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
-        );
+        tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
         mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
@@ -130,16 +121,13 @@ impl App {
         (mbv_remote_player::RemotePlayer, mpsc::Receiver<PlayerEvent>),
         mbv_remote_player::RemotePlayerError,
     > {
-        log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
+        tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", route = %route_label, endpoint = %endpoint, "daemon route connection started");
         Self::connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
-                log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
+                tracing::info!(name: "daemon_route.connect.succeeded", target: "daemon_route", route = %route_label, endpoint = %endpoint, "daemon route connection succeeded");
             })
             .inspect_err(|error| {
-                log::warn!(
-                    target: "daemon_route",
-                    "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {error}"
-                );
+                tracing::warn!(name: "daemon_route.connect.failed", target: "daemon_route", route = %route_label, endpoint = %endpoint, error = %error, "daemon route connection failed");
             })
     }
 
@@ -172,7 +160,7 @@ impl App {
         if !self.config.lock().unwrap().auto_reconnect {
             return false;
         }
-        log::info!(target: "auto_reconnect", "reconnect enabled; reattaching to {endpoint}");
+        tracing::info!(name: "auto_reconnect.reattach.started", target: "auto_reconnect", endpoint = %endpoint, "reattaching to daemon");
         // The daemon may still be coming back up, so retry a few times with
         // backoff before falling through to the local-restore path. Bounded
         // and short so an unreachable daemon cannot wedge the UI.
@@ -184,10 +172,7 @@ impl App {
                     return true;
                 }
                 Err(e) => {
-                    log::warn!(
-                        target: "auto_reconnect",
-                        "reattach attempt {attempt} to {endpoint} failed: {e}"
-                    );
+                    tracing::warn!(name: "auto_reconnect.reattach.failed", target: "auto_reconnect", attempt, endpoint = %endpoint, error = %e, "reattach attempt failed");
                     sleep(backoff);
                     backoff *= 2;
                 }
@@ -269,29 +254,26 @@ impl App {
     /// fallback rule -- never a hard failure at startup.
     pub(in crate::app) fn try_auto_reconnect(&mut self) {
         if !self.config.lock().unwrap().auto_reconnect {
-            log::info!(target: "auto_reconnect", "auto-reconnect disabled; staying local");
+            tracing::info!(name: "auto_reconnect.reconnect.disabled", target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;
         }
-        log::info!(target: "auto_reconnect", "auto-reconnect enabled; loading state");
+        tracing::info!(name: "auto_reconnect.state_load.started", target: "auto_reconnect", "loading auto-reconnect state");
         let last = match mbv_config::load_last_remote_connection() {
             Ok(Some(last)) => last,
             Ok(None) => {
-                log::info!(target: "auto_reconnect", "state missing; staying local");
+                tracing::info!(name: "auto_reconnect.state.missing", target: "auto_reconnect", "auto-reconnect state missing; staying local");
                 return;
             }
             Err(e) => {
-                log::warn!(target: "auto_reconnect", "state load failed; staying local: {e}");
+                tracing::warn!(name: "auto_reconnect.state_load.failed", target: "auto_reconnect", error = %e, "auto-reconnect state load failed; staying local");
                 return;
             }
         };
         match last {
             mbv_config::LastRemoteConnection::LibraryRoute { library } => {
-                log::info!(target: "auto_reconnect", "state loaded variant=library-route library={library:?}");
+                tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "library_route", library = %library, "auto-reconnect state loaded");
                 let Some((name, endpoint)) = self.resolve_route_for_library(&library) else {
-                    log::info!(
-                        target: "auto_reconnect",
-                        "persisted library route {library:?} no longer resolves; staying local"
-                    );
+                    tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
                     return;
                 };
                 match Self::try_daemon_route_connect(&endpoint, &name) {
@@ -307,11 +289,11 @@ impl App {
                 }
             }
             mbv_config::LastRemoteConnection::DirectSession { device_name } => {
-                log::info!(target: "auto_reconnect", "state loaded variant=direct-session device={device_name:?}");
+                tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "direct_session", device = %device_name, "auto-reconnect state loaded");
                 let sessions = match self.fetch_sessions_blocking() {
                     Ok(sessions) => sessions,
                     Err(e) => {
-                        log::warn!(target: "auto_reconnect", "failed to list sessions: {e}");
+                        tracing::warn!(name: "auto_reconnect.sessions_load.failed", target: "auto_reconnect", error = %e, "failed to list sessions");
                         self.flash(format!(
                             "\u{26a0} Auto-reconnect couldn't list sessions ({e}), using local playback"
                         ), ToastSeverity::Warning);
@@ -322,20 +304,17 @@ impl App {
                     .into_iter()
                     .find(|s| s.device_name.eq_ignore_ascii_case(&device_name))
                 {
-                    log::info!(target: "auto_reconnect", "direct-session resolved device={device_name:?} session_id={:?}; connecting", sess.id);
+                    tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved; connecting");
                     self.connect_to_session(&sess);
                     if self.remote.direct_remote_connected {
-                        log::info!(target: "auto_reconnect", "direct-session connection succeeded device={device_name:?} outcome=direct-daemon-upgrade");
+                        tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "direct_daemon_upgrade", "direct session connected");
                     } else if self.connected_session_id.is_some() {
-                        log::info!(target: "auto_reconnect", "direct-session connection initiated device={device_name:?} outcome=emby-session-control");
+                        tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "emby_session_control", "direct session connected");
                     } else {
-                        log::warn!(target: "auto_reconnect", "direct-session connection failed device={device_name:?}; staying local");
+                        tracing::warn!(name: "auto_reconnect.direct_session.connect_failed", target: "auto_reconnect", device = %device_name, "direct session connection failed; staying local");
                     }
                 } else {
-                    log::info!(
-                        target: "auto_reconnect",
-                        "device {device_name:?} not found in current sessions; staying local"
-                    );
+                    tracing::info!(name: "auto_reconnect.direct_session.not_found", target: "auto_reconnect", device = %device_name, "device not found in current sessions; staying local");
                     self.flash(
                         format!("\u{26a0} {device_name} not found, using local playback"),
                         ToastSeverity::Warning,

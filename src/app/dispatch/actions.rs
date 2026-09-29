@@ -324,9 +324,9 @@ impl App {
             PlaybackEligibility::Ineligible | PlaybackEligibility::WhollyPlayable => None,
         };
         if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
-            log::info!(target: "library_route", "user action=queue-replace item_id={:?} item_name={:?}", item.id, item.name);
+            tracing::info!(name: "library_route.queue_replace.requested", target: "library_route", item = %item.id, item_name = %item.name, "queue replacement requested");
             if self.in_non_library_thin_client_mode() {
-                log::info!(target: "library_route", "route bypass action=queue-replace item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+                tracing::info!(name: "library_route.queue_replace.bypassed", target: "library_route", item = %item.id, item_name = %item.name, reason = "non_library_thin_client_owns_playback", "queue replacement route bypassed");
             } else {
                 let item = item.clone();
                 self.apply_route_for_playback(&item);
@@ -380,7 +380,7 @@ impl App {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return;
         }
-        log::info!(target: "library_route", "user action=play item_id={:?} item_name={:?}", item.id, item.name);
+        tracing::info!(name: "library_route.play.requested", target: "library_route", item = %item.id, item_name = %item.name, "play requested");
         if matches!(
             self.playback_eligibility(std::slice::from_ref(&item)),
             PlaybackEligibility::WhollyUnplayable { .. }
@@ -404,7 +404,7 @@ impl App {
             return;
         }
         if self.in_non_library_thin_client_mode() {
-            log::info!(target: "library_route", "route bypass action=play item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+            tracing::info!(name: "library_route.play.bypassed", target: "library_route", item = %item.id, item_name = %item.name, reason = "non_library_thin_client_owns_playback", "play route bypassed");
         } else {
             self.apply_route_for_playback(&item);
         }
@@ -468,7 +468,7 @@ impl App {
     }
 
     pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {
-        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
+        tracing::info!(name: "library_route.enqueue.requested", target: "library_route", item = %item.id, item_name = %item.name, "enqueue requested");
         let resolved = self.resolve_route_for_enqueue_folder(item);
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;

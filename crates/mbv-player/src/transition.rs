@@ -184,13 +184,14 @@ impl OwnerTransitionState {
             }
             _ => {
                 if let Some(t) = self.in_flight {
-                    log::info!(
+                    tracing::info!(
+                        name: "player.transition.settle_ignored",
                         target: "transition",
-                        "settle ignored: expected=(request_id={} target={:?}) observed=(request_id={} slot={:?})",
-                        t.request_id,
-                        t.target,
-                        observed_request_id,
-                        observed_slot,
+                        request = %t.request_id,
+                        target_slot = ?t.target,
+                        observed_request = %observed_request_id,
+                        observed_slot = ?observed_slot,
+                        "transition settle identity did not match",
                     );
                 }
                 SettleOutcome::Ignored

@@ -8,7 +8,7 @@ impl App {
                 Ok(Some(window)) => self.visualizer_window = window,
                 Ok(None) => {}
                 Err(error) => {
-                    log::warn!(target: "visualizer", "PipeWire worker stopped; visualizer disabled for this playback: {error}");
+                    tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
                     self.visualizer_failed = true;
                     self.stop_visualizer_capture();
                 }
@@ -23,11 +23,11 @@ impl App {
         if self.visualizer.is_none() && !self.visualizer_failed {
             match PipeWireWorker::start() {
                 Ok(worker) => {
-                    log::info!(target: "visualizer", "started PipeWire system-audio worker");
+                    tracing::info!(name: "visualizer.worker.started", target: "visualizer", "started PipeWire system-audio worker");
                     self.visualizer = Some(worker);
                 }
                 Err(error) => {
-                    log::warn!(target: "visualizer", "system-audio visualizer unavailable: {error}");
+                    tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error = %error }, "system-audio visualizer unavailable");
                     self.visualizer_failed = true;
                 }
             }

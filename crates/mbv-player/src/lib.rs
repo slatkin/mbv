@@ -140,17 +140,13 @@ fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
         i64::try_from(start_idx).unwrap_or(i64::MAX),
     );
     if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-        log::warn!(target: "player", "start_queue_playback playlist-play-index={start_idx} failed: {}", mpv_err_str(&error));
+        tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to start playlist index");
     }
 }
 
 fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
     if let Err(e) = mpv.set_property(name, value) {
-        log::warn!(
-            target: "player",
-            "{caller} {name}={value} failed: {}",
-            mpv_err_str(&e),
-        );
+        tracing::warn!(name: "player.property.set_failed", target: "player", caller, property = name, value, error = %mpv_err_str(&e), "failed to set mpv property");
     }
 }
 
@@ -226,14 +222,10 @@ fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
     match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count, mpv_idle) {
         QueueLayoutVerdict::Ok => {}
         QueueLayoutVerdict::Reassert => {
-            log::warn!(
-                target: "player",
-                "queue layout mismatch: start_idx={start_idx} items={item_count} \
-                 mpv_pos={mpv_pos} mpv_count={mpv_count}; reasserting the active ordinal",
-            );
+            tracing::warn!(name: "player.queue_layout.mismatch", target: "player", start_index = start_idx, item_count, mpv_position = mpv_pos, mpv_count, "reasserting the active ordinal");
             if mpv_idle {
                 if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-                    log::warn!(target: "player", "queue layout repair playlist-play-index={start_idx} failed: {}", mpv_err_str(&error));
+                    tracing::warn!(name: "player.queue_layout.repair_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to repair playlist position");
                 }
             } else {
                 let _ =
@@ -242,11 +234,7 @@ fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
             }
         }
         QueueLayoutVerdict::ShortLayout => {
-            log::error!(
-                target: "player",
-                "queue layout incomplete: start_idx={start_idx} items={item_count} \
-                 mpv_pos={mpv_pos} mpv_count={mpv_count}",
-            );
+            tracing::error!(name: "player.queue_layout.incomplete", target: "player", start_index = start_idx, item_count, mpv_position = mpv_pos, mpv_count, "queue layout is incomplete");
         }
     }
 }

@@ -4,6 +4,7 @@ use super::super::{
 };
 use super::{PlaybackRun, ProgressGuard};
 use libmpv2::Mpv;
+use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
 
@@ -74,11 +75,13 @@ impl PlaybackRun {
         // progress_report_tx is dropped at the end of run().
         let (progress_report_tx, progress_report_rx) = mpsc::channel::<String>();
         let progress_worker_reporter = self.reporter.clone();
-        thread::spawn(move || {
+        // The progress worker outlives the slot, so it must not inherit the
+        // spawning slot's `playback` span — dispatcher only (design D5).
+        thread::spawn(app_logging::carry_dispatcher(move || {
             for event_name in progress_report_rx {
                 progress_worker_reporter.report_progress(&event_name);
             }
-        });
+        }));
 
         if wakeup_write_fd >= 0 {
             mpv.set_wakeup_callback(move || {
@@ -94,6 +97,10 @@ impl PlaybackRun {
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             loop {
+                // Playback correlation span (design D5): re-entered each tick,
+                // so a slot change's rebuilt span takes over on the next pass.
+                let playback = self.playback_span.clone();
+                let _playback = playback.enter();
                 if self.run_tick(
                     &mpv,
                     &mut progress,
@@ -119,7 +126,7 @@ impl PlaybackRun {
                 .map(ToString::to_string)
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
-            log::error!(target: "player", "PlaybackRun panicked: {msg}");
+            tracing::error!(name: "player.playback_run.panicked", target: "player", panic = %msg, "playback run panicked");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 // Panic teardown: the run's queue is gone with the unwound
                 // stack, so no slot identity can be resolved.
@@ -269,7 +276,7 @@ impl PlaybackRun {
                         .is_some_and(PreparedSource::has_sensitive_lifecycle),
                     text,
                 ) {
-                    log::warn!(target: "mpv", "[{prefix}/{level}] {t}");
+                    tracing::warn!(name: "player.mpv.message", target: "mpv", prefix, mpv_level = level, message = %t, "mpv log message");
                 }
                 false
             }
@@ -294,7 +301,7 @@ impl PlaybackRun {
     fn handle_client_message(&mut self, args: &[&str], mpv: &Mpv) {
         match args.first().copied() {
             Some("mbv-next-up-play") => {
-                log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
+                tracing::info!(name: "player.next_up.play_requested", target: "player", "Lua requested next-up playback");
                 self.next_up_jump = true;
                 let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
             }
@@ -344,7 +351,7 @@ impl PlaybackRun {
             }
             ("sid", PropertyData::Str(s)) => {
                 let id = s.parse::<i64>().unwrap_or(0);
-                log::info!(target: "player", "sid PropertyChange: raw={s:?} parsed={id}");
+                tracing::info!(name: "player.subtitle_id.changed", target: "player", raw_sid = ?s, sid = id, "subtitle id changed");
                 self.status.lock().unwrap().sub_id = id;
             }
             ("aid", PropertyData::Str(_)) => {
@@ -354,17 +361,17 @@ impl PlaybackRun {
                 self.status.lock().unwrap().muted = m;
             }
             ("video-params/h", PropertyData::Int64(h)) => {
-                log::info!(target: "player", "video-params/h (playlist): h={h}");
+                tracing::info!(name: "player.video_height.changed", target: "player", height = h, "video height changed");
                 self.status.lock().unwrap().video_height = h;
             }
             ("video-params/h", change) => {
-                log::warn!(target: "player", "video-params/h (playlist) unexpected type: {change:?}");
+                tracing::warn!(name: "player.video_height.unexpected_type", target: "player", value = ?change, "unexpected video height property type");
             }
             ("audio-codec-name", PropertyData::Str(s)) => {
                 self.status.lock().unwrap().audio_codec = s.to_lowercase();
             }
             ("current-tracks/video/image", PropertyData::Flag(is_img)) => {
-                log::info!(target: "player", "video/image (playlist): is_img={is_img}");
+                tracing::info!(name: "player.video_image.changed", target: "player", is_image = is_img, "video image state changed");
                 self.status.lock().unwrap().video_is_image = is_img;
             }
             ("playlist-pos", PropertyData::Int64(pos)) => {

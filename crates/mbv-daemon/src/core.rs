@@ -31,10 +31,7 @@ pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
             Some(listener)
         }
         Err(e) => {
-            log::error!(
-                target: "daemon",
-                "ctrl socket bind failed ({e}), remote TUI unavailable"
-            );
+            tracing::error!(name: "daemon.ctrl_socket_bind.failed", target: "daemon", error = %e, "ctrl socket bind failed; remote TUI unavailable");
             None
         }
     }
@@ -366,6 +363,7 @@ pub(super) struct DaemonPlayerOwner {
 }
 
 pub(crate) struct PendingIdleQueueLoad {
+    pub(super) client_id: CtrlClientId,
     pub(super) request_id: mbv_ctrl::QueueLoadRequestId,
     pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
     pub(super) cursor: usize,
@@ -421,18 +419,12 @@ pub(super) fn dispatch_slot_jump(
     let transition_generation = transition.generation;
     match transitions.accept(transition) {
         mbv_player::transition::DispatchDecision::DispatchNow(t) => {
-            log::info!(
-                target: "transition",
-                "dispatch_slot_jump: decision=DispatchNow target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
-            );
+            tracing::info!(name: "daemon.transition_dispatch.started", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump dispatched");
             let resume_ticks = mbv_player::resume_ticks_for_slot(queue, transition_target);
             ctx.player.send_command(t.into_jump(resume_ticks));
         }
         mbv_player::transition::DispatchDecision::Queued { superseded } => {
-            log::info!(
-                target: "transition",
-                "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
-            );
+            tracing::info!(name: "daemon.transition_dispatch.queued", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump queued");
             if let Some(s) = superseded
                 && let Some((origin_request_id, origin_client)) = *queued_origin
                 && origin_request_id == s.request_id
@@ -491,19 +483,10 @@ pub(super) fn settle_and_redispatch(
         .transitions
         .settle(observed_request_id, observed_slot)
     else {
-        log::info!(
-            target: "transition",
-            "settle_and_redispatch: request_id={observed_request_id} slot={observed_slot:?} settled=false dispatch_next=false",
-        );
+        tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = false, dispatch_next = false, "transition settled");
         return;
     };
-    log::info!(
-        target: "transition",
-        "settle_and_redispatch: request_id={} slot={:?} settled=true dispatch_next={}",
-        observed_request_id,
-        observed_slot,
-        dispatch_next.is_some(),
-    );
+    tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = true, dispatch_next = dispatch_next.is_some(), "transition settled");
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
         let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);

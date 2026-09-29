@@ -297,7 +297,7 @@ impl Model {
         if let Err(e) =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {
-            log::warn!(target: "config", "config save failed: {e}");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
     }
 
@@ -331,7 +331,7 @@ impl Model {
         let cfg = self.app.config.lock().unwrap().clone();
         if let Err(e) = crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Library)
         {
-            log::warn!(target: "config", "config save failed: {e}");
+            tracing::warn!(name: "config.save.failed", target: "config", error = %e, "config save failed");
         }
         if let Ok(content) = self.app.fetch_home() {
             // The commit runs the fetch synchronously (order-sensitive
@@ -457,18 +457,18 @@ impl Model {
     }
 
     pub(in crate::app) fn open_library_routes(&mut self) {
-        log::info!(target: "library_route", "F2 route picker opened");
+        tracing::info!(name: "library_route.picker.opened", target: "library_route", "F2 route picker opened");
         let Some(client) = self.app.emby_client() else {
             return;
         };
         let client = client.lock().unwrap();
         let all = match client.get_views() {
             Ok(all) => {
-                log::info!(target: "library_route", "F2 library fetch succeeded count={}", all.len());
+                tracing::info!(name: "library_route.library_fetch.succeeded", target: "library_route", count = all.len(), "F2 library fetch succeeded");
                 all
             }
             Err(e) => {
-                log::warn!(target: "library_route", "F2 library fetch failed: {e}");
+                tracing::warn!(name: "library_route.library_fetch.failed", target: "library_route", { error = %e }, "F2 library fetch failed");
                 drop(client);
                 self.app.flash(
                     format!("⚠ Library routes couldn't load libraries ({e})"),
@@ -539,11 +539,11 @@ impl Model {
     pub(in crate::app) fn enter_device_stage(&mut self, library_lower: String) {
         let sessions = match self.app.fetch_sessions_blocking() {
             Ok(sessions) => {
-                log::info!(target: "library_route", "F2 session fetch succeeded count={}", sessions.len());
+                tracing::info!(name: "library_route.session_fetch.succeeded", target: "library_route", count = sessions.len(), "F2 session fetch succeeded");
                 sessions
             }
             Err(e) => {
-                log::warn!(target: "library_route", "F2 session fetch failed library={library_lower:?}: {e}");
+                tracing::warn!(name: "library_route.session_fetch.failed", target: "library_route", { library = %library_lower, error = %e }, "F2 session fetch failed");
                 self.app.flash(
                     format!("⚠ Library routes couldn't load devices ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,
@@ -562,16 +562,16 @@ impl Model {
             .map(|s| {
                 let endpoint = self.app.session_direct_endpoint(s);
                 if let Some(endpoint) = &endpoint {
-                    log::info!(target: "library_route", "F2 endpoint eligible device={:?} endpoint={endpoint}", s.device_name);
+                    tracing::info!(name: "library_route.endpoint.eligible", target: "library_route", device = %s.device_name, endpoint = %endpoint, "F2 endpoint eligible");
                 } else {
-                    log::info!(target: "library_route", "F2 endpoint rejected device={:?} reason=no resolvable direct-connect endpoint", s.device_name);
+                    tracing::info!(name: "library_route.endpoint.rejected", target: "library_route", device = %s.device_name, reason = "no resolvable direct-connect endpoint", "F2 endpoint rejected");
                 }
                 (s.device_name.clone(), endpoint)
             })
             .collect();
         devices.sort_by(|a, b| a.0.cmp(&b.0));
         devices.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
-        log::info!(target: "library_route", "F2 candidate count={} library={library_lower:?}", devices.len());
+        tracing::info!(name: "library_route.candidates.counted", target: "library_route", count = devices.len(), library = %library_lower, "F2 candidate count");
 
         let current_endpoint = self
             .app
@@ -626,16 +626,16 @@ impl Model {
             let mut c = self.app.config.lock().unwrap();
             if cursor == 0 {
                 c.library_routes.remove(&library_lower);
-                log::info!(target: "library_route", "F2 route removed library={library_lower:?}");
+                tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
             } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
                 c.library_routes
                     .insert(library_lower.clone(), endpoint.clone());
-                log::info!(target: "library_route", "F2 endpoint persisted library={library_lower:?} endpoint={endpoint}");
+                tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
             }
         }
         let cfg = self.app.config.lock().unwrap().clone();
         self.app.library_routes = cfg.library_routes.clone();
-        log::info!(target: "library_route", "runtime route table synchronized count={}", self.app.library_routes.len());
+        tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.app.library_routes.len(), "runtime route table synchronized");
         let save_result =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::LibraryRoutes);
         if !self.finish_route_config_save(save_result) {
@@ -648,7 +648,7 @@ impl Model {
         let all = match refresh_result {
             Ok(all) => all,
             Err(e) => {
-                log::warn!(target: "library_route", "F2 post-save library refresh failed: {e}");
+                tracing::warn!(name: "library_route.library_refresh.failed", target: "library_route", { error = %e }, "F2 post-save library refresh failed");
                 self.app.flash(
                     format!("⚠ Library route saved but couldn't refresh libraries ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,
@@ -682,11 +682,11 @@ impl Model {
     ) -> bool {
         match result {
             Ok(()) => {
-                log::info!(target: "library_route", "config save succeeded");
+                tracing::info!(name: "library_route.config_save.succeeded", target: "library_route", "config save succeeded");
                 true
             }
             Err(e) => {
-                log::warn!(target: "library_route", "config save failed: {e}");
+                tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error = %e }, "config save failed");
                 self.app.flash(
                     format!("⚠ Library route changed but config save failed ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,

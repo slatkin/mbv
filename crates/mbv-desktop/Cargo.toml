@@ -17,7 +17,7 @@ workspace = true
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-images = { path = "../mbv-images" }
-log.workspace = true
+tracing.workspace = true
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }

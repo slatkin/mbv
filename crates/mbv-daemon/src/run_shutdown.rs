@@ -26,7 +26,7 @@ pub(crate) fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<(
                 libc::sigaddset(&raw mut mask, libc::SIGTERM);
                 libc::sigwait(&raw const mask, &raw mut sig)
             };
-            log::info!(target: "daemon", "received signal {sig} (SIGTERM), initiating graceful shutdown");
+            tracing::info!(name: "daemon.shutdown_signal.received", target: "daemon", signal = sig, "received SIGTERM; initiating graceful shutdown");
             let _ = tx.try_send(());
         })
     };

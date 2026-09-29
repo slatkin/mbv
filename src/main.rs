@@ -68,24 +68,25 @@ fn run_remote_app(
 
 fn parse_log_level_arg(
     args: &[String],
-) -> Result<Option<applog::Level>, mbv_ui_model::UiModelError> {
-    let mut level = None;
+) -> Result<Option<applog::LogSpec>, mbv_ui_model::UiModelError> {
+    let mut spec = None;
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--log-level" {
             i += 1;
             let Some(value) = args.get(i) else {
                 return Err(mbv_ui_model::UiModelError::operation(
-                    "mbv: --log-level requires error, warn, info, or debug",
+                    "mbv: --log-level requires a level or level[,target=level...] list",
                 ));
             };
-            level = Some(applog::Level::parse(value).ok_or_else(|| {
-                mbv_ui_model::UiModelError::operation(format!("mbv: invalid log level {value:?}"))
-            })?);
+            spec =
+                Some(applog::LogSpec::parse(value).map_err(|error| {
+                    mbv_ui_model::UiModelError::operation(format!("mbv: {error}"))
+                })?);
         }
         i += 1;
     }
-    Ok(level)
+    Ok(spec)
 }
 
 fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, mbv_ui_model::UiModelError> {
@@ -161,7 +162,12 @@ fn write_crash_log(msg: &str) {
     // Write directly to stderr (async-signal-safe, no mutex)
     let _ = std::io::stderr().write_all(msg.as_bytes());
     let _ = std::io::stderr().write_all(b"\n");
-    log::error!(target: "crash", "{msg}");
+    tracing::error!(
+        name: "crash.log.failed",
+        target: "crash",
+        { error = %msg },
+        "fatal error"
+    );
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -212,7 +218,7 @@ fn print_usage() {
     println!();
     println!("Options:");
     println!(
-        "      --log-level <level>   Set the log level: error, warn, info (default), or debug."
+        "      --log-level <level[,target=level...]>\n\n     Set the log level, e.g. info or info,player=debug.\n     Levels: error, warn, info (default), debug, trace."
     );
     println!("  -q                        Stop the running Player owner (bare mbv, or the local");
     println!("                             daemon in stay-alive mode).");
@@ -223,7 +229,7 @@ fn print_usage() {
     println!("  -h, --help                 Print this help message and exit.");
 }
 
-fn pre_config_startup() -> Option<(Option<applog::Level>, Option<String>)> {
+fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
@@ -307,7 +313,7 @@ fn main() {
     applog::init(
         config::is_system_instance(),
         Some(state_dir().join("mbv.log")),
-        log_level.unwrap_or(applog::Level::Info),
+        log_level.as_ref().unwrap_or(&applog::LogSpec::default()),
     );
 
     if let Err(e) = config::migrate_legacy_emby_token() {
@@ -320,12 +326,17 @@ fn main() {
             std::process::exit(1);
         }
     };
-    log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
+    tracing::info!(
+        name: "startup.config.loaded",
+        target: "startup",
+        summary = %config_diagnostic_summary(&config),
+        "configuration loaded"
+    );
     run_configured_startup(log_level, cli_daemon_endpoint, &config);
 }
 
 fn run_configured_startup(
-    log_level: Option<applog::Level>,
+    log_level: Option<applog::LogSpec>,
     cli_daemon_endpoint: Option<String>,
     config: &config::Config,
 ) {
@@ -341,18 +352,23 @@ fn run_configured_startup(
             })
         });
 
-    log::info!(target: "startup", "mbv starting");
+    tracing::info!(name: "startup.application.started", target: "startup", "mbv starting");
 
     // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
     // always wins: a thin client to `mbvd`, owning no Player and taking no
     // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
         let client = cached_emby_client(config);
-        log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
+        tracing::info!(
+            name: "startup.daemon.connecting",
+            target: "startup",
+            endpoint = %endpoint,
+            "connecting to explicit daemon endpoint"
+        );
         println!("Connecting to daemon at {endpoint}...");
         match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
             Ok((remote, player_rx)) => {
-                log::info!(target: "startup", "daemon endpoint connected");
+                tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
                 run_remote_app(client, remote, player_rx, &endpoint, config.clone());
                 return;
             }
@@ -366,7 +382,7 @@ fn run_configured_startup(
     run_local_instance(config, log_level);
 }
 
-fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>) {
+fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec>) {
     // Single-instance resolution (ADR 0006): advisory flock + control-socket
     // connectability. Independent of stay-alive; always on.
     let lock_path = single_instance::lock_path();
@@ -377,7 +393,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>)
             // A live local daemon exists: attach as a client alongside any
             // others already attached. Clients take no lock -- that is what
             // permits any number of them.
-            log::info!(target: "startup", "local daemon detected; attaching");
+            tracing::info!(name: "startup.local_daemon.detected", target: "startup", "local daemon detected; attaching");
             let client = cached_emby_client(config);
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
@@ -454,7 +470,12 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>)
             }
 
             if let Err(e) = guard.write_pid() {
-                log::warn!(target: "startup", "failed to write pid into lock file: {e}");
+                tracing::warn!(
+                    name: "startup.lock.write_failed",
+                    target: "startup",
+                    error = %e,
+                    "failed to write pid into lock file"
+                );
             }
             let app = App::new_independent(config);
             run_tui(app);
@@ -473,21 +494,34 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>)
 mod tests {
     use super::*;
 
+    #[rstest::rstest]
+    #[case("error", "error")]
+    #[case("warn", "warn")]
+    #[case("info", "info")]
+    #[case("debug", "debug")]
+    #[case("trace", "trace")]
+    #[case("info,player=debug", "info,player=debug")]
+    fn log_level_arg_accepts_supported_values(#[case] value: &str, #[case] expected: &str) {
+        assert_eq!(
+            parse_log_level_arg(&["--log-level".into(), value.into()])
+                .unwrap()
+                .as_ref()
+                .map(applog::LogSpec::to_string)
+                .as_deref(),
+            Some(expected)
+        );
+    }
+
+    #[rstest::rstest]
+    #[case(vec!["--log-level".into(), "info,player=".into()])]
+    #[case(vec!["--log-level".into(), "loud".into()])]
+    #[case(vec!["--log-level".into()])]
+    fn log_level_arg_rejects_invalid_values(#[case] args: Vec<String>) {
+        parse_log_level_arg(&args).unwrap_err();
+    }
+
     #[test]
-    fn log_level_arg_accepts_supported_values_and_rejects_invalid_values() {
-        for (value, expected) in [
-            ("error", applog::Level::Error),
-            ("warn", applog::Level::Warn),
-            ("info", applog::Level::Info),
-            ("debug", applog::Level::Debug),
-        ] {
-            assert_eq!(
-                parse_log_level_arg(&["--log-level".into(), value.into()]).unwrap(),
-                Some(expected)
-            );
-        }
-        parse_log_level_arg(&["--log-level".into(), "trace".into()]).unwrap_err();
-        parse_log_level_arg(&["--log-level".into()]).unwrap_err();
+    fn log_level_arg_is_absent_without_flag() {
         assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
     }
 

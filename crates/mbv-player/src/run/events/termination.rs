@@ -14,7 +14,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) -> bool {
         if !is_clocked_audio_error(error, self.config.audio_device.is_some()) {
-            log::warn!(target: "player", "event error: {}", mpv_err_str(error));
+            tracing::warn!(name: "player.event.failed", target: "player", error = %mpv_err_str(error), "mpv event failed");
             return false;
         }
 
@@ -61,9 +61,11 @@ impl PlaybackRun {
         }
         let id = self.reporter.ids.lock().unwrap().0.clone();
         match self.reporter.client.mark_played(id.as_str()) {
-            Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
+            Ok(()) => {
+                tracing::info!(name: "player.mark_played.succeeded", target: "player", item = %id, "mark played succeeded");
+            }
             Err(e) => {
-                log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
+                tracing::warn!(name: "player.mark_played.failed", target: "player", item = %id, error = %e, "mark played failed; will retry");
                 self.mark_played_id = Some(id.clone());
             }
         }
@@ -113,8 +115,7 @@ impl PlaybackRun {
         // the observed active slot, not an mpv-index fallback.
         let stopped_slot = self.stop_slot.take().or_else(|| self.active_slot_id());
         self.close_prepared_source();
-        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?}",
-            self.last_valid_pos, self.stop_report());
+        tracing::warn!(name: "player.shutdown.started", target: "player", last_valid_position = self.last_valid_pos, stop_report = ?self.stop_report(), "mpv shutdown");
         if self.is_unreported() {
             self.report_stop_now_or_background(progress);
         }

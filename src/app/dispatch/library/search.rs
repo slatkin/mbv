@@ -233,9 +233,7 @@ impl App {
                 name_lt,
             }) {
                 Ok((items, total_count)) => {
-                    log::info!(target: "browse", "Refreshed lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
-                        items.len(),
-                        items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
+                    tracing::info!(name: "browse.items.refreshed", target: "browse", library_index = lib_idx, parent = %parent_id, total_count, fetched_count = items.len(), first_items = ?items.iter().take(3).map(|item| format!("{}:{}", item.id, item.name)).collect::<Vec<_>>(), "browse items refreshed");
                     let _ = tx.send(LibEvent::Browse(BrowseEvent::Refreshed {
                         lib_idx,
                         parent_id,

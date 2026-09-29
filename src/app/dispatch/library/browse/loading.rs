@@ -273,10 +273,7 @@ impl App {
             ) {
                 Ok((items, total_count)) => {
                     let fetched_rows = items.len();
-                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
-                        items.len(),
-                        spawn_started.elapsed().as_millis(),
-                        items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
+                    tracing::info!(name: "browse.items.loaded", target: "browse", library_index = lib_idx, parent = %parent_id, total_count, fetched_count = items.len(), thread_duration_ms = spawn_started.elapsed().as_millis(), first_items = ?items.iter().take(3).map(|item| format!("{}:{}", item.id, item.name)).collect::<Vec<_>>(), "browse items loaded");
                     let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),

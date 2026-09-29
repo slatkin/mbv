@@ -22,7 +22,7 @@ impl EmbyClient {
             "EnableDirectStream": false,
             "IsPlayback": true,
         });
-        log::info!(target: "api", "outbound: PlaybackInfo item={item_id}");
+        tracing::info!(name: "emby.playback_info.requested", target: "api", item = %item_id, "requesting playback info");
         let resp: Value = match self
             .post(&format!(
                 "/Items/{}/PlaybackInfo",
@@ -33,7 +33,7 @@ impl EmbyClient {
             Ok(mut r) => match r.body_mut().read_json() {
                 Ok(v) => v,
                 Err(e) => {
-                    log::warn!(target: "api", "err: PlaybackInfo parse: {e}");
+                    tracing::warn!(name: "emby.playback_info.parse_failed", target: "api", error = %e, "failed to parse playback info response");
                     return PlaybackInfo {
                         session_id: gen_session_id(),
                         media_source_id: MediaSourceId::new(item_id.to_string()),
@@ -42,7 +42,7 @@ impl EmbyClient {
                 }
             },
             Err(e) => {
-                log::warn!(target: "api", "err: PlaybackInfo: {e}");
+                tracing::warn!(name: "emby.playback_info.request_failed", target: "api", error = %e, "playback info request failed");
                 return PlaybackInfo {
                     session_id: gen_session_id(),
                     media_source_id: MediaSourceId::new(item_id.to_string()),
@@ -66,7 +66,7 @@ impl EmbyClient {
             .filter_map(|s| s["DeliveryUrl"].as_str())
             .map(|u| format!("{}{}", self.config.server_url, u))
             .collect();
-        log::info!(target: "api", "inbound: PlaybackInfo sid={sid} msid={msid} ext_subs={}", sub_urls.len());
+        tracing::info!(name: "emby.playback_info.received", target: "api", play_session = %sid, media_source = %msid, external_subtitle_count = sub_urls.len(), "received playback info");
         let session_id = if sid.is_empty() {
             gen_session_id()
         } else {

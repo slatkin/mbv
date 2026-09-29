@@ -14,16 +14,16 @@ fn ctrl_client_capabilities(
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if let Err(e) = info.validate_peer() {
-                log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                tracing::warn!(name: "daemon.ctrl_client.peer_validation_failed", target: "daemon", error = %e, "ctrl client rejected");
                 return None;
             }
             if let Some(control_credential) = control_credential {
                 if info.control_token.is_none() {
-                    log::warn!(target: "daemon", "rejecting ctrl client: missing Control credential");
+                    tracing::warn!(name: "daemon.ctrl_client.control_credential_missing", target: "daemon", "ctrl client rejected: missing Control credential");
                     return None;
                 }
                 if let Err(e) = info.validate_control_credential(control_credential) {
-                    log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                    tracing::warn!(name: "daemon.ctrl_client.control_credential_invalid", target: "daemon", error = %e, "ctrl client rejected");
                     return None;
                 }
             }
@@ -38,11 +38,11 @@ fn ctrl_client_capabilities(
             ))
         }
         Ok(_) => {
-            log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
+            tracing::warn!(name: "daemon.ctrl_client.hello_missing", target: "daemon", "ctrl client rejected: missing protocol hello");
             None
         }
         Err(e) => {
-            log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
+            tracing::warn!(name: "daemon.ctrl_client_hello.invalid", target: "daemon", error = %e, "invalid ctrl protocol hello");
             None
         }
     }
@@ -76,6 +76,22 @@ fn send_initial_queue_state(
     }
 }
 
+/// The peer identity for the ctrl connect line (design D5): the Unix peer's
+/// process id from `SO_PEERCRED`, or the TCP peer address. Read before `stream`
+/// moves into the reader thread.
+fn ctrl_peer_identity(stream: &SocketStream) -> String {
+    match stream {
+        SocketStream::Unix(stream) => {
+            nix::sys::socket::getsockopt(stream, nix::sys::socket::sockopt::PeerCredentials)
+                .ok()
+                .map_or_else(|| "unknown".to_string(), |cred| cred.pid().to_string())
+        }
+        SocketStream::Tcp(stream) => stream
+            .peer_addr()
+            .map_or_else(|_| "unknown".to_string(), |addr| addr.to_string()),
+    }
+}
+
 pub(crate) fn spawn_ctrl_client(
     stream: SocketStream,
     transport: CtrlTransport,
@@ -86,6 +102,7 @@ pub(crate) fn spawn_ctrl_client(
     shared_queue: SharedQueueState,
     audio_only: bool,
 ) {
+    let peer = ctrl_peer_identity(&stream);
     let Ok(writer_stream) = stream.try_clone() else {
         return;
     };
@@ -149,6 +166,13 @@ pub(crate) fn spawn_ctrl_client(
             audiobookshelf,
             supports_owner_queue_load,
         );
+        tracing::info!(
+            name: "ctrl.client.connected",
+            target: "ctrl",
+            client = %client_id,
+            peer = %peer,
+            "ctrl client connected"
+        );
 
         for line in lines {
             let Ok(line) = line else { break };
@@ -165,10 +189,13 @@ pub(crate) fn spawn_ctrl_client(
                     // on both ends: the log for operators, CommandRejected for
                     // the client's toast — the serde error names the
                     // field/variant that drifted.
-                    log::warn!(
+                    tracing::warn!(
+                        name: "daemon.ctrl_command_parse.failed",
                         target: "daemon",
-                        "unparsable ctrl line from client {client_id} ({} bytes): {e}",
-                        line.len(),
+                        client = %client_id,
+                        bytes = line.len(),
+                        error = %e,
+                        "ctrl command parse failed"
                     );
                     if let Ok(json) = serde_json::to_string(&CtrlEvent::CommandRejected(format!(
                         "mbvd ignored an unparsable control command: {e}"

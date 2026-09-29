@@ -248,8 +248,9 @@ restriction. `mbv-core` takes `time` as a dependency and drops `libc`, along wit
 each write, if `len + line_len > 5_000_000`, it rotates: remove `.3`, rename `.2`→`.3`,
 `.1`→`.2`, `log`→`.1`, then reopen. `init` does the same check at startup. Any
 `create_dir_all`, open or rename error prints one `mbv: log file <path>: <error>` to stderr.
-After an open failure the sink stays `None`. After a failed rotation, writing continues to
-the current file and the warning is printed only once. The size limit is a constructor
+After an open failure the sink stays `None`. If a rename fails, writing continues to the
+current file; if the rename chain succeeds but reopening fails, the stale handle is dropped
+and no file write occurs. The warning is printed only once per failure. The size limit is a constructor
 argument so tests can use a tiny one in a temp directory.
 
 ### D9. Stderr sink

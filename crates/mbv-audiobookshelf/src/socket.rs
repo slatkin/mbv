@@ -188,7 +188,7 @@ fn run_socket_thread(
     let mut shutdown_requested = false;
 
     'reconnect: loop {
-        log::info!(target: "audiobookshelf_socket", "connecting…");
+        tracing::info!(name: "audiobookshelf.socket.connecting", target: "audiobookshelf_socket", "connecting to WebSocket");
         match tungstenite::connect(ws_url) {
             Ok((socket, _)) => {
                 backoff_secs = 1;
@@ -204,19 +204,25 @@ fn run_socket_thread(
                     Err(()) => return,
                 };
             }
-            Err(e) => log::warn!(target: "audiobookshelf_socket", "connect failed: {e}"),
+            Err(e) => {
+                tracing::warn!(name: "audiobookshelf.socket.connect_failed", target: "audiobookshelf_socket", error = %e, "WebSocket connection failed");
+            }
         }
 
         if shutdown_requested {
-            log::info!(
+            tracing::info!(
+                name: "audiobookshelf.socket.shutdown_requested",
                 target: "audiobookshelf_socket",
-                "shutdown requested, exiting reconnect loop"
+                "shutdown requested; exiting reconnect loop"
             );
             break 'reconnect;
         }
 
         // Exponential backoff with jitter, max 60s.
-        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, "audiobookshelf_socket");
+        mbv_net::reconnect_backoff_sleep(
+            &mut backoff_secs,
+            mbv_net::ReconnectTarget::AudiobookshelfSocket,
+        );
     }
 }
 
@@ -243,7 +249,7 @@ fn run_connected(
     // Socket.IO v4: open the default namespace. A send failure at the WebSocket
     // level will surface on the next read/send inside 'conn and trigger reconnect.
     let _ = socket.send(Message::Text("40".into()));
-    log::info!(target: "audiobookshelf_socket", "connected");
+    tracing::info!(name: "audiobookshelf.socket.connected", target: "audiobookshelf_socket", "WebSocket connected");
     let mut last_activity = Instant::now();
 
     'conn: loop {
@@ -254,10 +260,11 @@ fn run_connected(
         // Engine.IO v4 heartbeat: the SERVER pings every `ping_interval` and
         // we reply pong below; a client-sent ping is a protocol error.
         if last_activity.elapsed() >= *ping_interval + *ping_timeout {
-            log::warn!(
+            tracing::warn!(
+                name: "audiobookshelf.socket.idle_timeout",
                 target: "audiobookshelf_socket",
-                "no data for {:.0}s, reconnecting",
-                last_activity.elapsed().as_secs_f64()
+                idle_seconds = last_activity.elapsed().as_secs_f64(),
+                "no WebSocket data; reconnecting"
             );
             break 'conn;
         }
@@ -282,13 +289,13 @@ fn run_connected(
             }
             Ok(Message::Pong(_)) => last_activity = Instant::now(),
             Ok(Message::Close(_)) => {
-                log::info!(target: "audiobookshelf_socket", "closed by server, reconnecting");
+                tracing::info!(name: "audiobookshelf.socket.closed", target: "audiobookshelf_socket", "server closed WebSocket; reconnecting");
                 break 'conn;
             }
             Err(tungstenite::Error::Io(e))
                 if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
             Err(e) => {
-                log::warn!(target: "audiobookshelf_socket", "error: {e}, reconnecting");
+                tracing::warn!(name: "audiobookshelf.socket.disconnected", target: "audiobookshelf_socket", error = %e, "WebSocket error; reconnecting");
                 break 'conn;
             }
             _ => {}

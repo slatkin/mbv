@@ -35,11 +35,12 @@ impl ImageCache {
     /// on the right/bottom (#654).
     pub fn init_image_pickers(&mut self) {
         let picker = self.build_image_picker();
-        log::debug!(
+        tracing::debug!(
+            name: "startup.image_picker.initialized",
             target: "startup",
-            "image picker: protocol={:?} font_size={:?}",
-            picker.protocol_type(),
-            picker.font_size()
+            protocol = ?picker.protocol_type(),
+            font_size = ?picker.font_size(),
+            "image picker initialized"
         );
         self.initialize_image_pickers(picker, Picker::halfblocks());
     }

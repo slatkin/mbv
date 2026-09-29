@@ -26,12 +26,14 @@ mbv-ids = { path = "../mbv-ids" }
 mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
 libc.workspace = true
+nix.workspace = true
 uuid.workspace = true
 serde_json.workspace = true
-log.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-mbv-core = { path = "../mbv-core" }
+mbv-core = { path = "../mbv-core", features = ["test"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 rstest.workspace = true
 mbv-player = { path = "../mbv-player", features = ["test"] }
 mbv-config = { path = "../mbv-config", features = ["test"] }

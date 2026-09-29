@@ -12,7 +12,7 @@ pub(crate) fn current_launch_secs() -> u64 {
 #[must_use]
 pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
     if current == 0 {
-        log::warn!(target: "home_latest", "invalid non-positive launch cutoff; markers disabled");
+        tracing::warn!(name: "home_latest.launch_cutoff.invalid", target: "home_latest", current, "launch cutoff is not positive; markers disabled");
         return HomeLatestLaunchWindow {
             previous: None,
             current,
@@ -20,7 +20,7 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
     }
     let previous = mbv_config::load_home_latest_launch();
     if let Err(error) = mbv_config::save_home_latest_launch(current) {
-        log::warn!(target: "home_latest", "could not save launch cutoff: {error}");
+        tracing::warn!(name: "home_latest.launch_cutoff.save_failed", target: "home_latest", { error = %error }, "could not save launch cutoff");
         return HomeLatestLaunchWindow {
             previous: None,
             current,

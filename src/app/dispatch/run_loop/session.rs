@@ -138,7 +138,7 @@ impl App {
                 self.apply_saved_playlist_source(source, origin);
             }
             Ok(_) => {
-                log::debug!(target: "playlist", "discarding stale playlist replacement completion");
+                tracing::debug!(name: "playlist.replacement.stale_completion_ignored", target: "playlist", "stale playlist replacement completion ignored");
             }
             Err(error) => self.flash(
                 format!("Playlist overwrite failed: {error}"),
@@ -178,7 +178,7 @@ impl App {
                 }
             }
             Ok(_) => {
-                log::debug!(target: "playlist", "discarding stale Save As completion");
+                tracing::debug!(name: "playlist.save_as.stale_completion_ignored", target: "playlist", "stale Save As completion ignored");
             }
             Err(error) => self.flash(
                 format!("Playlist save failed: {error}"),
@@ -230,13 +230,9 @@ impl App {
             // A seek was just dispatched; hold the optimistic position until
             // the API catches up. Once the API reports the new position (or
             // the window expires) we fall through to normal reconciliation.
-            log::debug!(target: "sessions",
-                "pos hold (seek pending): api={}s remote_pos_s={}s",
-                s.position_s, self.remote.remote_pos_s);
+            tracing::debug!(name: "sessions.position.held", target: "sessions", api_position_seconds = s.position_s, remote_position_seconds = self.remote.remote_pos_s, "holding position while seek is pending");
         } else if item_changed {
-            log::debug!(target: "sessions",
-                "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
-                s.position_s, self.remote.remote_pos_s, s.position_s);
+            tracing::debug!(name: "sessions.position.reset", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "resetting position after item change");
             self.remote.remote_pos_s = s.position_s;
             self.remote.remote_api_pos_advanced_at = now;
             self.remote.remote_seek_pending_until =
@@ -248,14 +244,10 @@ impl App {
                 self.remote.remote_pos_at.elapsed(),
             );
             let new_pos = s.position_s.max(extrapolated);
-            log::debug!(target: "sessions",
-                "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
-                s.position_s, s.is_paused, elapsed, self.remote.remote_pos_s, new_pos);
+            tracing::debug!(name: "sessions.position.extrapolated", target: "sessions", api_position_seconds = s.position_s, paused = s.is_paused, elapsed_seconds = elapsed, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = new_pos, "extrapolated remote session position");
             self.remote.remote_pos_s = new_pos;
         } else {
-            log::debug!(target: "sessions",
-                "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
-                s.position_s, self.remote.remote_pos_s, s.position_s);
+            tracing::debug!(name: "sessions.position.idle", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "remote session position is idle");
             self.remote.remote_pos_s = s.position_s;
         }
         if !seek_pending || item_changed {
@@ -311,7 +303,7 @@ impl App {
         // currently observable, but the logical attachment is
         // still held (capable of observing a return).
         if self.remote.session_miss_count >= 3 {
-            log::warn!(target: "sessions", "connected session gone; disconnecting");
+            tracing::warn!(name: "sessions.connection.session_missing", target: "sessions", miss_count = self.remote.session_miss_count, "connected session missing; disconnecting");
             self.flash(
                 "Remote session ended; disconnected".to_string(),
                 ToastSeverity::Error,
@@ -321,11 +313,7 @@ impl App {
             self.remote.session_miss_count = 0;
             self.remote.remote_pos_s = 0;
         } else {
-            log::warn!(
-                target: "sessions",
-                "connected session not in poll ({}/3); holding",
-                self.remote.session_miss_count
-            );
+            tracing::warn!(name: "sessions.connection.session_missing", target: "sessions", miss_count = self.remote.session_miss_count, miss_limit = 3, "connected session missing from poll; holding");
         }
     }
 }

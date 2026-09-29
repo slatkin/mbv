@@ -12,7 +12,11 @@ fn emby_agent(
     connect_timeout: std::time::Duration,
     total_timeout: std::time::Duration,
 ) -> ureq::Agent {
-    mbv_net::native_tls_agent(Some(connect_timeout), Some(total_timeout))
+    mbv_net::native_tls_agent(
+        mbv_net::HttpService::Emby,
+        Some(connect_timeout),
+        Some(total_timeout),
+    )
 }
 
 impl EmbyClient {

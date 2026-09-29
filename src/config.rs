@@ -79,7 +79,12 @@ pub fn save_config_section(
 
 pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
     if let Err(e) = mbv_config::save_config_settings(cfg) {
-        log::warn!(target: "config", "config save failed: {e}");
+        tracing::warn!(
+            name: "config.save.failed",
+            target: "config",
+            error = %e,
+            "config save failed"
+        );
     }
     save_ui_config(ui);
 }

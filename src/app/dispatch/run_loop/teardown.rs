@@ -64,7 +64,7 @@ impl App {
             return;
         };
         if let Err(e) = mbv_config::save_last_remote_connection(Some(&last)) {
-            log::warn!(target: "auto_reconnect", "current target persistence failed: {e}");
+            tracing::warn!(name: "auto_reconnect.target_persist.failed", target: "auto_reconnect", error = %e, "current target persistence failed");
         }
     }
 
@@ -79,7 +79,7 @@ impl App {
         if let Some(state) = launch_state
             && let Err(error) = mbv_config::save_tui_launch_state(&state)
         {
-            log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
+            tracing::warn!(name: "launch_state.save.failed", target: "launch_state", error = %error, "TUI launch state save failed");
         }
         self.teardown_inner(quit_timeout);
     }
@@ -112,13 +112,10 @@ impl App {
                 st.last_valid_pos,
             )
         };
-        log::info!(target: "player", "quit: requested={quit_requested} was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos} timeout={}s", quit_timeout.as_secs());
+        tracing::info!(name: "player.quit.started", target: "player", requested = quit_requested, was_playing, current_index = current_idx, position_ticks, last_valid_position_ticks = last_valid_pos, timeout_seconds = quit_timeout.as_secs(), "player quit started");
         self.flush_playing_position_on_teardown(was_playing, current_idx, last_valid_pos);
         if self.home_is_local_daemon {
-            log::info!(
-                target: "queue",
-                "teardown persistence skipped: local daemon owns the authoritative queue"
-            );
+            tracing::info!(name: "queue.persist.skipped", target: "queue", reason = "local_daemon_owns_authoritative_queue", "queue persistence skipped during teardown");
         } else {
             self.save_queue_state_no_clear();
         }
@@ -135,11 +132,7 @@ impl App {
             config.stay_alive
         };
         let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
-        log::info!(
-            target: "daemon_shutdown",
-            "teardown: home_is_local_daemon={} stay_alive={} should_request_shutdown={}",
-            self.home_is_local_daemon, stay_alive, should_request_shutdown
-        );
+        tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", home_is_local_daemon = self.home_is_local_daemon, stay_alive, should_request_shutdown, "daemon shutdown policy evaluated");
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
         if self.player.is_remote() {
@@ -157,8 +150,7 @@ impl App {
             let started = Instant::now();
             self.player.join_or_timeout(outer_bound);
             let elapsed = started.elapsed();
-            log::info!(target: "player", "quit: player join finished in {}ms (bound={}ms)",
-                elapsed.as_millis(), outer_bound.as_millis());
+            tracing::info!(name: "player.quit.join_completed", target: "player", duration_ms = elapsed.as_millis(), bound_ms = outer_bound.as_millis(), "player join completed");
         }
         // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
@@ -189,25 +181,19 @@ impl App {
     /// session (see the `new_remote` doc comment), so it must not be skipped.
     fn persist_auto_reconnect_target_on_teardown(&mut self) {
         if self.launched_as_remote && !self.home_is_local_daemon {
-            log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
+            tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "launched_as_remote", "auto-reconnect target persistence skipped");
         } else if !self.config.lock().unwrap().auto_reconnect {
-            log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
+            tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "disabled", "auto-reconnect target persistence skipped");
         } else {
             let last = self.current_auto_reconnect_target();
-            log::info!(
-                target: "auto_reconnect",
-                "teardown decision={}",
-                match &last {
-                    Some(mbv_config::LastRemoteConnection::LibraryRoute { library }) =>
-                        format!("save-library-route library={library:?}"),
-                    Some(mbv_config::LastRemoteConnection::DirectSession { device_name }) =>
-                        format!("save-direct-session device={device_name:?}"),
-                    None => "clear".to_string(),
-                }
-            );
+            tracing::info!(name: "auto_reconnect.target_persist.decided", target: "auto_reconnect", target_state = ?last, "auto-reconnect persistence decision made");
             match mbv_config::save_last_remote_connection(last.as_ref()) {
-                Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
-                Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
+                Ok(()) => {
+                    tracing::info!(name: "auto_reconnect.target_persist.succeeded", target: "auto_reconnect", "auto-reconnect state persistence succeeded");
+                }
+                Err(e) => {
+                    tracing::warn!(name: "auto_reconnect.target_persist.failed", target: "auto_reconnect", error = %e, "auto-reconnect state persistence failed");
+                }
             }
         }
     }
@@ -266,13 +252,13 @@ impl App {
         if current_is_local && current_connected {
             // Invoke through the current live Local connection.
             if let Some(remote) = self.player.as_remote() {
-                log::info!(target: "daemon_shutdown", "invoking request_shutdown through current Local connection");
+                tracing::info!(name: "daemon_shutdown.request.started", target: "daemon_shutdown", connection = "current_local", "invoking shutdown request through current Local connection");
                 return Some(remote.request_shutdown(quit_timeout));
             }
-            log::warn!(target: "daemon_shutdown", "current player_endpoint is Local but as_remote() returned None; falling back to short-lived connection");
+            tracing::warn!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "local_endpoint_without_remote_player", fallback = "short_lived_connection", "current Local connection unavailable");
         } else {
             // Create a short-lived Local connection.
-            log::info!(target: "daemon_shutdown", "current target is not a live Local connection; creating short-lived Local connection");
+            tracing::info!(name: "daemon_shutdown.connection.create_started", target: "daemon_shutdown", connection = "short_lived_local", "creating short-lived Local connection");
         }
         Self::invoke_shutdown_via_short_lived_local(quit_timeout)
     }
@@ -284,7 +270,7 @@ impl App {
         use mbv_remote_player::ShutdownResponse;
         let Some(response) = response else {
             // Failed to connect or invoke the request.
-            log::warn!(target: "daemon_shutdown", "failed to invoke shutdown request via Local connection");
+            tracing::warn!(name: "daemon_shutdown.request.failed", target: "daemon_shutdown", reason = "no_response", "failed to invoke shutdown request via Local connection");
             self.pending_exit_message = Some(
                 "Local daemon may still be running (failed to connect). Use `mbv -q` to stop it."
                     .to_string(),
@@ -293,28 +279,28 @@ impl App {
         };
         match response {
             ShutdownResponse::Accepted => {
-                log::info!(target: "daemon_shutdown", "daemon accepted shutdown request");
+                tracing::info!(name: "daemon_shutdown.request.accepted", target: "daemon_shutdown", "daemon accepted shutdown request");
             }
             ShutdownResponse::Rejected { reason } => {
-                log::warn!(target: "daemon_shutdown", "daemon rejected shutdown request: {reason}");
+                tracing::warn!(name: "daemon_shutdown.request.rejected", target: "daemon_shutdown", reason = %reason, "daemon rejected shutdown request");
                 self.pending_exit_message = Some(format!(
                     "Local daemon may still be running (shutdown rejected: {reason}). Use `mbv -q` to stop it."
                 ));
             }
             ShutdownResponse::Disconnected => {
-                log::warn!(target: "daemon_shutdown", "daemon disconnected before responding to shutdown request");
+                tracing::warn!(name: "daemon_shutdown.request.disconnected", target: "daemon_shutdown", "daemon disconnected before responding to shutdown request");
                 self.pending_exit_message = Some(
                     "Local daemon may still be running (disconnected before responding). Use `mbv -q` to stop it.".to_string(),
                 );
             }
             ShutdownResponse::TimedOut => {
-                log::warn!(target: "daemon_shutdown", "daemon did not respond to shutdown request within timeout");
+                tracing::warn!(name: "daemon_shutdown.request.timed_out", target: "daemon_shutdown", "daemon shutdown request timed out");
                 self.pending_exit_message = Some(
                     "Local daemon may still be running (did not respond within timeout). Use `mbv -q` to stop it.".to_string(),
                 );
             }
             ShutdownResponse::Unsupported => {
-                log::warn!(target: "daemon_shutdown", "peer daemon does not support lifecycle-shutdown");
+                tracing::warn!(name: "daemon_shutdown.request.unsupported", target: "daemon_shutdown", "peer daemon does not support lifecycle shutdown");
                 self.pending_exit_message = Some(
                     "Local daemon is an older version and cannot be stopped remotely. Use `mbv -q` to stop it.".to_string(),
                 );
@@ -332,14 +318,14 @@ impl App {
         use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
         match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local) {
             Ok((remote, _event_rx)) => {
-                log::info!(target: "daemon_shutdown", "short-lived Local connection established");
+                tracing::info!(name: "daemon_shutdown.connection.established", target: "daemon_shutdown", connection = "short_lived_local", "short-lived Local connection established");
                 let response = remote.request_shutdown(quit_timeout);
                 // Disconnect the short-lived connection after the request.
                 remote.disconnect();
                 Some(response)
             }
             Err(e) => {
-                log::warn!(target: "daemon_shutdown", "failed to establish short-lived Local connection: {e}");
+                tracing::warn!(name: "daemon_shutdown.connection.failed", target: "daemon_shutdown", connection = "short_lived_local", error = %e, "failed to establish short-lived Local connection");
                 None
             }
         }

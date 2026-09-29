@@ -253,7 +253,7 @@ impl App {
                 self.set_cast_client(&receiver_id, client);
             }
             CastEvent::ConnectFailed { receiver_id, error } => {
-                log::warn!(target: "cast", "connect to receiver {receiver_id:?} failed: {error}");
+                tracing::warn!(name: "cast.connect.failed", target: "cast", receiver = %receiver_id, error = %error, "cast receiver connection failed");
                 // Detach if the failure is for the currently-attached
                 // receiver (attach-on-selection sets state optimistically
                 // before the connect completes; reattach does not, so

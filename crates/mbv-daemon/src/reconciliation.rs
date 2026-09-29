@@ -97,7 +97,7 @@ pub(super) fn reconcile_packaged_emby(
         ..
     } = &mut *ctx.owner;
     let owner_config = mbv_config::load_config().map_err(|error| {
-        log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
+        tracing::warn!(name: "daemon.owner_config_load.failed", target: "daemon", error = %error, "failed to load owner config during reconciliation");
         ServiceSetupRejection::StorageUnavailable
     })?;
     let setup = owner_config
@@ -108,7 +108,7 @@ pub(super) fn reconcile_packaged_emby(
         return Err(ServiceSetupRejection::RevisionMismatch);
     }
     let next = EmbyOwnerContext::from_packaged_storage_result(&owner_config).map_err(|error| {
-        log::warn!(target: "daemon", "failed to load Emby owner context: {error}");
+        tracing::warn!(name: "daemon.emby_context_load.failed", target: "daemon", error = %error, "failed to load Emby owner context");
         ServiceSetupRejection::StorageUnavailable
     })?;
 
@@ -205,7 +205,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
         ..
     } = &mut *ctx.owner;
     let owner_config = mbv_config::load_config().map_err(|error| {
-        log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
+        tracing::warn!(name: "daemon.owner_config_load.failed", target: "daemon", error = %error, "failed to load owner config during reconciliation");
         ServiceSetupRejection::StorageUnavailable
     })?;
     let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
@@ -241,7 +241,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
     }
     let next = AudiobookshelfOwnerContext::from_packaged_storage_result(&owner_config).map_err(
         |error| {
-            log::warn!(target: "daemon", "failed to load Audiobookshelf owner context: {error}");
+            tracing::warn!(name: "daemon.audiobookshelf_context_load.failed", target: "daemon", error = %error, "failed to load Audiobookshelf owner context");
             ServiceSetupRejection::StorageUnavailable
         },
     )?;

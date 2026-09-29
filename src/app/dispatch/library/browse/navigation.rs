@@ -98,7 +98,7 @@ fn build_navigate_landing(
     // round trip is paid only when a kind's fallback needs the chain.
     let reveal = resolve_reveal_target(item_type, &item, None).or_else(|_| {
         let ancestors = client.get_ancestors(item_id)?;
-        log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
+        tracing::debug!(name: "navigate.ancestors.fetched", target: "navigate", ancestor_items = ?ancestors.iter().map(|ancestor| format!("{}({})", ancestor.name, ancestor.id)).collect::<Vec<_>>(), "navigation ancestors fetched");
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
     landing_for_target(client, &item, reveal, lib_id, levels, cached_album_index)
@@ -274,7 +274,7 @@ fn build_chain_nav_stack(
             sort_episodes(&mut items);
         }
         let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
-        log::debug!(target:"navigate", "level parent={parent_id} target={target_id} cursor={cursor}/{}", items.len());
+        tracing::debug!(name: "navigate.level.loaded", target: "navigate", parent = %parent_id, target = %target_id, cursor, item_count = items.len(), "navigation level loaded");
         nav_stack.push(BrowseLevel {
             parent_id: parent_id.clone(),
             title: String::new(),

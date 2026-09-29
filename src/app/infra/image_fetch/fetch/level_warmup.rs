@@ -184,13 +184,14 @@ impl App {
             let url = format!(
                 "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
-            let items: Vec<serde_json::Value> = mbv_net::native_tls_agent(None, None)
-                .get(&url)
-                .call()
-                .ok()
-                .and_then(|mut r| r.body_mut().read_json::<serde_json::Value>().ok())
-                .and_then(|v| v["Items"].as_array().cloned())
-                .unwrap_or_default();
+            let items: Vec<serde_json::Value> =
+                mbv_net::native_tls_agent(mbv_net::HttpService::Emby, None, None)
+                    .get(&url)
+                    .call()
+                    .ok()
+                    .and_then(|mut r| r.body_mut().read_json::<serde_json::Value>().ok())
+                    .and_then(|v| v["Items"].as_array().cloned())
+                    .unwrap_or_default();
 
             let artists = level_artists_from_items(&items, &albums);
             let _ = tx.send(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {

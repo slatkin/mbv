@@ -7,6 +7,7 @@ use super::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
+use tracing_subscriber::prelude::*;
 
 type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
 
@@ -75,6 +76,19 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
 
 fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
     event_loop.player.status.lock().unwrap().sequence_generation
+}
+
+/// Runs `run` under the shared logfmt capture layer (structured-logging
+/// design D5) and returns the rendered lines.
+fn capture_log_lines(run: impl FnOnce()) -> Vec<String> {
+    let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = std::sync::Arc::clone(&lines);
+    let subscriber =
+        tracing_subscriber::registry().with(mbv_core::applog::test_support::capture_layer(
+            move |line| sink.lock().unwrap().push(line.to_owned()),
+        ));
+    tracing::subscriber::with_default(subscriber, run);
+    lines.lock().unwrap().clone()
 }
 
 #[test]
@@ -295,6 +309,7 @@ fn stopped_matching_pending_idle_load_commits_and_persists_once() {
     let run = current_run(&t.event_loop);
     let (reply_tx, reply_rx) = mpsc::channel();
     t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
+        client_id: 0,
         request_id: 7,
         slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
         cursor: 0,
@@ -346,6 +361,7 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
     let old_slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
     let (reply_tx, reply_rx) = mpsc::channel();
     t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
+        client_id: 0,
         request_id: 8,
         slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
         cursor: 0,
@@ -504,6 +520,55 @@ fn playback_resolved_stale_request_persists_nothing() {
     assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "old");
     assert_eq!(t.event_loop.owner.core.source, QueueSource::Unknown);
     assert!(t.persisted.borrow().is_empty());
+}
+
+#[test]
+fn playback_resolved_failure_line_carries_intent_client_and_request() {
+    // Rejoin-correlation contract (structured-logging): a failed
+    // `PlaybackResolved` handled on the event loop logs a line carrying the
+    // intent's `client` and `request`, rebuilt from the event's ids.
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![emby_qi("old", "Video", "Movie")],
+        0,
+    );
+    let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    let (request_id, generation) = (11, 3);
+    t.event_loop.owner.intents.accept(
+        client_id,
+        PlaybackIntent {
+            request_id,
+            generation,
+            action: PlaybackIntentAction::Play {
+                item_ids: vec!["new".into()],
+                start_idx: 0,
+                start_ticks: 0,
+                source: QueueSource::Album,
+            },
+        },
+        false,
+    );
+
+    let lines = capture_log_lines(|| {
+        t.event_loop.handle_event(DaemonEvent::PlaybackResolved {
+            start_idx: 0,
+            start_ticks: 0,
+            source: QueueSource::Album,
+            client_id,
+            request_id,
+            generation,
+            fetched: Err(crate::DaemonLibError::owner_context("lookup failed")),
+        });
+    });
+
+    assert!(
+        lines.iter().any(|line| {
+            line.contains("event=ctrl.intent.failed")
+                && line.contains(&format!("client={client_id}"))
+                && line.contains(&format!("request={request_id}"))
+        }),
+        "no failure line carrying the intent ids: {lines:?}"
+    );
 }
 
 #[test]

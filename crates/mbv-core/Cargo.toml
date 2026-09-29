@@ -13,15 +13,21 @@ readme = "../../README.md"
 [lints]
 workspace = true
 
+[features]
+test = []
+
 [dependencies]
 log.workspace = true
-libc.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-log = "0.2"
+time.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-emby = { path = "../mbv-emby" }
-mbv-config = { path = "../mbv-config" }
+mbv-config = { path = "../mbv-config", features = ["test"] }
 mbv-queue = { path = "../mbv-queue" }
 ureq.workspace = true
 serde_json.workspace = true

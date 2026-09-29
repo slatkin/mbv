@@ -551,11 +551,11 @@ pub(super) fn retry_mark_played(client: Arc<EmbyClient>, item_id: ItemId) {
             std::thread::sleep(Duration::from_millis(*delay_ms));
             match client.mark_played(item_id.as_str()) {
                 Ok(()) => {
-                    log::info!(target: "player", "mark_played retry {} ok id={item_id}", i + 1);
+                    tracing::info!(name: "player.mark_played.retry_succeeded", target: "player", attempt = i + 1, item = %item_id, "mark played retry succeeded");
                     return;
                 }
                 Err(e) => {
-                    log::warn!(target: "player", "mark_played retry {} failed id={item_id}: {e}", i + 1);
+                    tracing::warn!(name: "player.mark_played.retry_failed", target: "player", attempt = i + 1, item = %item_id, error = %e, "mark played retry failed");
                 }
             }
         }

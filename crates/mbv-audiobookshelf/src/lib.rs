@@ -244,6 +244,7 @@ impl AudiobookshelfClient {
             return Err(AudiobookshelfError::protocol());
         }
         let agent = mbv_net::native_tls_agent(
+            mbv_net::HttpService::Audiobookshelf,
             Some(Self::REQUEST_HARD_BOUND),
             Some(Self::REQUEST_HARD_BOUND),
         );
@@ -300,7 +301,7 @@ impl AudiobookshelfClient {
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {
         let mut response = self.get(api_key, "/api/me")?;
         let user: AudiobookshelfMeResponse = response.body_mut().read_json().map_err(|error| {
-            log::debug!(target: "audiobookshelf", "invalid /api/me response: {error}");
+            tracing::debug!(name: "audiobookshelf.user.response_invalid", target: "audiobookshelf", error = %error, "invalid user response");
             AudiobookshelfError::malformed()
         })?;
         if !user.is_active || user.id.trim().is_empty() || user.username.trim().is_empty() {

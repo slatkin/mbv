@@ -445,10 +445,11 @@ impl Model {
         if self.app.force_clear {
             self.app.force_clear = false;
             if let Err(e) = terminal.clear() {
-                log::error!(
+                tracing::error!(
+                    name: "run_loop.terminal_clear.failed",
                     target: "run_loop",
-                    "terminal.clear() failed: {e:?} (kind={:?})",
-                    e.kind()
+                    { error = %e, error.kind = ?e.kind() },
+                    "terminal clear failed"
                 );
                 return Err(e.into());
             }
@@ -457,10 +458,11 @@ impl Model {
             self.app.sync_visualizer();
         }
         if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
-            log::error!(
+            tracing::error!(
+                name: "run_loop.terminal_draw.failed",
                 target: "run_loop",
-                "terminal.draw() failed: {e:?} (kind={:?})",
-                e.kind()
+                { error = %e, error.kind = ?e.kind() },
+                "terminal draw failed"
             );
             return Err(e.into());
         }

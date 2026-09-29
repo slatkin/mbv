@@ -3,20 +3,23 @@ use super::*;
 #[test]
 fn log_level_flag_accepts_supported_values_and_rejects_invalid_values() {
     for (value, expected) in [
-        ("error", applog::Level::Error),
-        ("warn", applog::Level::Warn),
-        ("info", applog::Level::Info),
-        ("debug", applog::Level::Debug),
+        ("error", "error"),
+        ("warn", "warn"),
+        ("info", "info"),
+        ("debug", "debug"),
+        ("trace", "trace"),
+        ("info,player=debug", "info,player=debug"),
     ] {
         assert_eq!(
             parse_action(&["--log-level".into(), value.into()]).unwrap(),
             Action::Serve {
                 audio_only: false,
-                log_level: expected,
+                log_level: applog::LogSpec::parse(expected).expect("valid spec"),
             }
         );
     }
-    parse_action(&["--log-level".into(), "trace".into()]).unwrap_err();
+    parse_action(&["--log-level".into(), "info,player=".into()]).unwrap_err();
+    parse_action(&["--log-level".into(), "loud".into()]).unwrap_err();
     parse_action(&["--log-level".into()]).unwrap_err();
 }
 

@@ -36,7 +36,12 @@ struct MbvTray {
 impl MbvTray {
     fn send_command(&self, cmd: PlayerCommand) {
         if let Err(e) = self.transport_tx.send(TransportCommand::Player(cmd)) {
-            log::debug!(target: "tray", "player command dropped: {e}");
+            tracing::debug!(
+                name: "tray.player_command.dropped",
+                target: "tray",
+                error = %e,
+                "player command dropped"
+            );
         }
     }
 
@@ -138,7 +143,11 @@ impl ksni::Tray for MbvTray {
                 label: "Quit".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| {
-                    log::info!(target: "tray", "Quit requested from system tray");
+                    tracing::info!(
+                        name: "tray.quit.requested",
+                        target: "tray",
+                        "quit requested from system tray"
+                    );
                     let _ = tray.shutdown_tx.try_send(());
                 }),
                 ..Default::default()
@@ -171,7 +180,12 @@ pub fn spawn(
     .spawn()
     .map(|tray| Box::new(tray) as Box<dyn Send>)
     .map_err(|e| {
-        log::warn!(target: "tray", "not available: {e}");
+        tracing::warn!(
+            name: "tray.availability.failed",
+            target: "tray",
+            error = %e,
+            "not available"
+        );
     })
     .ok()
 }

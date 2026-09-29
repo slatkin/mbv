@@ -20,4 +20,8 @@ test = []
 ureq.workspace = true
 percent-encoding.workspace = true
 rand.workspace = true
-log.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+mbv-core = { path = "../mbv-core", features = ["test"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
