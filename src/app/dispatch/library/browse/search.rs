@@ -20,7 +20,7 @@ pub(in crate::app) fn recursive_album_search_eligible(
 
 /// The correct fetch `limit` for an unfiltered whole-library fetch, used by
 /// `spawn_all_items_prefetch`/`spawn_search_items_load` so `all_items` (the
-/// set `/`-search runs over) always spans the entire library. `lvl.total_count`
+/// set `/`-search runs over) always spans the entire library. `lvl.rows.total()`
 /// alone is NOT enough: with a letter-range pill active it's the FILTERED
 /// range's count (e.g. ~40 for `A–C` out of a 3,000-item library), which
 /// would silently truncate `all_items` to the active range and make search
@@ -32,8 +32,8 @@ pub(in crate::app) fn recursive_album_search_eligible(
 // `actions_tests.rs`.
 pub(in crate::app) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
     lib.library_total
-        .unwrap_or(lvl.total_count)
-        .max(lvl.total_count)
+        .unwrap_or(lvl.rows.total())
+        .max(lvl.rows.total())
 }
 
 pub(in crate::app) fn fetch_all_album_index_items(
@@ -109,8 +109,8 @@ impl App {
         let Some(lvl) = lib.nav_stack.last() else {
             return;
         };
-        // `lvl.is_fully_loaded()` compares server rows consumed (`fetched_rows`)
-        // against the active range's `total_count` -- with a letter-range pill
+        // `lvl.is_fully_loaded()` compares server rows consumed against the
+        // active range's total -- with a letter-range pill
         // active, that count is the FILTERED range's total, not the whole
         // library's, so a fully-loaded small range (e.g. 40 items in `A–C`)
         // would wrongly read as "nothing more to prefetch" while `all_items`

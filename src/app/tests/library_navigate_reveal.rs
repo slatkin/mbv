@@ -8,6 +8,7 @@ use crate::app::tests::make_app_stub;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 /// App stub with a scripted in-memory Emby transport installed.
 fn app_with_mock_emby(http: &MockHttp) -> App {
@@ -43,11 +44,11 @@ fn app_with_loaded_tv_library() -> App {
     let mut show = make_item("The Show", "Series");
     show.id = "ser1".into();
     app.libs[0].nav_stack.push(BrowseLevel {
-        fetched_rows: 2,
+        rows: ServerRows::complete(2),
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         items: vec![other, show],
-        total_count: 2,
+
         resting: BrowseResting::new(0, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,

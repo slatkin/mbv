@@ -112,14 +112,99 @@ impl BrowseResting {
     }
 }
 
+/// Server-row accounting for a browse level: how many server rows have been
+/// consumed (including rows a client-side filter dropped from `items`) and the
+/// server's row total. Both fields are private so writers go through the
+/// transitions below instead of keeping two bare counters in step; the
+/// consumed count is not readable outside the type except as the next page's
+/// offset. `items` is the retained browse presentation and may be shorter —
+/// client-side filters must never touch this value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ServerRows {
+    consumed: usize,
+    total: usize,
+}
+
+impl ServerRows {
+    /// A level whose rows have not arrived yet (placeholder or loading shell).
+    #[must_use]
+    pub fn new(total: usize) -> Self {
+        Self { consumed: 0, total }
+    }
+
+    /// A fetch replaced the level's rows wholesale: `rows` server rows were
+    /// consumed (pre-filter count) out of the server's `total`.
+    #[must_use]
+    pub fn loaded(rows: usize, total: usize) -> Self {
+        Self {
+            consumed: rows,
+            total,
+        }
+    }
+
+    /// The level now holds every server row it ever will (fetched whole, or
+    /// replaced by a complete subset): consumed and total both equal `rows`.
+    #[must_use]
+    pub fn complete(rows: usize) -> Self {
+        Self {
+            consumed: rows,
+            total: rows,
+        }
+    }
+
+    /// A further page of `rows` server rows was consumed; the server now
+    /// reports `total` rows for the level.
+    pub fn page(&mut self, rows: usize, total: usize) {
+        self.consumed += rows;
+        self.total = total;
+    }
+
+    /// One server row retired out of the level (e.g. marked played in an
+    /// unplayed-only level): it no longer exists server-side, so both counts
+    /// shrink and the next page keeps its correct offset.
+    pub fn retire(&mut self) {
+        self.consumed = self.consumed.saturating_sub(1);
+        self.total = self.total.saturating_sub(1);
+    }
+
+    /// Whether every server row for this level has been consumed.
+    #[must_use]
+    pub fn is_fully_loaded(&self) -> bool {
+        self.consumed >= self.total
+    }
+
+    /// The offset the next page request must start at — the one read of the
+    /// consumed count outside this type.
+    #[must_use]
+    pub fn next_page_start(&self) -> usize {
+        self.consumed
+    }
+
+    /// The server's row total for this level (display and prefetch sizing).
+    #[must_use]
+    pub fn total(&self) -> usize {
+        self.total
+    }
+
+    /// Rebuild from a persisted snapshot: `persisted` is the consumed count
+    /// saved via `next_page_start()`; `None` falls back to the retained item
+    /// count for snapshots that predate row accounting.
+    #[must_use]
+    pub fn from_persisted(total: usize, persisted: Option<usize>, items: usize) -> Self {
+        Self {
+            consumed: persisted.unwrap_or(items),
+            total,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct BrowseLevel {
     pub parent_id: String,
     pub title: String,
     pub items: Vec<EmbyItem>,
-    /// Number of server rows consumed, including rows omitted from `items`.
-    pub fetched_rows: usize,
-    pub total_count: usize,
+    /// Server-row accounting (consumed vs total); see `ServerRows`.
+    pub rows: ServerRows,
     pub resting: BrowseResting,
     pub item_types: Option<String>,
     pub unplayed_only: bool,
@@ -170,7 +255,7 @@ impl BrowseLevel {
     /// Whether every server row for this level has been consumed.
     #[must_use]
     pub fn is_fully_loaded(&self) -> bool {
-        self.fetched_rows >= self.total_count
+        self.rows.is_fully_loaded()
     }
 
     #[cfg(any(test, feature = "test"))]
@@ -209,9 +294,8 @@ impl BrowseLevel {
         Self {
             parent_id: saved.parent_id.clone(),
             title: saved.title.clone(),
-            fetched_rows: fetched_rows.unwrap_or(items.len()),
+            rows: ServerRows::from_persisted(total_count, fetched_rows, items.len()),
             items,
-            total_count,
             resting: BrowseResting::new(cursor, scroll),
             item_types: saved.item_types.clone(),
             unplayed_only: saved.unplayed_only,
@@ -261,7 +345,7 @@ impl BrowseLevel {
             parent_id: self.parent_id.clone(),
             title: self.title.clone(),
             focused_item_id: self.items.get(resting.cursor()).map(|item| item.id.clone()),
-            fetched_rows: Some(self.fetched_rows),
+            fetched_rows: Some(self.rows.next_page_start()),
             cursor_index: resting.cursor(),
             item_types: self.item_types.clone(),
             unplayed_only: self.unplayed_only,
@@ -393,7 +477,7 @@ mod tests {
             library_total: None,
         };
         let level = BrowseLevel::from_position_level(&saved, Vec::new(), 8, 1);
-        assert_eq!(level.fetched_rows, 7);
+        assert_eq!(level.rows.next_page_start(), 7);
     }
 
     #[test]

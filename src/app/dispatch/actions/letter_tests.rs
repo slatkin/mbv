@@ -1,5 +1,6 @@
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_items};
@@ -41,11 +42,11 @@ fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
 /// needs to consider the library "at its top browse level".
 fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
     lib.nav_stack.push(BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(item_count),
         parent_id: lib.library.id.clone(),
         title: lib.library.name.clone(),
         items: make_items(item_count),
-        total_count: item_count,
+
         resting: BrowseResting::new(0, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
@@ -121,7 +122,7 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
     lib.library_total = Some(3000); // the library's true size
     {
         let lvl = lib.nav_stack.last_mut().unwrap();
-        lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
+        lvl.rows = ServerRows::complete(40); // what get_items_sorted_ranged reported for M–O
         lvl.letter_filter = mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(
             4,
             mbv_ui_model::sort_filter::LetterFilterKind::Movie,
@@ -138,11 +139,11 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
 
 fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
     lib.nav_stack.push(BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(item_count),
         parent_id: lib.library.id.clone(),
         title: lib.library.name.clone(),
         items: make_items(item_count),
-        total_count: item_count,
+
         resting: BrowseResting::new(0, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,
@@ -172,7 +173,7 @@ fn tv_first_capture_resolves_latest_and_replaces_large_library_rows() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 301);
-    app.libs[0].nav_stack[0].total_count = 301;
+    app.libs[0].nav_stack[0].rows = ServerRows::complete(301);
 
     app.maybe_capture_library_total_and_apply_default_pill(0);
 
@@ -206,7 +207,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
         let level = app.libs[0].nav_stack.last_mut().unwrap();
         level.all_items = Some(corpus.clone());
         level.items = corpus.clone();
-        level.total_count = 2;
+        level.rows = ServerRows::complete(2);
     };
     let zebra = series("series-z", "Zebra");
 
@@ -224,7 +225,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
         vec!["series-z"],
         "the level list narrows to the marked pill's range"
     );
-    assert_eq!(level.total_count, 1);
+    assert_eq!(level.rows.total(), 1);
     assert_eq!(level.resting().cursor(), 0, "cursor rests on the series");
     assert_eq!(
         level.all_items.as_ref().unwrap().len(),

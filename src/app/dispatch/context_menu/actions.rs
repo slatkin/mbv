@@ -359,8 +359,11 @@ impl App {
             && lvl.unplayed_only
         {
             let id = item_id.to_string();
+            let before = lvl.items.len();
             lvl.items.retain(|item| item.id != id);
-            lvl.total_count = lvl.total_count.saturating_sub(1);
+            if lvl.items.len() != before {
+                lvl.rows.retire();
+            }
         }
     }
 
@@ -486,7 +489,7 @@ impl App {
             && let Some(pos) = lvl.items.iter().position(|item| item.id == item_id)
         {
             lvl.items.remove(pos);
-            lvl.total_count = lvl.total_count.saturating_sub(1);
+            lvl.rows.retire();
         }
     }
 

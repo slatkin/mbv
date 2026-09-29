@@ -11,6 +11,7 @@ use crate::app::{LibraryTab, PanelFocus};
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::library_panel::owner::LibraryContentOwner;
 use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::browse::ServerRows;
 use mbv_ui_msg::AlbumCursorKind;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use ratatui::Terminal;
@@ -240,11 +241,11 @@ fn music_library_app_with_three_albums() -> crate::app::App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(1),
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
-                total_count: 1,
+
                 resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
@@ -257,11 +258,11 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 music_grouping: None,
             },
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(3),
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: albums,
-                total_count: 3,
+
                 resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
@@ -338,11 +339,11 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     let mut track = make_item("Track 1", "Audio");
     track.id = "track-1".into();
     model.app.libs[0].nav_stack.push(BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(1),
         parent_id: "album-0".into(),
         title: "Tracks".into(),
         items: vec![track],
-        total_count: 1,
+
         resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
@@ -496,11 +497,11 @@ fn music_two_artist_app() -> crate::app::App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(1),
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
-                total_count: 1,
+
                 resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
@@ -513,11 +514,11 @@ fn music_two_artist_app() -> crate::app::App {
                 music_grouping: None,
             },
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(2),
                 parent_id: "group-soul".into(),
                 title: "Soul".into(),
                 items: vec![aaliyah, pf],
-                total_count: 2,
+
                 resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
                 item_types: None,
                 unplayed_only: false,

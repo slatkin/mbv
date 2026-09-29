@@ -1,6 +1,6 @@
 use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 fn restored_tv_content_mode(
     is_tv_library: bool,
@@ -38,9 +38,10 @@ pub(in crate::app) fn retain_grouped_music_level_items(
     level: &mut BrowseLevel,
     grouped_music: bool,
 ) {
-    let fetched_rows = level.items.len();
+    // Client-side filtering only shapes `items`; the level's server-row
+    // accounting (`ServerRows`) records rows before any filter ran and is
+    // never rewritten from the retained count.
     retain_grouped_music_items(&mut level.items, grouped_music);
-    level.fetched_rows = fetched_rows;
     level.resting = BrowseResting::new(
         level
             .resting()
@@ -77,8 +78,7 @@ impl App {
                     parent_id: root.parent_id.clone(),
                     title: root.title.clone(),
                     items: Vec::new(),
-                    fetched_rows: 0,
-                    total_count: 0,
+                    rows: ServerRows::new(0),
                     resting: BrowseResting::new(0, 0),
                     item_types: root.item_types.clone(),
                     unplayed_only: root.unplayed_only,
@@ -113,8 +113,7 @@ impl App {
                 parent_id: lib_id.clone(),
                 title: lib_name.clone(),
                 items: vec![],
-                fetched_rows: 0,
-                total_count: 0,
+                rows: ServerRows::new(0),
                 resting: BrowseResting::new(0, 0),
                 item_types: item_types.clone(),
                 unplayed_only,
@@ -272,7 +271,6 @@ impl App {
                 &sort_order,
             ) {
                 Ok((items, total_count)) => {
-                    let fetched_rows = items.len();
                     tracing::info!(name: "browse.items.loaded", target: "browse", library_index = lib_idx, parent = %parent_id, total_count, fetched_count = items.len(), thread_duration_ms = spawn_started.elapsed().as_millis(), first_items = ?items.iter().take(3).map(|item| format!("{}:{}", item.id, item.name)).collect::<Vec<_>>(), "browse items loaded");
                     let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
                         lib_idx,
@@ -280,9 +278,8 @@ impl App {
                         level: Box::new(BrowseLevel {
                             parent_id,
                             title,
+                            rows: ServerRows::loaded(items.len(), total_count),
                             items,
-                            fetched_rows,
-                            total_count,
                             resting: BrowseResting::new(0, 0),
                             item_types,
                             unplayed_only,

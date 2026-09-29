@@ -2,6 +2,7 @@ use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
 use mbv_render::{LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, effective_sort_str};
+use mbv_ui_model::browse::ServerRows;
 
 impl App {
     pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -174,7 +175,10 @@ impl App {
         };
         level.letter_filter = filter;
         level.items = filtered;
-        level.total_count = level.items.len();
+        // The level was replaced by a complete subset of the corpus: nothing
+        // remains to page in, so row accounting reads fully loaded (the old
+        // code left `fetched_rows` stale here and could page again).
+        level.rows = ServerRows::complete(level.items.len());
         level.all_items = Some(corpus);
         level.set_resting_cursor(cursor);
         level.set_resting_scroll(0);

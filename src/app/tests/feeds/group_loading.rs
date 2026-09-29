@@ -1,5 +1,6 @@
 use crate::app::tests::*;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 use rstest::{fixture, rstest};
 
 #[fixture]
@@ -15,11 +16,11 @@ fn make_home_video_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::complete(0),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![],
-            total_count: 0,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -56,11 +57,11 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         level: Box::new(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![empty, active.clone()],
-            total_count: 2,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

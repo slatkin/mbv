@@ -5,15 +5,16 @@ use crate::app::tests::make_app_stub;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 use std::time::{Duration, Instant};
 
 fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
     BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::complete(0),
         parent_id: "group-0".into(),
         title: "Alpha".into(),
         items: albums,
-        total_count: 0,
+
         resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
@@ -32,11 +33,11 @@ fn make_group_level() -> BrowseLevel {
     group.id = "group-0".into();
     group.is_folder = true;
     BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(1),
         parent_id: "lib-music".into(),
         title: "Music".into(),
         items: vec![group],
-        total_count: 1,
+
         resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,

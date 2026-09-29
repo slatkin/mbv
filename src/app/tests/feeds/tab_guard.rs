@@ -1,5 +1,6 @@
 use crate::app::tests::*;
 use mbv_queue::FeedEntry;
+use mbv_ui_model::browse::ServerRows;
 
 fn playable_feed_entry(guid: &str) -> FeedEntry {
     FeedEntry {
@@ -31,11 +32,11 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -193,11 +194,11 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,

@@ -21,7 +21,7 @@ use super::browse::{
 use crate::app::{
     AlbumIndexState, AlbumSearchEntry, BrowseLevel, LibEvent, PAGE_SIZE, PREFETCH_AHEAD,
 };
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
@@ -159,9 +159,8 @@ impl App {
                 let mut level = BrowseLevel {
                     parent_id,
                     title,
-                    fetched_rows: items.len(),
+                    rows: ServerRows::loaded(items.len(), total_count),
                     items,
-                    total_count,
                     resting: BrowseResting::new(0, 0),
                     item_types: None,
                     unplayed_only: false,
@@ -324,7 +323,7 @@ impl App {
         if !paginate_to_completion && cursor + ahead < lvl.items.len() {
             return;
         }
-        let start_index = lvl.fetched_rows;
+        let start_index = lvl.rows.next_page_start();
         let key = mbv_ui_model::browse::LevelFetchKey::from_level(lvl);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;

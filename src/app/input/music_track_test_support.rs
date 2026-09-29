@@ -3,6 +3,7 @@ use crate::app::tests::make_app_stub;
 use crate::app::{BrowseLevel, LibraryTab};
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",
@@ -33,11 +34,11 @@ pub(super) fn make_music_album_app() -> App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(1),
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
-                total_count: 1,
+
                 resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
@@ -50,11 +51,11 @@ pub(super) fn make_music_album_app() -> App {
                 music_grouping: None,
             },
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(2),
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: vec![album1, album2],
-                total_count: 2,
+
                 resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,

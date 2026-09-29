@@ -10,15 +10,13 @@
 //!      `PREFETCH_AHEAD` of the loaded edge (`library_search_actions.rs:240`).
 
 use super::*;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> BrowseLevel {
-    let fetched_rows = items.len();
     BrowseLevel {
-        fetched_rows,
+        rows: ServerRows::loaded(items.len(), total_count),
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
-        total_count,
         items,
         resting: BrowseResting::new(cursor, 0),
         item_types: Some("Movie".into()),
@@ -50,7 +48,7 @@ fn go_back_reanchors_parent_cursor_onto_the_popped_child_folder() {
     let root = movie_level(make_items(3), 3, 0);
     let child = movie_level(Vec::new(), 0, 0);
     let child = BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(0),
         parent_id: "id1".into(),
         ..child
     };

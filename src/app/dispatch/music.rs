@@ -1,5 +1,5 @@
 use crate::app::{App, BrowseLevel};
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 /// The shared eligibility gate for the grouped Music owner, consumed by
 /// `is_music_group_view` and grouped landing validation. Keep this in sync
@@ -140,11 +140,10 @@ impl App {
 
         // Push a loading placeholder so the Loaded handler can fill it in.
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -191,11 +190,10 @@ impl App {
             return;
         }
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -529,11 +527,10 @@ impl App {
             (g.id.clone(), g.name.clone())
         };
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -592,11 +589,10 @@ impl App {
             if !group_id.is_empty() {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack.push(BrowseLevel {
-                        fetched_rows: 0,
+                        rows: ServerRows::new(0),
                         parent_id: group_id.clone(),
                         title: group_name.clone(),
                         items: vec![],
-                        total_count: 0,
                         resting: BrowseResting::new(0, 0),
                         item_types: None,
                         unplayed_only: false,

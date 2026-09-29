@@ -1,4 +1,5 @@
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 use crate::app::App;
 use rstest::rstest;
@@ -72,11 +73,11 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![queued.clone()],
-            total_count: 1,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

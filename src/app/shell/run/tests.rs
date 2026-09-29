@@ -14,6 +14,7 @@ use mbv_audiobookshelf::{
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_images::series_image_cache_key;
 use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
+use mbv_ui_model::browse::ServerRows;
 use rstest::rstest;
 use std::collections::HashMap;
 
@@ -415,11 +416,11 @@ fn music_level(
     resting: usize,
 ) -> crate::app::BrowseLevel {
     crate::app::BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::complete(0),
         parent_id: parent_id.into(),
         title: title.into(),
         items,
-        total_count: 0,
+
         resting: mbv_ui_model::browse::BrowseResting::new(resting, 0),
         item_types: None,
         unplayed_only: false,

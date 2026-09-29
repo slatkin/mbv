@@ -1,5 +1,6 @@
 use crate::app::tests::*;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 #[test]
 fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
@@ -14,11 +15,11 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder],
-            total_count: 1,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -58,11 +59,11 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder.clone()],
-            total_count: 1,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -120,11 +121,11 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder.clone()],
-            total_count: 1,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

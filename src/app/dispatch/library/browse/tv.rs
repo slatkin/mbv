@@ -1,7 +1,7 @@
 use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, ModelContentEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 type BrowseRefresh = (
     usize,
@@ -56,8 +56,7 @@ fn build_tv_latest_level<S: TvLatestSource>(
         parent_id,
         title,
         items,
-        fetched_rows: total_count,
-        total_count,
+        rows: ServerRows::complete(total_count),
         resting: BrowseResting::new(0, 0),
         item_types: Some("Episode".into()),
         unplayed_only: false,
@@ -82,8 +81,7 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
         parent_id,
         title,
         items,
-        fetched_rows: total_count,
-        total_count,
+        rows: ServerRows::complete(total_count),
         resting: BrowseResting::new(0, 0),
         item_types: Some("Episode".into()),
         unplayed_only: false,
@@ -323,8 +321,7 @@ mod tv_latest_tests {
                 parent_id: "tv-library".into(),
                 title: "Shows".into(),
                 items: vec![level_item],
-                fetched_rows: 1,
-                total_count: 1,
+                rows: ServerRows::complete(1),
                 resting: BrowseResting::new(0, 0),
                 item_types: Some("Episode".into()),
                 unplayed_only: false,

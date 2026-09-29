@@ -1,5 +1,5 @@
 use crate::app::{App, BrowseLevel};
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::ui_util::sort_episodes;
 
 impl App {
@@ -76,11 +76,10 @@ impl App {
             if !season_id.is_empty() {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack.push(BrowseLevel {
-                        fetched_rows: 0,
+                        rows: ServerRows::new(0),
                         parent_id: season_id.clone(),
                         title: season_name.clone(),
                         items: vec![],
-                        total_count: 0,
                         resting: BrowseResting::new(0, 0),
                         item_types: Some("Episode".into()),
                         unplayed_only: false,

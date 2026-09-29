@@ -10,6 +10,7 @@ use mbv_components::home_content::HomeContent as HomeOwner;
 #[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
 use mbv_queue::QueueItem;
+use mbv_ui_model::browse::ServerRows;
 #[cfg(test)]
 use mbv_ui_model::library::LibraryKey;
 #[cfg(test)]
@@ -64,8 +65,7 @@ impl Model {
                 continue;
             }
             level.items.clone_from(&items);
-            level.fetched_rows = items.len();
-            level.total_count = items.len();
+            level.rows = ServerRows::complete(items.len());
             level.loading = false;
         }
         self.push_active_emby_library_owner_content();

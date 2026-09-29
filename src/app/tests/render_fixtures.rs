@@ -10,6 +10,7 @@ use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -36,11 +37,11 @@ pub fn make_movie_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![focused, second],
-            total_count: 2,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -100,11 +101,11 @@ pub fn make_music_group_app() -> App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(group_names.len()),
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: groups,
-                total_count: group_names.len(),
+
                 resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
@@ -117,11 +118,11 @@ pub fn make_music_group_app() -> App {
                 music_grouping: None,
             },
             BrowseLevel {
-                fetched_rows: 0,
+                rows: ServerRows::new(1),
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: vec![album],
-                total_count: 1,
+
                 resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,

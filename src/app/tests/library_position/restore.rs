@@ -75,11 +75,11 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
         requested_position: pre_feature_position.clone(),
         position: pre_feature_position,
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(673),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
-            total_count: 673,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -136,11 +136,11 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
         requested_position: requested.clone(),
         position: requested,
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
-            total_count: 2,
+
             resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,

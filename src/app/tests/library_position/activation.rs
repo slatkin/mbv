@@ -77,11 +77,11 @@ fn activate_library_position_leaves_music_nav_stack_untouched_on_tab_reentry() {
     library.collection_type = "music".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "lib-music".into(),
             title: "Live Group".into(),
             items: make_items(2),
-            total_count: 2,
+
             resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
             item_types: None,
             unplayed_only: false,

@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ui_model::browse::ServerRows;
 use rstest::rstest;
 
 #[rstest]
@@ -79,11 +80,11 @@ fn restoring_upcoming_position_loads_upcoming_episode_content() {
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
     let mut lib = LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(3),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(3),
-            total_count: 3,
+
             resting: mbv_ui_model::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
@@ -279,11 +280,11 @@ fn save_default_library_position_persists_focused_item() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(3),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(3),
-            total_count: 3,
+
             resting: mbv_ui_model::browse::BrowseResting::new(2, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
@@ -316,11 +317,11 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
-            total_count: 2,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,

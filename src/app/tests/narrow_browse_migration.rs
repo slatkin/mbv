@@ -23,6 +23,7 @@
 use super::*;
 use mbv_components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use mbv_components::library_panel::LibraryPanel;
+use mbv_ui_model::browse::ServerRows;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
@@ -119,11 +120,11 @@ fn tv_shows_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(5),
             parent_id: "lib-shows".into(),
             title: "Shows".into(),
             items: folder_items("Series", "Series", 5),
-            total_count: 5,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
@@ -193,11 +194,11 @@ fn feed_home_video_group_app() -> App {
     second.id = "video-two".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder.clone()],
-            total_count: 1,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

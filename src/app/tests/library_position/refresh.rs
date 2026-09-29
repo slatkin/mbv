@@ -10,11 +10,11 @@ fn mixed_services_app() -> App {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(1),
-            total_count: 1,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,

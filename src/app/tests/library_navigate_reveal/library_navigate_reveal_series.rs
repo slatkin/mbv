@@ -60,11 +60,11 @@ fn app_with_paginated_tv_library() -> App {
     let mut other = make_item("Other Show", "Series");
     other.id = "ser0".into();
     app.libs[0].nav_stack.push(BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(5),
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         items: vec![other],
-        total_count: 5,
+
         resting: BrowseResting::new(0, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,

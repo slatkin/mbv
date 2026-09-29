@@ -3,7 +3,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -323,11 +323,10 @@ impl App {
                 .unwrap_or_default()
         });
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: lib_id.clone(),
             title: lib_name.clone(),
             items: vec![],
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

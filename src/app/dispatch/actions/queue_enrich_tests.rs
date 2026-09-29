@@ -1,6 +1,7 @@
 use super::queue_state_tests::XdgHomeGuard;
 use crate::app::{BrowseLevel, LibEvent, LibraryTab};
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::ServerRows;
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
@@ -12,11 +13,11 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::complete(0),
             parent_id: "parent".into(),
             title: "Loading".into(),
             items: vec![],
-            total_count: 0,
+
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
@@ -32,11 +33,11 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     });
 
     let level = BrowseLevel {
-        fetched_rows: 0,
+        rows: ServerRows::new(2),
         parent_id: "parent".into(),
         title: "Loaded".into(),
         items: crate::app::tests::make_items(2),
-        total_count: 2,
+
         resting: BrowseResting::new(1, 3),
         item_types: None,
         unplayed_only: false,
@@ -54,7 +55,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     let last = app.libs[0].nav_stack.last().unwrap();
     assert_eq!(last.title, "Loaded");
     assert_eq!(last.items.len(), 2);
-    assert_eq!(last.total_count, 2);
+    assert_eq!(last.rows.total(), 2);
     assert_eq!(last.resting().cursor(), 1);
     assert_eq!(last.sort_by, "DateCreated");
     assert_eq!(last.sort_order, "Descending");
@@ -73,11 +74,11 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(2),
             parent_id: "series".into(),
             title: "Season 1".into(),
             items: vec![second, first],
-            total_count: 2,
+
             resting: BrowseResting::new(0, 0),
             item_types: Some("Episode".into()),
             unplayed_only: false,

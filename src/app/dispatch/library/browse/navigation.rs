@@ -3,7 +3,7 @@ use crate::app::state::events::NavigateLanding;
 use crate::app::{AlbumPathPart, App, BrowseEvent, BrowseLevel, LibEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
+use mbv_ui_model::browse::{AlbumIndex, AlbumIndexState, BrowseResting, ServerRows};
 use mbv_ui_model::ui_util::sort_episodes;
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
@@ -278,9 +278,8 @@ fn build_chain_nav_stack(
         nav_stack.push(BrowseLevel {
             parent_id: parent_id.clone(),
             title: String::new(),
-            fetched_rows: items.len(),
+            rows: ServerRows::loaded(items.len(), total_count),
             items,
-            total_count,
             resting: BrowseResting::new(cursor, 0),
             item_types: None,
             unplayed_only: false,

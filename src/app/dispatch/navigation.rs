@@ -2,7 +2,7 @@ use crate::app::{
     App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 
 use crate::app::dispatch::notify::ToastSeverity;
@@ -44,11 +44,10 @@ impl App {
     fn open_browse_folder(&mut self, lib_idx: usize, item: EmbyItem) {
         let lib = &mut self.libs[lib_idx];
         lib.nav_stack.push(BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: item.id.clone(),
             title: item.name.clone(),
             items: vec![],
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

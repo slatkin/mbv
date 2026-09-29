@@ -9,7 +9,7 @@ impl App {
     ) -> LibraryListRenderCtx {
         let lib = &self.libs[lib_idx];
         let (items, cursor, total_count) = match lib.nav_stack.last() {
-            Some(level) => (level.items.clone(), cursor, level.total_count),
+            Some(level) => (level.items.clone(), cursor, level.rows.total()),
             None => (Vec::new(), 0, 0),
         };
 

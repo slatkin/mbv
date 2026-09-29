@@ -1,6 +1,6 @@
 use crate::app::App;
 use mbv_ui_model::browse::BrowseLevel;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::feed::FeedHomeVideoState;
 impl App {
     /// Keeps the legacy browse snapshot current in memory for the migration
@@ -196,11 +196,10 @@ impl App {
         root: &mbv_queue::LibraryPositionLevel,
     ) -> BrowseLevel {
         BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(0),
             parent_id: root.parent_id.clone(),
             title: root.title.clone(),
             items: Vec::new(),
-            total_count: 0,
             resting: BrowseResting::new(0, 0),
             item_types: root.item_types.clone(),
             unplayed_only: root.unplayed_only,

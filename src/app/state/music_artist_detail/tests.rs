@@ -2,6 +2,7 @@ use super::*;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use mbv_emby_model::EmbyArtistRef;
 use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::browse::ServerRows;
 use mbv_ui_model::music_grouping::{MusicGroupingState, build_grouped_album_catalog};
 use std::collections::HashMap;
 
@@ -107,7 +108,7 @@ fn duplicate_title_artist_app() -> (App, MusicWideRenderCtx, MusicArtistTarget, 
     second.artist = "Alpha".into();
     second.production_year = 1999;
     app.libs[0].nav_stack[1].items.push(second);
-    app.libs[0].nav_stack[1].total_count = 2;
+    app.libs[0].nav_stack[1].rows = ServerRows::complete(2);
     {
         let level = app.libs[0].nav_stack.last_mut().unwrap();
         for item in &mut level.items {

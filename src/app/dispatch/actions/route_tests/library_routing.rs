@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ui_model::browse::ServerRows;
 
 #[test]
 fn enqueue_route_conflict_rejects_mismatched_route() {
@@ -118,8 +119,8 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
             parent_id: "parent-1".into(),
             title: "Movies".into(),
             items: vec![anchor.clone()],
-            fetched_rows: 1,
-            total_count: 1,
+            rows: ServerRows::complete(1),
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,

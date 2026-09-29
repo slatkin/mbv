@@ -1,7 +1,7 @@
 use crate::app::state::events::BrowseEvent;
 use crate::app::{App, BrowseLevel};
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 impl App {
     pub(super) fn handle_browse_event(&mut self, ev: BrowseEvent) {
@@ -140,7 +140,7 @@ impl App {
         if level.loading || level.letter_filter.is_some() {
             return;
         }
-        let total = level.total_count;
+        let total = level.rows.total();
         let parent_id = level.parent_id.clone();
         let is_tv = lib.library.collection_type == "tvshows";
         let filter_kind = mbv_ui_model::sort_filter::LetterFilterKind::from_collection_type(
@@ -201,8 +201,7 @@ impl App {
         }
         self.update_current_browse_level(lib_idx, parent_id, true, |last| {
             last.items.extend(items.take().unwrap());
-            last.fetched_rows += fetched_rows;
-            last.total_count = total_count;
+            last.rows.page(fetched_rows, total_count);
             last.loading = false;
         });
         self.normalize_current_browse_level_items(lib_idx);
@@ -233,8 +232,7 @@ impl App {
             let mut items = Some(items);
             let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
                 last.items = items.take().unwrap();
-                last.fetched_rows = last.items.len();
-                last.total_count = total_count;
+                last.rows = ServerRows::loaded(last.items.len(), total_count);
                 last.loading = false;
             });
             if updated {

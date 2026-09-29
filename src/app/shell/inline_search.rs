@@ -51,7 +51,7 @@ impl Model {
     fn inline_search_needs_full_load(&self, index: usize) -> bool {
         self.app.libs[index].nav_stack.last().is_some_and(|level| {
             level.all_items.is_none()
-                && (level.letter_filter.is_some() || level.items.len() < level.total_count)
+                && (level.letter_filter.is_some() || !level.rows.is_fully_loaded())
         })
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ui_model::browse::ServerRows;
 
 pub(crate) fn audiobookshelf_app() -> App {
     let mut app = make_app_stub();
@@ -48,11 +49,11 @@ pub(super) fn add_emby_movie_library(app: &mut App) {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
+            rows: ServerRows::new(1),
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
+
             resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
