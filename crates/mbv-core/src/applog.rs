@@ -8,6 +8,12 @@ pub mod spec;
 mod layer;
 mod line;
 mod time;
+mod url_path;
+
+#[cfg(feature = "test")]
+pub mod test_support;
+
+pub use url_path::UrlPath;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;

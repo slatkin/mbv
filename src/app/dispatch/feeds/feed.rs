@@ -467,10 +467,7 @@ impl App {
         };
 
         if let Err(error) = crate::app::open_url(&link) {
-            let url_path = ureq::http::Uri::try_from(link.as_str())
-                .map(|url| url.path().to_owned())
-                .unwrap_or_default();
-            tracing::warn!(name: "idle_feed.link_open.failed", target: "idle_feed", { url.path = %url_path, error = %error }, "feed link open failed");
+            tracing::warn!(name: "idle_feed.link_open.failed", target: "idle_feed", { url.path = %mbv_core::applog::UrlPath(&link), error = %error }, "feed link open failed");
             self.flash(
                 format!("Unable to open feed link: {error}"),
                 ToastSeverity::Neutral,

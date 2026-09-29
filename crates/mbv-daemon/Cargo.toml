@@ -32,7 +32,7 @@ serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-mbv-core = { path = "../mbv-core" }
+mbv-core = { path = "../mbv-core", features = ["test"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 rstest.workspace = true
 mbv-player = { path = "../mbv-player", features = ["test"] }

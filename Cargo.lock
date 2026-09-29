@@ -1958,6 +1958,7 @@ version = "0.21.4"
 name = "mbv-net"
 version = "0.21.4"
 dependencies = [
+ "mbv-core",
  "percent-encoding",
  "rand 0.10.3",
  "tracing",
@@ -1987,7 +1988,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]

@@ -78,87 +78,17 @@ fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
     event_loop.player.status.lock().unwrap().sequence_generation
 }
 
-/// Minimal thread-local capture subscriber for the rejoin-correlation test
-/// (structured-logging design D5): records each event's name plus the event's
-/// and its enclosing spans' fields as one `key=value` fragment.
-struct CaptureLayer;
-
-struct CapturedFields(Vec<(String, String)>);
-
-struct FieldPairs<'a>(&'a mut Vec<(String, String)>);
-
-impl tracing::field::Visit for FieldPairs<'_> {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        self.0.push((field.name().to_owned(), value.to_owned()));
-    }
-
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.push((field.name().to_owned(), format!("{value:?}")));
-    }
-}
-
-impl<S> tracing_subscriber::Layer<S> for CaptureLayer
-where
-    S: tracing::Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
-    fn on_new_span(
-        &self,
-        attrs: &tracing::span::Attributes<'_>,
-        id: &tracing::Id,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let mut fields = Vec::new();
-        attrs.record(&mut FieldPairs(&mut fields));
-        if let Some(span) = ctx.span(id) {
-            span.extensions_mut().insert(CapturedFields(fields));
-        }
-    }
-
-    fn on_record(
-        &self,
-        id: &tracing::Id,
-        values: &tracing::span::Record<'_>,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let Some(span) = ctx.span(id) else {
-            return;
-        };
-        let mut fields = Vec::new();
-        values.record(&mut FieldPairs(&mut fields));
-        if let Some(existing) = span.extensions_mut().get_mut::<CapturedFields>() {
-            existing.0.append(&mut fields);
-        }
-    }
-
-    fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        let mut fields = vec![("event".to_owned(), event.metadata().name().to_owned())];
-        event.record(&mut FieldPairs(&mut fields));
-        if let Some(scope) = ctx.event_scope(event) {
-            for span in scope.from_root() {
-                if let Some(captured) = span.extensions().get::<CapturedFields>() {
-                    fields.extend(captured.0.iter().cloned());
-                }
-            }
-        }
-        let line = fields
-            .iter()
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        CAPTURED_LOG.with(|captured| captured.borrow_mut().push(line));
-    }
-}
-
-thread_local! {
-    static CAPTURED_LOG: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
-}
-
-/// Runs `run` under a capture subscriber and returns the rendered fragments.
+/// Runs `run` under the shared logfmt capture layer (structured-logging
+/// design D5) and returns the rendered lines.
 fn capture_log_lines(run: impl FnOnce()) -> Vec<String> {
-    CAPTURED_LOG.with(|captured| captured.borrow_mut().clear());
-    let subscriber = tracing_subscriber::registry().with(CaptureLayer);
+    let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = std::sync::Arc::clone(&lines);
+    let subscriber =
+        tracing_subscriber::registry().with(mbv_core::applog::test_support::capture_layer(
+            move |line| sink.lock().unwrap().push(line.to_owned()),
+        ));
     tracing::subscriber::with_default(subscriber, run);
-    CAPTURED_LOG.with(|captured| captured.borrow().clone())
+    lines.lock().unwrap().clone()
 }
 
 #[test]

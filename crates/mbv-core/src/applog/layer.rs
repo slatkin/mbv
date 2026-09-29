@@ -4,8 +4,6 @@
 
 use std::fmt;
 use std::path::PathBuf;
-#[cfg(test)]
-use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Record};
@@ -62,11 +60,14 @@ impl Visit for FieldVisitor {
     }
 }
 
+type Tap = Box<dyn Fn(&str) + Send + Sync>;
+
 pub(crate) struct LogfmtLayer {
     stderr: bool,
     file: Mutex<Option<FileSink>>,
-    #[cfg(test)]
-    capture: Option<Arc<Mutex<Vec<String>>>>,
+    /// Extra sink receiving each rendered line; injected by `with_sink` for
+    /// tests, `None` in production.
+    tap: Option<Tap>,
 }
 
 impl LogfmtLayer {
@@ -74,18 +75,26 @@ impl LogfmtLayer {
         Self {
             stderr,
             file: Mutex::new(log_path.map(FileSink::at_default_size)),
-            #[cfg(test)]
-            capture: None,
+            tap: None,
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub(crate) fn with_sink(tap: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        Self {
+            stderr: false,
+            file: Mutex::new(None),
+            tap: Some(Box::new(tap)),
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn capturing(capture: Arc<Mutex<Vec<String>>>) -> Self {
-        Self {
-            stderr: false,
-            file: Mutex::new(None),
-            capture: Some(capture),
-        }
+    pub(crate) fn capturing(capture: std::sync::Arc<Mutex<Vec<String>>>) -> Self {
+        Self::with_sink(move |line| {
+            if let Ok(mut lines) = capture.lock() {
+                lines.push(line.to_owned());
+            }
+        })
     }
 
     fn write(&self, level: tracing::Level, line: &str) {
@@ -97,11 +106,8 @@ impl LogfmtLayer {
         {
             sink.write_line(line);
         }
-        #[cfg(test)]
-        if let Some(capture) = &self.capture
-            && let Ok(mut lines) = capture.lock()
-        {
-            lines.push(line.to_owned());
+        if let Some(tap) = &self.tap {
+            tap(line);
         }
     }
 }

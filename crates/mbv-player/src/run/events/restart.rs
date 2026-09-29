@@ -50,10 +50,7 @@ impl PlaybackRun {
         let prefs = self.subtitle_prefs.lock().unwrap().clone();
         for url in &self.ext_sub_urls {
             if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
-                let path = url::Url::parse(url)
-                    .map(|parsed| parsed.path().to_owned())
-                    .unwrap_or_default();
-                tracing::warn!(name: "player.subtitle.add_failed", target: "player", { url.path = %path, error = ?e }, "failed to add external subtitle");
+                tracing::warn!(name: "player.subtitle.add_failed", target: "player", { url.path = %mbv_core::applog::UrlPath(url), error = ?e }, "failed to add external subtitle");
             }
         }
         auto_select_tracks(mpv, &self.status, &prefs);
