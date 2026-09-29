@@ -105,6 +105,11 @@ pub struct App {
     /// the D-Bus service was first registered.
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
+    /// Player events the answer pump set aside while waiting for a queue-op
+    /// answer (row 5.1, design D6). `drain_player_events` takes these before
+    /// `player_rx`, so deferred disconnects, restarts, and projections keep
+    /// running at the tick level, in order.
+    pub(in crate::app) deferred_player_events: std::collections::VecDeque<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) transport_rx: mpsc::Receiver<mbv_ctrl::TransportCommand>,
     pub(in crate::app) transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,

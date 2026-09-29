@@ -78,9 +78,17 @@ impl App {
             PlayerEvent::UnifiedQueueUpdated(unified) => {
                 flow_after(self.handle_unified_queue_updated(&unified))
             }
-            PlayerEvent::QueueOpResult { .. } => {
-                // Deliberately ignored until App's queue-op correlation path is added.
-                PlayerEventFlow::Proceed
+            PlayerEvent::QueueOpResult { outcome, .. } => {
+                // Late or unmatched answers (row 5.1): the pump adopts the
+                // matching answer inline, so anything arriving here missed
+                // its wait and is adopted like any other owner snapshot.
+                // A late `Rejected` reports nothing more -- the timeout
+                // already flashed.
+                if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
+                    flow_after(self.handle_unified_queue_updated(&snapshot))
+                } else {
+                    PlayerEventFlow::Proceed
+                }
             }
             PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
                 self.handle_unified_queue_load_result(result);
@@ -520,7 +528,10 @@ impl App {
     /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
     /// `handle_player_event`). Returns true when the local generation fence
     /// ends the tick early.
-    fn handle_unified_queue_updated(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) -> bool {
+    pub(in crate::app) fn handle_unified_queue_updated(
+        &mut self,
+        unified: &mbv_ctrl::UnifiedQueueStateData,
+    ) -> bool {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         *self.player.status.lock().unwrap() = unified.status.clone();

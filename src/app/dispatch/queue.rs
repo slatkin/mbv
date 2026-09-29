@@ -11,6 +11,7 @@ use mbv_ui_model::ui_util::is_playable;
 mod pending_playback;
 mod playlist;
 mod playlist_mutation;
+mod queue_op;
 mod replacement;
 
 impl App {

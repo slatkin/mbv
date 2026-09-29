@@ -680,4 +680,17 @@ impl RemotePlayer {
         remote.ctrl_compatibility.supports_audio_only = true;
         (remote, event_rx, cmd_rx)
     }
+
+    /// Test-support stub whose owner answers correlated queue operations
+    /// (queue-owner-process row 5.1: the Client waits for `QueueOpResult`).
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub_answered_queue_ops_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_answered_queue_ops = true;
+        (remote, event_rx, cmd_rx)
+    }
 }

@@ -88,6 +88,7 @@ impl App {
             player: init.player,
             mpris: None,
             player_rx: init.player_rx,
+            deferred_player_events: std::collections::VecDeque::new(),
             ws_rx: init.ws_rx,
             transport_rx: init.transport_rx,
             transport_tx: init.transport_tx,

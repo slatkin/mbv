@@ -113,7 +113,14 @@ impl Model {
     /// Drain one player event. Returns whether playback requested a restart
     /// (the caller `continue`s the run loop).
     pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {
-        let Some(ev) = self.app.player_rx.try_recv().ok() else {
+        // The answer pump defers non-answer events here; replay them before
+        // the live receiver so tick-level handling stays ordered (row 5.1).
+        let ev = self
+            .app
+            .deferred_player_events
+            .pop_front()
+            .or_else(|| self.app.player_rx.try_recv().ok());
+        let Some(ev) = ev else {
             return false;
         };
         *had_events = true;
