@@ -84,14 +84,10 @@ fn spec_max_level(spec: &LogSpec) -> log::LevelFilter {
         .chain(std::iter::once(spec.default))
         .max()
         .unwrap_or(tracing::level_filters::LevelFilter::OFF);
-    match most_verbose {
-        tracing::level_filters::LevelFilter::OFF => log::LevelFilter::Off,
-        tracing::level_filters::LevelFilter::ERROR => log::LevelFilter::Error,
-        tracing::level_filters::LevelFilter::WARN => log::LevelFilter::Warn,
-        tracing::level_filters::LevelFilter::INFO => log::LevelFilter::Info,
-        tracing::level_filters::LevelFilter::DEBUG => log::LevelFilter::Debug,
-        tracing::level_filters::LevelFilter::TRACE => log::LevelFilter::Trace,
-    }
+    most_verbose
+        .to_string()
+        .parse()
+        .unwrap_or(log::LevelFilter::Off)
 }
 
 #[cfg(test)]

@@ -44,9 +44,11 @@ impl FileSink {
         if self.len.saturating_add(line_len) > self.max_size {
             self.rotate();
         }
+        let mut record = String::with_capacity(line.len() + 1);
+        record.push_str(line);
+        record.push('\n');
         if let Some(file) = self.file.as_mut()
-            && file.write_all(line.as_bytes()).is_ok()
-            && file.write_all(b"\n").is_ok()
+            && file.write_all(record.as_bytes()).is_ok()
         {
             self.len = self.len.saturating_add(line_len);
         }
@@ -120,9 +122,8 @@ fn open_append(path: &Path) -> std::io::Result<(File, u64)> {
 fn rotate_paths(path: &Path) -> std::io::Result<()> {
     let oldest = generation_path(path, GENERATIONS);
     match fs::remove_file(oldest) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+        _ => {}
     }
     for generation in (1..GENERATIONS).rev() {
         rename_if_exists(

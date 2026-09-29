@@ -17,9 +17,10 @@ use super::line::{self, Line};
 use super::time;
 use super::{format_stderr_line, sink::FileSink};
 
-/// The fields of one span, stored in the span's extensions. Empty at creation
-/// fields are absent until `Span::record` fills them (`on_record` appends).
-struct SpanFields(Vec<(String, String)>);
+/// The pre-rendered logfmt fields of one span, stored in the span's
+/// extensions. Empty at creation fields are absent until `Span::record` fills
+/// them (`on_record` appends).
+struct SpanFields(String);
 
 /// Collects every recorded field of an attributes/record/event in order.
 struct FieldVisitor {
@@ -113,7 +114,8 @@ where
         let mut visitor = FieldVisitor::new();
         attrs.record(&mut visitor);
         if let Some(span) = ctx.span(id) {
-            span.extensions_mut().insert(SpanFields(visitor.fields));
+            span.extensions_mut()
+                .insert(SpanFields(line::format_fields(&visitor.fields)));
         }
     }
 
@@ -125,7 +127,11 @@ where
         if let Some(existing) = extensions.get_mut::<SpanFields>() {
             let mut visitor = FieldVisitor::new();
             values.record(&mut visitor);
-            existing.0.append(&mut visitor.fields);
+            let appended = line::format_fields(&visitor.fields);
+            if !existing.0.is_empty() && !appended.is_empty() {
+                existing.0.push(' ');
+            }
+            existing.0.push_str(&appended);
         }
     }
 
@@ -139,23 +145,22 @@ where
         // Without `name:`, tracing names the event `event <file>:<line>`
         // (tracing 0.1.44's synthesized default); only an explicit name
         // becomes the `event` field (design D4).
-        let default_name = format!(
-            "event {}:{}",
-            metadata.file().unwrap_or_default(),
-            metadata.line().unwrap_or_default()
-        );
-        let event_name = (visitor.log_target.is_none() && metadata.name() != default_name.as_str())
-            .then_some(metadata.name());
+        let is_default_name = metadata
+            .name()
+            .strip_prefix("event ")
+            .and_then(|rest| rest.rsplit_once(':'))
+            .is_some_and(|(file, line)| {
+                file == metadata.file().unwrap_or_default()
+                    && line.parse().ok() == Some(metadata.line().unwrap_or_default())
+            });
+        let event_name =
+            (visitor.log_target.is_none() && !is_default_name).then_some(metadata.name());
         let spans: Vec<String> = ctx
             .event_scope(event)
             .map(|scope| {
                 scope
                     .from_root()
-                    .filter_map(|span| {
-                        span.extensions()
-                            .get::<SpanFields>()
-                            .map(|fields| line::format_fields(&fields.0))
-                    })
+                    .filter_map(|span| span.extensions().get::<SpanFields>().map(|f| f.0.clone()))
                     .collect()
             })
             .unwrap_or_default();

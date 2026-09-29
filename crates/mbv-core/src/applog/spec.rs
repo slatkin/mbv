@@ -144,15 +144,8 @@ fn parse_level(level: &str) -> Option<tracing::level_filters::LevelFilter> {
     }
 }
 
-fn level_name(level: tracing::level_filters::LevelFilter) -> &'static str {
-    match level {
-        tracing::level_filters::LevelFilter::OFF => "off",
-        tracing::level_filters::LevelFilter::ERROR => "error",
-        tracing::level_filters::LevelFilter::WARN => "warn",
-        tracing::level_filters::LevelFilter::INFO => "info",
-        tracing::level_filters::LevelFilter::DEBUG => "debug",
-        tracing::level_filters::LevelFilter::TRACE => "trace",
-    }
+fn level_name(level: tracing::level_filters::LevelFilter) -> String {
+    level.to_string().to_lowercase()
 }
 
 fn target_matches(target: &str, prefix: &str) -> bool {
