@@ -74,14 +74,16 @@ impl DaemonLoop {
         &mut self,
         update: &AudiobookshelfProgressUpdate,
     ) -> EventOutcome {
-        apply_audiobookshelf_progress(
+        if apply_audiobookshelf_progress(
             update,
             self.audiobookshelf_runtime
                 .as_ref()
                 .map(|runtime| runtime.generation),
             &mut self.owner.core.queue,
             &self.ctrl_clients,
-        );
+        ) {
+            self.broadcast_owner_queue_state();
+        }
         EventOutcome::CONTINUE
     }
 
@@ -91,14 +93,16 @@ impl DaemonLoop {
         &mut self,
         update: &AudiobookshelfBookProgressUpdate,
     ) -> EventOutcome {
-        apply_audiobookshelf_book_progress(
+        if apply_audiobookshelf_book_progress(
             update,
             self.audiobookshelf_runtime
                 .as_ref()
                 .map(|runtime| runtime.generation),
             &mut self.owner.core.queue,
             &self.ctrl_clients,
-        );
+        ) {
+            self.broadcast_owner_queue_state();
+        }
         EventOutcome::CONTINUE
     }
 }

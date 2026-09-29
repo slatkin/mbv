@@ -1,4 +1,4 @@
-use super::core::{DaemonEvent, bind_ctrl_listener, broadcast};
+use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broadcast};
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
@@ -145,6 +145,28 @@ struct DaemonStarted {
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
     _tray: Option<Box<dyn Send>>,
+}
+
+fn spawn_queue_persistence_worker(
+    merged_tx: mpsc::Sender<DaemonEvent>,
+) -> mpsc::Sender<QueuePersistenceRequest> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        while let Ok(request) = rx.recv() {
+            match request {
+                QueuePersistenceRequest::Save(state) => {
+                    if let Err(error) = mbv_config::save_stay_alive_queue_state(&state) {
+                        let _ =
+                            merged_tx.send(DaemonEvent::QueuePersistenceFailed(error.to_string()));
+                    }
+                }
+                QueuePersistenceRequest::Flush(ack) => {
+                    let _ = ack.send(());
+                }
+            }
+        }
+    });
+    tx
 }
 
 fn forward_transport(
@@ -558,6 +580,7 @@ pub fn run_with_options(
     );
     spawn_status_broadcast(&client, &player, &ctrl_clients);
 
+    let queue_persist_tx = spawn_queue_persistence_worker(merged_tx.clone());
     let mut daemon_loop = DaemonLoop {
         owner,
         player,
@@ -575,6 +598,7 @@ pub fn run_with_options(
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
+        queue_persist_tx: Some(queue_persist_tx),
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

@@ -37,6 +37,11 @@ pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
     }
 }
 
+pub(super) enum QueuePersistenceRequest {
+    Save(mbv_config::StayAliveQueueState),
+    Flush(mpsc::SyncSender<()>),
+}
+
 pub(super) enum DaemonEvent {
     Player(PlayerEvent),
     Transport(mbv_ctrl::TransportCommand),
@@ -54,6 +59,7 @@ pub(super) enum DaemonEvent {
     /// Carries freshly fetched Emby progress for a queue adopted from a
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),
+    QueuePersistenceFailed(String),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.

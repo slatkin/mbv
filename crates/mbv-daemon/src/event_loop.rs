@@ -74,6 +74,7 @@ pub(crate) struct DaemonLoop {
     /// Injected owner-queue persistence, so tests can record snapshots instead
     /// of writing real state files.
     pub(super) store: OwnerQueueStore,
+    pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
 }
 
 impl DaemonLoop {
@@ -148,6 +149,10 @@ impl DaemonLoop {
             DaemonEvent::Transport(command) => self.handle_transport(command),
             DaemonEvent::Ws { generation, event } => self.handle_ws_event(generation, event),
             DaemonEvent::QueueEnriched(items) => self.handle_queue_enriched(items),
+            DaemonEvent::QueuePersistenceFailed(error) => {
+                tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error, "failed to persist Stay-alive queue");
+                EventOutcome::CONTINUE
+            }
             DaemonEvent::AudiobookshelfProgress(update) => {
                 self.handle_audiobookshelf_progress(&update)
             }
@@ -188,12 +193,7 @@ impl DaemonLoop {
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 
-        if self.role == DaemonRole::Local
-            && outcome.owner_queue_dirty
-            && let Err(error) = self.persist_owner_queue()
-        {
-            tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue");
-        }
+        self.persist_owner_queue_if_dirty(outcome.owner_queue_dirty);
 
         outcome.flow
     }
@@ -247,6 +247,27 @@ impl DaemonLoop {
             &self.owner.core.transitions,
             None,
         );
+    }
+
+    fn persist_owner_queue_if_dirty(&mut self, owner_queue_dirty: bool) {
+        if self.role != DaemonRole::Local || !owner_queue_dirty {
+            return;
+        }
+        if let Some(tx) = &self.queue_persist_tx {
+            let snapshot = super::stay_alive_owner_queue_snapshot(
+                &self.owner,
+                &self.player,
+                &self.shared_queue,
+            );
+            if tx
+                .send(super::QueuePersistenceRequest::Save(snapshot))
+                .is_err()
+            {
+                tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", "queue persistence worker is unavailable");
+            }
+        } else if let Err(error) = self.persist_owner_queue() {
+            tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue");
+        }
     }
 
     /// Persists the owner queue through the injected store, returning the

@@ -97,10 +97,14 @@ pub(super) fn handle_adopt_queue(
         None,
     );
 
-    enrich_adopted_emby_slots(queue, ctx.client, ctx.merged_tx);
+    start_queue_enrichment(queue, ctx.client, ctx.merged_tx);
 }
 
-fn enrich_adopted_emby_slots(
+pub(super) fn handle_queue_refresh(ctx: &mut CtrlContext<'_>) {
+    start_queue_enrichment(&ctx.owner.core.queue, ctx.client, ctx.merged_tx);
+}
+
+fn start_queue_enrichment(
     queue: &PlaybackQueue,
     client: &Arc<std::sync::Mutex<EmbyClient>>,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,

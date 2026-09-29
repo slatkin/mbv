@@ -92,3 +92,5 @@ mod queue_persistence;
 mod queue_idle_load;
 // Queue replacements and source updates publish lineage-consistent snapshots.
 mod queue_source_updates;
+// Refresh and progress operations answer while preserving active-slot authority.
+mod queue_refresh_progress;

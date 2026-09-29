@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn connect_op_requester(
+pub(super) fn connect_op_requester(
     clients: &mut CtrlClients,
 ) -> (
     u64,

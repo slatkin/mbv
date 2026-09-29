@@ -232,6 +232,47 @@ pub(super) fn handle_queue_play_slot(
     );
 }
 
+/// Applies provider-qualified progress to every matching inactive queue slot.
+pub(super) fn handle_queue_apply_progress(
+    ctx: &mut CtrlContext<'_>,
+    updates: Vec<mbv_ctrl::ProgressUpdate>,
+) {
+    let active_slot = ctx.owner.core.queue.active_slot_id();
+    let mut applied = false;
+    for update in updates {
+        let matching_slots: Vec<_> = ctx
+            .owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .filter(|slot| {
+                Some(slot.slot_id) != active_slot && slot.item.content_id() == update.content_id
+            })
+            .map(|slot| slot.slot_id)
+            .collect();
+        for slot_id in matching_slots {
+            let _ = ctx.owner.core.queue.apply_progress(
+                slot_id,
+                update.position_ticks,
+                update.finished,
+            );
+            applied = true;
+        }
+    }
+    if applied {
+        broadcast_queue_state(
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
+            &ctx.owner.core.queue,
+            &ctx.owner.core.source,
+            &ctx.owner.core.transitions,
+            Some(ctx.client_id),
+        );
+    }
+}
+
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
 pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
     let DaemonPlayerOwner {

@@ -45,6 +45,51 @@ fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
     test_loop_with_queue(role, Vec::new(), 0)
 }
 
+#[test]
+fn audiobookshelf_acknowledged_progress_is_followed_by_queue_broadcast() {
+    let mut fixture =
+        test_loop_with_queue(crate::DaemonRole::Local, vec![abs_qi("li_1", "ep_1")], 0);
+    let generation = SetupGeneration::new(1);
+    fixture.event_loop.audiobookshelf_runtime = Some(AudiobookshelfOwnerContext {
+        setup: mbv_config::AudiobookshelfSetup::default(),
+        device_id: "test-device".into(),
+        generation,
+    });
+    let (_client_id, client_rx) =
+        connect_client(&mut fixture.event_loop.ctrl_clients.lock().unwrap());
+
+    fixture
+        .event_loop
+        .handle_event(DaemonEvent::AudiobookshelfProgress(
+            AudiobookshelfProgressUpdate {
+                generation,
+                library_item_id: "li_1".into(),
+                episode_id: "ep_1".into(),
+                current_time_seconds: 30.0,
+                duration_seconds: 100.0,
+                is_finished: false,
+            },
+        ));
+
+    assert!(matches!(
+        recv_event(&client_rx),
+        CtrlEvent::AudiobookshelfProgress(_)
+    ));
+    match recv_event(&client_rx) {
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert_eq!(
+                state.slots[0]
+                    .item
+                    .as_audiobookshelf()
+                    .unwrap()
+                    .position_ticks,
+                30 * mbv_emby_model::TICKS_PER_SECOND
+            );
+        }
+        _ => panic!("expected updated owner queue broadcast"),
+    }
+}
+
 fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: usize) -> TestLoop {
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
@@ -75,6 +120,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
             recorded.borrow_mut().push(RecordedSnapshot::of(state));
             Ok(())
         }),
+        queue_persist_tx: None,
     };
     TestLoop {
         event_loop,

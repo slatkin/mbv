@@ -229,6 +229,15 @@ impl DaemonLoop {
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
         self.ctrl_clients.lock().unwrap().begin_shutdown();
         tracing::info!(name: "daemon.shutdown.started", target: "daemon", "graceful shutdown: stopping player");
+        if let Some(tx) = &self.queue_persist_tx {
+            let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel(0);
+            if tx
+                .send(super::super::QueuePersistenceRequest::Flush(ack_tx))
+                .is_ok()
+            {
+                let _ = ack_rx.recv();
+            }
+        }
         if self.role == DaemonRole::Local
             && let Err(error) = self.persist_owner_queue()
         {

@@ -457,11 +457,9 @@ fn dispatch_ctrl_command(
         CtrlCmd::UnifiedQueueClear | CtrlCmd::UnifiedQueueClearOp { .. } => {
             queue_edit::handle_queue_clear(ctx);
         }
-        CtrlCmd::UnifiedQueueRefresh { .. } | CtrlCmd::UnifiedQueueApplyProgress { .. } => {
-            reject_command(
-                &ctx.rejection_context(queue_lineage),
-                "queue operation is not supported by this owner yet",
-            );
+        CtrlCmd::UnifiedQueueRefresh { .. } => queue_setup::handle_queue_refresh(ctx),
+        CtrlCmd::UnifiedQueueApplyProgress { updates, .. } => {
+            queue_edit::handle_queue_apply_progress(ctx, updates);
         }
     }
 }
