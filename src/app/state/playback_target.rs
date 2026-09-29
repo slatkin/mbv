@@ -156,7 +156,6 @@ impl App {
             // the Session's own title and progress.
             let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
                 self.local_view
-                    .queue
                     .slots()
                     .iter()
                     .position(|s| s.item.id() == id)
@@ -181,11 +180,7 @@ impl App {
             }
         } else {
             let s = self.player.status.lock().unwrap();
-            let active_idx = self
-                .playback_queue()
-                .queue
-                .active_index()
-                .unwrap_or(s.current_idx);
+            let active_idx = s.current_idx;
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
             mbv_ui_model::playback::PlaybackState {
                 active: s.active,
@@ -217,7 +212,7 @@ impl App {
 
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
-            .pending_playback_slot
+            .pending_playback_slot()
     }
 
     /// The playback projection the queue ROWS are painted from. Bare mode

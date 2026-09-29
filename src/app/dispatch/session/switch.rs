@@ -5,6 +5,17 @@ use mbv_player::PlayerProxy;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+fn replacement_view(snapshot: Option<&mbv_ctrl::UnifiedQueueStateData>) -> QueueView {
+    let mut view = QueueView::empty();
+    if let Some(snapshot) = snapshot {
+        view.adopt(
+            snapshot,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
+    }
+    view
+}
+
 impl App {
     pub(in crate::app) fn switch_to_direct_remote(
         &mut self,
@@ -16,11 +27,6 @@ impl App {
         let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_queue_source = initial_unified_state
-            .as_ref()
-            .map_or(mbv_queue::QueueSource::Unknown, |state| {
-                state.source.clone()
-            });
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
         // MPRIS (if this session has a live registration) must follow this
@@ -67,16 +73,11 @@ impl App {
             );
         }
 
-        let mut daemon_tab = initial_unified_state
-            .as_ref()
-            .map_or_else(QueueView::empty, QueueView::from_snapshot);
+        let daemon_view = replacement_view(initial_unified_state.as_ref());
         if endpoint.is_local() {
-            self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
+            self.adopt_local_daemon_queue(daemon_view);
         } else {
-            if let Some(previous_tab) = &self.remote_view {
-                daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
-            }
-            self.remote_view = Some(daemon_tab);
+            self.remote_view = Some(daemon_view);
         }
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -134,11 +135,6 @@ impl App {
         self.stop_visualizer_capture();
         let previous_route = self.active_route.clone();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_queue_source = initial_unified_state
-            .as_ref()
-            .map_or(mbv_queue::QueueSource::Unknown, |state| {
-                state.source.clone()
-            });
         let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
@@ -183,16 +179,11 @@ impl App {
             );
         }
 
-        let mut daemon_tab = initial_unified_state
-            .as_ref()
-            .map_or_else(QueueView::empty, QueueView::from_snapshot);
+        let daemon_view = replacement_view(initial_unified_state.as_ref());
         if endpoint.is_local() {
-            self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
+            self.adopt_local_daemon_queue(daemon_view);
         } else {
-            if let Some(previous_tab) = &self.remote_view {
-                daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
-            }
-            self.remote_view = Some(daemon_tab);
+            self.remote_view = Some(daemon_view);
         }
         self.advance_queue_epoch();
         self.remote.direct_remote_connected = false;
@@ -266,15 +257,8 @@ impl App {
     /// displayed Local queue, mirroring the App-construction attach path —
     /// parking it in `remote_view` leaves it unreachable, because the
     /// unified view never reads that tab.
-    fn adopt_local_daemon_queue(
-        &mut self,
-        daemon_tab: QueueView,
-        queue_source: mbv_queue::QueueSource,
-    ) {
-        let mut daemon_tab = daemon_tab;
-        daemon_tab.adopt_revision_mint(self.local_view.revision_mint());
-        self.local_view = daemon_tab;
-        self.queue_source = queue_source;
+    fn adopt_local_daemon_queue(&mut self, daemon_view: QueueView) {
+        self.local_view = daemon_view;
         self.remote_view = None;
     }
 
@@ -304,14 +288,9 @@ impl App {
     /// Clear attachment and route presentation after the local player is
     /// ready. Both ordinary restoration and confirmed fall-through use this
     /// tail so no path can leave the old owner presented or commandable.
-    fn finish_local_mode(
-        &mut self,
-        status: String,
-        reconnected_local_daemon: Option<(QueueView, mbv_queue::QueueSource)>,
-    ) {
-        if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
-            self.local_view = initial_tab;
-            self.queue_source = remote_queue_source;
+    fn finish_local_mode(&mut self, status: String, reconnected_local_daemon: Option<QueueView>) {
+        if let Some(local_view) = reconnected_local_daemon {
+            self.local_view = local_view;
         }
         self.remote_view = None;
         self.set_queue_scope(QueueScope::Local);
@@ -416,22 +395,14 @@ impl App {
             ) {
                 Ok((remote, remote_rx)) => {
                     let initial_unified_state = remote.unified_queue_state();
-                    let remote_queue_source = initial_unified_state
-                        .as_ref()
-                        .map_or(mbv_queue::QueueSource::Unknown, |state| {
-                            state.source.clone()
-                        });
-                    let mut initial_tab = initial_unified_state
-                        .as_ref()
-                        .map_or_else(QueueView::empty, QueueView::from_snapshot);
-                    initial_tab.adopt_revision_mint(self.local_view.revision_mint());
+                    let initial_tab = replacement_view(initial_unified_state.as_ref());
                     let always_play_next = self.config.lock().unwrap().always_play_next;
                     self.player = PlayerProxy::remote(remote, always_play_next);
                     self.player_rx = remote_rx;
                     self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
                     debug_assert!(self.player.as_remote().is_some());
                     self.sync_subtitle_prefs_to_player();
-                    reconnected_local_daemon = Some((initial_tab, remote_queue_source));
+                    reconnected_local_daemon = Some(initial_tab);
                 }
                 Err(_message) => {
                     status = Self::strip_local_playback_claim(&status);

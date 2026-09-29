@@ -58,10 +58,9 @@ impl App {
             })?;
 
         let remote_unified_state = remote.unified_queue_state();
-        let bootstrap = remote_unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(Vec::new(), 0, mbv_queue::QueueSource::Unknown),
-            bootstrap_unified_queue,
-        );
+        let bootstrap = remote_unified_state
+            .as_ref()
+            .map_or_else(bootstrap_legacy_queue, bootstrap_unified_queue);
 
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
@@ -81,11 +80,8 @@ impl App {
             );
         }
 
-        let mut local_view = bootstrap.local_view;
-        local_view.adopt_revision_mint(self.local_view.revision_mint());
-        self.local_view = local_view;
+        self.local_view = bootstrap.local_view;
         self.reset_local_daemon_queue_view();
-        self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);

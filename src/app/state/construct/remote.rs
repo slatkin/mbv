@@ -66,11 +66,10 @@ impl RemoteSnapshot {
 
     /// The legacy/unified bootstrap a local-daemon attach replays through
     /// `App::build`.
-    fn local_bootstrap(&self, source: &mbv_queue::QueueSource) -> LocalDaemonBootstrap {
-        self.unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(Vec::new(), 0, source.clone()),
-            bootstrap_unified_queue,
-        )
+    fn local_bootstrap(&self) -> LocalDaemonBootstrap {
+        self.unified_state
+            .as_ref()
+            .map_or_else(bootstrap_legacy_queue, bootstrap_unified_queue)
     }
 
     /// The queue tabs the session mounts: one unified tab for a local
@@ -219,16 +218,8 @@ impl App {
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
         let snapshot = RemoteSnapshot::take(&remote);
-        let remote_queue_source = snapshot
-            .unified_state
-            .as_ref()
-            .map_or(mbv_queue::QueueSource::Unknown, |state| {
-                state.source.clone()
-            });
         let initial_queue_scope = snapshot.scope(endpoint.is_local());
-        let local_daemon_bootstrap = endpoint
-            .is_local()
-            .then(|| snapshot.local_bootstrap(&remote_queue_source));
+        let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
         let mpris_handle = Some(start_mpris(&remote));
         #[cfg(test)]
@@ -281,12 +272,9 @@ impl App {
         );
         if endpoint.is_local() {
             let bootstrap = local_daemon_bootstrap.unwrap();
-            app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
             app.last_played_completed = bootstrap.last_played_completed;
             app.try_auto_reconnect();
-        } else {
-            app.queue_source = remote_queue_source;
         }
         initialize_service_startup(
             &mut app,

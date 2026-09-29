@@ -109,7 +109,6 @@ impl App {
     /// Adopt the owner's snapshot source and reconcile a pending
     /// playlist-save source update (design D6).
     pub(in crate::app) fn adopt_owner_source(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) {
-        self.queue_source = unified.source.clone();
         if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
             if unified.lineage != lineage {
                 self.pending_owner_source_update = None;

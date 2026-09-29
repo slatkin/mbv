@@ -109,7 +109,6 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::CommandRejected(reason) => {
-                self.pending_remote_move_cursor = None;
                 self.flash(reason, ToastSeverity::Error);
                 PlayerEventFlow::Proceed
             }
@@ -251,7 +250,6 @@ impl App {
         self.next_up_item = None;
         self.status.clear();
         self.finish_stopped_consumption(deleted_slot, slot_id, consume);
-        self.playback_queue_mut().queue.clear_active_slot();
         self.refresh_after_stop();
         false
     }
@@ -422,12 +420,7 @@ impl App {
             .slot(target_slot_id)
             .is_some()
         {
-            let _ = self
-                .playback_queue_mut()
-                .queue
-                .set_active_slot(target_slot_id);
             self.playback_queue()
-                .queue
                 .slot_index(target_slot_id)
                 .unwrap_or(0)
         } else {
@@ -482,11 +475,14 @@ impl App {
         &mut self,
         unified: &mbv_ctrl::UnifiedQueueStateData,
     ) {
-        let cursor = unified
-            .active_slot
-            .and_then(|slot| unified.slots.iter().position(|entry| entry.slot_id == slot))
-            .unwrap_or(0);
-        self.local_view.set_unified_state(unified, cursor);
+        let cause = if self.local_view.lineage() != unified.lineage {
+            crate::app::state::queue_view::AdoptCause::Replacement
+        } else {
+            crate::app::state::queue_view::AdoptCause::Background {
+                held: self.queue_cursor_held_by_user(),
+            }
+        };
+        self.local_view.adopt(unified, cause);
         // Same source adoption/reconciliation as a live owner snapshot
         // (design D6): the home link's snapshots must reconcile a pending
         // playlist-save source update too.
@@ -503,46 +499,19 @@ impl App {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         *self.player.status.lock().unwrap() = unified.status.clone();
-        let total = unified.slots.len();
-
-        // Derive the presentation cursor from the active slot index.
-        let active_index = unified
-            .active_slot
-            .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid));
-        let active_cursor = active_index.unwrap_or(0);
-
-        let pending_local_cursor = self.pending_queue_edit_cursor.take();
-        // Preserving the user's held selection carries no new
-        // cursor intent (the value is just what's already there);
-        // every other branch computes a fresh authoritative index.
-        let user_holding_local =
-            !self.has_direct_remote_queue() && self.queue_cursor_held_by_user();
-        let cursor = if self.has_direct_remote_queue() {
-            self.pending_remote_move_cursor
-                .take()
-                .filter(|pc| *pc < total)
-                .unwrap_or(active_cursor)
-        } else if user_holding_local {
-            // User is actively navigating — preserve their
-            // selection cursor, but still replace the queue
-            // contents so slot data stays current.
-            self.playback_queue().cursor()
+        let scope = self.playing_queue_scope();
+        let view = self.queue_for_scope(scope);
+        let cause = if view.lineage() != unified.lineage {
+            crate::app::state::queue_view::AdoptCause::Replacement
         } else {
-            pending_local_cursor
-                .filter(|pc| *pc < total)
-                .unwrap_or(active_cursor)
+            crate::app::state::queue_view::AdoptCause::Background {
+                held: self.queue_cursor_held_by_user(),
+            }
         };
-
-        // Bare mode retains its local generation fence. For the
-        // Stay-alive owner, this ordered snapshot is authoritative for
-        // slots, playback coordinates, and source.
-        if !self.local_queue_is_owner_queue(self.playing_queue_scope()) {
-            return true;
+        self.queue_for_scope_mut(scope).adopt(unified, cause);
+        if scope == crate::app::QueueScope::Local {
+            self.adopt_owner_source(unified);
         }
-
-        let queue = self.playback_queue_mut();
-        queue.set_unified_state(unified, cursor);
-        self.adopt_owner_source(unified);
         false
     }
 

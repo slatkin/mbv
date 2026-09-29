@@ -63,7 +63,6 @@ impl App {
         // the session API.
         let emby_start = self
             .local_view
-            .queue
             .slots()
             .iter()
             .take(target_idx)
@@ -133,13 +132,8 @@ pub(in crate::app) fn remote_jump_target(
     now_playing_item_id: Option<&str>,
     delta: i64,
 ) -> Option<(usize, i64)> {
-    let current = now_playing_item_id.and_then(|rid| {
-        local_view
-            .queue
-            .slots()
-            .iter()
-            .position(|s| s.item.id() == rid)
-    })?;
+    let current = now_playing_item_id
+        .and_then(|rid| local_view.slots().iter().position(|s| s.item.id() == rid))?;
     let t = i128::try_from(current)
         .ok()?
         .checked_add(i128::from(delta))?;

@@ -72,7 +72,6 @@ impl App {
         let slot_id = slot_id?;
         let index = self
             .displayed_queue()
-            .queue
             .slots()
             .iter()
             .position(|slot| slot.slot_id == slot_id)?;

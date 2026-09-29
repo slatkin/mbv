@@ -64,20 +64,9 @@ impl QueueView {
     /// Build a view from an initial owner snapshot.
     #[must_use]
     pub fn from_snapshot(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
-        let revision_mint = Arc::new(QueueRevisionMint::default());
-        let queue = queue_from_snapshot(state, Arc::clone(&revision_mint));
-        let cursor = state
-            .active_slot
-            .and_then(|slot_id| queue.slot_index(QueueSlotId::from_raw(slot_id)))
-            .unwrap_or(0);
-        Self {
-            cursor,
-            queue,
-            source: state.source.clone(),
-            lineage: state.lineage,
-            pending_playback_slot: pending_playback_slot(state),
-            revision_mint,
-        }
+        let mut view = Self::empty();
+        view.adopt(state, AdoptCause::Replacement);
+        view
     }
 
     /// Adopt an owner snapshot and reconcile the selected slot.

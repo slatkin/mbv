@@ -207,11 +207,12 @@ impl App {
                 Some(disconnected),
             );
         }
-        let mut tab = initial_unified_state
-            .as_ref()
-            .map_or_else(QueueView::empty, QueueView::from_snapshot);
-        if let Some(previous_tab) = &self.remote_view {
-            tab.adopt_revision_mint(previous_tab.revision_mint());
+        let mut tab = QueueView::empty();
+        if let Some(snapshot) = initial_unified_state.as_ref() {
+            tab.adopt(
+                snapshot,
+                crate::app::state::queue_view::AdoptCause::Replacement,
+            );
         }
         self.remote_view = Some(tab);
         self.remote.direct_remote_connected = true;

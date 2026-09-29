@@ -244,25 +244,6 @@ impl App {
             self.remote.runtime_zero_since = None;
         }
         self.connected_session_state = Some(s.clone());
-        // Stamp the canonical queue's active slot from the
-        // Session's own now-playing item. The attached
-        // receiver drives track changes; without this the
-        // queue keeps the originally submitted slot "active",
-        // and a Delete on that stale row hits
-        // `RequiresActiveConfirmation` and vanishes silently
-        // (the now-playing highlight was display-only).
-        if let Some(np_id) = s.now_playing_item_id.as_deref() {
-            let playing_slot = self
-                .local_view
-                .queue
-                .slots()
-                .iter()
-                .find(|slot| slot.item.id() == np_id)
-                .map(|slot| slot.slot_id);
-            if let Some(slot_id) = playing_slot {
-                let _ = self.local_view.playback_queue().set_active_slot(slot_id);
-            }
-        }
         self.remote.session_miss_count = 0;
         // Remote hasn't started playing yet — repoll sooner.
         // Cap fast-poll at 30 s: if runtime stays 0 that long the

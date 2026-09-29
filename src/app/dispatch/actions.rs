@@ -608,70 +608,28 @@ impl App {
         item: &QueueItem,
         scope: crate::app::QueueScope,
     ) -> bool {
-        let previous_queue = self.queue_for_scope(scope).clone();
-        let existing_index = self
+        let mut items = self
             .queue_for_scope(scope)
             .slots()
             .iter()
-            .position(|slot| slot.item.content_id() == item.content_id());
-        let selected_index = existing_index.unwrap_or_else(|| {
-            self.queue_for_scope_mut(scope).queue.append(item.clone());
-            self.queue_for_scope(scope).total_queue_len() - 1
-        });
-        let selected_slot = self
-            .queue_for_scope(scope)
-            .slot_id_at(selected_index)
-            .expect("selected queue slot disappeared");
-        {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.set_cursor(selected_index);
-            let _ = queue.playback_queue().set_active_slot(selected_slot);
-        }
-        let all_slots = self.queue_for_scope(scope).all_queue_slots();
-        // While a cast target is attached, playing a selection dispatches it
-        // to the receiver instead of the local player (cast-session-control
-        // "Attaching to a cast target does not engage the local player").
-        // `submit_queue_slots`/local playback state below is never touched on
-        // this path.
+            .map(|slot| slot.item.clone())
+            .collect::<Vec<_>>();
+        let selected_index = items
+            .iter()
+            .position(|queued| queued.content_id() == item.content_id())
+            .unwrap_or_else(|| {
+                items.push(item.clone());
+                items.len() - 1
+            });
         if self.is_cast_attached() {
-            let all_items = self.queue_for_scope(scope).all_queue_items();
-            self.dispatch_selection_to_cast(all_items, selected_index);
-            self.set_queue_scope(scope);
-            if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-                self.set_panel_focus(PanelFocus::Queue);
+            self.dispatch_selection_to_cast(items, selected_index);
+        } else {
+            let source = self.queue_for_scope(scope).source().clone();
+            if self.replace_queue_on_owner(scope, items, selected_index, source)
+                == QueueOpEdit::NotApplied
+            {
+                return false;
             }
-            return true;
-        }
-        if self.player.is_remote_disconnected() {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-            return false;
-        }
-        let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
-        let submitted = self.player.submit_queue_slots(
-            all_slots,
-            selected_index,
-            self.playback_queue().source().clone(),
-            None,
-            audio_only,
-            self.ui_volume,
-        );
-        if !submitted {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(
-                if self.player.is_remote_disconnected() {
-                    CONNECTION_LOST_MESSAGE
-                } else {
-                    "Playback owner rejected this item"
-                }
-                .into(),
-                if self.player.is_remote_disconnected() {
-                    ToastSeverity::Warning
-                } else {
-                    ToastSeverity::Error
-                },
-            );
-            return false;
         }
         self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {

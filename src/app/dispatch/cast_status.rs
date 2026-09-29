@@ -130,7 +130,6 @@ impl App {
         let status = cast.status.as_ref()?;
         let item = match_cast_dispatched_item(cast, status)?;
         self.local_view
-            .queue
             .slots()
             .iter()
             .position(|slot| slot.item.content_id() == item.content_id)

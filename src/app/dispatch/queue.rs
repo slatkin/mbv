@@ -238,10 +238,6 @@ impl App {
         let Some(slot_id) = self.queue_for_scope(scope).slot_id_at(from) else {
             return;
         };
-        if scope == QueueScope::Remote {
-            // Consumed by the answered adoption inside `send_queue_edit`.
-            self.pending_remote_move_cursor = Some(to);
-        }
         let sent = self.queue_op(
             scope,
             mbv_remote_player::QueueOp::MoveSlot {
@@ -263,13 +259,7 @@ impl App {
             QueueOpEdit::SentLegacy => {
                 self.record_undoable_queue_edit(scope, UndoEntry::Move { slot_id, from });
             }
-            QueueOpEdit::NotApplied => {
-                if scope == QueueScope::Remote {
-                    // No snapshot adopted the armed push, so it must not
-                    // fire on a later background snapshot.
-                    self.pending_remote_move_cursor = None;
-                }
-            }
+            QueueOpEdit::NotApplied => {}
         }
     }
 

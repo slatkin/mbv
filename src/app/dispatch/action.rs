@@ -448,7 +448,6 @@ impl App {
         // Snapshot data from the queue before any mutable borrows.
         let queue = self.displayed_queue();
         let emby_items = queue
-            .queue
             .slots()
             .iter()
             .filter_map(|slot| slot.item.as_emby().cloned())
@@ -458,7 +457,6 @@ impl App {
         // Pre-compute the Emby-only projection index for the cursor
         // position, needed by the session API boundary.
         let emby_start = queue
-            .queue
             .slots()
             .iter()
             .take(t)

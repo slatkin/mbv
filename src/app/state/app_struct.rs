@@ -178,12 +178,6 @@ pub struct App {
     pub(in crate::app) pending_delete_slot: Option<QueueSlotId>, // marks a delete that was already applied optimistically, so the Stopped handler doesn't re-derive it
     pub(in crate::app) queue_undo_stack: Vec<UndoEntry>,
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
-    pub(in crate::app) pending_remote_move_cursor: Option<usize>,
-    /// The display cursor a just-issued local queue edit (e.g. remove) wants
-    /// the next `UnifiedQueueUpdated` broadcast to land on, since the daemon's
-    /// state tracks *playback* position, not the UI selection — see
-    /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
-    pub(in crate::app) pending_queue_edit_cursor: Option<usize>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueScope>,
     pub(in crate::app) next_up_item: Option<EmbyItem>,

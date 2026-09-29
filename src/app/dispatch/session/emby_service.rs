@@ -17,31 +17,36 @@ impl App {
     }
 
     fn clear_emby_memory(&mut self) {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_feed = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)));
+            .item_at(active_index)
+            .is_some_and(|item| matches!(item, QueueItem::Feed(_)));
         if !active_is_feed {
             self.player.stop();
         }
-        let mut queues = vec![&mut self.local_view];
-        if let Some(queue) = self.remote_view.as_mut() {
-            queues.push(queue);
-        }
-        for queue in queues {
-            let non_emby_items = queue
-                .all_queue_items()
-                .into_iter()
-                .filter(|item| !matches!(item, QueueItem::Emby(_)))
+        for scope in [
+            crate::app::QueueScope::Local,
+            crate::app::QueueScope::Remote,
+        ] {
+            if scope == crate::app::QueueScope::Remote && !self.has_remote_queue() {
+                continue;
+            }
+            let slot_ids = self
+                .queue_for_scope(scope)
+                .slots()
+                .iter()
+                .filter(|slot| matches!(slot.item, QueueItem::Emby(_)))
+                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
                 .collect::<Vec<_>>();
-            queue.set_queue_items(non_emby_items, 0);
+            if !slot_ids.is_empty() {
+                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+            }
         }
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
         self.pending_delete_slot = None;
-        self.pending_queue_edit_cursor = None;
         self.next_up_item = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;

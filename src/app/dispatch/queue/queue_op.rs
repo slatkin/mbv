@@ -128,11 +128,11 @@ impl App {
             let event = self.queue_link(scope).1.recv_timeout(remaining);
             match event {
                 Ok(PlayerEvent::UnifiedQueueUpdated(snapshot)) => {
-                    self.adopt_queue_op_snapshot(scope, &snapshot);
+                    self.adopt_queue_op_snapshot(scope, &snapshot, false);
                 }
                 Ok(PlayerEvent::QueueOpResult { op, outcome }) if op == id => match outcome {
                     mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
-                        self.adopt_queue_op_snapshot(scope, &snapshot);
+                        self.adopt_queue_op_snapshot(scope, &snapshot, true);
                         return true;
                     }
                     mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
@@ -144,7 +144,7 @@ impl App {
                     // Another op's answer (or a duplicate): adopt its state
                     // like any other owner snapshot, and keep waiting.
                     if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
-                        self.adopt_queue_op_snapshot(scope, &snapshot);
+                        self.adopt_queue_op_snapshot(scope, &snapshot, false);
                     }
                 }
                 Ok(other) => {
@@ -171,8 +171,27 @@ impl App {
     /// Adopt one owner snapshot seen by the answer pump: through
     /// `adopt_home_snapshot` for a suspended home link, like the tick drain,
     /// and through the live `UnifiedQueueUpdated` adoption otherwise.
-    fn adopt_queue_op_snapshot(&mut self, scope: QueueScope, unified: &UnifiedQueueStateData) {
-        if scope == QueueScope::Local && self.suspended_local.is_some() {
+    fn adopt_queue_op_snapshot(
+        &mut self,
+        scope: QueueScope,
+        unified: &UnifiedQueueStateData,
+        own_answer: bool,
+    ) {
+        if own_answer {
+            if scope == self.playing_queue_scope() {
+                *self.player.status.lock().unwrap() = unified.status.clone();
+            }
+            let view = self.queue_for_scope(scope);
+            let cause = if view.lineage() != unified.lineage {
+                crate::app::state::queue_view::AdoptCause::Replacement
+            } else {
+                crate::app::state::queue_view::AdoptCause::OwnAnswer
+            };
+            self.queue_for_scope_mut(scope).adopt(unified, cause);
+            if scope == QueueScope::Local {
+                self.adopt_owner_source(unified);
+            }
+        } else if scope == QueueScope::Local && self.suspended_local.is_some() {
             self.adopt_home_snapshot(unified);
         } else {
             let _ = self.handle_unified_queue_updated(unified);

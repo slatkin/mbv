@@ -26,11 +26,11 @@ impl App {
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_audiobookshelf = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf());
+            .item_at(active_index)
+            .is_some_and(mbv_queue::QueueItem::is_audiobookshelf);
         if active_is_audiobookshelf {
             self.player.stop();
         }
@@ -130,28 +130,31 @@ impl App {
 
     fn clear_audiobookshelf_queue_memory(&mut self) {
         // If the currently active slot is Audiobookshelf, stop playback.
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_abs = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf());
+            .item_at(active_index)
+            .is_some_and(mbv_queue::QueueItem::is_audiobookshelf);
         if active_is_abs {
             self.player.stop();
         }
-        // Filter both local and remote player tabs, keeping Emby + Feed items.
-        let mut queues = vec![&mut self.local_view];
-        if let Some(queue) = self.remote_view.as_mut() {
-            queues.push(queue);
-        }
-        for queue in queues {
-            let cursor_before = queue.cursor();
-            let kept = queue
-                .all_queue_items()
-                .into_iter()
-                .filter(|item| !item.is_audiobookshelf())
+        for scope in [
+            crate::app::QueueScope::Local,
+            crate::app::QueueScope::Remote,
+        ] {
+            if scope == crate::app::QueueScope::Remote && !self.has_remote_queue() {
+                continue;
+            }
+            let slot_ids = self
+                .queue_for_scope(scope)
+                .slots()
+                .iter()
+                .filter(|slot| slot.item.is_audiobookshelf())
+                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
                 .collect::<Vec<_>>();
-            let new_cursor = cursor_before.min(kept.len().saturating_sub(1));
-            queue.set_queue_items(kept, new_cursor);
+            if !slot_ids.is_empty() {
+                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+            }
         }
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
@@ -205,15 +208,6 @@ impl App {
         let user = candidate.user.clone();
         let setup = candidate.setup.clone();
 
-        // Snapshot in-memory queue for rollback on failure; persisted queue
-        // state is owner-held, so only the in-memory projections restore here.
-        let old_player_items = self.local_view.all_queue_items();
-        let old_player_cursor = self.local_view.cursor();
-        let old_remote_items = self
-            .remote_view
-            .as_ref()
-            .map(|tab| (tab.all_queue_items(), tab.cursor()));
-
         let result = mbv_audiobookshelf::replace_audiobookshelf_candidate(
             mbv_audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
@@ -221,16 +215,7 @@ impl App {
                 candidate.api_key,
             ),
             || Ok(()),
-            || {
-                // Restore in-memory queues on failure.
-                self.local_view
-                    .set_queue_items(old_player_items.clone(), old_player_cursor);
-                if let Some((items, cursor)) = old_remote_items.clone()
-                    && let Some(tab) = self.remote_view.as_mut()
-                {
-                    tab.set_queue_items(items, cursor);
-                }
-            },
+            || {},
         );
         match result {
             Ok((_, revision)) => {
@@ -368,7 +353,7 @@ impl App {
                             && ep.episode_id == progress.episode_id
                     })
                 })
-        }) || self.local_view.playback_queue().slots().iter().any(|slot| {
+        }) || self.local_view.slots().iter().any(|slot| {
             slot.item.as_audiobookshelf().is_some_and(|ep| {
                 ep.library_item_id == progress.library_item_id
                     && ep.episode_id == progress.episode_id
@@ -415,10 +400,10 @@ impl App {
         &self,
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) -> bool {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         self.playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|slot| slot.item.as_audiobookshelf())
+            .item_at(active_index)
+            .and_then(mbv_queue::QueueItem::as_audiobookshelf)
             .is_some_and(|episode| {
                 episode.library_item_id == progress.library_item_id
                     && episode.episode_id == progress.episode_id
