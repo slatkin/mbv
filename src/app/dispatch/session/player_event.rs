@@ -222,9 +222,10 @@ impl App {
         }
     }
 
-    fn handle_daemon_shutdown_announced(&mut self) {
-        // The local-daemon client exits cleanly; a remote-daemon client keeps today's fallback.
-        if self.is_local_daemon() {
+    pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self) {
+        // A suspended home link is still this Client's local owner; its
+        // announced shutdown exits cleanly even while another target is viewed.
+        if self.is_local_daemon() || self.suspended_local.is_some() {
             self.pending_exit_message =
                 Some("mbv: the local daemon was stopped — exiting.".to_string());
             QUIT_REQUESTED.store(true, Ordering::Relaxed);
@@ -580,6 +581,20 @@ impl App {
         }
     }
 
+    /// Adopt a snapshot from the suspended home link into the Local queue
+    /// without changing the viewed Player's status.
+    pub(in crate::app) fn adopt_home_snapshot(
+        &mut self,
+        unified: &mbv_ctrl::UnifiedQueueStateData,
+    ) {
+        let cursor = unified
+            .active_slot
+            .and_then(|slot| unified.slots.iter().position(|entry| entry.slot_id == slot))
+            .unwrap_or(0);
+        self.player_tab.set_unified_state(unified, cursor);
+        self.queue_source = unified.source.clone();
+    }
+
     /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from
     /// `handle_player_event`). Returns true when the local generation fence
     /// ends the tick early.
@@ -632,7 +647,7 @@ impl App {
 
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
-    fn raise_daemon_lost_modal(&mut self) {
+    pub(in crate::app) fn raise_daemon_lost_modal(&mut self) {
         // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
         // arm calls `dismiss_blocking_modals`, which now also unmounts the
         // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,

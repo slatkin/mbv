@@ -72,6 +72,43 @@ impl Model {
         had_events
     }
 
+    /// Drain queued events from the suspended home link. It has no tick of its
+    /// own, so consume every pending event before returning.
+    pub(in crate::app) fn drain_suspended_home_events(&mut self) -> bool {
+        let mut had_events = false;
+        loop {
+            let event = if self.app.suspended_local.is_some() {
+                self.app
+                    .queue_link(crate::app::QueueScope::Local)
+                    .1
+                    .try_recv()
+                    .ok()
+            } else {
+                None
+            };
+            let Some(event) = event else {
+                return had_events;
+            };
+            had_events = true;
+            match event {
+                mbv_ctrl::player::PlayerEvent::UnifiedQueueUpdated(snapshot) => {
+                    self.app.adopt_home_snapshot(&snapshot);
+                }
+                mbv_ctrl::player::PlayerEvent::QueueOpResult {
+                    outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
+                    ..
+                } => self.app.adopt_home_snapshot(&snapshot),
+                mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
+                    self.app.raise_daemon_lost_modal();
+                }
+                mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
+                    self.app.handle_daemon_shutdown_announced();
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Drain one player event. Returns whether playback requested a restart
     /// (the caller `continue`s the run loop).
     pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {

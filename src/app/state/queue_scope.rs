@@ -51,6 +51,21 @@ impl App {
                 && self.local_queue_is_owner_queue(scope)
     }
 
+    /// Return the Player link and event receiver that own the requested
+    /// queue. Local resolves to the suspended home link when present.
+    pub(in crate::app) fn queue_link(
+        &mut self,
+        scope: QueueScope,
+    ) -> (
+        &mbv_player::PlayerProxy,
+        &mut std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ) {
+        match (scope, self.suspended_local.as_mut()) {
+            (QueueScope::Local, Some(home)) => (&home.player, &mut home.player_rx),
+            _ => (&self.player, &mut self.player_rx),
+        }
+    }
+
     pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
         match scope {
             QueueScope::Local => &self.player_tab,

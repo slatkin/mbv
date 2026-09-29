@@ -71,6 +71,7 @@ impl TickHarness {
         // The run loop drains one Player event before Application::tick();
         // process it here too so integration tests exercise the same event →
         // mounted-surface sync path.
+        self.model.drain_suspended_home_events();
         if let Ok(event) = self.model.app.player_rx.try_recv() {
             self.model.app.handle_player_event(event);
         }

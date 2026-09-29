@@ -302,6 +302,7 @@ impl Model {
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
             }
+            had_events |= self.drain_suspended_home_events();
             if self.drain_player_events(&mut had_events) {
                 continue 'outer;
             }
