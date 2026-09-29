@@ -199,7 +199,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 - [ ] 7.1 Add `docs/adr/0030-owner-process-is-the-only-local-player-owner.md`, covering design D1, D3, D4 and D6 with the rejected alternatives.
   - Add status notes pointing to 0030 to ADR 0006 (Refuse no longer means a Bare TUI), 0011, 0014 (the multi-connection model gains exclusive and shutting-down admission), 0015, 0016, 0017 (the Composed stage is retired), 0019 and 0029.
   - Verify: each amended ADR links to 0030.
-- [ ] 7.2 Update `CONTEXT.md` with the naming the maintainer approved (design Open Questions):
+- [ ] 7.2 Update `CONTEXT.md` per design D10: add **Owner process**, redefine **Stay-alive** as a lifetime policy, and make "Stay-alive process" and "Bare mode" _Avoid_ aliases. Also revise:
   - Bare mode, Stay-alive, Stay-alive process / Owner process, Client, Composed, Owner-held queue and source, Tray;
   - fix the Audiobookshelf eligibility line.
   - Update AGENTS.md's first paragraph.
