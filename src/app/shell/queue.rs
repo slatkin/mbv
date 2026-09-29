@@ -686,46 +686,6 @@ mod tests {
             .expect("Queue component mounted")
     }
 
-    fn queue_cursor(model: &Model) -> usize {
-        queue_component(model).test_cursor()
-    }
-
-    fn press_down(model: &mut Model) {
-        model
-            .application
-            .get_component_mut(&ComponentId::Queue)
-            .expect("Queue component mounted")
-            .on(&Event::Keyboard(KeyEvent {
-                code: Key::Down,
-                modifiers: KeyModifiers::NONE,
-            }));
-    }
-
-    #[test]
-    fn full_replacement_reanchors_instead_of_preserving() {
-        let mut app = make_app_stub();
-        app.player_tab.set_queue_items(emby_items(3), 0);
-        app.panel_focus = PanelFocus::Queue;
-        let mut model = Model::new(app);
-        model.sync_queue();
-
-        press_down(&mut model);
-        press_down(&mut model);
-        assert_eq!(queue_cursor(&model), 2);
-
-        model
-            .app
-            .replace_playback_queue(crate::app::tests::make_items(4), 1);
-        assert_eq!(
-            model.app.pending_queue_cursor_reanchor,
-            Some(QueueScope::Local),
-            "a replacement arms a re-anchor"
-        );
-
-        model.sync_queue();
-        assert_eq!(queue_cursor(&model), 1);
-    }
-
     #[test]
     fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         // Finding 5: after a remote disconnect the still-mounted component can

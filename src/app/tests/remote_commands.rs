@@ -52,7 +52,8 @@ fn remote_command_app() -> (App, MockHttp) {
     app.player_tab
         .set_item_at(1, mbv_queue::QueueItem::Emby(Box::new(item_b)));
     app.player_tab
-        .append_item(mbv_queue::QueueItem::Emby(Box::new(item_c)));
+        .queue
+        .append(mbv_queue::QueueItem::Emby(Box::new(item_c)));
     let mut session = mbv_emby::test_support::make_session("Client", "Emby");
     session.id = "session".into();
     session.now_playing_item_id = Some("a".into());

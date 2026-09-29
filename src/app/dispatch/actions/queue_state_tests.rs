@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::ContextAction;
-use crate::app::tests::confirm_replace_queue;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{
@@ -86,48 +85,6 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
     assert!(matches!(&items[0], QueueItem::Emby(item) if item.name == "Emby"));
     assert!(matches!(&items[1], QueueItem::Feed(item) if item.guid == "feed-entry"));
     assert!(items.iter().all(|item| !item.is_audiobookshelf()));
-}
-
-fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.queue.append_with_id(
-        mbv_queue::QueueSlotId::from_raw(700),
-        QueueItem::Emby(Box::new(make_item("stale", "Movie"))),
-    );
-    app.player_tab.queue.append_with_id(
-        mbv_queue::QueueSlotId::from_raw(900),
-        QueueItem::Emby(Box::new(make_item("stale-2", "Movie"))),
-    );
-    app.execute_context_action(Some(action), None);
-    // The target queue is populated, so the selection is held behind the
-    // replacement gate; confirming runs its rebuild + submission.
-    confirm_replace_queue(&mut app);
-
-    let slots = app.player_tab.queue.slots();
-    assert_eq!(slots.len(), 2);
-    assert_eq!(
-        slots
-            .iter()
-            .map(|slot| slot.slot_id.raw())
-            .collect::<Vec<_>>(),
-        vec![901, 902],
-        "context playback must preserve monotonic replacement slot identities"
-    );
-    assert!(slots.iter().all(|slot| {
-        matches!(&slot.item, QueueItem::Emby(item) if item.name == "selected" || item.name == "selected-2")
-    }));
-}
-
-#[rstest]
-#[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
-fn context_selection_rebuilds_canonical_queue_before_submission(
-    #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
-) {
-    let selected = vec![
-        make_item("selected", "Movie"),
-        make_item("selected-2", "Movie"),
-    ];
-    assert_context_selection_replaces_nonsequential_queue(action(selected));
 }
 
 fn assert_attached_context_selection_preserves_local_queue(action: ContextAction) {

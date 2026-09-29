@@ -10,10 +10,10 @@ use crate::app::tests::{
     close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub,
     make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, QueueScope};
+use crate::app::{App, PanelFocus, PendingQueueAction, QueueScope};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
-use mbv_queue::QueueItem;
+use mbv_queue::{QueueItem, QueueSource};
 use mbv_remote_player::QueueOp;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -361,5 +361,119 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     assert!(
         matches!(&received, CtrlCmd::UnifiedQueueAppend { op: None, .. }),
         "the legacy form carries no op id, got {received:?}"
+    );
+}
+
+/// Local-daemon stub whose owner advertises the owner-queue-load capability
+/// (idle loads), used by the idle-load test.
+fn owner_queue_load_local_daemon_app() -> (App, mpsc::Receiver<CtrlCmd>) {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(make_items(2), 0);
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..remote_stub_config()
+    };
+    let mut app = App::new_remote_with_config(
+        mbv_emby::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Local,
+        config,
+    );
+    close_initial_services(&mut app);
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
+#[test]
+fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
+    // unified-playback-queue "Clients hold no editable queue", scenario
+    // "Queue refresh": the Client asks the owner to refresh its queue, and
+    // the refreshed items appear only through the owner's resulting
+    // snapshot — the Client merges nothing of its own.
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    app.player_tab.set_items(make_items(2), 0);
+    app.panel_focus = PanelFocus::Queue;
+    // The owner answers Applied at once with the refreshed queue.
+    tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
+
+    app.refresh_current_view();
+
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(1) },
+        ),
+        "the refresh is sent as an answered owner operation"
+    );
+    assert_eq!(
+        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        3,
+        "the viewed queue is the owner's refreshed snapshot"
+    );
+    assert_eq!(
+        app.queue_for_scope(QueueScope::Local)
+            .slot_id_at(0)
+            .map(mbv_ctrl::slot_id_to_u64),
+        Some(500),
+        "the adopted snapshot is the owner's answer, not a Client-side merge"
+    );
+    assert!(app.status.is_empty(), "a timely answer must not flash");
+}
+
+#[test]
+fn idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result() {
+    // unified-playback-queue "Queue edits are answered before the next input",
+    // scenario "Idle load while an item plays": loading a playlist without
+    // starting playback keeps its own load result — the Client does not wait
+    // for it before handling input, and does not show the load as applied
+    // until the owner's accepted state contains it.
+    let (mut app, cmd_rx) = owner_queue_load_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    // A marker event ahead of any load result: a blocking pump would handle
+    // it inline while waiting for an answer that never comes on this path.
+    tx.send(PlayerEvent::RemoteDisconnected("marker".into()))
+        .unwrap();
+    app.player_tab.set_items(make_items(2), 0);
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(3),
+        start_idx: 0,
+        source: QueueSource::Playlist {
+            id: None,
+            name: "p".into(),
+        },
+        autostart: false,
+    });
+
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            CtrlCmd::UnifiedQueueLoadIdle { .. }
+        ),
+        "the load is sent on the idle-load request/result path"
+    );
+    assert!(
+        app.pending_overlay.is_none(),
+        "the load did not block on (and handle) the link's events"
+    );
+    assert_eq!(
+        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        2,
+        "the loaded playlist is not shown before the owner accepts it"
+    );
+
+    // The marker event stayed queued for the tick drain.
+    let mut harness = TickHarness::new(app);
+    harness.step();
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Modal(
+                mbv_ui_msg::ModalId::DaemonLost
+            )),
+        "the queued event is handled by the next tick, not by the load"
     );
 }

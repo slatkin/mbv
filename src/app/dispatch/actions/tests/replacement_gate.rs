@@ -4,7 +4,7 @@ use super::*;
 /// replacement runs; confirming plays the album through the routed path.
 #[test]
 fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
     app.remote_player_tab
@@ -29,7 +29,9 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
 
     confirm_replace_queue(&mut app);
 
-    assert_eq!(queued_track_ids(&app), ["track-1"]);
+    // Row 5.3: the confirmed replacement reaches the owner as a
+    // `UnifiedQueueReplace`; the Client's view follows the owner's answer.
+    assert_eq!(last_replace(&cmd_rx).0, ["track-1"]);
     assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
@@ -37,7 +39,7 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
 /// neither the queue nor playback and leaves no stored payload.
 #[test]
 fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
-    let mut app = remote_playback_app();
+    let (mut app, _cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
     app.remote_player_tab

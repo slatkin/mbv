@@ -40,12 +40,25 @@ fn socket_progress_updates_matching_inactive_queued_episode(
     make_socket_merge_ready_app: (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>),
 ) {
     let (mut app, _cmd_rx) = make_socket_merge_ready_app;
-    // Enqueue the known episode as an inactive slot.
-    app.enqueue_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
+    // Seed the known episode as an inactive slot directly: this test owns
+    // the socket merge, not the enqueue (row 5.3 made the enqueue an owner
+    // op whose result only reaches the view through the owner's answer).
+    app.player_tab.queue.append(QueueItem::Audiobookshelf(
+        mbv_queue::AudiobookshelfItem::Episode(mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        }),
+    ));
 
     // Activate a different slot so episode-a is inactive.
     let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(

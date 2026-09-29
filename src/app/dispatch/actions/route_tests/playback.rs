@@ -213,14 +213,9 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     assert!(!app.queue_deferrals.is_save_deferred());
     assert!(app.pending_overlay.is_none());
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(
-        app.remote_player_tab
-            .as_ref()
-            .unwrap()
-            .emby_items()
-            .iter()
-            .any(|queued| queued.id == item.id)
-    );
+    // The appended entry appears in the view only through the owner's
+    // answer (row 5.3); this legacy stub owner sends no snapshot, so the
+    // optimistic remote-tab content is not asserted here.
     assert!(command_rx.try_iter().any(|command| {
         matches!(
             command,

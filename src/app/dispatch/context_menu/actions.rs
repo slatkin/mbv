@@ -277,17 +277,6 @@ impl App {
         }
     }
 
-    /// Rebuild the local canonical queue from a context-menu selection only
-    /// when this process owns playback. A direct remote queue rebuilds its own
-    /// queue on submission, while an attached Session must leave the local
-    /// Composed queue untouched. Replayed by `run_routed_replacement` for the
-    /// gated `PlaySelection`/`ShuffleSelection` sites.
-    pub(in crate::app) fn rebuild_queue_for_selection(&mut self, items: &[EmbyItem]) {
-        if !self.has_direct_remote_queue() && self.connected_session_id.is_none() {
-            self.replace_playback_queue(items.to_vec(), 0);
-        }
-    }
-
     fn context_set_played(&mut self, item_id: &str, played: bool, lib_idx: Option<usize>) {
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);

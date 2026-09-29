@@ -2,7 +2,10 @@
 //! helpers for [`App`], split out of `queue_actions.rs` to keep that file
 //! within the repository's file-size limit.
 
-use super::{App, EmbyItem, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity, is_playable};
+use super::{
+    App, EmbyItem, PlaylistMutation, QueueItem, QueueScope, SessionEvent, ToastSeverity,
+    is_playable, queue_op::QueueOpEdit,
+};
 use crate::app::state::queue_owner::QueueOrigin;
 use mbv_emby::EmbyClient;
 
@@ -164,23 +167,25 @@ impl App {
     }
 
     /// Apply a completed Save As/Overwrite's new queue source (design D5).
-    /// Sends a lineage-guarded source-only update to the owner and leaves
-    /// the queue dirty until the owner's snapshot confirms it.
+    /// Sends a lineage-guarded source-only update to the owner as an answered
+    /// queue op addressed to the Local queue's owner link (row 5.3: the
+    /// suspended home link when a route or direct-remote peer is attached,
+    /// not whichever peer is currently routed), and leaves the queue dirty
+    /// until the owner's snapshot confirms it.
     pub(in crate::app) fn apply_saved_playlist_source(
         &mut self,
         source: mbv_queue::QueueSource,
         origin: QueueOrigin,
     ) -> bool {
         let lineage = origin.lineage;
-        // The mutation pushes the Local queue (`player_tab`), so the source
-        // update must reach that queue's owner link (the suspended home link
-        // when a route or direct-remote peer is attached) -- not whichever
-        // peer is currently routed.
-        let sent = self
-            .local_queue_player()
-            .as_remote()
-            .is_some_and(|remote| remote.update_queue_source(source.clone(), lineage).is_ok());
-        if !sent {
+        let sent = self.queue_op(
+            QueueScope::Local,
+            mbv_remote_player::QueueOp::SourceUpdate {
+                source: source.clone(),
+                lineage,
+            },
+        );
+        if sent == QueueOpEdit::NotApplied {
             self.flash(
                 "Could not update the Stay-alive queue source".into(),
                 ToastSeverity::Error,
@@ -212,7 +217,7 @@ impl App {
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
-        self.append_item_to_queue_and_sync(item);
+        self.append_item_to_queue(item);
     }
 
     /// Enqueue an explicitly resolved library-view item (task 5.3d, Album
@@ -233,33 +238,30 @@ impl App {
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
-        self.append_item_to_queue_and_sync(item);
+        self.append_item_to_queue(item);
     }
 
-    /// Shared append/sync/rollback tail for a single-item enqueue
-    /// (extracted from `enqueue_selected`'s two branches, which had
-    /// duplicated this verbatim before the wrapper was deleted in task
-    /// 4.3, R1): appends `item` to the visible queue,
-    /// marks local queue metadata dirty when applicable, and syncs the
-    /// append to the direct-remote queue / local persistence -- rolling
-    /// the whole append back if the sync fails.  The visible queue
-    /// mutation is the success confirmation; no enqueue success toast is
-    /// emitted.
-    pub(super) fn append_item_to_queue_and_sync(&mut self, item: EmbyItem) {
+    /// Appends one item to the viewed queue by sending the answered Append op
+    /// to that scope's Player owner (row 5.3, design D6): the Client holds no
+    /// editable queue, so the entry appears only when the owner's answer (or
+    /// a legacy owner's later snapshot) is adopted. Marks local playlist
+    /// metadata dirty and advances the queue epoch when the owner took the
+    /// edit. The visible-queue mutation is the success confirmation; no
+    /// enqueue success toast is emitted.
+    pub(super) fn append_item_to_queue(&mut self, item: EmbyItem) {
         let scope = self.viewed_queue_scope();
-        let previous_dirty = self.queue_dirty;
-        let previous_queue = self.queue_for_scope(scope).clone();
-        let appended_slot = self
-            .queue_for_scope_mut(scope)
-            .append_item(QueueItem::Emby(Box::new(item)));
-        if self.local_queue_metadata_applies(scope) {
-            self.queue_dirty = true;
-        }
-        if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
+        let sent = self.queue_op(
+            scope,
+            mbv_remote_player::QueueOp::Append {
+                items: vec![QueueItem::Emby(Box::new(item))],
+                before: None,
+            },
+        );
+        if sent != QueueOpEdit::NotApplied {
+            if self.local_queue_metadata_applies(scope) {
+                self.queue_dirty = true;
+            }
             self.advance_queue_epoch();
-        } else {
-            self.queue_dirty = previous_dirty;
-            *self.queue_for_scope_mut(scope) = previous_queue;
         }
     }
 }

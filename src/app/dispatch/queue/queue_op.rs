@@ -28,6 +28,36 @@ pub(in crate::app) enum QueueOpEdit {
 pub(in crate::app) const QUEUE_OP_ANSWER_BOUND: Duration = Duration::from_millis(250);
 
 impl App {
+    /// Send a whole-queue replacement to `scope`'s Player owner as an
+    /// answered op (row 5.3, design D6): the owner replaces its canonical
+    /// queue, begins playback at `start_idx`, and answers with the snapshot
+    /// the Client adopts — the Client holds no editable queue of its own.
+    /// Slot identities are minted client-side (1..=n), like the idle load.
+    pub(in crate::app) fn replace_queue_on_owner(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<mbv_queue::QueueItem>,
+        start_idx: usize,
+        source: mbv_queue::QueueSource,
+    ) -> QueueOpEdit {
+        let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: (index + 1) as u64,
+                item,
+            })
+            .collect();
+        self.queue_op(
+            scope,
+            mbv_remote_player::QueueOp::Replace {
+                items: slots,
+                start_idx: Some(start_idx),
+                source,
+            },
+        )
+    }
+
     /// Send `operation` to `scope`'s Player owner, then adopt its answer.
     /// Owners without the capability get the legacy form and no wait (the
     /// displayed queue follows their later snapshots instead). Returns

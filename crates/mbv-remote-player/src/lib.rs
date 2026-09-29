@@ -403,30 +403,6 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_answered_queue_ops
     }
 
-    /// Send a correlated idle load without changing the Client's queue
-    /// projection. A peer without the additive capability is refused locally.
-    pub fn update_queue_source(
-        &self,
-        source: mbv_queue::QueueSource,
-        lineage: mbv_queue::QueueLineage,
-    ) -> Result<(), RemotePlayerError> {
-        if !self.supports_owner_queue_load() {
-            return Err(RemotePlayerError::queue_operation(
-                "daemon does not support owner queue source updates",
-            ));
-        }
-        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate {
-            source,
-            lineage,
-            op: None,
-        }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send queue source update to Player owner",
-            ));
-        }
-        Ok(())
-    }
-
     pub fn load_queue_idle(
         &self,
         request_id: mbv_ctrl::QueueLoadRequestId,

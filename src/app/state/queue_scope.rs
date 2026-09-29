@@ -1,10 +1,5 @@
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{
-    App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
-};
-use mbv_emby_model::EmbyItem;
-use mbv_queue::ExecSlot;
-use mbv_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
+use crate::app::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
+use mbv_queue::{QueueMutationResult, QueueSlotId};
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {
@@ -134,73 +129,6 @@ impl App {
         self.queue_undo_stack.clear();
     }
 
-    pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.advance_queue_epoch();
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        match self.playing_queue_scope() {
-            QueueScope::Local => {
-                self.player_tab.set_items(items, cursor);
-            }
-            QueueScope::Remote => {
-                let queue = self
-                    .remote_player_tab
-                    .as_mut()
-                    .expect("direct remote playback queue requires remote queue");
-                queue.set_items(items, cursor);
-            }
-        }
-        // A full replacement changes the queue occurrence sequence. A preserved
-        // prior selection could refer to an unrelated slot, so force a re-anchor
-        // to the replacement's start index rather than relying on `Preserve`.
-        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
-    }
-    pub(in crate::app) fn sync_playback_queue_items_after_append(
-        &mut self,
-        scope: QueueScope,
-        items: Vec<ExecSlot>,
-    ) -> bool {
-        if items.is_empty() || scope != self.playing_queue_scope() {
-            return true;
-        }
-        if scope != QueueScope::Remote
-            && !matches!(self.playback_target(), PlaybackTarget::Local(_))
-        {
-            return true;
-        }
-        if scope != QueueScope::Remote && !self.local_queue_is_owner_queue(scope) {
-            // Bare mode has no live command channel before its first submit.
-            return true;
-        }
-        let sent = self.player.queue_append(items);
-        if !sent && self.player.is_remote_disconnected() {
-            self.flash(
-                crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        if !sent && self.player.as_remote().is_some() && !self.player.supports_queue_append() {
-            self.flash(
-                "Remote append is not supported by this direct mbv peer".to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        if !sent {
-            self.flash(
-                if self.player.is_remote_disconnected() {
-                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
-                } else {
-                    "Playback owner rejected the queue append"
-                }
-                .to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        true
-    }
-
     pub(in crate::app) fn playing_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().playback_target()
     }
@@ -223,36 +151,6 @@ impl App {
 
     pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut PlayerTab {
         self.queue_for_scope_mut(self.playing_queue_scope())
-    }
-
-    pub(in crate::app) fn merge_refreshed_queue(
-        &mut self,
-        scope: QueueScope,
-        fetched_items: Vec<EmbyItem>,
-    ) -> RefreshMergeResult {
-        let queue_len = self.queue_for_scope(scope).total_queue_len();
-        let sync_player_prunes =
-            scope == self.playing_queue_scope() && !self.has_direct_remote_queue();
-        let active_index = if scope == self.playing_queue_scope() {
-            let st = self.player.status.lock().unwrap();
-            (st.active && st.current_idx < queue_len).then_some(st.current_idx)
-        } else {
-            None
-        };
-        let result = {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.sync_active_slot(active_index);
-            queue.merge_refresh(fetched_items)
-        };
-        if sync_player_prunes {
-            // Slot-addressed removal is order-independent, so no descending
-            // index sort is needed.
-            for slot_id in &result.pruned_slots {
-                self.player
-                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(*slot_id));
-            }
-        }
-        result
     }
 
     /// Whether the previous/next transport controls (playback-header mouse

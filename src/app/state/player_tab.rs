@@ -1,8 +1,6 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ExecSlot;
-use mbv_queue::{
-    PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlot, QueueSlotId, RefreshMergeResult,
-};
+use mbv_queue::{PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlot, QueueSlotId};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -131,21 +129,6 @@ impl PlayerTab {
         self.clamp_cursor();
     }
 
-    pub fn sync_active_slot(&mut self, active_index: Option<usize>) {
-        let active_slot_id = active_index.and_then(|index| self.resolve_slot_at(index));
-        if let Some(slot_id) = active_slot_id {
-            let _ = self.queue.set_active_slot(slot_id);
-        } else {
-            self.queue.clear_active_slot();
-        }
-    }
-
-    pub fn merge_refresh(&mut self, fetched_items: Vec<EmbyItem>) -> RefreshMergeResult {
-        let result = self.queue.merge_refresh(fetched_items);
-        self.clamp_cursor();
-        result
-    }
-
     /// Canonical queue length: the number of slots in the playback queue,
     /// regardless of item kind.
     #[must_use]
@@ -165,31 +148,6 @@ impl PlayerTab {
     #[must_use]
     pub fn slot_id_at(&self, index: usize) -> Option<QueueSlotId> {
         self.queue.slots().get(index).map(|slot| slot.slot_id)
-    }
-
-    /// Read-only resolution of a display index to the slot currently at that
-    /// position.
-    #[must_use]
-    pub fn resolve_slot_at(&self, index: usize) -> Option<QueueSlotId> {
-        self.queue.slots().get(index).map(|slot| slot.slot_id)
-    }
-
-    /// Append one item to the canonical queue and return the slot identity the
-    /// owner must see alongside it, so callers never re-derive the pair.
-    pub fn append_item(&mut self, item: QueueItem) -> ExecSlot {
-        let slot_id = self.queue.append(item.clone());
-        ExecSlot { slot_id, item }
-    }
-
-    pub fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<ExecSlot> {
-        items
-            .into_iter()
-            .map(|item| self.append_item(QueueItem::Emby(Box::new(item))))
-            .collect()
-    }
-
-    pub fn clear(&mut self) {
-        self.set_items(Vec::new(), 0);
     }
 
     /// Extract a slice of all `QueueSlot`s from the canonical queue.

@@ -14,6 +14,7 @@
 
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
 use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
@@ -155,13 +156,15 @@ impl App {
         if self.reject_disconnected_remote_jump() {
             return false;
         }
-        let sent = self
-            .player
-            .queue_play_slot(mbv_ctrl::slot_id_to_u64(slot_id));
-        if !sent {
-            self.reject_disconnected_remote_jump();
-        }
-        sent
+        // Row 5.3 (design D6): the jump is an answered owner operation, so
+        // the playing slot changes only through the owner's answer.
+        let sent = self.queue_op(
+            self.playing_queue_scope(),
+            mbv_remote_player::QueueOp::PlaySlot {
+                slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
+            },
+        );
+        sent != QueueOpEdit::NotApplied
     }
 
     pub(in crate::app) fn request_relative_step(&mut self, direction: Direction) -> bool {

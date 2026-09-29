@@ -159,27 +159,30 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 #[test]
 fn feed_selection_enqueue_preserves_supplied_order() {
     let mut app = make_app_stub();
-    // Hold the owner command channel so the post-append owner sync
-    // reports success instead of a dropped-peer disconnect (Unit 4
-    // deleted the in-process Bare player the stub used to carry).
-    let _cmd_rx = super::super::live_owner_channel(&mut app);
+    // Row 5.3: each enqueue is an Append owner op, so the supplied order is
+    // observed on the wire rather than in an optimistic Client write.
+    let cmd_rx = super::super::live_owner_channel(&mut app);
     app.enqueue_feed_entries(vec![
         playable_feed_entry("feed-first"),
         playable_feed_entry("feed-second"),
         playable_feed_entry("feed-third"),
     ]);
 
-    let guids: Vec<_> = app
-        .playback_queue()
-        .queue
-        .slots()
-        .iter()
-        .filter_map(|slot| match &slot.item {
-            mbv_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+    let appended: Vec<String> = cmd_rx
+        .try_iter()
+        .filter_map(|command| match command {
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => match &*items {
+                [mbv_queue::QueueItem::Feed(entry)] => Some(entry.guid.clone()),
+                _ => None,
+            },
             _ => None,
         })
         .collect();
-    assert_eq!(guids, vec!["feed-first", "feed-second", "feed-third"]);
+    assert_eq!(
+        appended,
+        vec!["feed-first", "feed-second", "feed-third"],
+        "the enqueues reach the owner in the supplied order"
+    );
 }
 
 /// F5 while the Feeds tab is selected must not dispatch into the Emby or

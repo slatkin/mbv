@@ -136,7 +136,8 @@ impl App {
                 siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
                 if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
                     drop(client);
-                    self.replace_playback_queue(siblings.clone(), start_idx);
+                    // Row 5.3 (design D6): `play_items_routed` replaces the
+                    // queue on the Player owner; no Client-side queue write.
                     self.play_items_routed(siblings, start_idx, self.queue_source.clone());
                     return true;
                 }
