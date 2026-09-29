@@ -1,8 +1,9 @@
 use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
-    CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH, CTRL_CAP_LIFECYCLE_SHUTDOWN,
-    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN,
-    CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY, CTRL_PROTOCOL_VERSION,
+    CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
+    CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_QUEUE_STATE,
+    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
                 CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
+                CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
             ],
             control_token: None,
         }
@@ -134,6 +136,13 @@ impl CtrlHello {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
+    }
+
+    #[must_use]
+    pub fn supports_answered_queue_ops(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_ANSWERED_QUEUE_OPS)
     }
 
     #[must_use]

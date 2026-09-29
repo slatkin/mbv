@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::player::PlayerCommand;
 use crate::{
-    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, UnifiedQueueSlot,
+    CtrlHello, PlaybackGeneration, PlaybackRequestId, ProgressUpdate, QueueLoadRequestId,
+    QueueOpId, UnifiedQueueSlot,
 };
 use mbv_queue::QueueItem;
 use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
@@ -43,6 +44,8 @@ pub enum CtrlCmd {
         start_idx: Option<usize>,
         #[serde(default)]
         source: QueueSource,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Replace the owner's queue without starting playback. Requires the
     /// `owner-queue-load` capability and is correlated by request identity.
@@ -58,14 +61,22 @@ pub enum CtrlCmd {
     UnifiedQueueSourceUpdate {
         source: QueueSource,
         lineage: QueueLineage,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
-    /// Append item-generic values to the tail of the queue.
+    /// Append item-generic values before a slot, or to the tail when absent.
     UnifiedQueueAppend {
         items: Vec<QueueItem>,
+        #[serde(default)]
+        before: Option<u64>,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Remove the slot identified by `slot_id`.
     UnifiedQueueRemoveSlot {
         slot_id: u64,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Remove every listed slot as one queue edit. The owner applies all of
     /// them before publishing a single queue snapshot, so a bulk removal is
@@ -73,18 +84,37 @@ pub enum CtrlCmd {
     /// identities are skipped; an empty list is a no-op.
     UnifiedQueueRemoveSlots {
         slot_ids: Vec<u64>,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Move the slot identified by `slot_id` to `to_index`.
     UnifiedQueueMoveSlot {
         slot_id: u64,
         to_index: usize,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Begin playback of an existing slot identified by `slot_id`.
     UnifiedQueuePlaySlot {
         slot_id: u64,
+        #[serde(default)]
+        op: Option<QueueOpId>,
     },
     /// Clear all slots and stop playback.
     UnifiedQueueClear,
+    /// Correlated form of queue clear for peers with `answered-queue-ops`.
+    UnifiedQueueClearOp {
+        op: QueueOpId,
+    },
+    /// Refresh the owner's queue enrichment.
+    UnifiedQueueRefresh {
+        op: QueueOpId,
+    },
+    /// Relay provider progress updates to the owner.
+    UnifiedQueueApplyProgress {
+        op: QueueOpId,
+        updates: Vec<ProgressUpdate>,
+    },
     /// Seeds queue state on a cold daemon (no queue yet) without starting
     /// playback.
     UnifiedAdoptQueue {
@@ -147,7 +177,10 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueRemoveSlots { .. }
             | CtrlCmd::UnifiedQueueMoveSlot { .. }
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
-            | CtrlCmd::UnifiedQueueClear => OwnerGate::Any,
+            | CtrlCmd::UnifiedQueueClear
+            | CtrlCmd::UnifiedQueueClearOp { .. }
+            | CtrlCmd::UnifiedQueueRefresh { .. }
+            | CtrlCmd::UnifiedQueueApplyProgress { .. } => OwnerGate::Any,
         }
     }
 
@@ -164,7 +197,10 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }
             | CtrlCmd::UnifiedQueueRemoveSlots { .. }
             | CtrlCmd::UnifiedQueueMoveSlot { .. }
-            | CtrlCmd::UnifiedQueueClear => true,
+            | CtrlCmd::UnifiedQueueClear
+            | CtrlCmd::UnifiedQueueClearOp { .. }
+            | CtrlCmd::UnifiedQueueRefresh { .. }
+            | CtrlCmd::UnifiedQueueApplyProgress { .. } => true,
             CtrlCmd::Hello(_)
             | CtrlCmd::PlayerCmd(_)
             | CtrlCmd::Stop
@@ -189,6 +225,7 @@ impl CtrlCmd {
             slots,
             start_idx,
             source,
+            op: None,
         }
     }
 }

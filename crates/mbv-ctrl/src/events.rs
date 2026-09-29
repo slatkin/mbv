@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::player::{PlayerEvent, PlayerStatus};
 use crate::{
-    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, UnifiedQueueStateData,
+    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, QueueOpId,
+    UnifiedQueueStateData,
 };
 use mbv_queue::ServiceKind;
 
@@ -52,6 +53,11 @@ pub enum CtrlEvent {
         request_id: QueueLoadRequestId,
         result: QueueLoadResult,
     },
+    /// Result of one correlated owner queue operation.
+    QueueOpResult {
+        op: QueueOpId,
+        outcome: QueueOpOutcome,
+    },
 
     /// Redacted, provider-qualified Audiobookshelf progress. Sent only to
     /// peers advertising `abs-progress`. See `AudiobookshelfProgressEvent`
@@ -100,6 +106,12 @@ pub struct AudiobookshelfBookProgressEvent {
 pub enum QueueLoadResult {
     Accepted,
     Rejected { reason: String },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum QueueOpOutcome {
+    Applied(Box<UnifiedQueueStateData>),
+    Rejected(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
