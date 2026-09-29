@@ -65,9 +65,8 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     assert_eq!(status.title, "Remote status");
 }
 
-// Owns player-target-locality "Daemon target transitions update classification".
 #[test]
-fn daemon_target_transitions_update_classification_suspended_disconnect_raises_owner_lost_modal() {
+fn suspended_home_disconnect_raises_owner_lost_modal() {
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (remote, _) = RemotePlayer::stub(make_items(2), 0);
     app.switch_to_direct_remote(
@@ -78,21 +77,6 @@ fn daemon_target_transitions_update_classification_suspended_disconnect_raises_o
     );
     let (event_tx, event_rx) = mpsc::channel();
     app.suspended_local.as_mut().unwrap().player_rx = event_rx;
-    let mut snapshot = emby_unified_state(&make_items(2), 0);
-    snapshot.source = mbv_queue::QueueSource::Album;
-    let home = app
-        .suspended_local
-        .as_ref()
-        .unwrap()
-        .player
-        .as_remote()
-        .unwrap();
-    *home.unified_queue.lock().unwrap() = Some(snapshot.clone());
-    event_tx
-        .send(mbv_ctrl::player::PlayerEvent::UnifiedQueueUpdated(
-            Box::new(snapshot),
-        ))
-        .unwrap();
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
             "home owner lost".into(),
@@ -102,43 +86,6 @@ fn daemon_target_transitions_update_classification_suspended_disconnect_raises_o
     let mut harness = TickHarness::new(app);
     harness.step();
 
-    let app = &harness.model().app;
-    assert!(
-        harness
-            .model()
-            .application
-            .mounted(&mbv_ui_msg::ComponentId::Modal(
-                mbv_ui_msg::ModalId::DaemonLost,
-            ))
-    );
-    assert_eq!(app.player_tab.emby_items(), make_items(2));
-    assert!(matches!(app.queue_source, mbv_queue::QueueSource::Album));
-    assert!(app.suspended_local.is_none());
-}
-
-// Owns player-target-locality "Daemon target transitions update classification".
-#[test]
-fn daemon_target_transitions_update_classification_local_disconnect_keeps_local_snapshot_source() {
-    let mut app = make_local_daemon_app_stub(make_items(2));
-    let remote = app.player.as_remote().unwrap();
-    let mut snapshot = remote.unified_queue_state().unwrap();
-    snapshot.source = mbv_queue::QueueSource::Series;
-    *remote.unified_queue.lock().unwrap() = Some(snapshot);
-    app.queue_source = mbv_queue::QueueSource::Remote;
-    let (event_tx, event_rx) = mpsc::channel();
-    app.player_rx = event_rx;
-    event_tx
-        .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
-            "local owner lost".into(),
-        ))
-        .unwrap();
-
-    let mut harness = TickHarness::new(app);
-    harness.step();
-
-    let app = &harness.model().app;
-    assert_eq!(app.player_tab.emby_items(), make_items(2));
-    assert!(matches!(app.queue_source, mbv_queue::QueueSource::Series));
     assert!(
         harness
             .model()
@@ -149,7 +96,6 @@ fn daemon_target_transitions_update_classification_local_disconnect_keeps_local_
     );
 }
 
-// Owns player-target-locality "Daemon target transitions update classification".
 #[test]
 fn suspended_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -162,14 +108,6 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    let home = app
-        .suspended_local
-        .as_ref()
-        .unwrap()
-        .player
-        .as_remote()
-        .unwrap();
-    *home.unified_queue.lock().unwrap() = Some(emby_unified_state(&make_items(2), 0));
     app.suspended_local.as_mut().unwrap().player_rx = event_rx;
     event_tx
         .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
@@ -186,7 +124,6 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
                 mbv_ui_msg::ModalId::DaemonLost,
             ))
     );
-    assert_eq!(harness.model().app.player_tab.emby_items(), make_items(2));
     assert!(harness.model().app.suspended_local.is_none());
     assert_eq!(
         harness.model().app.pending_exit_message.as_deref(),
@@ -254,7 +191,6 @@ fn local_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 }
 
-// Owns player-target-locality "Daemon target transitions update classification".
 #[test]
 fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
     use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};

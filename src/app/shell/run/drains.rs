@@ -99,7 +99,6 @@ impl Model {
                     ..
                 } => self.app.adopt_home_snapshot(&snapshot),
                 mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
-                    self.app.adopt_last_local_snapshot();
                     self.app.suspended_local = None;
                     self.app.raise_daemon_lost_modal();
                 }
