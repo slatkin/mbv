@@ -19,10 +19,11 @@ requested. Debug messages SHALL NOT reach any log sink by default.
 of directives. A directive is either a bare level (`error`, `warn`, `info`, `debug`,
 `trace`), which sets the default level, or `<target>=<level>`, which sets the level for one
 log target and the targets nested under it. Messages SHALL be recorded when their level is
-at or above the most specific matching directive. A spec made of a single bare level SHALL
-behave exactly as that level did before this change. An unrecognised level, an empty
-directive, or a malformed directive SHALL be rejected with a usage error. The local daemon
-SHALL use the whole spec of the `mbv` process that spawns it.
+at or above the most specific matching directive. A bare level sets the default threshold.
+Module-path targets containing `::` outside `mbv` and `mbv_*` SHALL be capped at `warn`
+unless a matching target directive names them. An unrecognised level, an empty directive,
+or a malformed directive SHALL be rejected with a usage error. The local daemon SHALL use
+the whole spec of the `mbv` process that spawns it.
 
 #### Scenario: Debug opt-in
 - **WHEN** `mbvd --log-level debug` runs
@@ -38,8 +39,8 @@ SHALL use the whole spec of the `mbv` process that spawns it.
 - **THEN** debug-level `api` lines are recorded and info-level lines from other targets are not
 
 #### Scenario: Trace opt-in
-- **WHEN** `mbv --log-level trace` runs
-- **THEN** trace-level lines are recorded and labelled `level=trace`
+- **WHEN** `mbv --log-level trace` runs and an `mbv` trace-level event is emitted
+- **THEN** the line is recorded and labelled `level=trace`
 
 #### Scenario: Invalid value
 - **WHEN** `mbvd --log-level loud` runs
@@ -145,9 +146,9 @@ is handled later.
 
 Request ids are unique only within one client connection. So that lines can be matched
 across processes:
-- When a client connects, the Player owner SHALL log one line with `client` and `peer`:
-  the peer's process id for a local socket, or the peer's `ip:port` for a network
-  connection.
+- After a client completes the Control handshake and is registered, the Player owner SHALL
+  log one line with `client` and `peer`: the peer's process id for a local socket, or the
+  peer's `ip:port` for a network connection.
 - Each time `mbv` connects to a Player owner, it SHALL log one line with `peer` in the
   same format: its own process id for a local socket, or its local `ip:port` for a
   network connection.

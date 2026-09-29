@@ -183,7 +183,7 @@ impl PlaybackRun {
         );
 
         self.in_playback_span(|this| {
-            tracing::info!(name: "player.queue_submitted", target: "player", origin = ?origin, index = start_idx, item_count = this.queue_len(), "queue submitted");
+            tracing::info!(name: "player.queue.submitted", target: "player", origin = ?origin, index = start_idx, item_count = this.queue_len(), "queue submitted");
         });
     }
 

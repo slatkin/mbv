@@ -421,9 +421,10 @@ fn connect_stream(
     let disconnect_stream = stream.try_clone()?;
 
     // Correlation peer (D5 "Ctrl connections"): the owner joins its
-    // `ctrl.client.connected` line to this side's `ctrl.connected` line by
-    // an exact `peer=` match. Unix endpoints peer by this process's pid;
-    // TCP endpoints by this side's local `ip:port`, in the owner's format.
+    // `ctrl.client.connected` line to this side's
+    // `ctrl.connection.established` line by an exact `peer=` match.
+    // Unix endpoints peer by this process's pid; TCP endpoints by this side's
+    // local `ip:port`, in the owner's format.
     let peer = match &stream {
         SocketStream::Unix(_) => std::process::id().to_string(),
         SocketStream::Tcp(tcp) => tcp
@@ -469,7 +470,7 @@ fn connect_stream(
         DAEMON_HANDSHAKE_HARD_BOUND,
     )?;
     tracing::info!(
-        name: "ctrl.connected",
+        name: "ctrl.connection.established",
         target: "ctrl",
         peer = %peer,
         "ctrl connection established"

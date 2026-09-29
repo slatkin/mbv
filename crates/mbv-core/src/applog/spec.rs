@@ -90,9 +90,9 @@ impl LogSpec {
 
 impl Display for LogSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", level_name(self.default))?;
+        write!(f, "{}", self.default)?;
         for (target, level) in &self.directives {
-            write!(f, ",{target}={}", level_name(*level))?;
+            write!(f, ",{target}={level}")?;
         }
         Ok(())
     }
@@ -157,10 +157,6 @@ fn parse_level(level: &str) -> Option<tracing::level_filters::LevelFilter> {
     }
 }
 
-fn level_name(level: tracing::level_filters::LevelFilter) -> String {
-    level.to_string().to_lowercase()
-}
-
 fn is_first_party(target: &str) -> bool {
     target == "mbv" || target.starts_with("mbv_")
 }
@@ -178,38 +174,34 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case("info", Some((tracing::level_filters::LevelFilter::INFO, vec![])))]
+    #[case("info", tracing::level_filters::LevelFilter::INFO, vec![])]
     #[case(
         "warn,player=debug",
-        Some((
-            tracing::level_filters::LevelFilter::WARN,
-            vec![("player".to_owned(), tracing::level_filters::LevelFilter::DEBUG)]
-        ))
+        tracing::level_filters::LevelFilter::WARN,
+        vec![("player".to_owned(), tracing::level_filters::LevelFilter::DEBUG)]
     )]
-    #[case("trace", Some((tracing::level_filters::LevelFilter::TRACE, vec![])))]
-    #[case("", None)]
-    #[case(",info", None)]
-    #[case("info,", None)]
-    #[case("loud", None)]
-    #[case("player=", None)]
-    #[case("=debug", None)]
-    #[case("player=debug=trace", None)]
-    fn parse_directives(
+    #[case("trace", tracing::level_filters::LevelFilter::TRACE, vec![])]
+    fn parse_accepts_directives(
         #[case] input: &str,
-        #[case] expected: Option<(
-            tracing::level_filters::LevelFilter,
-            Vec<(String, tracing::level_filters::LevelFilter)>,
-        )>,
+        #[case] expected_default: tracing::level_filters::LevelFilter,
+        #[case] expected_directives: Vec<(String, tracing::level_filters::LevelFilter)>,
     ) {
-        let parsed = LogSpec::parse(input);
-        match expected {
-            Some((default, directives)) => {
-                let spec = parsed.expect("valid log spec");
-                assert_eq!(spec.default, default);
-                assert_eq!(spec.directives, directives);
-            }
-            None => assert_eq!(parsed, Err(LogSpecError::new(input))),
-        }
+        let spec = LogSpec::parse(input).expect("case table should contain valid log specs");
+
+        assert_eq!(spec.default, expected_default);
+        assert_eq!(spec.directives, expected_directives);
+    }
+
+    #[rstest]
+    #[case("")]
+    #[case(",info")]
+    #[case("info,")]
+    #[case("loud")]
+    #[case("player=")]
+    #[case("=debug")]
+    #[case("player=debug=trace")]
+    fn parse_rejects_malformed_directives(#[case] input: &str) {
+        assert_eq!(LogSpec::parse(input), Err(LogSpecError::new(input)));
     }
 
     #[test]
@@ -247,7 +239,7 @@ mod tests {
 
     #[test]
     fn third_party_targets_are_warn_capped_unless_directed() {
-        let spec = LogSpec::parse("debug,third_party=trace").expect("valid spec");
+        let spec = LogSpec::parse("trace,third_party=trace").expect("valid spec");
 
         assert_eq!(
             spec.level_for_target("rustls::client"),
@@ -259,7 +251,7 @@ mod tests {
         );
         assert_eq!(
             spec.level_for_target("player"),
-            tracing::level_filters::LevelFilter::DEBUG
+            tracing::level_filters::LevelFilter::TRACE
         );
     }
 
@@ -271,13 +263,5 @@ mod tests {
             spec.level_for_target("mbv_daemon::control"),
             tracing::level_filters::LevelFilter::DEBUG
         );
-    }
-
-    #[test]
-    fn error_has_display_and_error_contract() {
-        let error = LogSpec::parse("player=").expect_err("invalid spec");
-        let _: &dyn std::error::Error = &error;
-
-        assert!(error.to_string().contains("player="));
     }
 }

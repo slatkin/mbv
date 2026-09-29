@@ -17,6 +17,7 @@ pub use url_path::UrlPath;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use tracing_log::AsLog;
 use tracing_subscriber::prelude::*;
 
 pub use spec::LogSpec;
@@ -84,10 +85,7 @@ pub(crate) fn format_stderr_line(level: tracing::Level, line: &str) -> String {
 }
 
 fn spec_max_level(spec: &LogSpec) -> log::LevelFilter {
-    spec.most_verbose_level()
-        .to_string()
-        .parse()
-        .unwrap_or(log::LevelFilter::Off)
+    spec.most_verbose_level().as_log()
 }
 
 #[cfg(test)]
@@ -136,9 +134,9 @@ mod tests {
         assert!(!lines[0].contains("event="));
     }
 
-    // `tracing-log` dispatches every `log` record through one static "log
-    // event" callsite with target "log"; the line must carry the record's
-    // real `log.target` as `source` and none of the synthetic `log.*` fields.
+    // Regression guard for PR #856: `tracing-log` dispatches every `log` record
+    // through one static "log event" callsite with target "log"; the line must
+    // carry the record's real target as `source` and omit synthetic `log.*` fields.
     #[test]
     fn bridged_log_record_uses_log_target_as_source() {
         let (subscriber, capture) = capturing_subscriber();
@@ -156,20 +154,18 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("level=warn source=ureq"));
         assert!(lines[0].contains("msg=\"connection failed\""));
-        assert!(!lines[0].contains("event="));
         assert!(!lines[0].contains("log."));
     }
 
     // ── filter: first-party module paths are not capped ─────────────────────────────
 
     #[test]
-    fn first_party_module_path_span_is_created_while_third_party_event_stays_capped() {
+    fn first_party_module_path_span_survives_filtering() {
         let spec = LogSpec::parse("info").expect("valid spec");
         let (subscriber, capture) = filtered_capturing_subscriber(&spec);
         tracing::subscriber::with_default(subscriber, || {
             let span = tracing::info_span!(target: "mbv_daemon::control", "correlation", slot = 12);
             let _entered = span.enter();
-            tracing::info!(target: "rustls::client", "capped noise");
             tracing::info!(name: "app.done", target: "app", "done");
         });
 

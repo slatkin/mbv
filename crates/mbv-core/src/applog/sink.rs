@@ -196,13 +196,11 @@ mod tests {
     // Contract: after a successful rename chain, a failed reopen leaves the
     // sink with no file handle, so later `write_line` calls write nothing —
     // no line lands in a rotated generation and `path` is not recreated.
-    // Regression guard for the unit 1.4 review finding that a retained stale
-    // handle made every later write shift the renamed file through
-    // `.log.1/.2/.3` into deletion. The real filesystem cannot hermetically
-    // fail `open` after a successful rename (the chain always vacates `path`,
-    // and recreating it needs exactly the directory permissions the renames
-    // needed), so the reopen result is injected at the `adopt_reopen` seam
-    // that `rotate()` itself uses.
+    // Regression guard for PR #856: a retained stale handle would append every
+    // later write to a rotated generation that a subsequent rotation can delete.
+    // The real filesystem cannot hermetically fail `open` after a successful
+    // rename, so the reopen result is injected at the `adopt_reopen` seam that
+    // `rotate()` itself uses.
     #[test]
     fn failed_reopen_after_rename_chain_drops_handle_and_writes_nothing() {
         let dir = temp_dir();

@@ -115,7 +115,7 @@ impl App {
         tracing::info!(name: "player.quit.started", target: "player", requested = quit_requested, was_playing, current_index = current_idx, position_ticks, last_valid_position_ticks = last_valid_pos, timeout_seconds = quit_timeout.as_secs(), "player quit started");
         self.flush_playing_position_on_teardown(was_playing, current_idx, last_valid_pos);
         if self.home_is_local_daemon {
-            tracing::info!(name: "queue.state.persist.skipped", target: "queue", reason = "local_daemon_owns_authoritative_queue", "queue persistence skipped during teardown");
+            tracing::info!(name: "queue.persist.skipped", target: "queue", reason = "local_daemon_owns_authoritative_queue", "queue persistence skipped during teardown");
         } else {
             self.save_queue_state_no_clear();
         }

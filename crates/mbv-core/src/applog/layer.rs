@@ -60,13 +60,13 @@ impl Visit for FieldVisitor {
     }
 }
 
+#[cfg(any(test, feature = "test"))]
 type Tap = Box<dyn Fn(&str) + Send + Sync>;
 
 pub(crate) struct LogfmtLayer {
     stderr: bool,
     file: Mutex<Option<FileSink>>,
-    /// Extra sink receiving each rendered line; injected by `with_sink` for
-    /// tests, `None` in production.
+    #[cfg(any(test, feature = "test"))]
     tap: Option<Tap>,
 }
 
@@ -75,6 +75,7 @@ impl LogfmtLayer {
         Self {
             stderr,
             file: Mutex::new(log_path.map(FileSink::at_default_size)),
+            #[cfg(any(test, feature = "test"))]
             tap: None,
         }
     }
@@ -106,6 +107,7 @@ impl LogfmtLayer {
         {
             sink.write_line(line);
         }
+        #[cfg(any(test, feature = "test"))]
         if let Some(tap) = &self.tap {
             tap(line);
         }
@@ -145,7 +147,6 @@ where
         let mut visitor = FieldVisitor::new();
         event.record(&mut visitor);
         let metadata = event.metadata();
-        let level = level_name(*metadata.level());
         let ts = time::format_ts(time::now_local());
         let source = visitor.log_target.as_deref().unwrap_or(metadata.target());
         // Without `name:`, tracing names the event `event <file>:<line>`
@@ -172,7 +173,7 @@ where
             .unwrap_or_default();
         let rendered = line::format_line(&Line {
             ts: &ts,
-            level,
+            level: *metadata.level(),
             source,
             event: event_name,
             fields: &visitor.fields,
@@ -180,15 +181,5 @@ where
             message: visitor.message.as_deref().unwrap_or(""),
         });
         self.write(*metadata.level(), &rendered);
-    }
-}
-
-fn level_name(level: tracing::Level) -> &'static str {
-    match level {
-        tracing::Level::ERROR => "error",
-        tracing::Level::WARN => "warn",
-        tracing::Level::INFO => "info",
-        tracing::Level::DEBUG => "debug",
-        tracing::Level::TRACE => "trace",
     }
 }

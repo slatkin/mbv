@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 pub(crate) struct Line<'a> {
     pub ts: &'a str,
-    pub level: &'a str,
+    pub level: tracing::Level,
     pub source: &'a str,
     pub event: Option<&'a str>,
     pub fields: &'a [(String, String)],
@@ -14,7 +14,7 @@ pub(crate) fn format_line(line: &Line<'_>) -> String {
     let mut output = String::from("ts=");
     push_value(&mut output, line.ts);
     output.push_str(" level=");
-    push_value(&mut output, line.level);
+    push_value(&mut output, level_name(line.level));
     output.push_str(" source=");
     push_value(&mut output, line.source);
     if let Some(event) = line.event {
@@ -35,6 +35,16 @@ pub(crate) fn format_line(line: &Line<'_>) -> String {
     output.push_str(" msg=");
     push_value(&mut output, &redact(line.message));
     output
+}
+
+pub(super) fn level_name(level: tracing::Level) -> &'static str {
+    match level {
+        tracing::Level::ERROR => "error",
+        tracing::Level::WARN => "warn",
+        tracing::Level::INFO => "info",
+        tracing::Level::DEBUG => "debug",
+        tracing::Level::TRACE => "trace",
+    }
 }
 
 pub(crate) fn format_fields(fields: &[(String, String)]) -> String {
@@ -167,7 +177,7 @@ mod tests {
         assert_eq!(
             format_line(&Line {
                 ts: "2026-09-28T14:03:12.345+02:00",
-                level: "info",
+                level: tracing::Level::INFO,
                 source: "player",
                 event: Some("player.load.failed"),
                 fields: &fields,
@@ -201,7 +211,7 @@ mod tests {
         ];
         let output = format_line(&Line {
             ts: "now",
-            level: "info",
+            level: tracing::Level::INFO,
             source: "feed",
             event: None,
             fields: &fields,
