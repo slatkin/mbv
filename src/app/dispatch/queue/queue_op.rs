@@ -12,6 +12,17 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{QueueOpId, UnifiedQueueStateData};
 use std::time::{Duration, Instant};
 
+/// Whether an edit sent through [`App::send_queue_edit`] reached the
+/// owner's queue: `Applied` when the owner answered `Applied`, `SentLegacy`
+/// when a legacy owner took the edit with no answer to wait for, and
+/// `NotApplied` when the owner rejected it or did not answer in time.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum QueueOpEdit {
+    Applied,
+    SentLegacy,
+    NotApplied,
+}
+
 /// How long `await_queue_op` waits for the owner's answer before reporting
 /// the owner did not respond and leaving the edit unapplied (design D6).
 pub(in crate::app) const QUEUE_OP_ANSWER_BOUND: Duration = Duration::from_millis(250);
@@ -19,37 +30,46 @@ pub(in crate::app) const QUEUE_OP_ANSWER_BOUND: Duration = Duration::from_millis
 impl App {
     /// Send `operation` to `scope`'s Player owner, then adopt its answer.
     /// Owners without the capability get the legacy form and no wait (the
-    /// displayed queue follows their later snapshots instead).
+    /// displayed queue follows their later snapshots instead). Returns
+    /// whether the owner's queue now holds the edit (design D6):
+    /// [`QueueOpEdit::Applied`] on an `Applied` answer, [`QueueOpEdit::SentLegacy`]
+    /// for a legacy owner, and [`QueueOpEdit::NotApplied`] on rejection,
+    /// timeout, or a failed send.
     pub(in crate::app) fn queue_op(
         &mut self,
         scope: QueueScope,
         operation: mbv_remote_player::QueueOp,
-    ) {
+    ) -> QueueOpEdit {
         let remote = self.queue_link(scope).0.as_remote();
         let Some(remote) = remote else {
-            return;
+            return QueueOpEdit::NotApplied;
         };
         let answer = match remote.send_queue_op(operation) {
             Ok(answer) => answer,
             Err(e) => {
                 self.flash_error(&e);
-                return;
+                return QueueOpEdit::NotApplied;
             }
         };
         let Some(id) = answer else {
             // Legacy owner: the edit is sent, and there is no answer to wait for.
-            return;
+            return QueueOpEdit::SentLegacy;
         };
-        self.await_queue_op(scope, id);
+        if self.await_queue_op(scope, id) {
+            QueueOpEdit::Applied
+        } else {
+            QueueOpEdit::NotApplied
+        }
     }
 
     /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or
     /// [`QUEUE_OP_ANSWER_BOUND`]. Adopted inline: `UnifiedQueueUpdated` and
     /// the matching `Applied`. Deferred to the next tick: every other event.
-    /// A late or unmatched `Applied` is adopted as a background snapshot; a
-    /// late `Rejected` reports nothing more.
-    pub(in crate::app) fn await_queue_op(&mut self, scope: QueueScope, id: QueueOpId) {
-        self.await_queue_op_with_bound(scope, id, QUEUE_OP_ANSWER_BOUND);
+    /// Returns whether the matching answer was `Applied`; a late or unmatched
+    /// `Applied` is adopted as a background snapshot, a late `Rejected`
+    /// reports nothing more.
+    pub(in crate::app) fn await_queue_op(&mut self, scope: QueueScope, id: QueueOpId) -> bool {
+        self.await_queue_op_with_bound(scope, id, QUEUE_OP_ANSWER_BOUND)
     }
 
     /// Test seam: `bound` is injectable so tests can force the timeout
@@ -59,7 +79,16 @@ impl App {
         scope: QueueScope,
         id: QueueOpId,
         bound: Duration,
-    ) {
+    ) -> bool {
+        self.pump_queue_op_answer(scope, id, bound)
+    }
+
+    /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or `bound`.
+    /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`.
+    /// Deferred to the next tick: every other event. Returns whether the
+    /// matching answer was `Applied`; a late or unmatched `Applied` is adopted
+    /// as a background snapshot, a late `Rejected` reports nothing more.
+    fn pump_queue_op_answer(&mut self, scope: QueueScope, id: QueueOpId, bound: Duration) -> bool {
         let deadline = Instant::now() + bound;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -68,17 +97,16 @@ impl App {
                 Ok(PlayerEvent::UnifiedQueueUpdated(snapshot)) => {
                     self.adopt_queue_op_snapshot(scope, &snapshot);
                 }
-                Ok(PlayerEvent::QueueOpResult { op, outcome }) if op == id => {
-                    match outcome {
-                        mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
-                            self.adopt_queue_op_snapshot(scope, &snapshot);
-                        }
-                        mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
-                            self.flash(reason, ToastSeverity::Error);
-                        }
+                Ok(PlayerEvent::QueueOpResult { op, outcome }) if op == id => match outcome {
+                    mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
+                        self.adopt_queue_op_snapshot(scope, &snapshot);
+                        return true;
                     }
-                    return;
-                }
+                    mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
+                        self.flash(reason, ToastSeverity::Error);
+                        return false;
+                    }
+                },
                 Ok(PlayerEvent::QueueOpResult { outcome, .. }) => {
                     // Another op's answer (or a duplicate): adopt its state
                     // like any other owner snapshot, and keep waiting.
@@ -94,10 +122,10 @@ impl App {
                         "Playback owner did not respond to the queue edit".to_string(),
                         ToastSeverity::Error,
                     );
-                    return;
+                    return false;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    return;
+                    return false;
                 }
             }
         }

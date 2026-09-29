@@ -1,6 +1,6 @@
 //! Attached generic Emby Session commands remain direct operations.
 
-use crate::app::tests::{install_test_emby, make_app_stub};
+use crate::app::tests::{install_test_emby, live_owner_channel, make_app_stub};
 use crate::app::*;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
@@ -128,16 +128,22 @@ fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
     assert_eq!(app.player_tab.queue.active_slot_id(), Some(b_slot));
 
     // The stale previously-played first row is deletable again: no confirm
-    // modal, no silent no-op.
-    let before = app.player_tab.total_queue_len();
+    // modal, and the removal is dispatched to the Player owner rather than
+    // silently refused by a stale active slot.
+    let cmd_rx = live_owner_channel(&mut app);
+    // The live stub starts active on row 0; this scenario watches the remote
+    // session's now-playing item, so park the local player idle again.
+    app.player.status.lock().unwrap().active = false;
     app.remove_from_queue(0);
-    assert_eq!(
-        app.player_tab.total_queue_len(),
-        before - 1,
-        "removing a non-playing row must not be blocked by a stale active slot"
-    );
     assert!(
         app.pending_overlay.is_none(),
         "no confirm modal for a non-playing row"
+    );
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlot { op: None, .. }
+        ),
+        "removing a non-playing row must reach the Player owner"
     );
 }

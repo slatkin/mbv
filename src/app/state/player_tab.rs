@@ -1,8 +1,7 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ExecSlot;
 use mbv_queue::{
-    PlaybackQueue, QueueItem, QueueMutationResult, QueueRevisionMint, QueueSlot, QueueSlotId,
-    RefreshMergeResult, RemoveSlotResult,
+    PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlot, QueueSlotId, RefreshMergeResult,
 };
 use std::sync::Arc;
 
@@ -175,32 +174,6 @@ impl PlayerTab {
         self.queue.slots().get(index).map(|slot| slot.slot_id)
     }
 
-    #[must_use]
-    pub fn slot_id_matches_at(&self, index: usize, slot_id: QueueSlotId) -> bool {
-        self.queue
-            .slots()
-            .get(index)
-            .is_some_and(|slot| slot.slot_id == slot_id)
-    }
-
-    pub fn remove_slot_at(&mut self, index: usize) -> Option<QueueItem> {
-        let slot_id = self.slot_id_at(index)?;
-        let removed = match self.queue.remove_slot(slot_id) {
-            RemoveSlotResult::Removed(slot) => slot.item,
-            RemoveSlotResult::RequiresActiveConfirmation(_) | RemoveSlotResult::NotFound => {
-                return None;
-            }
-        };
-        self.clamp_cursor();
-        Some(removed)
-    }
-
-    pub fn insert_item_at(&mut self, index: usize, item: QueueItem) {
-        self.queue.insert(index, item);
-        // Cursor clamp uses the canonical queue length, not an Emby-only shadow.
-        self.queue_cursor = index.min(self.total_queue_len().saturating_sub(1));
-    }
-
     /// Append one item to the canonical queue and return the slot identity the
     /// owner must see alongside it, so callers never re-derive the pair.
     pub fn append_item(&mut self, item: QueueItem) -> ExecSlot {
@@ -213,18 +186,6 @@ impl PlayerTab {
             .into_iter()
             .map(|item| self.append_item(QueueItem::Emby(Box::new(item))))
             .collect()
-    }
-
-    pub fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {
-        if !matches!(
-            self.queue.move_slot(slot_id, to),
-            QueueMutationResult::Applied(())
-        ) {
-            return false;
-        }
-        // Cursor clamp uses the canonical queue length, not an Emby-only shadow.
-        self.queue_cursor = to.min(self.total_queue_len().saturating_sub(1));
-        true
     }
 
     pub fn clear(&mut self) {

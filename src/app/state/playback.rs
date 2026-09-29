@@ -47,18 +47,15 @@ impl QueueScopeResolution {
     }
 }
 
-/// A reversible queue edit. `Remove` re-inserts the item at its old position;
-/// `Move` swaps the slot back from `to` to `from`. `slot_id` is the runtime
-/// queue occurrence that landed at `to`, checked at undo time so a queue edit
-/// made after the move is refused instead of swapping the wrong items.
+/// A reversible queue edit (design D7). Undo re-sends the inverse edit to
+/// the Player owner: `Remove` re-appends the removed item before the entry
+/// now at its former index (resolved at undo time), and `Move` moves the
+/// slot back to `from`. `slot_id` is the runtime queue occurrence that was
+/// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
-    Remove(usize, QueueItem),
-    Move {
-        from: usize,
-        to: usize,
-        slot_id: QueueSlotId,
-    },
+    Remove { item: QueueItem, index: usize },
+    Move { slot_id: QueueSlotId, from: usize },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

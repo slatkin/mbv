@@ -487,7 +487,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items};
+    use crate::app::tests::{live_owner_channel, make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
     use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -702,35 +702,6 @@ mod tests {
     }
 
     #[test]
-    fn bulk_removal_reanchors_the_component_cursor_before_the_range() {
-        let mut app = make_app_stub();
-        app.player_tab.set_queue_items(emby_items(6), 0);
-        app.panel_focus = PanelFocus::Queue;
-        let mut model = Model::new(app);
-        model.sync_queue();
-        // Component cursor sits on the last row of the range about to go.
-        for _ in 0..4 {
-            press_down(&mut model);
-        }
-        assert_eq!(queue_cursor(&model), 4);
-
-        let slots: Vec<_> = (1..=4)
-            .map(|index| model.app.player_tab.slot_id_at(index).unwrap())
-            .collect();
-        model.handle_queue_request(mbv_ui_msg::QueueRequest::RemoveSelection {
-            scope: QueueScope::Local,
-            slot_ids: slots,
-        });
-        model.sync_queue();
-
-        assert_eq!(
-            queue_cursor(&model),
-            0,
-            "the component adopts the cursor before the deleted range"
-        );
-    }
-
-    #[test]
     fn full_replacement_reanchors_instead_of_preserving() {
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(emby_items(3), 0);
@@ -759,15 +730,17 @@ mod tests {
     fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         // Finding 5: after a remote disconnect the still-mounted component can
         // emit Undo { scope: Remote } for a frame. With no direct remote queue
-        // the visible queue is Local, so undo the Local edit instead of
-        // flashing an error.
+        // the visible queue is Local, so the Local undo entry is consumed and
+        // its inverse edit is sent to the Local owner instead of flashing a
+        // spurious remote-undo-unsupported error.
         use crate::app::state::playback::UndoEntry;
         let mut app = make_app_stub();
+        let _cmd_rx = live_owner_channel(&mut app);
         app.player_tab.set_queue_items(emby_items(2), 0);
-        app.queue_undo_stack.push(UndoEntry::Remove(
-            0,
-            mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
-        ));
+        app.queue_undo_stack.push(UndoEntry::Remove {
+            index: 0,
+            item: mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
+        });
         let mut model = Model::new(app);
         assert!(!model.app.has_direct_remote_queue());
 
@@ -783,11 +756,6 @@ mod tests {
         assert!(
             model.app.queue_undo_stack.is_empty(),
             "the Local undo entry was consumed"
-        );
-        assert_eq!(
-            model.app.player_tab.total_queue_len(),
-            3,
-            "the removed item was restored to the Local queue"
         );
     }
 }

@@ -52,6 +52,37 @@ fn snapshot(item_count: usize) -> Box<mbv_ctrl::UnifiedQueueStateData> {
     Box::new(emby_unified_state(&make_items(item_count), 0))
 }
 
+/// A snapshot whose slots are numbered from `base`, so a test can prove an
+/// edit was resolved against a specific answered state rather than any
+/// earlier queue with the same shape.
+fn snapshot_from_base(item_count: usize, base: u64) -> Box<mbv_ctrl::UnifiedQueueStateData> {
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = make_items(item_count)
+        .into_iter()
+        .enumerate()
+        .map(|(i, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: base + i as u64,
+            item: mbv_queue::QueueItem::Emby(Box::new(item)),
+        })
+        .collect();
+    Box::new(mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus::default(),
+        active_slot: slots.first().map(|s| s.slot_id),
+        slots,
+        revision: 1,
+        source: mbv_queue::QueueSource::Remote,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    })
+}
+
+fn applied(op: u64, snapshot: Box<mbv_ctrl::UnifiedQueueStateData>) -> PlayerEvent {
+    PlayerEvent::QueueOpResult {
+        op: QueueOpId(op),
+        outcome: QueueOpOutcome::Applied(snapshot),
+    }
+}
+
 fn one_queue_item() -> Vec<QueueItem> {
     vec![QueueItem::Emby(Box::new(make_items(1)[0].clone()))]
 }
@@ -187,6 +218,120 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
             .total_queue_len(),
         5,
         "the late Applied is adopted as a background snapshot"
+    );
+}
+
+#[test]
+fn rapid_repeated_removals_each_act_on_the_answered_state() {
+    // unified-playback-queue "Queue edits are answered before the next input",
+    // scenario "Rapid repeated removals": each removal is resolved and sent
+    // against the queue as updated by the previous removal's answer — the
+    // Client holds no editable queue of its own.
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    app.player_tab.set_items(make_items(4), 0);
+    // Nothing is playing: the stub player starts active on row 0, which
+    // would route row-0 removals into the now-playing confirm flow.
+    app.player.status.lock().unwrap().active = false;
+    // One answer per removal, each holding the queue as the owner keeps it
+    // after applying that removal (slot identities re-based per snapshot).
+    tx.send(applied(1, snapshot_from_base(3, 100))).unwrap();
+    tx.send(applied(2, snapshot_from_base(2, 200))).unwrap();
+    tx.send(applied(3, snapshot_from_base(1, 300))).unwrap();
+
+    let first_slot = app.player_tab.slot_id_at(0).unwrap();
+    app.remove_from_queue(0);
+    app.remove_from_queue(0);
+    app.remove_from_queue(0);
+
+    let mut sent_slot_ids = Vec::new();
+    while let Ok(cmd) = cmd_rx.try_recv() {
+        if let mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } = cmd {
+            sent_slot_ids.push(slot_id);
+        }
+    }
+    assert_eq!(
+        sent_slot_ids,
+        vec![mbv_ctrl::slot_id_to_u64(first_slot), 100, 200],
+        "removal 2 and 3 target slots of the previously answered snapshots"
+    );
+    assert_eq!(
+        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        1,
+        "three entries were removed"
+    );
+    assert!(
+        app.status.is_empty(),
+        "no timeout is flashed when answers arrive"
+    );
+}
+
+#[test]
+fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
+    // unified-playback-queue "Queue undo is an owner operation", scenario
+    // "Undo a removal": the inverse edit goes to the owner as an answered
+    // Append anchored before the slot now at the removed entry's position.
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    app.player_tab.set_items(make_items(4), 0);
+    app.player.status.lock().unwrap().active = false;
+    // Owner answer: the third entry (index 2) is gone; the entry that
+    // followed it now sits at index 2 with slot 102.
+    let mut remaining = make_items(4);
+    remaining.remove(2);
+    let mut undo_answer = emby_unified_state(&remaining, 0);
+    undo_answer.slots.truncate(2);
+    undo_answer.slots.push(mbv_ctrl::UnifiedQueueSlot {
+        slot_id: 102,
+        item: mbv_queue::QueueItem::Emby(Box::new(make_items(4)[3].clone())),
+    });
+    tx.send(applied(1, Box::new(undo_answer))).unwrap();
+
+    app.remove_from_queue(2);
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    let _remove = cmd_rx.try_recv().unwrap();
+    let undo = cmd_rx.try_recv().unwrap();
+    let mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, before, op } = undo else {
+        panic!("the undo sends an Append, got {undo:?}");
+    };
+    assert_eq!(items.len(), 1, "the removed item is restored alone");
+    assert_eq!(items[0].id(), "id2", "the removed item itself is restored");
+    assert_eq!(
+        before,
+        Some(102),
+        "the anchor is the slot now at the removed entry's former position"
+    );
+    assert!(op.is_some(), "the undo is an answered owner operation");
+}
+
+#[test]
+fn undoing_a_removal_past_the_end_appends_at_the_end() {
+    // unified-playback-queue "Queue undo is an owner operation", scenario
+    // "Undo a removal": when the removed entry's former position no longer
+    // exists, the anchor is absent and the item is appended at the end.
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    app.player_tab.set_items(make_items(2), 0);
+    app.player.status.lock().unwrap().active = false;
+    // Owner answer: the last entry is gone; one entry remains (slot 100).
+    tx.send(applied(1, snapshot_from_base(1, 100))).unwrap();
+
+    app.remove_from_queue(1);
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    let _remove = cmd_rx.try_recv().unwrap();
+    let undo = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(
+            undo,
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend {
+                before: None,
+                op: Some(_),
+                ..
+            }
+        ),
+        "a former position past the end appends at the end, got {undo:?}"
     );
 }
 

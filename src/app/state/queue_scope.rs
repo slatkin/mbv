@@ -15,23 +15,11 @@ impl App {
         self.player.as_remote().is_some() && self.has_remote_queue()
     }
 
-    pub(in crate::app) fn queue_edits_reach_owner(&self) -> bool {
-        matches!(self.playback_target(), PlaybackTarget::Local(_))
-    }
-
     /// Whether the scope's canonical queue is the playback owner's accepted
-    /// submission. Bare mode uses a generation fence until submit; the
-    /// Stay-alive owner is authoritative from its snapshots, while direct
-    /// remote scope is already independently projected.
+    /// submission. The Stay-alive owner is authoritative from its snapshots,
+    /// while direct remote scope is already independently projected.
     pub(in crate::app) fn local_queue_is_owner_queue(&self, _scope: QueueScope) -> bool {
         self.player.as_remote().is_some()
-    }
-
-    /// Whether a canonical-queue edit in `scope` should also be sent to its
-    /// playback owner as a live command.
-    pub(in crate::app) fn queue_edit_reaches_player(&self, scope: QueueScope) -> bool {
-        scope == QueueScope::Remote
-            || self.queue_edits_reach_owner() && self.local_queue_is_owner_queue(scope)
     }
 
     /// Return the Player link and event receiver that own the requested
@@ -165,7 +153,9 @@ impl App {
         if items.is_empty() || scope != self.playing_queue_scope() {
             return true;
         }
-        if scope != QueueScope::Remote && !self.queue_edits_reach_owner() {
+        if scope != QueueScope::Remote
+            && !matches!(self.playback_target(), PlaybackTarget::Local(_))
+        {
             return true;
         }
         if scope != QueueScope::Remote && !self.local_queue_is_owner_queue(scope) {
