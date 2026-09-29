@@ -282,7 +282,13 @@ fn apply_ctrl_event(
         ),
         CtrlEvent::QueueOpResult { op, outcome } => {
             if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
-                *unified_queue.lock().unwrap() = Some((**state).clone());
+                apply_unified_queue_state(
+                    (**state).clone(),
+                    status,
+                    unified_queue,
+                    event_tx,
+                    notify,
+                );
             }
             send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
         }

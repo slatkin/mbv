@@ -260,13 +260,30 @@ fn legacy_queue_op_sends_without_an_operation_id() {
     ));
 }
 
+// Regression for 2b22f7f42: Applied is the client's only post-op queue snapshot.
 #[test]
 fn inbound_queue_op_result_follows_prior_state_event() {
+    use mbv_ctrl::UnifiedQueueSlot;
+
     let (remote, events, mut daemon) = connected_pair_for_disconnect_test();
-    let state = UnifiedQueueStateData {
-        status: PlayerStatus::default(),
-        slots: Vec::new(),
-        active_slot: None,
+    let slots = vec![
+        UnifiedQueueSlot {
+            slot_id: 10,
+            item: QueueItem::Emby(Box::new(make_media_item("e0"))),
+        },
+        UnifiedQueueSlot {
+            slot_id: 20,
+            item: QueueItem::Emby(Box::new(make_media_item("e1"))),
+        },
+        UnifiedQueueSlot {
+            slot_id: 30,
+            item: QueueItem::Emby(Box::new(make_media_item("e2"))),
+        },
+    ];
+    let mut state = UnifiedQueueStateData {
+        status: status_with_idx_and_len(2, 3),
+        slots,
+        active_slot: Some(30),
         revision: 3,
         source: QueueSource::Unknown,
         lineage: mbv_queue::QueueLineage::default(),
@@ -281,6 +298,11 @@ fn inbound_queue_op_result_follows_prior_state_event() {
         serde_json::to_string(&CtrlEvent::UnifiedQueueState(earlier_state)).unwrap()
     )
     .unwrap();
+    state.slots.remove(0);
+    let mut stale_status = state.status.clone();
+    stale_status.current_idx = 2;
+    stale_status.queue_len = 3;
+    state.status = stale_status;
     writeln!(
         daemon,
         "{}",
@@ -291,6 +313,11 @@ fn inbound_queue_op_result_follows_prior_state_event() {
         .unwrap()
     )
     .unwrap();
+
+    assert!(matches!(
+        events.recv().unwrap(),
+        PlayerEvent::UnifiedQueueUpdated(_)
+    ));
     assert!(matches!(
         events.recv().unwrap(),
         PlayerEvent::UnifiedQueueUpdated(_)
@@ -302,7 +329,13 @@ fn inbound_queue_op_result_follows_prior_state_event() {
             ..
         }
     ));
-    assert_eq!(remote.unified_queue_state().unwrap().revision, 3);
+    let status = remote.status.lock().unwrap();
+    assert_eq!(status.queue_len, 2);
+    assert_eq!(status.current_idx, 1);
+    let queue = remote.unified_queue_state().unwrap();
+    assert_eq!(queue.revision, 3);
+    assert_eq!(queue.slots.len(), 2);
+    assert_eq!(queue.active_slot, Some(30));
 }
 
 #[test]
