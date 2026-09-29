@@ -202,7 +202,13 @@ fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
         Err(mpsc::TryRecvError::Empty)
     ));
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
-    assert!(remote.unified_queue_state().is_none());
+    let queue = remote
+        .unified_queue_state()
+        .expect("confirmed queue projection");
+    assert!(matches!(
+        &queue.slots[0].item,
+        QueueItem::Emby(item) if item.id == "confirmed"
+    ));
 }
 
 #[test]
@@ -218,7 +224,13 @@ fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
         Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })
     ));
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
-    assert!(remote.unified_queue_state().is_none());
+    let queue = remote
+        .unified_queue_state()
+        .expect("confirmed queue projection");
+    assert!(matches!(
+        &queue.slots[0].item,
+        QueueItem::Emby(item) if item.id == "confirmed"
+    ));
 }
 
 #[test]
@@ -342,6 +354,17 @@ fn inbound_queue_op_result_follows_prior_state_event() {
 fn adopt_queue_does_not_write_projection_before_owner_snapshot() {
     let (remote, _events, commands) =
         RemotePlayer::stub_with_command_rx(vec![make_media_item("existing")], 0);
+    let projected_before = remote.unified_queue_state().expect("stub queue projection");
+    let (before_revision, before_source, before_active_slot, before_slots) = (
+        projected_before.revision,
+        projected_before.source,
+        projected_before.active_slot,
+        projected_before
+            .slots
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.content_id()))
+            .collect::<Vec<_>>(),
+    );
     assert!(remote.adopt_queue(
         vec![QueueItem::Emby(Box::new(make_media_item("replacement")))],
         0,
@@ -352,7 +375,20 @@ fn adopt_queue_does_not_write_projection_before_owner_snapshot() {
     assert_eq!(status.queue_len, 1);
     assert!(status.active);
     drop(status);
-    assert!(remote.unified_queue_state().is_none());
+    let projected_after = remote
+        .unified_queue_state()
+        .expect("existing queue projection");
+    assert_eq!(projected_after.revision, before_revision);
+    assert_eq!(projected_after.source, before_source);
+    assert_eq!(projected_after.active_slot, before_active_slot);
+    assert_eq!(
+        projected_after
+            .slots
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.content_id()))
+            .collect::<Vec<_>>(),
+        before_slots
+    );
     assert!(matches!(
         commands.try_recv(),
         Ok(CtrlCmd::UnifiedAdoptQueue { .. })
