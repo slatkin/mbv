@@ -41,7 +41,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 2. Answered queue operations: protocol and owner (design D6)
 
-- [ ] 2.1 In `crates/mbv-ctrl`:
+- [x] 2.1 In `crates/mbv-ctrl`:
   - add `QueueOpId(u64)`;
   - add `#[serde(default)] op: Option<QueueOpId>` to `UnifiedQueueReplace`, `UnifiedQueueAppend`, `UnifiedQueueRemoveSlot`, `UnifiedQueueRemoveSlots`, `UnifiedQueueMoveSlot`, `UnifiedQueuePlaySlot`, `UnifiedQueueSourceUpdate`. Leave `UnifiedQueueLoadIdle` unchanged;
   - add the struct variant `UnifiedQueueClearOp { op }`, keeping the unit `UnifiedQueueClear`, and include it wherever `mutates_owner_queue`-style matches list `UnifiedQueueClear`;
@@ -50,7 +50,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
   - add the event `QueueOpResult { op, outcome: QueueOpOutcome::{Applied(Box<UnifiedQueueStateData>), Rejected(String)} }`;
   - add the hello capability `answered-queue-ops`.
   - Test: one serde test showing that legacy command JSON without the new fields, and the unit `UnifiedQueueClear`, still parse. Owns `unified-playback-queue` "Unified ctrl behavior is capability-gated and additive".
-- [ ] 2.2 Owner answers in `crates/mbv-daemon` (`control.rs`, `control/queue_edit.rs`, `control/queue_setup.rs`, `control_queue.rs`):
+- [x] 2.2 Owner answers in `crates/mbv-daemon` (`control.rs`, `control/queue_edit.rs`, `control/queue_setup.rs`, `control_queue.rs`):
   - Thread `op` through `CtrlContext`. **Every** handler path answers when `op` is present, including early returns (an empty append, an empty removal set, and so on). A no-op answers `Applied` with the unchanged snapshot.
   - Build `Applied` with the sender's ABS gating (`unified_queue_state_for_peer`).
   - Add `except: Option<CtrlClientId>` to `broadcast_queue_state`, and exclude the sender.
@@ -60,11 +60,11 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - the sender gets the result and no broadcast, while another client gets the broadcast;
     - an empty-set removal still answers;
     - a legacy command without `op` still broadcasts to everyone.
-- [ ] 2.3 `UnifiedQueueAppend.before`: insert with `PlaybackQueue::insert`, then keep the player run in order with `PlayerCommand::QueueAppend` followed by `PlayerCommand::QueueMove(slot, index)`. An absent anchor is rejected as stale.
+- [x] 2.3 `UnifiedQueueAppend.before`: insert with `PlaybackQueue::insert`, then keep the player run in order with `PlayerCommand::QueueAppend` followed by `PlayerCommand::QueueMove(slot, index)`. An absent anchor is rejected as stale.
   - Tests:
     - the owner queue and the recorded player commands both place the item before the anchor;
     - a stale anchor is rejected with the op id.
-- [ ] 2.4 `UnifiedQueueRefresh` and `UnifiedQueueApplyProgress`:
+- [x] 2.4 `UnifiedQueueRefresh` and `UnifiedQueueApplyProgress`:
   - Refresh starts the existing enrichment fetch that ends in `run.rs` `apply_queue_enriched`, and answers `Applied` at once.
   - ApplyProgress applies each update to matching **inactive** slots through the owner's progress path, respecting invariant 02 protection, and answers with the resulting snapshot.
   - After the owner applies its own acknowledged ABS progress (`crates/mbv-daemon/src/audiobookshelf.rs`, both `apply_progress` sites), it also calls `broadcast_queue_state`.
@@ -73,7 +73,7 @@ Every new test names the spec requirement it owns, in a comment or in its name (
     - refresh is answered at once;
     - ApplyProgress skips the active slot;
     - acknowledged ABS progress is followed by a queue broadcast. Owns `audiobookshelf-podcast-playback` "Attached clients reconcile daemon-owned acknowledged progress".
-- [ ] 2.5 In `crates/mbv-remote-player`:
+- [x] 2.5 In `crates/mbv-remote-player`:
   - add `send_queue_op(QueueOp) -> Result<Option<QueueOpId>, RemotePlayerError>` (`None` means the legacy form was sent);
   - the reader thread forwards `QueueOpResult` as `PlayerEvent::QueueOpResult` (`crates/mbv-ctrl/src/player.rs`) on `player_rx` in order, and updates `unified_queue` from `Applied`;
   - delete the `items` and `queue_source` fields, and the optimistic writes to them and to `status.current_idx` in `adopt_queue`, `play` and `play_queue`;

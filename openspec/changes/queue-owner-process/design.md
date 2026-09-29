@@ -285,7 +285,7 @@ The Client stops writing to queue slots at every event-driven site, and keeps th
 
 ## Risks / Trade-offs
 
-- **[The owner loop blocks inside a queue handler]** → The UI waits up to 250 ms per edit. The owner task audits the unified handlers for blocking I/O and moves any it finds onto worker/merged-event paths first.
+- **[The owner loop blocks inside a queue handler]** → The UI waits up to 250 ms per edit. The owner task audits the unified handlers for blocking I/O and moves any it finds onto worker/merged-event paths first. Audit result (row 2.4): queue-mutation paths are clean (in-memory/channel only); refresh/enrichment already runs on the worker and merges through the event loop; one move made — owner queue persistence after mutations is now a FIFO-serialized worker with shutdown flush before the final direct write.
 - **[Version skew]** → An older Client binary receives an unknown `DisconnectReason` from a newer daemon and reports a failed attach. It affects only the window between upgrading the binary and restarting an old daemon, and `mbv -q` clears it.
 - **[A launcher dies before attaching]** → A stay-alive-off daemon with no clients lingers until `mbv -q` or the next launch. It is logged.
 - **[The config is unreadable when the owner decides]** → The last-known-good value is used (D2), never a default that could wrongly refuse a client or exit.
