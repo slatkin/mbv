@@ -1,7 +1,7 @@
 use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::service_setup::StartupRequest;
-use crate::app::{App, AppInit, SuspendedLocalSession, spawn_resize_worker};
+use crate::app::{App, AppInit, spawn_resize_worker};
 use mbv_player::{Player, PlayerProxy};
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
@@ -56,37 +56,6 @@ fn detached_socket_rx() -> mpsc::Receiver<mbv_audiobookshelf::socket::SocketEven
 }
 
 impl App {
-    /// Construct a local player and its worker channels through the ordinary
-    /// startup path. The fall-through path uses this before it tears down an
-    /// attached owner.
-    pub(in crate::app) fn construct_local_session(&self) -> SuspendedLocalSession {
-        let config = self.config.lock().unwrap().clone();
-        let (player_tx, player_rx) = mpsc::channel();
-        let raw_player = Player::new(
-            String::new(),
-            String::new(),
-            config.show_audio_window,
-            config.use_mpv_config,
-            config.no_scripts,
-            config.always_skip_intro,
-            mbv_ctrl::player::SubtitlePrefs {
-                mode: config.subtitle_mode.clone(),
-                subtitle_lang: config.subtitle_lang.clone(),
-                audio_lang: config.audio_lang.clone(),
-            },
-            player_tx,
-            None,
-        )
-        .with_video_cache(config.video_cache_forward_mb, config.video_cache_back_mb);
-        let player = PlayerProxy::local(raw_player, config.always_play_next);
-        // Test builds must never construct the real external (issue #757):
-        // a fall-through test that plays locally would otherwise cold-start
-        // a real mpv handle that races process teardown.
-        #[cfg(test)]
-        player.inhibit_mpv();
-        SuspendedLocalSession { player, player_rx }
-    }
-
     #[expect(
         clippy::too_many_lines,
         reason = "App construction explicitly initializes heterogeneous fields after extracting four owned seams"

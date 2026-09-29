@@ -228,30 +228,43 @@ impl App {
         );
     }
 
-    /// Prepare a local player without changing the current attachment. A
-    /// suspended player is preferred; otherwise this constructs the same
-    /// local player used by `new_independent`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::unnecessary_wraps,
-            reason = "the Err path is exercised only through the test-only LOCAL_PLAYER_PREPARE_OVERRIDE failure-propagation seam (6d7571b75); clippy cannot see cfg(test) callers (approved, issue #804)"
-        )
-    )]
+    /// Resolve this machine's local Player without changing the attachment.
     pub(in crate::app) fn prepare_local_player(
         &mut self,
     ) -> Result<Option<SuspendedLocalSession>, mbv_remote_player::RemotePlayerError> {
-        if !self.player.is_remote() && self.suspended_local.is_none() {
+        if self.home_is_local_daemon && self.is_local_daemon() {
             return Ok(None);
         }
         if let Some(suspended) = self.suspended_local.take() {
             return Ok(Some(suspended));
         }
-        #[cfg(test)]
-        if let Some(prepare) = *crate::app::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
-            prepare()?;
+        #[cfg(not(test))]
+        {
+            let socket_path = crate::single_instance::socket_path();
+            let lock_path = crate::single_instance::lock_path();
+            match crate::single_instance::resolve(&socket_path, &lock_path)? {
+                crate::single_instance::Resolution::Fresh(guard) => {
+                    drop(guard);
+                    crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
+                }
+                crate::single_instance::Resolution::Attach => {}
+                crate::single_instance::Resolution::Refuse => {
+                    return Err(std::io::Error::other(
+                        "the local Player owner is not accepting connections",
+                    )
+                    .into());
+                }
+            }
         }
-        Ok(Some(self.construct_local_session()))
+        let (remote, player_rx) = Self::try_daemon_route_connect(
+            &mbv_remote_player::DaemonEndpoint::Local,
+            "local daemon",
+        )?;
+        let always_play_next = self.config.lock().unwrap().always_play_next;
+        Ok(Some(SuspendedLocalSession {
+            player: PlayerProxy::remote(remote, always_play_next),
+            player_rx,
+        }))
     }
 
     /// Install a prepared local session over the current attachment: swap
@@ -341,12 +354,8 @@ impl App {
                 return;
             }
         };
-        // Both owners must stop: a home local-daemon thin client that also
-        // controls an audio-only Emby session has `player.is_remote()` true
-        // while `connected_session_id` is set, so an either/or branch would
-        // leave one of them playing underneath the local item (and swap the
-        // ctrl proxy out without tearing down its reader thread).
-        if self.player.is_remote() {
+        let already_local = prepared.is_none();
+        if !already_local && self.player.is_remote() {
             self.player.stop();
             self.player.disconnect_remote();
         }
@@ -357,7 +366,15 @@ impl App {
             self.install_suspended_local(suspended);
             self.sync_subtitle_prefs_to_player();
         }
-        self.finish_local_mode("Playing locally".into(), None);
+        self.finish_local_mode(
+            if already_local {
+                "Already local"
+            } else {
+                "Playing locally"
+            }
+            .into(),
+            None,
+        );
         self.execute_pending_queue_action(action);
     }
 
