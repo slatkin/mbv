@@ -29,6 +29,7 @@ pub fn init(stderr: bool, log_path: Option<PathBuf>, spec: &LogSpec) {
     if INITIALIZED.set(()).is_err() {
         return;
     }
+    time::init_local_offset();
     let subscriber = layer::LogfmtLayer::new(stderr, log_path)
         .with_filter(spec.clone())
         .with_subscriber(tracing_subscriber::Registry::default());
@@ -77,14 +78,7 @@ pub(crate) fn format_stderr_line(level: tracing::Level, line: &str) -> String {
 }
 
 fn spec_max_level(spec: &LogSpec) -> log::LevelFilter {
-    let most_verbose = spec
-        .directives
-        .iter()
-        .map(|(_, level)| *level)
-        .chain(std::iter::once(spec.default))
-        .max()
-        .unwrap_or(tracing::level_filters::LevelFilter::OFF);
-    most_verbose
+    spec.most_verbose_level()
         .to_string()
         .parse()
         .unwrap_or(log::LevelFilter::Off)
@@ -160,16 +154,16 @@ mod tests {
         assert!(!lines[0].contains("log."));
     }
 
-    // ── filter: spans are not third-party capped ─────────────────────────────
+    // ── filter: first-party module paths are not capped ─────────────────────────────
 
     #[test]
-    fn module_path_span_is_created_while_module_path_event_stays_capped() {
+    fn first_party_module_path_span_is_created_while_third_party_event_stays_capped() {
         let spec = LogSpec::parse("info").expect("valid spec");
         let (subscriber, capture) = filtered_capturing_subscriber(&spec);
         tracing::subscriber::with_default(subscriber, || {
             let span = tracing::info_span!(target: "mbv_daemon::control", "correlation", slot = 12);
             let _entered = span.enter();
-            tracing::info!(target: "mbv_daemon::control", "capped noise");
+            tracing::info!(target: "rustls::client", "capped noise");
             tracing::info!(name: "app.done", target: "app", "done");
         });
 

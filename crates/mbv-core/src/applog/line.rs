@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 pub(crate) struct Line<'a> {
     pub ts: &'a str,
     pub level: &'a str,
@@ -9,15 +11,15 @@ pub(crate) struct Line<'a> {
 }
 
 pub(crate) fn format_line(line: &Line<'_>) -> String {
-    let mut output = format!(
-        "ts={} level={} source={}",
-        format_value(line.ts),
-        format_value(line.level),
-        format_value(line.source)
-    );
+    let mut output = String::from("ts=");
+    push_value(&mut output, line.ts);
+    output.push_str(" level=");
+    push_value(&mut output, line.level);
+    output.push_str(" source=");
+    push_value(&mut output, line.source);
     if let Some(event) = line.event {
         output.push_str(" event=");
-        output.push_str(&format_value(event));
+        push_value(&mut output, event);
     }
     let fields = format_fields(line.fields);
     if !fields.is_empty() {
@@ -31,7 +33,7 @@ pub(crate) fn format_line(line: &Line<'_>) -> String {
         }
     }
     output.push_str(" msg=");
-    output.push_str(&format_value(line.message));
+    push_value(&mut output, &redact(line.message));
     output
 }
 
@@ -43,21 +45,21 @@ pub(crate) fn format_fields(fields: &[(String, String)]) -> String {
         }
         output.push_str(key);
         output.push('=');
-        output.push_str(&format_value(value));
+        push_value(&mut output, &redact(value));
     }
     output
 }
 
-fn format_value(value: &str) -> String {
-    let value = redact(value);
+/// Appends `value`, quoted and escaped when it needs it. Does not redact.
+fn push_value(output: &mut String, value: &str) {
     let quoted = value.chars().any(|character| {
         character.is_whitespace() || character == '=' || character == '"' || character.is_control()
     });
     if !quoted {
-        return value;
+        output.push_str(value);
+        return;
     }
 
-    let mut output = String::with_capacity(value.len() + 2);
     output.push('"');
     for character in value.chars() {
         match character {
@@ -75,10 +77,12 @@ fn format_value(value: &str) -> String {
         }
     }
     output.push('"');
-    output
 }
 
-fn redact(value: &str) -> String {
+fn redact(value: &str) -> Cow<'_, str> {
+    if !value.contains("Bearer ") && !value.contains("://") {
+        return Cow::Borrowed(value);
+    }
     let mut output = String::with_capacity(value.len());
     let mut index = 0;
     while index < value.len() {
@@ -100,7 +104,7 @@ fn redact(value: &str) -> String {
             index += character.len_utf8();
         }
     }
-    output
+    Cow::Owned(output)
 }
 
 fn url_end(value: &str, start: usize) -> Option<usize> {

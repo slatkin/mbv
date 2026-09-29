@@ -53,11 +53,12 @@ impl LogSpec {
         })
     }
 
-    /// Returns the effective level for a target.
+    /// Returns the effective level for a target. Third-party module paths
+    /// (`::` targets outside `mbv`/`mbv_*`) are capped at warn unless directed.
     #[must_use]
     pub fn level_for_target(&self, target: &str) -> tracing::level_filters::LevelFilter {
         self.directive_level_for_target(target).unwrap_or_else(|| {
-            if target.contains("::") {
+            if target.contains("::") && !is_first_party(target) {
                 self.default.min(tracing::level_filters::LevelFilter::WARN)
             } else {
                 self.default
@@ -65,11 +66,14 @@ impl LogSpec {
         })
     }
 
-    /// The effective level for span metadata: directives and default, without
-    /// the third-party warn cap.
-    fn span_level_for_target(&self, target: &str) -> tracing::level_filters::LevelFilter {
-        self.directive_level_for_target(target)
-            .unwrap_or(self.default)
+    /// The most verbose level in the spec (default or any directive).
+    pub(crate) fn most_verbose_level(&self) -> tracing::level_filters::LevelFilter {
+        self.directives
+            .iter()
+            .map(|(_, level)| *level)
+            .chain(std::iter::once(self.default))
+            .max()
+            .unwrap_or(tracing::level_filters::LevelFilter::OFF)
     }
 
     fn directive_level_for_target(
@@ -100,14 +104,23 @@ impl<S: tracing::Subscriber> Filter<S> for LogSpec {
         meta: &tracing::Metadata<'_>,
         _: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        if meta.is_span() {
-            // The third-party warn cap (design D3) is about messages. A span
-            // without an explicit bare target gets a module-path target, and
-            // capping it would silently drop the D5 correlation fields it
-            // carries — so spans use the plain directive/default level.
-            return *meta.level() <= self.span_level_for_target(meta.target());
-        }
         *meta.level() <= self.level_for_target(meta.target())
+    }
+
+    // The decision depends only on static metadata, so it is cacheable per callsite.
+    fn callsite_enabled(
+        &self,
+        meta: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        if *meta.level() <= self.level_for_target(meta.target()) {
+            tracing::subscriber::Interest::always()
+        } else {
+            tracing::subscriber::Interest::never()
+        }
+    }
+
+    fn max_level_hint(&self) -> Option<tracing::level_filters::LevelFilter> {
+        Some(self.most_verbose_level())
     }
 }
 
@@ -146,6 +159,10 @@ fn parse_level(level: &str) -> Option<tracing::level_filters::LevelFilter> {
 
 fn level_name(level: tracing::level_filters::LevelFilter) -> String {
     level.to_string().to_lowercase()
+}
+
+fn is_first_party(target: &str) -> bool {
+    target == "mbv" || target.starts_with("mbv_")
 }
 
 fn target_matches(target: &str, prefix: &str) -> bool {
@@ -242,6 +259,16 @@ mod tests {
         );
         assert_eq!(
             spec.level_for_target("player"),
+            tracing::level_filters::LevelFilter::DEBUG
+        );
+    }
+
+    #[test]
+    fn first_party_module_paths_are_not_capped() {
+        let spec = LogSpec::parse("debug").expect("valid spec");
+
+        assert_eq!(
+            spec.level_for_target("mbv_daemon::control"),
             tracing::level_filters::LevelFilter::DEBUG
         );
     }
