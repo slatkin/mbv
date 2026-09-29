@@ -121,13 +121,13 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
     app.ask_confirm(ConfirmModal {
         title: String::new(),
         message: String::new(),
-        hint: String::new(),
+        buttons: Vec::new(),
         on_confirm: ConfirmAction::RemoveActiveQueueItem(0),
     });
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
-    model.handle_confirm_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    model.handle_confirm_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let app = &mut model.app;
 
     assert_eq!(
@@ -180,13 +180,13 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     app.ask_confirm(ConfirmModal {
         title: String::new(),
         message: String::new(),
-        hint: String::new(),
+        buttons: Vec::new(),
         on_confirm: ConfirmAction::RemoveActiveQueueItem(1),
     });
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
-    model.handle_confirm_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    model.handle_confirm_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let app = &mut model.app;
 
     assert_eq!(app.player_tab.emby_items().len(), 1);

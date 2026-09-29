@@ -18,7 +18,7 @@ pub use components::chrome_status_bar::{
     StatusBarModel, StatusBarRegions, VisualModeIndicator, render_status_bar,
 };
 pub use components::chrome_tabs::{TabBarModel, render_tab_bar};
-pub use components::confirm_modal::render_confirm_modal_content;
+pub use components::confirm_modal::{ConfirmRenderGeometry, render_confirm_modal_content};
 pub use components::context_menu::render_context_menu_content;
 pub use components::daemon_lost_modal::render_daemon_lost_modal_content;
 pub use components::feeds_manage::{FeedsManageRenderModel, render_feeds_manage_content};

@@ -4,7 +4,7 @@ use mbv_config::FeedSubscription;
 use mbv_ui_model::tab_selection::TabSelection;
 
 impl App {
-    /// Effect for `ConfirmAction::RemoveFeedSubscription`'s "yes" answer
+    /// Effect for `ConfirmAction::RemoveFeedSubscription`'s accept answer
     /// (§6.3): rewrites `config.feeds` without the removed entry.
     pub(in crate::app) fn remove_feed_confirmed(&mut self, index: usize) {
         let feeds: Vec<FeedSubscription> = {

@@ -9,7 +9,7 @@ impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
         let key = match intent {
             ConfirmIntent::Accept => {
-                KeyEvent::new(KeyCode::Char('y'), crossterm::event::KeyModifiers::NONE)
+                KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE)
             }
             ConfirmIntent::Cancel => {
                 KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE)
@@ -122,7 +122,10 @@ impl Model {
                     "\"{}\" already exists.",
                     mbv_ui_model::ui_util::trunc_str(&name, 40)
                 ),
-                hint: "[y] Overwrite    [Esc] Back".into(),
+                buttons: vec![
+                    super::ConfirmButton::affirmative("Enter", "Overwrite"),
+                    super::ConfirmButton::cancel("Esc", "Back"),
+                ],
                 on_confirm: ConfirmAction::SaveOverwritePlaylist {
                     existing_id: existing.id,
                     name,
@@ -136,35 +139,14 @@ impl Model {
     }
 }
 
+/// Whether answering `action` with `key` should also close the modal. Only
+/// the keys an action actually answers on dismiss it; any other key is a
+/// no-op that leaves the modal open.
 fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
     match action {
-        ConfirmAction::ClearQueue
-        | ConfirmAction::RemoveActiveQueueItem(_)
-        | ConfirmAction::RescanLibrary(_)
-        | ConfirmAction::RemoveFeedSubscription(_)
-        | ConfirmAction::ReplacePopulatedQueue => true,
-        ConfirmAction::SaveOverwritePlaylist { .. } | ConfirmAction::DeletePlaylist { .. } => {
-            matches!(key, KeyCode::Char('y') | KeyCode::Esc)
+        ConfirmAction::DiscardOrSaveDirtyPlaylist => {
+            matches!(key, KeyCode::Char('s' | 'S' | 'd' | 'D') | KeyCode::Esc)
         }
-        ConfirmAction::RemoveEmby | ConfirmAction::RemoveAudiobookshelf => {
-            matches!(
-                key,
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
-            )
-        }
-        ConfirmAction::ReplaceEmby(_) | ConfirmAction::ReplaceAudiobookshelf(_) => {
-            matches!(
-                key,
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
-            )
-        }
-        ConfirmAction::PlayLocallyInstead => matches!(
-            key,
-            KeyCode::Char('y' | 'Y' | 'n' | 'N') | KeyCode::Enter | KeyCode::Esc
-        ),
-        ConfirmAction::DiscardOrSaveDirtyPlaylist => matches!(
-            key,
-            KeyCode::Char('s' | 'S' | 'd' | 'D' | 'c' | 'C') | KeyCode::Esc
-        ),
+        _ => matches!(key, KeyCode::Enter | KeyCode::Esc),
     }
 }

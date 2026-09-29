@@ -123,7 +123,10 @@ impl Model {
                             "Delete playlist '{}'?",
                             mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
                         ),
-                        hint: "[y] Confirm    [Esc] Cancel".into(),
+                        buttons: vec![
+                            crate::app::ConfirmButton::affirmative("Enter", "Confirm"),
+                            crate::app::ConfirmButton::cancel("Esc", "Cancel"),
+                        ],
                         on_confirm: crate::app::ConfirmAction::DeletePlaylist {
                             id: playlist.id,
                             name: playlist.name,

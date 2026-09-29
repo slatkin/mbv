@@ -2,9 +2,9 @@ use mbv_theme as palette;
 use std::time::Duration;
 
 use super::{
-    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
-    PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage,
-    SidebarId, TabSelection, ToastSeverity,
+    AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmButton, ConfirmModal, IdleFeed,
+    LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog,
+    SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
 };
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,

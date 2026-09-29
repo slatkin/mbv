@@ -113,7 +113,10 @@ impl App {
         self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
             title: format!(" Play locally instead of {owner} "),
             message: format!("Play \"{label}\" on this machine instead?"),
-            hint: "[y] Play here    [n] Cancel".into(),
+            buttons: vec![
+                mbv_ui_model::confirm::ConfirmButton::affirmative("Enter", "Play here"),
+                mbv_ui_model::confirm::ConfirmButton::cancel("Esc", "Cancel"),
+            ],
             on_confirm: mbv_ui_model::confirm::ConfirmAction::PlayLocallyInstead,
         });
     }

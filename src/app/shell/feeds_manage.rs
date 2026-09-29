@@ -155,7 +155,10 @@ impl super::Model {
                 "Remove subscription '{}'?",
                 mbv_ui_model::ui_util::trunc_str(&name, 40)
             ),
-            hint: "[y] Confirm    [Esc] Cancel".into(),
+            buttons: vec![
+                super::ConfirmButton::affirmative("Enter", "Confirm"),
+                super::ConfirmButton::cancel("Esc", "Cancel"),
+            ],
             on_confirm: super::ConfirmAction::RemoveFeedSubscription(index),
         });
     }

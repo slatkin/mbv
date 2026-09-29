@@ -204,7 +204,13 @@ impl App {
                     self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
                         title: " Replace Emby ".into(),
                         message: "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
-                        hint: "[y/Enter] Replace    [Esc] Cancel".into(),
+                        buttons: vec![
+                            mbv_ui_model::confirm::ConfirmButton::affirmative(
+                                "Enter",
+                                "Replace",
+                            ),
+                            mbv_ui_model::confirm::ConfirmButton::cancel("Esc", "Cancel"),
+                        ],
                         on_confirm: mbv_ui_model::confirm::ConfirmAction::ReplaceEmby(generation),
                     });
                     return None;

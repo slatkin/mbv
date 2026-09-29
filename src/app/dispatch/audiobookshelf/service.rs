@@ -107,7 +107,10 @@ impl App {
                         message:
                             "Replace Audiobookshelf? Service-owned setup and state will be cleared."
                                 .into(),
-                        hint: "[y/Enter] Replace    [Esc] Cancel".into(),
+                        buttons: vec![
+                            mbv_ui_model::confirm::ConfirmButton::affirmative("Enter", "Replace"),
+                            mbv_ui_model::confirm::ConfirmButton::cancel("Esc", "Cancel"),
+                        ],
                         on_confirm: mbv_ui_model::confirm::ConfirmAction::ReplaceAudiobookshelf(
                             completion.generation,
                         ),

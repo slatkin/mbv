@@ -11,7 +11,7 @@ use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_components::QueueComponent;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::test_support::make_item;
-use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_ui_model::context_menu::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::overlay::OverlayRequest;
@@ -70,12 +70,10 @@ fn assert_blocking_modal_suppresses_sidebar_clicks(
     }));
     let outcome = harness.step();
     assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
-        "a click outside the blocking modal must produce no underlying \
-         message (only the UiRoot observer's NoOp redraw echo may appear)"
+        only_the_blocking_modals_own_messages(&outcome.raw_messages),
+        "a click over a blocking modal must reach the modal, never the \
+         sidebar beneath it (only the UiRoot observer's NoOp redraw echo \
+         and the modal's own intent may appear)"
     );
     {
         let component = search_component_mut(harness);
@@ -94,13 +92,21 @@ fn assert_blocking_modal_suppresses_sidebar_clicks(
     }));
     let outcome = harness.step();
     assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+        only_the_blocking_modals_own_messages(&outcome.raw_messages),
         "the sidebar's dismiss click must not surface beneath a blocking modal"
     );
     assert_eq!(search_component_mut(harness).sidebar.cursor, 0);
+}
+
+/// The modal's own `ConfirmIntent` (a click outside it cancels, issue #855)
+/// and the observer's redraw echo are the only messages a click may produce
+/// while a blocking modal is mounted.
+fn only_the_blocking_modals_own_messages(messages: &[Msg]) -> bool {
+    messages.iter().all(|msg| {
+        matches!(msg, Msg::TerminalEvent(_))
+            || matches!(msg, Msg::Shell(shell)
+                if matches!(shell.as_ref(), ShellRequest::ConfirmIntent(_)))
+    })
 }
 
 #[test]
@@ -110,7 +116,10 @@ fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
     harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
         title: "Clear queue?".into(),
         message: "Remove queued items".into(),
-        hint: "[y] Confirm    [Esc] Cancel".into(),
+        buttons: vec![
+            ConfirmButton::affirmative("Enter", "Confirm"),
+            ConfirmButton::cancel("Esc", "Cancel"),
+        ],
         on_confirm: ConfirmAction::ClearQueue,
     }));
     harness.model_mut().sync_mounted_surfaces();

@@ -1,5 +1,5 @@
 use super::Model;
-use super::{ConfirmAction, ConfirmModal};
+use super::{ConfirmAction, ConfirmButton, ConfirmModal};
 use crate::app::infra::image_fetch::NAV_IMAGE_FETCH_IDLE_DELAY;
 use mbv_ui_msg::ShellRequest;
 use std::time::Instant;
@@ -67,7 +67,10 @@ impl Model {
                 self.app.ask_confirm(ConfirmModal {
                     title: " Rescan Library ".into(),
                     message: format!("Rescan '{name}'?"),
-                    hint: "[y] Confirm    [Esc] Cancel".into(),
+                    buttons: vec![
+                        ConfirmButton::affirmative("Enter", "Confirm"),
+                        ConfirmButton::cancel("Esc", "Cancel"),
+                    ],
                     on_confirm: ConfirmAction::RescanLibrary(lib_idx),
                 });
             }

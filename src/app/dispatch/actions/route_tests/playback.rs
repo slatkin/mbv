@@ -90,7 +90,7 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
     app.apply_confirm_action(
         ConfirmAction::PlayLocallyInstead,
         crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
         ),
     );

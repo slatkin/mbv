@@ -1,6 +1,6 @@
 use super::{
-    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, ReplacementExecutor,
-    RoutedReplacementPrep,
+    App, ConfirmAction, ConfirmButton, ConfirmModal, PanelFocus, PendingQueueAction,
+    ReplacementExecutor, RoutedReplacementPrep,
 };
 use crate::app::SidebarId;
 
@@ -21,7 +21,11 @@ impl App {
             self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{name}\"?"),
-                hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),
+                buttons: vec![
+                    ConfirmButton::affirmative("Enter", "Save"),
+                    ConfirmButton::cancel("d", "Discard"),
+                    ConfirmButton::cancel("Esc", "Cancel"),
+                ],
                 on_confirm: ConfirmAction::DiscardOrSaveDirtyPlaylist,
             });
         } else {
@@ -61,7 +65,10 @@ impl App {
             self.ask_confirm(ConfirmModal {
                 title: " Replace Queue ".into(),
                 message: "Replace the current queue?".into(),
-                hint: "[y] Confirm    [Esc] Cancel".into(),
+                buttons: vec![
+                    ConfirmButton::affirmative("Enter", "Confirm"),
+                    ConfirmButton::cancel("Esc", "Cancel"),
+                ],
                 on_confirm: ConfirmAction::ReplacePopulatedQueue,
             });
         } else {

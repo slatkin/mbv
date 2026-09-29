@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::{ConfirmAction, ConfirmModal};
+use crate::app::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_core::service_runtime::ServiceState;
 use mbv_ui_model::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 
@@ -236,7 +236,10 @@ impl App {
         self.ask_confirm(ConfirmModal {
             title: " Remove Emby ".into(),
             message: "Remove Emby? Service-owned setup and state will be cleared.".into(),
-            hint: "[y/Enter] Confirm    [Esc] Cancel".into(),
+            buttons: vec![
+                ConfirmButton::affirmative("Enter", "Confirm"),
+                ConfirmButton::cancel("Esc", "Cancel"),
+            ],
             on_confirm: ConfirmAction::RemoveEmby,
         });
     }
@@ -248,7 +251,10 @@ impl App {
         self.ask_confirm(ConfirmModal {
             title: " Remove Audiobookshelf ".into(),
             message: "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
-            hint: "[y/Enter] Confirm    [Esc] Cancel".into(),
+            buttons: vec![
+                ConfirmButton::affirmative("Enter", "Confirm"),
+                ConfirmButton::cancel("Esc", "Cancel"),
+            ],
             on_confirm: ConfirmAction::RemoveAudiobookshelf,
         });
     }

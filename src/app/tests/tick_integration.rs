@@ -16,7 +16,7 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_components::SearchSidebarComponent;
-use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_msg::{
@@ -532,7 +532,10 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
         title: "Clear queue?".into(),
         message: "Remove queued items".into(),
-        hint: "[y] Confirm    [Esc] Cancel".into(),
+        buttons: vec![
+            ConfirmButton::affirmative("Enter", "Confirm"),
+            ConfirmButton::cancel("Esc", "Cancel"),
+        ],
         on_confirm: ConfirmAction::ClearQueue,
     }));
     let mut harness = TickHarness::new(app);
@@ -541,7 +544,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let confirm_id = ComponentId::Modal(ModalId::Confirm);
     assert_eq!(harness.model().application.focus(), Some(&confirm_id));
 
-    harness.inject(key(Key::Char('y')));
+    harness.inject(key(Key::Enter));
     let outcome = harness.step();
     assert_eq!(outcome.pre_fold_focus, Some(confirm_id.clone()));
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
@@ -569,6 +572,43 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(router, RouterOutcome::Swallow));
     assert!(messages.is_empty());
+}
+
+/// Only Enter and Esc answer a confirmation: any other key is a no-op that
+/// must leave the modal mounted (issue #855 follow-up).
+#[test]
+fn stray_key_is_a_noop_on_the_confirm_modal() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
+        title: "Clear queue?".into(),
+        message: "Remove queued items".into(),
+        buttons: vec![
+            ConfirmButton::affirmative("Enter", "Confirm"),
+            ConfirmButton::cancel("Esc", "Cancel"),
+        ],
+        on_confirm: ConfirmAction::ClearQueue,
+    }));
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let confirm_id = ComponentId::Modal(ModalId::Confirm);
+    assert!(harness.model().application.mounted(&confirm_id));
+
+    for code in [Key::Char('x'), Key::Char('y'), Key::Char('q')] {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        assert!(
+            outcome
+                .raw_messages
+                .iter()
+                .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+            "{code:?} must be a no-op on the confirm modal"
+        );
+        assert!(
+            harness.model().application.mounted(&confirm_id),
+            "{code:?} must leave the confirm modal mounted"
+        );
+    }
 }
 
 /// Task 3.3 (add-mouse-support-option): the Display section's `MouseSupport`

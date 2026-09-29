@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PlaylistMutation;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
-    ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
+    App, ConfirmAction, ConfirmButton, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction,
+    QueueScope, ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
@@ -28,7 +28,10 @@ impl App {
             self.ask_confirm(ConfirmModal {
                 title: " Remove Item ".into(),
                 message: "Remove now-playing item and stop playback?".into(),
-                hint: "[y] Confirm    [Esc] Cancel".into(),
+                buttons: vec![
+                    ConfirmButton::affirmative("Enter", "Confirm"),
+                    ConfirmButton::cancel("Esc", "Cancel"),
+                ],
                 on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
             });
             return;
