@@ -70,6 +70,9 @@ pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
 /// Peer supports owner-authoritative idle queue loads and source updates.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
+/// Client connection is restricted to owner Service-setup administration.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_SERVICE_SETUP_ADMIN: &str = "service-setup-admin";
 
 pub type PlaybackRequestId = u64;
 pub type QueueLoadRequestId = u64;

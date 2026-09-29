@@ -51,6 +51,7 @@ struct CtrlClient {
     /// Capabilities advertised by this peer at Hello.
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
+    admin_only: bool,
 }
 
 pub(crate) type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -98,17 +99,51 @@ impl CtrlClients {
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
     ) -> CtrlClientId {
+        self.connect_with_kind(
+            tx,
+            transport,
+            audiobookshelf,
+            supports_owner_queue_load,
+            false,
+        )
+    }
+
+    pub(crate) fn connect_admin(
+        &mut self,
+        tx: CtrlSender,
+        transport: CtrlTransport,
+        audiobookshelf: CtrlAudiobookshelfCapabilities,
+        supports_owner_queue_load: bool,
+    ) -> CtrlClientId {
+        self.connect_with_kind(
+            tx,
+            transport,
+            audiobookshelf,
+            supports_owner_queue_load,
+            true,
+        )
+    }
+
+    fn connect_with_kind(
+        &mut self,
+        tx: CtrlSender,
+        transport: CtrlTransport,
+        audiobookshelf: CtrlAudiobookshelfCapabilities,
+        supports_owner_queue_load: bool,
+        admin_only: bool,
+    ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
-        self.held_client = true;
+        self.held_client |= !admin_only;
         self.connection.push(CtrlClient {
             id,
             tx,
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+            admin_only,
         });
-        if self.authority == AuthorityHolder::None {
+        if !admin_only && self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
         id
@@ -173,7 +208,7 @@ impl CtrlClients {
     }
 
     pub(crate) fn has_driver(&self) -> bool {
-        !self.connection.is_empty()
+        self.connection.iter().any(|client| !client.admin_only)
     }
 
     /// Broadcast `json` to all connected ctrl clients. Removes any client

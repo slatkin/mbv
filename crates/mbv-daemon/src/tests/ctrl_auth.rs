@@ -27,11 +27,30 @@ fn start_ctrl_auth_test_peer(
     (client, merged_rx)
 }
 
+#[derive(Clone, Copy)]
+enum AdmissionClients {
+    Empty,
+    PlayerAttached,
+}
+
+#[derive(Clone, Copy)]
+enum AdmissionShutdown {
+    Running,
+    ShuttingDown,
+}
+
+#[derive(Clone, Copy)]
+enum AdmissionKind {
+    Player,
+    ServiceSetupAdmin,
+}
+
 fn admission_result(
     role: DaemonRole,
     stay_alive: bool,
-    existing_client: bool,
-    shutting_down: bool,
+    clients_state: AdmissionClients,
+    shutdown: AdmissionShutdown,
+    kind: AdmissionKind,
 ) -> CtrlEvent {
     let (client, peer) = UnixStream::pair().unwrap();
     client
@@ -39,7 +58,7 @@ fn admission_result(
         .unwrap();
     let (merged_tx, _merged_rx) = std::sync::mpsc::channel();
     let clients = std::sync::Arc::new(std::sync::Mutex::new(CtrlClients::new(merged_tx.clone())));
-    if existing_client {
+    if matches!(clients_state, AdmissionClients::PlayerAttached) {
         let (existing_tx, _existing_rx) = std::sync::mpsc::channel();
         clients.lock().unwrap().connect(
             existing_tx,
@@ -48,7 +67,7 @@ fn admission_result(
             false,
         );
     }
-    clients.lock().unwrap().shutting_down = shutting_down;
+    clients.lock().unwrap().shutting_down = matches!(shutdown, AdmissionShutdown::ShuttingDown);
     let player = cold_player();
     spawn_ctrl_client(
         SocketStream::Unix(peer),
@@ -68,7 +87,16 @@ fn admission_result(
     writeln!(
         writer,
         "{}",
-        serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current())).unwrap()
+        serde_json::to_string(&CtrlCmd::Hello({
+            let mut hello = CtrlHello::current();
+            if matches!(kind, AdmissionKind::ServiceSetupAdmin) {
+                hello
+                    .capabilities
+                    .push(mbv_ctrl::CTRL_CAP_SERVICE_SETUP_ADMIN.to_string());
+            }
+            hello
+        }))
+        .unwrap()
     )
     .unwrap();
     read_ctrl_event(&mut reader)
@@ -82,7 +110,13 @@ fn read_ctrl_event(reader: &mut BufReader<UnixStream>) -> CtrlEvent {
 
 #[test]
 fn local_stay_alive_off_admits_one_client_and_refuses_a_second_without_queue_state() {
-    let event = admission_result(DaemonRole::Local, false, true, false);
+    let event = admission_result(
+        DaemonRole::Local,
+        false,
+        AdmissionClients::PlayerAttached,
+        AdmissionShutdown::Running,
+        AdmissionKind::Player,
+    );
     assert!(!matches!(event, CtrlEvent::UnifiedQueueState(_)));
     assert!(matches!(
         event,
@@ -95,7 +129,13 @@ fn local_stay_alive_off_admits_one_client_and_refuses_a_second_without_queue_sta
 #[test]
 fn stay_alive_on_admits_another_client() {
     assert!(matches!(
-        admission_result(DaemonRole::Local, true, true, false),
+        admission_result(
+            DaemonRole::Local,
+            true,
+            AdmissionClients::PlayerAttached,
+            AdmissionShutdown::Running,
+            AdmissionKind::Player,
+        ),
         CtrlEvent::UnifiedQueueState(_)
     ));
 }
@@ -103,7 +143,27 @@ fn stay_alive_on_admits_another_client() {
 #[test]
 fn packaged_owner_admits_another_client_with_stay_alive_off() {
     assert!(matches!(
-        admission_result(DaemonRole::Packaged, false, true, false),
+        admission_result(
+            DaemonRole::Packaged,
+            false,
+            AdmissionClients::PlayerAttached,
+            AdmissionShutdown::Running,
+            AdmissionKind::Player,
+        ),
+        CtrlEvent::UnifiedQueueState(_)
+    ));
+}
+
+#[test]
+fn service_setup_admin_connection_is_admitted_while_local_owner_is_exclusive() {
+    assert!(matches!(
+        admission_result(
+            DaemonRole::Local,
+            false,
+            AdmissionClients::PlayerAttached,
+            AdmissionShutdown::Running,
+            AdmissionKind::ServiceSetupAdmin,
+        ),
         CtrlEvent::UnifiedQueueState(_)
     ));
 }
@@ -111,7 +171,13 @@ fn packaged_owner_admits_another_client_with_stay_alive_off() {
 #[test]
 fn a_shutting_down_daemon_admits_no_client() {
     assert!(matches!(
-        admission_result(DaemonRole::Local, true, false, true),
+        admission_result(
+            DaemonRole::Local,
+            true,
+            AdmissionClients::Empty,
+            AdmissionShutdown::ShuttingDown,
+            AdmissionKind::Player,
+        ),
         CtrlEvent::Disconnected {
             reason: DisconnectReason::OwnerShuttingDown
         }

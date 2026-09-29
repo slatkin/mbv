@@ -125,6 +125,54 @@ fn admission_error(reason: DisconnectReason) -> crate::RemotePlayerError {
 }
 
 #[test]
+fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (hello_tx, hello_rx) = mpsc::channel();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        hello_tx
+            .send(serde_json::from_str::<CtrlCmd>(&client_hello).unwrap())
+            .unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+    });
+    let (_, state, _) = perform_service_setup_admin_handshake(SocketStream::Unix(client), || {
+        Ok("admin-control-token".to_string())
+    })
+    .unwrap();
+    peer.join().unwrap();
+    let Ok(CtrlCmd::Hello(hello)) = hello_rx.recv() else {
+        panic!("expected client hello");
+    };
+    assert!(hello.supports_service_setup_admin());
+    assert_eq!(hello.control_token.as_deref(), Some("admin-control-token"));
+    assert!(matches!(state, CtrlEvent::UnifiedQueueState(_)));
+}
+
+#[test]
 fn connect_endpoint_maps_owner_admission_refusals() {
     let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
     assert_eq!(exclusive.kind_name(), "remote-player.exclusive_owner");

@@ -46,9 +46,35 @@ pub(crate) fn perform_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
+    perform_handshake_with_role(stream, load_control_token, false)
+}
+
+fn perform_service_setup_admin_handshake<F>(
+    stream: SocketStream,
+    load_control_token: F,
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+where
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
+{
+    perform_handshake_with_role(stream, load_control_token, true)
+}
+
+fn perform_handshake_with_role<F>(
+    stream: SocketStream,
+    load_control_token: F,
+    service_setup_admin: bool,
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+where
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
+{
     let mut reader = BufReader::new(stream);
     let ctrl_compatibility = read_server_hello(&mut reader)?;
-    send_client_hello(&mut reader, &ctrl_compatibility, load_control_token)?;
+    send_client_hello(
+        &mut reader,
+        &ctrl_compatibility,
+        load_control_token,
+        service_setup_admin,
+    )?;
     let state_event = read_initial_state(&mut reader)?;
 
     Ok((reader, state_event, ctrl_compatibility))
@@ -88,12 +114,19 @@ fn send_client_hello<F>(
     reader: &mut BufReader<SocketStream>,
     compatibility: &CtrlCompatibility,
     load_control_token: F,
+    service_setup_admin: bool,
 ) -> Result<(), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    let mut client_hello = if compatibility.supports_control_auth {
-        CtrlHello::current_control_client(load_control_token()?)
+    let control_token = compatibility
+        .supports_control_auth
+        .then(load_control_token)
+        .transpose()?;
+    let mut client_hello = if service_setup_admin {
+        CtrlHello::current_service_setup_admin(control_token)
+    } else if let Some(control_token) = control_token {
+        CtrlHello::current_control_client(control_token)
     } else {
         CtrlHello::current()
     };
@@ -159,7 +192,7 @@ pub fn signal_local_daemon_service_setup(
             ))
         })?;
     let (mut reader, _state, _compatibility) =
-        perform_handshake(SocketStream::Unix(stream), || {
+        perform_service_setup_admin_handshake(SocketStream::Unix(stream), || {
             Ok(mbv_config::load_or_create_control_credential()?)
         })
         .map_err(|error| {
