@@ -104,7 +104,7 @@ impl Model {
                     self.app.raise_daemon_lost_modal();
                 }
                 mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
-                    self.app.handle_daemon_shutdown_announced();
+                    self.app.handle_daemon_shutdown_announced(true);
                 }
                 _ => {}
             }

@@ -159,7 +159,7 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::DaemonShutdownAnnounced => {
-                self.handle_daemon_shutdown_announced();
+                self.handle_daemon_shutdown_announced(false);
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::AudiobookshelfProgress(ev) => {
@@ -222,8 +222,8 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self) {
-        if self.is_local_daemon() || self.suspended_local.is_some() {
+    pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self, from_home_link: bool) {
+        if from_home_link || self.is_local_daemon() {
             self.adopt_last_local_snapshot();
             self.suspended_local = None;
             self.pending_exit_message =

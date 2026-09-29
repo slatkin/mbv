@@ -196,7 +196,35 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 }
 
-// Owns player-target-locality "Daemon target transitions update classification".
+// Owns queue-owner-process D4: shutting down a routed remote restores the live home link.
+#[test]
+fn routed_remote_shutdown_announced_restores_suspended_home_without_quitting() {
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
+    app.switch_to_direct_remote(
+        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+        remote,
+        mpsc::channel().1,
+        &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    let (event_tx, event_rx) = mpsc::channel();
+    app.player_rx = event_rx;
+    event_tx
+        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .unwrap();
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    let app = &harness.model().app;
+    assert!(app.is_local_daemon());
+    assert!(app.suspended_local.is_none());
+    assert!(!app.player.is_remote_disconnected());
+    assert!(app.pending_exit_message.is_none());
+    assert!(!crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+}
+
 #[test]
 fn local_home_shutdown_announced_exits_cleanly() {
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
