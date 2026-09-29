@@ -1,7 +1,7 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
-use crate::OwnerSettingsReader;
 use crate::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
+use crate::{DaemonRole, OwnerSettingsReader};
 use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use mbv_net::stream::SocketStream;
 use std::io::{BufRead, BufReader, Write};
@@ -47,6 +47,26 @@ fn ctrl_client_capabilities(
             None
         }
     }
+}
+
+fn send_admission_refusal(
+    clients: &crate::ctrl::CtrlClients,
+    role: DaemonRole,
+    owner_settings: &OwnerSettingsReader,
+    ev_tx: &crate::ctrl::CtrlSender,
+) -> bool {
+    let reason = if clients.shutting_down {
+        Some(mbv_ctrl::DisconnectReason::OwnerShuttingDown)
+    } else if role == DaemonRole::Local && !owner_settings().stay_alive && clients.has_driver() {
+        Some(mbv_ctrl::DisconnectReason::ExclusiveOwner {
+            pid: std::process::id(),
+        })
+    } else {
+        None
+    };
+    let Some(reason) = reason else { return false };
+    crate::send_to(ev_tx, &CtrlEvent::Disconnected { reason });
+    true
 }
 
 fn send_initial_queue_state(
@@ -102,6 +122,7 @@ pub(crate) fn spawn_ctrl_client(
     player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
     audio_only: bool,
+    role: DaemonRole,
     owner_settings: OwnerSettingsReader,
 ) {
     let peer = ctrl_peer_identity(&stream);
@@ -143,7 +164,6 @@ pub(crate) fn spawn_ctrl_client(
         let _ = w.shutdown();
     });
     std::thread::spawn(move || {
-        let _settings_reader = owner_settings;
         let reader = BufReader::new(stream);
         let mut lines = reader.lines();
         let Some(Ok(line)) = lines.next() else {
@@ -155,6 +175,10 @@ pub(crate) fn spawn_ctrl_client(
             return;
         };
 
+        let mut clients = ctrl_clients.lock().unwrap();
+        if send_admission_refusal(&clients, role, &owner_settings, &ev_tx) {
+            return;
+        }
         send_initial_queue_state(
             &player_status,
             &shared_queue,
@@ -163,12 +187,9 @@ pub(crate) fn spawn_ctrl_client(
             audiobookshelf.book_queue,
         );
         let reply_tx = ev_tx.clone();
-        let client_id = ctrl_clients.lock().unwrap().connect(
-            ev_tx,
-            transport,
-            audiobookshelf,
-            supports_owner_queue_load,
-        );
+        let client_id =
+            clients.connect(ev_tx, transport, audiobookshelf, supports_owner_queue_load);
+        drop(clients);
         tracing::info!(
             name: "ctrl.client.connected",
             target: "ctrl",

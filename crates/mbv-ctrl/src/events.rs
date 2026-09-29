@@ -167,4 +167,8 @@ pub enum DisconnectReason {
     /// about to close, and it is not an Emby-authority notification.
     #[serde(rename = "DaemonShutdown")]
     DaemonShutdown,
+    #[serde(rename = "ExclusiveOwner")]
+    ExclusiveOwner { pid: u32 },
+    #[serde(rename = "OwnerShuttingDown")]
+    OwnerShuttingDown,
 }

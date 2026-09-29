@@ -97,6 +97,50 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
     (remote, events, daemon)
 }
 
+fn admission_error(reason: DisconnectReason) -> crate::RemotePlayerError {
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Disconnected { reason }).unwrap()
+        )
+        .unwrap();
+    });
+    let result = perform_handshake(SocketStream::Unix(client), || {
+        Ok("unused-control-token".to_string())
+    });
+    peer.join().unwrap();
+    result.unwrap_err()
+}
+
+#[test]
+fn connect_endpoint_maps_owner_admission_refusals() {
+    let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
+    assert_eq!(exclusive.kind_name(), "remote-player.exclusive_owner");
+    assert_eq!(
+        exclusive.to_string(),
+        "local owner process 1234 already has a client"
+    );
+
+    let shutting_down = admission_error(DisconnectReason::OwnerShuttingDown);
+    assert_eq!(
+        shutting_down.kind_name(),
+        "remote-player.owner_shutting_down"
+    );
+    assert_eq!(shutting_down.to_string(), "the owner is shutting down");
+}
+
 #[test]
 fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
     let (remote, _events, commands) =

@@ -226,6 +226,7 @@ impl DaemonLoop {
     /// `DaemonEvent::Shutdown`: persist the Stay-alive queue, announce the
     /// deliberate shutdown, and stop the player.
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
+        self.ctrl_clients.lock().unwrap().begin_shutdown();
         tracing::info!(name: "daemon.shutdown.started", target: "daemon", "graceful shutdown: stopping player");
         if self.role == DaemonRole::Local
             && let Err(error) = self.persist_owner_queue()

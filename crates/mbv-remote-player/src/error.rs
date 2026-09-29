@@ -15,6 +15,8 @@ enum RemotePlayerErrorKind {
     RestartRequired,
     QueueOperation,
     Control,
+    ExclusiveOwner { pid: u32 },
+    OwnerShuttingDown,
 }
 
 impl RemotePlayerError {
@@ -36,6 +38,22 @@ impl RemotePlayerError {
 
     pub(crate) fn queue_operation(message: impl Into<String>) -> Self {
         Self::new(RemotePlayerErrorKind::QueueOperation, message)
+    }
+
+    pub(crate) fn exclusive_owner(pid: u32) -> Self {
+        Self {
+            kind: RemotePlayerErrorKind::ExclusiveOwner { pid },
+            message: String::new(),
+            source: None,
+        }
+    }
+
+    pub(crate) fn owner_shutting_down() -> Self {
+        Self {
+            kind: RemotePlayerErrorKind::OwnerShuttingDown,
+            message: "the owner is shutting down".to_string(),
+            source: None,
+        }
     }
 
     fn new(kind: RemotePlayerErrorKind, message: impl Into<String>) -> Self {
@@ -66,13 +84,20 @@ impl RemotePlayerError {
             RemotePlayerErrorKind::RestartRequired => "remote-player.restart_required",
             RemotePlayerErrorKind::QueueOperation => "remote-player.queue_operation",
             RemotePlayerErrorKind::Control => "remote-player.control",
+            RemotePlayerErrorKind::ExclusiveOwner { .. } => "remote-player.exclusive_owner",
+            RemotePlayerErrorKind::OwnerShuttingDown => "remote-player.owner_shutting_down",
         }
     }
 }
 
 impl fmt::Display for RemotePlayerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        match &self.kind {
+            RemotePlayerErrorKind::ExclusiveOwner { pid } => {
+                write!(f, "local owner process {pid} already has a client")
+            }
+            _ => f.write_str(&self.message),
+        }
     }
 }
 

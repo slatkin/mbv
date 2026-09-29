@@ -122,9 +122,18 @@ fn read_initial_state(
             "daemon closed connection before initial state",
         ));
     }
-    serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
+    let event = serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
         crate::RemotePlayerError::protocol(format!("invalid daemon initial state: {e}"))
-    })
+    })?;
+    match event {
+        CtrlEvent::Disconnected {
+            reason: DisconnectReason::ExclusiveOwner { pid },
+        } => Err(crate::RemotePlayerError::exclusive_owner(pid)),
+        CtrlEvent::Disconnected {
+            reason: DisconnectReason::OwnerShuttingDown,
+        } => Err(crate::RemotePlayerError::owner_shutting_down()),
+        event => Ok(event),
+    }
 }
 
 /// Best-effort signal to a running same-user Local daemon to reread its own
@@ -321,7 +330,9 @@ fn apply_disconnected_event(
         // Handled by the reader thread's end-of-loop logic below
         // (`is_structured_disconnect`), which sends
         // `PlayerEvent::DaemonShutdownAnnounced` once the connection closes.
-        DisconnectReason::DaemonShutdown => {}
+        DisconnectReason::DaemonShutdown
+        | DisconnectReason::ExclusiveOwner { .. }
+        | DisconnectReason::OwnerShuttingDown => {}
     }
 }
 
@@ -331,6 +342,8 @@ fn disconnect_reason_message(reason: DisconnectReason) -> &'static str {
             "Emby remote control took over — returned to local mode"
         }
         DisconnectReason::DaemonShutdown => "the daemon was stopped",
+        DisconnectReason::ExclusiveOwner { .. } => "the owner already has a client",
+        DisconnectReason::OwnerShuttingDown => "the owner is shutting down",
     }
 }
 
@@ -579,10 +592,9 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
                 // for events that actually close the connection. Exhaustive match ensures
                 // new DisconnectReason variants are evaluated.
                 let is_structured_disconnect = match &ev {
-                    CtrlEvent::Disconnected { reason } => match reason {
-                        DisconnectReason::TakenOverByEmbyRemote => false,
-                        DisconnectReason::DaemonShutdown => true,
-                    },
+                    CtrlEvent::Disconnected { reason } => {
+                        matches!(reason, DisconnectReason::DaemonShutdown)
+                    }
                     _ => false,
                 };
                 apply_ctrl_event(

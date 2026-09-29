@@ -31,6 +31,7 @@ pub(crate) struct CtrlClients {
     connection: Vec<CtrlClient>,
     held_client: bool,
     merged_tx: Option<mpsc::Sender<crate::DaemonEvent>>,
+    pub(crate) shutting_down: bool,
     pub(crate) authority: AuthorityHolder,
 }
 
@@ -270,6 +271,10 @@ impl CtrlClients {
             let remaining = deadline.saturating_duration_since(Instant::now());
             let _ = ack_rx.recv_timeout(remaining);
         }
+    }
+
+    pub(crate) fn begin_shutdown(&mut self) {
+        self.shutting_down = true;
     }
 
     pub(crate) fn take_authority_for_emby_remote(&mut self) {

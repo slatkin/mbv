@@ -344,6 +344,7 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
 }
 
 fn start_local_control_server(
+    role: DaemonRole,
     audio_only: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     ctrl_clients: &ClientRegistry,
@@ -374,6 +375,7 @@ fn start_local_control_server(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    role,
                     Arc::clone(&settings_reader),
                 );
             }
@@ -421,6 +423,7 @@ fn register_capabilities(
 
 fn serve_tcp_control(
     listener: Option<TcpListener>,
+    role: DaemonRole,
     audio_only: bool,
     ctrl_clients: &ClientRegistry,
     merged_tx: &mpsc::Sender<DaemonEvent>,
@@ -448,6 +451,7 @@ fn serve_tcp_control(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    role,
                     Arc::clone(&settings_reader),
                 );
             }
@@ -501,6 +505,7 @@ pub fn run_with_options(
     let owner_settings = crate::owner_settings::reader(role, &config);
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
+        role,
         audio_only,
         &merged_tx,
         &ctrl_clients,
@@ -518,6 +523,7 @@ pub fn run_with_options(
     register_capabilities(&client, emby_runtime.as_ref(), &direct_commands, audio_only);
     serve_tcp_control(
         tcp_listener,
+        role,
         audio_only,
         &ctrl_clients,
         &merged_tx,
