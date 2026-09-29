@@ -1,7 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
+use crate::app::{App, DaemonLostModal};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
-use std::sync::atomic::Ordering;
 
 mod progress;
 
@@ -223,12 +222,9 @@ impl App {
     }
 
     pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self) {
-        // A suspended home link is still this Client's local owner; its
-        // announced shutdown exits cleanly even while another target is viewed.
         if self.is_local_daemon() || self.suspended_local.is_some() {
-            self.pending_exit_message =
-                Some("mbv: the local daemon was stopped — exiting.".to_string());
-            QUIT_REQUESTED.store(true, Ordering::Relaxed);
+            self.adopt_last_local_snapshot();
+            self.raise_daemon_lost_modal();
         } else {
             self.restore_local_mode("Daemon disconnected — returned to local mode");
             self.refresh_after_stop();
@@ -581,6 +577,24 @@ impl App {
         }
     }
 
+    /// Restore the Local queue from its owner's last accepted snapshot after
+    /// the home link is lost, without changing the viewed Player's status.
+    pub(in crate::app) fn adopt_last_local_snapshot(&mut self) {
+        self.queue_source = mbv_queue::QueueSource::Unknown;
+        let remote = self
+            .suspended_local
+            .as_ref()
+            .and_then(|home| home.player.as_remote())
+            .or_else(|| {
+                self.is_local_daemon()
+                    .then(|| self.player.as_remote())
+                    .flatten()
+            });
+        if let Some(snapshot) = remote.and_then(|remote| remote.unified_queue_state()) {
+            self.adopt_home_snapshot(&snapshot);
+        }
+    }
+
     /// Adopt a snapshot from the suspended home link into the Local queue
     /// without changing the viewed Player's status.
     pub(in crate::app) fn adopt_home_snapshot(
@@ -697,6 +711,7 @@ impl App {
     fn handle_remote_disconnected(&mut self, reason: &str) -> bool {
         self.next_up_item = None;
         if self.is_local_daemon() {
+            self.adopt_last_local_snapshot();
             self.raise_daemon_lost_modal();
             self.refresh_after_stop();
             return true;
