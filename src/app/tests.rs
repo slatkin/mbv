@@ -57,10 +57,6 @@ pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
-pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> mbv_queue::QueueState {
-    mbv_queue::QueueState::from_emby_items(items, 0, mbv_queue::QueueSource::Unknown)
-}
-
 pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {

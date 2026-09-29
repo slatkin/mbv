@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::service_runtime::ServiceState;
-use mbv_queue::QueueState;
 
 impl App {
     fn signal_running_local_daemon(&mut self, revision: u64) {
@@ -129,17 +128,6 @@ impl App {
         self.audiobookshelf_runtime.state = previous;
     }
 
-    /// Helper that persists a filtered queue or clears the file when empty.
-    /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
-    fn persist_filtered_queue_abs(
-        state: Option<&QueueState>,
-    ) -> Result<(), mbv_config::ConfigError> {
-        match state {
-            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
-            _ => mbv_config::clear_queue_state(),
-        }
-    }
-
     fn clear_audiobookshelf_queue_memory(&mut self) {
         // If the currently active slot is Audiobookshelf, stop playback.
         let active_is_abs = self
@@ -167,29 +155,13 @@ impl App {
         }
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
-        // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
-        // but future-proof: if items empty, reset source).
-        if self.player_tab.total_queue_len() == 0 {
-            self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
-        }
         self.queue_dirty = false;
     }
 
     pub(in crate::app) fn remove_audiobookshelf_confirmed(&mut self) {
         self.stop_audiobookshelf_socket();
         self.stop_active_audiobookshelf_playback();
-        // Snapshot for rollback if persistence fails, mirroring Emby removal.
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
-        // Use the transactional boundary that accepts a clear_owned_state closure.
-        // Queue filtering (persisted + in-memory) is performed inside that closure
-        // so setup/secret removal and queue purge are atomic from the caller's view.
-        let persist_result = mbv_config::remove_audiobookshelf_setup_and_secret_with_owned_state(
-            || Self::persist_filtered_queue_abs(filtered.as_ref()),
-            || {},
-        );
-
-        if let Err(error) = persist_result {
+        if let Err(error) = mbv_config::remove_audiobookshelf_setup_and_secret() {
             // Rollback: restore setup/secret handled inside transaction rollback;
             // The transaction restores durable setup, secret, and queue state;
             // in-memory queues have not been changed on this path.
@@ -233,11 +205,8 @@ impl App {
         let user = candidate.user.clone();
         let setup = candidate.setup.clone();
 
-        // Snapshot old queue for rollback explanation (persisted state rollback
-        // itself is handled inside the transaction's restore hook, but we also
-        // need to restore in-memory queue on failure).
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
+        // Snapshot in-memory queue for rollback on failure; persisted queue
+        // state is owner-held, so only the in-memory projections restore here.
         let old_player_items = self.player_tab.all_queue_items();
         let old_player_cursor = self.player_tab.queue_cursor;
         let old_remote_items = self
@@ -251,11 +220,7 @@ impl App {
                 candidate.user,
                 candidate.api_key,
             ),
-            || {
-                Self::persist_filtered_queue_abs(filtered.as_ref()).map_err(|error| {
-                    mbv_audiobookshelf::AudiobookshelfError::persistence(error.to_string())
-                })
-            },
+            || Ok(()),
             || {
                 // Restore in-memory queues on failure.
                 self.player_tab
@@ -264,9 +229,6 @@ impl App {
                     && let Some(tab) = self.remote_player_tab.as_mut()
                 {
                     tab.set_queue_items(items, cursor);
-                }
-                if let Some(q) = old_queue.as_ref() {
-                    let _ = mbv_config::save_queue_state(q);
                 }
             },
         );

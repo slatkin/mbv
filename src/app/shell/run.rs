@@ -268,7 +268,6 @@ impl Model {
 
         // Home populates now; Emby's startup merges its portion later (#543).
         self.fetch_home_at_startup();
-        self.app.restore_queue_state();
 
         self.init_idle_feed();
 

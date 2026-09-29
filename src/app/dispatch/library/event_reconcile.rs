@@ -42,9 +42,6 @@ impl App {
                 },
             );
         }
-        if !matching_slot_ids.is_empty() {
-            self.save_queue_state();
-        }
     }
 
     /// Book-shaped counterpart to `reconcile_audiobookshelf_progress`:
@@ -84,9 +81,6 @@ impl App {
                     is_finished,
                 },
             );
-        }
-        if !matching_slot_ids.is_empty() {
-            self.save_queue_state();
         }
     }
 }

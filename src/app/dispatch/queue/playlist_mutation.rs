@@ -2,9 +2,7 @@
 //! helpers for [`App`], split out of `queue_actions.rs` to keep that file
 //! within the repository's file-size limit.
 
-use super::{
-    App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity, is_playable,
-};
+use super::{App, EmbyItem, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity, is_playable};
 use crate::app::state::queue_owner::QueueOrigin;
 use mbv_emby::EmbyClient;
 
@@ -84,7 +82,6 @@ impl App {
             // until completion flips the source.
             if self.queue_playlist_id() == Some(playlist_id) {
                 self.clear_local_playlist_entry_ids();
-                self.save_queue_state();
             }
         }
     }
@@ -167,198 +164,27 @@ impl App {
     }
 
     /// Apply a completed Save As/Overwrite's new queue source (design D5).
-    /// Returns `true` when the source was applied locally or sent to the
-    /// Stay-alive owner. `ThisProcess` adopts it directly; `StayAlive` sends
-    /// a lineage-guarded source-only update and leaves the queue dirty until
-    /// the owner's snapshot confirms it.
+    /// Sends a lineage-guarded source-only update to the owner and leaves
+    /// the queue dirty until the owner's snapshot confirms it.
     pub(in crate::app) fn apply_saved_playlist_source(
         &mut self,
         source: mbv_queue::QueueSource,
         origin: QueueOrigin,
     ) -> bool {
-        match origin {
-            QueueOrigin::ThisProcess { .. } => {
-                self.set_queue_source_if_not_local_daemon(source);
-                self.queue_dirty = false;
-                // The new source must never retain entry identities from the
-                // old playlist.
-                self.clear_local_playlist_entry_ids();
-                self.save_queue_state();
-                true
-            }
-            QueueOrigin::StayAlive { lineage, .. } => {
-                let sent = self.player.as_remote().is_some_and(|remote| {
-                    remote.update_queue_source(source.clone(), lineage).is_ok()
-                });
-                if !sent {
-                    self.flash(
-                        "Could not update the Stay-alive queue source".into(),
-                        ToastSeverity::Error,
-                    );
-                    return false;
-                }
-                self.pending_owner_source_update = Some((source, lineage));
-                true
-            }
+        let lineage = origin.lineage;
+        let sent = self
+            .player
+            .as_remote()
+            .is_some_and(|remote| remote.update_queue_source(source.clone(), lineage).is_ok());
+        if !sent {
+            self.flash(
+                "Could not update the Stay-alive queue source".into(),
+                ToastSeverity::Error,
+            );
+            return false;
         }
-    }
-
-    pub(super) fn build_queue_state(&self) -> mbv_queue::QueueState {
-        let positions: std::collections::HashMap<String, i64> = self
-            .player_tab
-            .queue
-            .slots()
-            .iter()
-            .filter_map(|s| s.item.as_emby())
-            .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
-            .map(|i| (i.id.clone(), i.playback_position_ticks))
-            .collect();
-        mbv_queue::QueueState {
-            source: self.queue_source.clone(),
-            items: self
-                .player_tab
-                .queue
-                .slots()
-                .iter()
-                .map(|s| s.item.clone())
-                .collect(),
-            cursor: self.player_tab.queue_cursor,
-            last_played_content_id: self
-                .player_tab
-                .queue
-                .slots()
-                .get(self.player_tab.queue_cursor)
-                .map(|slot| slot.item.content_id()),
-            last_played_item_id: self.last_played_item_id.clone(),
-            last_played_completed: self.last_played_completed,
-            positions,
-        }
-    }
-
-    pub(in crate::app) fn save_queue_state(&mut self) {
-        if !self.local_queue_owner().owns_local_persistence() {
-            return;
-        }
-        let state = self.build_queue_state();
-        if state.items.is_empty() {
-            // Don't nuke the on-disk queue just because the local tab happens to be
-            // empty while attached to a remote session — that reflects remote-control
-            // UI state, not the user intentionally clearing their local queue.
-            if self.connected_session_id.is_none()
-                && let Err(e) = crate::config::clear_queue_state()
-            {
-                tracing::warn!(name: "queue.state.clear_failed", target: "queue", error = %e, "queue state clear failed");
-            }
-        } else if let Err(e) = crate::config::save_queue_state(&state) {
-            tracing::warn!(name: "queue.state.save_failed", target: "queue", error = %e, "queue state save failed");
-        }
-    }
-
-    /// Like `save_queue_state`, but never deletes the on-disk snapshot when the
-    /// in-memory queue happens to be empty. Quit is not a genuine "user cleared
-    /// the queue" signal — an empty `player_tab.items` at quit time can equally
-    /// mean this session never touched the local queue at all, and unconditionally
-    /// deleting in that case wipes a perfectly valid snapshot from an earlier
-    /// session with no recovery path. Only an explicit `ClearQueue` action (which
-    /// goes through `save_queue_state`) should ever delete the file.
-    pub(in crate::app) fn save_queue_state_no_clear(&mut self) {
-        if !self.local_queue_owner().owns_local_persistence() {
-            return;
-        }
-        let state = self.build_queue_state();
-        if !state.items.is_empty()
-            && let Err(e) = crate::config::save_queue_state(&state)
-        {
-            tracing::warn!(name: "queue.state.save_failed", target: "queue", reason = "no_clear", error = %e, "queue state save failed");
-        }
-    }
-
-    pub(super) fn save_queue_state_after_explicit_clear(&mut self) {
-        self.save_queue_state();
-    }
-
-    /// Restore the saved queue only for an owner this Client owns. A
-    /// Stay-alive Client always takes its queue from the attached owner.
-    /// Restore the queue from disk immediately and synchronously — the file
-    /// already holds full `EmbyItem`s, so this is a local read, no network
-    /// round-trip, no in-flight window where the queue could be superseded
-    /// by a real user action before it lands. See `spawn_enrich_queue_state`
-    /// for the separate, best-effort refresh of played/position state.
-    pub(in crate::app) fn restore_queue_state(&mut self) {
-        if !self.local_queue_owner().owns_local_persistence() {
-            return;
-        }
-        let Some(state) = crate::config::load_queue_state() else {
-            tracing::info!(name: "queue.state.restore_skipped", target: "queue", reason = "file_missing", "queue state restore skipped");
-            return;
-        };
-        if state.items.is_empty() {
-            tracing::info!(name: "queue.state.restore_skipped", target: "queue", reason = "empty", "queue state restore skipped");
-            return;
-        }
-        let queue_items = state.items;
-        let restored_count = queue_items.len();
-        let cursor = crate::app::dispatch::actions::queue_restore_cursor(
-            &queue_items,
-            state.cursor,
-            state.last_played_content_id.as_ref(),
-            state.last_played_item_id.as_deref(),
-            state.last_played_completed,
-        );
-        self.last_played_item_id = state.last_played_item_id;
-        self.last_played_completed = state.last_played_completed;
-        self.set_queue_source_if_not_local_daemon(state.source);
-        self.player_tab.set_queue_items(queue_items, cursor);
-        self.queue_dirty = false;
-        tracing::info!(name: "queue.state.restored", target: "queue", item_count = restored_count, cursor, "queue state restored");
-        self.spawn_enrich_queue_state(state.positions);
-    }
-
-    /// Best-effort background refresh of played/position state for whatever
-    /// is currently in `player_tab.items` (populated by `restore_queue_state`
-    /// just before this is called). Merges by item ID into the *current*
-    /// queue when it resolves, so it can never resurrect an item the user
-    /// has since consumed, nor clobber a queue they've since replaced —
-    /// unlike a wholesale overwrite, an ID that's no longer present is simply
-    /// skipped.
-    pub(in crate::app) fn spawn_enrich_queue_state(
-        &self,
-        positions: std::collections::HashMap<String, i64>,
-    ) {
-        let item_ids: Vec<String> = self
-            .player_tab
-            .emby_items()
-            .iter()
-            .map(|e| e.id.clone())
-            .collect();
-        if item_ids.is_empty() {
-            return;
-        }
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        let tx = self.channels.lib_tx.clone();
-        std::thread::spawn(move || {
-            let mut items = match client.get_items_by_ids(&item_ids) {
-                Ok(items) => items,
-                Err(e) => {
-                    tracing::warn!(name: "queue.state.enrichment_failed", target: "queue", error = %e, "queue state enrichment fetch failed");
-                    return;
-                }
-            };
-            // Apply locally-saved positions where they are fresher than what Emby returned.
-            // Emby's UserData may lag by up to a few seconds after a Stopped report.
-            for item in &mut items {
-                if let Some(&saved_pos) = positions
-                    .get(&item.id)
-                    .filter(|&&saved_pos| saved_pos > item.playback_position_ticks)
-                {
-                    tracing::info!(name: "player.position.saved_value_applied", target: "player", position_seconds = saved_pos / mbv_emby_model::TICKS_PER_SECOND, emby_position_seconds = item.playback_position_ticks / mbv_emby_model::TICKS_PER_SECOND, item = %item.id, "applying saved playback position");
-                    item.playback_position_ticks = saved_pos;
-                }
-            }
-            let _ = tx.send(LibEvent::QueueEnriched { items });
-        });
+        self.pending_owner_source_update = Some((source, lineage));
+        true
     }
 
     /// Enqueue an explicitly resolved Home Continue Watching item (task 5.3d,
@@ -426,7 +252,6 @@ impl App {
             self.queue_dirty = true;
         }
         if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
-            self.persist_local_queue_state_if_needed(scope);
             self.advance_queue_epoch();
         } else {
             self.queue_dirty = previous_dirty;

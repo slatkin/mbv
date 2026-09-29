@@ -6,7 +6,6 @@ use crate::app::SidebarId;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
-        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
     }
 
@@ -117,35 +116,25 @@ impl App {
         };
         match prep {
             RoutedReplacementPrep::Album => {
-                self.set_queue_source_if_not_local_daemon(source.clone());
                 self.replace_playback_queue(items.clone(), start_idx);
                 self.play_items_routed(items, start_idx, source);
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
             }
             RoutedReplacementPrep::MusicAlbums => {
                 self.replace_playback_queue(items.clone(), start_idx);
                 self.play_items_routed(items, start_idx, source);
-                self.save_queue_state();
             }
             RoutedReplacementPrep::Folder => {
                 self.replace_playback_queue(items.clone(), start_idx);
                 self.set_panel_focus(PanelFocus::Queue);
                 self.play_items_routed(items, start_idx, source);
-                self.save_queue_state();
             }
             RoutedReplacementPrep::ShuffleFolder => {
                 self.replace_playback_queue(items.clone(), start_idx);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.set_queue_source_if_not_local_daemon(source.clone());
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
                 self.play_items_routed(items, start_idx, source);
             }
             RoutedReplacementPrep::Selection => {
-                self.rebuild_queue_for_selection(&items, source.clone());
+                self.rebuild_queue_for_selection(&items);
                 self.play_items_routed(items, start_idx, source);
             }
         }

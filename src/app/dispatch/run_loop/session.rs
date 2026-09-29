@@ -104,10 +104,6 @@ impl App {
             && self.queue_playlist_id() == Some(source_playlist_id)
         {
             self.queue_dirty = false;
-            // A successful Save recreated server entry identities
-            // (cleared locally at the mutation boundary); persist that
-            // cleared state so stale identities cannot survive restart.
-            self.save_queue_state();
         }
         self.finish_playlist_mutation(playlist_id, mutation_id);
         if succeeded
@@ -166,16 +162,7 @@ impl App {
                     id: Some(id),
                     name: name.to_string(),
                 };
-                let applied = self.apply_saved_playlist_source(source, origin);
-                // The success toast stays a ThisProcess-only signal:
-                // a Stay-alive owner confirms the save through its own
-                // snapshot, without a toast.
-                if applied && matches!(origin, QueueOrigin::ThisProcess { .. }) {
-                    self.flash(
-                        format!("Saved as playlist \"{name}\""),
-                        ToastSeverity::Success,
-                    );
-                }
+                self.apply_saved_playlist_source(source, origin);
             }
             Ok(_) => {
                 tracing::debug!(name: "playlist.save_as.stale_completion_ignored", target: "playlist", "stale Save As completion ignored");

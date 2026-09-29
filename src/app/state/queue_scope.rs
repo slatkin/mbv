@@ -1,5 +1,4 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
@@ -82,15 +81,8 @@ impl App {
         }
     }
 
-    /// Stamps `scope`'s queue with the playback owner's current sequence
-    /// generation, after a submit the owner accepted at that generation.
-    pub(in crate::app) fn stamp_queue_generation(&mut self, scope: QueueScope) {
-        if !self.local_queue_owner().owns_local_persistence() {
-            return;
-        }
-        let generation = self.player.status.lock().unwrap().sequence_generation;
-        self.queue_for_scope_mut(scope).sequence_generation = generation;
-    }
+    /// Adopt the owner's snapshot source and reconcile a pending
+    /// playlist-save source update (design D6).
 
     pub(in crate::app) fn undo_stack_for_scope_mut(
         &mut self,
@@ -125,49 +117,46 @@ impl App {
         self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
-    pub(in crate::app) fn set_queue_source_if_not_local_daemon(
-        &mut self,
-        source: mbv_queue::QueueSource,
-    ) {
-        match self.local_queue_owner() {
-            LocalQueueOwner::StayAlive => {}
-            LocalQueueOwner::ThisProcess => self.queue_source = source,
-        }
-    }
-
-    /// Adopt the Stay-alive owner's snapshot source and reconcile a pending
-    /// playlist-save source update (design D6). `ThisProcess` owns its source
-    /// directly, so it adopts nothing.
+    /// Adopt the owner's snapshot source and reconcile a pending
+    /// playlist-save source update (design D6).
     pub(in crate::app) fn adopt_owner_source(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) {
-        match self.local_queue_owner() {
-            LocalQueueOwner::ThisProcess => {}
-            LocalQueueOwner::StayAlive => {
-                self.queue_source = unified.source.clone();
-                if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
-                    if unified.lineage != lineage {
-                        self.pending_owner_source_update = None;
-                    } else if unified.source == source {
-                        self.pending_owner_source_update = None;
-                        self.queue_dirty = false;
-                        self.clear_local_playlist_entry_ids();
-                    }
-                }
+        self.queue_source = unified.source.clone();
+        if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
+            if unified.lineage != lineage {
+                self.pending_owner_source_update = None;
+            } else if unified.source == source {
+                self.pending_owner_source_update = None;
+                self.queue_dirty = false;
+                self.clear_local_playlist_entry_ids();
             }
         }
     }
 
     pub(in crate::app) fn clear_local_queue_metadata(&mut self) {
-        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
     }
 
-    pub(in crate::app) fn persist_local_queue_state_if_needed(&mut self, scope: QueueScope) {
-        if self.local_queue_metadata_applies(scope) {
-            self.save_queue_state();
+    pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+        self.advance_queue_epoch();
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        match self.playing_queue_scope() {
+            QueueScope::Local => {
+                self.player_tab.set_items(items, cursor);
+            }
+            QueueScope::Remote => {
+                let queue = self
+                    .remote_player_tab
+                    .as_mut()
+                    .expect("direct remote playback queue requires remote queue");
+                queue.set_items(items, cursor);
+            }
         }
+        // A full replacement changes the queue occurrence sequence. A preserved
+        // prior selection could refer to an unrelated slot, so force a re-anchor
+        // to the replacement's start index rather than relying on `Preserve`.
+        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
-
     pub(in crate::app) fn sync_playback_queue_items_after_append(
         &mut self,
         scope: QueueScope,
@@ -215,37 +204,6 @@ impl App {
 
     pub(in crate::app) fn playing_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().playback_target()
-    }
-
-    pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.advance_queue_epoch();
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        match self.playing_queue_scope() {
-            QueueScope::Local => {
-                self.player_tab.set_items(items, cursor);
-                // Bare mode fences a local replacement until submit. A
-                // Stay-alive Client instead reconciles the owner's snapshots.
-                match self.local_queue_owner() {
-                    LocalQueueOwner::StayAlive => {}
-                    LocalQueueOwner::ThisProcess => {
-                        let owner_generation =
-                            self.player.status.lock().unwrap().sequence_generation;
-                        self.player_tab.sequence_generation = owner_generation.saturating_add(1);
-                    }
-                }
-            }
-            QueueScope::Remote => {
-                let queue = self
-                    .remote_player_tab
-                    .as_mut()
-                    .expect("direct remote playback queue requires remote queue");
-                queue.set_items(items, cursor);
-            }
-        }
-        // A full replacement changes the queue occurrence sequence. A preserved
-        // prior selection could refer to an unrelated slot, so force a re-anchor
-        // to the replacement's start index rather than relying on `Preserve`.
-        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 
     pub(in crate::app) fn viewed_queue_scope(&self) -> QueueScope {

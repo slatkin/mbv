@@ -545,7 +545,7 @@ impl App {
         &mut self,
         t: usize,
         item: &mbv_queue::QueueItem,
-        scope: crate::app::QueueScope,
+        _scope: crate::app::QueueScope,
         all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
         // Cold start: submit the full canonical queue (all
@@ -596,9 +596,6 @@ impl App {
                 crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                 ToastSeverity::Warning,
             );
-        }
-        if submitted {
-            self.stamp_queue_generation(scope);
         }
     }
 }

@@ -6,7 +6,7 @@ use mbv_emby_model::test_support::make_item;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
-use rstest::{fixture, rstest};
+use rstest::rstest;
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
@@ -38,14 +38,6 @@ impl Drop for XdgHomeGuard {
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
-#[fixture]
-fn make_queue_items() -> Vec<mbv_queue::QueueItem> {
-    crate::app::tests::make_items(3)
-        .into_iter()
-        .map(|i| mbv_queue::QueueItem::Emby(Box::new(i)))
-        .collect()
-}
-
 fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
     vec![
         QueueItem::Emby(Box::new(make_item("Emby", "Movie"))),
@@ -194,23 +186,12 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         mixed.clone(),
         3,
     ));
-    mbv_config::save_queue_state(&mbv_queue::QueueState {
-        source: mbv_queue::QueueSource::Unknown,
-        items: mixed.clone(),
-        cursor: 3,
-        last_played_content_id: None,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: std::collections::HashMap::default(),
-    })
-    .unwrap();
 
     // A cold local queue is Composed; the remote tab is the remote Bound view.
     app.remove_audiobookshelf_confirmed();
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
 
     // Refill the projections and make the local slot active: this is the
     // local Bound replacement path, while remote_player_tab remains remote Bound.
@@ -231,16 +212,6 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         mixed.clone(),
         3,
     ));
-    mbv_config::save_queue_state(&mbv_queue::QueueState {
-        source: mbv_queue::QueueSource::Unknown,
-        items: mixed,
-        cursor: 3,
-        last_played_content_id: None,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: std::collections::HashMap::default(),
-    })
-    .unwrap();
     let generation = app.audiobookshelf_runtime.generation();
     app.setup.pending_audiobookshelf_replacement = Some(
         crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
@@ -263,143 +234,4 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
     assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
-    assert_audiobookshelf_queue_purged(&mbv_config::load_queue_state().unwrap().items);
-}
-
-#[rstest]
-fn queue_restore_cursor_advances_past_a_completed_last_played_item(
-    make_queue_items: Vec<mbv_queue::QueueItem>,
-) {
-    let items = make_queue_items;
-    let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), true);
-    assert_eq!(cursor, 2);
-}
-
-#[rstest]
-fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing(
-    make_queue_items: Vec<mbv_queue::QueueItem>,
-) {
-    let items = make_queue_items;
-    // "id5" isn't in the restored list (e.g. it was removed from the
-    // queue before quitting) — must fall back to the saved cursor, not
-    // silently snap back to the front of the queue.
-    let cursor = queue_restore_cursor(&items, 2, None, Some("id5"), false);
-    assert_eq!(cursor, 2);
-}
-
-#[test]
-fn restore_queue_state_with_no_saved_file_does_nothing() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.restore_queue_state();
-
-    assert!(app.player_tab.emby_items().is_empty());
-}
-
-#[test]
-fn restore_queue_state_populates_queue_synchronously_from_disk() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let items = crate::app::tests::make_items(3);
-    crate::config::save_queue_state(&mbv_queue::QueueState::from_emby_items(
-        items,
-        1,
-        mbv_queue::QueueSource::Unknown,
-    ))
-    .expect("save queue state");
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.restore_queue_state();
-
-    // No network call is needed for the queue to already be correct —
-    // this is a synchronous, local read, not a spawned background fetch.
-    assert_eq!(app.player_tab.emby_items().len(), 3);
-    assert_eq!(app.player_tab.queue_cursor, 1);
-}
-
-#[test]
-fn restore_queue_state_clears_a_stale_dirty_flag() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    crate::config::save_queue_state(&mbv_queue::QueueState {
-        source: mbv_queue::QueueSource::Unknown,
-        items: crate::app::tests::make_items(1)
-            .into_iter()
-            .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
-            .collect(),
-        cursor: 0,
-        last_played_content_id: None,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: std::collections::HashMap::default(),
-    })
-    .expect("save queue state");
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.queue_dirty = true;
-    app.restore_queue_state();
-
-    assert!(
-        !app.queue_dirty,
-        "restoring a queue from disk is not a local edit — it must not \
-         leave a stale dirty flag that could trigger an unwanted \
-         save_playlist_to_emby() push on the next consume"
-    );
-}
-
-#[test]
-fn quit_preserves_saved_playlist_source_for_restart_restore() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(2),
-        app.player_tab.queue_cursor,
-    );
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("playlist-id".into()),
-        name: "Saved Queue".into(),
-    };
-    app.queue_dirty = true;
-    app.config.lock().unwrap().quit_timeout_secs = 0;
-
-    assert!(app.try_quit());
-    app.save_queue_state_no_clear();
-
-    let state = crate::config::load_queue_state().expect("queue state should be saved");
-    assert_eq!(
-        state.source,
-        mbv_queue::QueueSource::Playlist {
-            id: Some("playlist-id".into()),
-            name: "Saved Queue".into(),
-        },
-        "shutdown persistence must keep the saved-playlist association so \
-         a restart can still autosave/consume against the playlist"
-    );
-
-    let mut restarted = crate::app::tests::make_app_stub();
-    restarted.restore_queue_state();
-    assert_eq!(restarted.player_tab.emby_items().len(), 2);
-    assert_eq!(restarted.queue_source, state.source);
-}
-
-#[test]
-fn queue_restore_cursor_uses_unique_last_played_identity() {
-    let mut first = make_item("first", "Movie");
-    first.id = "first".into();
-    let mut second = make_item("second", "Movie");
-    second.id = "second".into();
-    let items = vec![
-        QueueItem::Emby(Box::new(first)),
-        QueueItem::Emby(Box::new(second)),
-    ];
-    assert_eq!(
-        queue_restore_cursor(&items, 0, None, Some("second"), false),
-        1
-    );
 }

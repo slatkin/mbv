@@ -78,8 +78,9 @@ fn successful_save_completion(app: &mut App, mutation_id: u64) {
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Ok(()),
@@ -265,8 +266,9 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: save_mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Ok(()),
@@ -489,8 +491,9 @@ fn failed_bound_save_drops_the_deferred_replacement() {
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: failed_save_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Err(mbv_emby::EmbyError::resolve("save failed")),

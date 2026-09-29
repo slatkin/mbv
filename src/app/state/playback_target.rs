@@ -282,7 +282,7 @@ impl App {
 #[cfg(test)]
 mod now_playing_status_tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items};
+    use crate::app::tests::make_app_stub;
 
     fn app() -> App {
         make_app_stub()
@@ -344,28 +344,6 @@ mod now_playing_status_tests {
         app.apply_cast_status("device-1", Err(mbv_cast::CastError::status_no_entries()));
         set_player(&app, true, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
-    }
-
-    /// Regression: with a stay-alive local daemon still playing the previous
-    /// Bare mode's local playhead must not claim a row of a fenced replacement.
-    #[test]
-    fn fenced_queue_claims_no_now_playing_row_while_bare_player_plays_the_old_queue() {
-        let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(3), 0);
-        // The local Player is playing the first item of its previous queue.
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 0;
-        };
-
-        app.replace_playback_queue(make_items(2), 0);
-
-        let state = app.queue_row_playback_state();
-        assert!(
-            !state.active,
-            "the owner's playhead must not claim a row of a fenced replacement queue"
-        );
     }
 
     /// An engaged cast target keeps priority over the local player.

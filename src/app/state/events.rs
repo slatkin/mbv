@@ -309,12 +309,6 @@ pub enum LibEvent {
     Audiobookshelf(AudiobookshelfEvent),
     Playlist(PlaylistEvent),
     ModelContent(ModelContentEvent),
-
-    /// Best-effort background refresh of played/position state for the queue
-    /// that `restore_queue_state` already populated synchronously from disk.
-    /// See `spawn_enrich_queue_state`.
-    #[rustfmt::skip]
-    QueueEnriched { items: Vec<EmbyItem> },
     Error(String),
 }
 

@@ -6,7 +6,7 @@ pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
-use mbv_queue::{QueueItem, QueueItemContentId};
+use mbv_queue::QueueItem;
 use mbv_ui_model::ui_util::natural_sort_key;
 use std::sync::Arc;
 
@@ -132,51 +132,6 @@ impl App {
     }
 }
 
-/// Where playback should resume within a restored queue. Prefers locating
-/// `last_played_content_id` by identity (robust to the saved `cursor` index having
-/// drifted, e.g. if the list was edited before the last save) and falls back
-/// to the saved cursor only when there's no last-played id to anchor on.
-pub(crate) fn queue_restore_cursor(
-    items: &[QueueItem],
-    saved_cursor: usize,
-    last_played_content_id: Option<&QueueItemContentId>,
-    legacy_last_played_item_id: Option<&str>,
-    last_played_completed: bool,
-) -> usize {
-    let fallback = saved_cursor.min(items.len().saturating_sub(1));
-    let identity = last_played_content_id.cloned().or_else(|| {
-        let id = legacy_last_played_item_id?;
-        let mut matches = items.iter().filter(|item| item.id() == id);
-        let first = matches.next()?;
-        if matches.next().is_some() {
-            None
-        } else {
-            Some(first.content_id())
-        }
-    });
-    let Some(identity) = identity else {
-        return fallback;
-    };
-    // If the last-played item is no longer in the restored list (e.g. it was
-    // removed from the queue before quitting), fall back to the saved cursor
-    // rather than silently jumping to the front of the queue.
-    let mut matches = items
-        .iter()
-        .enumerate()
-        .filter(|(_, item)| item.content_id() == identity);
-    let Some((idx, _)) = matches.next() else {
-        return fallback;
-    };
-    if matches.next().is_some() {
-        return fallback;
-    }
-    if last_played_completed {
-        (idx + 1).min(items.len().saturating_sub(1))
-    } else {
-        idx
-    }
-}
-
 impl App {
     /// Submit the already-replaced tab queue without re-minting slot ids.
     /// The tab's canonical pairs are the identity source for both local and
@@ -207,12 +162,6 @@ impl App {
         );
         if !sent && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-        }
-        if sent
-            && matches!(scope, crate::app::QueueScope::Local)
-            && !self.player.as_remote().is_some()
-        {
-            self.stamp_queue_generation(scope);
         }
         sent
     }
@@ -339,7 +288,6 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
-        self.set_queue_source_if_not_local_daemon(queue_source.clone());
         self.set_queue_scope(self.playing_queue_scope());
         // Keep library focus when playing from the library panel.
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -444,13 +392,9 @@ impl App {
                 }
                 self.replace_playback_queue(episodes.clone(), 0);
                 let source = mbv_queue::QueueSource::Series;
-                self.set_queue_source_if_not_local_daemon(source.clone());
                 self.submit_tab_queue(self.playing_queue_scope(), 0, source);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
                 return;
             }
         }
@@ -499,7 +443,6 @@ impl App {
                     self.queue_dirty = true;
                 }
                 if self.sync_playback_queue_items_after_append(scope, appended_slots) {
-                    self.persist_local_queue_state_if_needed(scope);
                     self.advance_queue_epoch();
                 } else {
                     self.queue_dirty = previous_dirty;
@@ -539,7 +482,6 @@ impl App {
                 self.queue_dirty = true;
             }
             if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
-                self.persist_local_queue_state_if_needed(scope);
                 self.advance_queue_epoch();
                 return true;
             }

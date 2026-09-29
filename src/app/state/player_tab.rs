@@ -12,9 +12,6 @@ pub struct PlayerTab {
     pub queue: PlaybackQueue,
     /// The newest desired playback slot from the owner snapshot, if any.
     pub pending_playback_slot: Option<QueueSlotId>,
-    /// Generation of the queue represented by this tab. Bare mode compares
-    /// it with Player status before issuing slot-addressed playback commands.
-    pub sequence_generation: u64,
     revision_mint: Arc<QueueRevisionMint>,
 }
 
@@ -37,7 +34,6 @@ impl PlayerTab {
             queue_cursor,
             queue,
             pending_playback_slot: None,
-            sequence_generation: 0,
             revision_mint,
         }
     }
@@ -89,7 +85,6 @@ impl PlayerTab {
                 .as_ref()
                 .or(state.in_flight_transition.as_ref())
                 .map(|transition| QueueSlotId::from_raw(transition.target_slot)),
-            sequence_generation: 0,
             revision_mint,
         }
     }

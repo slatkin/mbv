@@ -4,7 +4,7 @@ use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::{
-    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, FeedHomeVideoState, QueueScope,
+    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, FeedHomeVideoState,
     dispatch::notify::ToastSeverity,
 };
 use mbv_ui_model::ui_util::sort_audio_tracks;
@@ -44,7 +44,6 @@ impl App {
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
             // The shell drain applies Model-owned content.
             LibEvent::ModelContent(event) => handle_model_content_event(event),
-            LibEvent::QueueEnriched { items } => self.handle_queue_enriched(items),
             LibEvent::Error(error) => self.handle_error(&error),
         }
     }
@@ -315,10 +314,6 @@ impl App {
     fn handle_playlist_deleted(&mut self, name: &str) {
         self.dismiss_confirm();
         self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
-    }
-
-    fn handle_queue_enriched(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
-        let _ = self.merge_refreshed_queue(QueueScope::Local, items);
     }
 
     fn handle_error(&mut self, error: &str) {

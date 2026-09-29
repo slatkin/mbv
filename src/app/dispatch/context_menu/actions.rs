@@ -282,19 +282,9 @@ impl App {
     /// queue on submission, while an attached Session must leave the local
     /// Composed queue untouched. Replayed by `run_routed_replacement` for the
     /// gated `PlaySelection`/`ShuffleSelection` sites.
-    pub(in crate::app) fn rebuild_queue_for_selection(
-        &mut self,
-        items: &[EmbyItem],
-        source: mbv_queue::QueueSource,
-    ) {
-        let rebuild_local_queue =
-            !self.has_direct_remote_queue() && self.connected_session_id.is_none();
-        if rebuild_local_queue {
+    pub(in crate::app) fn rebuild_queue_for_selection(&mut self, items: &[EmbyItem]) {
+        if !self.has_direct_remote_queue() && self.connected_session_id.is_none() {
             self.replace_playback_queue(items.to_vec(), 0);
-        }
-        self.set_queue_source_if_not_local_daemon(source);
-        if rebuild_local_queue {
-            self.save_queue_state();
         }
     }
 

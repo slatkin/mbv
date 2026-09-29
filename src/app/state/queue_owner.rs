@@ -1,61 +1,24 @@
-//! Queue-owner identity for the Local queue (openspec change
-//! `encode-local-queue-owner`): which process holds the authoritative Local
-//! queue, and one fence value shaped by that owner.
+//! Queue-owner identity for the Local queue: the owner process holds the
+//! authoritative Local queue, and the Client fences async completions
+//! against the owner's lineage.
 
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
-use mbv_remote_player::DaemonEndpoint;
-
-/// Which process holds the authoritative Local queue. Derived from
-/// `player_endpoint`, never stored: an owner-kind change always goes through
-/// an endpoint write, and every such write advances the epoch (design D1/D5).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum LocalQueueOwner {
-    /// This process holds the authoritative Local queue (Bare mode and
-    /// direct-remote playback both behave identically at every owner site).
-    ThisProcess,
-    /// A Stay-alive daemon process holds it; this Client projects its
-    /// snapshots.
-    StayAlive,
-}
-
-impl LocalQueueOwner {
-    /// Whether this Client owns the Local queue's on-disk persistence and
-    /// sequence-generation stamping — false under Stay-alive, where the
-    /// owner daemon is authoritative for both.
-    pub(in crate::app) fn owns_local_persistence(self) -> bool {
-        match self {
-            LocalQueueOwner::ThisProcess => true,
-            LocalQueueOwner::StayAlive => false,
-        }
-    }
-}
 
 impl App {
-    /// Which process currently holds the authoritative Local queue.
-    pub(in crate::app) fn local_queue_owner(&self) -> LocalQueueOwner {
-        match self.player_endpoint {
-            Some(DaemonEndpoint::Local) => LocalQueueOwner::StayAlive,
-            _ => LocalQueueOwner::ThisProcess,
-        }
-    }
-
     /// The origin to fence a request against, captured at request time.
-    /// `None` only under Stay-alive, when the owner has not yet delivered a
-    /// queue snapshot, so no owner lineage exists to carry.
+    /// `None` when the owner has not yet delivered a queue snapshot, so no
+    /// owner lineage exists to carry.
     pub(in crate::app) fn queue_origin(&self) -> Option<QueueOrigin> {
-        let epoch = self.queue_epoch;
-        match self.local_queue_owner() {
-            LocalQueueOwner::ThisProcess => Some(QueueOrigin::ThisProcess { epoch }),
-            LocalQueueOwner::StayAlive => {
-                let lineage = self
-                    .player
-                    .as_remote()
-                    .and_then(|remote| remote.unified_queue_state())
-                    .map(|state| state.lineage)?;
-                Some(QueueOrigin::StayAlive { epoch, lineage })
-            }
-        }
+        let lineage = self
+            .player
+            .as_remote()
+            .and_then(|remote| remote.unified_queue_state())
+            .map(|state| state.lineage)?;
+        Some(QueueOrigin {
+            epoch: self.queue_epoch,
+            lineage,
+        })
     }
 
     /// Like `queue_origin`, but flashes the "not available yet" error when
@@ -97,24 +60,18 @@ impl QueueEpoch {
 }
 
 /// Which queue a playlist mutation (or another fenced async request) was
-/// made against, shaped by the owner at request time. The owner lineage can
-/// only be present under Stay-alive, and must be present there.
+/// made against: the Client-local epoch plus the owner lineage it was
+/// shaped by. The owner lineage must be present: the owner is authoritative
+/// for the queue, and this Client only projects its snapshots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum QueueOrigin {
-    ThisProcess {
-        epoch: QueueEpoch,
-    },
-    StayAlive {
-        epoch: QueueEpoch,
-        lineage: QueueLineage,
-    },
+pub(in crate::app) struct QueueOrigin {
+    pub(in crate::app) epoch: QueueEpoch,
+    pub(in crate::app) lineage: QueueLineage,
 }
 
 impl QueueOrigin {
     #[must_use]
     pub fn epoch(&self) -> QueueEpoch {
-        match self {
-            QueueOrigin::ThisProcess { epoch } | QueueOrigin::StayAlive { epoch, .. } => *epoch,
-        }
+        self.epoch
     }
 }

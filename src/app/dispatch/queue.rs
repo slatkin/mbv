@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PlaylistMutation;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
 };
 use mbv_emby_model::EmbyItem;
@@ -43,7 +43,6 @@ impl App {
         }
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, item));
-        self.persist_local_queue_state_if_needed(scope);
         let sent_queue_remove = controls_playback_queue && self.queue_edit_reaches_player(scope);
         if sent_queue_remove {
             // Slot identity was captured before the local removal above.
@@ -173,7 +172,6 @@ impl App {
         // `App`'s value when a re-anchor is armed; without this it would keep
         // the row the deleted range used to occupy and clamp there.
         self.pending_queue_cursor_reanchor = Some(scope);
-        self.persist_local_queue_state_if_needed(scope);
 
         let sent_queue_remove =
             self.queue_scope_is_playback(scope) && self.queue_edit_reaches_player(scope);
@@ -277,7 +275,6 @@ impl App {
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && self.queue_edit_reaches_player(scope) {
             self.player
                 .queue_move_slot(mbv_ctrl::slot_id_to_u64(slot_id), to);
@@ -300,7 +297,6 @@ impl App {
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
-                self.persist_local_queue_state_if_needed(scope);
                 self.advance_queue_epoch();
             }
             UndoEntry::Move { from, to, slot_id } => {

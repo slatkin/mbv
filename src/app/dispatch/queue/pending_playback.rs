@@ -1,5 +1,4 @@
 use super::{App, QueueScope, ToastSeverity};
-use crate::app::state::queue_owner::LocalQueueOwner;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
@@ -20,12 +19,9 @@ impl App {
             return;
         }
         let direct_remote = self.has_direct_remote_queue();
-        if !autostart && self.local_queue_owner() == LocalQueueOwner::StayAlive {
+        if !autostart && self.is_local_daemon() {
             self.load_idle_queue_on_owner(items, start_idx, source);
             return;
-        }
-        if self.local_queue_metadata_applies(self.playing_queue_scope()) {
-            self.set_queue_source_if_not_local_daemon(source.clone());
         }
         if autostart {
             self.start_pending_queue_playback(&items, start_idx, source, direct_remote);
@@ -82,7 +78,6 @@ impl App {
             self.replace_playback_queue(items.to_vec(), start_idx);
         }
         self.set_queue_scope(self.playing_queue_scope());
-        self.persist_local_queue_state_if_needed(self.playing_queue_scope());
         if let Some(label) = loaded {
             self.flash(format!("Loaded: {label}"), ToastSeverity::Neutral);
         }
@@ -116,9 +111,6 @@ impl App {
             self.player
                 .send_command(PlayerCommand::SetMute(self.mute_on));
         }
-        if !direct_remote {
-            self.save_queue_state();
-        }
     }
 
     pub(super) fn execute_pending_queue_clear(&mut self) {
@@ -133,9 +125,7 @@ impl App {
             self.clear_remote_queue();
         } else if self.queue_scope_is_playback(scope) {
             self.player.stop();
-            if self.local_queue_owner() == LocalQueueOwner::StayAlive {
-                self.player.clear_queue();
-            }
+            self.player.clear_queue();
         }
         if scope != QueueScope::Remote {
             let queue = self.queue_for_scope_mut(scope);
@@ -143,9 +133,6 @@ impl App {
         }
         if had_items {
             self.advance_queue_epoch();
-        }
-        if self.local_queue_metadata_applies(scope) {
-            self.save_queue_state_after_explicit_clear();
         }
         self.flash("Queue cleared".into(), ToastSeverity::Success);
     }

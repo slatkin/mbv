@@ -156,7 +156,6 @@ impl App {
                 mbv_queue::QueueSource::Remote,
             );
         }
-        self.save_queue_state();
     }
 }
 
@@ -190,8 +189,8 @@ mod tests {
     ]}"#;
 
     /// `Play` issues a real Emby fetch (`get_items_by_ids`), so its queue
-    /// replacement, `Remote` source, honoured start position, and persisted
-    /// queue state are asserted end to end against the mock transport.
+    /// replacement, `Remote` source, and honoured start position are asserted
+    /// end to end against the mock transport.
     #[rstest]
     #[case::multi_item(
         PLAY_TWO_ITEMS,
@@ -200,7 +199,7 @@ mod tests {
         999,
         vec![("a", 111), ("b", 999)]
     )]
-    fn play_replaces_queue_with_remote_source_and_persists(
+    fn play_replaces_queue_with_remote_source(
         #[case] response: &str,
         #[case] item_ids: Vec<String>,
         #[case] start_index: usize,
@@ -230,16 +229,6 @@ mod tests {
         let cursor = start_index.min(items.len() - 1);
         assert_eq!(app.player_tab.queue_cursor, cursor);
         assert_eq!(app.queue_source, mbv_queue::QueueSource::Remote);
-
-        let state = crate::config::load_queue_state().expect("Play persists the replaced queue");
-        let persisted_items = state.emby_items();
-        let persisted: Vec<(&str, i64)> = persisted_items
-            .iter()
-            .map(|i| (i.id.as_str(), i.playback_position_ticks))
-            .collect();
-        assert_eq!(persisted, expected_positions);
-        assert_eq!(state.cursor, cursor);
-        assert_eq!(state.source, mbv_queue::QueueSource::Remote);
     }
 
     #[test]

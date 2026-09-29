@@ -251,9 +251,6 @@ impl App {
         self.finish_stopped_consumption(deleted_slot, slot_id, consume);
         self.playback_queue_mut().queue.clear_active_slot();
         self.refresh_after_stop();
-        if !self.has_direct_remote_queue() {
-            self.save_queue_state();
-        }
         false
     }
 
@@ -431,9 +428,6 @@ impl App {
                 } else {
                     self.on_video_consumed();
                 }
-                if removed_id.is_some() && !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
             }
         }
     }
@@ -477,11 +471,6 @@ impl App {
             && let Some(item) = self.playback_queue().emby_item_at(adjusted)
         {
             self.last_played_item_id = Some(item.id.clone());
-        }
-        if !self.has_direct_remote_queue() {
-            let queue = self.playback_queue();
-            tracing::info!(name: "consume.track_changed.queue_saved", target: "consume", queue_length = queue.total_queue_len(), item_ids = ?queue.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>(), "queue saved after track change");
-            self.save_queue_state();
         }
     }
 
