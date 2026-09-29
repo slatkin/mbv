@@ -248,7 +248,7 @@ fn reconnect_loop(
             }
         }
         // M3: Exponential backoff with jitter, max 60s.
-        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, "ws");
+        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, mbv_net::ReconnectTarget::Ws);
     }
 }
 

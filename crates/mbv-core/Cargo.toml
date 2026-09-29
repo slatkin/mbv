@@ -27,7 +27,7 @@ time.workspace = true
 rstest.workspace = true
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-emby = { path = "../mbv-emby" }
-mbv-config = { path = "../mbv-config" }
+mbv-config = { path = "../mbv-config", features = ["test"] }
 mbv-queue = { path = "../mbv-queue" }
 ureq.workspace = true
 serde_json.workspace = true

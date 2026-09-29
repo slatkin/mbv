@@ -8,6 +8,7 @@ use super::super::{
     reconcile_packaged_emby, reset_slot_jumps, send_to,
 };
 use super::EventOutcome;
+use crate::control::intent_span;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
@@ -117,14 +118,7 @@ impl DaemonLoop {
     ) -> EventOutcome {
         // Rejoin rule (design D5): rebuild the intent span from the ids the
         // resolved event already carries; no `Span` is stored anywhere.
-        let _intent_span = tracing::info_span!(
-            target: "ctrl",
-            "ctrl.intent",
-            client = %client_id,
-            request = %request_id,
-            generation = generation,
-        )
-        .entered();
+        let _intent_span = intent_span(client_id, request_id, generation).entered();
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             self.owner.intents.invalidate_connection(client_id);
             return EventOutcome::CONTINUE;

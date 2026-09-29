@@ -27,30 +27,38 @@ pub fn encode_path_segment(value: &str) -> percent_encoding::PercentEncode<'_> {
     percent_encoding::utf8_percent_encode(value, PATH_SEGMENT)
 }
 
+/// Which websocket reconnect loop is waiting for its next attempt.
+#[derive(Clone, Copy, Debug)]
+pub enum ReconnectTarget {
+    Ws,
+    AudiobookshelfSocket,
+    Other(&'static str),
+}
+
 /// Sleep out one reconnect attempt: exponential backoff with 0–1s jitter,
 /// doubling `backoff_secs` up to 60s. Shared by the Emby and Audiobookshelf
 /// websocket reconnect loops so the incantation lives in one place.
-pub fn reconnect_backoff_sleep(backoff_secs: &mut u64, target: &str) {
+pub fn reconnect_backoff_sleep(backoff_secs: &mut u64, target: ReconnectTarget) {
     let jitter: f64 = rand::rng().random_range(0.0..1.0);
     let delay = std::time::Duration::from_secs_f64(
         f64::from(u32::try_from(*backoff_secs).unwrap_or(u32::MAX)) + jitter,
     );
     match target {
-        "ws" => tracing::info!(
+        ReconnectTarget::Ws => tracing::info!(
             name: "net.reconnect.scheduled",
             target: "ws",
             delay_secs = delay.as_secs_f64(),
             backoff_secs = *backoff_secs,
             "reconnecting"
         ),
-        "audiobookshelf_socket" => tracing::info!(
+        ReconnectTarget::AudiobookshelfSocket => tracing::info!(
             name: "net.reconnect.scheduled",
             target: "audiobookshelf_socket",
             delay_secs = delay.as_secs_f64(),
             backoff_secs = *backoff_secs,
             "reconnecting"
         ),
-        _ => tracing::info!(
+        ReconnectTarget::Other(target) => tracing::info!(
             name: "net.reconnect.scheduled",
             target: "net",
             source_target = target,

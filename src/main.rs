@@ -165,7 +165,7 @@ fn write_crash_log(msg: &str) {
     tracing::error!(
         name: "crash.log.failed",
         target: "crash",
-        { error.message = %msg },
+        { error = %msg },
         "fatal error"
     );
     if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -494,27 +494,34 @@ fn run_local_instance(config: &config::Config, log_level: Option<applog::LogSpec
 mod tests {
     use super::*;
 
+    #[rstest::rstest]
+    #[case("error", "error")]
+    #[case("warn", "warn")]
+    #[case("info", "info")]
+    #[case("debug", "debug")]
+    #[case("trace", "trace")]
+    #[case("info,player=debug", "info,player=debug")]
+    fn log_level_arg_accepts_supported_values(#[case] value: &str, #[case] expected: &str) {
+        assert_eq!(
+            parse_log_level_arg(&["--log-level".into(), value.into()])
+                .unwrap()
+                .as_ref()
+                .map(applog::LogSpec::to_string)
+                .as_deref(),
+            Some(expected)
+        );
+    }
+
+    #[rstest::rstest]
+    #[case(vec!["--log-level".into(), "info,player=".into()])]
+    #[case(vec!["--log-level".into(), "loud".into()])]
+    #[case(vec!["--log-level".into()])]
+    fn log_level_arg_rejects_invalid_values(#[case] args: Vec<String>) {
+        parse_log_level_arg(&args).unwrap_err();
+    }
+
     #[test]
-    fn log_level_arg_accepts_supported_values_and_rejects_invalid_values() {
-        for (value, expected) in [
-            ("error", "error"),
-            ("warn", "warn"),
-            ("info", "info"),
-            ("debug", "debug"),
-            ("trace", "trace"),
-            ("info,player=debug", "info,player=debug"),
-        ] {
-            assert_eq!(
-                parse_log_level_arg(&["--log-level".into(), value.into()])
-                    .unwrap()
-                    .as_ref()
-                    .map(applog::LogSpec::to_string),
-                Some(expected.to_string())
-            );
-        }
-        parse_log_level_arg(&["--log-level".into(), "info,player=".into()]).unwrap_err();
-        parse_log_level_arg(&["--log-level".into(), "loud".into()]).unwrap_err();
-        parse_log_level_arg(&["--log-level".into()]).unwrap_err();
+    fn log_level_arg_is_absent_without_flag() {
         assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
     }
 

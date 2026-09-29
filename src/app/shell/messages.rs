@@ -266,7 +266,7 @@ impl Model {
         if mbv_components::library_panel::sanitize_url(url).is_some()
             && let Err(error) = crate::app::open_url(url)
         {
-            tracing::warn!(name: "library_link.open.failed", target: "library_link", { url = %url, error.message = %error }, "failed to open provider link");
+            tracing::warn!(name: "library_link.open.failed", target: "library_link", { url = %url, error = %error }, "failed to open provider link");
             self.app.flash(
                 format!("Unable to open link: {error}"),
                 ToastSeverity::Neutral,

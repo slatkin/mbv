@@ -127,13 +127,7 @@ pub(crate) fn complete_pending_idle_queue_load(
     let pending = owner.pending_idle_load.take().expect("checked above");
     // Rejoin rule (design D5): rebuild the queue-load span from the ids the
     // parked state already carries; no `Span` is stored anywhere.
-    let _load_span = tracing::info_span!(
-        target: "ctrl",
-        "queue.load",
-        client = %pending.client_id,
-        queue_request = pending.request_id,
-    )
-    .entered();
+    let _load_span = super::queue_load_span(pending.client_id, pending.request_id).entered();
     if let Some(reason) = failure {
         reject_queue_load(&pending.reply_tx, pending.request_id, reason);
         return true;
@@ -163,13 +157,7 @@ pub(super) fn handle_queue_load_idle(
 ) {
     // Correlation span (design D5): every line this handler logs carries the
     // load's client and queue request id.
-    let _load_span = tracing::info_span!(
-        target: "ctrl",
-        "queue.load",
-        client = %ctx.client_id,
-        queue_request = request_id,
-    )
-    .entered();
+    let _load_span = super::queue_load_span(ctx.client_id, request_id).entered();
     let (supports_operation, supports_abs_queue, supports_abs_book_queue) = {
         let clients = ctx.ctrl_clients.lock().unwrap();
         (

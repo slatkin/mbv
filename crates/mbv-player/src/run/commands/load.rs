@@ -219,7 +219,7 @@ impl PlaybackRun {
                 let (urls, ok) = this.reporter.start_item(emby, &this.playback_span);
                 this.ext_sub_urls = urls;
                 if !ok {
-                    tracing::warn!(name: "player.report_start.failed", target: "player", item = %emby.id, "start report failed for submitted queue item");
+                    tracing::warn!(name: "player.report_start.failed", target: "player", phase = "submitted_queue", item = %emby.id, "start report failed for submitted queue item");
                 }
             });
         } else {

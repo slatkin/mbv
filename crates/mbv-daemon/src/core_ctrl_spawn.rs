@@ -14,16 +14,16 @@ fn ctrl_client_capabilities(
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if let Err(e) = info.validate_peer() {
-                tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", error = %e, "ctrl client rejected");
+                tracing::warn!(name: "daemon.ctrl_client.peer_validation_failed", target: "daemon", error = %e, "ctrl client rejected");
                 return None;
             }
             if let Some(control_credential) = control_credential {
                 if info.control_token.is_none() {
-                    tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", "ctrl client rejected: missing Control credential");
+                    tracing::warn!(name: "daemon.ctrl_client.control_credential_missing", target: "daemon", "ctrl client rejected: missing Control credential");
                     return None;
                 }
                 if let Err(e) = info.validate_control_credential(control_credential) {
-                    tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", error = %e, "ctrl client rejected");
+                    tracing::warn!(name: "daemon.ctrl_client.control_credential_invalid", target: "daemon", error = %e, "ctrl client rejected");
                     return None;
                 }
             }
@@ -38,7 +38,7 @@ fn ctrl_client_capabilities(
             ))
         }
         Ok(_) => {
-            tracing::warn!(name: "daemon.ctrl_client.rejected", target: "daemon", "ctrl client rejected: missing protocol hello");
+            tracing::warn!(name: "daemon.ctrl_client.hello_missing", target: "daemon", "ctrl client rejected: missing protocol hello");
             None
         }
         Err(e) => {

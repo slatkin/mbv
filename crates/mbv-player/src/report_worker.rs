@@ -125,7 +125,7 @@ fn report_start_job(
 ) {
     let ok = client.report_start(item, media_source_id, session_id);
     if !ok {
-        tracing::warn!(name: "player.report_start.failed", target: "player", item = %item.id, "start report failed");
+        tracing::warn!(name: "player.report_start.failed", target: "player", phase = "report_worker", item = %item.id, "start report failed");
     }
 }
 

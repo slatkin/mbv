@@ -468,7 +468,7 @@ impl Model {
                 all
             }
             Err(e) => {
-                tracing::warn!(name: "library_route.library_fetch.failed", target: "library_route", { error.message = %e }, "F2 library fetch failed");
+                tracing::warn!(name: "library_route.library_fetch.failed", target: "library_route", { error = %e }, "F2 library fetch failed");
                 drop(client);
                 self.app.flash(
                     format!("⚠ Library routes couldn't load libraries ({e})"),
@@ -543,7 +543,7 @@ impl Model {
                 sessions
             }
             Err(e) => {
-                tracing::warn!(name: "library_route.session_fetch.failed", target: "library_route", { library = %library_lower, error.message = %e }, "F2 session fetch failed");
+                tracing::warn!(name: "library_route.session_fetch.failed", target: "library_route", { library = %library_lower, error = %e }, "F2 session fetch failed");
                 self.app.flash(
                     format!("⚠ Library routes couldn't load devices ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,
@@ -648,7 +648,7 @@ impl Model {
         let all = match refresh_result {
             Ok(all) => all,
             Err(e) => {
-                tracing::warn!(name: "library_route.library_refresh.failed", target: "library_route", { error.message = %e }, "F2 post-save library refresh failed");
+                tracing::warn!(name: "library_route.library_refresh.failed", target: "library_route", { error = %e }, "F2 post-save library refresh failed");
                 self.app.flash(
                     format!("⚠ Library route saved but couldn't refresh libraries ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,
@@ -686,7 +686,7 @@ impl Model {
                 true
             }
             Err(e) => {
-                tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error.message = %e }, "config save failed");
+                tracing::warn!(name: "library_route.config_save.failed", target: "library_route", { error = %e }, "config save failed");
                 self.app.flash(
                     format!("⚠ Library route changed but config save failed ({e})"),
                     crate::app::dispatch::notify::ToastSeverity::Error,

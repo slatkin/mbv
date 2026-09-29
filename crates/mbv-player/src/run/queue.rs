@@ -314,7 +314,7 @@ impl PlaybackRun {
                 let (urls, ok) = this.reporter.start_item(&emby, &this.playback_span);
                 this.ext_sub_urls = urls;
                 if !ok {
-                    tracing::warn!(name: "player.report_start.failed", target: "player", item = %emby.id, "start report failed for adopted item");
+                    tracing::warn!(name: "player.report_start.failed", target: "player", phase = "adopted_item", item = %emby.id, "start report failed for adopted item");
                 }
             } else {
                 this.ext_sub_urls = vec![];

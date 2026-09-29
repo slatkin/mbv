@@ -8,7 +8,7 @@ impl App {
                 Ok(Some(window)) => self.visualizer_window = window,
                 Ok(None) => {}
                 Err(error) => {
-                    tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error.message = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
+                    tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
                     self.visualizer_failed = true;
                     self.stop_visualizer_capture();
                 }
@@ -27,7 +27,7 @@ impl App {
                     self.visualizer = Some(worker);
                 }
                 Err(error) => {
-                    tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error.message = %error }, "system-audio visualizer unavailable");
+                    tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error = %error }, "system-audio visualizer unavailable");
                     self.visualizer_failed = true;
                 }
             }

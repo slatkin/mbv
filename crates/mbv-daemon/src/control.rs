@@ -5,7 +5,7 @@ use super::{
     dispatch_slot_jump, reset_slot_jumps, send_to,
 };
 use mbv_ctrl::player::PlayerCommand;
-use mbv_ctrl::{CtrlCmd, CtrlEvent};
+use mbv_ctrl::{CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::{Player, PlayerOwnerState};
@@ -23,6 +23,32 @@ mod playback;
 mod queue_edit;
 mod queue_load;
 mod queue_setup;
+
+pub(crate) fn queue_load_span(
+    client_id: CtrlClientId,
+    request_id: QueueLoadRequestId,
+) -> tracing::Span {
+    tracing::info_span!(
+        target: "ctrl",
+        "queue.load",
+        client = %client_id,
+        queue_request = request_id,
+    )
+}
+
+pub(crate) fn intent_span(
+    client_id: CtrlClientId,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+) -> tracing::Span {
+    tracing::info_span!(
+        target: "ctrl",
+        "ctrl.intent",
+        client = %client_id,
+        request = %request_id,
+        generation = generation,
+    )
+}
 
 pub(crate) use playback::play_resolved_items;
 pub(crate) use queue_load::{

@@ -157,7 +157,7 @@ impl App {
                 tracing::warn!(
                     name: "library_route.ancestors.failed",
                     target: "library_route",
-                    { item = %item_id, error.message = %e },
+                    { item = %item_id, error = %e },
                     "ancestor lookup failed"
                 );
                 // Per #223's post-grilling revision: a transient lookup

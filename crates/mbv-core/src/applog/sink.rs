@@ -1,8 +1,19 @@
+//! Size-based log-file rotation for the application logger.
+//!
+//! `FileSink` appends one rendered log line at a time and shifts numbered
+//! generations when the active file reaches its configured size. Open, rotate,
+//! and write failures are reported to stderr at most once per sink; failed
+//! writes are counted and dropped.
+
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Default maximum size before rotation, per the application logging spec's
+/// "Log files rotate by size" requirement.
 const MAX_FILE_SIZE: u64 = 5_000_000;
+/// Number of retained rotated files, per the application logging spec's
+/// "Log files rotate by size" requirement.
 const GENERATIONS: u8 = 3;
 
 #[derive(Debug)]
@@ -12,6 +23,7 @@ pub struct FileSink {
     len: u64,
     max_size: u64,
     warned: bool,
+    write_failures: u64,
 }
 
 impl FileSink {
@@ -23,6 +35,7 @@ impl FileSink {
             len: 0,
             max_size,
             warned: false,
+            write_failures: 0,
         };
         sink.open();
         if sink.len > sink.max_size {
@@ -37,6 +50,14 @@ impl FileSink {
     }
 
     pub fn write_line(&mut self, line: &str) {
+        self.write_line_with(line, Write::write_all);
+    }
+
+    fn write_line_with(
+        &mut self,
+        line: &str,
+        write: impl FnOnce(&mut File, &[u8]) -> std::io::Result<()>,
+    ) {
         if self.file.is_none() {
             return;
         }
@@ -47,10 +68,17 @@ impl FileSink {
         let mut record = String::with_capacity(line.len() + 1);
         record.push_str(line);
         record.push('\n');
-        if let Some(file) = self.file.as_mut()
-            && file.write_all(record.as_bytes()).is_ok()
-        {
-            self.len = self.len.saturating_add(line_len);
+        let result = self
+            .file
+            .as_mut()
+            .map(|file| write(file, record.as_bytes()));
+        match result {
+            Some(Ok(())) => self.len = self.len.saturating_add(line_len),
+            Some(Err(error)) => {
+                self.write_failures = self.write_failures.saturating_add(1);
+                self.warn(&error);
+            }
+            None => {}
         }
     }
 
@@ -151,20 +179,11 @@ fn rename_if_exists(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_dir() -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock is after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("mbv-log-{}-{nonce}", std::process::id()))
-    }
+    use mbv_config::TestTempDir;
 
     #[test]
     fn rotation_shifts_and_caps_three_generations() {
-        let dir = temp_dir();
-        fs::create_dir_all(&dir).expect("create temp directory");
+        let dir = TestTempDir::new();
         let path = dir.join("mbv.log");
         let mut sink = FileSink::new(path.clone(), 4);
 
@@ -190,7 +209,6 @@ mod tests {
         assert!(!generation_path(&path, 4).exists());
 
         drop(sink);
-        fs::remove_dir_all(dir).expect("remove temp directory");
     }
 
     // Contract: after a successful rename chain, a failed reopen leaves the
@@ -203,8 +221,7 @@ mod tests {
     // `rotate()` itself uses.
     #[test]
     fn failed_reopen_after_rename_chain_drops_handle_and_writes_nothing() {
-        let dir = temp_dir();
-        fs::create_dir_all(&dir).expect("create temp directory");
+        let dir = TestTempDir::new();
         let path = dir.join("mbv.log");
         let mut sink = FileSink::new(path.clone(), 1000);
         sink.write_line("before");
@@ -220,6 +237,18 @@ mod tests {
         assert!(!generation_path(&path, 3).exists());
 
         drop(sink);
-        fs::remove_dir_all(dir).expect("remove temp directory");
+    }
+
+    #[test]
+    fn write_failures_are_counted_and_warned_once() {
+        let dir = TestTempDir::new();
+        let mut sink = FileSink::new(dir.join("mbv.log"), 1000);
+        let fail_write = |_: &mut File, _: &[u8]| Err(std::io::Error::other("write failed"));
+
+        sink.write_line_with("one", fail_write);
+        sink.write_line_with("two", fail_write);
+
+        assert_eq!(sink.write_failures, 2);
+        assert!(sink.warned);
     }
 }

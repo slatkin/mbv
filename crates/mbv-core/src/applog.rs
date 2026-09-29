@@ -3,7 +3,7 @@
 //! crates not yet converted (design D1).
 
 pub mod sink;
-pub mod spec;
+mod spec;
 
 mod layer;
 mod line;
@@ -132,6 +132,19 @@ mod tests {
         assert!(lines[0].contains("source=test"));
         assert!(lines[0].contains("msg=\"plain message\""));
         assert!(!lines[0].contains("event="));
+    }
+
+    #[test]
+    fn error_fields_use_the_shared_semantic_key() {
+        let (subscriber, capture) = capturing_subscriber();
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::warn!(name: "test.failed", target: "test", error = "failed", "failed");
+        });
+
+        let lines = captured_lines(&capture);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("error.message=failed"));
+        assert!(!lines[0].contains(" error="));
     }
 
     // Regression guard for PR #856: `tracing-log` dispatches every `log` record

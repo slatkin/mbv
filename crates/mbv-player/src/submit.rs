@@ -256,7 +256,7 @@ fn make_reporter(
             let _entered = span.entered();
             let ok = report_client.report_start(&report_item, &media_source_id, &session_id);
             if !ok {
-                tracing::warn!(name: "player.report_start.failed", target: "player", item = %report_item.id, "start report failed");
+                tracing::warn!(name: "player.report_start.failed", target: "player", phase = "submit", item = %report_item.id, "start report failed");
             }
         }));
         (

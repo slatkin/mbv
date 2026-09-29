@@ -245,7 +245,7 @@ impl App {
         else {
             return false;
         };
-        tracing::info!(name: "player.stopped.received", target: "player", { slot = ?slot_id, position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, played, error.message = %error.as_deref().unwrap_or("none") }, "player stopped");
+        tracing::info!(name: "player.stopped.received", target: "player", { slot = ?slot_id, position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, played, error = %error.as_deref().unwrap_or("none") }, "player stopped");
         if self.player.is_remote_disconnected() {
             return self.handle_stopped_remote_disconnected();
         }

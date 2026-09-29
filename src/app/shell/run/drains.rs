@@ -448,7 +448,7 @@ impl Model {
                 tracing::error!(
                     name: "run_loop.terminal_clear.failed",
                     target: "run_loop",
-                    { error.message = %e, error.kind = ?e.kind() },
+                    { error = %e, error.kind = ?e.kind() },
                     "terminal clear failed"
                 );
                 return Err(e.into());
@@ -461,7 +461,7 @@ impl Model {
             tracing::error!(
                 name: "run_loop.terminal_draw.failed",
                 target: "run_loop",
-                { error.message = %e, error.kind = ?e.kind() },
+                { error = %e, error.kind = ?e.kind() },
                 "terminal draw failed"
             );
             return Err(e.into());

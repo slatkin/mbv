@@ -13,7 +13,6 @@ categories = ["command-line-utilities", "multimedia::audio", "multimedia::video"
 
 [workspace.dependencies]
 ureq = { version = "3", default-features = false, features = ["json", "native-tls"] }
-url = "2"
 native-tls = "0.2"
 percent-encoding = "2"
 serde = { version = "1", features = ["derive"] }

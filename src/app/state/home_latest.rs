@@ -20,7 +20,7 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
     }
     let previous = mbv_config::load_home_latest_launch();
     if let Err(error) = mbv_config::save_home_latest_launch(current) {
-        tracing::warn!(name: "home_latest.launch_cutoff.save_failed", target: "home_latest", { error.message = %error }, "could not save launch cutoff");
+        tracing::warn!(name: "home_latest.launch_cutoff.save_failed", target: "home_latest", { error = %error }, "could not save launch cutoff");
         return HomeLatestLaunchWindow {
             previous: None,
             current,

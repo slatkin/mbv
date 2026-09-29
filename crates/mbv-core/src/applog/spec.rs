@@ -1,3 +1,9 @@
+//! Parses and applies the application's default and target-specific log levels.
+//!
+//! `LogSpec` accepts comma-separated level directives and implements the tracing
+//! subscriber filter. Use `parse` for user input and the accessors to inspect a
+//! validated specification.
+
 use std::fmt::{Display, Formatter};
 
 use tracing_subscriber::layer::Filter;
@@ -5,8 +11,8 @@ use tracing_subscriber::layer::Filter;
 /// A default tracing level and target-specific overrides.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogSpec {
-    pub default: tracing::level_filters::LevelFilter,
-    pub directives: Vec<(String, tracing::level_filters::LevelFilter)>,
+    default: tracing::level_filters::LevelFilter,
+    directives: Vec<(String, tracing::level_filters::LevelFilter)>,
 }
 
 impl Default for LogSpec {
@@ -19,6 +25,18 @@ impl Default for LogSpec {
 }
 
 impl LogSpec {
+    /// The default level applied when no target directive matches.
+    #[must_use]
+    pub fn default_level(&self) -> tracing::level_filters::LevelFilter {
+        self.default
+    }
+
+    /// Target-specific level directives in input order.
+    #[must_use]
+    pub fn directives(&self) -> &[(String, tracing::level_filters::LevelFilter)] {
+        &self.directives
+    }
+
     /// Parses comma-separated level and `target=level` directives.
     pub fn parse(spec: &str) -> Result<Self, LogSpecError> {
         let mut default = tracing::level_filters::LevelFilter::INFO;
@@ -188,8 +206,8 @@ mod tests {
     ) {
         let spec = LogSpec::parse(input).expect("case table should contain valid log specs");
 
-        assert_eq!(spec.default, expected_default);
-        assert_eq!(spec.directives, expected_directives);
+        assert_eq!(spec.default_level(), expected_default);
+        assert_eq!(spec.directives(), expected_directives);
     }
 
     #[rstest]

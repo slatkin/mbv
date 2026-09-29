@@ -219,7 +219,10 @@ fn run_socket_thread(
         }
 
         // Exponential backoff with jitter, max 60s.
-        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, "audiobookshelf_socket");
+        mbv_net::reconnect_backoff_sleep(
+            &mut backoff_secs,
+            mbv_net::ReconnectTarget::AudiobookshelfSocket,
+        );
     }
 }
 

@@ -99,14 +99,8 @@ pub(crate) fn play_resolved_items(
 pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl::PlaybackIntent) {
     // Correlation span (design D5): every line this handler logs carries the
     // intent's client, request and generation.
-    let _intent_span = tracing::info_span!(
-        target: "ctrl",
-        "ctrl.intent",
-        client = %ctx.client_id,
-        request = %intent.request_id,
-        generation = intent.generation,
-    )
-    .entered();
+    let _intent_span =
+        super::intent_span(ctx.client_id, intent.request_id, intent.generation).entered();
     let pipe_output = ctx.client.lock().unwrap().config.audio_pipe_enabled;
     let intents = &mut ctx.owner.intents;
     let accepted = intents.accept(ctx.client_id, intent.clone(), pipe_output);

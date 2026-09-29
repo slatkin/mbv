@@ -43,6 +43,7 @@ impl FieldVisitor {
         match field.name() {
             "message" => self.message = Some(value),
             "log.target" => self.log_target = Some(value),
+            "error" => self.fields.push(("error.message".to_owned(), value)),
             // The bridge's synthetic `log.*` context fields never render.
             name if name.starts_with("log.") => {}
             name => self.fields.push((name.to_owned(), value)),
@@ -102,6 +103,8 @@ impl LogfmtLayer {
         if self.stderr {
             eprintln!("{}", format_stderr_line(level, line));
         }
+        // A poisoned sink lock drops this line rather than risking recursive
+        // logging or panicking from the logging path.
         if let Ok(mut file) = self.file.lock()
             && let Some(sink) = file.as_mut()
         {
