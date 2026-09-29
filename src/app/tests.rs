@@ -1,6 +1,5 @@
 use super::*;
 
-mod actions_tests_queue_state_reseat;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_runtime;
 mod auto_reconnect;
@@ -15,12 +14,9 @@ mod library_route;
 mod lifecycle;
 mod music_grouping;
 mod narrow_browse_migration;
-mod next_up_accept_dispatch;
 mod panel_focus;
-mod player_event;
 mod podcast;
 mod queue;
-mod reattach;
 mod remote_commands;
 pub(crate) mod render_fixtures;
 mod route_state;
@@ -151,22 +147,17 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn make_built_app() -> App {
-    use mbv_ctrl::player::PlayerStatus;
     use mbv_player::PlayerProxy;
     use std::sync::Mutex;
 
-    let status = Arc::new(Mutex::new(PlayerStatus {
-        volume_max: 100,
-        ..Default::default()
-    }));
-
-    let (_, player_rx) = std::sync::mpsc::channel();
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+    remote.status.lock().unwrap().volume_max = 100;
     let (_, ws_rx) = std::sync::mpsc::channel();
     let (transport_tx, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
-    let player = PlayerProxy::stub(status);
+    let player = PlayerProxy::remote(remote, false);
 
     let config = crate::config::Config::default();
 

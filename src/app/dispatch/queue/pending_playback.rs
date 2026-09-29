@@ -132,7 +132,6 @@ impl App {
         if scope == QueueScope::Remote && had_items {
             self.clear_remote_queue();
         } else if self.queue_scope_is_playback(scope) {
-            self.reset_bare_transitions();
             self.player.stop();
             if self.local_queue_owner() == LocalQueueOwner::StayAlive {
                 self.player.clear_queue();

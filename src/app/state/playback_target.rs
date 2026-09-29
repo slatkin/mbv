@@ -218,7 +218,6 @@ impl App {
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
             .pending_playback_slot
-            .or_else(|| self.bare_in_flight_slot())
     }
 
     /// The playback projection the queue ROWS are painted from. Bare mode
@@ -269,18 +268,6 @@ impl App {
             .position(|slot| slot.slot_id == target)
     }
 
-    /// The Bare owner's desired-transition slot. The shell owns the local
-    /// transition it just dispatched, exactly as the daemon owner owns the
-    /// in-flight transition it publishes, so a locally selected slot projects
-    /// as now-playing before the Playback run reports the change
-    /// (queue-canonical-list, "Selecting a different item to play").
-    fn bare_in_flight_slot(&self) -> Option<mbv_queue::QueueSlotId> {
-        if self.player.is_remote() {
-            return None;
-        }
-        self.bare_owner.in_flight_transition_slot()
-    }
-
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
     ) -> mbv_ui_model::playback::PlaybackState {
@@ -295,7 +282,7 @@ impl App {
 #[cfg(test)]
 mod now_playing_status_tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub_at_index};
+    use crate::app::tests::{make_app_stub, make_items};
 
     fn app() -> App {
         make_app_stub()
@@ -398,30 +385,5 @@ mod now_playing_status_tests {
         );
         set_player(&app, false, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
-    }
-
-    /// Regression (0.19.3): the reseat generation fence blanked remote
-    /// (mbvd) queue rows. A daemon owner bumps `sequence_generation` on
-    /// every accepted submit but the client never stamps the tab for a
-    /// remote scope (`submit_tab_queue` skips it, `from_unified_state`
-    /// resets it to 0), so the fence saw a permanent mismatch and cleared
-    /// `active` — no play icon, no foam progress. The fence is for the
-    /// bare run only; daemon snapshots are authoritative.
-    #[test]
-    fn queue_row_playback_state_stays_active_for_direct_remote_queue() {
-        let app = make_remote_app_stub_at_index(make_items(1), make_items(3), 1);
-        assert!(app.player.is_remote());
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 1;
-            status.position_ticks = 42;
-            status.runtime_ticks = 84;
-            // Owner advanced past the never-stamped tab generation.
-            status.sequence_generation = 7;
-        };
-        let state = app.queue_row_playback_state();
-        assert!(state.active);
-        assert_eq!(state.active_idx, Some(1));
     }
 }

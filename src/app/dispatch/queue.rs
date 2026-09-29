@@ -4,7 +4,6 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
 };
-use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_ui_model::ui_util::is_playable;
@@ -18,7 +17,6 @@ impl App {
     pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let active = self.player.status.lock().unwrap().active;
         if pos >= self.queue_for_scope(scope).total_queue_len() {
             let queue = self.queue_for_scope_mut(scope);
             queue.clamp_cursor();
@@ -46,16 +44,11 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, item));
         self.persist_local_queue_state_if_needed(scope);
-        let sent_queue_remove =
-            controls_playback_queue && self.queue_edit_reaches_player(scope, active);
+        let sent_queue_remove = controls_playback_queue && self.queue_edit_reaches_player(scope);
         if sent_queue_remove {
             // Slot identity was captured before the local removal above.
-            // Prefer the unified remote path; the in-process command is now
-            // slot-addressed too.
-            if let Some(sid) = slot_id
-                && !self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid))
-            {
-                self.player.send_command(PlayerCommand::QueueRemove(sid));
+            if let Some(sid) = slot_id {
+                self.player.queue_remove_slot(mbv_ctrl::slot_id_to_u64(sid));
             }
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -133,10 +126,6 @@ impl App {
             return;
         }
 
-        let (active, _) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
         let mut positions: Vec<usize> = slot_ids
             .iter()
             .filter_map(|slot_id| self.slot_index(scope, *slot_id))
@@ -187,22 +176,13 @@ impl App {
         self.persist_local_queue_state_if_needed(scope);
 
         let sent_queue_remove =
-            self.queue_scope_is_playback(scope) && self.queue_edit_reaches_player(scope, active);
+            self.queue_scope_is_playback(scope) && self.queue_edit_reaches_player(scope);
         if sent_queue_remove {
             let raw_slot_ids: Vec<u64> = removed_slots
                 .iter()
                 .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
-            // A remote owner takes the whole range in one edit. A local owner
-            // has no batch command and keeps one player command per slot; its
-            // internal queue edits are never published, so they stay atomic
-            // on screen either way.
-            if !self.player.queue_remove_slots(raw_slot_ids) {
-                for slot_id in &removed_slots {
-                    self.player
-                        .send_command(PlayerCommand::QueueRemove(*slot_id));
-                }
-            }
+            self.player.queue_remove_slots(raw_slot_ids);
             self.pending_queue_edit_cursor = Some(self.queue_for_scope(scope).queue_cursor);
         }
         self.advance_queue_epoch();
@@ -291,7 +271,6 @@ impl App {
             return false;
         }
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let active = self.player.status.lock().unwrap().active;
         if !self.queue_for_scope_mut(scope).move_slot(slot_id, to) {
             return false;
         }
@@ -299,16 +278,9 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && self.queue_edit_reaches_player(scope, active) {
-            // Prefer the unified remote path; the in-process command is now
-            // slot-addressed (source) with an ordinal destination.
-            let sent_unified = self
-                .player
+        if controls_playback_queue && self.queue_edit_reaches_player(scope) {
+            self.player
                 .queue_move_slot(mbv_ctrl::slot_id_to_u64(slot_id), to);
-            if !sent_unified {
-                self.player
-                    .send_command(PlayerCommand::QueueMove(slot_id, to));
-            }
         }
         true
     }

@@ -5,11 +5,7 @@ use crate::app::shell::Model;
 use crate::app::{App, QUIT_REQUESTED};
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-
-fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
-    quit_timeout + Duration::from_millis(200) + Duration::from_secs(1)
-}
+use std::time::Duration;
 
 fn join_visualizer_capture(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
@@ -28,21 +24,8 @@ impl Model {
 }
 
 impl App {
-    /// Shared local-player teardown sequence for both the signal-triggered
-    /// quit-watchdog path (SIGHUP/SIGTERM) and the normal in-app quit-key
-    /// path (both now break out of `run()`'s event loop the same way) —
-    /// these two used to diverge, one bounded and one not, which is #202:
-    /// an unbounded join on a hung `report_stopped` call during shutdown
-    /// could hold the single-instance flock indefinitely. The player thread's
-    /// stopped report derives its own budget from `quit_timeout` via
-    /// `Player::stop_for_shutdown`, while the visualizer join remains bounded
-    /// independently by its worker shutdown timeout.
-    ///
-    /// Extracted from `run()`'s tail so it's callable directly against a
-    /// stubbed `App` in tests without a real tty — `run()` itself remains
-    /// untested end-to-end (unchanged status quo, not a regression; it has
-    /// never had test coverage since it unconditionally calls
-    /// `enable_raw_mode()`).
+    /// Persist exit state, apply the daemon lifetime policy, and stop the
+    /// visualizer during either signal-triggered or in-app teardown.
     fn current_auto_reconnect_target(&self) -> Option<mbv_config::LastRemoteConnection> {
         if let Some(library) = self.active_route.clone() {
             Some(mbv_config::LastRemoteConnection::LibraryRoute { library })
@@ -85,8 +68,8 @@ impl App {
     }
 
     fn teardown_inner(&mut self, quit_timeout: Duration) {
-        // Signal the visualizer before starting player shutdown so its worker
-        // can stop concurrently with the player thread.
+        // Stop the visualizer before requesting daemon shutdown so its worker
+        // can exit concurrently with the remote request.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
             let handle = worker.signal_stop();
             self.visualizer_window = mbv_visualizer::StereoSampleWindow::default();
@@ -100,9 +83,8 @@ impl App {
         // rationale lives on `persist_auto_reconnect_target_on_teardown`.
         self.persist_auto_reconnect_target_on_teardown();
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
-        // Leave the daemon's player running when the TUI disconnects; only stop
-        // and join the player when we own it locally. Both signal-triggered and
-        // in-app quit paths share the same bounded local teardown.
+        // Preserve the remote owner's playback unless the daemon lifetime
+        // policy below requests its shutdown.
         let (was_playing, current_idx, position_ticks, last_valid_pos) = {
             let st = self.player.status.lock().unwrap();
             (
@@ -131,23 +113,7 @@ impl App {
         self.flush_settings_save();
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
-        if self.player.is_remote() {
-            join_visualizer_capture(visualizer_handle);
-        } else {
-            self.player.stop_for_shutdown(quit_timeout);
-            // During quit shutdown there is no progress-thread join and no WS
-            // flush. The player thread's worst case is the bounded stopped
-            // report (`quit_timeout`) plus the 200ms mpv quit fallback. The
-            // one-second cushion makes the outer join bound
-            // `quit_timeout + 200ms + 1s`. Join the visualizer while the
-            // player is still shutting down, using its own bounded join.
-            join_visualizer_capture(visualizer_handle);
-            let outer_bound = player_join_outer_bound(quit_timeout);
-            let started = Instant::now();
-            self.player.join_or_timeout(outer_bound);
-            let elapsed = started.elapsed();
-            tracing::info!(name: "player.quit.join_completed", target: "player", duration_ms = elapsed.as_millis(), bound_ms = outer_bound.as_millis(), "player join completed");
-        }
+        join_visualizer_capture(visualizer_handle);
         // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
         // that the local daemon may still be running and names `mbv -q`.
@@ -248,8 +214,8 @@ impl App {
                     .is_some_and(mbv_remote_player::DaemonEndpoint::is_local)
                     .then_some(&self.player)
             });
-        let Some(home_link) =
-            home_link.filter(|player| player.is_remote() && !player.is_remote_disconnected())
+        let Some(home_link) = home_link
+            .filter(|player| player.as_remote().is_some() && !player.is_remote_disconnected())
         else {
             tracing::info!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "home_link_unavailable", "home link unavailable for shutdown request");
             return None;

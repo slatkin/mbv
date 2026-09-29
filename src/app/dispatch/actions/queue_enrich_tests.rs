@@ -129,35 +129,6 @@ fn queue_enriched_prunes_items_the_server_no_longer_returns() {
 }
 
 #[test]
-fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(3),
-        app.player_tab.queue_cursor,
-    );
-    let cmd_rx = app.player.spy_on_commands();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-
-    let fresh = vec![
-        app.player_tab.emby_items()[0].clone(),
-        app.player_tab.emby_items()[2].clone(),
-    ];
-    app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
-
-    assert!(
-        matches!(
-            cmd_rx.try_recv(),
-            Ok(mbv_ctrl::player::PlayerCommand::QueueRemove(_))
-        ),
-        "pruning a live playback queue slot must also remove it from the player's private queue copy"
-    );
-}
-
-#[test]
 fn save_queue_state_does_not_delete_file_while_attached_to_remote_session() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();

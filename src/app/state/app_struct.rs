@@ -93,10 +93,6 @@ pub struct App {
     pub(in crate::app) audiobookshelf_book_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
     pub(in crate::app) player: PlayerProxy,
-    /// Bare mode's owner-side transition state. Remote targets use their
-    /// daemon-owned coordinator; this is still hosted here so local jumps
-    /// receive the same request identity semantics.
-    pub(in crate::app) bare_owner: mbv_player::owner_state::PlayerOwnerState,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test
     /// construction via `build()` does not). `None` in tests so they never

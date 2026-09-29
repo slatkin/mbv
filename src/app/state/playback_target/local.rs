@@ -1,34 +1,26 @@
 use super::LocalPlaybackTarget;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
-use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
-        if app.player.is_remote() {
-            let paused = !app.player.status.lock().unwrap().paused;
-            app.flash(
-                if paused {
-                    "Pause requested".to_string()
-                } else {
-                    "Resume requested".to_string()
-                },
-                ToastSeverity::Neutral,
-            );
-            app.player.set_paused(paused);
-        } else {
-            app.player.send_command(PlayerCommand::TogglePause);
-        }
+        let paused = !app.player.status.lock().unwrap().paused;
+        app.flash(
+            if paused {
+                "Pause requested".to_string()
+            } else {
+                "Resume requested".to_string()
+            },
+            ToastSeverity::Neutral,
+        );
+        app.player.set_paused(paused);
     }
 
     pub(in crate::app) fn stop(app: &mut App) {
-        app.reset_bare_transitions();
-        if app.player.is_remote() {
-            app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
-        }
+        app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
         app.player.stop();
     }
 
@@ -37,27 +29,19 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn jump_track(app: &mut App, step: i64) {
-        if app.player.is_remote() {
-            app.flash(
-                if step >= 0 {
-                    "Next requested"
-                } else {
-                    "Previous requested"
-                }
-                .to_string(),
-                ToastSeverity::Neutral,
-            );
+        app.flash(
             if step >= 0 {
-                app.player.next();
+                "Next requested"
             } else {
-                app.player.previous();
+                "Previous requested"
             }
+            .to_string(),
+            ToastSeverity::Neutral,
+        );
+        if step >= 0 {
+            app.player.next();
         } else {
-            app.request_relative_step(if step >= 0 {
-                Direction::Next
-            } else {
-                Direction::Previous
-            });
+            app.player.previous();
         }
     }
 

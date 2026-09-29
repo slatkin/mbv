@@ -28,10 +28,6 @@ impl App {
             }
         }
         self.save_prefs();
-        if !self.player.is_remote() {
-            self.reset_bare_transitions();
-            self.player.stop();
-        }
         true
     }
 

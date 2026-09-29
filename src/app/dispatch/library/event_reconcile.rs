@@ -1,15 +1,11 @@
 use crate::app::App;
 
 impl App {
-    /// Shared acknowledged-progress reconcile used by both the bare owner
-    /// (`LibEvent::Audiobookshelf(AudiobookshelfEvent::ProgressAcknowledged)`) and a Local-daemon
-    /// client (`PlayerEvent::AudiobookshelfProgress`): matches queue slots by
-    /// provider-qualified identity, applies position/completion, writes every
-    /// browse state's progress map, and persists the queue. A no-match event
-    /// still updates browse state; only persistence is gated on a queue match.
-    /// Generation gating is the caller's concern: the bare owner gates on its
-    /// own runtime generation, while the daemon drops stale updates before
-    /// emitting, so the daemon client reconciles unconditionally.
+    /// Reconcile Audiobookshelf progress from the socket or daemon owner:
+    /// match queue slots by provider-qualified identity, apply position and
+    /// completion, update browse progress, and persist a matching queue. A
+    /// no-match event still updates browse state; only persistence is gated on
+    /// a queue match. Callers apply generation gating where available.
     pub(in crate::app) fn reconcile_audiobookshelf_progress(
         &mut self,
         library_item_id: &str,

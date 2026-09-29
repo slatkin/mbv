@@ -40,44 +40,6 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
     })
 }
 
-/// Task 1.1: the saved-tab restore runs in the sync pass, before any draw.
-/// After one `tick()` + sync pass and without drawing, the pending tab is
-/// resolved; `render_main` no longer writes `self.tab`.
-#[test]
-fn tick_routes_bare_transport_next_through_owner_slot_jump() {
-    let mut app = make_app_stub();
-    app.player_tab.set_items(
-        vec![
-            mbv_emby_model::test_support::make_item("first", "Movie"),
-            mbv_emby_model::test_support::make_item("second", "Movie"),
-        ],
-        0,
-    );
-    let active = app.player_tab.slot_id_at(0).unwrap();
-    let expected = app.player_tab.slot_id_at(1).unwrap();
-    let _ = app.player_tab.queue.set_active_slot(active);
-    app.bare_owner
-        .sync_canonical_queue(app.player_tab.queue.clone());
-    app.bare_owner.observe_track_change(active);
-    let commands = app.player.spy_on_commands();
-    app.transport_tx
-        .send(mbv_ctrl::TransportCommand::Step(mbv_ctrl::Direction::Next))
-        .unwrap();
-    let mut harness = TickHarness::new(app);
-    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
-    let outcome = harness.step();
-    let (mut music_resize, mut tv_resize) = (false, false);
-    for message in outcome.messages {
-        harness
-            .model_mut()
-            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
-    }
-    assert!(matches!(
-        commands.try_recv().unwrap(),
-        mbv_ctrl::player::PlayerCommand::JumpTo { slot_id, .. } if slot_id == expected
-    ));
-}
-
 #[test]
 fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();

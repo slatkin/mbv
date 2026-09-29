@@ -89,7 +89,7 @@ impl App {
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        debug_assert!(self.player.as_remote().is_some());
         self.advance_queue_epoch();
         self.sync_subtitle_prefs_to_player();
         self.next_up_item = None;

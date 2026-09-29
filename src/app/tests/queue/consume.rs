@@ -393,40 +393,6 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
 }
 
 #[test]
-fn consuming_a_video_resyncs_the_players_own_queue() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    // The player thread (QueueSession) keeps its own separate copy of the
-    // items list, independent of `player_tab.items`. If consume only shrinks
-    // the app-side queue and never tells the player, the player's internal
-    // index space permanently diverges from the displayed queue after the
-    // first consume — any later index-based command (Enter on a queue row,
-    // JumpTo, next natural advance) then lands on the wrong item.
-    let items = make_items(2);
-    let mut app = make_app_stub();
-    app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.config.lock().unwrap().consume_videos = true;
-    let consumed_slot = app.player_tab.queue.slots()[0].slot_id;
-    let cmd_rx = app.player.spy_on_commands();
-
-    app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: consumed_slot,
-        run_identity: 0,
-        position_ticks: 0,
-        played: true,
-        consume: true,
-        progress_report_accepted: false,
-    });
-    assert!(
-        matches!(
-            cmd_rx.try_recv(),
-            Ok(mbv_ctrl::player::PlayerCommand::QueueRemove(s)) if s == consumed_slot
-        ),
-        "consuming the active slot must tell the player to remove that same \
-             slot from its own internal queue, keeping it in sync"
-    );
-}
-
-#[test]
 fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);

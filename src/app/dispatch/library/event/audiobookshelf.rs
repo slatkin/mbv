@@ -41,12 +41,6 @@ impl App {
                     result,
                 );
             }
-            AudiobookshelfEvent::ProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_progress_acknowledged(&update);
-            }
-            AudiobookshelfEvent::BookProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_book_progress_acknowledged(&update);
-            }
         }
     }
 
@@ -259,40 +253,6 @@ impl App {
         if let Ok(shelves) = result {
             let items = App::newest_episodes_items(shelves);
             self.audiobookshelf_shelf_cache.insert(library_id, items);
-        }
-    }
-
-    pub(super) fn handle_audiobookshelf_progress_acknowledged(
-        &mut self,
-        update: &mbv_player::AudiobookshelfProgressUpdate,
-    ) {
-        if self.audiobookshelf_runtime.accepts(update.generation) {
-            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-                update.current_time_seconds,
-            );
-            self.reconcile_audiobookshelf_progress(
-                &update.library_item_id,
-                &update.episode_id,
-                position_ticks,
-                update.current_time_seconds,
-                update.is_finished,
-            );
-        }
-    }
-
-    pub(super) fn handle_audiobookshelf_book_progress_acknowledged(
-        &mut self,
-        update: &mbv_player::AudiobookshelfBookProgressUpdate,
-    ) {
-        if self.audiobookshelf_runtime.accepts(update.generation) {
-            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-                update.current_time_seconds,
-            );
-            self.reconcile_audiobookshelf_book_progress(
-                &update.library_item_id,
-                position_ticks,
-                update.is_finished,
-            );
         }
     }
 }

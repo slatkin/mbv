@@ -47,7 +47,6 @@ impl App {
                 self.audiobookshelf_runtime
                     .commit_ready(completion.generation, user.clone());
                 self.start_audiobookshelf_socket(completion.generation);
-                self.install_audiobookshelf_player_context(completion.generation);
                 self.setup.audiobookshelf_catalog_rx = Some(
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_catalog(
                         self.config.lock().unwrap().clone(),

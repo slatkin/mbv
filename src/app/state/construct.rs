@@ -1,14 +1,10 @@
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::state::service_setup::StartupRequest;
 use crate::app::{App, AppInit, spawn_resize_worker};
-use mbv_player::{Player, PlayerProxy};
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
-use mbv_ui_model::playback::QueueScope;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_model::tab_selection::TabSelection;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 mod remote;
@@ -23,8 +19,6 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
-/// The idle Emby service runtime an independent (non-daemon) session starts
-/// from: configured with or without a stored credential.
 fn independent_emby_runtime(configured: bool, credential_present: bool) -> EmbyRuntime {
     let mut runtime = EmbyRuntime::new(configured);
     runtime.state = crate::app::dispatch::session::service_startup::initial_state(
@@ -34,8 +28,6 @@ fn independent_emby_runtime(configured: bool, credential_present: bool) -> EmbyR
     runtime
 }
 
-/// The idle Audiobookshelf service runtime an independent or attaching
-/// session starts from: configured with or without a stored credential.
 fn independent_audiobookshelf_runtime(
     configured: bool,
     credential_present: bool,
@@ -48,8 +40,6 @@ fn independent_audiobookshelf_runtime(
     runtime
 }
 
-/// A detached Audiobookshelf socket receiver: sessions that do not host the
-/// ABS socket loop still need the channel `App` carries.
 fn detached_socket_rx() -> mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent> {
     let (_, rx) = mpsc::channel();
     rx
@@ -81,10 +71,6 @@ impl App {
                     .and_then(|position| usize::try_from(position).ok())
             })
             .flatten();
-        let bare_owner = mbv_player::owner_state::PlayerOwnerState::new(
-            init.player_tab.queue.clone(),
-            mbv_queue::QueueSource::Unknown,
-        );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
@@ -100,7 +86,6 @@ impl App {
             audiobookshelf_browse: Vec::new(),
             audiobookshelf_book_browse: Vec::new(),
             player: init.player,
-            bare_owner,
             mpris: None,
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,
@@ -278,95 +263,6 @@ impl App {
             feed_entry_state: mbv_feed::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();
-        app
-    }
-
-    /// Construct the bare Player owner without creating an Emby client or
-    /// performing any network work. Configured Emby setup is initialized by
-    /// the bounded worker once `run()` has entered the TUI.
-    pub fn new_independent(app_config: &crate::config::Config) -> Self {
-        let (player_tx, player_rx) = mpsc::channel();
-        let (_, ws_rx) = mpsc::channel();
-        let (transport_tx, transport_rx) = mpsc::channel();
-        let (card_image_tx, card_image_rx) =
-            mpsc::channel::<(String, Option<image::DynamicImage>)>();
-        let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-        let ui_config = crate::config::load_ui_config().unwrap_or_default();
-        let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
-        let configured = app_config.emby_setup.is_some();
-        let credential_present =
-            mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some();
-        let generation = mbv_core::service_runtime::SetupGeneration::default();
-        let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
-        let audiobookshelf_credential_present =
-            mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf).is_some();
-        let raw_player = Player::new(
-            String::new(),
-            String::new(),
-            app_config.show_audio_window,
-            app_config.use_mpv_config,
-            app_config.no_scripts,
-            app_config.always_skip_intro,
-            mbv_ctrl::player::SubtitlePrefs {
-                mode: app_config.subtitle_mode.clone(),
-                subtitle_lang: app_config.subtitle_lang.clone(),
-                audio_lang: app_config.audio_lang.clone(),
-            },
-            player_tx,
-            None,
-        );
-        let raw_player = raw_player.with_video_cache(
-            app_config.video_cache_forward_mb,
-            app_config.video_cache_back_mb,
-        );
-        let player = PlayerProxy::local(raw_player, app_config.always_play_next);
-        let mut app = Self::build(AppInit {
-            config: Arc::new(Mutex::new(app_config.clone())),
-            emby_runtime: independent_emby_runtime(configured, credential_present),
-            audiobookshelf_runtime: independent_audiobookshelf_runtime(
-                audiobookshelf_configured,
-                audiobookshelf_credential_present,
-            ),
-            player,
-            player_rx,
-            ws_rx,
-            transport_rx,
-            transport_tx,
-            ws_send_tx: None,
-            audiobookshelf_socket_rx: detached_socket_rx(),
-            audiobookshelf_socket_tx: None,
-            audiobookshelf_socket_generation: None,
-            player_tab: PlayerTab::default(),
-            remote_player_tab: None,
-            initial_queue_scope: QueueScope::Local,
-            system_notifications: app_config.system_notifications,
-            image_protocol: ui_config.image_protocol.clone(),
-            image_protocol_enabled: ui_config.image_protocol.is_some(),
-            hidden_libraries: app_config.hidden_libraries.clone(),
-            library_routes: app_config.library_routes.clone(),
-            music_levels: app_config.music_levels.clone(),
-            use_nerd_fonts: ui_config.use_nerd_fonts,
-            indicator_style,
-            image_cache_size: ui_config.image_cache_size,
-            visualizer_glyph: ui_config.visualizer_glyph.clone(),
-            card_image_tx,
-            card_image_rx,
-            channels,
-            idle_feed: None,
-        });
-        app.setup.emby_startup_request = configured.then_some(StartupRequest {
-            config: app_config.clone(),
-            generation,
-        });
-        app.setup.audiobookshelf_startup_request = (audiobookshelf_configured
-            && audiobookshelf_credential_present)
-            .then_some(StartupRequest {
-                config: app_config.clone(),
-                generation,
-            });
-        if crate::app::dispatch::session::service_startup::should_open_services(app_config) {
-            app.open_services_settings();
-        }
         app
     }
 

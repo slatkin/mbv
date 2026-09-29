@@ -58,12 +58,7 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
 }
 
 #[test]
-fn owner_audio_only_reflects_remote_capability_and_local_player_is_capable() {
-    let local = PlayerProxy::stub(std::sync::Arc::new(std::sync::Mutex::new(
-        mbv_ctrl::player::PlayerStatus::default(),
-    )));
-    assert!(!local.owner_is_audio_only());
-
+fn owner_audio_only_reflects_remote_capability() {
     let (mut remote, _event_rx, _cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     assert!(!PlayerProxy::remote(remote.clone(), false).owner_is_audio_only());
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();

@@ -405,7 +405,7 @@ impl Model {
                 };
                 if active {
                     self.app.playback_queue_mut().queue_cursor = current_idx;
-                    if self.app.player.is_remote() {
+                    if self.app.player.as_remote().is_some() {
                         self.app.set_queue_scope(QueueScope::Remote);
                     }
                     // Jump-to-now-playing is an explicit, authoritative move.

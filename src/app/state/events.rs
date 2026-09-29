@@ -259,8 +259,6 @@ pub enum AudiobookshelfEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    ProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
-    BookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
 }
 
 #[derive(Debug)]

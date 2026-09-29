@@ -42,7 +42,6 @@ impl App {
             .active_slot()
             .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)));
         if !active_is_feed {
-            self.reset_bare_transitions();
             self.player.stop();
         }
         let mut queues = vec![&mut self.player_tab];
@@ -106,8 +105,6 @@ impl App {
         self.remote.direct_remote_session_id = None;
         self.ws_send_tx = None;
         self.emby_runtime.client = None;
-        self.player
-            .update_emby_credentials(String::new(), String::new());
         let mut config = self.config.lock().unwrap();
         config.emby_setup = None;
         config.server_url.clear();
@@ -172,8 +169,6 @@ impl App {
         let (ws_tx, ws_rx) = std::sync::mpsc::channel();
         self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
         self.ws_rx = ws_rx;
-        self.player
-            .update_emby_credentials(replacement.server_url.clone(), token);
         self.emby_runtime.client = Some(client);
         // The App-internal confirm path cannot touch Model-owned
         // `home_content`; deliver the freshly bootstrapped content through

@@ -274,7 +274,7 @@ impl App {
         app.sync_subtitle_prefs_to_player();
         app.launched_as_remote = true;
         debug_assert_eq!(
-            app.player.is_remote(),
+            app.player.as_remote().is_some(),
             app.player_endpoint.is_some(),
             "player-endpoint invariant"
         );

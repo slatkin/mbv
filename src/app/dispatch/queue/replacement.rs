@@ -6,7 +6,6 @@ use crate::app::SidebarId;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
-        self.reset_bare_transitions();
         self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
     }

@@ -3,48 +3,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::service_runtime::ServiceState;
 use mbv_queue::QueueState;
 
-fn audiobookshelf_progress_event(
-    update: mbv_player::AudiobookshelfProgressUpdate,
-) -> crate::app::state::events::LibEvent {
-    crate::app::state::events::LibEvent::Audiobookshelf(
-        crate::app::state::events::AudiobookshelfEvent::ProgressAcknowledged(update),
-    )
-}
-
-fn audiobookshelf_book_progress_event(
-    update: mbv_player::AudiobookshelfBookProgressUpdate,
-) -> crate::app::state::events::LibEvent {
-    crate::app::state::events::LibEvent::Audiobookshelf(
-        crate::app::state::events::AudiobookshelfEvent::BookProgressAcknowledged(update),
-    )
-}
-
-fn forward_audiobookshelf_updates<T, F>(
-    receiver: &std::sync::mpsc::Receiver<T>,
-    sender: &std::sync::mpsc::Sender<crate::app::state::events::LibEvent>,
-    event: F,
-) where
-    T: Send + 'static,
-    F: Fn(T) -> crate::app::state::events::LibEvent + Send + 'static,
-{
-    for update in receiver {
-        if sender.send(event(update)).is_err() {
-            break;
-        }
-    }
-}
-
 impl App {
-    fn update_local_audiobookshelf_context(
-        &self,
-        context: Option<mbv_player::AudiobookshelfPlayerContext>,
-    ) {
-        self.player.update_audiobookshelf_context(context.clone());
-        if let Some(suspended) = &self.suspended_local {
-            suspended.player.update_audiobookshelf_context(context);
-        }
-    }
-
     fn signal_running_local_daemon(&mut self, revision: u64) {
         if let Err(error) = mbv_remote_player::signal_local_daemon_service_setup(
             mbv_queue::ServiceKind::Audiobookshelf,
@@ -63,7 +22,6 @@ impl App {
             .cancel_setup(current_generation, ServiceState::NeedsAuthentication);
         self.clear_audiobookshelf_catalog();
         self.stop_active_audiobookshelf_playback();
-        self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
         mbv_config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
     }
@@ -75,7 +33,6 @@ impl App {
             .active_slot()
             .is_some_and(|slot| slot.item.is_audiobookshelf());
         if active_is_audiobookshelf {
-            self.reset_bare_transitions();
             self.player.stop();
         }
     }
@@ -130,7 +87,6 @@ impl App {
                     self.audiobookshelf_runtime
                         .commit_ready(completion.generation, user.clone());
                     self.start_audiobookshelf_socket(completion.generation);
-                    self.install_audiobookshelf_player_context(completion.generation);
                     self.setup.audiobookshelf_setup_form = None;
                     self.signal_running_local_daemon(revision);
                     self.flash(
@@ -245,7 +201,6 @@ impl App {
         }
 
         self.clear_audiobookshelf_catalog();
-        self.update_local_audiobookshelf_context(None);
         self.clear_audiobookshelf_queue_memory();
         self.config.lock().unwrap().audiobookshelf_setup = None;
         self.audiobookshelf_runtime.remove_setup();
@@ -328,7 +283,6 @@ impl App {
                 self.audiobookshelf_runtime
                     .commit_ready(replacement_generation, user.clone());
                 self.start_audiobookshelf_socket(replacement_generation);
-                self.install_audiobookshelf_player_context(replacement_generation);
                 self.signal_running_local_daemon(revision);
                 self.flash(
                     format!(
@@ -346,46 +300,6 @@ impl App {
                 );
             }
         }
-    }
-
-    pub(in crate::app) fn install_audiobookshelf_player_context(
-        &self,
-        generation: mbv_core::service_runtime::SetupGeneration,
-    ) {
-        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
-        let credential = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
-        let context = setup.zip(credential).and_then(|(setup, credential)| {
-            mbv_player::AudiobookshelfPlayerContext::new(
-                generation,
-                setup,
-                credential,
-                mbv_emby::device_id(),
-            )
-            .map(|context| {
-                let (sender, receiver) = std::sync::mpsc::channel();
-                let context = context.with_progress_updates(sender);
-                let lib_tx = self.channels.lib_tx.clone();
-                let _ = std::thread::spawn(move || {
-                    forward_audiobookshelf_updates(
-                        &receiver,
-                        &lib_tx,
-                        audiobookshelf_progress_event,
-                    );
-                });
-                let (book_sender, book_receiver) = std::sync::mpsc::channel();
-                let context = context.with_book_progress_updates(book_sender);
-                let lib_tx = self.channels.lib_tx.clone();
-                let _ = std::thread::spawn(move || {
-                    forward_audiobookshelf_updates(
-                        &book_receiver,
-                        &lib_tx,
-                        audiobookshelf_book_progress_event,
-                    );
-                });
-                context
-            })
-        });
-        self.update_local_audiobookshelf_context(context);
     }
 
     // ---- Audiobookshelf Socket.IO lifecycle (tasks 2.5-2.6) ----

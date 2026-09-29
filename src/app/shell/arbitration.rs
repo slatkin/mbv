@@ -265,7 +265,7 @@ impl Model {
                 player_active,
                 remote_target: if self.app.connected_session_id.is_some() {
                     crate::app::input::RemotePlaybackTarget::Session
-                } else if self.app.player.is_remote() {
+                } else if self.app.player.as_remote().is_some() {
                     crate::app::input::RemotePlaybackTarget::DirectRemote
                 } else if self.app.is_cast_attached() {
                     crate::app::input::RemotePlaybackTarget::Cast

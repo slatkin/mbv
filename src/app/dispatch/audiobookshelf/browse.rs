@@ -339,7 +339,7 @@ impl App {
         };
         let scope = self.viewed_queue_scope();
         let bound = scope == self.playing_queue_scope()
-            && (self.player.is_remote() || self.player.status.lock().unwrap().active);
+            && (self.player.as_remote().is_some() || self.player.status.lock().unwrap().active);
         if bound && !self.player.can_admit_audiobookshelf() {
             self.flash(
                 "Audiobookshelf playback owner is unavailable".into(),
@@ -348,27 +348,6 @@ impl App {
             return;
         }
         self.submit_queue_item(item, false);
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn play_selected_audiobookshelf_episode(
-        &mut self,
-        index: usize,
-        episode_index: usize,
-        filter: AudiobookshelfEpisodeFilter,
-    ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
-        else {
-            return;
-        };
-        if !self.player.can_admit_audiobookshelf() {
-            self.flash(
-                "Audiobookshelf playback owner is unavailable".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.submit_queue_item(item, true);
     }
 
     /// Ordinary enqueue for the downloaded episode at `episode_index`. A cold
@@ -388,7 +367,7 @@ impl App {
         };
         let scope = self.viewed_queue_scope();
         let bound = scope == self.playing_queue_scope()
-            && (self.player.is_remote() || self.player.status.lock().unwrap().active);
+            && (self.player.as_remote().is_some() || self.player.status.lock().unwrap().active);
         if bound && !self.player.can_admit_audiobookshelf() {
             self.flash(
                 "Audiobookshelf playback owner is unavailable".into(),
@@ -494,6 +473,3 @@ pub(super) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
         u64::try_from(ticks).unwrap_or(0)
     })
 }
-
-#[cfg(test)]
-mod book_seek_tests;

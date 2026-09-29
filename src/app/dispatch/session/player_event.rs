@@ -15,30 +15,6 @@ pub(in crate::app) enum PlayerEventFlow {
 }
 
 impl App {
-    pub(in crate::app) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
-        if self.player.is_remote() {
-            return false;
-        }
-        let mbv_player::transition::ExpireOutcome::Expired {
-            dispatch_next: Some(next),
-            ..
-        } = self.bare_owner.expire_local_transition(now)
-        else {
-            return false;
-        };
-        // The promoted transition was already accepted by the owner state
-        // (expire moved it into in-flight): dispatch it as-is, never re-mint
-        // or re-accept.
-        self.dispatch_jump(next);
-        true
-    }
-
-    pub(in crate::app) fn reset_bare_transitions(&mut self) {
-        if !self.player.is_remote() {
-            self.bare_owner.reset_local_transitions();
-        }
-    }
-
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
     /// changes made inside the mpv window (not just via mbv's keys) are kept and
     /// restored on the next launch. Skipped while controlling a remote session
@@ -126,13 +102,6 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
-                // CommandRejected carries no request identity. Only the
-                // queued local transition is unconfirmable; keep the
-                // in-flight transition so a stale rejection cannot erase a
-                // legitimate optimistic playhead.
-                if !self.player.is_remote() {
-                    self.bare_owner.clear_unconfirmable_transition();
-                }
                 self.flash(reason, ToastSeverity::Error);
                 PlayerEventFlow::Proceed
             }
@@ -371,19 +340,11 @@ impl App {
     ) {
         if deleted_slot.is_some() {
             // The removal, undo-push, and cursor-clamp already happened
-            // immediately at confirm time (input_confirm_keys.rs), so
-            // the visible list update isn't blocked on this round trip.
-            // All that's left here is telling the player session to
-            // drop the slot from its own internal queue mirror and
-            // mpv's playlist — that still depends on this event, since
-            // nothing told it about the removal until now.
-            if let Some(deleted_slot) = deleted_slot
-                && !self
-                    .player
-                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot))
-            {
+            // immediately at confirm time. The owner receives the stable
+            // slot removal here.
+            if let Some(deleted_slot) = deleted_slot {
                 self.player
-                    .send_command(PlayerCommand::QueueRemove(deleted_slot));
+                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot));
             }
         } else {
             let (should_consume, is_audio) = match slot_id {
@@ -482,7 +443,7 @@ impl App {
     fn handle_track_changed_event(&mut self, ev: &PlayerEvent) {
         let PlayerEvent::TrackChanged {
             slot_id: target_slot_id,
-            transition,
+            ..
         } = *ev
         else {
             return;
@@ -493,23 +454,6 @@ impl App {
             self.status.clear();
         }
 
-        if !self.player.is_remote() {
-            self.bare_owner
-                .sync_canonical_queue(self.playback_queue().queue.clone());
-            let _ = self.bare_owner.observe_track_change(target_slot_id);
-            if let Some((request_id, _generation)) = transition
-                && let mbv_player::transition::SettleOutcome::Settled {
-                    dispatch_next: Some(next),
-                } = self
-                    .bare_owner
-                    .settle_local_transition(request_id, target_slot_id)
-            {
-                // Already accepted (settle promoted it into
-                // in-flight): dispatch as-is, never re-mint or
-                // re-accept.
-                self.dispatch_jump(next);
-            }
-        }
         // Activate by owner-assigned identity. Slot identity is stable
         // across the pending-removal consume above, so resolving it to
         // a display position afterward is order-independent.
@@ -526,9 +470,6 @@ impl App {
             tracing::warn!(name: "player.track_changed.slot_missing", target: "player", slot = ?target_slot_id, "track change has no live slot; skipping activation");
             self.playback_queue().queue.active_index().unwrap_or(0)
         };
-        if !self.player.is_remote() {
-            self.player.status.lock().unwrap().current_idx = adjusted;
-        }
         if !self.queue_cursor_held_by_user() {
             self.playback_queue_mut().queue_cursor = adjusted;
         }
@@ -557,13 +498,6 @@ impl App {
             {
                 let slot_id = self.playback_queue().slots()[idx].slot_id;
                 let accepted = self.request_slot_jump(slot_id);
-                if !self.player.is_remote() {
-                    // Bare owner only: with an out-of-process owner
-                    // the active slot follows the owner's queue
-                    // snapshot; a jump requested from it must not
-                    // write a client cursor from the requested slot.
-                    self.playback_queue_mut().queue_cursor = idx;
-                }
                 if accepted {
                     self.flash(label, ToastSeverity::Neutral);
                 } else {
@@ -679,7 +613,7 @@ impl App {
             let artist = item.artist.clone();
             self.next_up_item = Some(item.clone());
             // Daemon sends NextUpShow to mpv directly; only send from local player.
-            if !self.player.is_remote() {
+            if !self.player.as_remote().is_some() {
                 self.player.send_command(PlayerCommand::NextUpShow {
                     item_id,
                     show_title,

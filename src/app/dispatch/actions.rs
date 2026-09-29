@@ -71,7 +71,7 @@ impl App {
     /// Return the audio-only fall-through decision for an explicit Emby play.
     /// Empty/unknown selections and Library routes remain on today's path.
     pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
-        let attached = self.connected_session_id.is_some() || self.player.is_remote();
+        let attached = self.connected_session_id.is_some() || self.player.as_remote().is_some();
         let owner_is_audio_only = if self.connected_session_id.is_some() {
             self.session_owner_is_audio_only()
         } else {
@@ -208,7 +208,10 @@ impl App {
         if !sent && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
         }
-        if sent && matches!(scope, crate::app::QueueScope::Local) && !self.player.is_remote() {
+        if sent
+            && matches!(scope, crate::app::QueueScope::Local)
+            && !self.player.as_remote().is_some()
+        {
             self.stamp_queue_generation(scope);
         }
         sent

@@ -141,12 +141,6 @@ pub(in crate::app) fn idle_feed_command_for_key(
 }
 
 impl App {
-    /// Send an already-accepted transition to whichever component owns
-    /// playback. When the owner runs out of process (reached over ctrl,
-    /// including this machine's Local daemon), request the jump from it via
-    /// `UnifiedQueuePlaySlot`; when this process is the owner, send the local
-    /// `JumpTo` to the Playback run. Returns `false` when the request could
-    /// not be sent.
     fn reject_disconnected_remote_jump(&mut self) -> bool {
         if !self.player.is_remote_disconnected() {
             return false;
@@ -170,61 +164,15 @@ impl App {
         sent
     }
 
-    pub(in crate::app) fn dispatch_jump(
-        &mut self,
-        transition: mbv_player::transition::Transition,
-    ) -> bool {
-        if self.player.is_remote() {
-            return self.request_remote_slot_jump(transition.target);
-        }
-        let resume_ticks =
-            mbv_player::resume_ticks_for_slot(&self.playback_queue().queue, transition.target);
-        self.player.send_command(transition.into_jump(resume_ticks))
-    }
-
-    /// Request a jump to an existing canonical slot: the fresh-jump seam.
-    /// When the Player owner runs out of process, request the jump from it
-    /// (`UnifiedQueuePlaySlot`) and report its acceptance; the active slot
-    /// then follows the owner's queue snapshot, never a client cursor write
-    /// here. When this process is the owner, sync the canonical snapshot,
-    /// mint and accept a local transition, and dispatch the transition the
-    /// owner accepted now (or queue it behind an in-flight one).
     pub(in crate::app) fn request_relative_step(&mut self, direction: Direction) -> bool {
-        self.bare_owner
-            .sync_canonical_queue(self.playback_queue().queue.clone());
-        match self.bare_owner.relative_step_target(direction) {
-            mbv_player::StepTarget::Jump(slot_id) => {
-                let (request_id, generation) = self.bare_owner.mint_local_transition();
-                let transition = mbv_player::transition::Transition::with_cause(
-                    request_id,
-                    generation,
-                    slot_id,
-                    mbv_player::transition::TransitionCause::Step(direction),
-                );
-                match self.bare_owner.accept_local_transition(transition) {
-                    mbv_player::transition::DispatchDecision::DispatchNow(t) => {
-                        self.dispatch_jump(t)
-                    }
-                    mbv_player::transition::DispatchDecision::Queued { .. } => true,
-                }
-            }
-            mbv_player::StepTarget::Coalesced => true,
-            mbv_player::StepTarget::AtEdge => false,
+        match direction {
+            Direction::Next => self.player.next(),
+            Direction::Previous => self.player.previous(),
         }
     }
 
     pub(in crate::app) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
-        if self.player.is_remote() {
-            return self.request_remote_slot_jump(slot_id);
-        }
-        self.bare_owner
-            .sync_canonical_queue(self.playback_queue().queue.clone());
-        let (request_id, generation) = self.bare_owner.mint_local_transition();
-        let transition = mbv_player::transition::Transition::new(request_id, generation, slot_id);
-        match self.bare_owner.accept_local_transition(transition) {
-            mbv_player::transition::DispatchDecision::DispatchNow(t) => self.dispatch_jump(t),
-            mbv_player::transition::DispatchDecision::Queued { .. } => true,
-        }
+        self.request_remote_slot_jump(slot_id)
     }
 
     /// Own the state transitions for a `Command`. Returns whether the app

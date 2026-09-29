@@ -35,7 +35,7 @@ impl App {
         }
         self.player_endpoint = Some(endpoint.clone());
         let keep_home_link = current_is_home;
-        if self.player.is_remote() && !keep_home_link {
+        if !keep_home_link {
             // #233: tear down the previous remote connection's socket
             // before dropping the old PlayerProxy, so its reader thread
             // observes the shutdown and exits instead of leaking.
@@ -43,14 +43,8 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         } else {
-            if keep_home_link {
-                if !self.config.lock().unwrap().stay_alive {
-                    self.player.stop();
-                }
-            } else {
-                self.reset_bare_transitions();
+            if !self.config.lock().unwrap().stay_alive {
                 self.player.stop();
-                self.player.join_or_timeout(Duration::from_secs(5));
             }
             self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
@@ -60,7 +54,7 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
             });
         }
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        debug_assert!(self.player.as_remote().is_some());
         self.sync_subtitle_prefs_to_player();
 
         if let Some(handle) = &self.mpris {
@@ -157,7 +151,7 @@ impl App {
         }
         self.player_endpoint = Some(endpoint.clone());
         let keep_home_link = current_is_home;
-        if self.player.is_remote() && !keep_home_link {
+        if !keep_home_link {
             // #233: tear down the previous remote connection's socket
             // before dropping the old PlayerProxy, so its reader thread
             // observes the shutdown and exits instead of leaking.
@@ -165,14 +159,8 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         } else {
-            if keep_home_link {
-                if !self.config.lock().unwrap().stay_alive {
-                    self.player.stop();
-                }
-            } else {
-                self.reset_bare_transitions();
+            if !self.config.lock().unwrap().stay_alive {
                 self.player.stop();
-                self.player.join_or_timeout(Duration::from_secs(5));
             }
             self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
@@ -182,7 +170,7 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
             });
         }
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        debug_assert!(self.player.as_remote().is_some());
         self.sync_subtitle_prefs_to_player();
 
         if let Some(handle) = &self.mpris {
@@ -295,9 +283,10 @@ impl App {
         self.player_rx = suspended.player_rx;
         self.player_endpoint = self
             .player
-            .is_remote()
+            .as_remote()
+            .is_some()
             .then_some(mbv_remote_player::DaemonEndpoint::Local);
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        debug_assert!(self.player.as_remote().is_some());
     }
 
     fn rebind_mpris_to_current_player(&self) {
@@ -357,7 +346,7 @@ impl App {
             }
         };
         let already_local = prepared.is_none();
-        if !already_local && self.player.is_remote() {
+        if !already_local && self.player.as_remote().is_some() {
             self.player.stop();
             self.player.disconnect_remote();
         }
@@ -402,16 +391,6 @@ impl App {
             self.finish_local_mode(status.to_string(), None);
             return;
         }
-        if !self.player.is_remote() {
-            self.reset_bare_transitions();
-            self.player.stop();
-        }
-        self.player.join();
-        // `join()` is a documented no-op for a remote player (it doesn't tear
-        // down the control socket), so without this the old remote's reader
-        // thread would leak here exactly as it did at the two already-fixed
-        // remote-to-remote swap sites (#233). No-op if `self.player` is
-        // already local.
         self.player.disconnect_remote();
         let mut status = status.to_string();
         // Populated only when the local-daemon reconnect branch below
@@ -450,7 +429,7 @@ impl App {
                     self.player = PlayerProxy::remote(remote, always_play_next);
                     self.player_rx = remote_rx;
                     self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
-                    debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+                    debug_assert!(self.player.as_remote().is_some());
                     self.sync_subtitle_prefs_to_player();
                     reconnected_local_daemon = Some((initial_tab, remote_queue_source));
                 }
@@ -523,13 +502,6 @@ impl App {
         // when nothing is connected.
         self.sever_active_connection();
         let mut direct_upgrade_error = None;
-        // `player.is_remote()` alone can't gate this: a stay-alive thin
-        // client attached to its own local daemon (is_local_daemon()) is
-        // already `is_remote() == true` despite never having left home
-        // base, which used to skip the direct-upgrade attempt entirely and
-        // strand the connection on the plain `AttachedSession` path with no
-        // queue management. Only a genuinely different remote target
-        // should skip this.
         if self.player_owner_is_on_this_machine()
             && let Some(endpoint) = self.session_direct_endpoint(sess)
         {

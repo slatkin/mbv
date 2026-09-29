@@ -3,7 +3,6 @@ use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
-use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ExecSlot;
 use mbv_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
@@ -14,7 +13,7 @@ impl App {
     }
 
     pub(in crate::app) fn has_direct_remote_queue(&self) -> bool {
-        self.player.is_remote() && self.has_remote_queue()
+        self.player.as_remote().is_some() && self.has_remote_queue()
     }
 
     pub(in crate::app) fn queue_edits_reach_owner(&self) -> bool {
@@ -25,30 +24,15 @@ impl App {
     /// submission. Bare mode uses a generation fence until submit; the
     /// Stay-alive owner is authoritative from its snapshots, while direct
     /// remote scope is already independently projected.
-    pub(in crate::app) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
-        match self.local_queue_owner() {
-            LocalQueueOwner::StayAlive => true,
-            LocalQueueOwner::ThisProcess => {
-                scope == QueueScope::Remote
-                    || self.queue_for_scope(scope).sequence_generation
-                        <= self.player.status.lock().unwrap().sequence_generation
-            }
-        }
+    pub(in crate::app) fn local_queue_is_owner_queue(&self, _scope: QueueScope) -> bool {
+        self.player.as_remote().is_some()
     }
 
-    /// Whether a canonical-queue edit in `scope` should also be sent to the
-    /// player as a live command. `active` is the player's current playing
-    /// state (`self.player.status.lock().unwrap().active`), passed in since
-    /// callers already hold it.
-    pub(in crate::app) fn queue_edit_reaches_player(
-        &self,
-        scope: QueueScope,
-        active: bool,
-    ) -> bool {
+    /// Whether a canonical-queue edit in `scope` should also be sent to its
+    /// playback owner as a live command.
+    pub(in crate::app) fn queue_edit_reaches_player(&self, scope: QueueScope) -> bool {
         scope == QueueScope::Remote
-            || (active || self.player.is_remote())
-                && self.queue_edits_reach_owner()
-                && self.local_queue_is_owner_queue(scope)
+            || self.queue_edits_reach_owner() && self.local_queue_is_owner_queue(scope)
     }
 
     /// Return the Player link and event receiver that own the requested
@@ -199,11 +183,6 @@ impl App {
             // Bare mode has no live command channel before its first submit.
             return true;
         }
-        if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
-            // A cold in-process player has no command channel yet. The app's
-            // canonical queue is authoritative until the next Play starts it.
-            return true;
-        }
         let sent = self.player.queue_append(items);
         if !sent && self.player.is_remote_disconnected() {
             self.flash(
@@ -212,7 +191,7 @@ impl App {
             );
             return false;
         }
-        if !sent && self.player.is_remote() && !self.player.supports_queue_append() {
+        if !sent && self.player.as_remote().is_some() && !self.player.supports_queue_append() {
             self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),
                 ToastSeverity::Error,
@@ -239,7 +218,6 @@ impl App {
     }
 
     pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.reset_bare_transitions();
         self.advance_queue_epoch();
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playing_queue_scope() {
@@ -310,17 +288,11 @@ impl App {
             queue.merge_refresh(fetched_items)
         };
         if sync_player_prunes {
-            // Slot-addressed removal: order-independent, so no descending
-            // index sort is needed. Remote owners take the unified path;
-            // the raw command is the local-player fallback only.
+            // Slot-addressed removal is order-independent, so no descending
+            // index sort is needed.
             for slot_id in &result.pruned_slots {
-                if !self
-                    .player
-                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(*slot_id))
-                {
-                    self.player
-                        .send_command(PlayerCommand::QueueRemove(*slot_id));
-                }
+                self.player
+                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(*slot_id));
             }
         }
         result
@@ -394,10 +366,6 @@ impl App {
             QueueMutationResult::NotFound => return None,
         };
         self.playback_queue_mut().clamp_cursor();
-        if !self.player.is_remote() {
-            self.player
-                .send_command(PlayerCommand::QueueRemove(slot_id));
-        }
         Some(removed.item.id().to_string())
     }
 

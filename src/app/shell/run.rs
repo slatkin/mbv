@@ -276,7 +276,7 @@ impl Model {
 
         install_signal_handlers();
         let quit_timeout = Duration::from_secs(self.app.config.lock().unwrap().quit_timeout_secs);
-        start_quit_watchdog(self.app.player.quit_handle(), quit_timeout);
+        start_quit_watchdog();
 
         let mut last_render = Instant::now()
             .checked_sub(Duration::from_secs(2))
@@ -382,7 +382,6 @@ impl Model {
         *had_events |= self.tick_inline_search_clock(Instant::now());
 
         *had_events |= self.app.drain_session_events();
-        *had_events |= self.app.expire_bare_transition(Instant::now());
         *had_events |= self.app.drain_cast_events();
 
         // Feed results update their embedded destination owner.

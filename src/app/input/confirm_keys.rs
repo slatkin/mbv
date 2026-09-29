@@ -2,7 +2,7 @@ use crate::app::SidebarId;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, UndoEntry,
+    SavePlaylistDialog, SavePlaylistStage,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use mbv_queue::RemoveSlotResult;
@@ -207,17 +207,14 @@ impl App {
                     None
                 }
             };
-            if let Some(item) = removed_item {
+            if removed_item.is_some() {
                 let queue = self.playback_queue_mut();
                 queue.clamp_cursor();
-                if !self.player.is_remote() {
-                    self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
-                }
+
                 self.pending_delete_slot = Some(slot_id);
                 if self.connected_session_id.is_some() {
                     self.playback_target().stop(self);
                 } else {
-                    self.reset_bare_transitions();
                     self.player.stop();
                 }
                 if self.local_queue_metadata_applies(scope) {

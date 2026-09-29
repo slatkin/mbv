@@ -133,44 +133,11 @@ fn confirmed_fall_through_reinstates_a_suspended_home_link() {
 
 fn connect_local_daemon(
     _: &mbv_remote_player::DaemonEndpoint,
-) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-    let (remote, events) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
-}
-
-fn refuse_local_daemon(
-    _: &mbv_remote_player::DaemonEndpoint,
-) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-    crate::app::test_seams::DaemonRouteConnectOutcome::Failed(
-        std::io::Error::other("local owner refused").into(),
-    )
-}
-
-#[test]
-fn explicit_endpoint_fall_through_refusal_keeps_attachment_and_reports_failure() {
-    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
-
-    let (mut app, commands) =
-        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
-    app.play_item(make_item("Movie", "Movie"));
-    let endpoint = app.player_endpoint.clone();
-    let _guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(refuse_local_daemon);
-
-    confirm_local_fall_through(&mut app);
-
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-    assert_eq!(app.player_endpoint, endpoint);
-    assert!(app.player.is_remote());
-    assert!(app.status.contains("local owner refused"));
-    assert!(
-        !commands.try_iter().any(|command| matches!(
-            command,
-            CtrlCmd::PlaybackIntent(intent)
-                if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
-        )),
-        "preparation refusal must leave the attached owner untouched"
-    );
+) -> (
+    mbv_remote_player::RemotePlayer,
+    std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+) {
+    mbv_remote_player::RemotePlayer::stub(Vec::new(), 0)
 }
 
 #[test]

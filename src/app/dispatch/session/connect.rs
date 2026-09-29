@@ -88,7 +88,7 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint).into_result();
+            return Ok(connect(endpoint));
         }
 
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
@@ -197,7 +197,7 @@ impl App {
         self.player = PlayerProxy::remote(remote, always_play_next);
         self.player_rx = remote_rx;
         self.player_endpoint = Some(endpoint.clone());
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        debug_assert!(self.player.as_remote().is_some());
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
             mbv_desktop::mpris::rebind(
@@ -241,7 +241,7 @@ impl App {
     /// path (construct.rs) when the Emby client is already available at
     /// construction, or from `apply_emby_completion`
     /// (`app_emby_service_completion.rs`) once the async Emby startup used by
-    /// `App::new_independent` completes. A genuinely remote
+    /// async Emby startup completes. A genuinely remote
     /// `--connect-daemon` launch is a separate, unaffected mechanism per
     /// ADR 0010. A no-op unless `auto_reconnect` is enabled and
     /// `load_last_remote_connection` has a record. One shot, no retry: a

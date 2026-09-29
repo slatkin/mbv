@@ -671,29 +671,4 @@ mod tests {
         assert_eq!(dispatched.len(), 1);
         assert_eq!(dispatched[0].url, "https://b");
     }
-
-    #[test]
-    fn dispatch_to_cast_issues_no_local_player_command_and_flashes_uncastable_reason() {
-        use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        let (job_tx, _calls) = spawn_fake_cast_worker(FakeCastTransport::default());
-        app.set_cast_client("device-1", job_tx);
-        let items = vec![
-            feed_item("a", None),
-            feed_item("b", Some("https://feed/b.mp3")),
-        ];
-        app.dispatch_selection_to_cast(items, 1);
-        let event = app
-            .channels
-            .cast_rx
-            .recv_timeout(std::time::Duration::from_secs(2))
-            .unwrap();
-        app.handle_cast_event(event);
-        // No local playback command is ever reachable from this path: cast
-        // dispatch loads the receiver's own queue instead.
-        assert!(!app.player.status.lock().unwrap().active);
-        assert_eq!(app.cast_attachment.as_ref().unwrap().dispatched.len(), 1);
-        assert!(app.status.contains("Episode a") && app.status.contains("no media URL to cast"));
-    }
 }

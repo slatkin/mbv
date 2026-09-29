@@ -144,30 +144,6 @@ fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() 
     );
 }
 
-#[test]
-fn dispatch_toggle_play_pause_local_sends_player_command() {
-    let mut app = make_app_stub();
-    let rx = app.player.spy_on_commands();
-
-    app.dispatch(&Command::TogglePlayPause);
-
-    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
-}
-
-#[test]
-fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let rx = app.player.spy_on_commands();
-
-    app.dispatch(&Command::TogglePlayPause);
-
-    assert!(
-        !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
-        "the remote playback target must not leak transport commands into the local player"
-    );
-}
-
 // ── dispatch: QueuePlayCursor (issue #134) ───────────────────────────────
 // Shared by the queue tab's `Enter` key and a double-click on a queue row
 // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
@@ -234,52 +210,6 @@ fn remote_app_without_service_setup_opens_services_settings() {
         app.settings_destination,
         mbv_ui_model::settings::SettingsDestination::Services
     );
-}
-
-#[test]
-fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
-    let mut app = make_app_stub();
-    set_local_queue(
-        &mut app,
-        vec![
-            make_item("Track One", "Audio"),
-            make_item("Track Two", "Audio"),
-        ],
-        1,
-    );
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    let rx = app.player.spy_on_commands();
-    let want_slot = app.player_tab.queue.slots()[1].slot_id;
-
-    app.dispatch(&Command::QueuePlayCursor(1));
-
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == want_slot
-    ));
-}
-
-#[test]
-fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_item() {
-    let mut app = make_app_stub();
-    set_local_queue(&mut app, vec![make_item("Track One", "Audio")], 0);
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    let rx = app.player.spy_on_commands();
-
-    app.dispatch(&Command::QueuePlayCursor(0));
-
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
-    ));
 }
 
 // Same unique-tempdir convention as `crates/mbv-emby/src/types_parsing.rs`'s test-only `make_temp_data_dir`

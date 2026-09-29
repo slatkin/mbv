@@ -7,9 +7,11 @@ use std::sync::mpsc;
 
 fn reconnect_local_daemon(
     _endpoint: &DaemonEndpoint,
-) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-    let (remote, events) = RemotePlayer::stub(make_items(2), 0);
-    crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
+) -> (
+    RemotePlayer,
+    std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+) {
+    RemotePlayer::stub(make_items(2), 0)
 }
 
 #[test]
