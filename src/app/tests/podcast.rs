@@ -100,7 +100,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::AudiobookshelfLibrary(0);
-    app.player_tab
+    app.local_view
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu(false, None);
@@ -126,7 +126,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
-    let before_queue = app.player_tab.total_queue_len();
+    let before_queue = app.local_view.total_queue_len();
     let before_nav = app.libs[0].nav_stack.len();
     let before_active = app.player.status.lock().unwrap().active;
 
@@ -134,7 +134,7 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     app.enqueue_audiobookshelf_episode(0, 0);
 
     assert_eq!(
-        app.player_tab.total_queue_len(),
+        app.local_view.total_queue_len(),
         before_queue,
         "activation seams must not mutate the queue"
     );
@@ -221,7 +221,7 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
         "Audiobookshelf refresh must not reload the Emby library"
     );
     assert_eq!(
-        app.player_tab.total_queue_len(),
+        app.local_view.total_queue_len(),
         0,
         "Audiobookshelf refresh must not touch the queue"
     );

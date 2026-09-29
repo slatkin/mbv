@@ -69,7 +69,7 @@ impl App {
         let playlist_id = playlist_id.to_string();
         let mutation_id = mutation.mutation_id();
         let ids: Vec<String> = self
-            .player_tab
+            .local_view
             .emby_items()
             .iter()
             .map(|e| e.id.clone())

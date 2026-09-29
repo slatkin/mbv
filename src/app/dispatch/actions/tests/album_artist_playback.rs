@@ -204,7 +204,7 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         .insert("album-1".into(), vec![cached]);
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
         .set_items(vec![existing], 0);
@@ -223,9 +223,9 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         last_replace(&cmd_rx).0.is_empty(),
         "a failed resolution replaces nothing on the owner"
     );
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
     assert!(matches!(
-        app.queue_source,
+        app.local_view.source(),
         mbv_queue::QueueSource::Playlist { .. }
     ));
     assert!(

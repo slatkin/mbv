@@ -166,7 +166,7 @@ impl App {
 
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let (label, on) = match &self.queue_source {
+        let (label, on) = match self.playback_queue().source() {
             mbv_queue::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
             _ => (format!("{gap}none"), false),
         };
@@ -410,7 +410,7 @@ impl App {
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label = queue_source_status_label(
-            &self.queue_source,
+            self.playback_queue().source(),
             matches!(self.effective_panel_focus(), PanelFocus::Queue),
         );
         let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {

@@ -193,8 +193,8 @@ pub(crate) fn make_built_app() -> App {
         },
         audiobookshelf_socket_tx: None,
         audiobookshelf_socket_generation: None,
-        player_tab: PlayerTab::default(),
-        remote_player_tab: None,
+        local_view: QueueView::empty(),
+        remote_view: None,
         initial_queue_scope: QueueScope::Local,
         system_notifications: false,
         image_protocol: None,
@@ -249,9 +249,9 @@ pub(crate) fn make_remote_app_stub_at_index(
         config,
     );
     close_initial_services(&mut app);
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    app.local_view
+        .set_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     // Default to "focused, past grace window" for mouse tests.
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     app
@@ -274,9 +274,9 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
         config,
     );
     close_initial_services(&mut app);
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    app.local_view
+        .set_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     while cmd_rx.try_recv().is_ok() {}
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     (app, cmd_rx)
@@ -299,9 +299,9 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         config,
     );
     close_initial_services(&mut app);
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    app.local_view
+        .set_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     // `App::new_remote` synchronizes this client's subtitle/audio-language
     // prefs to the freshly attached daemon before returning; drain that so
     // callers see only commands their own test actions send.

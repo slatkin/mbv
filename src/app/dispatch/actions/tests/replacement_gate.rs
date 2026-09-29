@@ -7,7 +7,7 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     let (mut app, cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
         .set_items(vec![existing], 0);
@@ -25,7 +25,7 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     ));
     assert!(app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 
     confirm_replace_queue(&mut app);
 
@@ -42,7 +42,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
     let (mut app, _cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
         .set_items(vec![existing], 0);
@@ -62,7 +62,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 }
 
 /// Row 3.1 cancellation / design D4: a folder play on a populated queue
@@ -93,7 +93,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     // Populated target queue + a music library holding the played folder.
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.player_tab.set_items(vec![existing], 0);
+    app.local_view.set_items(vec![existing], 0);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.collection_type = "music".into();
@@ -107,7 +107,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     app.play_or_activate_lib_item(0, folder("album-1", "Album"));
 
     assert!(app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
+    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
 
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
@@ -118,5 +118,5 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     );
 
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
+    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
 }

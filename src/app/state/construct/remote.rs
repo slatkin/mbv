@@ -2,7 +2,7 @@ use super::{
     App, detached_socket_rx, independent_audiobookshelf_runtime, independent_emby_runtime,
 };
 use crate::app::state::bootstrap::{LocalDaemonBootstrap, bootstrap_legacy_queue};
-use crate::app::state::player_tab::PlayerTab;
+use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{AppInit, bootstrap_unified_queue};
 use mbv_ctrl::player::PlayerEvent;
@@ -79,22 +79,23 @@ impl RemoteSnapshot {
         self,
         is_local: bool,
         local_daemon_bootstrap: Option<&LocalDaemonBootstrap>,
-    ) -> (PlayerTab, Option<PlayerTab>) {
+    ) -> (QueueView, Option<QueueView>) {
         if is_local {
             // Local daemon: one unified queue, exactly like plain local
-            // playback — no separate remote_player_tab, no scope pill.
+            // playback — no separate remote_view, no scope pill.
             (
-                local_daemon_bootstrap.as_ref().unwrap().player_tab.clone(),
+                local_daemon_bootstrap.as_ref().unwrap().local_view.clone(),
                 None,
             )
         } else {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
             (
-                PlayerTab::default(),
-                Some(self.unified_state.map_or_else(PlayerTab::default, |state| {
-                    PlayerTab::from_unified_state(&state)
-                })),
+                QueueView::empty(),
+                Some(
+                    self.unified_state
+                        .map_or_else(QueueView::empty, |state| QueueView::from_snapshot(&state)),
+                ),
             )
         }
     }
@@ -168,7 +169,7 @@ impl App {
     /// - `Local`: behaves like a plain local session — one unified queue,
     ///   normal queue-state persistence — the only difference is that the
     ///   daemon owns mpv instead of an in-process `Player`.
-    /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
+    /// - `Tcp`/`Unix`: a separate `remote_view` is kept so the user
     ///   can browse locally while a daemon elsewhere plays something else,
     ///   with the Local/Remote scope split (`[`/`]`) to switch between them.
     #[cfg(test)]
@@ -235,7 +236,7 @@ impl App {
         let player = PlayerProxy::remote(remote, always_play_next);
         let audiobookshelf_startup_requested =
             services.audiobookshelf_configured && services.audiobookshelf_credential_present;
-        let (player_tab, remote_player_tab) =
+        let (local_view, remote_view) =
             snapshot.tabs(endpoint.is_local(), local_daemon_bootstrap.as_ref());
         let mut app = Self::build(AppInit {
             config,
@@ -250,8 +251,8 @@ impl App {
             audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
-            player_tab,
-            remote_player_tab,
+            local_view,
+            remote_view,
             initial_queue_scope,
             system_notifications,
             image_protocol: ui_config.image_protocol.clone(),

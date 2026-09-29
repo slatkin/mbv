@@ -48,8 +48,8 @@ fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconn
 #[test]
 fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.local_view
+        .set_items(make_items(2), app.local_view.cursor());
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = make_session("remote-host", "mbv");
 
@@ -57,21 +57,15 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
-    assert!(
-        app.remote_player_tab
-            .as_ref()
-            .unwrap()
-            .emby_items()
-            .is_empty()
-    );
-    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert!(app.remote_view.as_ref().unwrap().emby_items().is_empty());
+    assert_eq!(app.local_view.emby_items().len(), 2);
 }
 
 #[test]
 fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() {
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.local_view
+        .set_items(make_items(2), app.local_view.cursor());
     let remote_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(remote_items.clone(), 0);
     let sess = make_session("remote-host", "mbv");
@@ -81,10 +75,10 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
     assert_eq!(
-        app.remote_player_tab.as_ref().unwrap().emby_items()[0].id,
+        app.remote_view.as_ref().unwrap().emby_items()[0].id,
         remote_items[0].id
     );
-    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.local_view.emby_items().len(), 2);
 }
 
 #[test]
@@ -100,21 +94,15 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
 #[test]
 fn library_route_connect_shows_the_peer_queue_even_when_empty() {
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.local_view
+        .set_items(make_items(2), app.local_view.cursor());
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
-    assert!(
-        app.remote_player_tab
-            .as_ref()
-            .unwrap()
-            .emby_items()
-            .is_empty()
-    );
+    assert!(app.remote_view.as_ref().unwrap().emby_items().is_empty());
 }
 
 #[test]
@@ -224,12 +212,12 @@ fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
 // local-daemon-thin-client: the daemon's Bound queue is the client's
 // displayed Local queue in every state. The runtime attach paths must adopt
 // it into the unified tab (as the App-construction path does) instead of
-// parking it in `remote_player_tab`, where the unified view never reads it.
+// parking it in `remote_view`, where the unified view never reads it.
 #[test]
 fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.local_view
+        .set_items(make_items(2), app.local_view.cursor());
     let daemon_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
 
@@ -242,22 +230,22 @@ fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
-    assert!(app.remote_player_tab.is_none());
-    assert_eq!(app.player_tab.emby_items()[0].id, daemon_items[0].id);
+    assert!(app.remote_view.is_none());
+    assert_eq!(app.local_view.emby_items()[0].id, daemon_items[0].id);
 }
 
 #[test]
 fn local_daemon_route_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
+    app.local_view
+        .set_items(make_items(2), app.local_view.cursor());
     let daemon_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
 
     app.switch_to_library_route("music", remote, remote_rx, &DaemonEndpoint::Local);
 
-    assert!(app.remote_player_tab.is_none());
-    assert_eq!(app.player_tab.emby_items()[0].id, daemon_items[0].id);
+    assert!(app.remote_view.is_none());
+    assert_eq!(app.local_view.emby_items()[0].id, daemon_items[0].id);
 }
 
 #[test]

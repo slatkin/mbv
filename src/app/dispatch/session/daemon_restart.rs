@@ -5,7 +5,7 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {
     pub(in crate::app) fn reset_local_daemon_queue_view(&mut self) {
-        self.remote_player_tab = None;
+        self.remote_view = None;
         self.remote_queue_undo_stack.clear();
         self.set_queue_scope(QueueScope::Local);
     }
@@ -81,9 +81,9 @@ impl App {
             );
         }
 
-        let mut player_tab = bootstrap.player_tab;
-        player_tab.adopt_revision_mint(self.player_tab.revision_mint());
-        self.player_tab = player_tab;
+        let mut local_view = bootstrap.local_view;
+        local_view.adopt_revision_mint(self.local_view.revision_mint());
+        self.local_view = local_view;
         self.reset_local_daemon_queue_view();
         self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;

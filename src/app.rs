@@ -34,8 +34,8 @@ use crate::app::state::playback::{
     DestinationLatestSource, PendingQueueAction, QueueScopeResolution, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_deferrals::QueueDeferrals;
+pub(crate) use crate::app::state::queue_view::QueueView;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]

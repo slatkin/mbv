@@ -58,8 +58,11 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
 
     let app = &harness.model().app;
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
-    assert_eq!(app.player_tab.emby_items(), make_items(3));
-    assert!(matches!(&app.queue_source, mbv_queue::QueueSource::Series));
+    assert_eq!(app.local_view.emby_items(), make_items(3));
+    assert!(matches!(
+        app.local_view.source(),
+        mbv_queue::QueueSource::Series
+    ));
     let status = app.player.status.lock().unwrap();
     assert_eq!(status.position_ticks, 9876);
     assert_eq!(status.current_idx, 1);
@@ -260,7 +263,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     );
 
     assert!(app.home_is_local_daemon);
-    assert!(app.remote_player_tab.is_some());
+    assert!(app.remote_view.is_some());
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.displayed_queue().emby_items().len(), 3);
 
@@ -274,7 +277,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
 
     let app = &harness.model().app;
     assert!(app.home_is_local_daemon);
-    assert!(app.remote_player_tab.is_none());
+    assert!(app.remote_view.is_none());
     assert_eq!(app.queue_scope, QueueScope::Local);
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);

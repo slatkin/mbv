@@ -200,8 +200,8 @@ impl App {
             .expect("selected Audiobookshelf book queue slot disappeared");
         {
             let queue = self.queue_for_scope_mut(scope);
-            queue.queue_cursor = selected_index;
-            let _ = queue.queue.set_active_slot(selected_slot);
+            queue.set_cursor(selected_index);
+            let _ = queue.playback_queue().set_active_slot(selected_slot);
         }
 
         let all_slots = self.queue_for_scope(scope).all_queue_slots();
@@ -209,7 +209,7 @@ impl App {
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,
-            self.queue_source.clone(),
+            self.queue_for_scope(scope).source().clone(),
             None,
             audio_only,
             self.ui_volume,

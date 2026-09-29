@@ -33,7 +33,7 @@ fn progress_bucket(playback: PlaybackState) -> u16 {
 /// The observed active slot, or the predicted selection when nothing is
 /// playing yet (the pending slot is pre-filtered to the viewed queue).
 fn projected_active_target(
-    queue: &super::PlayerTab,
+    queue: &super::QueueView,
     playback: PlaybackState,
     pending_slot: Option<QueueSlotId>,
 ) -> Option<QueueSlotId> {
@@ -185,7 +185,7 @@ impl Model {
     fn queue_projection_cursor(&mut self, scope: QueueScope) -> QueueCursorUpdate {
         match self.app.pending_queue_cursor_reanchor.take() {
             Some(reanchor) if reanchor == scope => {
-                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).cursor())
             }
             _ => QueueCursorUpdate::Preserve,
         }
@@ -404,7 +404,7 @@ impl Model {
                     (status.active, status.current_idx)
                 };
                 if active {
-                    self.app.playback_queue_mut().queue_cursor = current_idx;
+                    self.app.playback_queue_mut().set_cursor(current_idx);
                     if self.app.player.as_remote().is_some() {
                         self.app.set_queue_scope(QueueScope::Remote);
                     }
@@ -416,7 +416,7 @@ impl Model {
                 }
             }
             QueueIntent::SavePlaylist => {
-                if self.app.player_tab.total_queue_len() > 0 {
+                if self.app.local_view.total_queue_len() > 0 {
                     self.app
                         .open_save_playlist_dialog(super::SavePlaylistDialog {
                             input: self.app.queue_playlist_name().to_string(),
@@ -498,7 +498,7 @@ mod tests {
         first.active_slot = None;
         first.revision = 7;
         let mut app = make_app_stub();
-        app.player_tab = crate::app::PlayerTab::from_unified_state(&first);
+        app.local_view = crate::app::QueueView::from_snapshot(&first);
         let mut model = Model::new(app);
 
         model.sync_queue();
@@ -508,7 +508,7 @@ mod tests {
         let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.player_tab.set_unified_state(&replacement, 0);
+        model.app.local_view.set_unified_state(&replacement, 0);
         model.sync_queue();
 
         let component = queue_component(&model);
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn unchanged_queue_revision_skips_projection_rebuild() {
         let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(2), 0);
+        app.local_view.set_items(make_items(2), 0);
         let mut model = Model::new(app);
         model.sync_queue();
 
@@ -533,7 +533,7 @@ mod tests {
         state.active_slot = None;
         state.revision = 7;
         let mut app = make_app_stub();
-        app.player_tab = crate::app::PlayerTab::from_unified_state(&state);
+        app.local_view = crate::app::QueueView::from_snapshot(&state);
         let mut model = Model::new(app);
         model.sync_queue();
 
@@ -542,7 +542,7 @@ mod tests {
         let mut replacement = crate::app::tests::emby_unified_state(&replacement_items, 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.player_tab.set_unified_state(&replacement, 0);
+        model.app.local_view.set_unified_state(&replacement, 0);
         let update = model.prepare_queue_projection();
 
         assert!(update.slots.is_some());
@@ -559,7 +559,7 @@ mod tests {
         // reservation set and counters together pin the request count.
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
-        app.player_tab.set_queue_items(
+        app.local_view.set_queue_items(
             items
                 .into_iter()
                 .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
         let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(2), 0);
+        app.local_view.set_items(make_items(2), 0);
         app.images.configure_protocol(None, true);
         app.visual_slot_hidden = true;
         {
@@ -622,7 +622,7 @@ mod tests {
         // `queue_cursor` (the shell-owned follow position) is not written
         // (task 3.2 — the mirror in select_queue_slot is gone).
         let mut app = make_app_stub();
-        app.player_tab.set_queue_items(
+        app.local_view.set_queue_items(
             vec![
                 mbv_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
                 mbv_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
@@ -646,7 +646,7 @@ mod tests {
                 .expect("Queue component mounted")
         };
         assert_eq!(component_cursor(&model), 0);
-        assert_eq!(model.app.player_tab.queue_cursor, 0);
+        assert_eq!(model.app.local_view.cursor(), 0);
 
         let message = model
             .application
@@ -667,7 +667,8 @@ mod tests {
             "component cursor moved to row 1"
         );
         assert_eq!(
-            model.app.player_tab.queue_cursor, 0,
+            model.app.local_view.cursor(),
+            0,
             "QueueRequest::Cursor must not write App's follow cursor"
         );
     }
@@ -696,7 +697,7 @@ mod tests {
         use crate::app::state::playback::UndoEntry;
         let mut app = make_app_stub();
         let _cmd_rx = live_owner_channel(&mut app);
-        app.player_tab.set_queue_items(emby_items(2), 0);
+        app.local_view.set_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove {
             index: 0,
             item: mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),

@@ -204,8 +204,8 @@ mod tests {
             start_index,
         });
 
-        assert!(app.player_tab.emby_items().is_empty());
-        assert_ne!(app.queue_source, mbv_queue::QueueSource::Remote);
+        assert!(app.local_view.emby_items().is_empty());
+        assert_ne!(app.local_view.source(), &mbv_queue::QueueSource::Remote);
         assert!(matches!(
             cmd_rx.try_recv(),
             Ok(mbv_ctrl::CtrlCmd::UnifiedQueueReplace {

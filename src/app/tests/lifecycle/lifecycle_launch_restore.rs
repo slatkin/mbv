@@ -112,7 +112,7 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
 fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
     let mut model = Model::new(make_app_stub());
     model.app.panel_focus = PanelFocus::Queue;
-    model.app.player_tab.queue_cursor = 7;
+    model.app.local_view.set_cursor(7);
 
     let mut selected = make_item("Selected home item", "Movie");
     selected.id = "selected-home-item".into();

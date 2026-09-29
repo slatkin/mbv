@@ -538,14 +538,14 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
-        let mint = app.player_tab.queue.revision_mint();
-        app.player_tab.queue = mbv_queue::PlaybackQueue::from_queue_items(
+        let mint = app.local_view.playback_queue().revision_mint();
+        app.local_view.queue = mbv_queue::PlaybackQueue::from_queue_items(
             vec![feed_item("a", Some("https://feed/a.mp3"))],
             Some(0),
             mint,
         );
         let before: Vec<String> = app
-            .player_tab
+            .local_view
             .queue
             .slots()
             .iter()
@@ -568,7 +568,7 @@ mod tests {
             "device-1"
         );
         let after: Vec<String> = app
-            .player_tab
+            .local_view
             .queue
             .slots()
             .iter()

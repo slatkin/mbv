@@ -53,16 +53,16 @@ impl App {
             .as_ref()
             .and_then(|s| s.now_playing_item_id.as_deref());
         // Resolve the destination and payload directly from the visible queue.
-        let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
+        let Some((target_idx, _)) = remote_jump_target(&self.local_view, current_remote_id, delta)
         else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
         };
-        let emby_items = self.player_tab.emby_items();
+        let emby_items = self.local_view.emby_items();
         // Remap the canonical queue index to the Emby-only item index used by
         // the session API.
         let emby_start = self
-            .player_tab
+            .local_view
             .queue
             .slots()
             .iter()
@@ -129,12 +129,12 @@ impl App {
 /// Resolve a remote Next/Previous destination by locating the connected
 /// session's now-playing item in the visible queue and applying the delta.
 pub(in crate::app) fn remote_jump_target(
-    player_tab: &crate::app::PlayerTab,
+    local_view: &crate::app::QueueView,
     now_playing_item_id: Option<&str>,
     delta: i64,
 ) -> Option<(usize, i64)> {
     let current = now_playing_item_id.and_then(|rid| {
-        player_tab
+        local_view
             .queue
             .slots()
             .iter()
@@ -144,12 +144,12 @@ pub(in crate::app) fn remote_jump_target(
         .ok()?
         .checked_add(i128::from(delta))?;
     let t = usize::try_from(t).ok()?;
-    if t >= player_tab.total_queue_len() {
+    if t >= local_view.total_queue_len() {
         return None;
     }
     Some((
         t,
-        player_tab
+        local_view
             .emby_item_at(t)
             .map_or(0, |i| i.playback_position_ticks),
     ))
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn remote_jump_target_moves_to_adjacent_queue_item() {
-        let player = crate::app::PlayerTab::from_emby_items(crate::app::tests::make_items(3), 0);
+        let player = crate::app::QueueView::from_emby_items(crate::app::tests::make_items(3), 0);
         assert_eq!(
             remote_jump_target(&player, Some("id1"), 1).map(|(index, _)| index),
             Some(2)

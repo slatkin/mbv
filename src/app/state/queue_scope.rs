@@ -1,9 +1,9 @@
-use crate::app::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
+use crate::app::{App, PendingQueueAction, QueueScope, QueueScopeResolution, QueueView, UndoEntry};
 use mbv_queue::QueueSlotId;
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {
-        self.remote_player_tab.is_some()
+        self.remote_view.is_some()
     }
 
     pub(in crate::app) fn has_direct_remote_queue(&self) -> bool {
@@ -41,11 +41,11 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
-    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
+    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &QueueView {
         match scope {
-            QueueScope::Local => &self.player_tab,
+            QueueScope::Local => &self.local_view,
             QueueScope::Remote => self
-                .remote_player_tab
+                .remote_view
                 .as_ref()
                 .expect("remote queue scope requires remote queue"),
         }
@@ -63,11 +63,11 @@ impl App {
             .position(|slot| slot.slot_id == slot_id)
     }
 
-    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
+    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut QueueView {
         match scope {
-            QueueScope::Local => &mut self.player_tab,
+            QueueScope::Local => &mut self.local_view,
             QueueScope::Remote => self
-                .remote_player_tab
+                .remote_view
                 .as_mut()
                 .expect("remote queue scope requires remote queue"),
         }
@@ -133,19 +133,19 @@ impl App {
         self.queue_scope_resolution().visible_scope()
     }
 
-    pub(in crate::app) fn displayed_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
         self.queue_for_scope(self.viewed_queue_scope())
     }
 
-    pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
         self.queue_for_scope_mut(self.viewed_queue_scope())
     }
 
-    pub(in crate::app) fn playback_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn playback_queue(&self) -> &QueueView {
         self.queue_for_scope(self.playing_queue_scope())
     }
 
-    pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut QueueView {
         self.queue_for_scope_mut(self.playing_queue_scope())
     }
 
@@ -176,7 +176,11 @@ impl App {
         slot_id: QueueSlotId,
         consume: bool,
     ) -> (bool, bool) {
-        let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
+        let item = self
+            .playback_queue()
+            .playback_queue()
+            .slot(slot_id)
+            .map(|s| &s.item);
         let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
         let (consume_videos, consume_audio) = {

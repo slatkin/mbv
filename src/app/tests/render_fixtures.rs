@@ -62,7 +62,7 @@ pub fn make_movie_app() -> App {
 pub fn make_queue_app(item_count: usize) -> App {
     let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
-    app.player_tab.set_items(
+    app.local_view.set_items(
         (0..item_count)
             .map(|i| make_item(&format!("Queue Item {i}"), "Movie"))
             .collect(),

@@ -169,7 +169,7 @@ impl App {
         if !was_playing || self.has_direct_remote_queue() {
             return;
         }
-        let Some(slot) = self.player_tab.queue.slots().get(current_idx) else {
+        let Some(slot) = self.local_view.playback_queue().slots().get(current_idx) else {
             return;
         };
         let slot_id = slot.slot_id;
@@ -182,7 +182,7 @@ impl App {
         }
         let last_id = item.id.clone();
         let _ = self
-            .player_tab
+            .local_view
             .queue
             .update_slot_item(slot_id, mbv_queue::QueueItem::Emby(Box::new(item)));
         self.last_played_item_id = Some(last_id);

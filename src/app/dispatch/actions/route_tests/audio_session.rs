@@ -12,11 +12,11 @@ fn make_remote_session(audio_only: bool) -> mbv_emby::SessionInfo {
 fn is_audio_item_falls_back_to_local_state_when_no_session() {
     let mut app = crate::app::tests::make_app_stub();
     assert!(app.connected_session_id.is_none());
-    app.player_tab.set_items(
+    app.local_view.set_items(
         vec![mbv_emby_model::test_support::make_item("song", "Audio")],
-        app.player_tab.queue_cursor,
+        app.local_view.cursor(),
     );
-    app.player_tab.queue_cursor = 0;
+    app.local_view.set_cursor(0);
 
     assert!(app.is_audio_item());
 }

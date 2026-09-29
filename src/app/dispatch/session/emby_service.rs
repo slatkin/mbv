@@ -25,8 +25,8 @@ impl App {
         if !active_is_feed {
             self.player.stop();
         }
-        let mut queues = vec![&mut self.player_tab];
-        if let Some(queue) = self.remote_player_tab.as_mut() {
+        let mut queues = vec![&mut self.local_view];
+        if let Some(queue) = self.remote_view.as_mut() {
             queues.push(queue);
         }
         for queue in queues {

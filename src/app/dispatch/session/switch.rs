@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
+use crate::app::{App, QueueScope, QueueView, SuspendedLocalSession};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
@@ -69,14 +69,14 @@ impl App {
 
         let mut daemon_tab = initial_unified_state
             .as_ref()
-            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
+            .map_or_else(QueueView::empty, QueueView::from_snapshot);
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
-            if let Some(previous_tab) = &self.remote_player_tab {
+            if let Some(previous_tab) = &self.remote_view {
                 daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
             }
-            self.remote_player_tab = Some(daemon_tab);
+            self.remote_view = Some(daemon_tab);
         }
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -185,14 +185,14 @@ impl App {
 
         let mut daemon_tab = initial_unified_state
             .as_ref()
-            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
+            .map_or_else(QueueView::empty, QueueView::from_snapshot);
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_tab, initial_queue_source);
         } else {
-            if let Some(previous_tab) = &self.remote_player_tab {
+            if let Some(previous_tab) = &self.remote_view {
                 daemon_tab.adopt_revision_mint(previous_tab.revision_mint());
             }
-            self.remote_player_tab = Some(daemon_tab);
+            self.remote_view = Some(daemon_tab);
         }
         self.advance_queue_epoch();
         self.remote.direct_remote_connected = false;
@@ -264,18 +264,18 @@ impl App {
     /// Local daemon attach: one unified queue owned by the daemon
     /// (local-daemon-thin-client spec). Adopt the owner's Bound queue as the
     /// displayed Local queue, mirroring the App-construction attach path —
-    /// parking it in `remote_player_tab` leaves it unreachable, because the
+    /// parking it in `remote_view` leaves it unreachable, because the
     /// unified view never reads that tab.
     fn adopt_local_daemon_queue(
         &mut self,
-        daemon_tab: PlayerTab,
+        daemon_tab: QueueView,
         queue_source: mbv_queue::QueueSource,
     ) {
         let mut daemon_tab = daemon_tab;
-        daemon_tab.adopt_revision_mint(self.player_tab.revision_mint());
-        self.player_tab = daemon_tab;
+        daemon_tab.adopt_revision_mint(self.local_view.revision_mint());
+        self.local_view = daemon_tab;
         self.queue_source = queue_source;
-        self.remote_player_tab = None;
+        self.remote_view = None;
     }
 
     fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
@@ -307,13 +307,13 @@ impl App {
     fn finish_local_mode(
         &mut self,
         status: String,
-        reconnected_local_daemon: Option<(PlayerTab, mbv_queue::QueueSource)>,
+        reconnected_local_daemon: Option<(QueueView, mbv_queue::QueueSource)>,
     ) {
         if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
-            self.player_tab = initial_tab;
+            self.local_view = initial_tab;
             self.queue_source = remote_queue_source;
         }
-        self.remote_player_tab = None;
+        self.remote_view = None;
         self.set_queue_scope(QueueScope::Local);
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -394,7 +394,7 @@ impl App {
         self.player.disconnect_remote();
         let mut status = status.to_string();
         // Populated only when the local-daemon reconnect branch below
-        // succeeds, so the tail can restore `player_tab` / queue source
+        // succeeds, so the tail can restore `local_view` / queue source
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
         if let Some(suspended) = self
@@ -423,8 +423,8 @@ impl App {
                         });
                     let mut initial_tab = initial_unified_state
                         .as_ref()
-                        .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
-                    initial_tab.adopt_revision_mint(self.player_tab.revision_mint());
+                        .map_or_else(QueueView::empty, QueueView::from_snapshot);
+                    initial_tab.adopt_revision_mint(self.local_view.revision_mint());
                     let always_play_next = self.config.lock().unwrap().always_play_next;
                     self.player = PlayerProxy::remote(remote, always_play_next);
                     self.player_rx = remote_rx;

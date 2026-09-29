@@ -90,13 +90,11 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
 fn assert_attached_context_selection_preserves_local_queue(action: ContextAction) {
     let mut app = crate::app::tests::make_app_stub();
     app.connected_session_id = Some("session-1".into());
-    app.player_tab.set_items(
-        crate::app::tests::make_items(2),
-        app.player_tab.queue_cursor,
-    );
-    app.player_tab.queue_cursor = 1;
+    app.local_view
+        .set_items(crate::app::tests::make_items(2), app.local_view.cursor());
+    app.local_view.set_cursor(1);
     let before: Vec<_> = app
-        .player_tab
+        .local_view
         .queue
         .slots()
         .iter()
@@ -106,14 +104,14 @@ fn assert_attached_context_selection_preserves_local_queue(action: ContextAction
     app.execute_context_action(Some(action), None);
 
     let after: Vec<_> = app
-        .player_tab
+        .local_view
         .queue
         .slots()
         .iter()
         .map(|slot| (slot.slot_id, slot.item.id().to_string()))
         .collect();
     assert_eq!(after, before);
-    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert_eq!(app.local_view.cursor(), 1);
 }
 
 #[rstest]
@@ -138,8 +136,8 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         "https://old-books.example",
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
-    app.player_tab.set_queue_items(mixed.clone(), 2);
-    app.remote_player_tab = Some(crate::app::state::player_tab::PlayerTab::new(
+    app.local_view.set_queue_items(mixed.clone(), 2);
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::new(
         mixed.clone(),
         3,
     ));
@@ -147,25 +145,25 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     // A cold local queue is Composed; the remote tab is the remote Bound view.
     app.remove_audiobookshelf_confirmed();
 
-    assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
-    assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
+    assert_audiobookshelf_queue_purged(&app.local_view.all_queue_items());
+    assert_audiobookshelf_queue_purged(&app.remote_view.as_ref().unwrap().all_queue_items());
 
     // Refill the projections and make the local slot active: this is the
-    // local Bound replacement path, while remote_player_tab remains remote Bound.
+    // local Bound replacement path, while remote_view remains remote Bound.
     let mixed = mixed_audiobookshelf_queue();
     app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
         "https://replacement-books.example",
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "replacement-secret")
         .unwrap();
-    app.player_tab.set_queue_items(mixed.clone(), 2);
-    let active_slot = app.player_tab.slot_id_at(2).unwrap();
+    app.local_view.set_queue_items(mixed.clone(), 2);
+    let active_slot = app.local_view.slot_id_at(2).unwrap();
     assert!(matches!(
-        app.player_tab.queue.set_active_slot(active_slot),
+        app.local_view.playback_queue().set_active_slot(active_slot),
         mbv_queue::QueueMutationResult::Applied(())
     ));
     app.player.status.lock().unwrap().active = true;
-    app.remote_player_tab = Some(crate::app::state::player_tab::PlayerTab::new(
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::new(
         mixed.clone(),
         3,
     ));
@@ -189,6 +187,6 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     app.replace_audiobookshelf_confirmed(generation);
 
-    assert_audiobookshelf_queue_purged(&app.player_tab.all_queue_items());
-    assert_audiobookshelf_queue_purged(&app.remote_player_tab.as_ref().unwrap().all_queue_items());
+    assert_audiobookshelf_queue_purged(&app.local_view.all_queue_items());
+    assert_audiobookshelf_queue_purged(&app.remote_view.as_ref().unwrap().all_queue_items());
 }

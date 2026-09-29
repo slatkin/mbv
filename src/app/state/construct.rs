@@ -97,8 +97,8 @@ impl App {
             audiobookshelf_socket_rx: init.audiobookshelf_socket_rx,
             audiobookshelf_socket_tx: init.audiobookshelf_socket_tx,
             audiobookshelf_socket_generation: init.audiobookshelf_socket_generation,
-            player_tab: init.player_tab,
-            remote_player_tab: init.remote_player_tab,
+            local_view: init.local_view,
+            remote_view: init.remote_view,
             system_notifications: init.system_notifications,
             images: mbv_images::cache::ImageCache::new(
                 init.image_cache_size,
@@ -208,7 +208,6 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_source: mbv_queue::QueueSource::Unknown,
             queue_dirty: false,
             pending_owner_source_update: None,
             queue_deferrals: crate::app::QueueDeferrals::default(),

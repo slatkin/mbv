@@ -3,15 +3,14 @@ use super::{App, PlaylistMutation};
 impl App {
     pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {
         matches!(
-            &self.queue_source,
+            self.playback_queue().source(),
             mbv_queue::QueueSource::Playlist { id: Some(_), .. }
         )
     }
 
     pub(in crate::app) fn queue_playlist_id(&self) -> Option<&str> {
-        if let mbv_queue::QueueSource::Playlist {
-            id: Some(ref id), ..
-        } = self.queue_source
+        if let mbv_queue::QueueSource::Playlist { id: Some(id), .. } =
+            self.playback_queue().source()
         {
             Some(id.as_str())
         } else {
@@ -20,7 +19,7 @@ impl App {
     }
 
     pub(in crate::app) fn queue_playlist_name(&self) -> &str {
-        if let mbv_queue::QueueSource::Playlist { ref name, .. } = self.queue_source {
+        if let mbv_queue::QueueSource::Playlist { name, .. } = self.playback_queue().source() {
             name.as_str()
         } else {
             ""

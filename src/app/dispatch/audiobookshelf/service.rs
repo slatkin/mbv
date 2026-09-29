@@ -139,12 +139,12 @@ impl App {
             self.player.stop();
         }
         // Filter both local and remote player tabs, keeping Emby + Feed items.
-        let mut queues = vec![&mut self.player_tab];
-        if let Some(queue) = self.remote_player_tab.as_mut() {
+        let mut queues = vec![&mut self.local_view];
+        if let Some(queue) = self.remote_view.as_mut() {
             queues.push(queue);
         }
         for queue in queues {
-            let cursor_before = queue.queue_cursor;
+            let cursor_before = queue.cursor();
             let kept = queue
                 .all_queue_items()
                 .into_iter()
@@ -207,12 +207,12 @@ impl App {
 
         // Snapshot in-memory queue for rollback on failure; persisted queue
         // state is owner-held, so only the in-memory projections restore here.
-        let old_player_items = self.player_tab.all_queue_items();
-        let old_player_cursor = self.player_tab.queue_cursor;
+        let old_player_items = self.local_view.all_queue_items();
+        let old_player_cursor = self.local_view.cursor();
         let old_remote_items = self
-            .remote_player_tab
+            .remote_view
             .as_ref()
-            .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
+            .map(|tab| (tab.all_queue_items(), tab.cursor()));
 
         let result = mbv_audiobookshelf::replace_audiobookshelf_candidate(
             mbv_audiobookshelf::AudiobookshelfValidatedSetup::new(
@@ -223,10 +223,10 @@ impl App {
             || Ok(()),
             || {
                 // Restore in-memory queues on failure.
-                self.player_tab
+                self.local_view
                     .set_queue_items(old_player_items.clone(), old_player_cursor);
                 if let Some((items, cursor)) = old_remote_items.clone()
-                    && let Some(tab) = self.remote_player_tab.as_mut()
+                    && let Some(tab) = self.remote_view.as_mut()
                 {
                     tab.set_queue_items(items, cursor);
                 }
@@ -368,7 +368,7 @@ impl App {
                             && ep.episode_id == progress.episode_id
                     })
                 })
-        }) || self.player_tab.queue.slots().iter().any(|slot| {
+        }) || self.local_view.playback_queue().slots().iter().any(|slot| {
             slot.item.as_audiobookshelf().is_some_and(|ep| {
                 ep.library_item_id == progress.library_item_id
                     && ep.episode_id == progress.episode_id

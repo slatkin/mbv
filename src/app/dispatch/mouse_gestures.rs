@@ -43,8 +43,8 @@ impl App {
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).
-        if let Some(slot_id) = self.playback_queue().queue.active_slot_id()
-            && let Some(slot) = self.playback_queue().queue.slot(slot_id)
+        if let Some(slot_id) = self.playback_queue().playback_queue().active_slot_id()
+            && let Some(slot) = self.playback_queue().playback_queue().slot(slot_id)
             && matches!(slot.item, mbv_queue::QueueItem::Feed(ref e) if e.feed_id.is_some())
         {
             self.feed_seek_pending_slot = Some(slot_id);
@@ -77,7 +77,7 @@ impl App {
             .iter()
             .position(|slot| slot.slot_id == slot_id)?;
         self.mark_queue_cursor_user_active();
-        self.displayed_queue_mut().queue_cursor = index;
+        self.displayed_queue_mut().set_cursor(index);
         Some(index)
     }
 

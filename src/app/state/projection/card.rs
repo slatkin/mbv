@@ -141,8 +141,8 @@ impl App {
             }
             let queue = self.displayed_queue();
             queue
-                .clone_emby_item_at(queue.queue_cursor)
-                .map(|item| (queue.queue_cursor, item))
+                .clone_emby_item_at(queue.cursor())
+                .map(|item| (queue.cursor(), item))
         })
     }
 
@@ -181,7 +181,7 @@ impl App {
                 return None;
             }
             let queue = self.displayed_queue();
-            queue.item_at(queue.queue_cursor).cloned()
+            queue.item_at(queue.cursor()).cloned()
         });
         let cover_id = match raw_item {
             Some(QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(ep))) => {

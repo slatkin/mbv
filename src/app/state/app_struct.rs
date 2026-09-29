@@ -2,8 +2,8 @@ use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_owner::QueueEpoch;
+use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::types::cast::CastAttachment;
 use mbv_ctrl::player::PlayerEvent;
@@ -122,8 +122,8 @@ pub struct App {
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,
     pub(in crate::app) libs: Vec<LibraryTab>,
-    pub(in crate::app) player_tab: PlayerTab,
-    pub(in crate::app) remote_player_tab: Option<PlayerTab>,
+    pub(in crate::app) local_view: QueueView,
+    pub(in crate::app) remote_view: Option<QueueView>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
@@ -291,7 +291,6 @@ pub struct App {
     pub(in crate::app) playlists_open_cursor: usize,
     pub(in crate::app) playlists_open_scroll: usize,
     pub(in crate::app) playlists_open_loading: bool,
-    pub(in crate::app) queue_source: mbv_queue::QueueSource,
     pub(in crate::app) queue_dirty: bool,
     pub(in crate::app) pending_owner_source_update:
         Option<(mbv_queue::QueueSource, mbv_queue::QueueLineage)>,

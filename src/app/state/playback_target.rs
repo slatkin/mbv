@@ -155,7 +155,7 @@ impl App {
             // Session and the slot stays `None`; presentation falls back to
             // the Session's own title and progress.
             let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
-                self.player_tab
+                self.local_view
                     .queue
                     .slots()
                     .iter()

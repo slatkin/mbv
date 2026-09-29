@@ -73,7 +73,7 @@ pub(in crate::app) enum Command {
     /// from this index if the visible queue isn't the one currently playing.
     /// The target index is carried explicitly (split-queue-cursor-ownership
     /// D2): the shell resolves the slot the user selected and passes it
-    /// rather than this command re-reading `queue.queue_cursor` as an
+    /// rather than this command re-reading `queue.cursor()` as an
     /// ambient argument channel.
     QueuePlayCursor(usize),
 
@@ -536,7 +536,7 @@ impl App {
     ) {
         // Cold start: submit the full canonical queue (all
         // variants) so the player's internal playlist matches
-        // the PlayerTab's queue exactly.
+        // the QueueView's queue exactly.
         let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
         let eligible: Vec<_> = all_slots
             .into_iter()
@@ -572,7 +572,7 @@ impl App {
         let submitted = self.player.submit_queue_slots(
             eligible,
             start_idx,
-            self.queue_source.clone(),
+            self.playback_queue().source().clone(),
             self.emby_snapshot().map(Arc::new),
             headless,
             self.ui_volume,

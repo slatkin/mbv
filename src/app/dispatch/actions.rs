@@ -340,7 +340,7 @@ impl App {
                 self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
                 return;
             }
-            self.defer_local_play(vec![item], 0, self.queue_source.clone());
+            self.defer_local_play(vec![item], 0, self.playback_queue().source().clone());
             return;
         }
         if self.in_non_library_thin_client_mode() {
@@ -624,8 +624,8 @@ impl App {
             .expect("selected queue slot disappeared");
         {
             let queue = self.queue_for_scope_mut(scope);
-            queue.queue_cursor = selected_index;
-            let _ = queue.queue.set_active_slot(selected_slot);
+            queue.set_cursor(selected_index);
+            let _ = queue.playback_queue().set_active_slot(selected_slot);
         }
         let all_slots = self.queue_for_scope(scope).all_queue_slots();
         // While a cast target is attached, playing a selection dispatches it
@@ -651,7 +651,7 @@ impl App {
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,
-            self.queue_source.clone(),
+            self.playback_queue().source().clone(),
             None,
             audio_only,
             self.ui_volume,

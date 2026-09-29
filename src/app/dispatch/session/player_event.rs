@@ -161,7 +161,7 @@ impl App {
 
     fn handle_paused_changed(&mut self, paused: bool) {
         // Persist Feed position on pause (one write per pause event).
-        if paused && let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
+        if paused && let Some(slot_id) = self.playback_queue().playback_queue().active_slot_id() {
             self.persist_feed_slot_position(slot_id);
         }
     }
@@ -238,7 +238,7 @@ impl App {
                     self.apply_stopped_slot_progress(slot_id, position_ticks, played);
                 }
                 if preserve_local_state
-                    && let Some(slot) = self.playback_queue().queue.slot(slot_id)
+                    && let Some(slot) = self.playback_queue().playback_queue().slot(slot_id)
                 {
                     self.last_played_item_id = Some(slot.item.id().to_string());
                     self.last_played_completed = played;
@@ -293,7 +293,7 @@ impl App {
         position_ticks: i64,
         played: bool,
     ) {
-        let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
+        let Some(slot) = self.playback_queue().playback_queue().slot(slot_id) else {
             return;
         };
         let observation = mbv_queue::ProgressObservation::Stopped {
@@ -302,7 +302,7 @@ impl App {
         };
         let position = observation.position_to_record(&slot.item);
         // Persist Feed lifecycle state from the report; the owner publishes the queue update.
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+        if let Some(slot) = self.playback_queue().playback_queue().slot(slot_id)
             && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
         {
             let runtime = slot.item.runtime_ticks();
@@ -359,11 +359,16 @@ impl App {
         else {
             return;
         };
-        if self.playback_queue().queue.slot(slot_id).is_none() {
+        if self
+            .playback_queue()
+            .playback_queue()
+            .slot(slot_id)
+            .is_none()
+        {
             tracing::warn!(name: "consume.track_completed.slot_missing", target: "consume", slot = ?slot_id, "completed track has no live slot; dropping");
             return;
         }
-        let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
+        let Some(slot) = self.playback_queue().playback_queue().slot(slot_id) else {
             return;
         };
         let observation = mbv_queue::ProgressObservation::Completed {
@@ -375,7 +380,7 @@ impl App {
         // `played` means EOF; for Feed entries,
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+        if let Some(slot) = self.playback_queue().playback_queue().slot(slot_id)
             && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
         {
             let runtime = slot.item.runtime_ticks();
@@ -411,7 +416,12 @@ impl App {
         // Activate by owner-assigned identity. Slot identity is stable
         // across the pending-removal consume above, so resolving it to
         // a display position afterward is order-independent.
-        let adjusted = if self.playback_queue().queue.slot(target_slot_id).is_some() {
+        let adjusted = if self
+            .playback_queue()
+            .playback_queue()
+            .slot(target_slot_id)
+            .is_some()
+        {
             let _ = self
                 .playback_queue_mut()
                 .queue
@@ -422,10 +432,13 @@ impl App {
                 .unwrap_or(0)
         } else {
             tracing::warn!(name: "player.track_changed.slot_missing", target: "player", slot = ?target_slot_id, "track change has no live slot; skipping activation");
-            self.playback_queue().queue.active_index().unwrap_or(0)
+            self.playback_queue()
+                .playback_queue()
+                .active_index()
+                .unwrap_or(0)
         };
         if !self.queue_cursor_held_by_user() {
-            self.playback_queue_mut().queue_cursor = adjusted;
+            self.playback_queue_mut().set_cursor(adjusted);
         }
         if !self.has_direct_remote_queue()
             && let Some(item) = self.playback_queue().emby_item_at(adjusted)
@@ -473,7 +486,7 @@ impl App {
             .active_slot
             .and_then(|slot| unified.slots.iter().position(|entry| entry.slot_id == slot))
             .unwrap_or(0);
-        self.player_tab.set_unified_state(unified, cursor);
+        self.local_view.set_unified_state(unified, cursor);
         // Same source adoption/reconciliation as a live owner snapshot
         // (design D6): the home link's snapshots must reconcile a pending
         // playlist-save source update too.
@@ -513,7 +526,7 @@ impl App {
             // User is actively navigating — preserve their
             // selection cursor, but still replace the queue
             // contents so slot data stays current.
-            self.playback_queue().queue_cursor
+            self.playback_queue().cursor()
         } else {
             pending_local_cursor
                 .filter(|pc| *pc < total)
@@ -602,7 +615,7 @@ impl App {
     /// exists and carries a feed identity. Shared by the pause and
     /// seek-completion paths (extracted from `handle_player_event`).
     fn persist_feed_slot_position(&mut self, slot_id: mbv_queue::QueueSlotId) {
-        if let Some(slot) = self.playback_queue().queue.slot(slot_id)
+        if let Some(slot) = self.playback_queue().playback_queue().slot(slot_id)
             && let mbv_queue::QueueItem::Feed(ref entry) = slot.item
             && entry.feed_id.is_some()
         {

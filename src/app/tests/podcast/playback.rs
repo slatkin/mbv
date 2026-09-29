@@ -43,22 +43,24 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
     // Seed the known episode as an inactive slot directly: this test owns
     // the socket merge, not the enqueue (row 5.3 made the enqueue an owner
     // op whose result only reaches the view through the owner's answer).
-    app.player_tab.queue.append(QueueItem::Audiobookshelf(
-        mbv_queue::AudiobookshelfItem::Episode(mbv_queue::AudiobookshelfQueueItem {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            title: "Episode A".into(),
-            show_title: None,
-            author: None,
-            description: None,
-            duration_ticks: None,
-            position_ticks: 0,
-            played: false,
-            pub_date_secs: None,
-            is_finished: false,
-            cover_path: None,
-        }),
-    ));
+    app.local_view
+        .playback_queue()
+        .append(QueueItem::Audiobookshelf(
+            mbv_queue::AudiobookshelfItem::Episode(mbv_queue::AudiobookshelfQueueItem {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                show_title: None,
+                author: None,
+                description: None,
+                duration_ticks: None,
+                position_ticks: 0,
+                played: false,
+                pub_date_secs: None,
+                is_finished: false,
+                cover_path: None,
+            }),
+        ));
 
     // Activate a different slot so episode-a is inactive.
     let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
@@ -77,9 +79,9 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
             cover_path: None,
         },
     ));
-    app.player_tab.queue.append(other);
-    let other_slot = app.player_tab.queue.slots()[1].slot_id;
-    let _ = app.player_tab.queue.set_active_slot(other_slot);
+    app.local_view.playback_queue().append(other);
+    let other_slot = app.local_view.playback_queue().slots()[1].slot_id;
+    let _ = app.local_view.playback_queue().set_active_slot(other_slot);
 
     assert!(
         app.playback_queue()
@@ -98,7 +100,7 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
     }));
 
     let slot = app
-        .player_tab
+        .local_view
         .queue
         .slots()
         .iter()

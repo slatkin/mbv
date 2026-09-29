@@ -261,7 +261,7 @@ impl App {
             // (ContextAction::PlayQueue, D2); bare Play on Queue
             // focus should not occur, but keep the legacy read for
             // defensive parity with the pre-D2 behavior.
-            let index = self.displayed_queue().queue_cursor;
+            let index = self.displayed_queue().cursor();
             self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
                 index,
             ));

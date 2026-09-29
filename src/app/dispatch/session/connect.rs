@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PlayerTab};
+use crate::app::{App, QueueView};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
 use mbv_player::PlayerProxy;
@@ -209,11 +209,11 @@ impl App {
         }
         let mut tab = initial_unified_state
             .as_ref()
-            .map_or_else(PlayerTab::default, PlayerTab::from_unified_state);
-        if let Some(previous_tab) = &self.remote_player_tab {
+            .map_or_else(QueueView::empty, QueueView::from_snapshot);
+        if let Some(previous_tab) = &self.remote_view {
             tab.adopt_revision_mint(previous_tab.revision_mint());
         }
-        self.remote_player_tab = Some(tab);
+        self.remote_view = Some(tab);
         self.remote.direct_remote_connected = true;
         self.advance_queue_epoch();
         self.remote.session_miss_count = 0;

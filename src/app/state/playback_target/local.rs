@@ -52,8 +52,8 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn is_audio_item(app: &App) -> bool {
-        let idx = app.player_tab.queue_cursor;
-        app.player_tab
+        let idx = app.local_view.cursor();
+        app.local_view
             .emby_item_at(idx)
             .is_some_and(|i| i.media_type == "Audio" || i.item_type == "Audio")
     }

@@ -253,14 +253,14 @@ impl App {
         // (the now-playing highlight was display-only).
         if let Some(np_id) = s.now_playing_item_id.as_deref() {
             let playing_slot = self
-                .player_tab
+                .local_view
                 .queue
                 .slots()
                 .iter()
                 .find(|slot| slot.item.id() == np_id)
                 .map(|slot| slot.slot_id);
             if let Some(slot_id) = playing_slot {
-                let _ = self.player_tab.queue.set_active_slot(slot_id);
+                let _ = self.local_view.playback_queue().set_active_slot(slot_id);
             }
         }
         self.remote.session_miss_count = 0;

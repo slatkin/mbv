@@ -661,5 +661,5 @@ fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target(
     harness.model_mut().sync_mounted_surfaces();
 
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
-    assert!(harness.model().app.player_tab.queue.is_empty());
+    assert!(harness.model().app.local_view.playback_queue().is_empty());
 }

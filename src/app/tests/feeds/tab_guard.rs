@@ -73,10 +73,10 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 2. A bounds-miss shuffle target (the old tab-recovery would
     // panic on emby_library_index().unwrap()) must return early without
     // panic or mutation.
-    let queue_len_before = app.player_tab.emby_items().len();
+    let queue_len_before = app.local_view.emby_items().len();
     app.shuffle_play_target(app.libs.len(), None); // index past the single library
     assert_eq!(
-        app.player_tab.emby_items().len(),
+        app.local_view.emby_items().len(),
         queue_len_before,
         "a bounds-miss shuffle must not touch the queue"
     );
@@ -127,7 +127,7 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
         app.status
     );
     assert!(
-        app.playback_queue().queue.slots().is_empty(),
+        app.playback_queue().playback_queue().slots().is_empty(),
         "no-source entry must not be mirrored into the queue panel"
     );
 }
@@ -265,5 +265,5 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         1,
         "Feeds F5 must not clear the Audiobookshelf catalog"
     );
-    assert_eq!(app.player_tab.total_queue_len(), 0);
+    assert_eq!(app.local_view.total_queue_len(), 0);
 }

@@ -138,7 +138,11 @@ impl App {
                     drop(client);
                     // Row 5.3 (design D6): `play_items_routed` replaces the
                     // queue on the Player owner; no Client-side queue write.
-                    self.play_items_routed(siblings, start_idx, self.queue_source.clone());
+                    self.play_items_routed(
+                        siblings,
+                        start_idx,
+                        self.playback_queue().source().clone(),
+                    );
                     return true;
                 }
                 drop(client);

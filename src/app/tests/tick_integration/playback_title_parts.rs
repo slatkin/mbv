@@ -35,7 +35,7 @@ fn title_parts_app(active_idx: usize) -> App {
     track.artist = "Artist B".into();
     let mut movie = make_item("Movie One", "Movie");
     movie.id = "movie-one".into();
-    app.player_tab.set_items(vec![track, movie], 0);
+    app.local_view.set_items(vec![track, movie], 0);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;

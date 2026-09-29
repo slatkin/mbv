@@ -298,7 +298,7 @@ impl App {
         // Extract identity from the slot before any mutable borrow.
         let (feed_id, entry_guid) = {
             let queue = self.playback_queue();
-            let Some(slot) = queue.queue.slot(slot_id) else {
+            let Some(slot) = queue.playback_queue().slot(slot_id) else {
                 return;
             };
             let QueueItem::Feed(ref entry) = slot.item else {

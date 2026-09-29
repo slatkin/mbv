@@ -37,7 +37,7 @@ impl App {
         // owner's last accepted state before the edit is sent: the Client
         // holds no editable queue, so the view changes only when the
         // owner's answer is adopted.
-        let cursor_before = self.queue_for_scope(scope).queue_cursor;
+        let cursor_before = self.queue_for_scope(scope).cursor();
         let Some(slot_id) = self.queue_for_scope(scope).slot_id_at(pos) else {
             return;
         };
@@ -62,7 +62,8 @@ impl App {
                 } else {
                     cursor_before
                 };
-                self.queue_for_scope_mut(scope).queue_cursor = cursor.min(len.saturating_sub(1));
+                self.queue_for_scope_mut(scope)
+                    .set_cursor(cursor.min(len.saturating_sub(1)));
                 self.record_undoable_queue_edit(scope, UndoEntry::Remove { item, index: pos });
             }
             QueueOpEdit::SentLegacy => {
@@ -179,7 +180,8 @@ impl App {
         }
         if sent == QueueOpEdit::Applied {
             let len = self.queue_for_scope(scope).total_queue_len();
-            self.queue_for_scope_mut(scope).queue_cursor = cursor_after.min(len.saturating_sub(1));
+            self.queue_for_scope_mut(scope)
+                .set_cursor(cursor_after.min(len.saturating_sub(1)));
             // The mounted component owns the painted cursor and only adopts
             // `App`'s value when a re-anchor is armed; the adopted snapshot
             // moved the cursor onto the item preceding the range.
@@ -203,7 +205,7 @@ impl App {
     /// Moves the item at `from` by `delta` within the displayed queue's
     /// scope. The target is passed explicitly (split-queue-cursor-ownership
     /// D2): the shell resolves the slot the user selected and hands it over
-    /// rather than this function re-reading `queue.queue_cursor` as an
+    /// rather than this function re-reading `queue.cursor()` as an
     /// ambient argument channel.
     fn move_queue_item_by(&mut self, from: usize, delta: isize) {
         let scope = self.viewed_queue_scope();
@@ -253,7 +255,8 @@ impl App {
                     // The selection stays on the moved entry at its new
                     // position.
                     let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope).queue_cursor = to.min(len.saturating_sub(1));
+                    self.queue_for_scope_mut(scope)
+                        .set_cursor(to.min(len.saturating_sub(1)));
                 }
                 self.record_undoable_queue_edit(scope, UndoEntry::Move { slot_id, from });
             }
@@ -299,7 +302,8 @@ impl App {
                 );
                 if sent == QueueOpEdit::Applied {
                     let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope).queue_cursor = index.min(len.saturating_sub(1));
+                    self.queue_for_scope_mut(scope)
+                        .set_cursor(index.min(len.saturating_sub(1)));
                 }
             }
             UndoEntry::Move { slot_id, from } => {
@@ -312,7 +316,8 @@ impl App {
                 );
                 if sent == QueueOpEdit::Applied {
                     let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope).queue_cursor = from.min(len.saturating_sub(1));
+                    self.queue_for_scope_mut(scope)
+                        .set_cursor(from.min(len.saturating_sub(1)));
                 }
             }
         }
