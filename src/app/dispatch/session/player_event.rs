@@ -522,7 +522,10 @@ impl App {
             .and_then(|slot| unified.slots.iter().position(|entry| entry.slot_id == slot))
             .unwrap_or(0);
         self.player_tab.set_unified_state(unified, cursor);
-        self.queue_source = unified.source.clone();
+        // Same source adoption/reconciliation as a live owner snapshot
+        // (design D6): the home link's snapshots must reconcile a pending
+        // playlist-save source update too.
+        self.adopt_owner_source(unified);
     }
 
     /// Handle a `PlayerEvent::UnifiedQueueUpdated` (extracted from

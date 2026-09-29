@@ -8,10 +8,12 @@ use crate::app::dispatch::notify::ToastSeverity;
 impl App {
     /// The origin to fence a request against, captured at request time.
     /// `None` when the owner has not yet delivered a queue snapshot, so no
-    /// owner lineage exists to carry.
+    /// owner lineage exists to carry. The lineage is read from the Local
+    /// queue's owner link (the suspended home link when present), matching
+    /// `queue_link`'s Local resolution.
     pub(in crate::app) fn queue_origin(&self) -> Option<QueueOrigin> {
         let lineage = self
-            .player
+            .local_queue_player()
             .as_remote()
             .and_then(|remote| remote.unified_queue_state())
             .map(|state| state.lineage)?;

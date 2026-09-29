@@ -37,6 +37,15 @@ impl App {
         }
     }
 
+    /// The `PlayerProxy` that owns the Local queue's state: the suspended home
+    /// link when present, else the current player. Read-only counterpart of
+    /// [`App::queue_link`] for `QueueScope::Local`.
+    pub(in crate::app) fn local_queue_player(&self) -> &mbv_player::PlayerProxy {
+        self.suspended_local
+            .as_ref()
+            .map_or(&self.player, |home| &home.player)
+    }
+
     pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
         match scope {
             QueueScope::Local => &self.player_tab,

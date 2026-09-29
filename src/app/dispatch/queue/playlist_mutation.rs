@@ -172,8 +172,12 @@ impl App {
         origin: QueueOrigin,
     ) -> bool {
         let lineage = origin.lineage;
+        // The mutation pushes the Local queue (`player_tab`), so the source
+        // update must reach that queue's owner link (the suspended home link
+        // when a route or direct-remote peer is attached) -- not whichever
+        // peer is currently routed.
         let sent = self
-            .player
+            .local_queue_player()
             .as_remote()
             .is_some_and(|remote| remote.update_queue_source(source.clone(), lineage).is_ok());
         if !sent {
