@@ -258,16 +258,56 @@ fn local_daemon_route_attach_adopts_the_owner_queue_as_the_unified_local_view() 
 }
 
 #[test]
-fn local_daemon_attach_restore_brings_back_the_suspended_local_queue() {
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
-    let daemon_items = make_items(1);
-    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(daemon_items, 0);
-    app.switch_to_library_route("music", remote, remote_rx, &DaemonEndpoint::Local);
+fn switching_away_from_home_link_keeps_it_suspended_and_connected() {
+    let (mut app, home_commands) = make_local_daemon_app_stub_with_cmd_rx(make_items(1));
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.restore_local_mode("Local playback restored");
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
-    assert!(!app.player.is_remote());
-    assert_eq!(app.player_tab.emby_items().len(), 2);
+    let home = app
+        .suspended_local
+        .as_ref()
+        .expect("home link stays suspended");
+    assert!(!home.player.is_remote_disconnected());
+    assert!(app.player.is_remote());
+    assert!(!home_commands.try_iter().any(|command| matches!(
+        command,
+        mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
+            if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
+    )));
+}
+
+#[test]
+fn local_route_while_home_link_is_suspended_reinstates_it() {
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    let (route, route_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_library_route("music", route, route_rx, &stub_endpoint());
+    let (unused_local, unused_local_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+
+    app.switch_to_library_route(
+        "local",
+        unused_local.clone(),
+        unused_local_rx,
+        &DaemonEndpoint::Local,
+    );
+
+    assert!(app.suspended_local.is_none());
+    assert!(app.is_local_daemon());
+    assert!(!app.player.is_remote_disconnected());
+}
+
+#[test]
+fn switching_away_with_stay_alive_disabled_sends_stop_to_home_link() {
+    let (mut app, home_commands) = make_local_daemon_app_stub_with_cmd_rx(make_items(1));
+    app.config.lock().unwrap().stay_alive = false;
+    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
+
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+
+    assert!(app.suspended_local.is_some());
+    assert!(home_commands.try_iter().any(|command| matches!(
+        command,
+        mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
+            if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
+    )));
 }

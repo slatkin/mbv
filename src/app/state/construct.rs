@@ -78,25 +78,13 @@ impl App {
             None,
         )
         .with_video_cache(config.video_cache_forward_mb, config.video_cache_back_mb);
-        let (_ws_tx, ws_rx) = mpsc::channel();
-        let (_abs_tx, abs_rx) = mpsc::channel();
         let player = PlayerProxy::local(raw_player, config.always_play_next);
         // Test builds must never construct the real external (issue #757):
         // a fall-through test that plays locally would otherwise cold-start
         // a real mpv handle that races process teardown.
         #[cfg(test)]
         player.inhibit_mpv();
-        SuspendedLocalSession {
-            player,
-            player_rx,
-            ws_rx,
-            ws_send_tx: None,
-            audiobookshelf_socket_rx: abs_rx,
-            audiobookshelf_socket_tx: None,
-            audiobookshelf_socket_generation: None,
-            player_tab: self.player_tab.clone(),
-            queue_source: self.queue_source.clone(),
-        }
+        SuspendedLocalSession { player, player_rx }
     }
 
     #[expect(

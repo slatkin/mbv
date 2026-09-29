@@ -2,7 +2,6 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
-use mbv_ws::WsEvent;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -14,8 +13,8 @@ impl App {
         remote_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) {
+        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
-        self.player_endpoint = Some(endpoint.clone());
         let initial_unified_state = remote.unified_queue_state();
         let initial_queue_source = initial_unified_state
             .as_ref()
@@ -29,7 +28,14 @@ impl App {
         // playback before the takeover -- see #175.
         let mpris_remote = remote.clone();
 
-        if self.player.is_remote() {
+        if endpoint.is_local() && (self.suspended_local.is_some() || current_is_home) {
+            remote.disconnect();
+            self.restore_local_mode("Local playback restored");
+            return;
+        }
+        self.player_endpoint = Some(endpoint.clone());
+        let keep_home_link = current_is_home;
+        if self.player.is_remote() && !keep_home_link {
             // #233: tear down the previous remote connection's socket
             // before dropping the old PlayerProxy, so its reader thread
             // observes the shutdown and exits instead of leaking.
@@ -37,30 +43,22 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         } else {
-            self.reset_bare_transitions();
-            self.player.stop();
-            self.player.join_or_timeout(Duration::from_secs(5));
-            let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
-            let (_dummy_abs_tx, dummy_abs_rx) =
-                mpsc::channel::<mbv_audiobookshelf::socket::SocketEvent>();
-            let suspended = SuspendedLocalSession {
+            if keep_home_link {
+                if !self.config.lock().unwrap().stay_alive {
+                    self.player.stop();
+                }
+            } else {
+                self.reset_bare_transitions();
+                self.player.stop();
+                self.player.join_or_timeout(Duration::from_secs(5));
+            }
+            self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
                     PlayerProxy::remote(remote, always_play_next),
                 ),
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
-                ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
-                ws_send_tx: self.ws_send_tx.take(),
-                audiobookshelf_socket_rx: std::mem::replace(
-                    &mut self.audiobookshelf_socket_rx,
-                    dummy_abs_rx,
-                ),
-                audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
-                audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
-                player_tab: self.player_tab.clone(),
-                queue_source: self.queue_source.clone(),
-            };
-            self.suspended_local = Some(suspended);
+            });
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();
@@ -138,8 +136,8 @@ impl App {
         // `connect_to_session`'s sever, so a cast attachment must be severed
         // here too. No-op when nothing is attached.
         self.cast_attachment = None;
+        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
-        self.player_endpoint = Some(endpoint.clone());
         let previous_route = self.active_route.clone();
         let initial_unified_state = remote.unified_queue_state();
         let initial_queue_source = initial_unified_state
@@ -152,7 +150,14 @@ impl App {
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
         let mpris_remote = remote.clone();
 
-        if self.player.is_remote() {
+        if endpoint.is_local() && (self.suspended_local.is_some() || current_is_home) {
+            remote.disconnect();
+            self.restore_local_mode("Local playback restored");
+            return;
+        }
+        self.player_endpoint = Some(endpoint.clone());
+        let keep_home_link = current_is_home;
+        if self.player.is_remote() && !keep_home_link {
             // #233: tear down the previous remote connection's socket
             // before dropping the old PlayerProxy, so its reader thread
             // observes the shutdown and exits instead of leaking.
@@ -160,30 +165,22 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         } else {
-            self.reset_bare_transitions();
-            self.player.stop();
-            self.player.join_or_timeout(Duration::from_secs(5));
-            let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
-            let (_dummy_abs_tx, dummy_abs_rx) =
-                mpsc::channel::<mbv_audiobookshelf::socket::SocketEvent>();
-            let suspended = SuspendedLocalSession {
+            if keep_home_link {
+                if !self.config.lock().unwrap().stay_alive {
+                    self.player.stop();
+                }
+            } else {
+                self.reset_bare_transitions();
+                self.player.stop();
+                self.player.join_or_timeout(Duration::from_secs(5));
+            }
+            self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
                     PlayerProxy::remote(remote, always_play_next),
                 ),
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
-                ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
-                ws_send_tx: self.ws_send_tx.take(),
-                audiobookshelf_socket_rx: std::mem::replace(
-                    &mut self.audiobookshelf_socket_rx,
-                    dummy_abs_rx,
-                ),
-                audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
-                audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
-                player_tab: self.player_tab.clone(),
-                queue_source: self.queue_source.clone(),
-            };
-            self.suspended_local = Some(suspended);
+            });
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();
@@ -281,14 +278,10 @@ impl App {
     fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
         self.player = suspended.player;
         self.player_rx = suspended.player_rx;
-        self.ws_rx = suspended.ws_rx;
-        self.ws_send_tx = suspended.ws_send_tx;
-        self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
-        self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
-        self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
-        self.player_endpoint = None;
-        self.player_tab = suspended.player_tab;
-        self.queue_source = suspended.queue_source;
+        self.player_endpoint = self
+            .player
+            .is_remote()
+            .then_some(mbv_remote_player::DaemonEndpoint::Local);
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
     }
 
@@ -386,6 +379,10 @@ impl App {
     pub(in crate::app) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
         tracing::info!(name: "library_route.playback_route.restoring_local", target: "library_route", previous_route = ?previous_route, reason = %status, "restoring local playback");
+        if self.home_is_local_daemon && self.is_local_daemon() && self.suspended_local.is_none() {
+            self.finish_local_mode(status.to_string(), None);
+            return;
+        }
         if !self.player.is_remote() {
             self.reset_bare_transitions();
             self.player.stop();
@@ -461,6 +458,13 @@ impl App {
                 tracing::info!(name: "library_route.playback_route.already_active", target: "library_route", route = %name, item = %item.id, "playback route already active");
             }
             (Some((name, endpoint)), was_routed) => {
+                if endpoint.is_local()
+                    && (self.suspended_local.is_some()
+                        || (self.home_is_local_daemon && self.is_local_daemon()))
+                {
+                    self.restore_local_mode("Local playback restored");
+                    return;
+                }
                 match Self::try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
@@ -506,6 +510,13 @@ impl App {
         if self.player_owner_is_on_this_machine()
             && let Some(endpoint) = self.session_direct_endpoint(sess)
         {
+            if endpoint.is_local()
+                && (self.suspended_local.is_some()
+                    || (self.home_is_local_daemon && self.is_local_daemon()))
+            {
+                self.restore_local_mode("Local playback restored");
+                return;
+            }
             match Self::connect_direct_endpoint(&endpoint) {
                 Ok((remote, remote_rx)) => {
                     self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);

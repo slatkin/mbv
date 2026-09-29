@@ -273,6 +273,13 @@ impl App {
                     tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
                     return;
                 };
+                if endpoint.is_local()
+                    && (self.suspended_local.is_some()
+                        || (self.home_is_local_daemon && self.is_local_daemon()))
+                {
+                    self.restore_local_mode("Local playback restored");
+                    return;
+                }
                 match Self::try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
