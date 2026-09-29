@@ -18,10 +18,10 @@ use rstest::{fixture, rstest};
 #[fixture]
 fn make_socket_merge_ready_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let mut app = super::podcast::audiobookshelf_app();
-    // Hold the owner command channel so the enqueue's post-append owner
-    // sync reports success instead of a dropped-peer disconnect (Unit 4
-    // deleted the in-process Bare player the stub used to carry).
-    let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(Vec::new(), 0);
+    app.player = mbv_player::PlayerProxy::remote(remote, false);
+    app.player_rx = player_rx;
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
     app.audiobookshelf_browse[0].progress.insert(
         ("show-a".into(), "episode-a".into()),
@@ -36,10 +36,10 @@ fn make_socket_merge_ready_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::Ct
 }
 
 #[rstest]
-fn socket_progress_updates_matching_inactive_queued_episode(
+fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_state(
     make_socket_merge_ready_app: (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>),
 ) {
-    let (mut app, _cmd_rx) = make_socket_merge_ready_app;
+    let (mut app, cmd_rx) = make_socket_merge_ready_app;
     // Seed the known episode as an inactive slot directly: this test owns
     // the socket merge, not the enqueue (row 5.3 made the enqueue an owner
     // op whose result only reaches the view through the owner's answer).
@@ -109,10 +109,22 @@ fn socket_progress_updates_matching_inactive_queued_episode(
         })
         .expect("episode-a slot");
     let episode = slot.item.as_audiobookshelf().unwrap();
-    assert_eq!(episode.position_ticks, 85 * TICKS_PER_SECOND / 2);
-    assert!(episode.is_finished);
+    assert_eq!(episode.position_ticks, 0);
+    assert!(!episode.is_finished);
 
-    // Browse map updated.
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(mbv_ctrl::CtrlCmd::UnifiedQueueApplyProgress { updates, .. })
+        if updates == vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+            },
+            position_ticks: 85 * TICKS_PER_SECOND / 2,
+            finished: true,
+        }])
+    );
+
+    // Browse map updated directly while the queue awaits its owner's snapshot.
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
     assert!((progress.current_time_seconds - 42.5).abs() < f64::EPSILON);
     assert!(progress.is_finished);

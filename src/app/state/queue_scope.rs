@@ -1,5 +1,5 @@
 use crate::app::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
-use mbv_queue::{QueueMutationResult, QueueSlotId};
+use mbv_queue::QueueSlotId;
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {
@@ -73,9 +73,6 @@ impl App {
         }
     }
 
-    /// Adopt the owner's snapshot source and reconcile a pending
-    /// playlist-save source update (design D6).
-
     pub(in crate::app) fn undo_stack_for_scope_mut(
         &mut self,
         scope: QueueScope,
@@ -119,7 +116,6 @@ impl App {
             } else if unified.source == source {
                 self.pending_owner_source_update = None;
                 self.queue_dirty = false;
-                self.clear_local_playlist_entry_ids();
             }
         }
     }
@@ -172,56 +168,27 @@ impl App {
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 
-    /// Slot-keyed check of whether a completed/stopped queue slot should be
-    /// consumed, given a player-reported completion (`consume`) and the
-    /// type-specific consume flags. Returns `(should_consume, is_audio)` --
-    /// callers that act on the removal need `is_audio` afterward to route to
-    /// `on_video_consumed`/`on_audio_consumed`. Resolves the audio/video
-    /// flag from the queue model by slot identity instead of raw index.
+    /// Resolve the slot kind for the consume side effect. The Player owner
+    /// has already applied its consume policy and reports the decision in the
+    /// event's `consume` flag.
     pub(in crate::app) fn should_consume_slot(
         &self,
         slot_id: QueueSlotId,
         consume: bool,
     ) -> (bool, bool) {
         let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
-        let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
-        let (consume_videos, consume_audio) = {
-            let config = self.config.lock().unwrap();
-            let cfg = &*config;
-            (cfg.consume_videos, cfg.consume_audio)
-        };
-        let should_consume =
-            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
+        let should_consume = consume && item.is_some_and(|item| item.is_audio() || item.is_video());
         tracing::info!(
             name: "consume.slot.checked",
             target: "consume",
             slot = ?slot_id,
             consume,
-            is_video,
-            consume_videos,
             is_audio,
-            consume_audio,
             should_consume,
-            "consume check"
+            "consume reaction resolved"
         );
         (should_consume, is_audio)
-    }
-
-    /// Removes a completed slot from the local playback queue by identity.
-    /// Uses `consume_slot` rather than `remove_slot` so a slot that is
-    /// currently marked active can still be consumed. Returns the removed
-    /// item's id, or `None` if the slot no longer exists.
-    pub(in crate::app) fn consume_slot_from_active_playback_queue(
-        &mut self,
-        slot_id: QueueSlotId,
-    ) -> Option<String> {
-        let removed = match self.playback_queue_mut().queue.consume_slot(slot_id) {
-            QueueMutationResult::Applied(slot) => slot,
-            QueueMutationResult::NotFound => return None,
-        };
-        self.playback_queue_mut().clamp_cursor();
-        Some(removed.item.id().to_string())
     }
 
     /// Connected to an mbv daemon/client: the peer's queue is the displayed

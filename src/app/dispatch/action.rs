@@ -363,7 +363,6 @@ impl App {
         if !self.validate_queue_play_feed(&item) {
             return;
         }
-        self.hydrate_queue_play_feed(t, &item);
         let (emby_items, all_slots, slot_id, emby_start) = self.queue_play_snapshot(t);
         if self.handoff_queue_play_to_session(&item, &emby_items, emby_start) {
             return;
@@ -435,22 +434,6 @@ impl App {
             return false;
         }
         true
-    }
-
-    fn hydrate_queue_play_feed(&mut self, t: usize, item: &mbv_queue::QueueItem) {
-        // Hydrate stored feed-entry state before building the
-        // playback snapshot so resume uses the latest position.
-        if let mbv_queue::QueueItem::Feed(entry) = item {
-            let hydrated = self.hydrate_feed_entry_state(entry.clone());
-            let sid = self.playback_queue().slot_id_at(t);
-            if let Some(sid) = sid {
-                let queue_mut = self.playback_queue_mut();
-                let _ =
-                    queue_mut
-                        .queue
-                        .apply_progress(sid, hydrated.position_ticks, hydrated.played);
-            }
-        }
     }
 
     fn queue_play_snapshot(

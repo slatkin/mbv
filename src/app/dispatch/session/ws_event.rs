@@ -124,45 +124,31 @@ impl App {
         }
         let start_idx = start_index.min(items.len().saturating_sub(1));
         self.set_panel_focus(PanelFocus::Queue);
-        self.queue_source = mbv_queue::QueueSource::Remote;
         if items.len() == 1 {
-            let mut item = items[0].clone();
-            if start_position_ticks > 0 {
-                item.playback_position_ticks = start_position_ticks;
-            }
-            self.player_tab.set_items(vec![item.clone()], 0);
-            self.flash(item.playback_label(), ToastSeverity::Neutral);
-            self.submit_tab_queue(
-                self.playing_queue_scope(),
-                0,
-                mbv_queue::QueueSource::Remote,
-            );
+            self.flash(items[0].playback_label(), ToastSeverity::Neutral);
         } else {
-            tracing::info!(name: "ws.play.multiple_items", target: "ws", item_count = items.len(), start_index = start_idx, "playing multiple items");
-            // Always hand the whole list to play_queue (not just the clicked
-            // item) so the remote-controlled queue continues past start_idx.
-            // play_queue already handles the "something is already playing"
-            // case in place via unified queue submission.
-            let mut items_with_pos = items.clone();
-            if start_position_ticks > 0 {
-                items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
-            }
-            self.player_tab.set_items(items_with_pos, start_idx);
-            // Keep the tab's canonical slot identities when starting
-            // this replacement; do not mint a fresh sequential run.
-            self.submit_tab_queue(
-                self.playing_queue_scope(),
-                start_idx,
-                mbv_queue::QueueSource::Remote,
-            );
+            tracing::info!(name: "ws.play.multiple_items", target: "ws", item_count = items.len(), start_index = start_idx, "play request replaces the owner queue");
         }
+        let mut items = items;
+        if start_position_ticks > 0 {
+            items[start_idx].playback_position_ticks = start_position_ticks;
+        }
+        self.replace_queue_on_owner(
+            self.playing_queue_scope(),
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            start_idx,
+            mbv_queue::QueueSource::Remote,
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{live_owner_channel, make_app_stub};
     use rstest::rstest;
 
     /// Install a stub Emby runtime whose transport is `http`, so the handler's
@@ -209,6 +195,7 @@ mod tests {
         let http = mbv_net::mock_http::MockHttp::new();
         http.respond(200, response);
         let mut app = app_with_mock_emby(&http);
+        let cmd_rx = live_owner_channel(&mut app);
 
         app.handle_ws_event(WsEvent::Play {
             item_ids,
@@ -217,18 +204,21 @@ mod tests {
             start_index,
         });
 
-        let items = app.player_tab.emby_items();
-        let actual: Vec<(&str, i64)> = items
-            .iter()
-            .map(|i| (i.id.as_str(), i.playback_position_ticks))
-            .collect();
-        assert_eq!(
-            actual, expected_positions,
-            "the queue is replaced in fetch order and only start_index honours start_position_ticks"
-        );
-        let cursor = start_index.min(items.len() - 1);
-        assert_eq!(app.player_tab.queue_cursor, cursor);
-        assert_eq!(app.queue_source, mbv_queue::QueueSource::Remote);
+        assert!(app.player_tab.emby_items().is_empty());
+        assert_ne!(app.queue_source, mbv_queue::QueueSource::Remote);
+        assert!(matches!(
+            cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
+                items,
+                start_idx: Some(index),
+                source: mbv_queue::QueueSource::Remote,
+                ..
+            }) if index == start_index.min(expected_positions.len() - 1)
+                && items.iter()
+                    .filter_map(|item| item.as_emby())
+                    .map(|item| (item.id.as_str(), item.playback_position_ticks))
+                    .collect::<Vec<_>>() == expected_positions
+        ));
     }
 
     #[test]

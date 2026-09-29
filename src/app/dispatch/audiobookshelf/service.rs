@@ -333,8 +333,8 @@ impl App {
 
     /// Apply a `user_item_progress_updated` event from the socket.
     ///
-    /// Task 3.1-3.3: generation gate, active-slot skip, in-place merge
-    /// via reconcile (no REST call). Task 3.4 covers test cases.
+    /// Generation-gate, skip the active Player-owned slot, relay progress to
+    /// the home owner, and merge the event into browse state without a REST call.
     fn apply_audiobookshelf_socket_progress(
         &mut self,
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
@@ -380,13 +380,30 @@ impl App {
 
         // Task 3.1: merge in place (no REST call) via the existing
         // shared reconcile path that the daemon-route ack also uses.
-        let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-            progress.current_time_seconds,
-        );
+        let update = mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: progress.library_item_id.clone(),
+                episode_id: progress.episode_id.clone(),
+            },
+            position_ticks: crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+                progress.current_time_seconds,
+            ),
+            finished: progress.is_finished,
+        };
+        let result = {
+            let (player, _) = self.queue_link(crate::app::QueueScope::Local);
+            player.as_remote().map(|owner| {
+                owner.send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {
+                    updates: vec![update],
+                })
+            })
+        };
+        if let Some(Err(error)) = result {
+            self.flash(error.to_string(), ToastSeverity::Warning);
+        }
         self.reconcile_audiobookshelf_progress(
             &progress.library_item_id,
             &progress.episode_id,
-            position_ticks,
             progress.current_time_seconds,
             progress.is_finished,
         );

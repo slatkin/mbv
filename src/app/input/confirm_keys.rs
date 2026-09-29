@@ -5,7 +5,6 @@ use crate::app::{
     SavePlaylistDialog, SavePlaylistStage,
 };
 use crossterm::event::{KeyCode, KeyEvent};
-use mbv_queue::RemoveSlotResult;
 
 impl App {
     /// Shared dispatcher for the confirmation-modal component (see
@@ -185,43 +184,23 @@ impl App {
         }
     }
 
-    /// Confirmed removal of the active queue item at `pos`: the owner removes
-    /// the slot (a still-unconfirmed active slot reports `None` and nothing
-    /// changes), then playback stops — through the player target for a
-    /// connected session, or the bare player locally — with the undo entry and
-    /// queue-dirty/epoch bookkeeping preserved.
+    /// Confirmed removal of the active queue item at `pos`: leave the
+    /// displayed queue untouched, stop playback, then remove the slot through
+    /// the Player owner from the resulting `Stopped` event.
     fn confirm_remove_active_queue_item(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
         if let Some(slot_id) = slot_id {
-            let removed_item = match self
-                .playback_queue_mut()
-                .queue
-                .remove_active_slot_confirmed(slot_id)
-            {
-                RemoveSlotResult::Removed(slot) => {
-                    self.playback_queue_mut().clamp_cursor();
-                    Some(slot.item)
-                }
-                RemoveSlotResult::RequiresActiveConfirmation(_) | RemoveSlotResult::NotFound => {
-                    None
-                }
-            };
-            if removed_item.is_some() {
-                let queue = self.playback_queue_mut();
-                queue.clamp_cursor();
-
-                self.pending_delete_slot = Some(slot_id);
-                if self.connected_session_id.is_some() {
-                    self.playback_target().stop(self);
-                } else {
-                    self.player.stop();
-                }
-                if self.local_queue_metadata_applies(scope) {
-                    self.queue_dirty = true;
-                }
-                self.advance_queue_epoch();
+            self.pending_delete_slot = Some(slot_id);
+            if self.connected_session_id.is_some() {
+                self.playback_target().stop(self);
+            } else {
+                self.player.stop();
             }
+            if self.local_queue_metadata_applies(scope) {
+                self.queue_dirty = true;
+            }
+            self.advance_queue_epoch();
         }
     }
 

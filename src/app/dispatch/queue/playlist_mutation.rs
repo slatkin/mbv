@@ -14,7 +14,6 @@ impl App {
         if self.discard_stale_playlist_mutation(playlist_id) {
             return;
         }
-        self.prepare_full_playlist_update(playlist_id);
         self.dispatch_playlist_mutation(playlist_id);
     }
 
@@ -54,39 +53,6 @@ impl App {
             }
         }
         stale
-    }
-
-    fn prepare_full_playlist_update(&mut self, playlist_id: &str) {
-        // Full updates (Save/Replace) recreate server playlist-entry IDs.
-        // Consume eligibility derived from the old IDs dies at this boundary,
-        // after earlier same-playlist mutations have completed, not when the
-        // user merely queues the update. A Replace genuinely replaces queue
-        // content/source and advances visible-queue lineage; a Save does not
-        // change queue slots, content, or source, so it must preserve the
-        // request lineage — otherwise its successful completion can never
-        // satisfy the original-lineage checks that clear dirty state and run
-        // an explicit save-before-replace continuation.
-        let is_full_update = self
-            .playlist_mutations
-            .get(playlist_id)
-            .and_then(|state| state.active.as_ref())
-            .is_some_and(|mutation| {
-                matches!(
-                    mutation,
-                    PlaylistMutation::Save { .. } | PlaylistMutation::Replace { .. }
-                )
-            });
-        if is_full_update {
-            // A full update recreates entry identities for the playlist it
-            // targets. Only the current source's items carry those identities,
-            // so clear and persist them exactly when the update targets that
-            // source — and regardless of whether a tracker is active. An
-            // unrelated overwrite leaves the current source's identities valid
-            // until completion flips the source.
-            if self.queue_playlist_id() == Some(playlist_id) {
-                self.clear_local_playlist_entry_ids();
-            }
-        }
     }
 
     fn dispatch_playlist_mutation(&mut self, playlist_id: &str) {

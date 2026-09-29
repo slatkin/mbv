@@ -1,4 +1,4 @@
-use super::{App, PlaylistMutation, QueueItem};
+use super::{App, PlaylistMutation};
 
 impl App {
     pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {
@@ -72,32 +72,6 @@ impl App {
         self.playlist_mutations
             .get(playlist_id)
             .is_some_and(|state| state.active.is_some() || !state.queued.is_empty())
-    }
-
-    /// Clears `playlist_item_id` from local queue items after a full playlist
-    /// update recreates server entry identities. Every full update
-    /// (Save/Replace/CreateAs) pushes this queue to Emby, so those identities
-    /// are invalidated.
-    pub(in crate::app) fn clear_local_playlist_entry_ids(&mut self) {
-        let slot_ids: Vec<_> = self
-            .player_tab
-            .queue
-            .slots()
-            .iter()
-            .filter(|s| matches!(&s.item, QueueItem::Emby(_)))
-            .map(|s| s.slot_id)
-            .collect();
-        for slot_id in slot_ids {
-            if let Some(slot) = self.player_tab.queue.slot(slot_id)
-                && let QueueItem::Emby(mut item) = slot.item.clone()
-            {
-                item.playlist_item_id.clear();
-                let _ = self
-                    .player_tab
-                    .queue
-                    .update_slot_item(slot_id, QueueItem::Emby(item));
-            }
-        }
     }
 
     pub(in crate::app) fn enqueue_playlist_mutation(

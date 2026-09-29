@@ -42,8 +42,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 pub(crate) use mbv_images::resize::spawn_resize_worker;
 #[cfg(test)]
-use mbv_queue::RemoveSlotResult;
-#[cfg(test)]
 use mbv_ui_model::browse::restore_library_position;
 use mbv_ui_model::browse::{
     AlbumIndex, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,

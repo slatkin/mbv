@@ -9,7 +9,6 @@ use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::QueueItem;
 use mbv_ui_model::ui_util::natural_sort_key;
-use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,39 +133,6 @@ impl App {
 }
 
 impl App {
-    /// Submit the already-replaced tab queue without re-minting slot ids.
-    /// The tab's canonical pairs are the identity source for both local and
-    /// direct-remote owners; fresh `play_queue` projections would diverge
-    /// from monotonic tab ids after a replacement.
-    pub(in crate::app) fn submit_tab_queue(
-        &mut self,
-        scope: crate::app::QueueScope,
-        start_idx: usize,
-        source: mbv_queue::QueueSource,
-    ) -> bool {
-        if self.player.is_remote_disconnected() {
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-            return false;
-        }
-        let slots = self.queue_for_scope(scope).all_queue_slots();
-        if slots.is_empty() {
-            return false;
-        }
-        let headless = slots.iter().all(|slot| slot.item.is_audio());
-        let sent = self.player.submit_queue_slots(
-            slots,
-            start_idx,
-            source,
-            self.emby_snapshot().map(Arc::new),
-            headless,
-            self.ui_volume,
-        );
-        if !sent && self.player.is_remote_disconnected() {
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-        }
-        sent
-    }
-
     /// Cast takes priority over an attached Emby session: the two are
     /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
     /// this ordering keeps the seam correct even if that invariant is ever

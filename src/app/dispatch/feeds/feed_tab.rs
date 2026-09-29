@@ -321,10 +321,6 @@ impl App {
         } else {
             (position_ticks, false)
         };
-        let queue_mut = self.playback_queue_mut();
-        let _ = queue_mut
-            .queue
-            .apply_progress(slot_id, store_position, store_played);
         self.write_feed_entry_state(&feed_id, &entry_guid, store_position, store_played);
     }
 }

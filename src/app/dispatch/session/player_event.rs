@@ -219,7 +219,6 @@ impl App {
             position_ticks,
             played,
             consume,
-            progress_report_accepted,
             error,
             ..
         } = ev
@@ -236,12 +235,7 @@ impl App {
         match slot_id {
             Some(slot_id) => {
                 if !is_delete {
-                    self.apply_stopped_slot_progress(
-                        slot_id,
-                        position_ticks,
-                        played,
-                        progress_report_accepted,
-                    );
+                    self.apply_stopped_slot_progress(slot_id, position_ticks, played);
                 }
                 if preserve_local_state
                     && let Some(slot) = self.playback_queue().queue.slot(slot_id)
@@ -292,14 +286,12 @@ impl App {
         true
     }
 
-    /// Progress/bookkeeping half of a normal `Stopped`: recompute the
-    /// retained position, apply it, persist Feed lifecycle state.
+    /// Progress/bookkeeping half of a normal `Stopped`: derive and persist Feed lifecycle state.
     fn apply_stopped_slot_progress(
         &mut self,
         slot_id: mbv_queue::QueueSlotId,
         position_ticks: i64,
         played: bool,
-        progress_report_accepted: bool,
     ) {
         let Some(slot) = self.playback_queue().queue.slot(slot_id) else {
             return;
@@ -309,16 +301,7 @@ impl App {
             played,
         };
         let position = observation.position_to_record(&slot.item);
-        let queue = self.playback_queue_mut();
-        let _ = queue.queue.record_reported_progress(
-            slot_id,
-            position,
-            played,
-            mbv_queue::StopReportOutcome::from_accepted(progress_report_accepted),
-        );
-        queue.clamp_cursor();
-        // Persist Feed lifecycle state before any
-        // consume/removal changes the queue.
+        // Persist Feed lifecycle state from the report; the owner publishes the queue update.
         if let Some(slot) = self.playback_queue().queue.slot(slot_id)
             && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
         {
@@ -326,17 +309,11 @@ impl App {
             let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
             self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
-        if played {
-            tracing::info!(name: "player.stopped.progress_marked_played", target: "player", "stopped item marked played");
-        } else if position_ticks > 0 {
-            tracing::info!(name: "player.stopped.progress_saved", target: "player", position_seconds = position_ticks / mbv_emby_model::TICKS_PER_SECOND, "stopped position saved");
-        } else {
-            tracing::info!(name: "player.stopped.progress_not_saved", target: "player", position_ticks, "stopped position not saved");
-        }
+        // The Player owner applies the report to its queue and publishes it.
     }
 
-    /// Delete-vs-consume tail of a normal `Stopped`: tell the player session
-    /// to drop a deleted slot, or run the consume reaction.
+    /// Delete-vs-consume tail of a normal `Stopped`: send a confirmed removal
+    /// to the Player owner, or run the consume reaction.
     fn finish_stopped_consumption(
         &mut self,
         deleted_slot: Option<mbv_queue::QueueSlotId>,
@@ -344,12 +321,15 @@ impl App {
         consume: bool,
     ) {
         if deleted_slot.is_some() {
-            // The removal, undo-push, and cursor-clamp already happened
-            // immediately at confirm time. The owner receives the stable
-            // slot removal here.
+            // Confirmation deferred removal until playback stopped; the Client
+            // now asks the owner to remove the stable slot identity.
             if let Some(deleted_slot) = deleted_slot {
-                self.player
-                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(deleted_slot));
+                self.queue_op(
+                    self.playing_queue_scope(),
+                    mbv_remote_player::QueueOp::RemoveSlot {
+                        slot_id: mbv_ctrl::slot_id_to_u64(deleted_slot),
+                    },
+                );
             }
         } else {
             let (should_consume, is_audio) = match slot_id {
@@ -357,13 +337,6 @@ impl App {
                 None => (false, false),
             };
             if should_consume {
-                let slot_id = slot_id.expect("should_consume implies a resolved slot");
-                let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                self.playback_queue_mut().clamp_cursor();
-                tracing::info!(name: "consume.stopped.slot_removed", target: "consume", slot = ?slot_id, removed_item = ?removed_id, "stopped item removed from queue");
-                if removed_id.is_none() {
-                    tracing::warn!(name: "consume.stopped.slot_removal_skipped", target: "consume", slot = ?slot_id, "stopped slot not found; removal skipped");
-                }
                 if is_audio {
                     self.on_audio_consumed();
                 } else {
@@ -381,7 +354,6 @@ impl App {
             position_ticks,
             played,
             consume,
-            progress_report_accepted,
             ..
         } = *ev
         else {
@@ -399,16 +371,8 @@ impl App {
             played,
         };
         let position = observation.position_to_record(&slot.item);
-        let queue = self.playback_queue_mut();
-        let _ = queue.queue.record_reported_progress(
-            slot_id,
-            position,
-            played,
-            mbv_queue::StopReportOutcome::from_accepted(progress_report_accepted),
-        );
-        queue.clamp_cursor();
-        // Persist Feed lifecycle state before any consume/removal.
-        // TrackCompleted with `played` means EOF; for Feed entries,
+        // Persist Feed lifecycle state from the report. TrackCompleted with
+        // `played` means EOF; for Feed entries,
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
         if let Some(slot) = self.playback_queue().queue.slot(slot_id)
@@ -420,22 +384,10 @@ impl App {
         }
         let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
         if should_consume {
-            if self.has_direct_remote_queue() {
-                // The Player owner has already consumed its canonical
-                // queue. The Client keeps only the service reaction.
-                if is_audio {
-                    self.on_audio_consumed();
-                } else {
-                    self.on_video_consumed();
-                }
+            if is_audio {
+                self.on_audio_consumed();
             } else {
-                let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                tracing::info!(name: "consume.track_completed.slot_removed", target: "consume", slot = ?slot_id, removed_item = ?removed_id, "completed track removed from queue");
-                if is_audio {
-                    self.on_audio_consumed();
-                } else {
-                    self.on_video_consumed();
-                }
+                self.on_video_consumed();
             }
         }
     }

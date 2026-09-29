@@ -98,6 +98,7 @@ impl PlayerTab {
         Self::new(queue_items, queue_cursor)
     }
 
+    #[cfg(test)]
     pub fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
         let queue_items = items
             .into_iter()
