@@ -254,13 +254,16 @@ fn send_ep_info(mpv: &Mpv, item: &mbv_emby_model::EmbyItem) {
 
 pub mod owner_state;
 pub mod transition;
-pub use owner_state::*;
+pub use owner_state::{PlayerOwnerState, StepTarget};
 mod tracks;
 #[cfg(test)]
 use tracks::lang_code_to_name;
 use tracks::{auto_select_tracks, refresh_tracks};
 mod sources;
-pub use sources::*;
+pub use sources::{
+    AudiobookshelfBookProgressUpdate, AudiobookshelfPlayerContext, AudiobookshelfProgressUpdate,
+};
+pub(crate) use sources::{PreparedSource, prepare_source};
 mod runtime;
 pub(crate) use runtime::{
     MpvRunConfig, ProgressGuard, handle_intro, init_mpv, init_volume, observe_properties,
@@ -287,9 +290,14 @@ pub(crate) use run::{IntroState, PlaybackOrigin, PlaybackRun, RunInit, mpv_url_f
 // submission concerns remain sibling modules.
 mod controller;
 mod submit;
-pub use controller::*;
+pub(crate) use controller::make_wakeup_pipe;
+pub use controller::{Player, QuitHandle};
 mod proxy;
-pub use proxy::*;
+pub use proxy::PlayerProxy;
+pub(crate) use proxy::{
+    StopReportContext, end_file_stop_report_context, is_near_end, queue_completed_pos,
+    quit_timeout_stop_flags, retry_mark_played,
+};
 
 #[cfg(test)]
 mod tests;

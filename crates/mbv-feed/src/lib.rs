@@ -392,7 +392,7 @@ pub struct IdleFeedItem {
 }
 
 mod entry_state;
-pub use entry_state::*;
+pub use entry_state::{FeedEntryState, FeedEntryStore, feed_entry_state_path};
 
 #[cfg(test)]
 mod tests;

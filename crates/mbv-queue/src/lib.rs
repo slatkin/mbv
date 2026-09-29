@@ -8,15 +8,23 @@ use mbv_emby_model::EmbyItem;
 mod audiobookshelf;
 pub use audiobookshelf::{AudiobookshelfEpisodeCatalog, EpisodeResume};
 mod items;
-pub use items::*;
+pub use items::{
+    AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
+    MpvUrlSource, PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts, QueueItem,
+    QueueItemContentId, QueueItemKind,
+};
 mod kinds;
-pub use kinds::*;
+pub use kinds::{FeedKind, ServiceKind};
 mod state;
-pub use state::*;
+pub use state::{
+    LibraryPosition, LibraryPositionLevel, LibraryPositionState, QueueLineage, QueueSource,
+    QueueState, TvContentMode,
+};
 mod execution_sequence;
-pub use execution_sequence::*;
+pub use execution_sequence::{ExecSlot, ExecutionSequence};
 mod progress;
-pub use progress::*;
+pub(crate) use progress::apply_progress_to_queue_item;
+pub use progress::{ProgressObservation, SlotProgress, StopReportOutcome};
 
 // serde derives so the owner-assigned slot identity can travel on
 // `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`

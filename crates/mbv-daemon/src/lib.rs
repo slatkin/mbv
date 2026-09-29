@@ -1,18 +1,37 @@
 pub(crate) mod ctrl;
-pub use ctrl::*;
+#[cfg(test)]
+pub(crate) use ctrl::CtrlOutbound;
+pub use ctrl::CtrlTransport;
+pub(crate) use ctrl::{
+    AuthorityHolder, ClientRegistry, CtrlClientId, CtrlClients, CtrlSender, send_to,
+    serialize_ctrl_event, take_authority_for_emby_remote,
+};
 
 mod context;
 mod error;
-pub use context::*;
+pub use context::{AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext};
 pub use error::DaemonLibError;
 mod core;
-pub use core::*;
+#[cfg(test)]
+pub(crate) use core::PlaybackIntentState;
+pub(crate) use core::{
+    DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PendingIdleQueueLoad, SharedQueueState,
+    audio_only_rejection, broadcast, dispatch_slot_jump, expire_and_redispatch, reset_slot_jumps,
+    settle_and_redispatch,
+};
+pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, pid_file};
 mod core_ctrl_spawn;
 pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
 mod run_shutdown;
 pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;
-pub use run::*;
+#[cfg(test)]
+pub(crate) use run::playback_run_identity_is_current;
+pub use run::run_with_options;
+pub(crate) use run::{
+    ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
+    apply_track_completed_observation, broadcast_player_event_if_not_replaced,
+};
 mod event_loop;
 pub(crate) use event_loop::{DaemonLoop, LoopFlow};
 mod audiobookshelf;
@@ -35,7 +54,10 @@ pub(crate) use control_queue::{daemon_admits, unified_queue_state_for_peer};
 mod ws;
 pub(crate) use ws::handle_ws;
 mod reconciliation;
-pub use reconciliation::*;
+pub use reconciliation::{
+    ABS_REPLACEMENT_FINALIZE_HARD_BOUND, EMBY_REPLACEMENT_FINALIZE_HARD_BOUND,
+};
+pub(crate) use reconciliation::{reconcile_packaged_audiobookshelf, reconcile_packaged_emby};
 
 #[cfg(test)]
 mod tests;

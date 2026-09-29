@@ -2,11 +2,27 @@ use serde::Deserialize;
 use std::time::Duration;
 
 mod catalog;
-pub use catalog::*;
+pub use catalog::{
+    AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
+    AudiobookshelfShelf, AudiobookshelfShelfEntry, AudiobookshelfShow, AudiobookshelfShowPage,
+};
+#[cfg(test)]
+pub(crate) use catalog::{
+    ExpandedWire, ItemsResponse, LibrariesResponse, ProgressResponse, ShelfEntryWire, ShelfWire,
+    ShowWire, published_at_secs, shelf_entry_from_wire,
+};
 mod catalog_books;
-pub use catalog_books::*;
+pub use catalog_books::{
+    AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage,
+    AudiobookshelfBookProgress, AudiobookshelfChapter, AuthorWire, BookMediaWire, BookMetadataWire,
+    BookWire, BooksResponse, audiobook_author_sort_key, book_author_display,
+    first_listed_author_sort_key,
+};
 mod playback;
-pub use playback::*;
+pub use playback::{
+    AudiobookshelfAudioSource, AudiobookshelfBookPlaybackSession, AudiobookshelfPlaybackProgress,
+    AudiobookshelfPlaybackSession, AudiobookshelfSourceMethod,
+};
 pub mod socket;
 
 #[cfg(test)]
