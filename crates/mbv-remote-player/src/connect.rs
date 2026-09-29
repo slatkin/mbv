@@ -282,9 +282,11 @@ fn apply_ctrl_event(
             event_tx,
             PlayerEvent::PipePlaybackStatus(status_event),
         ),
-        CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
-            // Handled by the request-completion path in RemotePlayer
-            //, not by the general event loop.
+        CtrlEvent::QueueOpResult { .. }
+        | CtrlEvent::ShutdownAccepted
+        | CtrlEvent::ShutdownRejected { .. } => {
+            // QueueOpResult awaits the Client's row-2.5 correlation path; shutdown
+            // replies are handled by RemotePlayer's request-completion path.
         }
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
             tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");

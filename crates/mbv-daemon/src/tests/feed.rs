@@ -48,6 +48,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &owner.queue,
         &owner.source,
         &mbv_player::transition::OwnerTransitionState::default(),
+        None,
     );
 
     // A later Client receives the shortened owner snapshot.
@@ -62,6 +63,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         &owner.queue,
         &owner.source,
         &mbv_player::transition::OwnerTransitionState::default(),
+        None,
     );
     assert_eq!(owner.queue.len(), 1);
     assert_eq!(owner.queue.slots()[0].item.id(), "feed-2");
@@ -114,6 +116,7 @@ fn replace_queue_succeeds_unconditionally() {
             }],
             start_idx: Some(0),
             source: QueueSource::Album,
+            op: None,
         },
         CtrlContext {
             reply_tx: &reply_tx,
@@ -128,6 +131,7 @@ fn replace_queue_succeeds_unconditionally() {
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     let queue = owner.core.queue;

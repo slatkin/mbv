@@ -97,6 +97,7 @@ impl DaemonLoop {
                 merged_tx: &self.merged_tx,
                 owner_settings: Arc::clone(&self.owner_settings),
                 role: self.role,
+                op: std::cell::Cell::new(None),
             },
         );
         if persist_after_command && self.owner.pending_idle_load.is_none() {

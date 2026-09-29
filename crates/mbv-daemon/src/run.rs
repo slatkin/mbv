@@ -127,6 +127,7 @@ pub(super) fn apply_queue_enriched(
             &owner.core.queue,
             &owner.core.source,
             &owner.core.transitions,
+            None,
         );
     }
 }

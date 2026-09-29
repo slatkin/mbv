@@ -2,9 +2,8 @@ use super::{
     CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue, PlayerCommand,
     PlayerOwnerState, QueueItem, QueueSlotId, RejectContext, abs_queue_transport_rejection,
     admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
-    daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps, send_to,
+    daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
 };
-use mbv_ctrl::CtrlEvent;
 use mbv_emby::EmbyClient;
 use std::sync::Arc;
 
@@ -40,6 +39,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "daemon already has a queue; adoption skipped",
         );
@@ -67,6 +67,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -92,6 +93,7 @@ pub(super) fn handle_adopt_queue(
         queue,
         source,
         transitions,
+        None,
     );
 
     enrich_adopted_emby_slots(queue, ctx.client, ctx.merged_tx);
@@ -156,11 +158,9 @@ pub(super) fn handle_queue_source_update(
         .unwrap()
         .supports_owner_queue_load(ctx.client_id);
     if !supports_operation {
-        send_to(
-            ctx.reply_tx,
-            &CtrlEvent::CommandRejected(
-                "peer did not negotiate owner queue-load capability".to_string(),
-            ),
+        reject_command(
+            &ctx.rejection_context(lineage),
+            "peer did not negotiate owner queue-load capability",
         );
     } else if cmd_lineage != lineage {
         reject_command(
@@ -172,6 +172,7 @@ pub(super) fn handle_queue_source_update(
                 queue: &ctx.owner.core.queue,
                 source: &ctx.owner.core.source,
                 lineage,
+                op: &ctx.op,
             },
             "queue source update rejected: owner queue lineage changed",
         );
@@ -194,6 +195,7 @@ pub(super) fn handle_queue_source_update(
             queue,
             source,
             transitions,
+            ctx.op.get().map(|_| ctx.client_id),
         );
     }
 }
@@ -330,6 +332,7 @@ pub(super) fn handle_queue_replace(
         &ctx.owner.core.queue,
         &ctx.owner.core.source,
         &ctx.owner.core.transitions,
+        ctx.op.get().map(|_| ctx.client_id),
     );
 }
 
@@ -376,6 +379,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -393,6 +397,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "Playback owner rejected the queue append",
         );
@@ -409,6 +414,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -430,6 +436,7 @@ pub(super) fn handle_queue_append(
         queue,
         source,
         transitions,
+        ctx.op.get().map(|_| ctx.client_id),
     );
     // Append to the player's queue rather than replacing the whole queue.
     ctx.player.send_command(PlayerCommand::QueueAppend {

@@ -403,6 +403,7 @@ pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
     origin: JumpOrigin,
     transition: mbv_player::transition::Transition,
+    except: Option<CtrlClientId>,
 ) {
     let DaemonPlayerOwner {
         core:
@@ -458,6 +459,7 @@ pub(super) fn dispatch_slot_jump(
         queue,
         source,
         transitions,
+        except,
     );
 }
 
@@ -553,6 +555,7 @@ pub(super) fn expire_and_redispatch(
         &owner.core.queue,
         &owner.core.source,
         &owner.core.transitions,
+        None,
     );
 }
 

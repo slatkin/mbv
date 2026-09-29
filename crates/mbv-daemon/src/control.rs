@@ -5,7 +5,10 @@ use super::{
     dispatch_slot_jump, reset_slot_jumps, send_to,
 };
 use mbv_ctrl::player::PlayerCommand;
-use mbv_ctrl::{CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId};
+use mbv_ctrl::{
+    CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, QueueOpId,
+    QueueOpOutcome,
+};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::{Player, PlayerOwnerState};
@@ -85,6 +88,7 @@ pub(super) struct CtrlContext<'a> {
     pub(super) merged_tx: &'a mpsc::Sender<DaemonEvent>,
     pub(super) owner_settings: super::OwnerSettingsReader,
     pub(super) role: crate::DaemonRole,
+    pub(super) op: std::cell::Cell<Option<QueueOpId>>,
 }
 
 impl CtrlContext<'_> {
@@ -109,6 +113,7 @@ impl CtrlContext<'_> {
             queue: &self.owner.core.queue,
             source: &self.owner.core.source,
             lineage,
+            op: &self.op,
         }
     }
 }
@@ -125,6 +130,7 @@ struct RejectContext<'a> {
     queue: &'a PlaybackQueue,
     source: &'a mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
+    op: &'a std::cell::Cell<Option<QueueOpId>>,
 }
 
 /// Sends a command rejection to the requesting client and re-publishes the
@@ -138,7 +144,18 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
         queue,
         source,
         lineage,
+        op,
     } = *ctx;
+    if let Some(op) = op.take() {
+        send_to(
+            reply_tx,
+            &CtrlEvent::QueueOpResult {
+                op,
+                outcome: QueueOpOutcome::Rejected(reason.to_string()),
+            },
+        );
+        return;
+    }
     send_to(reply_tx, &CtrlEvent::CommandRejected(reason.to_string()));
     let status = player.status.lock().unwrap().clone();
     let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
@@ -179,11 +196,9 @@ fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &Reje
                 "idle queue loads are supported only by the Stay-alive owner".to_string(),
             );
         }
-        mbv_ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
-            ctx.reply_tx,
-            &CtrlEvent::CommandRejected(
-                "queue source updates are supported only by the Stay-alive owner".to_string(),
-            ),
+        mbv_ctrl::OwnerGateRejection::QueueSourceUpdate => reject_command(
+            ctx,
+            "queue source updates are supported only by the Stay-alive owner",
         ),
     }
 }
@@ -266,28 +281,29 @@ fn handle_stop(ctx: &mut CtrlContext<'_>) {
 }
 
 pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
+    ctx.op.set(queue_op_id(&cmd));
     cancel_pending_idle_queue_load_if_run_changed(ctx.owner, ctx.player);
-    if ctx.owner.pending_idle_load.is_some() && !matches!(&cmd, CtrlCmd::RequestShutdown) {
-        if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = cmd {
-            queue_load::reject_queue_load(
-                ctx.reply_tx,
-                request_id,
-                "another idle queue load is pending".to_string(),
-            );
-        } else {
-            send_to(
-                ctx.reply_tx,
-                &CtrlEvent::CommandRejected("owner is finalizing an idle queue load".to_string()),
-            );
-        }
-        return;
-    }
     // `SharedQueueState.lineage` is the single source of truth (other
     // threads read it for cold ctrl-client snapshots); this is a
     // function-local snapshot so hot-path comparisons below don't
     // re-lock per read; `mint_queue_lineage` below writes the new value
     // straight to `shared_queue.lineage` for the next command's read.
     let queue_lineage = *ctx.shared_queue.lineage.lock().unwrap();
+    if ctx.owner.pending_idle_load.is_some() && !matches!(&cmd, CtrlCmd::RequestShutdown) {
+        if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = &cmd {
+            queue_load::reject_queue_load(
+                ctx.reply_tx,
+                *request_id,
+                "another idle queue load is pending".to_string(),
+            );
+        } else {
+            reject_command(
+                &ctx.rejection_context(queue_lineage),
+                "owner is finalizing an idle queue load",
+            );
+        }
+        return;
+    }
     match cmd.requires_owner() {
         mbv_ctrl::OwnerGate::OwnerOnly(rejection) if ctx.role != crate::DaemonRole::Local => {
             send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
@@ -304,6 +320,58 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
     }
 
     dispatch_ctrl_command(cmd, &mut ctx, queue_lineage);
+    if let Some(op) = ctx.op.take() {
+        answer_queue_op(&ctx, op);
+    }
+}
+
+fn queue_op_id(cmd: &CtrlCmd) -> Option<QueueOpId> {
+    match cmd {
+        CtrlCmd::UnifiedQueueReplace { op, .. }
+        | CtrlCmd::UnifiedQueueAppend { op, .. }
+        | CtrlCmd::UnifiedQueueRemoveSlot { op, .. }
+        | CtrlCmd::UnifiedQueueRemoveSlots { op, .. }
+        | CtrlCmd::UnifiedQueueMoveSlot { op, .. }
+        | CtrlCmd::UnifiedQueuePlaySlot { op, .. }
+        | CtrlCmd::UnifiedQueueSourceUpdate { op, .. } => *op,
+        CtrlCmd::UnifiedQueueClearOp { op }
+        | CtrlCmd::UnifiedQueueRefresh { op }
+        | CtrlCmd::UnifiedQueueApplyProgress { op, .. } => Some(*op),
+        _ => None,
+    }
+}
+
+fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
+    let status = ctx.player.status.lock().unwrap().clone();
+    let (in_flight, queued_latest) = ctx.owner.core.transitions.summaries();
+    let (supports_abs_queue, supports_abs_book_queue) = {
+        let clients = ctx.ctrl_clients.lock().unwrap();
+        (
+            clients.supports_abs_queue(ctx.client_id),
+            clients.supports_abs_book_queue(ctx.client_id),
+        )
+    };
+    let event = unified_queue_state_for_peer(
+        &status,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        *ctx.shared_queue.lineage.lock().unwrap(),
+        *ctx.shared_queue.observed_active_slot.lock().unwrap(),
+        in_flight,
+        queued_latest,
+        supports_abs_queue,
+        supports_abs_book_queue,
+    );
+    let CtrlEvent::UnifiedQueueState(state) = event else {
+        unreachable!("queue projection always returns UnifiedQueueState")
+    };
+    send_to(
+        ctx.reply_tx,
+        &CtrlEvent::QueueOpResult {
+            op,
+            outcome: QueueOpOutcome::Applied(Box::new(state)),
+        },
+    );
 }
 
 fn dispatch_ctrl_command(
@@ -352,6 +420,7 @@ fn dispatch_ctrl_command(
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: new_source,
             lineage: cmd_lineage,
+            ..
         } => queue_setup::handle_queue_source_update(ctx, queue_lineage, new_source, cmd_lineage),
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace {
@@ -359,6 +428,7 @@ fn dispatch_ctrl_command(
             slots,
             start_idx,
             source: new_source,
+            ..
         } => queue_setup::handle_queue_replace(
             ctx,
             queue_lineage,
@@ -367,22 +437,32 @@ fn dispatch_ctrl_command(
             start_idx,
             new_source,
         ),
-        CtrlCmd::UnifiedQueueAppend { items } => {
+        CtrlCmd::UnifiedQueueAppend { items, .. } => {
             queue_setup::handle_queue_append(ctx, queue_lineage, items);
         }
-        CtrlCmd::UnifiedQueueRemoveSlot { slot_id } => {
+        CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } => {
             queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id);
         }
-        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids } => {
+        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, .. } => {
             queue_edit::handle_queue_remove_slots(ctx, slot_ids);
         }
-        CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
+        CtrlCmd::UnifiedQueueMoveSlot {
+            slot_id, to_index, ..
+        } => {
             queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index);
         }
-        CtrlCmd::UnifiedQueuePlaySlot { slot_id } => {
+        CtrlCmd::UnifiedQueuePlaySlot { slot_id, .. } => {
             queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id);
         }
-        CtrlCmd::UnifiedQueueClear => queue_edit::handle_queue_clear(ctx),
+        CtrlCmd::UnifiedQueueClear | CtrlCmd::UnifiedQueueClearOp { .. } => {
+            queue_edit::handle_queue_clear(ctx);
+        }
+        CtrlCmd::UnifiedQueueRefresh { .. } | CtrlCmd::UnifiedQueueApplyProgress { .. } => {
+            reject_command(
+                &ctx.rejection_context(queue_lineage),
+                "queue operation is not supported by this owner yet",
+            );
+        }
     }
 }
 

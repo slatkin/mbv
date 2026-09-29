@@ -29,6 +29,7 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
             merged_tx: &merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
 

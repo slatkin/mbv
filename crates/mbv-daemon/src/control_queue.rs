@@ -136,6 +136,7 @@ pub(crate) fn broadcast_queue_state(
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
     transitions: &mbv_player::transition::OwnerTransitionState,
+    except: Option<crate::CtrlClientId>,
 ) {
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();
@@ -204,6 +205,7 @@ pub(crate) fn broadcast_queue_state(
             &unified_abs_json,
             &unified_book_json,
             &unified_json,
+            except,
         );
     }
 

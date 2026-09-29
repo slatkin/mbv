@@ -133,7 +133,7 @@ fn ordinary_disconnect_is_not_shutdown_emits_when_gated_broadcast_prunes_last_cl
     let (_id, client_rx) = connect_client(&mut clients);
     drop(client_rx);
 
-    clients.broadcast_state_gated("full", "abs", "book", "legacy");
+    clients.broadcast_state_gated("full", "abs", "book", "legacy", None);
 
     assert!(matches!(
         merged_rx.try_recv(),

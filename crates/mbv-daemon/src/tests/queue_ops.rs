@@ -36,6 +36,7 @@ fn run_queue_cmd(
             merged_tx: &merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 }
@@ -68,6 +69,7 @@ fn run_queue_cmd_with_shared(
             merged_tx: &merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 }

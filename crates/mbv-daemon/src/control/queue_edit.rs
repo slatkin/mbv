@@ -33,6 +33,7 @@ pub(super) fn handle_queue_remove_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "slot not found; remove skipped",
         );
@@ -45,6 +46,7 @@ pub(super) fn handle_queue_remove_slot(
             queue,
             source,
             transitions,
+            ctx.op.get().map(|_| ctx.client_id),
         );
         if queue.is_empty() {
             // Clear the player's queue and stop.
@@ -71,6 +73,7 @@ pub(super) fn handle_queue_remove_slot(
             queue,
             source,
             transitions,
+            ctx.op.get().map(|_| ctx.client_id),
         );
         ctx.player.send_command(PlayerCommand::QueueRemove(sid));
     }
@@ -119,6 +122,7 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         queue,
         source,
         transitions,
+        ctx.op.get().map(|_| ctx.client_id),
     );
     if removed_active {
         // Removing the playing slot forces a track change that carries
@@ -174,6 +178,7 @@ pub(super) fn handle_queue_move_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "slot not found; move skipped",
         );
@@ -186,6 +191,7 @@ pub(super) fn handle_queue_move_slot(
             queue,
             source,
             transitions,
+            ctx.op.get().map(|_| ctx.client_id),
         );
         ctx.player
             .send_command(PlayerCommand::QueueMove(sid, to_index));
@@ -222,6 +228,7 @@ pub(super) fn handle_queue_play_slot(
         },
         super::super::core::JumpOrigin::Ctrl(ctx.client_id),
         mbv_player::transition::Transition::new(request_id, generation, sid),
+        ctx.op.get().map(|_| ctx.client_id),
     );
 }
 
@@ -255,5 +262,6 @@ pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
         queue,
         source,
         transitions,
+        ctx.op.get().map(|_| ctx.client_id),
     );
 }

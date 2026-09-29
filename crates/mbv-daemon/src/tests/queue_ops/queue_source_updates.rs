@@ -28,6 +28,7 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
             ],
             start_idx: Some(1),
             source: QueueSource::Album,
+            op: None,
         },
         client_id,
         &reply_tx,
@@ -88,6 +89,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
             }],
             start_idx: Some(0),
             source: QueueSource::Unknown,
+            op: None,
         },
         client_id,
         &reply_tx,
@@ -178,6 +180,7 @@ impl SourceUpdateFixture {
                 merged_tx: &self.merged_tx,
                 owner_settings: crate::owner_settings::fixed_reader(true),
                 role: crate::DaemonRole::Local,
+                op: std::cell::Cell::new(None),
             },
         );
     }
@@ -238,6 +241,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
                 name: "Saved playlist".to_string(),
             },
             lineage,
+            op: None,
         },
     );
 
@@ -340,6 +344,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
                 name: "Stale save".to_string(),
             },
             lineage: stale_lineage,
+            op: None,
         },
     );
 

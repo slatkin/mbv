@@ -224,6 +224,7 @@ impl DaemonLoop {
                             slot_id,
                             mbv_player::transition::TransitionCause::Step(direction),
                         ),
+                        None,
                     );
                 }
             }
@@ -244,6 +245,7 @@ impl DaemonLoop {
             &self.owner.core.queue,
             &self.owner.core.source,
             &self.owner.core.transitions,
+            None,
         );
     }
 

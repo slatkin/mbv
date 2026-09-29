@@ -220,7 +220,8 @@ impl CtrlClients {
         self.notify_last_client_gone(was_nonempty);
     }
 
-    /// Broadcasts a state event gated per client:
+    /// Broadcasts a state event gated per client, excluding `except` when
+    /// provided:
     /// - `unified_full_json` → peers advertising `abs-queue` + `abs-book-queue`
     /// - `unified_abs_json` → peers advertising `abs-queue` only
     /// - `unified_book_json` → peers advertising `abs-book-queue` only
@@ -233,9 +234,13 @@ impl CtrlClients {
         unified_abs_json: &str,
         unified_book_json: &str,
         unified_json: &str,
+        except: Option<CtrlClientId>,
     ) {
         let was_nonempty = !self.connection.is_empty();
         self.connection.retain(|c| {
+            if except == Some(c.id) {
+                return true;
+            }
             let json = match (c.audiobookshelf.queue, c.audiobookshelf.book_queue) {
                 (true, true) => unified_full_json,
                 (true, false) => unified_abs_json,

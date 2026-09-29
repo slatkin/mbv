@@ -64,6 +64,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 

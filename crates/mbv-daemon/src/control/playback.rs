@@ -74,6 +74,7 @@ pub(crate) fn play_resolved_items(
         queue,
         source,
         transitions,
+        None,
     );
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
@@ -229,6 +230,7 @@ fn step_to_neighbor_slot(
                 slot_id,
                 mbv_player::transition::TransitionCause::Step(direction),
             ),
+            None,
         );
     } else if target == mbv_player::owner_state::StepTarget::Coalesced {
         send_to(

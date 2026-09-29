@@ -139,6 +139,7 @@ pub(super) fn reconcile_packaged_emby(
             queue,
             source,
             transitions,
+            None,
         );
         *ctx.client.lock().unwrap() = next.client.lock().unwrap().clone();
         update_player_queue(ctx.player, items, active_index, ctx.client);
@@ -231,6 +232,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
             queue,
             source,
             transitions,
+            None,
         );
         update_player_queue(ctx.player, items, active_index, ctx.client);
         *current = None;
@@ -271,6 +273,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
             queue,
             source,
             transitions,
+            None,
         );
         update_player_queue(ctx.player, items, active_index, ctx.client);
     }

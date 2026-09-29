@@ -414,7 +414,11 @@ impl RemotePlayer {
                 "daemon does not support owner queue source updates",
             ));
         }
-        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate { source, lineage }) {
+        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate {
+            source,
+            lineage,
+            op: None,
+        }) {
             return Err(RemotePlayerError::queue_operation(
                 "could not send queue source update to Player owner",
             ));
@@ -467,13 +471,17 @@ impl RemotePlayer {
         if items.is_empty() {
             return true;
         }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend {
+            items,
+            before: None,
+            op: None,
+        })
     }
 
     /// Remove a slot by its stable identity.
     #[must_use]
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op: None })
     }
 
     /// Remove several slots in one owner edit, so the owner publishes one
@@ -483,19 +491,23 @@ impl RemotePlayer {
         if slot_ids.is_empty() {
             return true;
         }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids })
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op: None })
     }
 
     /// Move a slot by its stable identity to `to_index`.
     #[must_use]
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot {
+            slot_id,
+            to_index,
+            op: None,
+        })
     }
 
     /// Begin playback of an existing slot by its stable identity.
     #[must_use]
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id, op: None })
     }
 
     #[cfg(any(test, feature = "test"))]
