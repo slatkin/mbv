@@ -119,14 +119,9 @@ impl App {
         } else {
             self.save_queue_state_no_clear();
         }
-        // Coordinated daemon shutdown: when the policy gate
-        // is true (launched against the local daemon and stay_alive is off),
-        // send a bounded RequestShutdown to the daemon. The daemon owns
-        // queue persistence (persist-before-acceptance); this client only
-        // invokes the request. When the current player is a live Local
-        // connection, use it directly; otherwise create a short-lived
-        // DaemonEndpoint::Local connection without mutating self.player or
-        // any route/queue-scope/MPRIS/auto-reconnect state.
+        // Coordinated shutdown always uses the home link, even when it is
+        // suspended behind a routed remote player. Flush settings first: the
+        // daemon reads the current lifetime policy when it handles the request.
         let stay_alive = {
             let config = self.config.lock().unwrap();
             config.stay_alive
@@ -232,11 +227,8 @@ impl App {
         self.last_played_item_id = Some(last_id);
     }
 
-    /// Invoke the coordinated daemon shutdown when the policy gate is true
-    /// (launched against the local daemon with stay-alive off). Uses the live
-    /// Local connection when present, else a short-lived Local connection that
-    /// does not mutate `self.player` or any route/queue-scope/MPRIS/
-    /// auto-reconnect state. `None` means no request was made.
+    /// Invoke coordinated shutdown over the home link (current or suspended).
+    /// `None` means no request was made or the home link is unavailable.
     fn request_teardown_shutdown(
         &self,
         quit_timeout: Duration,
@@ -245,23 +237,17 @@ impl App {
         if !should_request_shutdown {
             return None;
         }
-        let current_is_local = matches!(
-            self.player_endpoint,
-            Some(mbv_remote_player::DaemonEndpoint::Local)
-        );
-        let current_connected = self.player.is_remote() && !self.player.is_remote_disconnected();
-        if current_is_local && current_connected {
-            // Invoke through the current live Local connection.
-            if let Some(remote) = self.player.as_remote() {
-                tracing::info!(name: "daemon_shutdown.request.started", target: "daemon_shutdown", connection = "current_local", "invoking shutdown request through current Local connection");
-                return Some(remote.request_shutdown(quit_timeout));
-            }
-            tracing::warn!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "local_endpoint_without_remote_player", fallback = "short_lived_connection", "current Local connection unavailable");
-        } else {
-            // Create a short-lived Local connection.
-            tracing::info!(name: "daemon_shutdown.connection.create_started", target: "daemon_shutdown", connection = "short_lived_local", "creating short-lived Local connection");
+        let home_link = self
+            .suspended_local
+            .as_ref()
+            .map_or(&self.player, |home| &home.player);
+        if !home_link.is_remote() || home_link.is_remote_disconnected() {
+            tracing::warn!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "home_link_unavailable", "home link unavailable for shutdown request");
+            return None;
         }
-        Self::invoke_shutdown_via_short_lived_local(quit_timeout)
+        let remote = home_link.as_remote()?;
+        tracing::info!(name: "daemon_shutdown.request.started", target: "daemon_shutdown", connection = if self.suspended_local.is_some() { "suspended_home" } else { "current_home" }, "invoking shutdown request through home link");
+        Some(remote.request_shutdown(quit_timeout))
     }
 
     /// After a failed shutdown request (Rejected, Disconnected, `TimedOut`,
@@ -308,27 +294,50 @@ impl App {
             }
         }
     }
+}
 
-    /// Creates a short-lived `DaemonEndpoint::Local` connection and
-    /// invoke `request_shutdown` through it without replacing self.player or
-    /// mutating route, queue-scope, MPRIS, or auto-reconnect state. Returns
-    /// None if the connection cannot be established.
-    fn invoke_shutdown_via_short_lived_local(
-        quit_timeout: Duration,
-    ) -> Option<mbv_remote_player::ShutdownResponse> {
-        use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
-        match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local) {
-            Ok((remote, _event_rx)) => {
-                tracing::info!(name: "daemon_shutdown.connection.established", target: "daemon_shutdown", connection = "short_lived_local", "short-lived Local connection established");
-                let response = remote.request_shutdown(quit_timeout);
-                // Disconnect the short-lived connection after the request.
-                remote.disconnect();
-                Some(response)
-            }
-            Err(e) => {
-                tracing::warn!(name: "daemon_shutdown.connection.failed", target: "daemon_shutdown", connection = "short_lived_local", error = %e, "failed to establish short-lived Local connection");
-                None
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::SuspendedLocalSession;
+    use crate::app::tests::make_app_stub;
+    use mbv_player::PlayerProxy;
+
+    #[test]
+    fn quitting_with_stay_alive_off_stops_this_machines_local_daemon() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.home_is_local_daemon = true;
+        app.config.lock().unwrap().stay_alive = false;
+
+        let (home_remote, home_rx, home_peer) =
+            mbv_remote_player::connect_stub_daemon_pair().unwrap();
+        app.suspended_local = Some(SuspendedLocalSession {
+            player: PlayerProxy::remote(home_remote, false),
+            player_rx: home_rx,
+        });
+        let (routed_remote, routed_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+        app.player = PlayerProxy::remote(routed_remote, false);
+        app.player_rx = routed_rx;
+        app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
+            "127.0.0.1:1234".parse().unwrap(),
+        ));
+        app.active_route = Some("music".to_string());
+
+        app.teardown(Duration::ZERO, None);
+
+        assert!(
+            app.pending_exit_message
+                .as_deref()
+                .is_some_and(|message| message.contains("did not respond within timeout"))
+        );
+        app.suspended_local
+            .as_ref()
+            .unwrap()
+            .player
+            .as_remote()
+            .unwrap()
+            .disconnect();
+        home_peer.join().unwrap();
     }
 }
