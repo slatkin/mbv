@@ -20,11 +20,14 @@ Today a Bare TUI holds `player_tab` plus `bare_owner`, synchronized by whole-que
 - **BREAKING (process model):** the Player owner for a local launch is always a separate owner process. Bare in-process ownership is retired. `stay_alive` becomes a lifetime policy only:
   - **Off:** the owner accepts one Client and shuts down when that Client quits or its connection drops. A second launch is refused with today's message.
   - **On:** unchanged. Any number of Clients may attach, and the owner outlives them.
-- The owner reads `stay_alive` when it decides something (an attach, a last-Client disconnect, a shutdown request), not once at spawn. This fixes the spec'd "Stay Alive toggled off during the session" scenario, which the spawn-time `DaemonLoop.stay_alive` flag currently violates.
-- Clients hold no editable queue. Both queue scopes (the home owner and a directly controlled remote owner) are read-only mirrors, and adopting an owner snapshot is the only way to write them. The Client's selection is anchored by `QueueSlotId`, not by index.
+- The local daemon reads `stay_alive` and `consume_*` when it decides something (an attach, a last-Client disconnect, a shutdown request, consume policy), not once at spawn. This fixes the spec'd "Stay Alive toggled off during the session" scenario, which the spawn-time `DaemonLoop.stay_alive` flag currently violates. It also honours `show_audio_window`. None of these lifetime or settings changes affect packaged `mbvd`.
+- A daemon that has begun shutting down refuses new connections, and a relaunch retries until the old daemon has released the lock.
+- Clients hold no editable queue: no queue slots, no queue source, and no optimistic mirror (`SuspendedLocalSession`'s copies and `RemotePlayer`'s `items`/`queue_source` go too). Both queue scopes (the home owner and a directly controlled remote owner) are read-only mirrors, and adopting an owner snapshot is the only way to write them. The Client's selection is anchored by `QueueSlotId`, not by index.
 - Every queue edit is an owner operation with a correlated result. The Client waits a bounded time for its own result and adopts the resulting snapshot before handling the next input, so an edit is painted in the next frame, with no prediction and nothing to roll back.
   - Undo sends the inverse operation.
   - Queue refresh becomes an owner operation.
+  - Audiobookshelf Socket.IO progress is relayed to the owner.
+  - Event-driven queue writes (progress, consume, feed hydrate) are left to the owner. The Client keeps only the side effects that aren't queue writes.
 - Deleted:
   - `bare_owner`, `sync_canonical_queue` and Bare transitions;
   - the in-TUI `Player` (`PlayerProxy::local`);
@@ -58,6 +61,11 @@ None. The behaviour belongs to existing capabilities.
 - `queue-canonical-list`: the Client holds no playhead prediction; the requirement on clearing the Bare prediction is replaced.
 - `player-target-locality`: the in-process player target is removed.
 - `non-audio-fall-through`: the "local Player" a fall-through prepares becomes this machine's local daemon, not a Player the TUI builds.
+- `audiobookshelf-podcast-playback`: the in-process eligibility and activation scenarios are removed. Acknowledged progress reaches the Client's queue only through owner snapshots.
+- `audiobookshelf-podcast-browsing`: Bare wording is removed from discovery.
+- `audiobookshelf-service-setup`: the Bare direct-apply path is removed.
+- `audiobookshelf-progress-refresh`: the socket belongs to the terminal UI, and queue progress is relayed to the owner.
+- `clocked-audio-output`: Bare wording is removed from the defaults.
 
 ## Impact
 
@@ -65,9 +73,9 @@ None. The behaviour belongs to existing capabilities.
   - `src/main.rs` (startup resolution) and `src/local_daemon.rs` (spawn);
   - `src/app/state/{construct*, app_struct, queue_scope, queue_owner, player_tab, playback}`;
   - `src/app/dispatch/{queue*, action, session/*, run_loop/teardown, library/load, library/event}`;
-  - `crates/mbv-daemon` (lifetime policy, exclusive attach, op results, refresh op);
-  - `crates/mbv-ctrl` (op id, result event, insert-before and refresh ops, capabilities);
-  - `crates/mbv-remote-player` (bounded op call);
+  - `crates/mbv-daemon` (live owner settings, Local-role gating, exclusive and shutting-down admission, `LastClientGone`, op results, refresh and progress ops, audio window);
+  - `crates/mbv-ctrl` (op id, result event, insert-before, refresh, progress-relay and clear-op commands, disconnect reasons, capabilities);
+  - `crates/mbv-remote-player` (op send, refusal errors, `items`/`queue_source` mirrors removed);
   - `crates/mbv-player/src/proxy.rs` (the Local variant is removed).
 - **Protocol:** additive ctrl capabilities; `CTRL_PROTOCOL_VERSION` does not change.
 - **Persistence:** the Bare queue file is read once by the existing legacy takeover in the owner and never written again.

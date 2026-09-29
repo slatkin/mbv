@@ -22,6 +22,10 @@ daemon's lifetime. The terminal SHALL NOT own the Player; it SHALL run as a clie
 - **THEN** mbv SHALL NOT start a second daemon
 - **THEN** mbv SHALL attach to the running daemon as a client
 
+#### Scenario: Audio window is configured
+- **WHEN** `show_audio_window` is enabled and the local daemon plays audio in a desktop session
+- **THEN** the local daemon SHALL show the audio window, as a terminal-owned Player did
+
 #### Scenario: The daemon is not yet accepting connections
 - **WHEN** mbv has just started a local daemon and the control socket is not yet accepting connections
 - **THEN** mbv SHALL retry the connection for a bounded period before reporting failure
