@@ -98,10 +98,13 @@ impl Model {
                     outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
                     ..
                 } => self.app.adopt_home_snapshot(&snapshot),
-                mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_)
-                | mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
+                mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
                     self.app.adopt_last_local_snapshot();
+                    self.app.suspended_local = None;
                     self.app.raise_daemon_lost_modal();
+                }
+                mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
+                    self.app.handle_daemon_shutdown_announced();
                 }
                 _ => {}
             }

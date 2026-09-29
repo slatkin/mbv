@@ -1,5 +1,13 @@
 use super::*;
 use mbv_remote_player::DaemonEndpoint;
+
+fn reconnect_local_daemon(
+    _endpoint: &DaemonEndpoint,
+) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+    let (remote, events) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
+    crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
+}
+
 pub(super) fn stub_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
 }
@@ -203,6 +211,52 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
     daemon
         .join()
         .expect("old remote's client socket must be shut down after restore_local_mode");
+}
+
+// Owns player-target-locality "Daemon target transitions update classification".
+#[test]
+fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
+    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    let (route, route_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_direct_remote(
+        &make_session("remote-owner", "mbv"),
+        route,
+        route_rx,
+        &stub_endpoint(),
+    );
+    let (dead_home, dead_home_rx, dead_home_peer) =
+        mbv_remote_player::connect_stub_daemon_pair().unwrap();
+    app.suspended_local.as_mut().unwrap().player =
+        mbv_player::PlayerProxy::remote(dead_home.clone(), false);
+    app.suspended_local.as_mut().unwrap().player_rx = dead_home_rx;
+    dead_home.disconnect();
+    app.suspended_local
+        .as_mut()
+        .unwrap()
+        .player_rx
+        .recv()
+        .unwrap();
+    dead_home_peer.join().unwrap();
+
+    app.restore_local_mode("Local playback restored");
+
+    assert!(app.suspended_local.is_none());
+    assert!(app.is_local_daemon());
+    assert_eq!(
+        app.player
+            .as_remote()
+            .unwrap()
+            .unified_queue_state()
+            .unwrap()
+            .slots
+            .len(),
+        2
+    );
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]

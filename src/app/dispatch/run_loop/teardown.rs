@@ -151,8 +151,8 @@ impl App {
         // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
         // that the local daemon may still be running and names `mbv -q`.
-        if should_request_shutdown {
-            self.record_shutdown_failure(shutdown_response);
+        if should_request_shutdown && let Some(response) = shutdown_response {
+            self.record_shutdown_failure(Some(response));
         }
     }
 
@@ -240,11 +240,20 @@ impl App {
         let home_link = self
             .suspended_local
             .as_ref()
-            .map_or(&self.player, |home| &home.player);
-        if !home_link.is_remote() || home_link.is_remote_disconnected() {
-            tracing::warn!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "home_link_unavailable", "home link unavailable for shutdown request");
+            .filter(|home| !home.player.is_remote_disconnected())
+            .map(|home| &home.player)
+            .or_else(|| {
+                self.player_endpoint
+                    .as_ref()
+                    .is_some_and(mbv_remote_player::DaemonEndpoint::is_local)
+                    .then_some(&self.player)
+            });
+        let Some(home_link) =
+            home_link.filter(|player| player.is_remote() && !player.is_remote_disconnected())
+        else {
+            tracing::info!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "home_link_unavailable", "home link unavailable for shutdown request");
             return None;
-        }
+        };
         let remote = home_link.as_remote()?;
         tracing::info!(name: "daemon_shutdown.request.started", target: "daemon_shutdown", connection = if self.suspended_local.is_some() { "suspended_home" } else { "current_home" }, "invoking shutdown request through home link");
         Some(remote.request_shutdown(quit_timeout))
@@ -339,5 +348,38 @@ mod tests {
             .unwrap()
             .disconnect();
         home_peer.join().unwrap();
+    }
+
+    // Owns daemon-lifecycle "Quitting with Stay Alive off stops this machine's local daemon".
+    #[test]
+    fn teardown_after_local_restart_uses_the_live_home_link() {
+        let mut app = make_app_stub();
+        app.home_is_local_daemon = true;
+        app.config.lock().unwrap().stay_alive = false;
+
+        let (dead_home, dead_rx, dead_peer) =
+            mbv_remote_player::connect_stub_daemon_pair().unwrap();
+        dead_home.disconnect();
+        dead_peer.join().unwrap();
+        app.suspended_local = Some(SuspendedLocalSession {
+            player: PlayerProxy::remote(dead_home, false),
+            player_rx: dead_rx,
+        });
+
+        let (restarted_home, restarted_rx, restarted_peer) =
+            mbv_remote_player::connect_stub_daemon_pair().unwrap();
+        app.player = PlayerProxy::remote(restarted_home, false);
+        app.player_rx = restarted_rx;
+        app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+
+        let response = app.request_teardown_shutdown(Duration::ZERO, true);
+
+        assert!(matches!(
+            response,
+            Some(mbv_remote_player::ShutdownResponse::TimedOut)
+        ));
+        assert!(app.pending_exit_message.is_none());
+        app.player.disconnect_remote();
+        restarted_peer.join().unwrap();
     }
 }

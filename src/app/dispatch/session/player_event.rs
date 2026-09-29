@@ -1,6 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, DaemonLostModal};
+use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
+use std::sync::atomic::Ordering;
 
 mod progress;
 
@@ -224,7 +225,10 @@ impl App {
     pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self) {
         if self.is_local_daemon() || self.suspended_local.is_some() {
             self.adopt_last_local_snapshot();
-            self.raise_daemon_lost_modal();
+            self.suspended_local = None;
+            self.pending_exit_message =
+                Some("mbv: the local daemon was stopped — exiting.".to_string());
+            QUIT_REQUESTED.store(true, Ordering::Relaxed);
         } else {
             self.restore_local_mode("Daemon disconnected — returned to local mode");
             self.refresh_after_stop();
@@ -712,6 +716,7 @@ impl App {
         self.next_up_item = None;
         if self.is_local_daemon() {
             self.adopt_last_local_snapshot();
+            self.suspended_local = None;
             self.raise_daemon_lost_modal();
             self.refresh_after_stop();
             return true;

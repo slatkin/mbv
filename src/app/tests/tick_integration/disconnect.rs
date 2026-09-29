@@ -5,6 +5,13 @@ use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use std::sync::mpsc;
 
+fn reconnect_local_daemon(
+    _endpoint: &DaemonEndpoint,
+) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+    let (remote, events) = RemotePlayer::stub(make_items(2), 0);
+    crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
+}
+
 #[test]
 fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     let mut app = make_local_daemon_app_stub(make_items(1));
@@ -106,6 +113,7 @@ fn daemon_target_transitions_update_classification_suspended_disconnect_raises_o
     );
     assert_eq!(app.player_tab.emby_items(), make_items(2));
     assert!(matches!(app.queue_source, mbv_queue::QueueSource::Album));
+    assert!(app.suspended_local.is_none());
 }
 
 // Owns player-target-locality "Daemon target transitions update classification".
@@ -141,8 +149,90 @@ fn daemon_target_transitions_update_classification_local_disconnect_keeps_local_
     );
 }
 
+// Owns player-target-locality "Daemon target transitions update classification".
 #[test]
-fn suspended_home_shutdown_announced_raises_owner_lost_modal() {
+fn suspended_home_shutdown_announced_exits_cleanly() {
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    let (remote, _) = RemotePlayer::stub(make_items(2), 0);
+    app.switch_to_direct_remote(
+        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+        remote,
+        mpsc::channel().1,
+        &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    let (event_tx, event_rx) = mpsc::channel();
+    let home = app
+        .suspended_local
+        .as_ref()
+        .unwrap()
+        .player
+        .as_remote()
+        .unwrap();
+    *home.unified_queue.lock().unwrap() = Some(emby_unified_state(&make_items(2), 0));
+    app.suspended_local.as_mut().unwrap().player_rx = event_rx;
+    event_tx
+        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .unwrap();
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Modal(
+                mbv_ui_msg::ModalId::DaemonLost,
+            ))
+    );
+    assert_eq!(harness.model().app.player_tab.emby_items(), make_items(2));
+    assert!(harness.model().app.suspended_local.is_none());
+    assert_eq!(
+        harness.model().app.pending_exit_message.as_deref(),
+        Some("mbv: the local daemon was stopped — exiting.")
+    );
+    assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+// Owns player-target-locality "Daemon target transitions update classification".
+#[test]
+fn local_home_shutdown_announced_exits_cleanly() {
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    let (event_tx, event_rx) = mpsc::channel();
+    app.player_rx = event_rx;
+    event_tx
+        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .unwrap();
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    assert!(
+        !harness
+            .model()
+            .application
+            .mounted(&mbv_ui_msg::ComponentId::Modal(
+                mbv_ui_msg::ModalId::DaemonLost,
+            ))
+    );
+    assert_eq!(
+        harness.model().app.pending_exit_message.as_deref(),
+        Some("mbv: the local daemon was stopped — exiting.")
+    );
+    assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+// Owns player-target-locality "Daemon target transitions update classification".
+#[test]
+fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
+    use crate::app::{DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK};
+
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (remote, _) = RemotePlayer::stub(make_items(2), 0);
     app.switch_to_direct_remote(
@@ -154,32 +244,37 @@ fn suspended_home_shutdown_announced_raises_owner_lost_modal() {
     let (event_tx, event_rx) = mpsc::channel();
     app.suspended_local.as_mut().unwrap().player_rx = event_rx;
     event_tx
-        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .send(mbv_ctrl::player::PlayerEvent::RemoteDisconnected(
+            "home owner lost".into(),
+        ))
         .unwrap();
 
     let mut harness = TickHarness::new(app);
     harness.step();
 
-    assert!(
-        harness
-            .model()
-            .application
-            .mounted(&mbv_ui_msg::ComponentId::Modal(
-                mbv_ui_msg::ModalId::DaemonLost,
-            ))
+    assert!(harness.model().app.suspended_local.is_none());
+    let prepared = harness
+        .model_mut()
+        .app
+        .prepare_local_player()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        prepared
+            .player
+            .as_remote()
+            .unwrap()
+            .unified_queue_state()
+            .unwrap()
+            .slots
+            .len(),
+        2
     );
-    assert!(harness.model().app.pending_exit_message.is_none());
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 }
 
 #[test]
 fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
-    fn reconnect_local_daemon(
-        _endpoint: &DaemonEndpoint,
-    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-        let (remote, events) = RemotePlayer::stub(make_items(2), 0);
-        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
-    }
-
     let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local_daemon);
 

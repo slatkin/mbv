@@ -235,7 +235,9 @@ impl App {
         if self.home_is_local_daemon && self.is_local_daemon() {
             return Ok(None);
         }
-        if let Some(suspended) = self.suspended_local.take() {
+        if let Some(suspended) = self.suspended_local.take()
+            && !suspended.player.is_remote_disconnected()
+        {
             return Ok(Some(suspended));
         }
         #[cfg(not(test))]
@@ -416,7 +418,11 @@ impl App {
         // succeeds, so the tail can restore `player_tab` / queue source
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
-        if let Some(suspended) = self.suspended_local.take() {
+        if let Some(suspended) = self
+            .suspended_local
+            .take()
+            .filter(|suspended| !suspended.player.is_remote_disconnected())
+        {
             self.install_suspended_local(suspended);
         } else if self.home_is_local_daemon {
             // This app's baseline was never a genuinely local in-process

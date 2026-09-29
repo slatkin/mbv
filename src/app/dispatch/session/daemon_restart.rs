@@ -70,6 +70,7 @@ impl App {
         let mpris_remote = remote.clone();
         self.player = PlayerProxy::remote(remote, always_play_next);
         self.player_rx = remote_rx;
+        self.suspended_local = None;
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
             mbv_desktop::mpris::rebind(
