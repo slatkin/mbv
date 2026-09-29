@@ -15,6 +15,7 @@ pub(in crate::app) mod projection;
 pub(in crate::app) mod queue_deferrals;
 pub(in crate::app) mod queue_owner;
 pub(in crate::app) mod queue_scope;
+pub(in crate::app) mod queue_view;
 pub(in crate::app) mod remote_slot;
 pub(in crate::app) mod remote_tracking;
 pub(in crate::app) mod runtime_channels;
