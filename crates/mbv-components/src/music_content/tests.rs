@@ -236,7 +236,11 @@ fn launch_restore_selects_the_saved_artist_collapsed_and_expands_nothing() {
         ))
     );
     assert!(
-        owner.browser.expanded.is_empty(),
+        owner
+            .browser
+            .roots()
+            .into_iter()
+            .all(|root| !owner.browser.is_expanded(root)),
         "no artist root -- saved or otherwise -- is expanded by a programmatic restore"
     );
 }

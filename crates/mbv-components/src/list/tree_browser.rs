@@ -57,7 +57,7 @@ pub enum VisibleRow {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArenaNode<Target> {
+struct ArenaNode<Target> {
     pub node: TreeNode<Target>,
     pub children: Vec<usize>,
     pub depth: usize,
@@ -83,29 +83,29 @@ struct ReconciledSelection<Target> {
 /// only select, expand, mark, and resolve rows through destination targets.
 #[derive(Debug)]
 pub struct TreeBrowser<Target> {
-    pub arena: HashMap<usize, ArenaNode<Target>>,
-    pub target_to_node: HashMap<Target, usize>,
-    pub ordered_nodes: Vec<usize>,
-    pub roots: Vec<usize>,
-    pub root_structures: HashMap<Target, Vec<StructuralRow>>,
-    pub next_node_id: usize,
-    pub model_revision: u64,
-    pub selected: Option<Target>,
-    pub expanded: HashSet<Target>,
-    pub marks: MarkSelectionState<Target>,
-    pub viewport_offset: usize,
-    pub configured_geometry: Option<(Rect, Rect)>,
-    pub filter_active: bool,
-    pub filter_query: String,
-    pub filter_anchor: Option<Target>,
-    pub filter_matches: HashSet<usize>,
-    pub paint: PaintRetainedState<Target>,
-    pub focused: bool,
-    pub marquee_text: String,
-    pub marquee_started_at: Instant,
+    arena: HashMap<usize, ArenaNode<Target>>,
+    target_to_node: HashMap<Target, usize>,
+    ordered_nodes: Vec<usize>,
+    roots: Vec<usize>,
+    root_structures: HashMap<Target, Vec<StructuralRow>>,
+    next_node_id: usize,
+    model_revision: u64,
+    selected: Option<Target>,
+    expanded: HashSet<Target>,
+    marks: MarkSelectionState<Target>,
+    viewport_offset: usize,
+    configured_geometry: Option<(Rect, Rect)>,
+    filter_active: bool,
+    filter_query: String,
+    filter_anchor: Option<Target>,
+    filter_matches: HashSet<usize>,
+    paint: PaintRetainedState<Target>,
+    focused: bool,
+    marquee_text: String,
+    marquee_started_at: Instant,
     /// The area of the latest completed `view`, the paging viewport fallback
     /// when the panel has not declared geometry yet.
-    pub last_painted: Option<Rect>,
+    last_painted: Option<Rect>,
 }
 
 impl<Target> Default for TreeBrowser<Target> {
