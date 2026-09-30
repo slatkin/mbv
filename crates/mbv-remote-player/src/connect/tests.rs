@@ -284,11 +284,7 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
     )
     .unwrap_err();
 
-    assert_eq!(error.owner_build_mismatch(), Some(owner_version));
-    assert_eq!(error.kind_name(), "remote-player.owner_build_mismatch");
-    assert!(error.to_string().contains(owner_version));
-    assert!(error.to_string().contains(env!("CARGO_PKG_VERSION")));
-    assert!(error.to_string().contains("mbv -q"));
+    assert_eq!(error.mismatched_owner_version(), Some(owner_version));
     peer.join().unwrap();
     assert_eq!(received_rx.recv().unwrap(), "");
 }
@@ -364,7 +360,7 @@ fn local_handshake_keeps_protocol_compatibility_independent_of_build() {
     )
     .unwrap_err();
 
-    assert_eq!(error.owner_build_mismatch(), None);
+    assert_eq!(error.mismatched_owner_version(), None);
     assert_eq!(error.kind_name(), "remote-player.control");
     assert!(
         error

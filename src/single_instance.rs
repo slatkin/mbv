@@ -91,10 +91,13 @@ pub fn read_pid(lock: &Path) -> Option<u32> {
     std::fs::read_to_string(lock).ok()?.trim().parse().ok()
 }
 
+/// Why `mbv -q` could not stop the Owner process.
 #[derive(Debug)]
 pub enum TerminateOwnerError {
+    /// The lock file held no PID, so there is no Owner to signal.
     NoOwnerPid,
-    Signal(io::Error),
+    /// `SIGTERM` to the lock file's PID failed.
+    Signal { pid: u32, error: io::Error },
 }
 
 impl std::fmt::Display for TerminateOwnerError {
@@ -106,7 +109,7 @@ impl std::fmt::Display for TerminateOwnerError {
                     "no running instance found; if one just started, try again in a moment"
                 )
             }
-            Self::Signal(error) => write!(f, "{error}"),
+            Self::Signal { pid, error } => write!(f, "failed to signal pid {pid}: {error}"),
         }
     }
 }
@@ -115,7 +118,7 @@ impl std::error::Error for TerminateOwnerError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::NoOwnerPid => None,
-            Self::Signal(error) => Some(error),
+            Self::Signal { error, .. } => Some(error),
         }
     }
 }
@@ -127,11 +130,10 @@ pub fn terminate_owner(lock: &Path) -> Result<u32, TerminateOwnerError> {
     if ok {
         Ok(pid)
     } else {
-        let error = io::Error::last_os_error();
-        Err(TerminateOwnerError::Signal(io::Error::new(
-            error.kind(),
-            format!("failed to signal pid {pid}: {error}"),
-        )))
+        Err(TerminateOwnerError::Signal {
+            pid,
+            error: io::Error::last_os_error(),
+        })
     }
 }
 

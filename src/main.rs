@@ -429,18 +429,16 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 owner_restart::FollowUp::WaitForOwnerExit => {
                     resolution = wait_for_owner_exit();
                 }
-                owner_restart::FollowUp::Prompt(owner_version) => {
+                owner_restart::FollowUp::Prompt => {
                     if !std::io::stdin().is_terminal() {
                         eprintln!("mbv: {error}");
                         std::process::exit(1);
                     }
                     let mut input = std::io::stdin().lock();
                     let mut output = std::io::stderr().lock();
-                    match owner_restart::ask(owner_version, &mut input, &mut output) {
+                    match owner_restart::ask(&error, &mut input, &mut output) {
                         owner_restart::Choice::Quit => {
-                            eprintln!(
-                                "mbv: run `mbv -q` to stop the Owner process, then relaunch mbv."
-                            );
+                            eprintln!("mbv: {error}");
                             std::process::exit(1);
                         }
                         owner_restart::Choice::Restart => {
@@ -455,7 +453,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                         }
                     }
                 }
-                owner_restart::FollowUp::Other if error.is_exclusive_owner() => {
+                owner_restart::FollowUp::RefuseSecondTerminal => {
                     eprintln!("mbv: refusing a second terminal: {error}.");
                     eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
                     eprintln!(

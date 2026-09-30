@@ -57,7 +57,7 @@ impl RemotePlayerError {
         }
     }
 
-    pub fn owner_build_mismatch_error(app_version: impl Into<String>) -> Self {
+    pub(crate) fn owner_build_mismatch(app_version: impl Into<String>) -> Self {
         Self {
             kind: RemotePlayerErrorKind::OwnerBuildMismatch {
                 app_version: app_version.into(),
@@ -65,6 +65,14 @@ impl RemotePlayerError {
             message: String::new(),
             source: None,
         }
+    }
+
+    /// Test support: builds the mismatch error for callers outside this crate
+    /// (the `mbv` binary's startup-prompt tests), gated behind the `test`
+    /// feature like the crate's other test seams.
+    #[cfg(any(test, feature = "test"))]
+    pub fn owner_build_mismatch_for_test(app_version: impl Into<String>) -> Self {
+        Self::owner_build_mismatch(app_version)
     }
 
     fn new(kind: RemotePlayerErrorKind, message: impl Into<String>) -> Self {
@@ -91,8 +99,9 @@ impl RemotePlayerError {
         matches!(&self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
     }
 
+    /// The local Owner's `app_version`, when it differs from this build's.
     #[must_use]
-    pub fn owner_build_mismatch(&self) -> Option<&str> {
+    pub fn mismatched_owner_version(&self) -> Option<&str> {
         match &self.kind {
             RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => Some(app_version),
             _ => None,
@@ -122,17 +131,26 @@ impl RemotePlayerError {
     }
 }
 
+/// Canonical user-facing text for a local Owner build mismatch: both
+/// application versions, then how to proceed. The startup prompt and every
+/// path that only prints the error render this one text, so the guidance
+/// cannot drift between them.
+fn owner_build_mismatch_message(owner_app_version: &str) -> String {
+    format!(
+        "Owner process is running version {owner_app_version}, but this terminal is version {}; stop it with `mbv -q`, then relaunch mbv",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
 impl fmt::Display for RemotePlayerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             RemotePlayerErrorKind::ExclusiveOwner { pid } => {
                 write!(f, "local owner process {pid} already has a client")
             }
-            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => write!(
-                f,
-                "Owner process is running version {app_version}, but this mbv is version {}; run `mbv -q` to restart it",
-                env!("CARGO_PKG_VERSION")
-            ),
+            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => {
+                f.write_str(&owner_build_mismatch_message(app_version))
+            }
             _ => f.write_str(&self.message),
         }
     }

@@ -31,19 +31,21 @@ mod endpoint;
 
 pub use endpoint::{DaemonEndpoint, resolve_library_route};
 
+/// Whether the handshake must reject an Owner built from a different version.
+///
+/// The local Owner process is the same binary as this Client, so a differing
+/// `app_version` means a stale process; explicit `unix://`/`tcp://` endpoints
+/// and the packaged `mbvd` are independent builds and never compare.
 #[derive(Clone, Copy)]
 pub(crate) enum PeerBuild {
     Any,
     MustMatch,
 }
 
-/// Performs the daemon control-protocol handshake (hello exchange, then the
-/// initial state) on `stream`, returning a reader ready for the long-running
-/// event-reading loop plus the initial `UnifiedQueueState`. Split out of
-/// `connect_endpoint` so it can run on a worker thread bounded by
-/// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
-/// directly against a real stalled `TcpListener` without going through
-/// `connect_endpoint`'s full setup.
+/// Test-only entry point to the handshake, on `stream`, with
+/// [`PeerBuild::Any`]. Production goes through [`connect_endpoint`], which
+/// runs [`perform_handshake_with_role`] on a worker thread bounded by
+/// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5).
 #[cfg(test)]
 pub(crate) fn perform_handshake<F>(
     stream: SocketStream,
@@ -108,8 +110,14 @@ fn read_server_hello(
             "daemon did not send protocol hello",
         ));
     };
+    // A local Owner is the same binary as this Client, so a differing
+    // `app_version` means the user is attached to a stale process. Refuse
+    // here, before `validate_peer` and therefore before `send_client_hello`,
+    // so no control credential leaves this terminal. Both sides read the
+    // workspace version (`version.workspace = true`), so this compares like
+    // with like.
     if matches!(peer_build, PeerBuild::MustMatch) && info.app_version != env!("CARGO_PKG_VERSION") {
-        return Err(crate::RemotePlayerError::owner_build_mismatch_error(
+        return Err(crate::RemotePlayerError::owner_build_mismatch(
             info.app_version,
         ));
     }

@@ -1,3 +1,13 @@
+//! Owner build-mismatch handling at startup (issue #559): prompt, then wait
+//! for the old Owner process to exit.
+//!
+//! A local Client refuses an Owner built from a different version before
+//! sending its control credential. This module turns that refusal into the
+//! terminal prompt and decides what to do next. [`follow_up`] is pure over
+//! `(error, restart_requested)` so the "do not prompt again while the old
+//! Owner winds down" rule is unit-testable without `process::exit`
+//! (design D6).
+
 use std::io::{BufRead, Write};
 
 use crate::remote_player::RemotePlayerError;
@@ -9,21 +19,23 @@ pub(super) enum Choice {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum FollowUp<'a> {
-    Prompt(&'a str),
+pub(super) enum FollowUp {
+    Prompt,
     WaitForOwnerExit,
+    RefuseSecondTerminal,
     Other,
 }
 
+/// Prints the mismatch and reads one line, restarting only on `r`/`R`
+/// (trimmed); anything else, an empty line, or EOF quits.
 pub(super) fn ask(
-    owner_app_version: &str,
+    error: &RemotePlayerError,
     input: &mut impl BufRead,
     output: &mut impl Write,
 ) -> Choice {
     let _ = writeln!(
         output,
-        "Owner process version: {owner_app_version}\nThis terminal version: {}\nRestarting stops playback and closes any other mbv terminals.\n[R] Restart  [Q] Quit",
-        env!("CARGO_PKG_VERSION")
+        "{error}\nRestarting stops playback and closes any other mbv terminals.\n[R] Restart  [Q] Quit"
     );
     let _ = output.flush();
 
@@ -35,15 +47,21 @@ pub(super) fn ask(
     }
 }
 
-pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp<'_> {
+pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp {
     if error.is_owner_shutting_down() {
         return FollowUp::WaitForOwnerExit;
     }
-    match error.owner_build_mismatch() {
-        Some(_) if restart_requested => FollowUp::WaitForOwnerExit,
-        Some(owner_version) => FollowUp::Prompt(owner_version),
-        None => FollowUp::Other,
+    if error.mismatched_owner_version().is_some() {
+        return if restart_requested {
+            FollowUp::WaitForOwnerExit
+        } else {
+            FollowUp::Prompt
+        };
     }
+    if error.is_exclusive_owner() {
+        return FollowUp::RefuseSecondTerminal;
+    }
+    FollowUp::Other
 }
 
 #[cfg(test)]
