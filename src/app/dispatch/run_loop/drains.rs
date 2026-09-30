@@ -98,11 +98,10 @@ impl App {
                     mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected
                 ) =>
             {
-                self.audiobookshelf_runtime.complete(
+                self.fail_audiobookshelf_service(
                     completion.generation,
                     mbv_core::service_runtime::ServiceState::NeedsAuthentication,
                 );
-                self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
                 let _ = self.clear_audiobookshelf_authentication();
             }
             Err(_) => {

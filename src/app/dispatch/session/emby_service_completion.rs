@@ -71,10 +71,9 @@ impl App {
                 Some(content)
             }
             Err(error) => {
-                self.expire_launch_service(mbv_queue::ServiceKind::Emby);
                 let state =
                     crate::app::dispatch::session::service_startup::classify_failure(&error);
-                self.emby_runtime.state = state;
+                self.fail_emby_service(state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     self.emby_runtime.client = None;
                     self.ws_send_tx = None;
@@ -113,8 +112,7 @@ impl App {
             return;
         }
         let config = self.config.lock().unwrap().clone();
-        self.expire_launch_service(mbv_queue::ServiceKind::Emby);
-        self.emby_runtime.state = if config.emby_setup.is_some()
+        let state = if config.emby_setup.is_some()
             && mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
         {
             mbv_core::service_runtime::ServiceState::Unavailable
@@ -123,6 +121,7 @@ impl App {
         } else {
             mbv_core::service_runtime::ServiceState::NotConfigured
         };
+        self.fail_emby_service(state);
         self.flash(
             crate::app::dispatch::session::service_startup::startup_status(self.emby_runtime.state)
                 .into(),
@@ -230,8 +229,7 @@ impl App {
                 Some(content)
             }
             Err(error) => {
-                self.expire_launch_service(mbv_queue::ServiceKind::Emby);
-                self.emby_runtime.state = completion.previous_state;
+                self.fail_emby_service(completion.previous_state);
                 if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;
                     form.error = error.to_string();

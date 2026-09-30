@@ -72,9 +72,32 @@ impl App {
         self.select_tab(tab);
     }
 
+    /// The only writer of a failed Emby state: records `state` and expires a
+    /// pending Emby launch destination, so the pairing cannot be forgotten.
+    pub(in crate::app) fn fail_emby_service(
+        &mut self,
+        state: mbv_core::service_runtime::ServiceState,
+    ) {
+        self.emby_runtime.state = state;
+        self.expire_launch_service(ServiceKind::Emby);
+    }
+
+    /// The only writer of a failed Audiobookshelf state: records `state` for
+    /// `generation` and expires a pending Audiobookshelf launch destination.
+    pub(in crate::app) fn fail_audiobookshelf_service(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        state: mbv_core::service_runtime::ServiceState,
+    ) {
+        self.audiobookshelf_runtime.complete(generation, state);
+        self.expire_launch_service(ServiceKind::Audiobookshelf);
+    }
+
     /// Abandon a saved Service destination after its Service startup fails:
     /// re-target the snapshot to Home, where the destination re-anchor still
-    /// applies its focus.
+    /// applies its focus. Reach it through `fail_*_service`; the one direct
+    /// caller is the Audiobookshelf catalog failure that leaves the Service
+    /// state untouched.
     pub(in crate::app) fn expire_launch_service(&mut self, kind: ServiceKind) {
         if matches!(
             &self.launch_restore,
