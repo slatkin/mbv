@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
-    PanelMode, PlaybackState, PlayerTab, QueueScope, SavePlaylistDialog, SavePlaylistStage,
+    PanelMode, PlaybackState, QueueScope, QueueView, SavePlaylistDialog, SavePlaylistStage,
     SidebarId, TabSelection, ToastSeverity,
 };
 use super::{

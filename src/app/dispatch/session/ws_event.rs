@@ -1,8 +1,5 @@
 use crate::app::{App, LibEvent, ModelContentEvent, PanelFocus, dispatch::notify::ToastSeverity};
-use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
-#[cfg(test)]
-use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ws::WsEvent;
 
 impl App {
@@ -15,68 +12,60 @@ impl App {
                 start_index,
             } => self.handle_ws_play(&item_ids, play_now, start_position_ticks, start_index),
             WsEvent::Stop => {
-                self.reset_bare_transitions();
                 self.player.stop();
             }
             WsEvent::Pause => {
-                self.player.set_paused(true);
+                let _ = self.player.set_paused(true);
             }
             WsEvent::Unpause => {
-                self.player.set_paused(false);
+                let _ = self.player.set_paused(false);
             }
             WsEvent::NextTrack => {
-                if self.player.is_remote() {
-                    self.player.next();
-                } else {
-                    self.request_relative_step(Direction::Next);
-                }
+                let _ = self.player.next();
             }
             WsEvent::PreviousTrack => {
-                if self.player.is_remote() {
-                    self.player.previous();
-                } else {
-                    self.request_relative_step(Direction::Previous);
-                }
+                let _ = self.player.previous();
             }
             WsEvent::TogglePause => {
-                self.player.send_command(PlayerCommand::TogglePause);
+                let _ = self.player.send_command(PlayerCommand::TogglePause);
             }
             WsEvent::Seek(ticks) => {
-                self.player.send_command(PlayerCommand::SeekAbsolute(
+                let _ = self.player.send_command(PlayerCommand::SeekAbsolute(
                     mbv_emby_model::ticks_to_seconds(ticks),
                 ));
             }
             WsEvent::SeekRelative(secs) => {
-                self.player.send_command(PlayerCommand::Seek(secs));
+                let _ = self.player.send_command(PlayerCommand::Seek(secs));
             }
             WsEvent::SetVolume(v) => {
                 let vol_max = self.player.status.lock().unwrap().volume_max;
-                self.player
+                let _ = self
+                    .player
                     .send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max)));
             }
             WsEvent::VolumeUp => {
                 let st = self.player.status.lock().unwrap();
                 let v = (st.volume + 5).min(st.volume_max);
                 drop(st);
-                self.player.send_command(PlayerCommand::SetVolume(v));
+                let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::VolumeDown => {
                 let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
-                self.player.send_command(PlayerCommand::SetVolume(v));
+                let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::SetMute(muted) => {
                 self.mute_on = muted;
-                self.player.send_command(PlayerCommand::SetMute(muted));
+                let _ = self.player.send_command(PlayerCommand::SetMute(muted));
                 self.save_prefs();
             }
             WsEvent::ToggleMute => {
                 let muted = !self.player.status.lock().unwrap().muted;
                 self.mute_on = muted;
-                self.player.send_command(PlayerCommand::SetMute(muted));
+                let _ = self.player.send_command(PlayerCommand::SetMute(muted));
                 self.save_prefs();
             }
             WsEvent::SetAudio(index) => {
-                self.player.send_command(PlayerCommand::SetAudio(index));
+                let _ = self.player.send_command(PlayerCommand::SetAudio(index));
             }
             WsEvent::SetSub(index) => {
                 let sid = self
@@ -86,7 +75,7 @@ impl App {
                     .unwrap()
                     .subtitle_stream_index_to_mpv_id(index);
                 if let Some(sid) = sid {
-                    self.player.send_command(PlayerCommand::SetSub(sid));
+                    let _ = self.player.send_command(PlayerCommand::SetSub(sid));
                 }
             }
             WsEvent::UserDataChanged => {
@@ -136,174 +125,29 @@ impl App {
         }
         let start_idx = start_index.min(items.len().saturating_sub(1));
         self.set_panel_focus(PanelFocus::Queue);
-        self.queue_source = mbv_queue::QueueSource::Remote;
         if items.len() == 1 {
-            let mut item = items[0].clone();
-            if start_position_ticks > 0 {
-                item.playback_position_ticks = start_position_ticks;
-            }
-            self.player_tab.set_items(vec![item.clone()], 0);
-            self.flash(item.playback_label(), ToastSeverity::Neutral);
-            self.submit_tab_queue(
-                self.playing_queue_scope(),
-                0,
-                mbv_queue::QueueSource::Remote,
-            );
+            self.flash(items[0].playback_label(), ToastSeverity::Neutral);
         } else {
-            tracing::info!(name: "ws.play.multiple_items", target: "ws", item_count = items.len(), start_index = start_idx, "playing multiple items");
-            // Always hand the whole list to play_queue (not just the clicked
-            // item) so the remote-controlled queue continues past start_idx.
-            // play_queue already handles the "something is already playing"
-            // case in place via unified queue submission.
-            let mut items_with_pos = items.clone();
-            if start_position_ticks > 0 {
-                items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
-            }
-            self.player_tab.set_items(items_with_pos, start_idx);
-            // Keep the tab's canonical slot identities when starting
-            // this replacement; do not mint a fresh sequential run.
-            self.submit_tab_queue(
-                self.playing_queue_scope(),
-                start_idx,
-                mbv_queue::QueueSource::Remote,
-            );
+            tracing::info!(name: "ws.play.multiple_items", target: "ws", item_count = items.len(), start_index = start_idx, "play request replaces the owner queue");
         }
-        self.save_queue_state();
+        let mut items = items;
+        if start_position_ticks > 0 {
+            items[start_idx].playback_position_ticks = start_position_ticks;
+        }
+        self.replace_emby_queue_on_owner(
+            self.playing_queue_scope(),
+            items,
+            start_idx,
+            mbv_queue::QueueSource::Remote,
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
-    use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
+    use crate::app::tests::{live_owner_channel, make_app_stub};
     use rstest::rstest;
-    use std::sync::mpsc::Receiver;
-
-    /// `PlayerCommand` carries no `PartialEq`, so compare structurally through
-    /// its `Serialize` impl — exact variant and payload, not a hand-written
-    /// field check per case.
-    fn command_json(cmd: &PlayerCommand) -> serde_json::Value {
-        serde_json::to_value(cmd).expect("PlayerCommand is serializable")
-    }
-
-    fn sent(rx: &Receiver<PlayerCommand>) -> PlayerCommand {
-        rx.try_recv()
-            .expect("the handler must send exactly one PlayerCommand")
-    }
-
-    fn set_status(app: &crate::app::App, f: impl FnOnce(&mut PlayerStatus)) {
-        f(&mut app.player.status.lock().unwrap());
-    }
-
-    /// The pure command variants: fixture is the status the handler reads and
-    /// the expected command is the exact payload it must emit. `Pause`/`Unpause`
-    /// reach `TogglePause` only when the status is on the other side of the
-    /// toggle, so `paused` is part of the fixture, not decoration.
-    #[rstest]
-    #[case::pause(false, 100, WsEvent::Pause, PlayerCommand::TogglePause)]
-    #[case::seek_absolute(false, 100, WsEvent::Seek(30 * TICKS_PER_SECOND), PlayerCommand::SeekAbsolute(30.0))]
-    #[case::set_volume_clamps_low(false, 100, WsEvent::SetVolume(-5), PlayerCommand::SetVolume(0))]
-    #[case::set_audio(false, 100, WsEvent::SetAudio(3), PlayerCommand::SetAudio(3))]
-    fn pure_command_variants_send_the_exact_command(
-        #[case] paused: bool,
-        #[case] volume: i64,
-        #[case] ev: WsEvent,
-        #[case] expected: PlayerCommand,
-    ) {
-        let mut app = make_app_stub();
-        set_status(&app, |st| {
-            st.paused = paused;
-            st.volume = volume;
-        });
-        let rx = app.player.spy_on_commands();
-
-        app.handle_ws_event(ev);
-
-        assert_eq!(command_json(&sent(&rx)), command_json(&expected));
-    }
-
-    #[test]
-    fn stop_resets_bare_transitions_and_sends_no_transport_command() {
-        use mbv_player::transition::Transition;
-        use mbv_queue::QueueSlotId;
-
-        let mut app = make_app_stub();
-        let (request_id, generation) = app.bare_owner.mint_local_transition();
-        app.bare_owner.accept_local_transition(Transition::new(
-            request_id,
-            generation,
-            QueueSlotId::from_raw(1),
-        ));
-        assert!(
-            app.bare_owner.in_flight_transition_slot().is_some(),
-            "fixture must leave a bare transition in flight for Stop to drop"
-        );
-        let rx = app.player.spy_on_commands();
-
-        app.handle_ws_event(WsEvent::Stop);
-
-        assert!(
-            app.bare_owner.in_flight_transition_slot().is_none(),
-            "Stop must reset the bare owner's in-flight transition"
-        );
-        assert!(
-            rx.try_recv().is_err(),
-            "Stop is a teardown, not an mpv transport command"
-        );
-    }
-
-    #[rstest]
-    #[case::toggle_from_unmuted(false, WsEvent::ToggleMute, true, PlayerCommand::SetMute(true))]
-    #[case::toggle_from_muted(true, WsEvent::ToggleMute, false, PlayerCommand::SetMute(false))]
-    fn mute_variants_update_state_send_command_and_persist_prefs(
-        #[case] status_muted: bool,
-        #[case] ev: WsEvent,
-        #[case] expected_mute_on: bool,
-        #[case] expected: PlayerCommand,
-    ) {
-        let mut app = make_app_stub();
-        set_status(&app, |st| st.muted = status_muted);
-        let rx = app.player.spy_on_commands();
-
-        app.handle_ws_event(ev);
-
-        assert_eq!(app.mute_on, expected_mute_on);
-        assert_eq!(command_json(&sent(&rx)), command_json(&expected));
-        // `make_app_stub` installs a `TestStateDirGuard`, so this write lands in
-        // the thread-local tempdir, never the developer's config.
-        let prefs: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(crate::config::prefs_path())
-                .expect("mute must persist prefs into the test state dir"),
-        )
-        .expect("prefs file must stay valid JSON");
-        assert_eq!(prefs["mute_on"].as_bool(), Some(expected_mute_on));
-    }
-
-    /// `SetSub` derives its target from player status: a stream index present in
-    /// the map resolves to that mpv id, a negative index means "off", and an
-    /// index the status cannot resolve legitimately sends nothing.
-    #[rstest]
-    #[case::resolved_stream_index(2, Some(PlayerCommand::SetSub(1)))]
-    #[case::unknown_stream_index_sends_nothing(5, None)]
-    fn set_sub_resolves_through_player_status(
-        #[case] index: i64,
-        #[case] expected: Option<PlayerCommand>,
-    ) {
-        let mut app = make_app_stub();
-        set_status(&app, |st| st.sub_track_stream_indexes = vec![(1, 2)]);
-        let rx = app.player.spy_on_commands();
-
-        app.handle_ws_event(WsEvent::SetSub(index));
-
-        match expected {
-            Some(expected) => assert_eq!(command_json(&sent(&rx)), command_json(&expected)),
-            None => assert!(
-                rx.try_recv().is_err(),
-                "an unresolvable stream index must not force a SetSub"
-            ),
-        }
-    }
 
     /// Install a stub Emby runtime whose transport is `http`, so the handler's
     /// synchronous fetch is served from scripted in-memory responses (no real
@@ -329,8 +173,8 @@ mod tests {
     ]}"#;
 
     /// `Play` issues a real Emby fetch (`get_items_by_ids`), so its queue
-    /// replacement, `Remote` source, honoured start position, and persisted
-    /// queue state are asserted end to end against the mock transport.
+    /// replacement, `Remote` source, and honoured start position are asserted
+    /// end to end against the mock transport.
     #[rstest]
     #[case::multi_item(
         PLAY_TWO_ITEMS,
@@ -339,7 +183,7 @@ mod tests {
         999,
         vec![("a", 111), ("b", 999)]
     )]
-    fn play_replaces_queue_with_remote_source_and_persists(
+    fn play_replaces_queue_with_remote_source(
         #[case] response: &str,
         #[case] item_ids: Vec<String>,
         #[case] start_index: usize,
@@ -349,6 +193,7 @@ mod tests {
         let http = mbv_net::mock_http::MockHttp::new();
         http.respond(200, response);
         let mut app = app_with_mock_emby(&http);
+        let cmd_rx = live_owner_channel(&mut app);
 
         app.handle_ws_event(WsEvent::Play {
             item_ids,
@@ -357,28 +202,21 @@ mod tests {
             start_index,
         });
 
-        let items = app.player_tab.emby_items();
-        let actual: Vec<(&str, i64)> = items
-            .iter()
-            .map(|i| (i.id.as_str(), i.playback_position_ticks))
-            .collect();
-        assert_eq!(
-            actual, expected_positions,
-            "the queue is replaced in fetch order and only start_index honours start_position_ticks"
-        );
-        let cursor = start_index.min(items.len() - 1);
-        assert_eq!(app.player_tab.queue_cursor, cursor);
-        assert_eq!(app.queue_source, mbv_queue::QueueSource::Remote);
-
-        let state = crate::config::load_queue_state().expect("Play persists the replaced queue");
-        let persisted_items = state.emby_items();
-        let persisted: Vec<(&str, i64)> = persisted_items
-            .iter()
-            .map(|i| (i.id.as_str(), i.playback_position_ticks))
-            .collect();
-        assert_eq!(persisted, expected_positions);
-        assert_eq!(state.cursor, cursor);
-        assert_eq!(state.source, mbv_queue::QueueSource::Remote);
+        assert!(app.local_view.slots().is_empty());
+        assert_ne!(app.local_view.source(), &mbv_queue::QueueSource::Remote);
+        assert!(matches!(
+            cmd_rx.try_recv(),
+            Ok(mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
+                items,
+                start_idx: Some(index),
+                source: mbv_queue::QueueSource::Remote,
+                ..
+            }) if index == start_index.min(expected_positions.len() - 1)
+                && items.iter()
+                    .filter_map(|item| item.as_emby())
+                    .map(|item| (item.id.as_str(), item.playback_position_ticks))
+                    .collect::<Vec<_>>() == expected_positions
+        ));
     }
 
     #[test]

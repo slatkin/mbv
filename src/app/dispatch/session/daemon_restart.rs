@@ -5,7 +5,7 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {
     pub(in crate::app) fn reset_local_daemon_queue_view(&mut self) {
-        self.remote_player_tab = None;
+        self.remote_view = None;
         self.remote_queue_undo_stack.clear();
         self.set_queue_scope(QueueScope::Local);
     }
@@ -57,41 +57,25 @@ impl App {
                 std::io::Error::other(format!("failed to attach to local daemon: {error}"))
             })?;
 
-        let remote_items = remote.items.lock().unwrap().clone();
-        let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_unified_state = remote.unified_queue_state();
-        let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let bootstrap = remote_unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(remote_items, remote_cursor, remote_queue_source),
-            bootstrap_unified_queue,
-        );
+        let bootstrap = remote_unified_state
+            .as_ref()
+            .map_or_else(bootstrap_legacy_queue, bootstrap_unified_queue);
 
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
         self.player.disconnect_remote();
         let always_play_next = self.config.lock().unwrap().always_play_next;
-        let mpris_remote = remote.clone();
-        self.player = PlayerProxy::remote(remote, always_play_next);
+        self.player = PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = remote_rx;
-        if let Some(handle) = &self.mpris {
-            let disconnected = mpris_remote.disconnected_flag();
-            mbv_desktop::mpris::rebind(
-                handle,
-                std::sync::Arc::clone(&mpris_remote.status),
-                move |transport| mpris_remote.send_transport(transport),
-                Some(disconnected),
-            );
-        }
+        self.suspended_local = None;
+        self.rebind_mpris_to_current_player();
 
-        let mut player_tab = bootstrap.player_tab;
-        player_tab.adopt_revision_mint(self.player_tab.revision_mint());
-        self.player_tab = player_tab;
+        self.local_view = bootstrap.local_view;
         self.reset_local_daemon_queue_view();
-        self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.advance_queue_epoch();
         self.sync_subtitle_prefs_to_player();
         self.next_up_item = None;

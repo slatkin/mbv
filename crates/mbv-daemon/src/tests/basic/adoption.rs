@@ -33,8 +33,9 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     let _queue = owner.core.queue;
@@ -84,8 +85,9 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     assert!(
@@ -341,8 +343,9 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     let queue = owner.core.queue;

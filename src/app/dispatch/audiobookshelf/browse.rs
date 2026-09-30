@@ -129,7 +129,7 @@ impl App {
                 },
             );
             let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-                AudiobookshelfEvent::BookDetailFetched {
+                AudiobookshelfEvent::BookDetailLoaded {
                     generation,
                     library_item_id,
                     result,
@@ -338,8 +338,7 @@ impl App {
             return;
         };
         let scope = self.viewed_queue_scope();
-        let bound = scope == self.playing_queue_scope()
-            && (self.player.is_remote() || self.player.status.lock().unwrap().active);
+        let bound = scope == self.playing_queue_scope();
         if bound && !self.player.can_admit_audiobookshelf() {
             self.flash(
                 "Audiobookshelf playback owner is unavailable".into(),
@@ -350,55 +349,8 @@ impl App {
         self.submit_queue_item(item, false);
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn play_selected_audiobookshelf_episode(
-        &mut self,
-        index: usize,
-        episode_index: usize,
-        filter: AudiobookshelfEpisodeFilter,
-    ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
-        else {
-            return;
-        };
-        if !self.player.can_admit_audiobookshelf() {
-            self.flash(
-                "Audiobookshelf playback owner is unavailable".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.submit_queue_item(item, true);
-    }
-
-    /// Ordinary enqueue for the downloaded episode at `episode_index`. A cold
-    /// local queue is the Composed stage and is intentionally allowed without
-    /// owner admission; an active or remote playback target is Bound and must
-    /// be eligible.
-    #[cfg(test)]
-    pub(in crate::app) fn enqueue_selected_audiobookshelf_episode(
-        &mut self,
-        index: usize,
-        episode_index: usize,
-        filter: AudiobookshelfEpisodeFilter,
-    ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
-        else {
-            return;
-        };
-        let scope = self.viewed_queue_scope();
-        let bound = scope == self.playing_queue_scope()
-            && (self.player.is_remote() || self.player.status.lock().unwrap().active);
-        if bound && !self.player.can_admit_audiobookshelf() {
-            self.flash(
-                "Audiobookshelf playback owner is unavailable".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.submit_queue_item(item, false);
-    }
-
+    /// Ordinary play for the downloaded episode at `episode_index`. The shell
+    /// resolves the target from the mounted component's selection (task
     #[cfg(test)]
     fn selected_audiobookshelf_queue_item(
         &self,
@@ -494,6 +446,3 @@ pub(super) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
         u64::try_from(ticks).unwrap_or(0)
     })
 }
-
-#[cfg(test)]
-mod book_seek_tests;

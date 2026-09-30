@@ -107,6 +107,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueuePlaySlot {
             slot_id: emby_slot_id,
+            op: None,
         },
         CtrlContext {
             reply_tx: &reply_tx,
@@ -119,8 +120,9 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     let _queue = owner.core.queue;
@@ -183,8 +185,9 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     let queue = owner.core.queue;
@@ -248,8 +251,9 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     let queue = owner.core.queue;
@@ -305,8 +309,9 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     let _queue = owner.core.queue;
@@ -362,8 +367,9 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
             ctrl_clients: &registry,
             has_audiobookshelf: true,
             merged_tx: &dummy_merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     let queue = owner.core.queue;

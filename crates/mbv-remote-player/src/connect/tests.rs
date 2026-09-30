@@ -1,5 +1,7 @@
 use super::*;
+use crate::QueueOp;
 use mbv_emby_model::EmbyImageTags;
+use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
@@ -97,132 +99,93 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
     (remote, events, daemon)
 }
 
-#[test]
-fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
-    let (remote, _events, commands) =
-        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
-    let result = remote.load_queue_idle(9, vec![], 0, QueueSource::Album);
-    assert!(result.is_err());
-    assert!(matches!(
-        commands.try_recv(),
-        Err(mpsc::TryRecvError::Empty)
-    ));
-    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
-    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
-    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
-}
-
-#[test]
-fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
-    let (mut remote, _events, commands) =
-        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
-    remote.ctrl_compatibility.supports_owner_queue_load = true;
-    remote
-        .load_queue_idle(31, vec![], 0, QueueSource::Album)
+fn admission_error(reason: DisconnectReason) -> crate::RemotePlayerError {
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap()
+        )
         .unwrap();
-    assert!(matches!(
-        commands.try_recv(),
-        Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })
-    ));
-    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
-    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
-    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Disconnected { reason }).unwrap()
+        )
+        .unwrap();
+    });
+    let result = perform_handshake(SocketStream::Unix(client), || {
+        Ok("unused-control-token".to_string())
+    });
+    peer.join().unwrap();
+    result.unwrap_err()
 }
 
 #[test]
-fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
-    use std::net::Shutdown;
-    use std::time::Duration;
-
-    let (remote, events, daemon) = connected_pair_for_disconnect_test();
-    daemon.shutdown(Shutdown::Read).unwrap();
-    assert!(!remote.is_disconnected());
-    assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        PlayerEvent::RemoteDisconnected(message)
-            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
-    ));
-    assert!(remote.is_disconnected());
-    assert!(!remote.send_ctrl_cmd(CtrlCmd::Stop));
-}
-
-#[test]
-fn failed_writer_write_emits_connection_lost_once() {
-    use std::net::Shutdown;
-    use std::time::Duration;
-
-    let (remote, events, daemon) = connected_pair_for_disconnect_test();
-    daemon.shutdown(Shutdown::Read).unwrap();
-    assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
-
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        PlayerEvent::RemoteDisconnected(message)
-            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
-    ));
-    assert!(remote.is_disconnected());
-    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
-}
-
-#[test]
-fn reader_eof_emits_connection_lost_instead_of_stopped() {
-    use std::net::Shutdown;
-    use std::time::Duration;
-
-    let (remote, events, daemon) = connected_pair_for_disconnect_test();
-    daemon.shutdown(Shutdown::Write).unwrap();
-
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        PlayerEvent::RemoteDisconnected(message)
-            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
-    ));
-    assert!(remote.is_disconnected());
-    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
-}
-
-#[test]
-fn writer_and_reader_loss_emit_only_one_disconnect_event() {
-    use std::net::Shutdown;
-    use std::time::Duration;
-
-    let (remote, events, daemon) = connected_pair_for_disconnect_test();
-    daemon.shutdown(Shutdown::Read).unwrap();
-    assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
-    daemon.shutdown(Shutdown::Write).unwrap();
-
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        PlayerEvent::RemoteDisconnected(message)
-            if message == mbv_ctrl::player::CONNECTION_LOST_MESSAGE
-    ));
-    assert!(remote.is_disconnected());
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)),
-        Err(mpsc::RecvTimeoutError::Disconnected)
-    ));
-}
-
-#[test]
-fn announced_shutdown_emits_only_its_dedicated_event() {
-    use std::io::Write;
-    use std::net::Shutdown;
-    use std::time::Duration;
-
-    let (remote, events, mut daemon) = connected_pair_for_disconnect_test();
-    let shutdown = CtrlEvent::Disconnected {
-        reason: DisconnectReason::DaemonShutdown,
+fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (hello_tx, hello_rx) = mpsc::channel();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        hello_tx
+            .send(serde_json::from_str::<CtrlCmd>(&client_hello).unwrap())
+            .unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+    });
+    let (_, state, _) = perform_service_setup_admin_handshake(SocketStream::Unix(client), || {
+        Ok("admin-control-token".to_string())
+    })
+    .unwrap();
+    peer.join().unwrap();
+    let Ok(CtrlCmd::Hello(hello)) = hello_rx.recv() else {
+        panic!("expected client hello");
     };
-    writeln!(daemon, "{}", serde_json::to_string(&shutdown).unwrap()).unwrap();
-    daemon.shutdown(Shutdown::Write).unwrap();
+    assert!(hello.supports_service_setup_admin());
+    assert_eq!(hello.control_token.as_deref(), Some("admin-control-token"));
+    assert!(matches!(state, CtrlEvent::UnifiedQueueState(_)));
+}
 
-    assert!(matches!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        PlayerEvent::DaemonShutdownAnnounced
-    ));
-    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
-    assert!(remote.is_shutdown_announced());
+#[test]
+fn connect_endpoint_maps_owner_admission_refusals() {
+    let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
+    assert!(exclusive.is_exclusive_owner());
+    assert_eq!(
+        exclusive.to_string(),
+        "local owner process 1234 already has a client"
+    );
+
+    let shutting_down = admission_error(DisconnectReason::OwnerShuttingDown);
+    assert!(shutting_down.is_owner_shutting_down());
+    assert_eq!(shutting_down.to_string(), "the owner is shutting down");
 }
 
 #[test]
@@ -327,6 +290,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     let (_reader, _state, compatibility) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(compatibility.supports_audio_only);
+    assert!(compatibility.supports_answered_queue_ops);
     peer.join().unwrap();
 }
 
@@ -339,8 +303,16 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
-        let hello = CtrlEvent::Hello(CtrlHello::current());
-        writeln!(writer, "{}", serde_json::to_string(&hello).unwrap()).unwrap();
+        let mut hello = CtrlHello::current();
+        hello
+            .capabilities
+            .retain(|cap| cap != mbv_ctrl::CTRL_CAP_ANSWERED_QUEUE_OPS);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
@@ -359,6 +331,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
     let (_reader, _state, compatibility) =
         perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(!compatibility.supports_audio_only);
+    assert!(!compatibility.supports_answered_queue_ops);
     peer.join().unwrap();
 }
 
@@ -373,292 +346,4 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
     DaemonEndpoint::parse("http://localhost:1234").unwrap_err();
 }
 
-#[test]
-fn status_only_preserves_event_confirmed_current_index() {
-    let status = Arc::new(Mutex::new(status_with_idx(3)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, _rx) = mpsc::channel();
-
-    apply_ctrl_event(
-        CtrlEvent::StatusOnly(status_with_idx(5)),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    assert_eq!(status.lock().unwrap().current_idx, 3);
-}
-
-#[test]
-fn status_only_preserves_current_idx_and_queue_len() {
-    let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, _rx) = mpsc::channel();
-
-    apply_ctrl_event(
-        CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    let s = status.lock().unwrap();
-    assert_eq!(s.current_idx, 3);
-    assert_eq!(s.queue_len, 7);
-}
-
-#[test]
-fn track_changed_leaves_status_mirror_for_app_to_rederive() {
-    // `TrackChanged` now carries a `QueueSlotId`; the RemotePlayer read loop
-    // has no queue to resolve it against and no longer mutates the status
-    // mirror. `App::handle_player_event` re-derives `current_idx` from its
-    // canonical queue instead (client-side mirror removal is Section 4).
-    let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, _rx) = mpsc::channel();
-
-    apply_ctrl_event(
-        CtrlEvent::Player(PlayerEvent::TrackChanged {
-            slot_id: mbv_queue::QueueSlotId::from_raw(2),
-            transition: None,
-        }),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    let s = status.lock().unwrap();
-    assert_eq!(s.current_idx, 0);
-    assert_eq!(s.queue_len, 5);
-}
-
-#[test]
-fn command_rejected_forwards_reason_as_player_event() {
-    let status = Arc::new(Mutex::new(status_with_idx(0)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, rx) = mpsc::channel();
-
-    apply_ctrl_event(
-        CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    match rx.recv().unwrap() {
-        PlayerEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "daemon is audio-only");
-        }
-        _ => panic!("expected CommandRejected"),
-    }
-}
-
-#[test]
-fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
-    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
-
-    let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
-    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, rx) = mpsc::channel();
-    let pending_playback = Arc::new(Mutex::new(std::collections::HashMap::new()));
-
-    let reconnect_snapshot = UnifiedQueueStateData {
-        status: status_with_idx_and_len(0, 2),
-        slots: vec![
-            UnifiedQueueSlot {
-                slot_id: 11,
-                item: QueueItem::Emby(Box::new(make_media_item("a"))),
-            },
-            UnifiedQueueSlot {
-                slot_id: 22,
-                item: QueueItem::Emby(Box::new(make_media_item("b"))),
-            },
-        ],
-        active_slot: Some(22),
-        revision: 9,
-        source: QueueSource::Remote,
-        lineage: mbv_queue::QueueLineage::default(),
-        in_flight_transition: None,
-        queued_latest_transition: None,
-    };
-
-    apply_ctrl_event(
-        CtrlEvent::UnifiedQueueState(reconnect_snapshot),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &pending_playback,
-        true,
-    );
-
-    let stored = unified_queue.lock().unwrap().clone().unwrap();
-    let status = status.lock().unwrap().clone();
-    let event = rx.recv().unwrap();
-    let PlayerEvent::UnifiedQueueUpdated(event_snapshot) = event else {
-        panic!("expected unified queue snapshot");
-    };
-
-    assert_eq!(stored.revision, 9);
-    assert_eq!(
-        stored
-            .slots
-            .iter()
-            .map(|slot| slot.slot_id)
-            .collect::<Vec<_>>(),
-        vec![11, 22]
-    );
-    assert_eq!(stored.active_slot, Some(22));
-    assert_eq!(stored.status.current_idx, 1);
-    assert_eq!(stored.status.queue_len, 2);
-    assert_eq!(status.current_idx, stored.status.current_idx);
-    assert_eq!(status.queue_len, stored.status.queue_len);
-    assert_eq!(status.active, stored.status.active);
-    assert_eq!(event_snapshot.revision, stored.revision);
-    assert_eq!(
-        event_snapshot
-            .slots
-            .iter()
-            .map(|slot| slot.slot_id)
-            .collect::<Vec<_>>(),
-        vec![11, 22]
-    );
-    assert_eq!(event_snapshot.active_slot, stored.active_slot);
-    assert_eq!(event_snapshot.status.current_idx, status.current_idx);
-}
-
-#[test]
-fn unified_queue_state_preserves_canonical_coordinates_and_source() {
-    use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
-
-    let status = Arc::new(Mutex::new(status_with_idx(0)));
-    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, rx) = mpsc::channel();
-
-    // Mixed queue: [Emby(e0), Feed(f1), Emby(e2), Feed(f3)]. The active
-    // Feed slot must retain its canonical index; it cannot be represented by
-    // an index into the legacy Emby-only projection.
-    let e0 = make_media_item("e0");
-    let e2 = make_media_item("e2");
-    let f1 = make_feed_entry("f1");
-    let f3 = make_feed_entry("f3");
-
-    let unified = UnifiedQueueStateData {
-        status: status_with_idx_and_len(1, 4),
-        slots: vec![
-            UnifiedQueueSlot {
-                slot_id: 10,
-                item: QueueItem::Emby(Box::new(e0)),
-            },
-            UnifiedQueueSlot {
-                slot_id: 20,
-                item: QueueItem::Feed(f1),
-            },
-            UnifiedQueueSlot {
-                slot_id: 30,
-                item: QueueItem::Emby(Box::new(e2)),
-            },
-            UnifiedQueueSlot {
-                slot_id: 40,
-                item: QueueItem::Feed(f3),
-            },
-        ],
-        active_slot: Some(20), // canonical slot_id for f1
-        revision: 1,
-        source: QueueSource::Playlist {
-            id: Some("pl-1".into()),
-            name: "My Playlist".into(),
-        },
-        lineage: mbv_queue::QueueLineage::default(),
-        in_flight_transition: None,
-        queued_latest_transition: None,
-    };
-
-    apply_ctrl_event(
-        CtrlEvent::UnifiedQueueState(unified),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    // queue_source carried from unified state
-    assert!(
-        matches!(
-            *queue_source.lock().unwrap(),
-            QueueSource::Playlist {
-                id: Some(ref id),
-                ..
-            } if id == "pl-1"
-        ),
-        "queue_source should be carried from UnifiedQueueStateData"
-    );
-
-    // queue_len from canonical slots
-    assert_eq!(status.lock().unwrap().queue_len, 4);
-
-    assert_eq!(status.lock().unwrap().current_idx, 1);
-
-    // Emby-only items: Feed entries stripped
-    let emby = items.lock().unwrap();
-    assert_eq!(emby.len(), 2, "only Emby items in legacy projection");
-    assert_eq!(emby[0].id, "e0");
-    assert_eq!(emby[1].id, "e2");
-
-    let canonical = unified_queue.lock().unwrap().clone().unwrap();
-    assert_eq!(canonical.active_slot, Some(20));
-    assert_eq!(canonical.slots[1].slot_id, 20);
-
-    // UnifiedQueueUpdated event emitted with full canonical data
-    match rx.recv().unwrap() {
-        PlayerEvent::UnifiedQueueUpdated(state) => {
-            assert_eq!(state.slots.len(), 4);
-            assert_eq!(state.active_slot, Some(20));
-            assert_eq!(
-                state.source,
-                QueueSource::Playlist {
-                    id: Some("pl-1".into()),
-                    name: "My Playlist".into(),
-                }
-            );
-            // Slot IDs preserved
-            assert_eq!(state.slots[0].slot_id, 10);
-            assert_eq!(state.slots[1].slot_id, 20);
-            assert_eq!(state.slots[2].slot_id, 30);
-            assert_eq!(state.slots[3].slot_id, 40);
-        }
-        _ => panic!("expected UnifiedQueueUpdated"),
-    }
-}
+mod queue;

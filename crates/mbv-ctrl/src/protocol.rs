@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::player::PlayerStatus;
-use mbv_queue::{QueueItem, QueueLineage, QueueSlotId, QueueSource};
+use mbv_queue::{QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueSource};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
 /// fail to understand. Compatibility is exact-match, so every bump kills
@@ -70,10 +70,28 @@ pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
 /// Peer supports owner-authoritative idle queue loads and source updates.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
+/// Client connection is restricted to owner Service-setup administration.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_SERVICE_SETUP_ADMIN: &str = "service-setup-admin";
+/// Peer supports correlated owner-answered queue operations.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
 
 pub type PlaybackRequestId = u64;
 pub type QueueLoadRequestId = u64;
 pub type PlaybackGeneration = u64;
+
+/// Identity correlating one Client queue operation with its owner's answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct QueueOpId(pub u64);
+
+/// Provider-qualified queue content progress relayed to the Player owner.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProgressUpdate {
+    pub content_id: QueueItemContentId,
+    pub position_ticks: i64,
+    pub finished: bool,
+}
 
 // ── Unified queue wire types ──────────────────────────────────────────────
 

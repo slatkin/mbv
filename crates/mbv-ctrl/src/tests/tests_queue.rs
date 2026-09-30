@@ -60,6 +60,24 @@ fn stub_feed_entry() -> mbv_queue::FeedEntry {
 }
 
 #[test]
+fn unified_ctrl_behavior_is_capability_gated_and_additive() {
+    assert!(CtrlHello::current().supports_answered_queue_ops());
+
+    for legacy_json in [
+        r#"{"UnifiedQueueReplace":{"items":[],"slots":[],"start_idx":null,"source":{"type":"unknown"}}}"#,
+        r#"{"UnifiedQueueAppend":{"items":[]}}"#,
+        r#"{"UnifiedQueueRemoveSlot":{"slot_id":1}}"#,
+        r#"{"UnifiedQueueRemoveSlots":{"slot_ids":[1]}}"#,
+        r#"{"UnifiedQueueMoveSlot":{"slot_id":1,"to_index":0}}"#,
+        r#"{"UnifiedQueuePlaySlot":{"slot_id":1}}"#,
+        r#"{"UnifiedQueueSourceUpdate":{"source":{"type":"unknown"},"lineage":1}}"#,
+        r#""UnifiedQueueClear""#,
+    ] {
+        serde_json::from_str::<CtrlCmd>(legacy_json).unwrap();
+    }
+}
+
+#[test]
 fn unified_queue_slot_round_trips_through_json() {
     let slot = UnifiedQueueSlot {
         slot_id: 42,
@@ -158,6 +176,7 @@ fn unified_queue_replace_cmd_round_trips() {
         items,
         start_idx: Some(0),
         source: QueueSource::Album,
+        op: None,
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
@@ -167,7 +186,9 @@ fn unified_queue_replace_cmd_round_trips() {
             slots,
             start_idx,
             source,
+            op,
         } => {
+            assert_eq!(op, None);
             assert_eq!(items.len(), 2);
             assert_eq!(source, QueueSource::Album);
             assert_eq!(
@@ -196,6 +217,7 @@ fn unified_queue_replace_cmd_round_trips() {
         slots,
         start_idx,
         source,
+        op,
     } = serde_json::from_value(legacy).unwrap()
     else {
         panic!("expected legacy UnifiedQueueReplace")
@@ -204,6 +226,7 @@ fn unified_queue_replace_cmd_round_trips() {
     assert!(slots.is_empty());
     assert_eq!(start_idx, Some(0));
     assert_eq!(source, QueueSource::Unknown);
+    assert_eq!(op, None);
 }
 
 #[test]
@@ -258,13 +281,15 @@ fn source_only_update_round_trips_queue_lineage() {
     let command = CtrlCmd::UnifiedQueueSourceUpdate {
         source: QueueSource::Album,
         lineage: QueueLineage(42),
+        op: None,
     };
     let decoded: CtrlCmd = serde_json::from_str(&serde_json::to_string(&command).unwrap()).unwrap();
     assert!(matches!(
         decoded,
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Album,
-            lineage: QueueLineage(42)
+            lineage: QueueLineage(42),
+            op: None
         }
     ));
 }
@@ -273,22 +298,34 @@ fn source_only_update_round_trips_queue_lineage() {
 fn unified_queue_append_cmd_round_trips() {
     let cmd = CtrlCmd::UnifiedQueueAppend {
         items: vec![QueueItem::Feed(stub_feed_entry())],
+        before: None,
+        op: None,
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueAppend { items } => assert_eq!(items.len(), 1),
+        CtrlCmd::UnifiedQueueAppend { items, before, op } => {
+            assert_eq!(items.len(), 1);
+            assert_eq!(before, None);
+            assert_eq!(op, None);
+        }
         _ => panic!("expected UnifiedQueueAppend"),
     }
 }
 
 #[test]
 fn unified_queue_remove_slot_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 99 };
+    let cmd = CtrlCmd::UnifiedQueueRemoveSlot {
+        slot_id: 99,
+        op: None,
+    };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueRemoveSlot { slot_id } => assert_eq!(slot_id, 99),
+        CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op } => {
+            assert_eq!(slot_id, 99);
+            assert_eq!(op, None);
+        }
         _ => panic!("expected UnifiedQueueRemoveSlot"),
     }
 }
@@ -297,11 +334,15 @@ fn unified_queue_remove_slot_cmd_round_trips() {
 fn unified_queue_remove_slots_cmd_round_trips() {
     let cmd = CtrlCmd::UnifiedQueueRemoveSlots {
         slot_ids: vec![4, 9],
+        op: None,
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids } => assert_eq!(slot_ids, vec![4, 9]),
+        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op } => {
+            assert_eq!(slot_ids, vec![4, 9]);
+            assert_eq!(op, None);
+        }
         _ => panic!("expected UnifiedQueueRemoveSlots"),
     }
 }
@@ -311,13 +352,19 @@ fn unified_queue_move_slot_cmd_round_trips() {
     let cmd = CtrlCmd::UnifiedQueueMoveSlot {
         slot_id: 3,
         to_index: 0,
+        op: None,
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
+        CtrlCmd::UnifiedQueueMoveSlot {
+            slot_id,
+            to_index,
+            op,
+        } => {
             assert_eq!(slot_id, 3);
             assert_eq!(to_index, 0);
+            assert_eq!(op, None);
         }
         _ => panic!("expected UnifiedQueueMoveSlot"),
     }
@@ -325,11 +372,17 @@ fn unified_queue_move_slot_cmd_round_trips() {
 
 #[test]
 fn unified_queue_play_slot_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueuePlaySlot { slot_id: 5 };
+    let cmd = CtrlCmd::UnifiedQueuePlaySlot {
+        slot_id: 5,
+        op: None,
+    };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueuePlaySlot { slot_id } => assert_eq!(slot_id, 5),
+        CtrlCmd::UnifiedQueuePlaySlot { slot_id, op } => {
+            assert_eq!(slot_id, 5);
+            assert_eq!(op, None);
+        }
         _ => panic!("expected UnifiedQueuePlaySlot"),
     }
 }

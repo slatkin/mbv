@@ -44,6 +44,7 @@ fn install_idle_queue_load(
         &owner.core.queue,
         &owner.core.source,
         &owner.core.transitions,
+        None,
     );
     // Persistence is owned by the caller's dirty-flag pass: every path that
     // reaches here (`UnifiedQueueLoadIdle` handled directly, and

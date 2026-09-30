@@ -1,5 +1,7 @@
 # Local daemon for stay-alive
 
+> **Status (2026-09-30):** Every local TUI now attaches to the Owner process regardless of Stay-alive policy; see [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 **Supersedes ADR 0005** (Owned pty relay for stay-alive mode).
 
 > **Amended (2026-08-14, Control credential):** Local daemon ctrl authentication now uses the mbv-owned Control credential (`control-auth` capability, `crates/mbv-core/src/ctrl.rs:43`) rather than an Emby Service token. `src/local_daemon.rs:125` `load_or_create_control_credential`, `spawn_detached` waits for socket connectable within bounded poll. `mbvd` on `main` still uses legacy Emby-token auth (`crates/mbvd/src/main.rs:117-120`) until PR #529 tracking #523 migrates it to filesystem/trusted-LAN authorization.

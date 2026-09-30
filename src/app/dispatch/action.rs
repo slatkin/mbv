@@ -14,13 +14,15 @@
 
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
+#[cfg(test)]
+use crate::app::tests::QueueViewTestExt;
 use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum Command {
@@ -72,7 +74,7 @@ pub(in crate::app) enum Command {
     /// from this index if the visible queue isn't the one currently playing.
     /// The target index is carried explicitly (split-queue-cursor-ownership
     /// D2): the shell resolves the slot the user selected and passes it
-    /// rather than this command re-reading `queue.queue_cursor` as an
+    /// rather than this command re-reading `queue.cursor()` as an
     /// ambient argument channel.
     QueuePlayCursor(usize),
 
@@ -141,12 +143,6 @@ pub(in crate::app) fn idle_feed_command_for_key(
 }
 
 impl App {
-    /// Send an already-accepted transition to whichever component owns
-    /// playback. When the owner runs out of process (reached over ctrl,
-    /// including this machine's Local daemon), request the jump from it via
-    /// `UnifiedQueuePlaySlot`; when this process is the owner, send the local
-    /// `JumpTo` to the Playback run. Returns `false` when the request could
-    /// not be sent.
     fn reject_disconnected_remote_jump(&mut self) -> bool {
         if !self.player.is_remote_disconnected() {
             return false;
@@ -161,70 +157,26 @@ impl App {
         if self.reject_disconnected_remote_jump() {
             return false;
         }
-        let sent = self
-            .player
-            .queue_play_slot(mbv_ctrl::slot_id_to_u64(slot_id));
-        if !sent {
-            self.reject_disconnected_remote_jump();
-        }
-        sent
+        // Row 5.3 (design D6): the jump is an answered owner operation, so
+        // the playing slot changes only through the owner's answer.
+        let sent = self.queue_op(
+            self.playing_queue_scope(),
+            mbv_remote_player::QueueOp::PlaySlot {
+                slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
+            },
+        );
+        sent != QueueOpEdit::NotApplied
     }
 
-    pub(in crate::app) fn dispatch_jump(
-        &mut self,
-        transition: mbv_player::transition::Transition,
-    ) -> bool {
-        if self.player.is_remote() {
-            return self.request_remote_slot_jump(transition.target);
-        }
-        let resume_ticks =
-            mbv_player::resume_ticks_for_slot(&self.playback_queue().queue, transition.target);
-        self.player.send_command(transition.into_jump(resume_ticks))
-    }
-
-    /// Request a jump to an existing canonical slot: the fresh-jump seam.
-    /// When the Player owner runs out of process, request the jump from it
-    /// (`UnifiedQueuePlaySlot`) and report its acceptance; the active slot
-    /// then follows the owner's queue snapshot, never a client cursor write
-    /// here. When this process is the owner, sync the canonical snapshot,
-    /// mint and accept a local transition, and dispatch the transition the
-    /// owner accepted now (or queue it behind an in-flight one).
     pub(in crate::app) fn request_relative_step(&mut self, direction: Direction) -> bool {
-        self.bare_owner
-            .sync_canonical_queue(self.playback_queue().queue.clone());
-        match self.bare_owner.relative_step_target(direction) {
-            mbv_player::StepTarget::Jump(slot_id) => {
-                let (request_id, generation) = self.bare_owner.mint_local_transition();
-                let transition = mbv_player::transition::Transition::with_cause(
-                    request_id,
-                    generation,
-                    slot_id,
-                    mbv_player::transition::TransitionCause::Step(direction),
-                );
-                match self.bare_owner.accept_local_transition(transition) {
-                    mbv_player::transition::DispatchDecision::DispatchNow(t) => {
-                        self.dispatch_jump(t)
-                    }
-                    mbv_player::transition::DispatchDecision::Queued { .. } => true,
-                }
-            }
-            mbv_player::StepTarget::Coalesced => true,
-            mbv_player::StepTarget::AtEdge => false,
+        match direction {
+            Direction::Next => self.player.next(),
+            Direction::Previous => self.player.previous(),
         }
     }
 
     pub(in crate::app) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
-        if self.player.is_remote() {
-            return self.request_remote_slot_jump(slot_id);
-        }
-        self.bare_owner
-            .sync_canonical_queue(self.playback_queue().queue.clone());
-        let (request_id, generation) = self.bare_owner.mint_local_transition();
-        let transition = mbv_player::transition::Transition::new(request_id, generation, slot_id);
-        match self.bare_owner.accept_local_transition(transition) {
-            mbv_player::transition::DispatchDecision::DispatchNow(t) => self.dispatch_jump(t),
-            mbv_player::transition::DispatchDecision::Queued { .. } => true,
-        }
+        self.request_remote_slot_jump(slot_id)
     }
 
     /// Own the state transitions for a `Command`. Returns whether the app
@@ -412,7 +364,6 @@ impl App {
         if !self.validate_queue_play_feed(&item) {
             return;
         }
-        self.hydrate_queue_play_feed(t, &item);
         let (emby_items, all_slots, slot_id, emby_start) = self.queue_play_snapshot(t);
         if self.handoff_queue_play_to_session(&item, &emby_items, emby_start) {
             return;
@@ -486,22 +437,6 @@ impl App {
         true
     }
 
-    fn hydrate_queue_play_feed(&mut self, t: usize, item: &mbv_queue::QueueItem) {
-        // Hydrate stored feed-entry state before building the
-        // playback snapshot so resume uses the latest position.
-        if let mbv_queue::QueueItem::Feed(entry) = item {
-            let hydrated = self.hydrate_feed_entry_state(entry.clone());
-            let sid = self.playback_queue().slot_id_at(t);
-            if let Some(sid) = sid {
-                let queue_mut = self.playback_queue_mut();
-                let _ =
-                    queue_mut
-                        .queue
-                        .apply_progress(sid, hydrated.position_ticks, hydrated.played);
-            }
-        }
-    }
-
     fn queue_play_snapshot(
         &self,
         t: usize,
@@ -514,17 +449,15 @@ impl App {
         // Snapshot data from the queue before any mutable borrows.
         let queue = self.displayed_queue();
         let emby_items = queue
-            .queue
             .slots()
             .iter()
             .filter_map(|slot| slot.item.as_emby().cloned())
             .collect();
-        let all_slots = queue.all_queue_slots();
+        let all_slots = queue.slot_pairs();
         let slot_id = queue.slot_id_at(t);
         // Pre-compute the Emby-only projection index for the cursor
         // position, needed by the session API boundary.
         let emby_start = queue
-            .queue
             .slots()
             .iter()
             .take(t)
@@ -572,9 +505,9 @@ impl App {
         let active = st.active;
         let current_idx = st.current_idx;
         drop(st);
-        if active && self.queue_scope_is_playback(scope) && self.local_queue_is_owner_queue(scope) {
+        if active && self.queue_scope_is_playback(scope) {
             if t == current_idx {
-                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {
                 let Some(slot_id) = slot_id else {
                     return;
@@ -589,7 +522,7 @@ impl App {
                 }
             }
         } else {
-            self.cold_start_queue_play(t, item, scope, all_slots);
+            self.cold_start_queue_play(t, item, all_slots);
         }
     }
 
@@ -597,12 +530,11 @@ impl App {
         &mut self,
         t: usize,
         item: &mbv_queue::QueueItem,
-        scope: crate::app::QueueScope,
         all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
         // Cold start: submit the full canonical queue (all
         // variants) so the player's internal playlist matches
-        // the PlayerTab's queue exactly.
+        // the QueueView's queue exactly.
         let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
         let eligible: Vec<_> = all_slots
             .into_iter()
@@ -634,23 +566,16 @@ impl App {
                     .count()
                     .min(eligible.len().saturating_sub(1))
             });
-        let headless = eligible.iter().all(|slot| slot.item.is_audio());
         let submitted = self.player.submit_queue_slots(
             eligible,
             start_idx,
-            self.queue_source.clone(),
-            self.emby_snapshot().map(Arc::new),
-            headless,
-            self.ui_volume,
+            self.playback_queue().source().clone(),
         );
         if !submitted && self.player.is_remote_disconnected() {
             self.flash(
                 crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                 ToastSeverity::Warning,
             );
-        }
-        if submitted {
-            self.stamp_queue_generation(scope);
         }
     }
 }

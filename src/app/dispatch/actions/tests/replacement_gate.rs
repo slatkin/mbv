@@ -4,13 +4,13 @@ use super::*;
 /// replacement runs; confirming plays the album through the routed path.
 #[test]
 fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
+        .adopt_items(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
     app.album_tracks_cache
@@ -25,11 +25,13 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     ));
     assert!(app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 
     confirm_replace_queue(&mut app);
 
-    assert_eq!(queued_track_ids(&app), ["track-1"]);
+    // Row 5.3: the confirmed replacement reaches the owner as a
+    // `UnifiedQueueReplace`; the Client's view follows the owner's answer.
+    assert_eq!(last_replace(&cmd_rx).0, ["track-1"]);
     assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
@@ -37,13 +39,13 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
 /// neither the queue nor playback and leaves no stored payload.
 #[test]
 fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
-    let mut app = remote_playback_app();
+    let (mut app, _cmd_rx) = remote_playback_app();
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
+        .adopt_items(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
     app.album_tracks_cache
@@ -60,7 +62,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queued_track_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 }
 
 /// Row 3.1 cancellation / design D4: a folder play on a populated queue
@@ -91,12 +93,12 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     // Populated target queue + a music library holding the played folder.
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.player_tab.set_items(vec![existing], 0);
+    app.local_view.adopt_items(vec![existing], 0);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.collection_type = "music".into();
     app.libs.push(LibraryTab::new(library));
-    app.queue_source = mbv_queue::QueueSource::Album;
+    app.local_view.adopt_source(mbv_queue::QueueSource::Album);
 
     http.respond(
         200,
@@ -105,7 +107,7 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     app.play_or_activate_lib_item(0, folder("album-1", "Album"));
 
     assert!(app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
+    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
 
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
@@ -116,5 +118,5 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     );
 
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(app.queue_source, mbv_queue::QueueSource::Album);
+    assert_eq!(app.local_view.source(), &mbv_queue::QueueSource::Album);
 }

@@ -296,9 +296,9 @@ impl App {
         completed: bool,
     ) {
         // Extract identity from the slot before any mutable borrow.
-        let (feed_id, entry_guid) = {
+        let (feed_id, entry_guid, runtime) = {
             let queue = self.playback_queue();
-            let Some(slot) = queue.queue.slot(slot_id) else {
+            let Some(slot) = queue.slot(slot_id) else {
                 return;
             };
             let QueueItem::Feed(ref entry) = slot.item else {
@@ -307,24 +307,17 @@ impl App {
             let Some(ref feed_id) = entry.feed_id else {
                 return;
             };
-            (feed_id.clone(), entry.guid.clone())
-        };
-        let runtime = {
-            let queue = self.playback_queue();
-            queue
-                .queue
-                .slot(slot_id)
-                .map_or(0, |s| s.item.runtime_ticks())
+            (
+                feed_id.clone(),
+                entry.guid.clone(),
+                slot.item.runtime_ticks(),
+            )
         };
         let (store_position, store_played) = if completed && runtime > 0 {
             (0, true)
         } else {
             (position_ticks, false)
         };
-        let queue_mut = self.playback_queue_mut();
-        let _ = queue_mut
-            .queue
-            .apply_progress(slot_id, store_position, store_played);
         self.write_feed_entry_state(&feed_id, &entry_guid, store_position, store_played);
     }
 }

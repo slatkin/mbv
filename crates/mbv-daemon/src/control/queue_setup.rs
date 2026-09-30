@@ -2,10 +2,10 @@ use super::{
     CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue, PlayerCommand,
     PlayerOwnerState, QueueItem, QueueSlotId, RejectContext, abs_queue_transport_rejection,
     admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
-    daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps, send_to,
+    daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
 };
-use mbv_ctrl::CtrlEvent;
 use mbv_emby::EmbyClient;
+use mbv_player::Player;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -40,6 +40,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "daemon already has a queue; adoption skipped",
         );
@@ -67,6 +68,7 @@ pub(super) fn handle_adopt_queue(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -92,12 +94,17 @@ pub(super) fn handle_adopt_queue(
         queue,
         source,
         transitions,
+        None,
     );
 
-    enrich_adopted_emby_slots(queue, ctx.client, ctx.merged_tx);
+    start_queue_enrichment(queue, ctx.client, ctx.merged_tx);
 }
 
-fn enrich_adopted_emby_slots(
+pub(super) fn handle_queue_refresh(ctx: &mut CtrlContext<'_>) {
+    start_queue_enrichment(&ctx.owner.core.queue, ctx.client, ctx.merged_tx);
+}
+
+fn start_queue_enrichment(
     queue: &PlaybackQueue,
     client: &Arc<std::sync::Mutex<EmbyClient>>,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
@@ -150,17 +157,16 @@ pub(super) fn handle_queue_source_update(
     new_source: mbv_queue::QueueSource,
     cmd_lineage: mbv_queue::QueueLineage,
 ) {
+    let except_op_client = ctx.except_op_client();
     let supports_operation = ctx
         .ctrl_clients
         .lock()
         .unwrap()
         .supports_owner_queue_load(ctx.client_id);
     if !supports_operation {
-        send_to(
-            ctx.reply_tx,
-            &CtrlEvent::CommandRejected(
-                "peer did not negotiate owner queue-load capability".to_string(),
-            ),
+        reject_command(
+            &ctx.rejection_context(lineage),
+            "peer did not negotiate owner queue-load capability",
         );
     } else if cmd_lineage != lineage {
         reject_command(
@@ -172,6 +178,7 @@ pub(super) fn handle_queue_source_update(
                 queue: &ctx.owner.core.queue,
                 source: &ctx.owner.core.source,
                 lineage,
+                op: &ctx.op,
             },
             "queue source update rejected: owner queue lineage changed",
         );
@@ -194,6 +201,7 @@ pub(super) fn handle_queue_source_update(
             queue,
             source,
             transitions,
+            except_op_client,
         );
     }
 }
@@ -276,6 +284,7 @@ pub(super) fn handle_queue_replace(
                 return;
             }
         };
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -330,7 +339,38 @@ pub(super) fn handle_queue_replace(
         &ctx.owner.core.queue,
         &ctx.owner.core.source,
         &ctx.owner.core.transitions,
+        except_op_client,
     );
+}
+
+fn append_index(
+    ctx: &CtrlContext<'_>,
+    lineage: mbv_queue::QueueLineage,
+    before: Option<u64>,
+) -> Option<usize> {
+    before.map_or_else(
+        || Some(ctx.owner.core.queue.len()),
+        |raw_slot_id| {
+            let slot_id = QueueSlotId::from_raw(raw_slot_id);
+            ctx.owner.core.queue.slot_index(slot_id).or_else(|| {
+                reject_command(
+                    &ctx.rejection_context(lineage),
+                    "slot not found; append anchor is stale",
+                );
+                None
+            })
+        },
+    )
+}
+
+fn forward_queue_append(player: &Player, items: Vec<ExecSlot>, before: Option<u64>, index: usize) {
+    let inserted_slot_ids: Vec<_> = items.iter().map(|slot| slot.slot_id).collect();
+    player.send_command(PlayerCommand::QueueAppend { items });
+    if before.is_some() {
+        for (offset, slot_id) in inserted_slot_ids.into_iter().enumerate() {
+            player.send_command(PlayerCommand::QueueMove(slot_id, index + offset));
+        }
+    }
 }
 
 /// `CtrlCmd::UnifiedQueueAppend`: append item-generic values to the tail of
@@ -339,7 +379,15 @@ pub(super) fn handle_queue_append(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
+    before: Option<u64>,
 ) {
+    let except_op_client = ctx.except_op_client();
+    if items.is_empty() {
+        return;
+    }
+    let Some(index) = append_index(ctx, lineage, before) else {
+        return;
+    };
     let has_emby = ctx.has_emby();
     let DaemonPlayerOwner {
         core:
@@ -351,9 +399,6 @@ pub(super) fn handle_queue_append(
             },
         ..
     } = &mut *ctx.owner;
-    if items.is_empty() {
-        return;
-    }
     let supports_abs_queue = ctx
         .ctrl_clients
         .lock()
@@ -376,6 +421,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -393,6 +439,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "Playback owner rejected the queue append",
         );
@@ -409,6 +456,7 @@ pub(super) fn handle_queue_append(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             &reason,
         );
@@ -418,8 +466,9 @@ pub(super) fn handle_queue_append(
     // queue, and hand the same ids to the Playback run.
     let items_for_player: Vec<ExecSlot> = items
         .into_iter()
-        .map(|item| {
-            let slot_id = queue.append(item.clone());
+        .enumerate()
+        .map(|(offset, item)| {
+            let slot_id = queue.insert(index + offset, item.clone());
             ExecSlot { slot_id, item }
         })
         .collect();
@@ -430,9 +479,9 @@ pub(super) fn handle_queue_append(
         queue,
         source,
         transitions,
+        except_op_client,
     );
     // Append to the player's queue rather than replacing the whole queue.
-    ctx.player.send_command(PlayerCommand::QueueAppend {
-        items: items_for_player,
-    });
+    // A following move keeps the run's order aligned with canonical inserts.
+    forward_queue_append(ctx.player, items_for_player, before, index);
 }

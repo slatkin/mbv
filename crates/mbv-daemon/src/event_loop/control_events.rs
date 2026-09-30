@@ -12,6 +12,7 @@ use crate::control::intent_span;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use std::sync::Arc;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise
@@ -94,8 +95,9 @@ impl DaemonLoop {
                 ctrl_clients: &self.ctrl_clients,
                 has_audiobookshelf: self.audiobookshelf_runtime.is_some(),
                 merged_tx: &self.merged_tx,
-                stay_alive: self.stay_alive,
+                owner_settings: Arc::clone(&self.owner_settings),
                 role: self.role,
+                op: std::cell::Cell::new(None),
             },
         );
         if persist_after_command && self.owner.pending_idle_load.is_none() {
@@ -225,7 +227,17 @@ impl DaemonLoop {
     /// `DaemonEvent::Shutdown`: persist the Stay-alive queue, announce the
     /// deliberate shutdown, and stop the player.
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
+        self.ctrl_clients.lock().unwrap().begin_shutdown();
         tracing::info!(name: "daemon.shutdown.started", target: "daemon", "graceful shutdown: stopping player");
+        if let Some(tx) = &self.queue_persist_tx {
+            let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel(0);
+            if tx
+                .send(super::super::QueuePersistenceRequest::Flush(ack_tx))
+                .is_ok()
+            {
+                let _ = ack_rx.recv();
+            }
+        }
         if self.role == DaemonRole::Local
             && let Err(error) = self.persist_owner_queue()
         {

@@ -18,7 +18,6 @@ pub(in crate::app) enum RemotePlaybackTarget {
     None,
     Session,
     DirectRemote,
-    Cast,
 }
 
 /// Playback facts read by the central keyboard policy.

@@ -82,44 +82,6 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
 }
 
 #[test]
-fn queue_append_forwards_caller_slot_ids() {
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    );
-    let cmd_rx = player.spy_on_commands();
-    let slots = vec![
-        ExecSlot {
-            slot_id: QueueSlotId::from_raw(17),
-            item: QueueItem::Feed(make_feed_entry("append-a", "Append A")),
-        },
-        ExecSlot {
-            slot_id: QueueSlotId::from_raw(4),
-            item: QueueItem::Feed(make_feed_entry("append-b", "Append B")),
-        },
-    ];
-    assert!(player.queue_append(slots));
-
-    match cmd_rx.try_recv().expect("expected QueueAppend command") {
-        PlayerCommand::QueueAppend { items } => {
-            assert_eq!(
-                items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
-                vec![QueueSlotId::from_raw(17), QueueSlotId::from_raw(4)]
-            );
-        }
-        _ => panic!("expected QueueAppend command"),
-    }
-}
-
-#[test]
 fn submit_queue_slots_preserves_caller_slot_ids() {
     // The app's canonical queue owns slot identity. The SubmitQueue command
     // must carry those ids verbatim (not controller-minted ones), because the

@@ -39,15 +39,19 @@ impl App {
             return;
         }
         let target_secs = fraction * mbv_emby_model::ticks_to_seconds(runtime_ticks);
-        self.player
+        let _ = self
+            .player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).
-        if let Some(slot_id) = self.playback_queue().queue.active_slot_id()
-            && let Some(slot) = self.playback_queue().queue.slot(slot_id)
-            && matches!(slot.item, mbv_queue::QueueItem::Feed(ref e) if e.feed_id.is_some())
+        let active_index = {
+            let status = self.player.status.lock().unwrap();
+            status.active.then_some(status.current_idx)
+        };
+        if let Some(slot) = active_index.and_then(|index| self.playback_queue().slots().get(index))
+            && matches!(&slot.item, mbv_queue::QueueItem::Feed(e) if e.feed_id.is_some())
         {
-            self.feed_seek_pending_slot = Some(slot_id);
+            self.feed_seek_pending_slot = Some(slot.slot_id);
         }
     }
 
@@ -70,14 +74,9 @@ impl App {
     ) -> Option<usize> {
         self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         let slot_id = slot_id?;
-        let index = self
-            .displayed_queue()
-            .queue
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)?;
+        let index = self.displayed_queue().slot_index(slot_id)?;
         self.mark_queue_cursor_user_active();
-        self.displayed_queue_mut().queue_cursor = index;
+        self.displayed_queue_mut().set_cursor(index);
         Some(index)
     }
 

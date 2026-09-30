@@ -34,8 +34,9 @@ fn run_queue_cmd(
             ctrl_clients: registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 }
@@ -66,8 +67,9 @@ fn run_queue_cmd_with_shared(
             ctrl_clients: registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 }
@@ -90,3 +92,5 @@ mod queue_persistence;
 mod queue_idle_load;
 // Queue replacements and source updates publish lineage-consistent snapshots.
 mod queue_source_updates;
+// Refresh and progress operations answer while preserving active-slot authority.
+mod queue_refresh_progress;

@@ -22,7 +22,7 @@ impl Model {
                 open_cursor: self.app.playlists_open_cursor,
                 open_scroll: self.app.playlists_open_scroll,
                 open_loading: self.app.playlists_open_loading,
-                loaded_id: match &self.app.queue_source {
+                loaded_id: match self.app.playback_queue().source() {
                     mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
                     _ => None,
                 },

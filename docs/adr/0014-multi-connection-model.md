@@ -1,5 +1,7 @@
 # Multi-Connection Ctrl Model
 
+> **Status (2026-09-30):** The local Owner process admits concurrent Clients only while Stay-alive is enabled; with it disabled admission is exclusive, and shutdown closes admission first. See [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 **Supersedes ADR 0003** (Exclusive Ctrl-Socket Connection).
 
 > **Amended (2026-08-14):** Protocol version has advanced from v4 (described below) to v7 on `main` via `retire-pty-relay-for-local-daemon-stay-alive` (v6→v7) and `stop-daemon-when-stay-alive-off` added capability `lifecycle-shutdown`. `crates/mbv-core/src/ctrl.rs` `CTRL_PROTOCOL_VERSION = 7` on `main`. Additive capabilities since added: `feed-playback`, `unified-queue`, `control-auth`. Open PR #529 tracking issue #523 will reconcile the pre-existing v7-vs-archived-v8 drift and ship v9 removing legacy `auth_token`. Multi-connection semantics unchanged.

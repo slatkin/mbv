@@ -11,11 +11,12 @@ use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRe
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
+    lineage: mbv_queue::QueueLineage,
     scope: QueueScope,
     active: bool,
     active_target: Option<QueueSlotId>,
-    /// The optimistic selection awaiting playback-owner confirmation. It moves
-    /// the now-playing row before the owner reports anything, so it has to be
+    /// The adopted pending transition awaiting playback-owner observation.
+    /// It moves the now-playing row before the owner reports it, so it remains
     /// part of the fingerprint even while `active_target` is unchanged.
     pending_target: Option<QueueSlotId>,
     progress_bucket: u16,
@@ -30,10 +31,9 @@ fn progress_bucket(playback: PlaybackState) -> u16 {
     }
 }
 
-/// The observed active slot, or the predicted selection when nothing is
-/// playing yet (the pending slot is pre-filtered to the viewed queue).
+/// The observed active slot, or the owner's pending slot when idle.
 fn projected_active_target(
-    queue: &super::PlayerTab,
+    queue: &super::QueueView,
     playback: PlaybackState,
     pending_slot: Option<QueueSlotId>,
 ) -> Option<QueueSlotId> {
@@ -108,7 +108,7 @@ impl Model {
 
     fn prepare_queue_projection(&mut self) -> QueueProjectionUpdate {
         let scope = self.app.viewed_queue_scope();
-        let playback = self.app.queue_row_playback_state();
+        let playback = self.app.displayed_queue_playback_state();
         let pending_slot = self.pending_queue_projection_slot(scope);
         let fingerprint = self.queue_projection_fingerprint(scope, playback, pending_slot);
         let (rows_changed, bucket_only) = self.queue_projection_changes(&fingerprint);
@@ -128,21 +128,14 @@ impl Model {
         update
     }
 
-    // An optimistic selection counts only while its slot is still in the
-    // viewed queue: a stale target (removed by an edit or the owner) must
-    // not move the now-playing state off the row that is really playing.
+    // The adopted pending slot counts only while it is still in the viewed
+    // queue: a stale target must not move now-playing off the observed row.
     fn pending_queue_projection_slot(&self, scope: QueueScope) -> Option<QueueSlotId> {
         self.app
             .queue_scope_is_playback(scope)
             .then(|| self.app.pending_playback_slot())
             .flatten()
-            .filter(|target| {
-                self.app
-                    .queue_for_scope(scope)
-                    .slots()
-                    .iter()
-                    .any(|slot| slot.slot_id == *target)
-            })
+            .filter(|target| self.app.queue_for_scope(scope).slot(*target).is_some())
     }
 
     fn queue_projection_fingerprint(
@@ -154,6 +147,7 @@ impl Model {
         let queue = self.app.queue_for_scope(scope);
         QueueProjectionFingerprint {
             revision: queue.revision().raw(),
+            lineage: queue.lineage(),
             scope,
             active: playback.active,
             active_target: projected_active_target(queue, playback, pending_slot),
@@ -170,6 +164,7 @@ impl Model {
         let rows_changed = previous != Some(fingerprint);
         let bucket_only = previous.is_some_and(|old| {
             old.revision == fingerprint.revision
+                && old.lineage == fingerprint.lineage
                 && old.scope == fingerprint.scope
                 && old.active == fingerprint.active
                 && old.active_target == fingerprint.active_target
@@ -185,7 +180,7 @@ impl Model {
     fn queue_projection_cursor(&mut self, scope: QueueScope) -> QueueCursorUpdate {
         match self.app.pending_queue_cursor_reanchor.take() {
             Some(reanchor) if reanchor == scope => {
-                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).cursor())
             }
             _ => QueueCursorUpdate::Preserve,
         }
@@ -198,24 +193,18 @@ impl Model {
             .bucket_only
             .then(|| {
                 let queue = self.app.queue_for_scope(update.scope);
-                update.fingerprint.active_target.and_then(|target| {
-                    queue
-                        .slots()
-                        .iter()
-                        .enumerate()
-                        .find(|(_, slot)| slot.slot_id == target)
-                        .map(|(index, slot)| {
-                            (
-                                target,
-                                mbv_components::queue::queue_media_row(
-                                    slot,
-                                    index,
-                                    update.playback,
-                                    update.pending_slot,
-                                ),
-                            )
-                        })
-                })
+                let target = update.fingerprint.active_target?;
+                let index = queue.slot_index(target)?;
+                let slot = queue.slots().get(index)?;
+                Some((
+                    target,
+                    mbv_components::queue::queue_media_row(
+                        slot,
+                        index,
+                        update.playback,
+                        update.pending_slot,
+                    ),
+                ))
             })
             .flatten();
     }
@@ -404,10 +393,8 @@ impl Model {
                     (status.active, status.current_idx)
                 };
                 if active {
-                    self.app.playback_queue_mut().queue_cursor = current_idx;
-                    if self.app.player.is_remote() {
-                        self.app.set_queue_scope(QueueScope::Remote);
-                    }
+                    self.app.playback_queue_mut().set_cursor(current_idx);
+                    self.app.set_queue_scope(QueueScope::Remote);
                     // Jump-to-now-playing is an explicit, authoritative move.
                     self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_scope());
                 } else {
@@ -416,7 +403,7 @@ impl Model {
                 }
             }
             QueueIntent::SavePlaylist => {
-                if self.app.player_tab.total_queue_len() > 0 {
+                if self.app.local_view.total_queue_len() > 0 {
                     self.app
                         .open_save_playlist_dialog(super::SavePlaylistDialog {
                             input: self.app.queue_playlist_name().to_string(),
@@ -487,7 +474,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items};
+    use crate::app::tests::{QueueViewTestExt, live_owner_channel, make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
     use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -498,7 +485,7 @@ mod tests {
         first.active_slot = None;
         first.revision = 7;
         let mut app = make_app_stub();
-        app.player_tab = crate::app::PlayerTab::from_unified_state(&first);
+        app.local_view = crate::app::QueueView::from_snapshot(&first);
         let mut model = Model::new(app);
 
         model.sync_queue();
@@ -508,7 +495,10 @@ mod tests {
         let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.player_tab.set_unified_state(&replacement, 0);
+        model.app.local_view.adopt(
+            &replacement,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
         model.sync_queue();
 
         let component = queue_component(&model);
@@ -516,9 +506,48 @@ mod tests {
     }
 
     #[test]
+    fn queue_projection_uses_adopted_pending_transition_without_progress() {
+        // Owns queue-canonical-list, "Queue projection is bounded presentation data".
+        let mut snapshot = crate::app::tests::emby_unified_state(&make_items(2), 0);
+        snapshot.in_flight_transition = Some(mbv_ctrl::TransitionSummary {
+            request_id: 1,
+            generation: 1,
+            target_slot: 101,
+        });
+        let mut app = make_app_stub();
+        app.local_view = crate::app::QueueView::from_snapshot(&snapshot);
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.position_ticks = 500;
+        status.runtime_ticks = 1_000;
+        drop(status);
+
+        let displayed = app.displayed_playback_state();
+        let rows = mbv_components::queue::queue_media_rows(
+            app.local_view.slots(),
+            app.displayed_queue_playback_state(),
+            app.pending_playback_slot(),
+        );
+
+        assert_eq!(displayed.active_idx, Some(1));
+        assert_eq!(displayed.position_ticks, 0);
+        assert!(matches!(
+            &rows[1],
+            mbv_render::components::media_list::MediaListRow::Item {
+                semantic_state:
+                    mbv_render::components::media_list::MediaSemanticState::NowPlaying {
+                        progress: None
+                    },
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn unchanged_queue_revision_skips_projection_rebuild() {
         let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(2), 0);
+        app.local_view.adopt_items(make_items(2), 0);
         let mut model = Model::new(app);
         model.sync_queue();
 
@@ -528,21 +557,26 @@ mod tests {
     }
 
     #[test]
-    fn owner_purge_revision_change_rebuilds_same_sized_rows() {
+    fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
+        // A replacement QueueView restarts its private revision mint; lineage
+        // still distinguishes its rows from the prior owner's queue.
         let mut state = crate::app::tests::emby_unified_state(&make_items(2), 0);
         state.active_slot = None;
         state.revision = 7;
         let mut app = make_app_stub();
-        app.player_tab = crate::app::PlayerTab::from_unified_state(&state);
+        app.local_view = crate::app::QueueView::from_snapshot(&state);
         let mut model = Model::new(app);
         model.sync_queue();
+        let previous_revision = model.app.local_view.revision();
 
         let mut replacement_items = make_items(2);
         replacement_items[0].id = "replacement".into();
         let mut replacement = crate::app::tests::emby_unified_state(&replacement_items, 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.player_tab.set_unified_state(&replacement, 0);
+        replacement.lineage = mbv_queue::QueueLineage(1);
+        model.app.local_view = crate::app::QueueView::from_snapshot(&replacement);
+        assert_eq!(model.app.local_view.revision(), previous_revision);
         let update = model.prepare_queue_projection();
 
         assert!(update.slots.is_some());
@@ -559,7 +593,7 @@ mod tests {
         // reservation set and counters together pin the request count.
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
-        app.player_tab.set_queue_items(
+        app.local_view.adopt_queue_items(
             items
                 .into_iter()
                 .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -595,7 +629,7 @@ mod tests {
     #[test]
     fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
         let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(2), 0);
+        app.local_view.adopt_items(make_items(2), 0);
         app.images.configure_protocol(None, true);
         app.visual_slot_hidden = true;
         {
@@ -622,7 +656,7 @@ mod tests {
         // `queue_cursor` (the shell-owned follow position) is not written
         // (task 3.2 — the mirror in select_queue_slot is gone).
         let mut app = make_app_stub();
-        app.player_tab.set_queue_items(
+        app.local_view.adopt_queue_items(
             vec![
                 mbv_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
                 mbv_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
@@ -646,7 +680,7 @@ mod tests {
                 .expect("Queue component mounted")
         };
         assert_eq!(component_cursor(&model), 0);
-        assert_eq!(model.app.player_tab.queue_cursor, 0);
+        assert_eq!(model.app.local_view.cursor(), 0);
 
         let message = model
             .application
@@ -667,7 +701,8 @@ mod tests {
             "component cursor moved to row 1"
         );
         assert_eq!(
-            model.app.player_tab.queue_cursor, 0,
+            model.app.local_view.cursor(),
+            0,
             "QueueRequest::Cursor must not write App's follow cursor"
         );
     }
@@ -686,88 +721,23 @@ mod tests {
             .expect("Queue component mounted")
     }
 
-    fn queue_cursor(model: &Model) -> usize {
-        queue_component(model).test_cursor()
-    }
-
-    fn press_down(model: &mut Model) {
-        model
-            .application
-            .get_component_mut(&ComponentId::Queue)
-            .expect("Queue component mounted")
-            .on(&Event::Keyboard(KeyEvent {
-                code: Key::Down,
-                modifiers: KeyModifiers::NONE,
-            }));
-    }
-
-    #[test]
-    fn bulk_removal_reanchors_the_component_cursor_before_the_range() {
-        let mut app = make_app_stub();
-        app.player_tab.set_queue_items(emby_items(6), 0);
-        app.panel_focus = PanelFocus::Queue;
-        let mut model = Model::new(app);
-        model.sync_queue();
-        // Component cursor sits on the last row of the range about to go.
-        for _ in 0..4 {
-            press_down(&mut model);
-        }
-        assert_eq!(queue_cursor(&model), 4);
-
-        let slots: Vec<_> = (1..=4)
-            .map(|index| model.app.player_tab.slot_id_at(index).unwrap())
-            .collect();
-        model.handle_queue_request(mbv_ui_msg::QueueRequest::RemoveSelection {
-            scope: QueueScope::Local,
-            slot_ids: slots,
-        });
-        model.sync_queue();
-
-        assert_eq!(
-            queue_cursor(&model),
-            0,
-            "the component adopts the cursor before the deleted range"
-        );
-    }
-
-    #[test]
-    fn full_replacement_reanchors_instead_of_preserving() {
-        let mut app = make_app_stub();
-        app.player_tab.set_queue_items(emby_items(3), 0);
-        app.panel_focus = PanelFocus::Queue;
-        let mut model = Model::new(app);
-        model.sync_queue();
-
-        press_down(&mut model);
-        press_down(&mut model);
-        assert_eq!(queue_cursor(&model), 2);
-
-        model
-            .app
-            .replace_playback_queue(crate::app::tests::make_items(4), 1);
-        assert_eq!(
-            model.app.pending_queue_cursor_reanchor,
-            Some(QueueScope::Local),
-            "a replacement arms a re-anchor"
-        );
-
-        model.sync_queue();
-        assert_eq!(queue_cursor(&model), 1);
-    }
-
     #[test]
     fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         // Finding 5: after a remote disconnect the still-mounted component can
         // emit Undo { scope: Remote } for a frame. With no direct remote queue
-        // the visible queue is Local, so undo the Local edit instead of
-        // flashing an error.
+        // the visible queue is Local, so the Local undo entry is consumed and
+        // its inverse edit is sent to the Local owner instead of flashing a
+        // spurious remote-undo-unsupported error.
         use crate::app::state::playback::UndoEntry;
         let mut app = make_app_stub();
-        app.player_tab.set_queue_items(emby_items(2), 0);
-        app.queue_undo_stack.push(UndoEntry::Remove(
-            0,
-            mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
-        ));
+        let _cmd_rx = live_owner_channel(&mut app);
+        app.local_view.adopt_queue_items(emby_items(2), 0);
+        app.queue_undo_stack.push(UndoEntry::Remove {
+            index: 0,
+            item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
+                "restored", "Movie",
+            )))),
+        });
         let mut model = Model::new(app);
         assert!(!model.app.has_direct_remote_queue());
 
@@ -783,11 +753,6 @@ mod tests {
         assert!(
             model.app.queue_undo_stack.is_empty(),
             "the Local undo entry was consumed"
-        );
-        assert_eq!(
-            model.app.player_tab.total_queue_len(),
-            3,
-            "the removed item was restored to the Local queue"
         );
     }
 }

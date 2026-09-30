@@ -195,12 +195,10 @@ impl DaemonLoop {
         else {
             return EventOutcome::CONTINUE;
         };
-        let consume_policy = {
-            let cfg = self.client.lock().unwrap();
-            super::super::ConsumePolicy {
-                videos: cfg.config.consume_videos,
-                audio: cfg.config.consume_audio,
-            }
+        let settings = (self.owner_settings)();
+        let consume_policy = super::super::ConsumePolicy {
+            videos: settings.consume_videos,
+            audio: settings.consume_audio,
         };
         if !apply_track_completed_observation(
             &mut self.owner,

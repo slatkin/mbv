@@ -155,8 +155,7 @@ impl App {
             // Session and the slot stays `None`; presentation falls back to
             // the Session's own title and progress.
             let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
-                self.player_tab
-                    .queue
+                self.local_view
                     .slots()
                     .iter()
                     .position(|s| s.item.id() == id)
@@ -181,11 +180,7 @@ impl App {
             }
         } else {
             let s = self.player.status.lock().unwrap();
-            let active_idx = self
-                .playback_queue()
-                .queue
-                .active_index()
-                .unwrap_or(s.current_idx);
+            let active_idx = s.current_idx;
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
             mbv_ui_model::playback::PlaybackState {
                 active: s.active,
@@ -217,19 +212,7 @@ impl App {
 
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
-            .pending_playback_slot
-            .or_else(|| self.bare_in_flight_slot())
-    }
-
-    /// The playback projection the queue ROWS are painted from. Bare mode
-    /// blanks a queue fenced ahead of its local Player; out-of-process owner
-    /// snapshots reconcile queue slots and playback coordinates together.
-    pub(in crate::app) fn queue_row_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
-        let mut state = self.displayed_queue_playback_state();
-        if state.active && !self.local_queue_is_owner_queue(self.viewed_queue_scope()) {
-            state.active = false;
-        }
-        state
+            .pending_playback_slot()
     }
 
     /// The playhead presentation reads: the confirmed playback state, or --
@@ -238,7 +221,7 @@ impl App {
     /// gates, effects, reporting) keep `effective_playback_state`.
     pub(in crate::app) fn displayed_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let state = self.effective_playback_state();
-        let Some(index) = self.predicted_active_index() else {
+        let Some(index) = self.pending_playback_index() else {
             return state;
         };
         if state.active && state.active_idx == Some(index) {
@@ -259,26 +242,11 @@ impl App {
         }
     }
 
-    /// The position of the slot the user selected to play in the playing
-    /// queue, while the playback owner has not yet confirmed it.
-    fn predicted_active_index(&self) -> Option<usize> {
+    /// The adopted pending slot's position while the owner has not confirmed it.
+    fn pending_playback_index(&self) -> Option<usize> {
         let target = self.pending_playback_slot()?;
         self.queue_for_scope(self.playing_queue_scope())
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == target)
-    }
-
-    /// The Bare owner's desired-transition slot. The shell owns the local
-    /// transition it just dispatched, exactly as the daemon owner owns the
-    /// in-flight transition it publishes, so a locally selected slot projects
-    /// as now-playing before the Playback run reports the change
-    /// (queue-canonical-list, "Selecting a different item to play").
-    fn bare_in_flight_slot(&self) -> Option<mbv_queue::QueueSlotId> {
-        if self.player.is_remote() {
-            return None;
-        }
-        self.bare_owner.in_flight_transition_slot()
+            .slot_index(target)
     }
 
     pub(in crate::app) fn displayed_queue_playback_state(
@@ -295,7 +263,7 @@ impl App {
 #[cfg(test)]
 mod now_playing_status_tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub};
+    use crate::app::tests::make_app_stub;
 
     fn app() -> App {
         make_app_stub()
@@ -310,8 +278,10 @@ mod now_playing_status_tests {
     #[test]
     fn now_playing_status_covers_the_three_states() {
         // Idle: nothing active — an unreachable stale `paused` flag still
-        // reads as Idle.
+        // reads as Idle. The stub player starts active (a remote-owner
+        // stand-in), so park it idle first: this test owns the status.
         let app = app();
+        set_player(&app, false, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);
         set_player(&app, false, true);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);
@@ -359,28 +329,6 @@ mod now_playing_status_tests {
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
     }
 
-    /// Regression: with a stay-alive local daemon still playing the previous
-    /// Bare mode's local playhead must not claim a row of a fenced replacement.
-    #[test]
-    fn fenced_queue_claims_no_now_playing_row_while_bare_player_plays_the_old_queue() {
-        let mut app = make_app_stub();
-        app.player_tab.set_items(make_items(3), 0);
-        // The local Player is playing the first item of its previous queue.
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 0;
-        };
-
-        app.replace_playback_queue(make_items(2), 0);
-
-        let state = app.queue_row_playback_state();
-        assert!(
-            !state.active,
-            "the owner's playhead must not claim a row of a fenced replacement queue"
-        );
-    }
-
     /// An engaged cast target keeps priority over the local player.
     #[test]
     fn playing_cast_still_wins_over_the_local_player() {
@@ -398,30 +346,5 @@ mod now_playing_status_tests {
         );
         set_player(&app, false, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
-    }
-
-    /// Regression (0.19.3): the reseat generation fence blanked remote
-    /// (mbvd) queue rows. A daemon owner bumps `sequence_generation` on
-    /// every accepted submit but the client never stamps the tab for a
-    /// remote scope (`submit_tab_queue` skips it, `from_unified_state`
-    /// resets it to 0), so the fence saw a permanent mismatch and cleared
-    /// `active` — no play icon, no foam progress. The fence is for the
-    /// bare run only; daemon snapshots are authoritative.
-    #[test]
-    fn queue_row_playback_state_stays_active_for_direct_remote_queue() {
-        let app = make_remote_app_stub(make_items(1), make_items(3));
-        assert!(app.player.is_remote());
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 1;
-            status.position_ticks = 42;
-            status.runtime_ticks = 84;
-            // Owner advanced past the never-stamped tab generation.
-            status.sequence_generation = 7;
-        };
-        let state = app.queue_row_playback_state();
-        assert!(state.active);
-        assert_eq!(state.active_idx, Some(1));
     }
 }

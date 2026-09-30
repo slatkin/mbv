@@ -6,46 +6,6 @@ Defines secure bare-mode playback activation, owner eligibility, listening-progr
 
 ## Requirements
 
-### Requirement: Only an eligible Player owner with Audiobookshelf context binds episodes
-An in-process bare Player owner with current Audiobookshelf context, prepared-source support, and reporting/finalization support SHALL bind Audiobookshelf podcast episodes. A Local daemon or packaged `mbvd` Player owner SHALL bind Audiobookshelf podcast episodes only when its owner-scoped Audiobookshelf setup is installed and it has negotiated Audiobookshelf transport capability with a capable attached client. Ctrl owners that are not daemon-owner proxies, Library routes, and Emby Sessions SHALL remain ineligible.
-
-#### Scenario: Eligible bare owner binds an episode
-- **WHEN** an Audiobookshelf episode is submitted to the complete in-process Player capability
-- **THEN** it SHALL be eligible for that owner's Bound queue and active-source lifecycle
-
-#### Scenario: Eligible daemon owner with installed setup binds an episode
-- **WHEN** an Audiobookshelf episode is submitted to a Local daemon or packaged `mbvd` owner that has installed Audiobookshelf setup and has negotiated Audiobookshelf transport capability
-- **THEN** the episode SHALL be eligible for that owner's Bound queue and active-source lifecycle
-
-#### Scenario: Daemon owner without installed setup receives a submission
-- **WHEN** an Audiobookshelf episode targets a Local daemon or packaged `mbvd` owner that has no installed Audiobookshelf setup, or that has not negotiated Audiobookshelf transport capability
-- **THEN** submission SHALL fail visibly without Bound queue mutation
-
-#### Scenario: Unsupported owner receives a submission
-- **WHEN** an Audiobookshelf episode targets a remote-only ctrl owner, Library route, or Emby Session
-- **THEN** submission SHALL fail visibly without Bound queue mutation or local fall-through
-
-#### Scenario: Credential is rejected during playback
-- **WHEN** Audiobookshelf explicitly rejects the current credential
-- **THEN** the active session SHALL be finalized or abandoned within bounds and the runtime context SHALL clear
-- **THEN** repairable Composed and persisted snapshots SHALL remain while Audiobookshelf items become ineligible for Bound queues
-- **THEN** installed Audiobookshelf setup and API key SHALL be preserved; retry is available on the next explicit play
-
-### Requirement: Podcast activation uses ordinary play and enqueue semantics
-The selected downloaded Audiobookshelf episode SHALL support ordinary play and enqueue actions. Play SHALL select or create the corresponding queue slot and start it when the submission destination is eligible; enqueue SHALL add it without starting playback.
-
-#### Scenario: User plays a selected episode in bare mode
-- **WHEN** the user invokes ordinary play on a downloaded episode toward the eligible in-process Player
-- **THEN** mbv SHALL place or select the episode in the local Bound queue and start that slot
-
-#### Scenario: User enqueues a selected episode
-- **WHEN** the user invokes ordinary enqueue on a downloaded episode
-- **THEN** mbv SHALL add it through the canonical queue operation without opening a playback session or starting it
-
-#### Scenario: Selected row is not an available episode
-- **WHEN** play or enqueue targets a show, loading state, empty state, or unavailable episode
-- **THEN** mbv SHALL NOT create a QueueItem or playback session
-
 ### Requirement: Progress synchronization reports position and actual listening time
 While an Audiobookshelf episode is active, the Player owner SHALL periodically synchronize current position, duration, and monotonic wall-clock listening time accumulated while mpv was actually playing. Paused time and seek distance SHALL NOT increase listening time, and an ambiguously dispatched interval SHALL NOT be counted again.
 
@@ -96,20 +56,6 @@ Acknowledged mbv-owned Audiobookshelf progress SHALL update matching canonical q
 #### Scenario: Old generation reports late progress
 - **WHEN** a progress completion belongs to a replaced or removed setup generation
 - **THEN** mbv SHALL ignore it without updating current queue or browse state
-
-### Requirement: Bare podcast playback adds no audiobook support or credential transport, and no Socket.IO remote control
-Bare-mode Audiobookshelf playback SHALL NOT support audiobook media, transfer Service credentials between processes, or make Audiobookshelf items playable by a remote-only ctrl owner. The Audiobookshelf Socket.IO connection added by the `audiobookshelf-progress-refresh` capability SHALL NOT carry remote-control commands and SHALL NOT alter the in-process Player owner's own playback-session lifecycle, which remains driven exclusively by REST. Daemon owners that have negotiated transport capability MAY carry Audiobookshelf queue items and acknowledged progress over the capability-gated ctrl seam established by the transport child (#525); this is not a bare-mode concern.
-
-#### Scenario: User plays podcasts in bare mode
-- **WHEN** the user plays, seeks, pauses, completes, or stops downloaded Audiobookshelf episodes in bare mode
-- **THEN** all Audiobookshelf credentials and playback-session lifecycle SHALL remain in the in-process Player owner
-- **THEN** the active session's progress SHALL be driven only by REST synchronization, never by a Socket.IO event
-
-#### Scenario: Daemon owner carries Audiobookshelf transport over ctrl
-- **WHEN** a daemon owner with installed setup and a capable attached client plays an Audiobookshelf episode
-- **THEN** Audiobookshelf credentials and playback-session lifecycle SHALL remain in the daemon owner
-- **THEN** queue items and acknowledged progress MAY flow over the capability-gated ctrl seam to capable clients
-- **THEN** no Audiobookshelf Socket.IO connection SHALL be opened by the daemon owner
 
 ### Requirement: Daemon owner updates its canonical queue by provider-qualified identity at the post-sync acknowledgement point
 After Audiobookshelf accepts a synchronization request, the daemon owner SHALL update the matching slot in its canonical Bound queue by provider-qualified identity (`library_item_id`, `episode_id`) with the acknowledged position and completion state. The daemon owner SHALL then broadcast acknowledged provider-qualified progress to all capable attached clients, reusing the capability-gated broadcast seam.
@@ -167,14 +113,14 @@ On daemon owner Audiobookshelf setup replacement with a different server, the ow
 - **THEN** the entire queue SHALL stop and Audiobookshelf Bound and persisted slots SHALL be purged
 
 ### Requirement: Attached clients reconcile daemon-owned acknowledged progress
-An attached client that negotiated the Audiobookshelf progress capability SHALL apply a daemon owner's acknowledged progress event to its canonical queue slots matched by provider-qualified identity (`libraryItemId` and `episodeId`), reflecting acknowledged position and completion, only while the client's captured setup generation matches the event's generation. Reconciliation SHALL reuse the same apply path as bare-mode owned progress and SHALL NOT require polling or Socket.IO.
+An attached client that negotiated the Audiobookshelf progress capability SHALL apply a daemon owner's acknowledged progress event to its browse state matched by provider-qualified identity (`libraryItemId` and `episodeId`), reflecting acknowledged position and completion, only while the client's captured setup generation matches the event's generation. The client's displayed queue SHALL reflect acknowledged progress only through the owner's queue snapshot: after applying acknowledged progress to its own queue slots, the daemon owner SHALL publish its resulting queue state, and the client SHALL NOT write progress into queue slots itself. Reconciliation SHALL NOT require polling or Socket.IO.
 
 #### Scenario: Client receives acknowledged progress for a queued episode
-- **WHEN** a capable client receives a daemon progress event whose generation matches and whose identity matches one or more of its queue slots
-- **THEN** every matching slot SHALL reflect the acknowledged position and completion state
+- **WHEN** a capable client receives a daemon progress event whose generation matches and whose identity matches one or more of the owner's queue slots
+- **THEN** every matching slot SHALL reflect the acknowledged position and completion state through the owner's published queue state
 
 #### Scenario: Client receives progress for an episode it does not hold
-- **WHEN** a daemon progress event identifies an episode absent from the client's queue
+- **WHEN** a daemon progress event identifies an episode absent from the owner's queue
 - **THEN** the client SHALL apply no queue change and SHALL retain its existing queue state
 
 #### Scenario: Progress belongs to a superseded generation
@@ -206,3 +152,53 @@ Daemon-owned Audiobookshelf podcast playback SHALL be validated across direct an
 #### Scenario: Reattachment after no-client operation
 - **WHEN** the daemon runs Audiobookshelf playback with no client attached and a capable client later reattaches
 - **THEN** the client SHALL adopt the live queue and acknowledged position without overwriting daemon authority
+
+### Requirement: Only an eligible daemon Player owner binds episodes
+A Local daemon or packaged `mbvd` Player owner SHALL bind Audiobookshelf podcast episodes only when its owner-scoped Audiobookshelf setup is installed and it has negotiated Audiobookshelf transport capability with a capable attached client. Ctrl owners that are not daemon-owner proxies, Library routes, and Emby Sessions SHALL remain ineligible.
+
+#### Scenario: Eligible daemon owner with installed setup binds an episode
+- **WHEN** an Audiobookshelf episode is submitted to a Local daemon or packaged `mbvd` owner that has installed Audiobookshelf setup and has negotiated Audiobookshelf transport capability
+- **THEN** the episode SHALL be eligible for that owner's Bound queue and active-source lifecycle
+
+#### Scenario: Daemon owner without installed setup receives a submission
+- **WHEN** an Audiobookshelf episode targets a Local daemon or packaged `mbvd` owner that has no installed Audiobookshelf setup, or that has not negotiated Audiobookshelf transport capability
+- **THEN** submission SHALL fail visibly without Bound queue mutation
+
+#### Scenario: Unsupported owner receives a submission
+- **WHEN** an Audiobookshelf episode targets a remote-only ctrl owner, Library route, or Emby Session
+- **THEN** submission SHALL fail visibly without Bound queue mutation or local fall-through
+
+#### Scenario: Credential is rejected during playback
+- **WHEN** Audiobookshelf explicitly rejects the current credential
+- **THEN** the active session SHALL be finalized or abandoned within bounds and the runtime context SHALL clear
+- **THEN** repairable persisted owner snapshots SHALL remain while Audiobookshelf items become ineligible for Bound queues
+- **THEN** installed Audiobookshelf setup and API key SHALL be preserved; retry is available on the next explicit play
+
+### Requirement: Podcast activation uses ordinary play and enqueue on the local daemon
+The selected downloaded Audiobookshelf episode SHALL support ordinary play and enqueue actions. Play SHALL select or create the corresponding queue slot and start it when the submission destination is eligible; enqueue SHALL add it without starting playback.
+
+#### Scenario: User plays a selected episode
+- **WHEN** the user invokes ordinary play on a downloaded episode toward the eligible local daemon
+- **THEN** mbv SHALL place or select the episode in the local Bound queue and start that slot
+
+#### Scenario: User enqueues a selected episode
+- **WHEN** the user invokes ordinary enqueue on a downloaded episode
+- **THEN** mbv SHALL add it through the canonical queue operation without opening a playback session or starting it
+
+#### Scenario: Selected row is not an available episode
+- **WHEN** play or enqueue targets a show, loading state, empty state, or unavailable episode
+- **THEN** mbv SHALL NOT create a QueueItem or playback session
+
+### Requirement: Podcast playback adds no credential transport and no Socket.IO remote control
+Audiobookshelf podcast playback SHALL NOT transfer Service credentials between processes or make Audiobookshelf items playable by a remote-only ctrl owner; audiobook media is governed by the `audiobookshelf-book-playback` capability. The Audiobookshelf Socket.IO connection added by the `audiobookshelf-progress-refresh` capability SHALL NOT carry remote-control commands and SHALL NOT alter the Player owner's own playback-session lifecycle, which remains driven exclusively by REST. Daemon owners that have negotiated transport capability MAY carry Audiobookshelf queue items and acknowledged progress over the capability-gated ctrl seam established by the transport child (#525).
+
+#### Scenario: User plays podcasts on the local daemon
+- **WHEN** the user plays, seeks, pauses, completes, or stops downloaded Audiobookshelf episodes on the local daemon
+- **THEN** all Audiobookshelf credentials and playback-session lifecycle SHALL remain in the local daemon
+- **THEN** the active session's progress SHALL be driven only by REST synchronization, never by a Socket.IO event
+
+#### Scenario: Daemon owner carries Audiobookshelf transport over ctrl
+- **WHEN** a daemon owner with installed setup and a capable attached client plays an Audiobookshelf episode
+- **THEN** Audiobookshelf credentials and playback-session lifecycle SHALL remain in the daemon owner
+- **THEN** queue items and acknowledged progress MAY flow over the capability-gated ctrl seam to capable clients
+- **THEN** no Audiobookshelf Socket.IO connection SHALL be opened by the daemon owner

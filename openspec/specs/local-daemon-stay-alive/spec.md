@@ -2,11 +2,14 @@
 
 ## Purpose
 TBD - created by archiving change retire-pty-relay-for-local-daemon-stay-alive. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Stay-alive hosts playback in a local daemon
-In stay-alive mode the Player owner SHALL be a local daemon: a user-owned background process on
-the same machine, holding no terminal, that binds the user's control socket. The terminal that
-requested stay-alive SHALL NOT own the Player; it SHALL run as a client of that daemon.
+The Player owner for a TUI launched without an explicit daemon endpoint SHALL be a local daemon: a
+user-owned background process on the same machine, holding no terminal, that binds the user's
+control socket. This SHALL hold whether stay-alive is enabled or not; stay-alive decides only the
+daemon's lifetime. The terminal SHALL NOT own the Player; it SHALL run as a client of that daemon.
 
 #### Scenario: Stay-alive is requested and no local daemon exists
 - **WHEN** mbv starts with stay-alive enabled and nothing is listening on the user's control socket
@@ -14,10 +17,19 @@ requested stay-alive SHALL NOT own the Player; it SHALL run as a client of that 
 - **THEN** mbv SHALL attach to that daemon as a client and present its normal terminal UI
 - **THEN** mbv SHALL NOT create a pseudo-terminal, a relay process, or a byte-pipe client
 
+#### Scenario: Stay-alive is disabled and no local daemon exists
+- **WHEN** mbv starts with stay-alive disabled, without an explicit daemon endpoint, and nothing is listening on the user's control socket
+- **THEN** mbv SHALL start a local daemon that owns the Player and admits only this client
+- **THEN** mbv SHALL attach to that daemon as a client and present its normal terminal UI
+
 #### Scenario: Stay-alive is requested and a local daemon is already running
 - **WHEN** mbv starts with stay-alive enabled and a local daemon is already listening
 - **THEN** mbv SHALL NOT start a second daemon
 - **THEN** mbv SHALL attach to the running daemon as a client
+
+#### Scenario: Audio window is configured
+- **WHEN** `show_audio_window` is enabled and the local daemon plays audio in a desktop session
+- **THEN** the local daemon SHALL show the audio window, as a terminal-owned Player did
 
 #### Scenario: The daemon is not yet accepting connections
 - **WHEN** mbv has just started a local daemon and the control socket is not yet accepting connections
@@ -61,48 +73,46 @@ from the cached token rather than by prompting.
 - **THEN** mbv SHALL exit with a non-zero status rather than presenting a UI with no playback backend
 
 ### Requirement: A client exiting never stops the local daemon
-The local daemon's lifetime SHALL be independent of its clients. Closing a client, its terminal,
-or its SSH connection SHALL NOT stop the daemon or interrupt playback, regardless of whether that
-client started the daemon.
+While stay-alive is enabled, the local daemon's lifetime SHALL be independent of its clients.
+Closing a client, its terminal, or its SSH connection SHALL NOT stop the daemon or interrupt
+playback, regardless of whether that client started the daemon. While stay-alive is disabled, the
+daemon's lifetime SHALL end with its client, as defined by the `daemon-lifecycle` capability.
 
 #### Scenario: The client that started the daemon exits
-- **WHEN** the client that started the local daemon exits
+- **WHEN** stay-alive is enabled and the client that started the local daemon exits
 - **THEN** the daemon SHALL keep running and playback SHALL continue
 
 #### Scenario: The last client exits
-- **WHEN** the last attached client exits while media is playing
+- **WHEN** stay-alive is enabled and the last attached client exits while media is playing
 - **THEN** the daemon SHALL keep running and playback SHALL continue
 
 #### Scenario: A client's terminal is destroyed
-- **WHEN** a client's terminal is closed, its SSH session drops, or the client process is killed
+- **WHEN** stay-alive is enabled and a client's terminal is closed, its SSH session drops, or the client process is killed
 - **THEN** the daemon SHALL keep running and playback SHALL continue
 
+#### Scenario: Stay-alive disabled and the client exits
+- **WHEN** stay-alive is disabled and the daemon's only client exits for any reason
+- **THEN** playback SHALL stop and the daemon SHALL exit
+
 ### Requirement: Stopping the local daemon is always explicit
-The local daemon SHALL stop only in response to an explicit request: `mbv -q`, the tray's quit
-action, or a termination signal sent to it directly. No client action SHALL stop it implicitly.
+While stay-alive is enabled, the local daemon SHALL stop only in response to an explicit request:
+`mbv -q`, the tray's quit action, or a termination signal sent to it directly. No client action
+SHALL stop it implicitly. While stay-alive is disabled, quitting the client or losing it SHALL also
+stop the daemon.
 
 #### Scenario: Explicit quit
 - **WHEN** the user runs `mbv -q` or selects the tray's quit action
 - **THEN** the daemon SHALL stop playback, persist its state, and exit
 
 #### Scenario: Quitting a client
-- **WHEN** the user quits a client from within its UI
+- **WHEN** stay-alive is enabled and the user quits a client from within its UI
 - **THEN** the client SHALL exit
 - **THEN** the daemon SHALL NOT stop and playback SHALL continue
 
-### Requirement: Bare mode is unchanged when stay-alive is off
-With stay-alive disabled, mbv SHALL run as a single process that owns the Player in-process. mbv
-SHALL NOT start a local daemon, SHALL NOT leave any process running after it exits, and SHALL NOT
-change its behavior because stay-alive exists.
-
-#### Scenario: Default launch
-- **WHEN** the user runs mbv with stay-alive disabled
-- **THEN** mbv SHALL own the Player in its own process
-- **THEN** no control socket SHALL be bound on mbv's behalf
-
-#### Scenario: Bare mode exits
-- **WHEN** a bare-mode mbv exits for any reason
-- **THEN** playback SHALL stop and no mbv-owned process SHALL remain running
+#### Scenario: Quitting the client with stay-alive disabled
+- **WHEN** stay-alive is disabled and the user quits the client from within its UI
+- **THEN** the daemon SHALL stop playback, persist its state, and exit
+- **THEN** the client SHALL exit
 
 ### Requirement: Audiobookshelf playback and progress synchronization continue across client exits
 When a daemon owner has an Audiobookshelf episode active, playback and periodic progress synchronization SHALL continue uninterrupted after every attached client exits. Session finalization, bounded retry, and queue advancement SHALL proceed from the daemon owner without requiring a client to be present, consistent with how non-Audiobookshelf media remains active under the existing stay-alive lifecycle.
@@ -116,4 +126,3 @@ When a daemon owner has an Audiobookshelf episode active, playback and periodic 
 - **WHEN** a later capable client attaches to a daemon owner that is playing an Audiobookshelf episode
 - **THEN** the client SHALL receive the live canonical queue, active slot, status, and last-broadcast acknowledged Audiobookshelf progress via the existing attach snapshot
 - **THEN** the daemon owner's playback and synchronization authority SHALL not be transferred to the attaching client
-

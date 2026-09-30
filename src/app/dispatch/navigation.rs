@@ -135,16 +135,14 @@ impl App {
                 siblings.retain(|i| !i.is_folder);
                 siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
                 if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
-                    let ct = self.libs[lib_idx].library.collection_type.clone();
                     drop(client);
-                    self.replace_playback_queue(siblings.clone(), start_idx);
-                    self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Collection {
-                        collection_type: ct,
-                    });
-                    if !self.has_direct_remote_queue() {
-                        self.save_queue_state();
-                    }
-                    self.play_items_routed(siblings, start_idx, self.queue_source.clone());
+                    // Row 5.3 (design D6): `play_items_routed` replaces the
+                    // queue on the Player owner; no Client-side queue write.
+                    self.play_items_routed(
+                        siblings,
+                        start_idx,
+                        self.playback_queue().source().clone(),
+                    );
                     return true;
                 }
                 drop(client);

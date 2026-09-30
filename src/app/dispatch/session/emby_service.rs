@@ -1,17 +1,9 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, LibEvent, ModelContentEvent};
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
-use mbv_queue::QueueItem;
-use mbv_queue::{QueueState, ServiceKind};
+use mbv_queue::{QueueItem, ServiceKind};
 
 impl App {
-    fn persist_filtered_queue(state: Option<&QueueState>) -> Result<(), mbv_config::ConfigError> {
-        match state {
-            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
-            _ => mbv_config::clear_queue_state(),
-        }
-    }
-
     fn restore_emby_setup(setup: Option<&mbv_config::EmbySetup>, token: Option<&str>) {
         match (setup, token) {
             (Some(setup), Some(token)) => {
@@ -24,45 +16,20 @@ impl App {
         }
     }
 
-    fn restore_persisted_queue(state: Option<&QueueState>) {
-        match state {
-            Some(state) => {
-                let _ = mbv_config::save_queue_state(state);
-            }
-            None => {
-                let _ = mbv_config::clear_queue_state();
-            }
-        }
-    }
-
     fn clear_emby_memory(&mut self) {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_feed = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)));
+            .item_at(active_index)
+            .is_some_and(|item| matches!(item, QueueItem::Feed(_)));
         if !active_is_feed {
-            self.reset_bare_transitions();
             self.player.stop();
         }
-        let mut queues = vec![&mut self.player_tab];
-        if let Some(queue) = self.remote_player_tab.as_mut() {
-            queues.push(queue);
-        }
-        for queue in queues {
-            let non_emby_items = queue
-                .all_queue_items()
-                .into_iter()
-                .filter(|item| !matches!(item, QueueItem::Emby(_)))
-                .collect::<Vec<_>>();
-            queue.set_queue_items(non_emby_items, 0);
-        }
-        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
+        self.remove_queue_slots_where(QueueItem::is_emby);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
         self.pending_delete_slot = None;
-        self.pending_queue_edit_cursor = None;
         self.next_up_item = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;
@@ -106,8 +73,6 @@ impl App {
         self.remote.direct_remote_session_id = None;
         self.ws_send_tx = None;
         self.emby_runtime.client = None;
-        self.player
-            .update_emby_credentials(String::new(), String::new());
         let mut config = self.config.lock().unwrap();
         config.emby_setup = None;
         config.server_url.clear();
@@ -120,13 +85,8 @@ impl App {
     pub(in crate::app) fn remove_emby_confirmed(&mut self) {
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
         let old_token = mbv_config::load_service_secret(ServiceKind::Emby);
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_emby);
-        if let Err(error) = mbv_config::remove_emby_setup_and_secret()
-            .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
-        {
+        if let Err(error) = mbv_config::remove_emby_setup_and_secret() {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
-            Self::restore_persisted_queue(old_queue.as_ref());
             self.flash(
                 format!("Could not remove Emby safely: {error}"),
                 ToastSeverity::Error,
@@ -150,16 +110,12 @@ impl App {
         };
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
         let old_token = mbv_config::load_service_secret(ServiceKind::Emby);
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_emby);
         let replacement = candidate.setup.clone();
         let token = candidate.client.token.clone();
         let result = mbv_config::remove_emby_setup_and_secret()
-            .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
             .and_then(|()| mbv_config::persist_emby_setup_and_secret(&replacement, &token));
         if let Err(error) = result {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
-            Self::restore_persisted_queue(old_queue.as_ref());
             self.flash(
                 format!("Could not replace Emby safely: {error}"),
                 ToastSeverity::Error,
@@ -172,8 +128,6 @@ impl App {
         let (ws_tx, ws_rx) = std::sync::mpsc::channel();
         self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
         self.ws_rx = ws_rx;
-        self.player
-            .update_emby_credentials(replacement.server_url.clone(), token);
         self.emby_runtime.client = Some(client);
         // The App-internal confirm path cannot touch Model-owned
         // `home_content`; deliver the freshly bootstrapped content through

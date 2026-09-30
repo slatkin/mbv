@@ -11,7 +11,6 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
-use mbv_ctrl::player::PlayerEvent;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_msg::PlaybackRequest;
 use mbv_ui_msg::{ComponentId, Msg};
@@ -303,6 +302,9 @@ fn tick_clicks_play_pause_and_the_seekbar_in_mini_view_queue_only() {
 #[test]
 fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     let mut app = make_app_stub();
+    // Collapsed means idle: the stub player starts active (a remote-owner
+    // stand-in), which would paint the transport this test expects hidden.
+    app.player.status.lock().unwrap().active = false;
     app.terminal_width = 80;
     app.terminal_height = 40;
     let mut harness = TickHarness::new(app);
@@ -430,82 +432,4 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         }
         assert!(painted > 0, "{mode:?}: the seekbar track painted");
     }
-}
-
-#[test]
-fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
-    use crate::app::tests::make_audio_items;
-    use mbv_components::queue::queue_media_rows;
-    use mbv_render::components::media_list::MediaSemanticState;
-
-    let mut app = make_app_stub();
-    app.player_tab.set_items(make_audio_items(2), 0);
-    let confirmed = app.player_tab.slot_id_at(0).unwrap();
-    assert!(matches!(
-        app.player_tab.queue.set_active_slot(confirmed),
-        mbv_queue::QueueMutationResult::Applied(())
-    ));
-    {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 0;
-        status.queue_len = 2;
-    };
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    let rows = queue_media_rows(
-        harness.model().app.player_tab.slots(),
-        harness.model().app.displayed_playback_state(),
-        None,
-    );
-    assert!(matches!(
-        &rows[0],
-        mbv_render::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::NowPlaying { .. },
-            ..
-        }
-    ));
-    assert!(matches!(
-        &rows[1],
-        mbv_render::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::Ordinary,
-            ..
-        }
-    ));
-
-    let confirmed_transition = {
-        let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-        mbv_player::transition::Transition::new(request_id, generation, confirmed)
-    };
-    harness
-        .model_mut()
-        .app
-        .bare_owner
-        .accept_local_transition(confirmed_transition);
-    let target = harness.model().app.player_tab.slot_id_at(1).unwrap();
-    let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-    let transition = mbv_player::transition::Transition::new(request_id, generation, target);
-    harness
-        .model_mut()
-        .app
-        .bare_owner
-        .accept_local_transition(transition);
-    harness.model_mut().app.player.status.lock().unwrap().active = false;
-    harness
-        .model_mut()
-        .app
-        .handle_player_event(PlayerEvent::CommandRejected("rejected".into()));
-    harness.model_mut().sync_mounted_surfaces();
-    let rows = queue_media_rows(
-        harness.model().app.player_tab.slots(),
-        harness.model().app.displayed_playback_state(),
-        None,
-    );
-    assert!(matches!(
-        &rows[1],
-        mbv_render::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::Ordinary,
-            ..
-        }
-    ));
 }

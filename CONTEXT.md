@@ -1,9 +1,9 @@
 # mbv
 
 A terminal client for Emby, Audiobookshelf, and Feeds that browses catalogs and
-plays media. Playback may run inside the terminal process itself, or be hosted by an
-out-of-process Player owner — the Stay-alive process on the same machine — so it survives
-the terminal closing.
+plays media. Every local launch attaches to the per-user Owner process, the sole
+local Player-owner host. Stay-alive controls whether that process outlives its
+Clients.
 
 ## Services
 
@@ -62,7 +62,7 @@ never in `config.toml`.
 _Avoid_: account credential, mbv token, control token
 
 **Control credential**:
-An mbv-owned secret used by a Stay-alive process to admit Clients independently of all
+An mbv-owned secret used by the Owner process to admit Clients independently of all
 Service credentials. It grants control access, not an identity or login;
 packaged mbvd does not use this mechanism yet — it currently still uses legacy
 Emby-token ctrl authentication and will migrate to filesystem/trusted-LAN
@@ -86,10 +86,9 @@ _Avoid_: setup version, auth generation, connection ID
 The rule by which a Player owner decides whether a QueueItem may enter its Bound
 queue. It evaluates media kind (audio vs video), whether the required Remote
 Service setup and credential are loaded in that owner process, and whether ctrl
-peers negotiated transport for that item kind. Bare mode may admit Emby, Feed,
-and Audiobookshelf items when their Services are Ready; the Stay-alive process and packaged
+peers negotiated transport for that item kind. The local Owner process and packaged
 mbvd currently admit Emby and Feed (audio-only owners admit only the audio
-subset of a mixed submission); Audiobookshelf daemon admission is tracked in
+subset of a mixed submission); Audiobookshelf owner admission is tracked in
 milestone #524.
 _Avoid_: owner capability, queue capability, supported kinds
 
@@ -103,22 +102,20 @@ _Avoid_: instance, master, host
 
 **Out-of-process owner**:
 A Player owner running outside the terminal application's own process — the
-Stay-alive process or packaged mbvd — reached over ctrl. Out-of-process says which process holds
-playback, not which machine: a Stay-alive process is always on this machine and still
+Owner process or packaged mbvd — reached over ctrl. Out-of-process says which process holds
+playback, not which machine: the Owner process is always on this machine and still
 classifies as on-this-machine; only TCP or Unix endpoints point elsewhere
-(`player-target-locality`). Bare mode is never out-of-process.
+(`player-target-locality`).
 _Avoid_: remote owner (bare), background owner, external player
 
 **Bare mode**:
-The default presentation, where one process is both the terminal UI and the
-Player owner. Closing it stops playback. Bare mode is currently the only owner
-eligible for Audiobookshelf podcast and book playback.
-_Avoid_: foreground mode, standalone, normal mode
+Retired terminology: every local terminal launch is a Client of the Owner process.
+_Avoid_: foreground mode, standalone, normal mode, Bare mode
 
 **Stay-alive**:
-The mode in which playback is hosted by a Stay-alive process rather than the terminal
-UI, so playback continues after every terminal window closes. That process
-is the Player owner; Clients are disposable UIs that attach to it.
+The lifetime policy that decides whether the Owner process outlives its Clients.
+When enabled, it remains after the last Client closes; when disabled, it shuts
+down with its last Client.
 _Avoid_: daemon mode, background mode, alive mode, persistent mode
 
 **Audio-only owner**:
@@ -128,7 +125,7 @@ contains audio is accepted minus the non-audio items (wholly non-audio remains
 refused). When a Client explicitly plays a video through an eligible ctrl
 attachment or controlled Emby session, mbv prompts with the owner and selection
 named; confirmation stops the owner, ends the attachment, and plays locally,
-while a decline changes nothing. The Stay-alive process is never audio-only.
+while a decline changes nothing. The local Owner process is never audio-only.
 See `openspec/changes/archive/2026-09-16-play-locally-when-owner-cannot` for this shipped behavior.
 _Avoid_: audio daemon, headless audio owner, mbvd audio mode
 
@@ -167,18 +164,20 @@ _Avoid_: script source (bare), active script, script lookup
 
 ## Processes
 
-**Stay-alive process**:
-The foreground Player owner on this machine when Stay-alive is on. It hosts
-playback so a terminal can close, and a Client falls back to it when Direct
-remote control or a Library route ends. It is not a daemon and not a Session.
-One exists per user. A bare-mode client has none; ending remote control there
-resumes its own in-process Player directly.
+**Owner process**:
+The per-user local process that is the Player owner for every terminal UI
+launched on this machine. Every such UI is a Client; the Owner process remains
+the local playback authority across route switches. Stay-alive determines
+whether it survives after its last Client closes.
 _Avoid_: local daemon, home daemon, daemon, session, background process, background service, relay, backend, server
+
+**Stay-alive process**:
+_Avoid_: Stay-alive process
 
 **mbvd**:
 The separately packaged daemon, run as a system service, with its own
 configuration, state, and socket. A different product surface from the
-Stay-alive process, never started by a terminal UI. On `main` it is still Emby-gated: it
+Packaged Player owner, never started by a terminal UI. On `main` it is still Emby-gated: it
 constructs `EmbyClient` unconditionally, requires cached credentials to start,
 and uses legacy Emby-token ctrl authentication. Service-independent startup
 (zero Services), Feed playback without Emby, optional Emby runtime, filesystem/
@@ -188,29 +187,30 @@ landed on `main`.
 _Avoid_: system daemon, the daemon
 
 **Client**:
-A terminal UI that reaches an out-of-process Player owner over ctrl. Attachment
-does not log it into the owner or establish a Service identity. Any number may
-attach at once, and each is disposable.
+A terminal UI attached to an out-of-process Player owner over ctrl. Local
+Clients attach to the Owner process; attachment does not establish a Service
+identity. Any number may attach when Stay-alive is enabled; with it disabled,
+admission is exclusive.
 _Avoid_: thin client, terminal client, viewer, attachment
 
 **Tray**:
 The desktop status icon belonging to the Player owner, giving playback controls
-and a stop action while no client is on screen. Only present when the owner
-enables it; for the Stay-alive process this means stay-alive mode.
+and a stop action while no Client is on screen. For the local Owner process, it
+is present only when Stay-alive is enabled.
 _Avoid_: systray, status icon, indicator
 
 **Player endpoint**:
 The address used to reach a Player owner's control socket. Local is this
-machine's Stay-alive process. A network address points at a remote owner
+machine's Owner process. A network address points at a remote owner
 (another machine's Player owner, or an mbvd). mbvd is a daemon. The
-Stay-alive process is not, on this machine or any other.
+Owner process is not, on this machine or any other.
 _Avoid_: daemon endpoint, connection string, remote address, socket path
 
 ## Continuity
 
 **Playback continuity**:
-The guarantee stay-alive makes: what is playing, the queue, and position survive
-every client closing and reopening.
+The guarantee enabled Stay-alive makes: what is playing, the queue, and position survive
+every Client closing and reopening.
 _Avoid_: persistence, session continuity
 
 **Session continuity**:
@@ -227,7 +227,7 @@ snapshot only as part of orderly exit — cursor, tab, pill, item, focus,
 refresh, and rendering activity never write it while open. When two TUIs
 diverge in memory and exit in sequence, the last completed exit wins, with no
 Client identity, merge, or daemon synchronization. An attached **Client**
-restores the same bounded snapshot as Bare mode. The snapshot holds exactly
+restores the same bounded launch-state snapshot. The snapshot holds exactly
 four things: the selected tab, that tab's selected main Selector pill, that
 pill's selected library item (stable identities where the destination supplies
 them, never presentation indices), and whether Library or Queue held Panel
@@ -271,7 +271,7 @@ _Avoid_: queue origin, queue type, source type
 Removal of an item from the queue once it finishes playing, as in ncmpcpp.
 Purely a queue operation — it says nothing about where the queue came from and
 never edits anything on the server. Driven only by the authoritative Player
-owner's playback lifecycle (a local in-process Player, a Stay-alive process, or a
+owner's playback lifecycle (the local Owner process or a
 directly controlled remote Player owner); a Session watch of another device's
 generic Emby Session never consumes, because that observation carries no mbv
 queue authority. Addresses canonical slot identity; removes only the consumed
@@ -285,10 +285,9 @@ playlist; Consume happens with or without it.
 _Avoid_: autosave, consume persistence, playlist sync
 
 **Composed**:
-The stage in which a queue is held in a client's UI and no Player owner holds
-it. Editing one has no playback consequence, so it doubles as a staging area —
-build it now, play it later. Not every queue is Composed first; playback
-started from Emby reaches an owner without passing through a UI.
+The retired pre-owner-process stage in which a client UI held an editable queue
+before submission to a Player owner. Local Clients now display adopt-only queue
+snapshots.
 _Avoid_: draft, staging queue, pending queue, unplayed queue
 
 **Bound**:
@@ -300,11 +299,10 @@ Bound to two owners at once while only one of them plays.
 _Avoid_: active queue, live queue, running queue, attached queue
 
 **Owner-held queue and source**:
-In the Stay-alive model, the owner (the Stay-alive process) holds the only
-authoritative Bound queue and Queue source and persists them; attached
-Clients are readers that display owner-accepted snapshots and never stage,
-persist, or seed a queue of their own. Gate: the owner-side path is
-`DaemonRole::Local`; packaged mbvd and Bare mode are unchanged.
+The Owner process holds the only authoritative local Bound queue and Queue
+source and persists them; attached Clients are readers that display
+owner-accepted snapshots and never stage, persist, or seed a queue of their own.
+Packaged mbvd retains its separate behavior.
 _Avoid_: client-owned queue, thin-client seeding, staged local queue
 
 **QueueLineage**:
@@ -880,9 +878,8 @@ _Avoid_: ABS book item, audiobook episode, book queue entry
 The QueueItem snapshot of a downloaded podcast episode. It carries content
 identity, presentation, progress, completion, and Service-scoped artwork
 identity, but no credential, server URL, playback-session ID, resolved source,
-or request headers. Currently eligible only for bare-mode owners with
-Audiobookshelf setup and credential (Stay-alive process and mbvd eligibility is
-milestone #524 — issues #525-528).
+or request headers. Eligible only for Player owners (Owner process, packaged mbvd) with
+Audiobookshelf setup and credential.
 _Avoid_: Audiobookshelf episode, ABS item, feed entry
 
 **Audiobookshelf playback session**:
@@ -938,7 +935,7 @@ _Avoid_: episode, post, feed item, rss item
 ## Remote sessions
 
 A client can also reach *another* device's playback, discovered through Emby
-rather than through the Stay-alive process. The Stay-alive process is never a
+rather than through the Owner process. The Owner process is never a
 remote session. This is a distinct relationship from Attach above, even though
 both involve one process reaching a Player owner over a socket.
 
@@ -965,7 +962,7 @@ A client has its own control-socket connection to another device's Player
 owner, giving the same queue management as local playback — reorder,
 remove, play next, all of it. The device stays the connected row in the
 Sessions sidebar; taking the control socket does not erase that. The
-Stay-alive process is never Direct remote control. This is what the aqua
+Owner process is never Direct remote control. This is what the aqua
 queue-scope pill indicates.
 _Avoid_: green pill, remote takeover, queue management (alone)
 

@@ -1,4 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::dispatch::queue::QueueOpEdit;
+#[cfg(test)]
+use crate::app::tests::QueueViewTestExt;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
@@ -6,9 +9,8 @@ pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
-use mbv_queue::{QueueItem, QueueItemContentId};
+use mbv_queue::QueueItem;
 use mbv_ui_model::ui_util::natural_sort_key;
-use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,7 +73,7 @@ impl App {
     /// Return the audio-only fall-through decision for an explicit Emby play.
     /// Empty/unknown selections and Library routes remain on today's path.
     pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
-        let attached = self.connected_session_id.is_some() || self.player.is_remote();
+        let attached = true;
         let owner_is_audio_only = if self.connected_session_id.is_some() {
             self.session_owner_is_audio_only()
         } else {
@@ -133,88 +135,7 @@ impl App {
     }
 }
 
-/// Where playback should resume within a restored queue. Prefers locating
-/// `last_played_content_id` by identity (robust to the saved `cursor` index having
-/// drifted, e.g. if the list was edited before the last save) and falls back
-/// to the saved cursor only when there's no last-played id to anchor on.
-pub(crate) fn queue_restore_cursor(
-    items: &[QueueItem],
-    saved_cursor: usize,
-    last_played_content_id: Option<&QueueItemContentId>,
-    legacy_last_played_item_id: Option<&str>,
-    last_played_completed: bool,
-) -> usize {
-    let fallback = saved_cursor.min(items.len().saturating_sub(1));
-    let identity = last_played_content_id.cloned().or_else(|| {
-        let id = legacy_last_played_item_id?;
-        let mut matches = items.iter().filter(|item| item.id() == id);
-        let first = matches.next()?;
-        if matches.next().is_some() {
-            None
-        } else {
-            Some(first.content_id())
-        }
-    });
-    let Some(identity) = identity else {
-        return fallback;
-    };
-    // If the last-played item is no longer in the restored list (e.g. it was
-    // removed from the queue before quitting), fall back to the saved cursor
-    // rather than silently jumping to the front of the queue.
-    let mut matches = items
-        .iter()
-        .enumerate()
-        .filter(|(_, item)| item.content_id() == identity);
-    let Some((idx, _)) = matches.next() else {
-        return fallback;
-    };
-    if matches.next().is_some() {
-        return fallback;
-    }
-    if last_played_completed {
-        (idx + 1).min(items.len().saturating_sub(1))
-    } else {
-        idx
-    }
-}
-
 impl App {
-    /// Submit the already-replaced tab queue without re-minting slot ids.
-    /// The tab's canonical pairs are the identity source for both local and
-    /// direct-remote owners; fresh `play_queue` projections would diverge
-    /// from monotonic tab ids after a replacement.
-    pub(in crate::app) fn submit_tab_queue(
-        &mut self,
-        scope: crate::app::QueueScope,
-        start_idx: usize,
-        source: mbv_queue::QueueSource,
-    ) -> bool {
-        if self.player.is_remote_disconnected() {
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-            return false;
-        }
-        let slots = self.queue_for_scope(scope).all_queue_slots();
-        if slots.is_empty() {
-            return false;
-        }
-        let headless = slots.iter().all(|slot| slot.item.is_audio());
-        let sent = self.player.submit_queue_slots(
-            slots,
-            start_idx,
-            source,
-            self.emby_snapshot().map(Arc::new),
-            headless,
-            self.ui_volume,
-        );
-        if !sent && self.player.is_remote_disconnected() {
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-        }
-        if sent && matches!(scope, crate::app::QueueScope::Local) && !self.player.is_remote() {
-            self.stamp_queue_generation(scope);
-        }
-        sent
-    }
-
     /// Cast takes priority over an attached Emby session: the two are
     /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
     /// this ordering keeps the seam correct even if that invariant is ever
@@ -337,13 +258,19 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
-        self.set_queue_source_if_not_local_daemon(queue_source.clone());
         self.set_queue_scope(self.playing_queue_scope());
         // Keep library focus when playing from the library panel.
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
+        // Attached Emby session: the queue is installed on the Player owner
+        // through the idle-load path (ruling on row 5.3: the owner's Replace
+        // op always starts playback, so it must not be used while another
+        // target owns playback), then playback starts on the session.
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            if !self.load_idle_queue_on_owner(items.clone(), start_idx, queue_source.clone()) {
+                return;
+            }
             self.clear_playback_overlays();
             let id = conn_id.clone();
             let label = items
@@ -363,8 +290,21 @@ impl App {
                 ToastSeverity::Neutral,
             );
         }
-        self.submit_tab_queue(self.playing_queue_scope(), start_idx, queue_source);
-        self.player
+        // Row 5.3 (design D6): the replacement is an answered owner op — the
+        // owner replaces its canonical queue, begins playback at `start_idx`,
+        // and the Client adopts the resulting snapshot; the Client holds no
+        // editable queue of its own.
+        let sent = self.replace_emby_queue_on_owner(
+            self.playing_queue_scope(),
+            items,
+            start_idx,
+            queue_source,
+        );
+        if sent == QueueOpEdit::NotApplied {
+            return;
+        }
+        let _ = self
+            .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
         if let Some(count) = mixed_unplayable
             && !direct_remote
@@ -401,7 +341,7 @@ impl App {
                 self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
                 return;
             }
-            self.defer_local_play(vec![item], 0, self.queue_source.clone());
+            self.defer_local_play(vec![item], 0, self.playback_queue().source().clone());
             return;
         }
         if self.in_non_library_thin_client_mode() {
@@ -440,31 +380,42 @@ impl App {
                 if !direct_remote {
                     self.on_queue_replace_silent();
                 }
-                self.replace_playback_queue(episodes.clone(), 0);
-                let source = mbv_queue::QueueSource::Series;
-                self.set_queue_source_if_not_local_daemon(source.clone());
-                self.submit_tab_queue(self.playing_queue_scope(), 0, source);
-                self.player
-                    .send_command(PlayerCommand::SetMute(self.mute_on));
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
+                // Row 5.3 (design D6): the replacement is an answered owner
+                // op; the Client holds no editable queue of its own.
+                let sent = self.replace_emby_queue_on_owner(
+                    self.playing_queue_scope(),
+                    episodes,
+                    0,
+                    mbv_queue::QueueSource::Series,
+                );
+                if sent == QueueOpEdit::NotApplied {
+                    return;
                 }
+                let _ = self
+                    .player
+                    .send_command(PlayerCommand::SetMute(self.mute_on));
                 return;
             }
         }
-        self.replace_playback_queue(vec![item.clone()], 0);
         if direct_remote {
             self.flash(
                 format!("Requesting playback: {label}"),
                 ToastSeverity::Neutral,
             );
         }
-        self.submit_tab_queue(
+        // Row 5.3 (design D6): the replacement is an answered owner op; the
+        // Client holds no editable queue of its own.
+        let sent = self.replace_emby_queue_on_owner(
             self.playing_queue_scope(),
+            vec![item],
             0,
             mbv_queue::QueueSource::Unknown,
         );
-        self.player
+        if sent == QueueOpEdit::NotApplied {
+            return;
+        }
+        let _ = self
+            .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
@@ -489,20 +440,18 @@ impl App {
                     self.flash("Nothing to enqueue".into(), ToastSeverity::Error);
                     return;
                 }
+                // Row 5.3 (design D6): the folder's items reach the viewed
+                // queue's owner as one answered Append op; the Client holds
+                // no editable queue, so the entries appear only when the
+                // owner's answer is adopted.
                 let scope = self.viewed_queue_scope();
-                let previous_dirty = self.queue_dirty;
-                let previous_queue = self.queue_for_scope(scope).clone();
-                let appended_slots = self.queue_for_scope_mut(scope).append_items(items);
-                if self.local_queue_metadata_applies(scope) {
-                    self.queue_dirty = true;
-                }
-                if self.sync_playback_queue_items_after_append(scope, appended_slots) {
-                    self.persist_local_queue_state_if_needed(scope);
-                    self.advance_queue_epoch();
-                } else {
-                    self.queue_dirty = previous_dirty;
-                    *self.queue_for_scope_mut(scope) = previous_queue;
-                }
+                self.append_on_owner(
+                    scope,
+                    items
+                        .into_iter()
+                        .map(|item| QueueItem::Emby(Box::new(item)))
+                        .collect(),
+                );
             }
             Err(e) => {
                 drop(client);
@@ -511,14 +460,15 @@ impl App {
         }
     }
 
-    /// Shared tail for submitting a single `QueueItem` to the canonical queue
-    /// (Task 8.1): play looks up an existing slot by `content_id()`, appends
-    /// if absent, sets cursor/active slot, and submits the full queue to the
-    /// player, rolling the queue back and flashing on rejection; enqueue
-    /// appends without starting playback and syncs/persists like the library
-    /// enqueue path. Callers resolve their own provider-specific
-    /// selection/admission ahead of the call. Returns whether the submit
-    /// succeeded.
+    /// Shared tail for submitting a single `QueueItem` to the canonical queue:
+    /// play resolves the played entry against the owner's last accepted state
+    /// — an existing slot is started through the answered `PlaySlot` op, an
+    /// absent one is first appended through the answered `Append` op — and a
+    /// cast receiver is dispatched the owner-accepted queue; enqueue appends
+    /// without starting playback. The Client holds no editable queue (row
+    /// 5.3, design D6), so the view changes only through the owner's answer.
+    /// Callers resolve their own provider-specific selection/admission ahead
+    /// of the call. Returns whether the submit succeeded.
     pub(in crate::app) fn submit_queue_item(
         &mut self,
         item: QueueItem,
@@ -530,52 +480,58 @@ impl App {
             self.viewed_queue_scope()
         };
         if !start_playback {
-            let previous_dirty = self.queue_dirty;
-            let previous_queue = self.queue_for_scope(scope).clone();
-            let appended_slot = self.queue_for_scope_mut(scope).append_item(item);
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
-                self.persist_local_queue_state_if_needed(scope);
-                self.advance_queue_epoch();
-                return true;
-            }
-            self.queue_dirty = previous_dirty;
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            return false;
+            return self.append_on_owner(scope, vec![item]);
         }
         if !self.is_cast_attached() && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return false;
         }
-        let previous_queue = self.queue_for_scope(scope).clone();
+        // Legacy owners have no answered Append to resolve the played slot
+        // from, so they keep the legacy whole-queue submission (the legacy
+        // form of replace-and-play); capable owners get the answered ops.
+        let answered = self
+            .queue_link(scope)
+            .0
+            .remote()
+            .supports_answered_queue_ops();
+        if !answered {
+            return self.submit_queue_item_legacy_play(&item, scope);
+        }
+        // Resolve the played entry against the owner's last accepted state.
         let existing_index = self
             .queue_for_scope(scope)
             .slots()
             .iter()
             .position(|slot| slot.item.content_id() == item.content_id());
-        let selected_index = existing_index.unwrap_or_else(|| {
-            self.queue_for_scope_mut(scope).queue.append(item.clone());
-            self.queue_for_scope(scope).total_queue_len() - 1
-        });
-        let selected_slot = self
-            .queue_for_scope(scope)
-            .slot_id_at(selected_index)
-            .expect("selected queue slot disappeared");
-        {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.queue_cursor = selected_index;
-            let _ = queue.queue.set_active_slot(selected_slot);
-        }
-        let all_slots = self.queue_for_scope(scope).all_queue_slots();
+        let selected_slot = if let Some(index) = existing_index {
+            self.queue_for_scope(scope).slot_id_at(index)
+        } else {
+            // The item is new to the owner's queue: append it as an
+            // answered op, then start the slot the answer adopted at the
+            // tail.
+            if !self.append_on_owner(scope, vec![item]) {
+                return false;
+            }
+            let last = self
+                .queue_for_scope(scope)
+                .total_queue_len()
+                .saturating_sub(1);
+            self.queue_for_scope(scope).slot_id_at(last)
+        };
+        let Some(selected_slot) = selected_slot else {
+            return false;
+        };
         // While a cast target is attached, playing a selection dispatches it
         // to the receiver instead of the local player (cast-session-control
         // "Attaching to a cast target does not engage the local player").
-        // `submit_queue_slots`/local playback state below is never touched on this
-        // path.
+        // The receiver is handed the owner-accepted queue, so the played
+        // entry must already be an owner-accepted slot.
         if self.is_cast_attached() {
-            let all_items = self.queue_for_scope(scope).all_queue_items();
+            let selected_index = self.queue_for_scope(scope).slot_index(selected_slot);
+            let Some(selected_index) = selected_index else {
+                return false;
+            };
+            let all_items = self.queue_for_scope(scope).items();
             self.dispatch_selection_to_cast(all_items, selected_index);
             self.set_queue_scope(scope);
             if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -583,36 +539,73 @@ impl App {
             }
             return true;
         }
-        if self.player.is_remote_disconnected() {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+        // Row 5.3 (design D6): starting the entry is an answered PlaySlot op
+        // against the owner that holds the queue.
+        let sent = self.queue_op(
+            scope,
+            mbv_remote_player::QueueOp::PlaySlot {
+                slot_id: mbv_ctrl::slot_id_to_u64(selected_slot),
+            },
+        );
+        if sent == QueueOpEdit::NotApplied {
             return false;
         }
-        let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
-        let submitted = self.player.submit_queue_slots(
-            all_slots,
-            selected_index,
-            self.queue_source.clone(),
-            None,
-            audio_only,
-            self.ui_volume,
+        self.set_queue_scope(scope);
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+        true
+    }
+
+    pub(in crate::app) fn append_on_owner(
+        &mut self,
+        scope: crate::app::QueueScope,
+        items: Vec<QueueItem>,
+    ) -> bool {
+        // Entries appear only when the owner's answered Append is adopted.
+        let sent = self.queue_op(
+            scope,
+            mbv_remote_player::QueueOp::Append {
+                items,
+                before: None,
+            },
         );
-        if !submitted {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(
-                if self.player.is_remote_disconnected() {
-                    CONNECTION_LOST_MESSAGE
-                } else {
-                    "Playback owner rejected this item"
-                }
-                .into(),
-                if self.player.is_remote_disconnected() {
-                    ToastSeverity::Warning
-                } else {
-                    ToastSeverity::Error
-                },
-            );
+        if sent == QueueOpEdit::NotApplied {
             return false;
+        }
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.advance_queue_epoch();
+        true
+    }
+
+    /// The legacy-owner play path for a single submitted item (row 5.3):
+    /// append-if-absent against the displayed queue, start the whole queue at
+    /// the played entry, and dispatch a cast attachment its selection — the
+    /// legacy wire forms, with the same rollback and flash behaviour.
+    fn submit_queue_item_legacy_play(
+        &mut self,
+        item: &QueueItem,
+        scope: crate::app::QueueScope,
+    ) -> bool {
+        let mut items = self.queue_for_scope(scope).items();
+        let selected_index = items
+            .iter()
+            .position(|queued| queued.content_id() == item.content_id())
+            .unwrap_or_else(|| {
+                items.push(item.clone());
+                items.len() - 1
+            });
+        if self.is_cast_attached() {
+            self.dispatch_selection_to_cast(items, selected_index);
+        } else {
+            let source = self.queue_for_scope(scope).source().clone();
+            if self.replace_queue_on_owner(scope, items, selected_index, source)
+                == QueueOpEdit::NotApplied
+            {
+                return false;
+            }
         }
         self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {

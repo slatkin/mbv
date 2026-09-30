@@ -48,21 +48,8 @@ fn stdin_has_hup() -> bool {
     unsafe { libc::poll(&raw mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP) != 0 }
 }
 
-// Watchdog thread: detects terminal close (SIGHUP or stdin POLLHUP) and
-// ensures the mpv window closes and the process exits even when the main event
-// loop is wedged in a blocking crossterm epoll call (which SA_RESTART prevents
-// SIGHUP from interrupting). Calls player stop directly — bypassing the event
-// loop — so the mpv window closes within one wait_event(0.5) tick. The player
-// thread then reports stopped to Emby on its own. Force-exits after 15s as a
-// backstop for hung Emby HTTP calls.
-//
-// The forced exit is gated on TERMINAL_GONE (set only by SIGHUP/stdin POLLHUP),
-// never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
-// TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
-pub(in crate::app) fn start_quit_watchdog(
-    quit_handle: Option<mbv_player::QuitHandle>,
-    quit_timeout: Duration,
-) {
+// Watchdog thread detects terminal close even if the TUI event loop is stuck.
+pub(in crate::app) fn start_quit_watchdog() {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
@@ -72,9 +59,6 @@ pub(in crate::app) fn start_quit_watchdog(
             }
             if TERMINAL_GONE.load(Ordering::Relaxed) || QUIT_REQUESTED.load(Ordering::Relaxed) {
                 QUIT_REQUESTED.store(true, Ordering::Relaxed);
-                if let Some(ref h) = quit_handle {
-                    h.stop_for_shutdown(quit_timeout);
-                }
                 if TERMINAL_GONE.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_secs(15));
                     std::process::exit(0);

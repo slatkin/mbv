@@ -32,8 +32,9 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
 
@@ -54,6 +55,7 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Album,
             lineage: mbv_queue::QueueLineage(3),
+            op: None,
         },
         CtrlContext {
             reply_tx: &reply_tx,
@@ -66,8 +68,9 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
     assert_eq!(owner.core.source, QueueSource::Unknown);
@@ -118,8 +121,9 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 
@@ -172,8 +176,9 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 
@@ -236,8 +241,9 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
 
@@ -389,8 +395,9 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
                 ctrl_clients: &registry,
                 has_audiobookshelf: false,
                 merged_tx: &merged_tx,
-                stay_alive: true,
+                owner_settings: crate::owner_settings::fixed_reader(true),
                 role: crate::DaemonRole::Local,
+                op: std::cell::Cell::new(None),
             },
         );
     }
@@ -413,8 +420,9 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
@@ -459,8 +467,9 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     let deadline = owner.pending_idle_load.as_ref().unwrap().started_at;
@@ -507,8 +516,9 @@ fn pending_idle_load_does_not_block_request_shutdown() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     player.status.lock().unwrap().sequence_generation += 1;
@@ -525,8 +535,9 @@ fn pending_idle_load_does_not_block_request_shutdown() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     assert!(
@@ -576,8 +587,9 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: true,
+            owner_settings: crate::owner_settings::fixed_reader(true),
             role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(None),
         },
     );
     let old_run = owner.pending_idle_load.as_ref().unwrap().stopped_run;

@@ -25,7 +25,7 @@ fn artist_cache_key(
 /// tracks from where the row came from.
 #[test]
 fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     let mut first = make_item("First", "Audio");
     first.id = "artist-track-1".into();
     first.album_id = "album-1".into();
@@ -49,7 +49,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
 
     assert!(app.play_album_track("album-1", &second));
     assert_eq!(
-        queued_track_ids(&app),
+        last_replace(&cmd_rx).0,
         ["artist-track-1", "artist-track-2"],
         "the row's album group becomes the queue from the artist cache"
     );
@@ -60,7 +60,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
 /// carries more tracks for the same album.
 #[test]
 fn album_track_cache_still_precedes_the_artist_cache_fallback() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     let mut only = make_item("Only", "Audio");
     only.id = "album-track".into();
     only.album_id = "album-1".into();
@@ -79,7 +79,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
 
     assert!(app.play_album_track("album-1", &only));
     assert_eq!(
-        queued_track_ids(&app),
+        last_replace(&cmd_rx).0,
         ["album-track"],
         "the album cache's list is the browsing source and takes precedence"
     );
@@ -91,8 +91,10 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     // The second activation targets a populated queue, so it goes through the
     // replacement gate before the queue changes.
     confirm_replace_queue(&mut app);
+    let (mut replaced, _) = last_replace(&cmd_rx);
+    replaced.sort();
     assert_eq!(
-        queued_track_ids(&app),
+        replaced,
         ["album-track", "artist-extra"],
         "the candidate that holds the row wins when the album cache does not"
     );
@@ -105,7 +107,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
 /// `PendingQueueAction::PlayItems` reaches the existing executor.
 #[test]
 fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_track() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     app.config.lock().unwrap().autoload = true;
     let tracks = [("track-3", 3), ("track-1", 1), ("track-2", 2)]
         .into_iter()
@@ -146,18 +148,15 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
     }
 
     assert!(app.play_grouped_track("album-1", "track-2"));
+    let (replaced_ids, replaced_start) = last_replace(&cmd_rx);
     assert_eq!(
-        app.playback_queue()
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
+        replaced_ids,
         ["track-1", "track-2", "track-3"],
-        "the resolved album replaces the target queue"
+        "the resolved album replaces the target queue on the owner"
     );
     assert_eq!(
-        app.playback_queue().queue_cursor,
-        1,
+        replaced_start,
+        Some(1),
         "playback starts at the selected track with earlier tracks still queued"
     );
 }
@@ -166,7 +165,7 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
 /// Audio item enters the replacement queue.
 #[test]
 fn grouped_track_without_autoload_queues_only_the_selected_track() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     app.config.lock().unwrap().autoload = false;
     let tracks = ["track-1", "track-2", "track-3"]
         .into_iter()
@@ -184,22 +183,17 @@ fn grouped_track_without_autoload_queues_only_the_selected_track() {
 
     assert!(app.play_grouped_track("album-1", "track-2"));
     assert_eq!(
-        app.playback_queue()
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
+        last_replace(&cmd_rx).0,
         ["track-2"],
         "autoload off resolves only the selected track"
     );
-    assert_eq!(app.playback_queue().queue_cursor, 0);
 }
 
 /// Resolution failure flashes the existing library error and does not replace
 /// a queue: the group's cached album carries no such track identity.
 #[test]
 fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() {
-    let mut app = remote_playback_app();
+    let (mut app, cmd_rx) = remote_playback_app();
     app.config.lock().unwrap().autoload = true;
     let mut cached = make_item("Cached", "Audio");
     cached.id = "cached-track".into();
@@ -210,14 +204,15 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         .insert("album-1".into(), vec![cached]);
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.remote_player_tab
+    app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("playlist-1".into()),
-        name: "Playlist".into(),
-    };
+        .adopt_items(vec![existing], 0);
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Playlist".into(),
+        });
 
     assert!(!app.play_grouped_track("album-1", "missing-track"));
     assert_eq!(
@@ -225,9 +220,13 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
         ["existing"],
         "a failed resolution leaves the target queue untouched"
     );
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert!(
+        last_replace(&cmd_rx).0.is_empty(),
+        "a failed resolution replaces nothing on the owner"
+    );
+    assert_eq!(app.playback_queue().cursor(), 0);
     assert!(matches!(
-        app.queue_source,
+        app.local_view.source(),
         mbv_queue::QueueSource::Playlist { .. }
     ));
     assert!(

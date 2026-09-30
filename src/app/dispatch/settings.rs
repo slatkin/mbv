@@ -8,10 +8,7 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub(crate) fn close_settings(&mut self) {
-        if self.settings_save_at.take().is_some() {
-            let cfg = self.config.lock().unwrap().clone();
-            crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
-        }
+        self.flush_settings_save();
         self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
@@ -25,6 +22,19 @@ impl App {
             self.persist_current_auto_reconnect_target();
         }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+        if matches!(
+            key,
+            SettingKey::StayAlive | SettingKey::ConsumeVideos | SettingKey::ConsumeAudio
+        ) {
+            self.flush_settings_save();
+        }
+    }
+
+    pub(crate) fn flush_settings_save(&mut self) {
+        if self.settings_save_at.take().is_some() {
+            let cfg = self.config.lock().unwrap().clone();
+            crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
+        }
     }
 
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {

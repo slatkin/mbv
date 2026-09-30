@@ -86,7 +86,7 @@ impl App {
                 // and stop polling it -- clearing `client` means
                 // `spawn_cast_status_poll`'s next tick finds nothing to
                 // submit a job to. `dispatched`/`status` and mbv's own queue
-                // (`player_tab.queue`, untouched here) are left exactly as
+                // (`local_view.queue`, untouched here) are left exactly as
                 // they were; only progress reporting and further polling
                 // stop.
                 tracing::warn!(name: "cast.status_poll.failed", target: "cast", error = %e, "cast status poll failed");
@@ -129,8 +129,7 @@ impl App {
     fn cast_active_queue_index(&self, cast: &CastAttachment) -> Option<usize> {
         let status = cast.status.as_ref()?;
         let item = match_cast_dispatched_item(cast, status)?;
-        self.player_tab
-            .queue
+        self.local_view
             .slots()
             .iter()
             .position(|slot| slot.item.content_id() == item.content_id)
@@ -290,7 +289,7 @@ fn cast_progress_for_status<'a>(
 mod tests {
     use super::*;
     use crate::app::state::types::cast::CastProgressTarget as ProgressTarget;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{QueueViewTestExt, make_app_stub};
     use mbv_queue::QueueItemContentId;
 
     fn dispatched(url: &str) -> DispatchedCastItem {
@@ -400,7 +399,7 @@ mod tests {
     fn a_dropped_connection_presents_disconnected_stops_polling_and_leaves_the_queue_intact() {
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
-        app.player_tab.set_items(items.clone(), 0);
+        app.local_view.adopt_items(items.clone(), 0);
         app.attach_cast("device-1".to_string());
         let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
             crate::app::state::types::cast::FakeCastTransport::default(),
@@ -417,8 +416,7 @@ mod tests {
             Some("Cast: disconnected")
         );
         assert_eq!(
-            app.player_tab
-                .queue
+            app.local_view
                 .slots()
                 .iter()
                 .map(|slot| slot.item.content_id())

@@ -199,20 +199,9 @@ fn lang_code_to_name_matches_api_table() {
 }
 
 #[test]
-fn disconnect_remote_is_a_no_op_for_a_local_player() {
-    let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let proxy = PlayerProxy::stub(status);
-    assert!(!proxy.is_remote());
-
-    proxy.disconnect_remote(); // must not panic
-}
-
-#[test]
 fn disconnect_remote_disconnects_a_remote_player() {
     let (remote, _event_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    let proxy = PlayerProxy::remote(remote, false);
-    assert!(proxy.is_remote());
-
+    let proxy = PlayerProxy::from_remote(remote, false);
     proxy.disconnect_remote(); // must not panic; a stub has no real
     // socket, so this only exercises the
     // dispatch, not the shutdown itself

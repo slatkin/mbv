@@ -2,8 +2,8 @@ use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_owner::QueueEpoch;
+use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::types::cast::CastAttachment;
 use mbv_ctrl::player::PlayerEvent;
@@ -93,10 +93,6 @@ pub struct App {
     pub(in crate::app) audiobookshelf_book_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
     pub(in crate::app) player: PlayerProxy,
-    /// Bare mode's owner-side transition state. Remote targets use their
-    /// daemon-owned coordinator; this is still hosted here so local jumps
-    /// receive the same request identity semantics.
-    pub(in crate::app) bare_owner: mbv_player::owner_state::PlayerOwnerState,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test
     /// construction via `build()` does not). `None` in tests so they never
@@ -109,17 +105,24 @@ pub struct App {
     /// the D-Bus service was first registered.
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
+    /// Player events the answer pump set aside while waiting for a queue-op
+    /// answer (row 5.1, design D6). `drain_player_events` takes these before
+    /// `player_rx`, so deferred disconnects, restarts, and projections keep
+    /// running at the tick level, in order.
+    pub(in crate::app) deferred_player_events: std::collections::VecDeque<PlayerEvent>,
+    /// Player events deferred from the suspended home link during a Local
+    /// queue-op answer pump; only the home-link drain may interpret them.
+    pub(in crate::app) deferred_home_events: std::collections::VecDeque<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) transport_rx: mpsc::Receiver<mbv_ctrl::TransportCommand>,
-    pub(in crate::app) transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
     pub(in crate::app) audiobookshelf_socket_rx:
         mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,
     pub(in crate::app) libs: Vec<LibraryTab>,
-    pub(in crate::app) player_tab: PlayerTab,
-    pub(in crate::app) remote_player_tab: Option<PlayerTab>,
+    pub(in crate::app) local_view: QueueView,
+    pub(in crate::app) remote_view: Option<QueueView>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
@@ -174,12 +177,6 @@ pub struct App {
     pub(in crate::app) pending_delete_slot: Option<QueueSlotId>, // marks a delete that was already applied optimistically, so the Stopped handler doesn't re-derive it
     pub(in crate::app) queue_undo_stack: Vec<UndoEntry>,
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
-    pub(in crate::app) pending_remote_move_cursor: Option<usize>,
-    /// The display cursor a just-issued local queue edit (e.g. remove) wants
-    /// the next `UnifiedQueueUpdated` broadcast to land on, since the daemon's
-    /// state tracks *playback* position, not the UI selection — see
-    /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
-    pub(in crate::app) pending_queue_edit_cursor: Option<usize>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueScope>,
     pub(in crate::app) next_up_item: Option<EmbyItem>,
@@ -287,7 +284,6 @@ pub struct App {
     pub(in crate::app) playlists_open_cursor: usize,
     pub(in crate::app) playlists_open_scroll: usize,
     pub(in crate::app) playlists_open_loading: bool,
-    pub(in crate::app) queue_source: mbv_queue::QueueSource,
     pub(in crate::app) queue_dirty: bool,
     pub(in crate::app) pending_owner_source_update:
         Option<(mbv_queue::QueueSource, mbv_queue::QueueLineage)>,

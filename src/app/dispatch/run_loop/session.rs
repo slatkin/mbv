@@ -104,10 +104,6 @@ impl App {
             && self.queue_playlist_id() == Some(source_playlist_id)
         {
             self.queue_dirty = false;
-            // A successful Save recreated server entry identities
-            // (cleared locally at the mutation boundary); persist that
-            // cleared state so stale identities cannot survive restart.
-            self.save_queue_state();
         }
         self.finish_playlist_mutation(playlist_id, mutation_id);
         if succeeded
@@ -166,16 +162,7 @@ impl App {
                     id: Some(id),
                     name: name.to_string(),
                 };
-                let applied = self.apply_saved_playlist_source(source, origin);
-                // The success toast stays a ThisProcess-only signal:
-                // a Stay-alive owner confirms the save through its own
-                // snapshot, without a toast.
-                if applied && matches!(origin, QueueOrigin::ThisProcess { .. }) {
-                    self.flash(
-                        format!("Saved as playlist \"{name}\""),
-                        ToastSeverity::Success,
-                    );
-                }
+                self.apply_saved_playlist_source(source, origin);
             }
             Ok(_) => {
                 tracing::debug!(name: "playlist.save_as.stale_completion_ignored", target: "playlist", "stale Save As completion ignored");
@@ -257,25 +244,6 @@ impl App {
             self.remote.runtime_zero_since = None;
         }
         self.connected_session_state = Some(s.clone());
-        // Stamp the canonical queue's active slot from the
-        // Session's own now-playing item. The attached
-        // receiver drives track changes; without this the
-        // queue keeps the originally submitted slot "active",
-        // and a Delete on that stale row hits
-        // `RequiresActiveConfirmation` and vanishes silently
-        // (the now-playing highlight was display-only).
-        if let Some(np_id) = s.now_playing_item_id.as_deref() {
-            let playing_slot = self
-                .player_tab
-                .queue
-                .slots()
-                .iter()
-                .find(|slot| slot.item.id() == np_id)
-                .map(|slot| slot.slot_id);
-            if let Some(slot_id) = playing_slot {
-                let _ = self.player_tab.queue.set_active_slot(slot_id);
-            }
-        }
         self.remote.session_miss_count = 0;
         // Remote hasn't started playing yet — repoll sooner.
         // Cap fast-poll at 30 s: if runtime stays 0 that long the

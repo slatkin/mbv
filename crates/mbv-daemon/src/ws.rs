@@ -141,6 +141,7 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         queue,
         source,
         transitions,
+        None,
     );
     start_remote_playback(playback, client, &fetched, start_idx, start_position_ticks);
 }

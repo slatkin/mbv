@@ -5,210 +5,8 @@ use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::QueueItem;
 use rstest::{fixture, rstest};
 
-fn enable_audiobookshelf_owner(app: &App) {
-    let context = mbv_player::AudiobookshelfPlayerContext::new(
-        mbv_core::service_runtime::SetupGeneration::new(1),
-        mbv_config::AudiobookshelfSetup::new("https://books.example"),
-        "secret".into(),
-        "device".into(),
-    )
-    .expect("valid test Audiobookshelf context");
-    app.player.update_audiobookshelf_context(Some(context));
-}
-
-#[test]
-fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
-    let mut app = super::podcast::audiobookshelf_app();
-    enable_audiobookshelf_owner(&app);
-    app.player.status.lock().unwrap().active = true;
-    let commands = app.player.spy_on_commands();
-
-    app.play_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-
-    assert_eq!(app.player_tab.total_queue_len(), 1);
-    assert_eq!(app.player_tab.queue_cursor, 0);
-    assert!(app.player_tab.queue.active_slot_id().is_some());
-    match commands.recv().unwrap() {
-        mbv_ctrl::player::PlayerCommand::SubmitQueue { items, start_idx } => {
-            assert_eq!(start_idx, 0);
-            assert!(items[0].item.is_audiobookshelf());
-        }
-        _ => panic!("expected canonical play submission"),
-    }
-}
-
-#[test]
-fn audiobookshelf_enqueue_mutates_composed_queue_without_starting() {
-    let mut app = super::podcast::audiobookshelf_app();
-    let commands = app.player.spy_on_commands();
-
-    app.enqueue_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-
-    assert_eq!(app.player_tab.total_queue_len(), 1);
-    assert!(!app.player.status.lock().unwrap().active);
-    assert!(
-        commands.try_recv().is_err(),
-        "Composed enqueue must not submit"
-    );
-}
-
-#[test]
-fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
-    let mut app = super::podcast::audiobookshelf_app();
-    enable_audiobookshelf_owner(&app);
-    app.enqueue_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-    let before_queue = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .filter_map(|slot| {
-            slot.item.as_audiobookshelf().map(|episode| {
-                (
-                    episode.library_item_id.clone(),
-                    episode.episode_id.clone(),
-                    episode.position_ticks,
-                    episode.is_finished,
-                )
-            })
-        })
-        .collect::<Vec<_>>();
-    let before_progress = app.audiobookshelf_browse[0].progress.clone();
-    let stale = app.audiobookshelf_runtime.generation();
-    app.audiobookshelf_runtime.begin_validation();
-    app.handle_lib_event(LibEvent::Audiobookshelf(
-        AudiobookshelfEvent::ProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate {
-            generation: stale,
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            current_time_seconds: 42.5,
-            duration_seconds: 120.0,
-            is_finished: true,
-        }),
-    ));
-
-    let after_queue = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .filter_map(|slot| {
-            slot.item.as_audiobookshelf().map(|episode| {
-                (
-                    episode.library_item_id.clone(),
-                    episode.episode_id.clone(),
-                    episode.position_ticks,
-                    episode.is_finished,
-                )
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(after_queue, before_queue);
-    assert_eq!(app.audiobookshelf_browse[0].progress, before_progress);
-}
-
 // Task 3.1(a)(b)(c): daemon route via PlayerEvent::AudiobookshelfProgress
 // updates queue slots, browse progress map, and Unplayed filter.
-#[test]
-fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
-    let mut app = super::podcast::audiobookshelf_app();
-    app.audiobookshelf_browse[0].detail_cache.insert(
-        "show-a".into(),
-        vec![
-            mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
-                library_item_id: "show-a".into(),
-                episode_id: "episode-a".into(),
-                title: "Episode A".into(),
-                description: None,
-                published_at: None,
-                duration_seconds: Some(120.0),
-            },
-            mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
-                library_item_id: "show-a".into(),
-                episode_id: "episode-b".into(),
-                title: "Episode B".into(),
-                description: None,
-                published_at: None,
-                duration_seconds: Some(120.0),
-            },
-        ],
-    );
-    enable_audiobookshelf_owner(&app);
-    app.play_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-    app.enqueue_selected_audiobookshelf_episode(
-        0,
-        1,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-
-    let generation = app.audiobookshelf_runtime.generation();
-    let position_ticks = 120 * mbv_emby_model::TICKS_PER_SECOND;
-
-    // (a)(b)(c): completion via daemon route.
-    app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
-        mbv_ctrl::AudiobookshelfProgressEvent {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            position_ticks,
-            is_finished: true,
-            setup_generation: generation.value(),
-        },
-    ));
-
-    // (a) Matching queue slots reflect acknowledged position_ticks and is_finished.
-    let matching: Vec<_> = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .filter_map(|slot| slot.item.as_audiobookshelf())
-        .filter(|ep| ep.library_item_id == "show-a" && ep.episode_id == "episode-a")
-        .collect();
-    assert!(!matching.is_empty(), "must have at least one matching slot");
-    assert!(
-        matching.iter().all(|ep| ep.is_finished),
-        "all matching slots must be marked finished"
-    );
-    assert!(
-        matching
-            .iter()
-            .all(|ep| ep.position_ticks == position_ticks),
-        "all matching slots must have the acknowledged position_ticks"
-    );
-
-    // (b) Browse progress map updated.
-    let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
-    assert!(progress.is_finished);
-    assert!((progress.current_time_seconds - 120.0).abs() < f64::EPSILON);
-
-    // (c) Unplayed filter excludes the finished episode.
-    assert!(
-        app.audiobookshelf_browse[0]
-            .visible_episodes(
-                mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed
-            )
-            .iter()
-            .all(|ep| ep.episode_id != "episode-a"),
-        "finished episode must be excluded from Unplayed filter"
-    );
-}
-
 // Task 3.4: Socket-merge tests — matching inactive/browsed, skipped
 // active slot, unmatched episode, superseded generation.
 //
@@ -218,8 +16,12 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
 /// Set up the app with a known socket generation and a matching
 /// browse progress entry so the merge will recognise the episode.
 #[fixture]
-fn make_socket_merge_ready_app() -> App {
+fn make_socket_merge_ready_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let mut app = super::podcast::audiobookshelf_app();
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(Vec::new(), 0);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    app.player_rx = player_rx;
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
     app.audiobookshelf_browse[0].progress.insert(
         ("show-a".into(), "episode-a".into()),
@@ -230,20 +32,33 @@ fn make_socket_merge_ready_app() -> App {
             is_finished: false,
         },
     );
-    app
+    (app, cmd_rx)
 }
 
 #[rstest]
-fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_ready_app: App) {
-    let mut app = make_socket_merge_ready_app;
-    // Enqueue the known episode as an inactive slot.
-    app.enqueue_selected_audiobookshelf_episode(
-        0,
-        0,
-        mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
-    );
-
-    // Activate a different slot so episode-a is inactive.
+fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_state(
+    make_socket_merge_ready_app: (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>),
+) {
+    let (mut app, cmd_rx) = make_socket_merge_ready_app;
+    // The adopted owner snapshot keeps episode-a inactive; this test owns
+    // the socket merge, not the enqueue (row 5.3 made the enqueue an owner
+    // op whose result only reaches the view through the owner's answer).
+    let episode_a = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ));
     let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
         mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-b".into(),
@@ -260,16 +75,19 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
             cover_path: None,
         },
     ));
-    app.player_tab.queue.append(other);
-    let other_slot = app.player_tab.queue.slots()[1].slot_id;
-    let _ = app.player_tab.queue.set_active_slot(other_slot);
-
-    assert!(
-        app.playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|s| s.item.as_audiobookshelf())
-            .is_some_and(|e| e.episode_id != "episode-a")
+    app.local_view
+        .adopt_queue_items_with_active(vec![episode_a, other], 0, 1);
+    let mut status = app.player.status.lock().unwrap();
+    status.active = true;
+    status.current_idx = 1;
+    drop(status);
+    assert_eq!(
+        app.local_view.slots()[1]
+            .item
+            .as_audiobookshelf()
+            .unwrap()
+            .episode_id,
+        "ep-b"
     );
 
     // Fire the socket progress event.
@@ -281,8 +99,7 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
     }));
 
     let slot = app
-        .player_tab
-        .queue
+        .local_view
         .slots()
         .iter()
         .find(|s| {
@@ -292,10 +109,22 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
         })
         .expect("episode-a slot");
     let episode = slot.item.as_audiobookshelf().unwrap();
-    assert_eq!(episode.position_ticks, 85 * TICKS_PER_SECOND / 2);
-    assert!(episode.is_finished);
+    assert_eq!(episode.position_ticks, 0);
+    assert!(!episode.is_finished);
 
-    // Browse map updated.
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(mbv_ctrl::CtrlCmd::UnifiedQueueApplyProgress { updates, .. })
+        if updates == vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+            },
+            position_ticks: 85 * TICKS_PER_SECOND / 2,
+            finished: true,
+        }])
+    );
+
+    // Browse map updated directly while the queue awaits its owner's snapshot.
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
     assert!((progress.current_time_seconds - 42.5).abs() < f64::EPSILON);
     assert!(progress.is_finished);

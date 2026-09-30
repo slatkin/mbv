@@ -334,6 +334,11 @@ pub enum PlayerEvent {
     /// sync the full canonical queue (tagged `QueueItems`, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
     UnifiedQueueUpdated(Box<crate::UnifiedQueueStateData>),
+    /// Result of an owner-authoritative queue operation.
+    QueueOpResult {
+        op: crate::QueueOpId,
+        outcome: crate::QueueOpOutcome,
+    },
     /// Correlated result of an owner-authoritative idle queue load.
     UnifiedQueueLoadResult {
         request_id: crate::QueueLoadRequestId,

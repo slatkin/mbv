@@ -73,6 +73,9 @@ mod tests {
     fn idle_playback_does_not_start_pipewire() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
+        // The shared stub status starts active; idle is the precondition
+        // this test names.
+        app.player.status.lock().unwrap().active = false;
 
         app.sync_visualizer();
 

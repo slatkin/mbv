@@ -7,8 +7,6 @@ use mbv_ui_model::confirm::ConfirmButton;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
-        self.reset_bare_transitions();
-        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
     }
 
@@ -123,70 +121,26 @@ impl App {
             return;
         };
         match prep {
-            RoutedReplacementPrep::Album => {
-                self.set_queue_source_if_not_local_daemon(source.clone());
-                self.replace_playback_queue(items.clone(), start_idx);
+            RoutedReplacementPrep::Album
+            | RoutedReplacementPrep::MusicAlbums
+            | RoutedReplacementPrep::Selection => {
                 self.play_items_routed(items, start_idx, source);
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
             }
-            RoutedReplacementPrep::MusicAlbums => {
-                self.replace_playback_queue(items.clone(), start_idx);
-                self.play_items_routed(items, start_idx, source);
-                self.save_queue_state();
-            }
-            RoutedReplacementPrep::Folder => {
-                self.replace_playback_queue(items.clone(), start_idx);
+            RoutedReplacementPrep::Folder | RoutedReplacementPrep::ShuffleFolder => {
                 self.set_panel_focus(PanelFocus::Queue);
-                self.play_items_routed(items, start_idx, source);
-                self.save_queue_state();
-            }
-            RoutedReplacementPrep::ShuffleFolder => {
-                self.replace_playback_queue(items.clone(), start_idx);
-                self.set_panel_focus(PanelFocus::Queue);
-                self.set_queue_source_if_not_local_daemon(source.clone());
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
-                self.play_items_routed(items, start_idx, source);
-            }
-            RoutedReplacementPrep::Selection => {
-                self.rebuild_queue_for_selection(&items, source.clone());
                 self.play_items_routed(items, start_idx, source);
             }
         }
     }
 
     /// Executes one already-resolved replacement through the existing playback
-    /// and admission executor. A directly-controlled owner holds the target
-    /// queue itself, so the executor's local-metadata gate never stages it or
-    /// writes its source label; both happen here, in the same order the
-    /// shipped album/artist track paths use (`replace_playback_queue`, then
-    /// submission). Local saved-playlist protection still runs through
-    /// `replace_queue_or_prompt`, which may raise its own save/discard prompt
-    /// as a second step before this payload executes.
+    /// and admission executor. Local saved-playlist protection still runs
+    /// through `replace_queue_or_prompt`, which may raise its own save/discard
+    /// prompt as a second step before this payload executes; the queue itself
+    /// is replaced on the Player owner by the play executor (row 5.3), so no
+    /// Client-side queue staging happens here.
     pub(in crate::app) fn execute_queue_replacement(&mut self, action: PendingQueueAction) {
-        if self.has_direct_remote_queue()
-            && let PendingQueueAction::PlayItems {
-                items,
-                start_idx,
-                source,
-                ..
-            } = &action
-        {
-            self.queue_source = source.clone();
-            self.replace_playback_queue(items.clone(), *start_idx);
-        }
         self.replace_queue_or_prompt(action);
-    }
-
-    pub(super) fn clear_remote_queue(&mut self) {
-        self.advance_queue_epoch();
-        self.player.clear_queue();
-        if let Some(queue) = self.remote_player_tab.as_mut() {
-            queue.clear();
-        }
     }
 
     pub(in crate::app) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {

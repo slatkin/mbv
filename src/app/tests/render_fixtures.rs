@@ -5,7 +5,7 @@
 //! The render presentation suite that once lived beside these was pruned in
 //! issue #801 section 2; only the fixtures with surviving callers remain.
 
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{QueueViewTestExt, make_app_stub};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
@@ -62,7 +62,7 @@ pub fn make_movie_app() -> App {
 pub fn make_queue_app(item_count: usize) -> App {
     let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
-    app.player_tab.set_items(
+    app.local_view.adopt_items(
         (0..item_count)
             .map(|i| make_item(&format!("Queue Item {i}"), "Movie"))
             .collect(),

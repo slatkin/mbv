@@ -1,75 +1,59 @@
 use super::LocalPlaybackTarget;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
-use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_render::indicators::{IndicatorData, IndicatorFlags, short_resolution_label};
 use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
-        if app.player.is_remote() {
-            let paused = !app.player.status.lock().unwrap().paused;
-            app.flash(
-                if paused {
-                    "Pause requested".to_string()
-                } else {
-                    "Resume requested".to_string()
-                },
-                ToastSeverity::Neutral,
-            );
-            app.player.set_paused(paused);
-        } else {
-            app.player.send_command(PlayerCommand::TogglePause);
-        }
+        let paused = !app.player.status.lock().unwrap().paused;
+        app.flash(
+            if paused {
+                "Pause requested".to_string()
+            } else {
+                "Resume requested".to_string()
+            },
+            ToastSeverity::Neutral,
+        );
+        let _ = app.player.set_paused(paused);
     }
 
     pub(in crate::app) fn stop(app: &mut App) {
-        app.reset_bare_transitions();
-        if app.player.is_remote() {
-            app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
-        }
+        app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
         app.player.stop();
     }
 
     pub(in crate::app) fn seek_relative(app: &mut App, delta: f64) {
-        app.player.send_command(PlayerCommand::Seek(delta));
+        let _ = app.player.send_command(PlayerCommand::Seek(delta));
     }
 
     pub(in crate::app) fn jump_track(app: &mut App, step: i64) {
-        if app.player.is_remote() {
-            app.flash(
-                if step >= 0 {
-                    "Next requested"
-                } else {
-                    "Previous requested"
-                }
-                .to_string(),
-                ToastSeverity::Neutral,
-            );
+        app.flash(
             if step >= 0 {
-                app.player.next();
+                "Next requested"
             } else {
-                app.player.previous();
+                "Previous requested"
             }
+            .to_string(),
+            ToastSeverity::Neutral,
+        );
+        if step >= 0 {
+            let _ = app.player.next();
         } else {
-            app.request_relative_step(if step >= 0 {
-                Direction::Next
-            } else {
-                Direction::Previous
-            });
+            let _ = app.player.previous();
         }
     }
 
     pub(in crate::app) fn toggle_command_mute(app: &mut App) {
         app.mute_on = !app.mute_on;
-        app.player.send_command(PlayerCommand::SetMute(app.mute_on));
+        let _ = app.player.send_command(PlayerCommand::SetMute(app.mute_on));
         app.save_prefs();
     }
 
     pub(in crate::app) fn is_audio_item(app: &App) -> bool {
-        let idx = app.player_tab.queue_cursor;
-        app.player_tab
+        let idx = app.local_view.cursor();
+        app.local_view
             .emby_item_at(idx)
             .is_some_and(|i| i.media_type == "Audio" || i.item_type == "Audio")
     }
@@ -77,13 +61,14 @@ impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_soft_mute(app: &mut App) {
         if app.ui_volume == 0 {
             if let Some(v) = app.pre_mute_volume.take() {
-                app.player
+                let _ = app
+                    .player
                     .send_command(PlayerCommand::SetVolume(i64::from(v)));
                 app.ui_volume = v;
             }
         } else {
             app.pre_mute_volume = Some(app.ui_volume);
-            app.player.send_command(PlayerCommand::SetVolume(0));
+            let _ = app.player.send_command(PlayerCommand::SetVolume(0));
             app.ui_volume = 0;
         }
         app.save_prefs();
@@ -104,16 +89,17 @@ impl LocalPlaybackTarget {
         let next_id = entries[next];
         if next_id == 0 {
             app.pre_mute_volume = Some(app.ui_volume);
-            app.player.send_command(PlayerCommand::SetVolume(0));
+            let _ = app.player.send_command(PlayerCommand::SetVolume(0));
             app.ui_volume = 0;
         } else if current_id == 0
             && let Some(v) = app.pre_mute_volume.take()
         {
-            app.player
+            let _ = app
+                .player
                 .send_command(PlayerCommand::SetVolume(i64::from(v)));
             app.ui_volume = v;
         }
-        app.player.send_command(PlayerCommand::SetAudio(next_id));
+        let _ = app.player.send_command(PlayerCommand::SetAudio(next_id));
     }
 
     pub(in crate::app) fn adjust_volume(app: &mut App, delta: i64) {
@@ -122,7 +108,8 @@ impl LocalPlaybackTarget {
             let st = app.player.status.lock().unwrap();
             let v = u8::try_from((st.volume + delta).clamp(0, st.volume_max)).unwrap_or(u8::MAX);
             drop(st);
-            app.player
+            let _ = app
+                .player
                 .send_command(PlayerCommand::SetVolume(i64::from(v)));
             app.ui_volume = v;
         } else {
@@ -147,7 +134,7 @@ impl LocalPlaybackTarget {
         let mut entries: Vec<i64> = vec![0];
         entries.extend(tracks.iter().map(|(id, _, _)| *id));
         let next_id = App::next_subtitle_entry(&entries, current_id);
-        app.player.send_command(PlayerCommand::SetSub(next_id));
+        let _ = app.player.send_command(PlayerCommand::SetSub(next_id));
         app.save_prefs();
     }
 

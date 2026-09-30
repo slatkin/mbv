@@ -6,8 +6,8 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::tests::{QueueViewTestExt, make_app_stub};
 use crate::app::{App, PanelFocus, PanelMode};
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
 use mbv_emby_model::test_support::make_item;
@@ -35,7 +35,7 @@ fn title_parts_app(active_idx: usize) -> App {
     track.artist = "Artist B".into();
     let mut movie = make_item("Movie One", "Movie");
     movie.id = "movie-one".into();
-    app.player_tab.set_items(vec![track, movie], 0);
+    app.local_view.adopt_items(vec![track, movie], 0);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;

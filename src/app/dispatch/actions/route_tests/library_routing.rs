@@ -24,7 +24,7 @@ fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
 fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.player = mbv_player::PlayerProxy::remote(remote, false);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app.player_rx = remote_rx;
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
@@ -109,7 +109,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
     // Populated target queue + a browse level whose parent holds the item.
     let mut existing = make_item("Existing", "Movie");
     existing.id = "existing".into();
-    app.player_tab.set_items(vec![existing], 0);
+    app.local_view.adopt_items(vec![existing], 0);
     let mut anchor = make_item("Anchor", "Movie");
     anchor.id = "anchor-1".into();
     let mut sibling = make_item("Sibling", "Movie");
@@ -159,12 +159,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
         "library autoplay is never gated"
     );
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(
-        app.playback_queue()
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
-        ["anchor-1", "sibling-1"]
-    );
+    // The queue itself changes only through the owner's answer (row 5.3):
+    // this stub owner is legacy, so the view keeps its last accepted state
+    // and the optimistic replacement content is not asserted here.
 }

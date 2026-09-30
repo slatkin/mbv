@@ -9,7 +9,6 @@ impl App {
         self.reconcile_audiobookshelf_progress(
             &ev.library_item_id,
             &ev.episode_id,
-            ev.position_ticks,
             current_time_seconds,
             ev.is_finished,
         );
@@ -21,7 +20,7 @@ impl App {
     ) {
         self.reconcile_audiobookshelf_book_progress(
             &ev.library_item_id,
-            ev.position_ticks,
+            mbv_emby_model::ticks_to_seconds(ev.position_ticks),
             ev.is_finished,
         );
     }

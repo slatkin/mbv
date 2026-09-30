@@ -46,6 +46,48 @@ fn pending_confirm_action(app: &App) -> Option<ConfirmAction> {
     }
 }
 
+/// A local-daemon stub whose command channel exposes the owner-bound queue
+/// ops, so a replacement's execution is observed on the wire (row 5.3: the
+/// Client's view follows the owner's answer, not an optimistic write).
+fn gate_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    make_local_daemon_app_stub_with_cmd_rx(Vec::new())
+}
+
+/// A local-daemon stub whose owner advertises the owner-queue-load
+/// capability, so an idle playlist load is accepted and observable on the
+/// wire.
+fn idle_load_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(Vec::new(), 0);
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..crate::config::Config::default()
+    };
+    let mut app = App::new_remote_with_config(
+        mbv_emby::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        &mbv_remote_player::DaemonEndpoint::Local,
+        config,
+    );
+    app.close_settings();
+    app.pending_overlay = None;
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
+/// The item ids of the most recent `UnifiedQueueReplace` sent to the owner;
+/// drains the channel, so call once per assertion point.
+fn sent_replace_ids(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) -> Vec<String> {
+    let mut ids = Vec::new();
+    for command in cmd_rx.try_iter() {
+        if let mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, .. } = command {
+            ids = items.iter().map(|item| item.id().to_string()).collect();
+        }
+    }
+    ids
+}
+
 fn queue_ids(app: &App) -> Vec<String> {
     app.playback_queue()
         .emby_items()
@@ -63,23 +105,25 @@ fn mount_confirmation(app: &mut App) {
 
 /// A saved-playlist queue with unsaved edits: the second-step protection the
 /// confirmed replacement must still run through `replace_queue_or_prompt`.
-fn dirty_saved_playlist_app() -> App {
-    let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("playlist-1".into()),
-        name: "Saved".into(),
-    };
+fn dirty_saved_playlist_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut app, cmd_rx) = gate_app();
+    app.local_view.adopt_items(vec![audio("existing")], 0);
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Saved".into(),
+        });
     app.queue_dirty = true;
-    app
+    (app, cmd_rx)
 }
 
 fn successful_save_completion(app: &mut App, mutation_id: u64) {
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Ok(()),
@@ -91,14 +135,18 @@ fn successful_save_completion(app: &mut App, mutation_id: u64) {
 #[test]
 fn empty_local_target_queue_executes_the_replacement_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
+    let (mut app, cmd_rx) = gate_app();
     assert_eq!(app.playback_queue().total_queue_len(), 0);
 
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(queue_ids(&app), ["track-1"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["track-1"],
+        "the replacement reached the owner as one answered op"
+    );
 }
 
 /// D6: an empty directly-controlled remote target queue also executes
@@ -107,7 +155,7 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
 fn populated_local_target_queue_stores_the_action_and_prompts() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
@@ -124,7 +172,7 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
         "the gated payload never occupies the save-deferral slot"
     );
     assert_eq!(queue_ids(&app), ["existing"], "the prompt changes no queue");
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 }
 
 /// D6: a populated directly-controlled remote queue prompts; the remote
@@ -132,14 +180,18 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
 #[test]
 fn confirming_a_populated_local_queue_executes_the_stored_action() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
+    let (mut app, cmd_rx) = gate_app();
+    app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
 
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(queue_ids(&app), ["track-1"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["track-1"],
+        "the confirmation executes the stored action as one answered op"
+    );
 }
 
 /// D6 cancellation: Esc at the first prompt changes neither queue nor
@@ -148,7 +200,8 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
 fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
+    app.player.status.lock().unwrap().active = false;
+    app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
@@ -162,7 +215,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
         "and the save-deferral slot was never touched"
     );
     assert_eq!(queue_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
     assert!(!app.player.status.lock().unwrap().active);
 }
 
@@ -171,7 +224,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
 #[test]
 fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     mount_confirmation(&mut app);
@@ -194,7 +247,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
 #[test]
 fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
@@ -206,7 +259,11 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
     );
 
     assert!(!app.queue_deferrals.is_save_deferred());
-    assert_eq!(queue_ids(&app), ["track-1"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["track-1"],
+        "the discard executes the stored replacement as one answered op"
+    );
 }
 
 /// D6 two-step: saving the dirty playlist defers the replacement until the
@@ -214,7 +271,7 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
 #[test]
 fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, cmd_rx) = dirty_saved_playlist_app();
 
     // First activation: confirmed at the populated-queue gate, then deferred
     // behind the dirty-playlist save prompt's `s` answer.
@@ -252,15 +309,16 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: save_mutation_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Ok(()),
     });
 
     assert_eq!(
-        queue_ids(&app),
+        sent_replace_ids(&cmd_rx),
         ["track-1"],
         "the boundary executes the confirmed deferred intent, not the gated one"
     );
@@ -277,7 +335,11 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     // completion did not leave the mounted prompt inert.
     mount_confirmation(&mut app);
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
-    assert_eq!(queue_ids(&app), ["track-2"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["track-2"],
+        "only the gated payload's own confirmation executes it"
+    );
     assert!(!app.queue_deferrals.has_gated_replacement());
 }
 
@@ -287,7 +349,8 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
+    app.player.status.lock().unwrap().active = false;
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     app.execute_context_action(
         Some(crate::app::ContextAction::PlaySelection(vec![
@@ -310,13 +373,13 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
         ["existing"],
         "the selection rebuild is deferred past the gate"
     );
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["existing"]);
-    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert_eq!(app.playback_queue().cursor(), 0);
     assert!(!app.player.status.lock().unwrap().active);
 }
 
@@ -326,7 +389,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
 fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
     let _guard = crate::config::TestStateDirGuard::new();
 
-    let mut app = make_app_stub();
+    let (mut app, cmd_rx) = gate_app();
     assert_eq!(app.playback_queue().total_queue_len(), 0);
     app.request_queue_replacement(
         PendingQueueAction::PlayItems {
@@ -339,9 +402,13 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
     );
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(queue_ids(&app), ["shuffle-1"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["shuffle-1"],
+        "the routed shuffle reached the owner as one answered op"
+    );
 
-    let mut app = make_app_stub();
+    let (mut app, cmd_rx) = idle_load_app();
     app.request_queue_replacement(
         PendingQueueAction::PlayItems {
             items: vec![audio("playlist-1")],
@@ -356,7 +423,16 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
     );
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(queue_ids(&app), ["playlist-1"]);
+    assert!(
+        cmd_rx
+            .try_iter()
+            .any(|command| matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueLoadIdle { .. }))
+    );
+    assert_eq!(
+        queue_ids(&app),
+        Vec::<String>::new(),
+        "the idle load shows only through the owner's accepted state"
+    );
 }
 
 /// Row 3.5 / design D5: a routed replacement whose items the current owner
@@ -406,8 +482,8 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
 #[test]
 fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab.set_items(vec![audio("existing")], 0);
+    let (mut app, cmd_rx) = gate_app();
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     let mut item = audio("movie-1");
     item.media_type = "Video".into();
@@ -415,13 +491,17 @@ fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
 
     assert!(!confirm_pending(&app), "play_item is never gated");
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert_eq!(queue_ids(&app), ["movie-1"]);
+    assert_eq!(
+        sent_replace_ids(&cmd_rx),
+        ["movie-1"],
+        "the play reached the owner as one answered op"
+    );
 }
 
 #[test]
 fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     app.pending_overlay = None;
     let later_save_id = app
@@ -436,7 +516,7 @@ fn save_deferral_ignores_a_save_after_the_prompt_was_dismissed_unanswered() {
 #[test]
 fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     mount_confirmation(&mut app);
     app.apply_confirm_action(
@@ -452,7 +532,7 @@ fn save_deferral_ignores_a_different_save_for_the_same_playlist() {
 #[test]
 fn failed_bound_save_drops_the_deferred_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = dirty_saved_playlist_app();
+    let (mut app, _cmd_rx) = dirty_saved_playlist_app();
     app.replace_queue_or_prompt(play_action(&["track-1"]));
     mount_confirmation(&mut app);
     app.apply_confirm_action(
@@ -469,8 +549,9 @@ fn failed_bound_save_drops_the_deferred_replacement() {
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: failed_save_id,
         playlist_id: "playlist-1".into(),
-        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+        origin: crate::app::state::queue_owner::QueueOrigin {
             epoch: app.queue_epoch,
+            lineage: mbv_queue::QueueLineage::default(),
         },
         source_playlist_id: "playlist-1".into(),
         result: Err(mbv_emby::EmbyError::resolve("save failed")),

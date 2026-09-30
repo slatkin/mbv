@@ -11,6 +11,7 @@ pub(super) fn handle_queue_remove_slot(
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
 ) {
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -33,6 +34,7 @@ pub(super) fn handle_queue_remove_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "slot not found; remove skipped",
         );
@@ -45,6 +47,7 @@ pub(super) fn handle_queue_remove_slot(
             queue,
             source,
             transitions,
+            except_op_client,
         );
         if queue.is_empty() {
             // Clear the player's queue and stop.
@@ -71,6 +74,7 @@ pub(super) fn handle_queue_remove_slot(
             queue,
             source,
             transitions,
+            except_op_client,
         );
         ctx.player.send_command(PlayerCommand::QueueRemove(sid));
     }
@@ -80,6 +84,7 @@ pub(super) fn handle_queue_remove_slot(
 /// edit, so a client that selected a range never observes the queue shrinking
 /// one row per round trip.
 pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec<u64>) {
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -119,6 +124,7 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         queue,
         source,
         transitions,
+        except_op_client,
     );
     if removed_active {
         // Removing the playing slot forces a track change that carries
@@ -153,6 +159,7 @@ pub(super) fn handle_queue_move_slot(
     slot_id: u64,
     to_index: usize,
 ) {
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -174,6 +181,7 @@ pub(super) fn handle_queue_move_slot(
                 queue: &*queue,
                 source: &*source,
                 lineage,
+                op: &ctx.op,
             },
             "slot not found; move skipped",
         );
@@ -186,6 +194,7 @@ pub(super) fn handle_queue_move_slot(
             queue,
             source,
             transitions,
+            except_op_client,
         );
         ctx.player
             .send_command(PlayerCommand::QueueMove(sid, to_index));
@@ -199,6 +208,7 @@ pub(super) fn handle_queue_play_slot(
     lineage: mbv_queue::QueueLineage,
     slot_id: u64,
 ) {
+    let except_op_client = ctx.except_op_client();
     let sid = QueueSlotId::from_raw(slot_id);
     // No client request id on this command, so the owner mints
     // one to correlate the settling observation.
@@ -222,11 +232,54 @@ pub(super) fn handle_queue_play_slot(
         },
         super::super::core::JumpOrigin::Ctrl(ctx.client_id),
         mbv_player::transition::Transition::new(request_id, generation, sid),
+        except_op_client,
     );
+}
+
+/// Applies provider-qualified progress to every matching inactive queue slot.
+pub(super) fn handle_queue_apply_progress(
+    ctx: &mut CtrlContext<'_>,
+    updates: Vec<mbv_ctrl::ProgressUpdate>,
+) {
+    let active_slot = ctx.owner.core.queue.active_slot_id();
+    let mut applied = false;
+    for update in updates {
+        let matching_slots: Vec<_> = ctx
+            .owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .filter(|slot| {
+                Some(slot.slot_id) != active_slot && slot.item.content_id() == update.content_id
+            })
+            .map(|slot| slot.slot_id)
+            .collect();
+        for slot_id in matching_slots {
+            let _ = ctx.owner.core.queue.apply_progress(
+                slot_id,
+                update.position_ticks,
+                update.finished,
+            );
+            applied = true;
+        }
+    }
+    if applied {
+        broadcast_queue_state(
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
+            &ctx.owner.core.queue,
+            &ctx.owner.core.source,
+            &ctx.owner.core.transitions,
+            Some(ctx.client_id),
+        );
+    }
 }
 
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
 pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -255,5 +308,6 @@ pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
         queue,
         source,
         transitions,
+        except_op_client,
     );
 }

@@ -1,4 +1,4 @@
-use super::core::{DaemonEvent, bind_ctrl_listener, broadcast};
+use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broadcast};
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
@@ -127,6 +127,7 @@ pub(super) fn apply_queue_enriched(
             &owner.core.queue,
             &owner.core.source,
             &owner.core.transitions,
+            None,
         );
     }
 }
@@ -142,7 +143,30 @@ struct DaemonStarted {
     merged_tx: mpsc::Sender<DaemonEvent>,
     merged_rx: mpsc::Receiver<DaemonEvent>,
     ws_send_tx: Option<mbv_ws::WsSender>,
+    owner_settings: crate::OwnerSettingsReader,
     _tray: Option<Box<dyn Send>>,
+}
+
+fn spawn_queue_persistence_worker(
+    merged_tx: mpsc::Sender<DaemonEvent>,
+) -> mpsc::Sender<QueuePersistenceRequest> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        while let Ok(request) = rx.recv() {
+            match request {
+                QueuePersistenceRequest::Save(state) => {
+                    if let Err(error) = mbv_config::save_stay_alive_queue_state(&state) {
+                        let _ =
+                            merged_tx.send(DaemonEvent::QueuePersistenceFailed(error.to_string()));
+                    }
+                }
+                QueuePersistenceRequest::Flush(ack) => {
+                    let _ = ack.send(());
+                }
+            }
+        }
+    });
+    tx
 }
 
 fn forward_transport(
@@ -156,9 +180,30 @@ fn forward_transport(
     });
 }
 
+fn prewarm_player(player: &Player, config: &mbv_config::Config) {
+    player.pre_warm(
+        config.audio_pipe_target(),
+        config.audio_pipe_samplerate,
+        config.audio_pipe_bitdepth,
+    );
+}
+
+fn start_tray(
+    owner_settings: &crate::OwnerSettingsReader,
+    on_tray_ready: impl FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>,
+    shutdown_signal_tx: mpsc::SyncSender<()>,
+) -> Option<Box<dyn Send>> {
+    if owner_settings().stay_alive {
+        on_tray_ready(shutdown_signal_tx)
+    } else {
+        None
+    }
+}
+
 fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
     let role = startup.role;
     let config = startup.config;
+    let owner_settings = crate::owner_settings::reader(role, &config);
     let emby_runtime = startup.emby;
     let audiobookshelf_runtime = startup.audiobookshelf;
     std::fs::write(pid_file(), std::process::id().to_string())
@@ -188,8 +233,8 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         .map(|_| mbv_ws::start(client.lock().unwrap().ws_url(), ws_tx_chan));
 
     let mut client_locked = client.lock().unwrap().clone();
-    // Daemon always runs headless — ignore user's show_audio_window setting.
-    client_locked.config.show_audio_window = false;
+    // Packaged mbvd stays headless; Local honors the user's audio-window setting.
+    client_locked.config.show_audio_window = role == DaemonRole::Local && config.show_audio_window;
     // always_play_next, always_skip_intro, and subtitle/audio-lang prefs are
     // controlling-client preferences, not daemon config — mbvd never reads
     // them from its own host config.toml, regardless of what's in it.
@@ -213,11 +258,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         client_locked.config.video_cache_back_mb,
     )
     .with_audio_device(audio_device);
-    player.pre_warm(
-        client_locked.config.audio_pipe_target(),
-        client_locked.config.audio_pipe_samplerate,
-        client_locked.config.audio_pipe_bitdepth,
-    );
+    prewarm_player(&player, &client_locked.config);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let player_status = Arc::clone(&player.status);
     let (transport_tx, transport_rx) = mpsc::channel();
@@ -226,7 +267,11 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         transport_tx,
     });
 
-    let tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
+    let tray = start_tray(
+        &owner_settings,
+        hooks.on_tray_ready,
+        shutdown_signal_tx.clone(),
+    );
     forward_transport(transport_rx, merged_tx.clone());
 
     let tx = merged_tx.clone();
@@ -270,6 +315,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         merged_tx,
         merged_rx,
         ws_send_tx,
+        owner_settings,
         _tray: tray,
     }
 }
@@ -344,12 +390,14 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
 }
 
 fn start_local_control_server(
+    role: DaemonRole,
     audio_only: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
     control_credential: Option<&String>,
+    owner_settings: crate::OwnerSettingsReader,
 ) {
     // Bind and start the control socket only once the daemon can immediately
     // accept and speak the protocol, so local clients never connect and hang
@@ -361,6 +409,7 @@ fn start_local_control_server(
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
+            let settings_reader = owner_settings;
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
@@ -372,6 +421,8 @@ fn start_local_control_server(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    role,
+                    Arc::clone(&settings_reader),
                 );
             }
         });
@@ -418,12 +469,14 @@ fn register_capabilities(
 
 fn serve_tcp_control(
     listener: Option<TcpListener>,
+    role: DaemonRole,
     audio_only: bool,
     ctrl_clients: &ClientRegistry,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     player: &Player,
     shared_queue: &SharedQueueState,
     control_credential: Option<&String>,
+    owner_settings: crate::OwnerSettingsReader,
 ) {
     if let Some(listener) = listener {
         let ctrl_clients = Arc::clone(ctrl_clients);
@@ -432,6 +485,7 @@ fn serve_tcp_control(
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
+            let settings_reader = owner_settings;
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
@@ -443,6 +497,8 @@ fn serve_tcp_control(
                     Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
+                    role,
+                    Arc::clone(&settings_reader),
                 );
             }
         });
@@ -489,17 +545,20 @@ pub fn run_with_options(
         merged_tx,
         merged_rx,
         ws_send_tx,
+        owner_settings,
         _tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
-    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
+        role,
         audio_only,
         &merged_tx,
         &ctrl_clients,
         &player,
         &shared_queue,
         control_credential.as_ref(),
+        Arc::clone(&owner_settings),
     );
 
     let mut direct_commands = Vec::new();
@@ -510,15 +569,18 @@ pub fn run_with_options(
     register_capabilities(&client, emby_runtime.as_ref(), &direct_commands, audio_only);
     serve_tcp_control(
         tcp_listener,
+        role,
         audio_only,
         &ctrl_clients,
         &merged_tx,
         &player,
         &shared_queue,
         control_credential.as_ref(),
+        Arc::clone(&owner_settings),
     );
     spawn_status_broadcast(&client, &player, &ctrl_clients);
 
+    let queue_persist_tx = spawn_queue_persistence_worker(merged_tx.clone());
     let mut daemon_loop = DaemonLoop {
         owner,
         player,
@@ -530,12 +592,13 @@ pub fn run_with_options(
         merged_tx,
         ws_send_tx,
         direct_commands,
-        stay_alive: config.stay_alive,
+        owner_settings,
         role,
         audio_only,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
+        queue_persist_tx: Some(queue_persist_tx),
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

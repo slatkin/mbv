@@ -241,7 +241,7 @@ A lineage change between the previous and the adopted snapshot marks the adoptio
 - `App::queue_op(scope, op)` sends, then `await_queue_op(scope, id)` pumps that link's receiver until `QueueOpResult{op: id}` or `QUEUE_OP_ANSWER_BOUND = 250 ms`. The pump:
   - adopts `UnifiedQueueUpdated` inline as `Background` (or through `adopt_home_snapshot` for a suspended home link);
   - adopts the matching `QueueOpResult` as `OwnAnswer`;
-  - appends **every other event** to `App.deferred_player_events: VecDeque<PlayerEvent>`. `drain_player_events` takes from it before `player_rx`, so `RemoteDisconnected`, `RestartLoop`, and the per-event `push_*` projections keep running at the tick level, in order.
+  - appends every other event to `App.deferred_player_events: VecDeque<PlayerEvent>`. For a suspended home link, pump deferrals go to the home drain (`deferred_home_events`) instead; `drain_player_events` takes from its deferred queue before `player_rx`, so `RemoteDisconnected`, `RestartLoop`, and the per-event `push_*` projections keep running at the tick level, in order.
 - **Late answers.** An `Applied` that arrives after the bound, or that matches no waiting op, is adopted as `Background`. A late `Rejected` flashes nothing more, because the timeout already reported.
 - **Legacy peers.** Peers without the capability get the edit and no wait. Undo of a removal, refresh, and progress relay report "not supported by this owner".
 
@@ -285,7 +285,7 @@ The Client stops writing to queue slots at every event-driven site, and keeps th
 
 ## Risks / Trade-offs
 
-- **[The owner loop blocks inside a queue handler]** → The UI waits up to 250 ms per edit. The owner task audits the unified handlers for blocking I/O and moves any it finds onto worker/merged-event paths first.
+- **[The owner loop blocks inside a queue handler]** → The UI waits up to 250 ms per edit. The owner task audits the unified handlers for blocking I/O and moves any it finds onto worker/merged-event paths first. Audit result (row 2.4): queue-mutation paths are clean (in-memory/channel only); refresh/enrichment already runs on the worker and merges through the event loop; one move made — owner queue persistence after mutations is now a FIFO-serialized worker with shutdown flush before the final direct write.
 - **[Version skew]** → An older Client binary receives an unknown `DisconnectReason` from a newer daemon and reports a failed attach. It affects only the window between upgrading the binary and restarting an old daemon, and `mbv -q` clears it.
 - **[A launcher dies before attaching]** → A stay-alive-off daemon with no clients lingers until `mbv -q` or the next launch. It is logged.
 - **[The config is unreadable when the owner decides]** → The last-known-good value is used (D2), never a default that could wrongly refuse a client or exit.

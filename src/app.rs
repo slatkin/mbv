@@ -15,8 +15,7 @@ mod test_seams;
 #[cfg(test)]
 pub(in crate::app) use self::test_seams::{
     CAST_CONNECT_OVERRIDE, CAST_CONNECT_TEST_LOCK, CastConnectFn, DAEMON_ROUTE_CONNECT_OVERRIDE,
-    DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE, LOCAL_PLAYER_PREPARE_OVERRIDE,
-    SESSIONS_LOAD_OVERRIDE,
+    DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE, SESSIONS_LOAD_OVERRIDE,
 };
 mod shell;
 use self::dispatch::notify::ToastSeverity;
@@ -35,15 +34,13 @@ use crate::app::state::playback::{
     DestinationLatestSource, PendingQueueAction, QueueScopeResolution, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_deferrals::QueueDeferrals;
+pub(crate) use crate::app::state::queue_view::QueueView;
 #[cfg(test)]
 use mbv_ctrl::player::PlayerEvent;
 #[cfg(test)]
 use mbv_emby_model::EmbyItem;
 pub(crate) use mbv_images::resize::spawn_resize_worker;
-#[cfg(test)]
-use mbv_queue::RemoveSlotResult;
 #[cfg(test)]
 use mbv_ui_model::browse::restore_library_position;
 use mbv_ui_model::browse::{

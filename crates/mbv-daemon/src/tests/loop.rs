@@ -37,28 +37,81 @@ impl RecordedSnapshot {
 struct TestLoop {
     event_loop: DaemonLoop,
     persisted: Persisted,
+    settings: Arc<Mutex<OwnerSettings>>,
+    merged_rx: mpsc::Receiver<DaemonEvent>,
 }
 
 fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
     test_loop_with_queue(role, Vec::new(), 0)
 }
 
+#[test]
+fn audiobookshelf_acknowledged_progress_is_followed_by_queue_broadcast() {
+    let mut fixture =
+        test_loop_with_queue(crate::DaemonRole::Local, vec![abs_qi("li_1", "ep_1")], 0);
+    let generation = SetupGeneration::new(1);
+    fixture.event_loop.audiobookshelf_runtime = Some(AudiobookshelfOwnerContext {
+        setup: mbv_config::AudiobookshelfSetup::default(),
+        device_id: "test-device".into(),
+        generation,
+    });
+    let (_client_id, client_rx) =
+        connect_client(&mut fixture.event_loop.ctrl_clients.lock().unwrap());
+
+    fixture
+        .event_loop
+        .handle_event(DaemonEvent::AudiobookshelfProgress(
+            AudiobookshelfProgressUpdate {
+                generation,
+                library_item_id: "li_1".into(),
+                episode_id: "ep_1".into(),
+                current_time_seconds: 30.0,
+                duration_seconds: 100.0,
+                is_finished: false,
+            },
+        ));
+
+    assert!(matches!(
+        recv_event(&client_rx),
+        CtrlEvent::AudiobookshelfProgress(_)
+    ));
+    match recv_event(&client_rx) {
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert_eq!(
+                state.slots[0]
+                    .item
+                    .as_audiobookshelf()
+                    .unwrap()
+                    .position_ticks,
+                30 * mbv_emby_model::TICKS_PER_SECOND
+            );
+        }
+        _ => panic!("expected updated owner queue broadcast"),
+    }
+}
+
 fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: usize) -> TestLoop {
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
-    let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
+    let settings = Arc::new(Mutex::new(OwnerSettings {
+        stay_alive: false,
+        consume_videos: false,
+        consume_audio: false,
+    }));
+    let current_settings = Arc::clone(&settings);
     let event_loop = DaemonLoop {
         owner: owner_with(items, active),
         player: cold_player(),
         shared_queue: shared_queue_state(),
-        ctrl_clients: Arc::new(Mutex::new(CtrlClients::default())),
+        ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone()))),
         client: Arc::new(Mutex::new(EmbyClient::new(Config::default()))),
         emby_runtime: None,
         audiobookshelf_runtime: None,
         merged_tx,
         ws_send_tx: None,
         direct_commands: Vec::new(),
-        stay_alive: false,
+        owner_settings: Arc::new(move || *current_settings.lock().unwrap()),
         role,
         audio_only: false,
         last_keepalive: Instant::now(),
@@ -67,10 +120,13 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
             recorded.borrow_mut().push(RecordedSnapshot::of(state));
             Ok(())
         }),
+        queue_persist_tx: None,
     };
     TestLoop {
         event_loop,
         persisted,
+        settings,
+        merged_rx,
     }
 }
 
@@ -150,7 +206,7 @@ fn websocket_next_dispatches_owner_resolved_jump_not_run_step() {
 }
 
 #[test]
-fn track_completed_current_run_consumes_slot_and_persists_once() {
+fn daemon_reads_consume_audio_turned_on_during_the_session() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![
@@ -159,7 +215,7 @@ fn track_completed_current_run_consumes_slot_and_persists_once() {
         ],
         0,
     );
-    t.event_loop.client.lock().unwrap().config.consume_audio = true;
+    t.settings.lock().unwrap().consume_audio = true;
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
 
     let flow = t
@@ -179,6 +235,89 @@ fn track_completed_current_run_consumes_slot_and_persists_once() {
     assert_eq!(t.persisted.borrow().len(), 1);
     assert_eq!(t.persisted.borrow()[0].item_ids, vec!["next".to_string()]);
     assert_eq!(t.persisted.borrow()[0].cursor, 0);
+}
+
+#[test]
+fn daemon_reads_stay_alive_when_it_decides_to_accept_shutdown() {
+    let _state_dir = mbv_config::TestStateDirGuard::new();
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: true,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    assert!((t.event_loop.owner_settings)().stay_alive);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: false,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+
+    let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::RequestShutdown,
+        client_id,
+        reply_tx,
+    ));
+
+    assert_eq!(flow, LoopFlow::Continue);
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
+    assert!(matches!(t.merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_local_role_persists_and_shuts_down_when_stay_alive_is_off() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![emby_qi("persist-on-disconnect", "Audio", "Audio")],
+        0,
+    );
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert!(matches!(event, DaemonEvent::LastClientGone));
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Shutdown);
+    assert_eq!(t.persisted.borrow().len(), 1);
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_when_reader_says_stay_alive() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    *t.settings.lock().unwrap() = OwnerSettings {
+        stay_alive: true,
+        consume_videos: false,
+        consume_audio: false,
+    };
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Continue);
+    assert!(t.persisted.borrow().is_empty());
+}
+
+#[test]
+fn ordinary_disconnect_is_not_shutdown_for_packaged_role() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Packaged);
+    let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);
+    let event = t.merged_rx.recv().unwrap();
+
+    assert_eq!(t.event_loop.handle_event(event), LoopFlow::Continue);
+    assert!(t.persisted.borrow().is_empty());
+}
+
+#[test]
+fn packaged_daemon_reads_stay_alive_as_true_regardless_of_spawn_config() {
+    let config = Config {
+        stay_alive: false,
+        ..Config::default()
+    };
+    let settings = crate::owner_settings::reader(crate::DaemonRole::Packaged, &config);
+
+    assert!((settings)().stay_alive);
 }
 
 #[test]

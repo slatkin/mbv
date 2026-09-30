@@ -278,11 +278,24 @@ fn local_only_command_is_refused_without_wire_encoding() {
 }
 
 #[rstest::rstest]
-#[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1 }, true)]
-#[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2] }, true)]
-#[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0 }, true)]
+#[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None }, true)]
+#[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None }, true)]
+#[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0, op: None }, true)]
 #[case::clear(CtrlCmd::UnifiedQueueClear, true)]
-#[case::play_slot(CtrlCmd::UnifiedQueuePlaySlot { slot_id: 1 }, false)]
+#[case::clear_op(CtrlCmd::UnifiedQueueClearOp { op: QueueOpId(1) }, true)]
+#[case::refresh(CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(1) }, true)]
+#[case::apply_progress(
+    CtrlCmd::UnifiedQueueApplyProgress {
+        op: QueueOpId(1),
+        updates: vec![ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Feed("feed-id".into()),
+            position_ticks: 42,
+            finished: false,
+        }],
+    },
+    true
+)]
+#[case::play_slot(CtrlCmd::UnifiedQueuePlaySlot { slot_id: 1, op: None }, false)]
 #[case::stop(CtrlCmd::Stop, false)]
 #[case::shutdown(CtrlCmd::RequestShutdown, false)]
 fn owner_persists_only_after_queue_edits(#[case] cmd: CtrlCmd, #[case] persists: bool) {

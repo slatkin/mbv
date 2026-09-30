@@ -23,15 +23,6 @@ impl App {
         })
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn apply_emby_completion_with_secret_deleter(
-        &mut self,
-        completion: crate::app::dispatch::session::service_startup::Completion,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
-    ) -> Option<HomeContent> {
-        self.transition_emby_failure(Some(completion.generation), completion.result, delete)
-    }
-
     fn transition_emby_failure(
         &mut self,
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
@@ -58,13 +49,6 @@ impl App {
                 let (ws_tx, ws_rx) = mpsc::channel();
                 self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
                 self.ws_rx = ws_rx;
-                {
-                    let client = client.lock().unwrap();
-                    self.player.update_emby_credentials(
-                        client.config.server_url.clone(),
-                        client.token.clone(),
-                    );
-                };
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
@@ -77,11 +61,10 @@ impl App {
                 self.sync_subtitle_prefs_from_emby();
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 tracing::info!(name: "startup.emby.completed", target: "startup", "Emby startup completed");
-                // `App::new_independent`'s launch (no daemon attached at
-                // construction) has no Emby client yet when it's built, so
-                // it can't call `try_auto_reconnect` synchronously the way
-                // `App::new_remote` does (construct.rs) -- it has to wait
-                // for the async startup this method completes. Guarded on
+                // An app launch without an Emby client at construction
+                // can't call `try_auto_reconnect` synchronously the way an
+                // attached launch does -- it waits for async startup here.
+                // Guarded on
                 // `player_endpoint` being still unset so this only fires on
                 // that first-ever completion, not on a later reconfigure
                 // that also flows through this branch.
@@ -97,8 +80,6 @@ impl App {
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     self.emby_runtime.client = None;
                     self.ws_send_tx = None;
-                    self.player
-                        .update_emby_credentials(String::new(), String::new());
                     let deletion = delete_secret(mbv_queue::ServiceKind::Emby);
                     let message = match deletion {
                         Ok(()) => format!(
@@ -124,15 +105,6 @@ impl App {
         self.transition_emby_failure(None, Err(error), |kind| {
             mbv_config::clear_service_secret_result(kind)
         });
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
-        &mut self,
-        error: mbv_emby::EmbyFailure,
-        delete: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
-    ) {
-        self.transition_emby_failure(None, Err(error), delete);
     }
 
     pub(in crate::app) fn handle_emby_startup_worker_disconnect(
@@ -234,11 +206,6 @@ impl App {
                     self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
                     self.ws_rx = ws_rx;
                 }
-                let (server_url, token) = {
-                    let client = client.lock().unwrap();
-                    (client.config.server_url.clone(), client.token.clone())
-                };
-                self.player.update_emby_credentials(server_url, token);
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;

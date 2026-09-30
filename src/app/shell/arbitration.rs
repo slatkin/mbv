@@ -265,12 +265,8 @@ impl Model {
                 player_active,
                 remote_target: if self.app.connected_session_id.is_some() {
                     crate::app::input::RemotePlaybackTarget::Session
-                } else if self.app.player.is_remote() {
-                    crate::app::input::RemotePlaybackTarget::DirectRemote
-                } else if self.app.is_cast_attached() {
-                    crate::app::input::RemotePlaybackTarget::Cast
                 } else {
-                    crate::app::input::RemotePlaybackTarget::None
+                    crate::app::input::RemotePlaybackTarget::DirectRemote
                 },
                 queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
                     && !self.app.effective_playback_state().active,

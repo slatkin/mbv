@@ -4,10 +4,46 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
-use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
+use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
-use mbv_queue::QueueItem;
+use mbv_queue::{QueueItem, QueueLineage, QueueSource};
+
+/// An owner-authoritative queue operation sent over ctrl.
+#[derive(Clone, Debug)]
+pub enum QueueOp {
+    Replace {
+        items: Vec<mbv_ctrl::UnifiedQueueSlot>,
+        start_idx: Option<usize>,
+        source: QueueSource,
+    },
+    Append {
+        items: Vec<QueueItem>,
+        before: Option<u64>,
+    },
+    RemoveSlot {
+        slot_id: u64,
+    },
+    RemoveSlots {
+        slot_ids: Vec<u64>,
+    },
+    MoveSlot {
+        slot_id: u64,
+        to_index: usize,
+    },
+    PlaySlot {
+        slot_id: u64,
+    },
+    Clear,
+    SourceUpdate {
+        source: QueueSource,
+        lineage: QueueLineage,
+    },
+    Refresh,
+    ApplyProgress {
+        updates: Vec<mbv_ctrl::ProgressUpdate>,
+    },
+}
 
 /// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,9 +64,7 @@ pub enum ShutdownResponse {
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
-    pub items: Arc<Mutex<Vec<EmbyItem>>>,
     pub unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
-    pub queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
@@ -47,6 +81,7 @@ pub struct RemotePlayer {
     /// shutdown.
     pub(crate) control_stream: Arc<Mutex<Option<SocketStream>>>,
     pub(crate) next_playback_id: Arc<std::sync::atomic::AtomicU64>,
+    pub(crate) next_queue_op_id: Arc<std::sync::atomic::AtomicU64>,
     pub(crate) pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     /// Completer for a pending shutdown request.
     pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
@@ -224,8 +259,7 @@ impl RemotePlayer {
         let wire_cmd = match cmd {
             // Queue mutation has no legacy wire form; it crosses ctrl
             // exclusively as `CtrlCmd::UnifiedQueue*`. Callers use the unified
-            // path (`RemotePlayer::queue_append`/`queue_remove_slot`/
-            // `queue_move_slot`, `PlayerProxy::submit_queue_slots`).
+            // path (`RemotePlayer::send_queue_op`, `PlayerProxy::submit_queue_slots`).
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..) => {
@@ -243,45 +277,6 @@ impl RemotePlayer {
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }
 
-    /// # Panics
-    ///
-    /// Panics if any of the projection mutexes is poisoned — `status`, `items`
-    /// or `queue_source` — i.e. a previous owner panicked while holding one of
-    /// them.
-    #[must_use]
-    pub fn adopt_queue(
-        &self,
-        items: Vec<QueueItem>,
-        cursor: usize,
-        source: mbv_queue::QueueSource,
-    ) -> bool {
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        {
-            let mut status = self.status.lock().unwrap();
-            status.current_idx = cursor;
-            status.queue_len = items.len();
-            status.active = false;
-        };
-        let emby_items: Vec<EmbyItem> = items
-            .iter()
-            .filter_map(|item| item.as_emby().cloned())
-            .collect();
-        self.items.lock().unwrap().clone_from(&emby_items);
-        *self.queue_source.lock().unwrap() = source.clone();
-        self.cmd_tx
-            .send(CtrlCmd::UnifiedAdoptQueue {
-                items,
-                cursor,
-                source,
-            })
-            .is_ok()
-    }
-
-    /// # Panics
-    ///
-    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
-    /// i.e. a previous owner panicked while holding it. Those locks are only
-    /// taken once the queue replace was sent.
     #[must_use]
     pub fn play(
         &self,
@@ -291,26 +286,16 @@ impl RemotePlayer {
         _initial_volume: u8,
     ) -> bool {
         let queue_item = QueueItem::Emby(Box::new(item.clone()));
-        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+        self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
             vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,
                 item: queue_item,
             }],
             Some(0),
-            source.clone(),
-        ));
-        if sent {
-            *self.items.lock().unwrap() = vec![item.clone()];
-            *self.queue_source.lock().unwrap() = source;
-        }
-        sent
+            source,
+        ))
     }
 
-    /// # Panics
-    ///
-    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
-    /// i.e. a previous owner panicked while holding it. Those locks are only
-    /// taken once the queue replace was sent.
     #[must_use]
     pub fn play_queue(
         &self,
@@ -321,25 +306,18 @@ impl RemotePlayer {
         _initial_volume: u8,
     ) -> bool {
         let slots: Vec<_> = items
-            .iter()
-            .cloned()
-            .map(|i| QueueItem::Emby(Box::new(i)))
+            .into_iter()
             .enumerate()
             .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
                 slot_id: (index + 1) as u64,
-                item,
+                item: QueueItem::Emby(Box::new(item)),
             })
             .collect();
-        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+        self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
             slots,
             Some(start_idx),
-            source.clone(),
-        ));
-        if sent {
-            *self.items.lock().unwrap() = items;
-            *self.queue_source.lock().unwrap() = source;
-        }
-        sent
+            source,
+        ))
     }
 
     pub fn stop(&self) {
@@ -402,24 +380,9 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_owner_queue_load
     }
 
-    /// Send a correlated idle load without changing the Client's queue
-    /// projection. A peer without the additive capability is refused locally.
-    pub fn update_queue_source(
-        &self,
-        source: mbv_queue::QueueSource,
-        lineage: mbv_queue::QueueLineage,
-    ) -> Result<(), RemotePlayerError> {
-        if !self.supports_owner_queue_load() {
-            return Err(RemotePlayerError::queue_operation(
-                "daemon does not support owner queue source updates",
-            ));
-        }
-        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate { source, lineage }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send queue source update to Player owner",
-            ));
-        }
-        Ok(())
+    #[must_use]
+    pub fn supports_answered_queue_ops(&self) -> bool {
+        self.ctrl_compatibility.supports_answered_queue_ops
     }
 
     pub fn load_queue_idle(
@@ -453,6 +416,76 @@ impl RemotePlayer {
         Ok(())
     }
 
+    /// Send an owner queue operation, using answered correlation when negotiated.
+    pub fn send_queue_op(
+        &self,
+        operation: QueueOp,
+    ) -> Result<Option<QueueOpId>, RemotePlayerError> {
+        let op = self
+            .supports_answered_queue_ops()
+            .then(|| QueueOpId(self.next_queue_op_id.fetch_add(1, Ordering::Relaxed)));
+        let command = match operation {
+            QueueOp::Replace {
+                items,
+                start_idx,
+                source,
+            } => CtrlCmd::UnifiedQueueReplace {
+                items: items.iter().map(|slot| slot.item.clone()).collect(),
+                slots: items,
+                start_idx,
+                source,
+                op,
+            },
+            QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend { items, before, op },
+            QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op },
+            QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op },
+            QueueOp::MoveSlot { slot_id, to_index } => CtrlCmd::UnifiedQueueMoveSlot {
+                slot_id,
+                to_index,
+                op,
+            },
+            QueueOp::PlaySlot { slot_id } => CtrlCmd::UnifiedQueuePlaySlot { slot_id, op },
+            QueueOp::Clear => match op {
+                Some(op) => CtrlCmd::UnifiedQueueClearOp { op },
+                None => CtrlCmd::UnifiedQueueClear,
+            },
+            QueueOp::SourceUpdate { source, lineage } => {
+                if !self.supports_owner_queue_load() {
+                    return Err(RemotePlayerError::queue_operation(
+                        "daemon does not support owner queue source updates",
+                    ));
+                }
+                CtrlCmd::UnifiedQueueSourceUpdate {
+                    source,
+                    lineage,
+                    op,
+                }
+            }
+            QueueOp::Refresh => {
+                let Some(op) = op else {
+                    return Err(RemotePlayerError::queue_operation(
+                        "daemon does not support answered queue refresh",
+                    ));
+                };
+                CtrlCmd::UnifiedQueueRefresh { op }
+            }
+            QueueOp::ApplyProgress { updates } => {
+                let Some(op) = op else {
+                    return Err(RemotePlayerError::queue_operation(
+                        "daemon does not support answered queue progress",
+                    ));
+                };
+                CtrlCmd::UnifiedQueueApplyProgress { op, updates }
+            }
+        };
+        if !self.send_ctrl_cmd(command) {
+            return Err(RemotePlayerError::queue_operation(
+                "could not send queue operation to Player owner",
+            ));
+        }
+        Ok(op)
+    }
+
     /// # Panics
     ///
     /// Panics if the `unified_queue` mutex is poisoned: a previous owner
@@ -460,42 +493,6 @@ impl RemotePlayer {
     #[must_use]
     pub fn unified_queue_state(&self) -> Option<mbv_ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
-    }
-
-    #[must_use]
-    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
-        if items.is_empty() {
-            return true;
-        }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
-    }
-
-    /// Remove a slot by its stable identity.
-    #[must_use]
-    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
-    }
-
-    /// Remove several slots in one owner edit, so the owner publishes one
-    /// queue snapshot instead of one per slot.
-    #[must_use]
-    pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
-        if slot_ids.is_empty() {
-            return true;
-        }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids })
-    }
-
-    /// Move a slot by its stable identity to `to_index`.
-    #[must_use]
-    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
-    }
-
-    /// Begin playback of an existing slot by its stable identity.
-    #[must_use]
-    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
     }
 
     #[cfg(any(test, feature = "test"))]
@@ -521,14 +518,31 @@ impl RemotePlayer {
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn stub_with_command_rx(
-        items: Vec<EmbyItem>,
+        items: impl AsRef<[EmbyItem]>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let queue_len = items.len();
-        let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
+        let slots: Vec<_> = items
+            .as_ref()
+            .iter()
+            .enumerate()
+            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: index as u64 + 1,
+                item: QueueItem::Emby(Box::new(item.clone())),
+            })
+            .collect();
+        let status = Self::stub_status(current_idx, slots.len());
+        let unified_queue = mbv_ctrl::UnifiedQueueStateData {
+            status: status.clone(),
+            active_slot: slots.get(current_idx).map(|slot| slot.slot_id),
+            slots,
+            revision: 0,
+            source: QueueSource::Unknown,
+            lineage: QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        };
+        let status = Arc::new(Mutex::new(status));
         let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
-        let items = Arc::new(Mutex::new(items));
-        let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
@@ -540,15 +554,14 @@ impl RemotePlayer {
             RemotePlayer {
                 status,
                 subtitle_prefs,
-                items,
-                unified_queue: Arc::new(Mutex::new(None)),
-                queue_source,
+                unified_queue: Arc::new(Mutex::new(Some(unified_queue))),
                 cmd_tx,
                 disconnected,
                 shutdown_announced,
                 ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,
+                next_queue_op_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
                 pending_playback,
                 shutdown_request_tx: Arc::new(Mutex::new(None)),
             },
@@ -579,6 +592,19 @@ impl RemotePlayer {
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
         remote.ctrl_compatibility.supports_audio_only = true;
+        (remote, event_rx, cmd_rx)
+    }
+
+    /// Test-support stub whose owner answers correlated queue operations
+    /// (queue-owner-process row 5.1: the Client waits for `QueueOpResult`).
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn stub_answered_queue_ops_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_answered_queue_ops = true;
         (remote, event_rx, cmd_rx)
     }
 }

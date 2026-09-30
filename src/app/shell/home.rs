@@ -128,11 +128,25 @@ mod tests {
     #[test]
     fn continue_watching_effects_use_the_resolved_item_target() {
         let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
+        let mut app = make_app_stub();
+        // Row 5.3: the enqueue is an Append owner op, so the resolved item is
+        // observed on the wire rather than in an optimistic Client write.
+        let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
+        let mut model = Model::new(app);
         model.home_content.continue_items = make_items(3);
 
         model.handle_home_request(ShellRequest::HomeEnqueue(target("id2")));
-        assert_eq!(model.app.player_tab.emby_items()[0].id, "id2");
+        let appended: Vec<String> = cmd_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => match &*items {
+                    [mbv_queue::QueueItem::Emby(item)] => Some(item.id.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        assert_eq!(appended, vec!["id2"], "the CW enqueue resolves id2");
 
         model.app.status.clear();
         model.handle_home_request(ShellRequest::HomePlay(target("id0")));

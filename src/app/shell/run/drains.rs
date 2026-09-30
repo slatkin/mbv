@@ -72,10 +72,57 @@ impl Model {
         had_events
     }
 
+    /// Drain queued events from the suspended home link. It has no tick of its
+    /// own, so consume every pending event before returning.
+    pub(in crate::app) fn drain_suspended_home_events(&mut self) -> bool {
+        let mut had_events = false;
+        loop {
+            let event = if self.app.suspended_local.is_some() {
+                self.app.deferred_home_events.pop_front().or_else(|| {
+                    self.app
+                        .queue_link(crate::app::QueueScope::Local)
+                        .1
+                        .try_recv()
+                        .ok()
+                })
+            } else {
+                None
+            };
+            let Some(event) = event else {
+                return had_events;
+            };
+            had_events = true;
+            match event {
+                mbv_ctrl::player::PlayerEvent::UnifiedQueueUpdated(snapshot) => {
+                    self.app.adopt_home_snapshot(&snapshot);
+                }
+                mbv_ctrl::player::PlayerEvent::QueueOpResult {
+                    outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
+                    ..
+                } => self.app.adopt_home_snapshot(&snapshot),
+                mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
+                    self.app.suspended_local = None;
+                    self.app.raise_daemon_lost_modal();
+                }
+                mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
+                    self.app.handle_daemon_shutdown_announced(true);
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Drain one player event. Returns whether playback requested a restart
     /// (the caller `continue`s the run loop).
     pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {
-        let Some(ev) = self.app.player_rx.try_recv().ok() else {
+        // The answer pump defers non-answer events here; replay them before
+        // the live receiver so tick-level handling stays ordered (row 5.1).
+        let ev = self
+            .app
+            .deferred_player_events
+            .pop_front()
+            .or_else(|| self.app.player_rx.try_recv().ok());
+        let Some(ev) = ev else {
             return false;
         };
         *had_events = true;
@@ -263,7 +310,7 @@ impl Model {
                     let _ = self.app.request_relative_step(direction);
                 }
                 mbv_ctrl::TransportCommand::Player(command) => {
-                    self.app.player.send_command(command);
+                    let _ = self.app.player.send_command(command);
                 }
             }
         }

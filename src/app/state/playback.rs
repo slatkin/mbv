@@ -1,4 +1,3 @@
-use crate::app::state::player_tab::PlayerTab;
 use crate::app::state::queue_owner::QueueOrigin;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
@@ -6,7 +5,6 @@ use mbv_player::PlayerProxy;
 use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, is_new_in_launch_window};
 use mbv_ui_model::playback::QueueScope;
-use mbv_ws::WsEvent;
 use std::collections::VecDeque;
 use std::sync::mpsc;
 
@@ -49,18 +47,15 @@ impl QueueScopeResolution {
     }
 }
 
-/// A reversible queue edit. `Remove` re-inserts the item at its old position;
-/// `Move` swaps the slot back from `to` to `from`. `slot_id` is the runtime
-/// queue occurrence that landed at `to`, checked at undo time so a queue edit
-/// made after the move is refused instead of swapping the wrong items.
+/// A reversible queue edit (design D7). Undo re-sends the inverse edit to
+/// the Player owner: `Remove` re-appends the removed item before the entry
+/// now at its former index (resolved at undo time), and `Move` moves the
+/// slot back to `from`. `slot_id` is the runtime queue occurrence that was
+/// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
-    Remove(usize, QueueItem),
-    Move {
-        from: usize,
-        to: usize,
-        slot_id: QueueSlotId,
-    },
+    Remove { item: Box<QueueItem>, index: usize },
+    Move { slot_id: QueueSlotId, from: usize },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,17 +145,6 @@ impl HomeContent {
 pub(in crate::app) struct SuspendedLocalSession {
     pub player: PlayerProxy,
     pub player_rx: mpsc::Receiver<PlayerEvent>,
-    pub ws_rx: mpsc::Receiver<WsEvent>,
-    pub ws_send_tx: Option<mbv_ws::WsSender>,
-    pub audiobookshelf_socket_rx: mpsc::Receiver<mbv_audiobookshelf::socket::SocketEvent>,
-    pub audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
-    pub audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
-    /// The queue presentation and source the suspended local session was
-    /// displaying. A local-daemon attach adopts the daemon's Bound queue as
-    /// the unified (Local) view, so restoring the bare local player must
-    /// also restore what it was playing.
-    pub player_tab: PlayerTab,
-    pub queue_source: mbv_queue::QueueSource,
 }
 
 #[derive(Debug)]

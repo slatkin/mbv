@@ -72,12 +72,12 @@ pub(crate) fn apply_audiobookshelf_progress(
     current_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,
-) {
+) -> bool {
     let Some(current) = current_generation else {
-        return;
+        return false;
     };
     if current != update.generation {
-        return;
+        return false;
     }
     let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
@@ -110,6 +110,7 @@ pub(crate) fn apply_audiobookshelf_progress(
             setup_generation: update.generation.value(),
         },
     );
+    target.is_some()
 }
 
 /// Apply an acknowledged Audiobookshelf book progress update to the canonical
@@ -121,12 +122,12 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     current_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,
-) {
+) -> bool {
     let Some(current) = current_generation else {
-        return;
+        return false;
     };
     if current != update.generation {
-        return;
+        return false;
     }
     let position_ticks = mbv_emby_model::seconds_to_ticks(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
@@ -156,4 +157,5 @@ pub(crate) fn apply_audiobookshelf_book_progress(
             setup_generation: update.generation.value(),
         },
     );
+    target.is_some()
 }

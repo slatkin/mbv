@@ -100,7 +100,7 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
 
     assert!(app.tab.is_home());
     assert_eq!(app.library_tab_pending, 0);
-    assert!(app.player_tab.emby_items().is_empty());
+    assert!(app.local_view.emby_items().is_empty());
 }
 
 #[test]
@@ -128,8 +128,8 @@ fn entering_queue_focus_selects_now_playing_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.player_tab.set_items(make_items(3), 0);
-    app.player_tab.queue_cursor = 2;
+    app.local_view.adopt_items(make_items(3), 0);
+    app.local_view.set_cursor(2);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
@@ -138,7 +138,7 @@ fn entering_queue_focus_selects_now_playing_item() {
 
     app.set_panel_focus(PanelFocus::Queue);
 
-    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert_eq!(app.local_view.cursor(), 1);
 }
 
 #[test]
@@ -146,10 +146,10 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.player_tab.set_items(make_items(3), 0);
-    app.player_tab.queue_cursor = 99;
+    app.local_view.adopt_items(make_items(3), 0);
+    app.local_view.set_cursor(99);
 
     app.set_panel_focus(PanelFocus::Queue);
 
-    assert_eq!(app.player_tab.queue_cursor, 0);
+    assert_eq!(app.local_view.cursor(), 0);
 }

@@ -14,13 +14,6 @@ pub(in crate::app) type DirectConnectFn = fn(
 pub(in crate::app) static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> =
     Mutex::new(None);
 
-/// Test seam for local-player preparation. Production construction is still
-/// the ordinary `Player::new` path; tests can inject a construction failure
-/// without creating an mpv handle.
-pub(in crate::app) type LocalPlayerPrepareFn = fn() -> Result<(), std::io::Error>;
-pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlayerPrepareFn>> =
-    Mutex::new(None);
-
 // Separate from DIRECT_CONNECT_OVERRIDE above (Sessions-panel "Direct
 // Remote" upgrade, keyed off a discovered SessionInfo): this is issue
 // #222's lazy daemon-route connect primitive, targeting a statically
@@ -29,33 +22,12 @@ pub(in crate::app) static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlaye
 // eventually drive (`connected_session_id`/`direct_remote_label` vs. a
 // future #223 `active_route`) -- stay independently testable and are
 // never conflated, per #223's explicit "must not be conflated" rule.
-pub(in crate::app) enum DaemonRouteConnectOutcome {
-    Connected(
-        mbv_remote_player::RemotePlayer,
-        mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
-    ),
-    Failed(mbv_remote_player::RemotePlayerError),
-}
-
-impl DaemonRouteConnectOutcome {
-    pub(in crate::app) fn into_result(
-        self,
-    ) -> Result<
-        (
-            mbv_remote_player::RemotePlayer,
-            mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
-        ),
-        mbv_remote_player::RemotePlayerError,
-    > {
-        match self {
-            Self::Connected(remote, events) => Ok((remote, events)),
-            Self::Failed(error) => Err(error),
-        }
-    }
-}
-
-pub(in crate::app) type DaemonRouteConnectFn =
-    fn(&mbv_remote_player::DaemonEndpoint) -> DaemonRouteConnectOutcome;
+pub(in crate::app) type DaemonRouteConnectFn = fn(
+    &mbv_remote_player::DaemonEndpoint,
+) -> (
+    mbv_remote_player::RemotePlayer,
+    mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+);
 pub(in crate::app) static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DaemonRouteConnectFn>> =
     Mutex::new(None);
 pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());

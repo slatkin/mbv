@@ -137,9 +137,9 @@ impl App {
                 | mbv_ui_model::tab_selection::TabSelection::Feeds,
             ) => return None,
             (mbv_ui_model::settings::PanelFocus::Queue, _) => {
-                let cursor = self.displayed_queue().queue_cursor;
+                let cursor = self.displayed_queue().cursor();
                 queue_cursor = Some(cursor);
-                self.displayed_queue().clone_emby_item_at(cursor)
+                self.displayed_queue().emby_item_at(cursor).cloned()
             }
         };
         Some((current_item, queue_cursor))
@@ -228,7 +228,7 @@ impl App {
                 mbv_ui_model::settings::PanelFocus::Queue
             )
         {
-            let pos = self.displayed_queue().queue_cursor;
+            let pos = self.displayed_queue().cursor();
             Self::push_context_action(
                 entries,
                 "Remove from Queue",

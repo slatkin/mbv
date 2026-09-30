@@ -73,10 +73,10 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 2. A bounds-miss shuffle target (the old tab-recovery would
     // panic on emby_library_index().unwrap()) must return early without
     // panic or mutation.
-    let queue_len_before = app.player_tab.emby_items().len();
+    let queue_len_before = app.local_view.emby_items().len();
     app.shuffle_play_target(app.libs.len(), None); // index past the single library
     assert_eq!(
-        app.player_tab.emby_items().len(),
+        app.local_view.emby_items().len(),
         queue_len_before,
         "a bounds-miss shuffle must not touch the queue"
     );
@@ -127,7 +127,7 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
         app.status
     );
     assert!(
-        app.playback_queue().queue.slots().is_empty(),
+        app.playback_queue().slots().is_empty(),
         "no-source entry must not be mirrored into the queue panel"
     );
 }
@@ -159,23 +159,30 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 #[test]
 fn feed_selection_enqueue_preserves_supplied_order() {
     let mut app = make_app_stub();
+    // Row 5.3: each enqueue is an Append owner op, so the supplied order is
+    // observed on the wire rather than in an optimistic Client write.
+    let cmd_rx = super::super::live_owner_channel(&mut app);
     app.enqueue_feed_entries(vec![
         playable_feed_entry("feed-first"),
         playable_feed_entry("feed-second"),
         playable_feed_entry("feed-third"),
     ]);
 
-    let guids: Vec<_> = app
-        .playback_queue()
-        .queue
-        .slots()
-        .iter()
-        .filter_map(|slot| match &slot.item {
-            mbv_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+    let appended: Vec<String> = cmd_rx
+        .try_iter()
+        .filter_map(|command| match command {
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => match &*items {
+                [mbv_queue::QueueItem::Feed(entry)] => Some(entry.guid.clone()),
+                _ => None,
+            },
             _ => None,
         })
         .collect();
-    assert_eq!(guids, vec!["feed-first", "feed-second", "feed-third"]);
+    assert_eq!(
+        appended,
+        vec!["feed-first", "feed-second", "feed-third"],
+        "the enqueues reach the owner in the supplied order"
+    );
 }
 
 /// F5 while the Feeds tab is selected must not dispatch into the Emby or
@@ -258,5 +265,5 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         1,
         "Feeds F5 must not clear the Audiobookshelf catalog"
     );
-    assert_eq!(app.player_tab.total_queue_len(), 0);
+    assert_eq!(app.local_view.total_queue_len(), 0);
 }

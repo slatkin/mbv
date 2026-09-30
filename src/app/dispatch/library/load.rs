@@ -63,27 +63,19 @@ impl App {
         }
     }
 
+    /// Refresh the viewed queue by asking its Player owner to run the
+    /// enrichment fetch (row 5.3, design D6): the owner answers `Applied`
+    /// at once and the refreshed items appear only through the owner's
+    /// resulting snapshot — the Client holds no editable queue to merge
+    /// into (`unified-playback-queue` "Clients hold no editable queue",
+    /// scenario "Queue refresh"). The answered op blocks input only for
+    /// the answer bound.
     fn refresh_queue(&mut self) {
         let scope = self.viewed_queue_scope();
         if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }
-        let ids: Vec<String> = self
-            .queue_for_scope(scope)
-            .queue
-            .slots()
-            .iter()
-            .filter_map(|s| s.item.as_emby())
-            .map(|i| i.id.clone())
-            .collect();
-        let Some(client) = self.emby_client() else {
-            return;
-        };
-        let client = client.lock().unwrap();
-        if let Ok(fetched) = client.get_items_by_ids(&ids) {
-            drop(client);
-            let _ = self.merge_refreshed_queue(scope, fetched);
-        }
+        self.queue_op(scope, mbv_remote_player::QueueOp::Refresh);
     }
 
     pub(in crate::app) fn refresh_current_view(&mut self) {

@@ -14,7 +14,6 @@ use mbv_ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
     UnifiedQueueStateData,
 };
-use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 
 use crate::RemotePlayer;
@@ -46,9 +45,35 @@ pub(crate) fn perform_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
+    perform_handshake_with_role(stream, load_control_token, false)
+}
+
+fn perform_service_setup_admin_handshake<F>(
+    stream: SocketStream,
+    load_control_token: F,
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+where
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
+{
+    perform_handshake_with_role(stream, load_control_token, true)
+}
+
+fn perform_handshake_with_role<F>(
+    stream: SocketStream,
+    load_control_token: F,
+    service_setup_admin: bool,
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
+where
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
+{
     let mut reader = BufReader::new(stream);
     let ctrl_compatibility = read_server_hello(&mut reader)?;
-    send_client_hello(&mut reader, &ctrl_compatibility, load_control_token)?;
+    send_client_hello(
+        &mut reader,
+        &ctrl_compatibility,
+        load_control_token,
+        service_setup_admin,
+    )?;
     let state_event = read_initial_state(&mut reader)?;
 
     Ok((reader, state_event, ctrl_compatibility))
@@ -80,6 +105,7 @@ fn read_server_hello(
     compatibility.supports_audio_only = info.supports_audio_only();
     compatibility.supports_control_auth = info.supports_control_auth();
     compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
+    compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }
@@ -88,12 +114,19 @@ fn send_client_hello<F>(
     reader: &mut BufReader<SocketStream>,
     compatibility: &CtrlCompatibility,
     load_control_token: F,
+    service_setup_admin: bool,
 ) -> Result<(), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    let mut client_hello = if compatibility.supports_control_auth {
-        CtrlHello::current_control_client(load_control_token()?)
+    let control_token = compatibility
+        .supports_control_auth
+        .then(load_control_token)
+        .transpose()?;
+    let mut client_hello = if service_setup_admin {
+        CtrlHello::current_service_setup_admin(control_token)
+    } else if let Some(control_token) = control_token {
+        CtrlHello::current_control_client(control_token)
     } else {
         CtrlHello::current()
     };
@@ -122,9 +155,18 @@ fn read_initial_state(
             "daemon closed connection before initial state",
         ));
     }
-    serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
+    let event = serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
         crate::RemotePlayerError::protocol(format!("invalid daemon initial state: {e}"))
-    })
+    })?;
+    match event {
+        CtrlEvent::Disconnected {
+            reason: DisconnectReason::ExclusiveOwner { pid },
+        } => Err(crate::RemotePlayerError::exclusive_owner(pid)),
+        CtrlEvent::Disconnected {
+            reason: DisconnectReason::OwnerShuttingDown,
+        } => Err(crate::RemotePlayerError::owner_shutting_down()),
+        event => Ok(event),
+    }
 }
 
 /// Best-effort signal to a running same-user Local daemon to reread its own
@@ -150,7 +192,7 @@ pub fn signal_local_daemon_service_setup(
             ))
         })?;
     let (mut reader, _state, _compatibility) =
-        perform_handshake(SocketStream::Unix(stream), || {
+        perform_service_setup_admin_handshake(SocketStream::Unix(stream), || {
             Ok(mbv_config::load_or_create_control_credential()?)
         })
         .map_err(|error| {
@@ -206,9 +248,7 @@ fn await_service_setup_acknowledgement(
 fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
-    items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     notify: bool,
@@ -240,9 +280,20 @@ fn apply_ctrl_event(
             event_tx,
             PlayerEvent::PipePlaybackStatus(status_event),
         ),
+        CtrlEvent::QueueOpResult { op, outcome } => {
+            if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
+                apply_unified_queue_state(
+                    (**state).clone(),
+                    status,
+                    unified_queue,
+                    event_tx,
+                    notify,
+                );
+            }
+            send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
+        }
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
-            // Handled by the request-completion path in RemotePlayer
-            //, not by the general event loop.
+            // Shutdown replies are handled by RemotePlayer's request-completion path.
         }
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
             tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
@@ -256,21 +307,12 @@ fn apply_ctrl_event(
             PlayerEvent::UnifiedQueueLoadResult { request_id, result },
         ),
         CtrlEvent::UnifiedQueueState(unified) => {
-            // Keep a compatibility projection for older status consumers,
-            // but retain the canonical snapshot for TUI and reconnect paths.
-            apply_unified_queue_state(
-                unified,
-                status,
-                items,
-                unified_queue,
-                queue_source,
-                event_tx,
-                notify,
-            );
+            // Retain the canonical snapshot for TUI and reconnect paths.
+            apply_unified_queue_state(unified, status, unified_queue, event_tx, notify);
         }
         CtrlEvent::AudiobookshelfProgress(event) => {
             // Dormant: forwarded for a future browse-reconciliation consumer.
-            // Does not touch `status`, `items`, or `unified_queue`.
+            // Does not touch `status` or `unified_queue`.
             send_if_notifying(notify, event_tx, PlayerEvent::AudiobookshelfProgress(event));
         }
         CtrlEvent::AudiobookshelfBookProgress(event) => send_if_notifying(
@@ -321,7 +363,9 @@ fn apply_disconnected_event(
         // Handled by the reader thread's end-of-loop logic below
         // (`is_structured_disconnect`), which sends
         // `PlayerEvent::DaemonShutdownAnnounced` once the connection closes.
-        DisconnectReason::DaemonShutdown => {}
+        DisconnectReason::DaemonShutdown
+        | DisconnectReason::ExclusiveOwner { .. }
+        | DisconnectReason::OwnerShuttingDown => {}
     }
 }
 
@@ -331,21 +375,20 @@ fn disconnect_reason_message(reason: DisconnectReason) -> &'static str {
             "Emby remote control took over — returned to local mode"
         }
         DisconnectReason::DaemonShutdown => "the daemon was stopped",
+        DisconnectReason::ExclusiveOwner { .. } => "the owner already has a client",
+        DisconnectReason::OwnerShuttingDown => "the owner is shutting down",
     }
 }
 
-/// Applies a unified-queue state snapshot.  Updates the `status` and
-/// `items` Arc values backing status-bar consumers, and — when `notify` is
-/// true — emits a `PlayerEvent::UnifiedQueueUpdated` that carries the full
+/// Applies a unified-queue state snapshot to the status and canonical queue,
+/// and — when `notify` is true — emits a `PlayerEvent::UnifiedQueueUpdated` carrying
 /// tagged queue, slot identity, active slot, and revision so the TUI can
 /// reconstruct the canonical queue without decomposing it into Emby-only
 /// shapes.
 fn apply_unified_queue_state(
     mut unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
-    items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: &Arc<Mutex<mbv_queue::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
@@ -362,22 +405,10 @@ fn apply_unified_queue_state(
         unified.status.current_idx = active_index;
     }
 
-    // Project Emby-only items for consumers that need them; the status
-    // coordinates remain canonical, and the queue itself stays tagged.
-    let emby_items: Vec<EmbyItem> = unified
-        .slots
-        .iter()
-        .filter_map(|slot| slot.item.as_emby().cloned())
-        .collect();
     let next_status = unified.status.clone();
 
     *status.lock().unwrap() = next_status;
-    *items.lock().unwrap() = emby_items;
     *unified_queue.lock().unwrap() = Some(unified.clone());
-
-    // Carry the queue source from the unified state so saved-playlist
-    // detection remains correct across reconnect.
-    *queue_source.lock().unwrap() = unified.source.clone();
 
     if notify {
         // Emit the full unified state so the TUI can reconstruct the
@@ -397,9 +428,7 @@ pub(crate) fn connect_endpoint(
 
 struct ReaderThreadState {
     status: Arc<Mutex<PlayerStatus>>,
-    items: Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: Arc<Mutex<Option<UnifiedQueueStateData>>>,
-    queue_source: Arc<Mutex<mbv_queue::QueueSource>>,
     pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     disconnected: Arc<AtomicBool>,
     disconnect_notified: Arc<AtomicBool>,
@@ -434,13 +463,12 @@ fn connect_stream(
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
-    let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(mbv_queue::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let disconnect_notified = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let next_queue_op_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
     let shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<crate::ShutdownResponse>>>> =
         Arc::new(Mutex::new(None));
@@ -478,9 +506,7 @@ fn connect_stream(
     apply_ctrl_event(
         state_event,
         &status,
-        &items,
         &unified_queue,
-        &queue_source,
         &event_tx,
         &pending_playback,
         false,
@@ -489,9 +515,7 @@ fn connect_stream(
     // Reader thread: deserializes CtrlEvent lines from daemon
     let reader_state = ReaderThreadState {
         status: Arc::clone(&status),
-        items: Arc::clone(&items),
         unified_queue: Arc::clone(&unified_queue),
-        queue_source: Arc::clone(&queue_source),
         pending_playback: Arc::clone(&pending_playback),
         disconnected: Arc::clone(&disconnected),
         disconnect_notified: Arc::clone(&disconnect_notified),
@@ -517,15 +541,14 @@ fn connect_stream(
         RemotePlayer {
             status,
             subtitle_prefs,
-            items,
             unified_queue,
-            queue_source,
             cmd_tx,
             disconnected,
             shutdown_announced,
             ctrl_compatibility,
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,
+            next_queue_op_id,
             pending_playback,
             shutdown_request_tx,
         },
@@ -536,9 +559,7 @@ fn connect_stream(
 fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState) {
     let ReaderThreadState {
         status,
-        items,
         unified_queue,
-        queue_source,
         pending_playback,
         disconnected,
         disconnect_notified,
@@ -579,18 +600,15 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
                 // for events that actually close the connection. Exhaustive match ensures
                 // new DisconnectReason variants are evaluated.
                 let is_structured_disconnect = match &ev {
-                    CtrlEvent::Disconnected { reason } => match reason {
-                        DisconnectReason::TakenOverByEmbyRemote => false,
-                        DisconnectReason::DaemonShutdown => true,
-                    },
+                    CtrlEvent::Disconnected { reason } => {
+                        matches!(reason, DisconnectReason::DaemonShutdown)
+                    }
                     _ => false,
                 };
                 apply_ctrl_event(
                     ev,
                     &status,
-                    &items,
                     &unified_queue,
-                    &queue_source,
                     &event_tx,
                     &pending_playback,
                     true,

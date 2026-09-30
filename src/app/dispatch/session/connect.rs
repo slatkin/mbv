@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PlayerTab};
+use crate::app::{App, QueueView};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
 use mbv_player::PlayerProxy;
@@ -88,7 +88,7 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint).into_result();
+            return Ok(connect(endpoint));
         }
 
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
@@ -188,35 +188,19 @@ impl App {
         endpoint: &mbv_remote_player::DaemonEndpoint,
         attempt: usize,
     ) {
-        let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
-        let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.config.lock().unwrap().always_play_next;
-        let mpris_remote = remote.clone();
         // #233: tear down the dead connection before replacing it so its
         // reader thread observes the shutdown and exits instead of leaking.
         self.player.disconnect_remote();
-        self.player = PlayerProxy::remote(remote, always_play_next);
+        self.player = PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = remote_rx;
         self.player_endpoint = Some(endpoint.clone());
-        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
-        if let Some(handle) = &self.mpris {
-            let disconnected = mpris_remote.disconnected_flag();
-            mbv_desktop::mpris::rebind(
-                handle,
-                std::sync::Arc::clone(&mpris_remote.status),
-                move |transport| mpris_remote.send_transport(transport),
-                Some(disconnected),
-            );
-        }
-        let mut tab = initial_unified_state.as_ref().map_or_else(
-            || PlayerTab::from_emby_items(initial_items, initial_cursor),
-            PlayerTab::from_unified_state,
-        );
-        if let Some(previous_tab) = &self.remote_player_tab {
-            tab.adopt_revision_mint(previous_tab.revision_mint());
-        }
-        self.remote_player_tab = Some(tab);
+        self.rebind_mpris_to_current_player();
+        let tab = initial_unified_state
+            .as_ref()
+            .map_or_else(QueueView::default, QueueView::from_snapshot);
+        self.remote_view = Some(tab);
         self.remote.direct_remote_connected = true;
         self.advance_queue_epoch();
         self.remote.session_miss_count = 0;
@@ -244,7 +228,7 @@ impl App {
     /// path (construct.rs) when the Emby client is already available at
     /// construction, or from `apply_emby_completion`
     /// (`app_emby_service_completion.rs`) once the async Emby startup used by
-    /// `App::new_independent` completes. A genuinely remote
+    /// async Emby startup completes. A genuinely remote
     /// `--connect-daemon` launch is a separate, unaffected mechanism per
     /// ADR 0010. A no-op unless `auto_reconnect` is enabled and
     /// `load_last_remote_connection` has a record. One shot, no retry: a
@@ -276,6 +260,13 @@ impl App {
                     tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
                     return;
                 };
+                if endpoint.is_local()
+                    && (self.suspended_local.is_some()
+                        || (self.home_is_local_daemon && self.is_local_daemon()))
+                {
+                    self.restore_local_mode("Local playback restored");
+                    return;
+                }
                 match Self::try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);

@@ -27,8 +27,9 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
             ctrl_clients: &registry,
             has_audiobookshelf: false,
             merged_tx: &merged_tx,
-            stay_alive: false,
+            owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
         },
     );
 

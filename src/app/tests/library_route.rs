@@ -12,10 +12,12 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     fn counting_connect(
         _endpoint: &mbv_remote_player::DaemonEndpoint,
-    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+    ) -> (
+        mbv_remote_player::RemotePlayer,
+        std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ) {
         CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let (remote, events) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
+        mbv_remote_player::RemotePlayer::stub(Vec::new(), 0)
     }
 
     let _guard = crate::config::TestStateDirGuard::new();
@@ -26,87 +28,4 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 
     assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 0);
-}
-
-#[test]
-fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
-    // #256: resolution is now a pure config read -- no live session
-    // lookup, no SESSIONS_LOAD_OVERRIDE seam needed to reach the no-op
-    // branch (`name == current`), even though this test's whole point
-    // is that no *connect* attempt happens.
-    let mut app = make_app_stub();
-    app.library_routes
-        .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    app.active_route = Some("music".to_string());
-    let mut lib_item = make_item("Music", "CollectionFolder");
-    lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab::new(lib_item));
-    let mut item = make_item("Song", "Audio");
-    item.id = "song-1".to_string();
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    app.apply_route_for_playback(&item);
-
-    // No connect attempt was needed (no DAEMON_ROUTE_CONNECT_OVERRIDE
-    // set, so a real connect attempt would panic/hang if this weren't
-    // a no-op) -- active_route and local-ness are unchanged.
-    assert_eq!(app.active_route.as_deref(), Some("music"));
-    assert!(!app.player.is_remote());
-}
-
-#[test]
-fn apply_route_for_playback_double_failure_strips_using_local_playback() {
-    // Regression: when `apply_route_for_playback` tries a new route while
-    // already routed, both the target-route connect and the subsequent
-    // Local-daemon restoration can fail. The route-failure message from
-    // `try_daemon_route_connect` contains "using local playback", which is
-    // wrong when the Local daemon is also unreachable. `restore_local_mode`
-    // must strip that claim so the final warning is accurate.
-    fn always_fail(
-        _endpoint: &mbv_remote_player::DaemonEndpoint,
-    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
-        crate::app::test_seams::DaemonRouteConnectOutcome::Failed(
-            std::io::Error::other("connection refused").into(),
-        )
-    }
-
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    let mut app = make_local_daemon_app_stub(make_items(2));
-    app.library_routes
-        .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    app.library_routes
-        .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
-    let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route(
-        "music",
-        remote,
-        remote_rx,
-        &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    assert_eq!(app.active_route.as_deref(), Some("music"));
-
-    let mut lib_item = make_item("Movies", "CollectionFolder");
-    lib_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab::new(lib_item));
-    let mut item = make_item("Movie", "Movie");
-    item.id = "movie-1".to_string();
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    // Both the movies-route connect AND the Local-daemon restoration fail.
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(always_fail);
-    app.apply_route_for_playback(&item);
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-    assert!(app.active_route.is_none());
-    assert!(
-        app.status.contains("local daemon unavailable"),
-        "status was: {:?}",
-        app.status
-    );
-    assert!(
-        !app.status.contains("using local playback"),
-        "double-failure status must not claim usable local playback: {:?}",
-        app.status
-    );
 }

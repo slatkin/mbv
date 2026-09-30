@@ -2,7 +2,7 @@ use super::{
     App, detached_socket_rx, independent_audiobookshelf_runtime, independent_emby_runtime,
 };
 use crate::app::state::bootstrap::{LocalDaemonBootstrap, bootstrap_legacy_queue};
-use crate::app::state::player_tab::PlayerTab;
+use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{AppInit, bootstrap_unified_queue};
 use mbv_ctrl::player::PlayerEvent;
@@ -37,16 +37,12 @@ fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::
 /// The daemon-side queue snapshot an attaching session seeds its queue
 /// scope, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
-    items: Vec<mbv_emby_model::EmbyItem>,
-    cursor: usize,
     unified_state: Option<mbv_ctrl::UnifiedQueueStateData>,
 }
 
 impl RemoteSnapshot {
     fn take(remote: &mbv_remote_player::RemotePlayer) -> Self {
         Self {
-            items: remote.items.lock().unwrap().clone(),
-            cursor: remote.status.lock().unwrap().current_idx,
             unified_state: remote.unified_queue_state(),
         }
     }
@@ -55,7 +51,7 @@ impl RemoteSnapshot {
     fn has_items(&self) -> bool {
         self.unified_state
             .as_ref()
-            .map_or(!self.items.is_empty(), |state| !state.slots.is_empty())
+            .is_some_and(|state| !state.slots.is_empty())
     }
 
     /// The queue scope the session opens in: remote when a network daemon
@@ -70,11 +66,10 @@ impl RemoteSnapshot {
 
     /// The legacy/unified bootstrap a local-daemon attach replays through
     /// `App::build`.
-    fn local_bootstrap(&self, source: &mbv_queue::QueueSource) -> LocalDaemonBootstrap {
-        self.unified_state.as_ref().map_or_else(
-            || bootstrap_legacy_queue(self.items.clone(), self.cursor, source.clone()),
-            bootstrap_unified_queue,
-        )
+    fn local_bootstrap(&self) -> LocalDaemonBootstrap {
+        self.unified_state
+            .as_ref()
+            .map_or_else(bootstrap_legacy_queue, bootstrap_unified_queue)
     }
 
     /// The queue tabs the session mounts: one unified tab for a local
@@ -83,23 +78,23 @@ impl RemoteSnapshot {
         self,
         is_local: bool,
         local_daemon_bootstrap: Option<&LocalDaemonBootstrap>,
-    ) -> (PlayerTab, Option<PlayerTab>) {
+    ) -> (QueueView, Option<QueueView>) {
         if is_local {
             // Local daemon: one unified queue, exactly like plain local
-            // playback — no separate remote_player_tab, no scope pill.
+            // playback — no separate remote_view, no scope pill.
             (
-                local_daemon_bootstrap.as_ref().unwrap().player_tab.clone(),
+                local_daemon_bootstrap.as_ref().unwrap().local_view.clone(),
                 None,
             )
         } else {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
             (
-                PlayerTab::default(),
-                Some(self.unified_state.as_ref().map_or_else(
-                    || PlayerTab::from_emby_items(self.items, self.cursor),
-                    PlayerTab::from_unified_state,
-                )),
+                QueueView::default(),
+                Some(
+                    self.unified_state
+                        .map_or_else(QueueView::default, |state| QueueView::from_snapshot(&state)),
+                ),
             )
         }
     }
@@ -142,6 +137,30 @@ fn remote_services(
     }
 }
 
+fn initialize_service_startup(
+    app: &mut App,
+    audiobookshelf_startup_requested: bool,
+    emby_configured_without_client: bool,
+    should_open_services: bool,
+) {
+    let config = app.config.lock().unwrap().clone();
+    app.setup.emby_startup_request = emby_configured_without_client.then_some(
+        crate::app::state::service_setup::StartupRequest {
+            config: config.clone(),
+            generation: app.emby_runtime.generation(),
+        },
+    );
+    app.setup.audiobookshelf_startup_request = audiobookshelf_startup_requested.then_some(
+        crate::app::state::service_setup::StartupRequest {
+            config,
+            generation: app.audiobookshelf_runtime.generation(),
+        },
+    );
+    if should_open_services {
+        app.open_services_settings();
+    }
+}
+
 impl App {
     /// `endpoint` is the daemon endpoint the remote player is connected to.
     /// The endpoint's `is_local()` distinguishes local-daemon attach
@@ -149,7 +168,7 @@ impl App {
     /// - `Local`: behaves like a plain local session — one unified queue,
     ///   normal queue-state persistence — the only difference is that the
     ///   daemon owns mpv instead of an in-process `Player`.
-    /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
+    /// - `Tcp`/`Unix`: a separate `remote_view` is kept so the user
     ///   can browse locally while a daemon elsewhere plays something else,
     ///   with the Local/Remote scope split (`[`/`]`) to switch between them.
     #[cfg(test)]
@@ -171,7 +190,7 @@ impl App {
         app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
-        let (transport_tx, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
+        let (_, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
@@ -180,6 +199,10 @@ impl App {
         let library_routes = app_config.library_routes.clone();
         let music_levels = app_config.music_levels.clone();
         let always_play_next = app_config.always_play_next;
+        let emby_configured_without_client = client.is_none() && app_config.emby_setup.is_some();
+        let should_open_services =
+            crate::app::dispatch::session::service_startup::should_open_services(&app_config);
+        let system_notifications = !app_config.stay_alive && app_config.system_notifications;
         // Both side effects below touch real system state, so test builds
         // must never run them (issue #757): the eviction thread scans and
         // prunes the user's real image-cache dir, and `mpris::start` claims
@@ -194,18 +217,17 @@ impl App {
         let client_arc = client.map(|client| Arc::new(Mutex::new(client)));
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
-        let remote_queue_source = remote.queue_source.lock().unwrap().clone();
         let snapshot = RemoteSnapshot::take(&remote);
         let initial_queue_scope = snapshot.scope(endpoint.is_local());
-        let local_daemon_bootstrap = endpoint
-            .is_local()
-            .then(|| snapshot.local_bootstrap(&remote_queue_source));
+        let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
         let mpris_handle = Some(start_mpris(&remote));
         #[cfg(test)]
         let mpris_handle = None;
-        let player = PlayerProxy::remote(remote, always_play_next);
-        let (player_tab, remote_player_tab) =
+        let player = PlayerProxy::from_remote(remote, always_play_next);
+        let audiobookshelf_startup_requested =
+            services.audiobookshelf_configured && services.audiobookshelf_credential_present;
+        let (local_view, remote_view) =
             snapshot.tabs(endpoint.is_local(), local_daemon_bootstrap.as_ref());
         let mut app = Self::build(AppInit {
             config,
@@ -215,15 +237,14 @@ impl App {
             player_rx,
             ws_rx,
             transport_rx,
-            transport_tx,
             ws_send_tx: None,
             audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
-            player_tab,
-            remote_player_tab,
+            local_view,
+            remote_view,
             initial_queue_scope,
-            system_notifications: false,
+            system_notifications,
             image_protocol: ui_config.image_protocol.clone(),
             image_protocol_enabled: ui_config.image_protocol.is_some(),
             hidden_libraries,
@@ -243,26 +264,75 @@ impl App {
         app.home_is_local_daemon = endpoint.is_local();
         app.sync_subtitle_prefs_to_player();
         app.launched_as_remote = true;
-        debug_assert_eq!(
-            app.player.is_remote(),
-            app.player_endpoint.is_some(),
-            "player-endpoint invariant"
-        );
+        debug_assert!(app.player_endpoint.is_some(), "player-endpoint invariant");
         if endpoint.is_local() {
             let bootstrap = local_daemon_bootstrap.unwrap();
-            app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
             app.last_played_completed = bootstrap.last_played_completed;
             app.try_auto_reconnect();
-        } else {
-            app.queue_source = remote_queue_source;
         }
-        app.setup.audiobookshelf_startup_request = (services.audiobookshelf_configured
-            && services.audiobookshelf_credential_present)
-            .then_some(crate::app::state::service_setup::StartupRequest {
-                config: app.config.lock().unwrap().clone(),
-                generation: app.audiobookshelf_runtime.generation(),
-            });
+        initialize_service_startup(
+            &mut app,
+            audiobookshelf_startup_requested,
+            emby_configured_without_client,
+            should_open_services,
+        );
         app
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn construct(config: crate::config::Config) -> App {
+        let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+        App::new_remote_optional_with_config(
+            None,
+            remote,
+            player_rx,
+            &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+            config,
+        )
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_uses_system_notifications_when_stay_alive_is_off()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            system_notifications: true,
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(app.system_notifications);
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_suppresses_notifications_when_stay_alive_is_on()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            stay_alive: true,
+            system_notifications: true,
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(!app.system_notifications);
+    }
+
+    #[test]
+    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_requests_startup_when_configured_without_client()
+     {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let config = crate::config::Config {
+            emby_setup: Some(mbv_config::EmbySetup::new("https://emby.example", "user")),
+            ..Default::default()
+        };
+        let app = construct(config);
+
+        assert!(app.setup.emby_startup_request.is_some());
     }
 }

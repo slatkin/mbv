@@ -39,7 +39,7 @@ impl App {
     /// own host config — so without this, direct-daemon and `stay_alive`
     /// sessions would silently ignore the controlling client's language
     /// preferences until the user manually cycled subtitle mode once.
-    /// Call this right after any `self.player = PlayerProxy::remote(...)`
+    /// Call this right after any `self.player = PlayerProxy::from_remote(...)`
     /// assignment.
     pub(in crate::app) fn sync_subtitle_prefs_to_player(&mut self) {
         let prefs = {
@@ -90,7 +90,8 @@ impl App {
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
     pub(in crate::app) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
-        self.player
+        let _ = self
+            .player
             .send_command(mbv_ctrl::player::PlayerCommand::SetSubtitlePrefs {
                 mode: prefs.mode,
                 subtitle_lang: prefs.subtitle_lang,

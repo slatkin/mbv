@@ -21,7 +21,7 @@ After Audiobookshelf becomes Ready, mbv SHALL discover the authenticated user's 
 #### Scenario: Audiobookshelf is the only configured content Service
 - **WHEN** mbv starts with configured Audiobookshelf content and no configured Emby Service or feed subscriptions
 - **THEN** mbv SHALL enter its ordinary content UI rather than opening Services settings as though no content Service were configured
-- **THEN** Audiobookshelf initialization and discovery SHALL occur for both bare-mode and attached Local daemon clients
+- **THEN** Audiobookshelf initialization and discovery SHALL occur for every Client of the local daemon
 
 #### Scenario: Catalog request explicitly rejects the credential
 - **WHEN** an authenticated catalog request explicitly rejects the persisted Audiobookshelf credential

@@ -1,61 +1,44 @@
-use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::queue_owner::LocalQueueOwner;
-use crate::app::{
-    App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
-};
-use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::EmbyItem;
-use mbv_queue::ExecSlot;
-use mbv_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
+use crate::app::{App, PendingQueueAction, QueueScope, QueueScopeResolution, QueueView, UndoEntry};
+use mbv_queue::{QueueItem, QueueSlotId};
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {
-        self.remote_player_tab.is_some()
+        self.remote_view.is_some()
     }
 
     pub(in crate::app) fn has_direct_remote_queue(&self) -> bool {
-        self.player.is_remote() && self.has_remote_queue()
+        self.has_remote_queue()
     }
 
-    pub(in crate::app) fn queue_edits_reach_owner(&self) -> bool {
-        matches!(self.playback_target(), PlaybackTarget::Local(_))
-    }
-
-    /// Whether the scope's canonical queue is the playback owner's accepted
-    /// submission. Bare mode uses a generation fence until submit; the
-    /// Stay-alive owner is authoritative from its snapshots, while direct
-    /// remote scope is already independently projected.
-    pub(in crate::app) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
-        match self.local_queue_owner() {
-            LocalQueueOwner::StayAlive => true,
-            LocalQueueOwner::ThisProcess => {
-                scope == QueueScope::Remote
-                    || self.queue_for_scope(scope).sequence_generation
-                        <= self.player.status.lock().unwrap().sequence_generation
-            }
+    /// Return the Player link and event receiver that own the requested
+    /// queue. Local resolves to the suspended home link when present.
+    pub(in crate::app) fn queue_link(
+        &mut self,
+        scope: QueueScope,
+    ) -> (
+        &mbv_player::PlayerProxy,
+        &mut std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ) {
+        match (scope, self.suspended_local.as_mut()) {
+            (QueueScope::Local, Some(home)) => (&home.player, &mut home.player_rx),
+            _ => (&self.player, &mut self.player_rx),
         }
     }
 
-    /// Whether a canonical-queue edit in `scope` should also be sent to the
-    /// player as a live command. `active` is the player's current playing
-    /// state (`self.player.status.lock().unwrap().active`), passed in since
-    /// callers already hold it.
-    pub(in crate::app) fn queue_edit_reaches_player(
-        &self,
-        scope: QueueScope,
-        active: bool,
-    ) -> bool {
-        scope == QueueScope::Remote
-            || (active || self.player.is_remote())
-                && self.queue_edits_reach_owner()
-                && self.local_queue_is_owner_queue(scope)
+    /// The `PlayerProxy` that owns the Local queue's state: the suspended home
+    /// link when present, else the current player. Read-only counterpart of
+    /// [`App::queue_link`] for `QueueScope::Local`.
+    pub(in crate::app) fn local_queue_player(&self) -> &mbv_player::PlayerProxy {
+        self.suspended_local
+            .as_ref()
+            .map_or(&self.player, |home| &home.player)
     }
 
-    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
+    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &QueueView {
         match scope {
-            QueueScope::Local => &self.player_tab,
+            QueueScope::Local => &self.local_view,
             QueueScope::Remote => self
-                .remote_player_tab
+                .remote_view
                 .as_ref()
                 .expect("remote queue scope requires remote queue"),
         }
@@ -67,30 +50,38 @@ impl App {
         scope: QueueScope,
         slot_id: QueueSlotId,
     ) -> Option<usize> {
-        self.queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)
+        self.queue_for_scope(scope).slot_index(slot_id)
     }
 
-    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
+    pub(in crate::app) fn remove_queue_slots_where(
+        &mut self,
+        predicate: impl Fn(&QueueItem) -> bool,
+    ) {
+        for scope in [QueueScope::Local, QueueScope::Remote] {
+            if scope == QueueScope::Remote && !self.has_remote_queue() {
+                continue;
+            }
+            let slot_ids = self
+                .queue_for_scope(scope)
+                .slots()
+                .iter()
+                .filter(|slot| predicate(&slot.item))
+                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
+                .collect::<Vec<_>>();
+            if !slot_ids.is_empty() {
+                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+            }
+        }
+    }
+
+    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut QueueView {
         match scope {
-            QueueScope::Local => &mut self.player_tab,
+            QueueScope::Local => &mut self.local_view,
             QueueScope::Remote => self
-                .remote_player_tab
+                .remote_view
                 .as_mut()
                 .expect("remote queue scope requires remote queue"),
         }
-    }
-
-    /// Stamps `scope`'s queue with the playback owner's current sequence
-    /// generation, after a submit the owner accepted at that generation.
-    pub(in crate::app) fn stamp_queue_generation(&mut self, scope: QueueScope) {
-        if !self.local_queue_owner().owns_local_persistence() {
-            return;
-        }
-        let generation = self.player.status.lock().unwrap().sequence_generation;
-        self.queue_for_scope_mut(scope).sequence_generation = generation;
     }
 
     pub(in crate::app) fn undo_stack_for_scope_mut(
@@ -126,189 +117,46 @@ impl App {
         self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
-    pub(in crate::app) fn set_queue_source_if_not_local_daemon(
-        &mut self,
-        source: mbv_queue::QueueSource,
-    ) {
-        match self.local_queue_owner() {
-            LocalQueueOwner::StayAlive => {}
-            LocalQueueOwner::ThisProcess => self.queue_source = source,
-        }
-    }
-
-    /// Adopt the Stay-alive owner's snapshot source and reconcile a pending
-    /// playlist-save source update (design D6). `ThisProcess` owns its source
-    /// directly, so it adopts nothing.
+    /// Adopt the owner's snapshot source and reconcile a pending
+    /// playlist-save source update (design D6).
     pub(in crate::app) fn adopt_owner_source(&mut self, unified: &mbv_ctrl::UnifiedQueueStateData) {
-        match self.local_queue_owner() {
-            LocalQueueOwner::ThisProcess => {}
-            LocalQueueOwner::StayAlive => {
-                self.queue_source = unified.source.clone();
-                if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
-                    if unified.lineage != lineage {
-                        self.pending_owner_source_update = None;
-                    } else if unified.source == source {
-                        self.pending_owner_source_update = None;
-                        self.queue_dirty = false;
-                        self.clear_local_playlist_entry_ids();
-                    }
-                }
+        if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
+            if unified.lineage != lineage {
+                self.pending_owner_source_update = None;
+            } else if unified.source == source {
+                self.pending_owner_source_update = None;
+                self.queue_dirty = false;
             }
         }
     }
 
     pub(in crate::app) fn clear_local_queue_metadata(&mut self) {
-        self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
-    }
-
-    pub(in crate::app) fn persist_local_queue_state_if_needed(&mut self, scope: QueueScope) {
-        if self.local_queue_metadata_applies(scope) {
-            self.save_queue_state();
-        }
-    }
-
-    pub(in crate::app) fn sync_playback_queue_items_after_append(
-        &mut self,
-        scope: QueueScope,
-        items: Vec<ExecSlot>,
-    ) -> bool {
-        if items.is_empty() || scope != self.playing_queue_scope() {
-            return true;
-        }
-        if scope != QueueScope::Remote && !self.queue_edits_reach_owner() {
-            return true;
-        }
-        if scope != QueueScope::Remote && !self.local_queue_is_owner_queue(scope) {
-            // Bare mode has no live command channel before its first submit.
-            return true;
-        }
-        if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
-            // A cold in-process player has no command channel yet. The app's
-            // canonical queue is authoritative until the next Play starts it.
-            return true;
-        }
-        let sent = self.player.queue_append(items);
-        if !sent && self.player.is_remote_disconnected() {
-            self.flash(
-                crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        if !sent && self.player.is_remote() && !self.player.supports_queue_append() {
-            self.flash(
-                "Remote append is not supported by this direct mbv peer".to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        if !sent {
-            self.flash(
-                if self.player.is_remote_disconnected() {
-                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
-                } else {
-                    "Playback owner rejected the queue append"
-                }
-                .to_string(),
-                ToastSeverity::Error,
-            );
-            return false;
-        }
-        true
     }
 
     pub(in crate::app) fn playing_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().playback_target()
     }
 
-    pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.reset_bare_transitions();
-        self.advance_queue_epoch();
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        match self.playing_queue_scope() {
-            QueueScope::Local => {
-                self.player_tab.set_items(items, cursor);
-                // Bare mode fences a local replacement until submit. A
-                // Stay-alive Client instead reconciles the owner's snapshots.
-                match self.local_queue_owner() {
-                    LocalQueueOwner::StayAlive => {}
-                    LocalQueueOwner::ThisProcess => {
-                        let owner_generation =
-                            self.player.status.lock().unwrap().sequence_generation;
-                        self.player_tab.sequence_generation = owner_generation.saturating_add(1);
-                    }
-                }
-            }
-            QueueScope::Remote => {
-                let queue = self
-                    .remote_player_tab
-                    .as_mut()
-                    .expect("direct remote playback queue requires remote queue");
-                queue.set_items(items, cursor);
-            }
-        }
-        // A full replacement changes the queue occurrence sequence. A preserved
-        // prior selection could refer to an unrelated slot, so force a re-anchor
-        // to the replacement's start index rather than relying on `Preserve`.
-        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
-    }
-
     pub(in crate::app) fn viewed_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().visible_scope()
     }
 
-    pub(in crate::app) fn displayed_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
         self.queue_for_scope(self.viewed_queue_scope())
     }
 
-    pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
         self.queue_for_scope_mut(self.viewed_queue_scope())
     }
 
-    pub(in crate::app) fn playback_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn playback_queue(&self) -> &QueueView {
         self.queue_for_scope(self.playing_queue_scope())
     }
 
-    pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut QueueView {
         self.queue_for_scope_mut(self.playing_queue_scope())
-    }
-
-    pub(in crate::app) fn merge_refreshed_queue(
-        &mut self,
-        scope: QueueScope,
-        fetched_items: Vec<EmbyItem>,
-    ) -> RefreshMergeResult {
-        let queue_len = self.queue_for_scope(scope).total_queue_len();
-        let sync_player_prunes =
-            scope == self.playing_queue_scope() && !self.has_direct_remote_queue();
-        let active_index = if scope == self.playing_queue_scope() {
-            let st = self.player.status.lock().unwrap();
-            (st.active && st.current_idx < queue_len).then_some(st.current_idx)
-        } else {
-            None
-        };
-        let result = {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.sync_active_slot(active_index);
-            queue.merge_refresh(fetched_items)
-        };
-        if sync_player_prunes {
-            // Slot-addressed removal: order-independent, so no descending
-            // index sort is needed. Remote owners take the unified path;
-            // the raw command is the local-player fallback only.
-            for slot_id in &result.pruned_slots {
-                if !self
-                    .player
-                    .queue_remove_slot(mbv_ctrl::slot_id_to_u64(*slot_id))
-                {
-                    self.player
-                        .send_command(PlayerCommand::QueueRemove(*slot_id));
-                }
-            }
-        }
-        result
     }
 
     /// Whether the previous/next transport controls (playback-header mouse
@@ -330,24 +178,20 @@ impl App {
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 
-    /// Slot-keyed check of whether a completed/stopped queue slot should be
-    /// consumed, given a player-reported completion (`consume`) and the
-    /// type-specific consume flags. Returns `(should_consume, is_audio)` --
-    /// callers that act on the removal need `is_audio` afterward to route to
-    /// `on_video_consumed`/`on_audio_consumed`. Resolves the audio/video
-    /// flag from the queue model by slot identity instead of raw index.
+    /// Resolve the slot kind for the consume side effect. The Player owner
+    /// has already applied its consume policy and reports the decision in the
+    /// event's `consume` flag.
     pub(in crate::app) fn should_consume_slot(
         &self,
         slot_id: QueueSlotId,
         consume: bool,
     ) -> (bool, bool) {
-        let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
+        let item = self.playback_queue().slot(slot_id).map(|slot| &slot.item);
         let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
         let (consume_videos, consume_audio) = {
             let config = self.config.lock().unwrap();
-            let cfg = &*config;
-            (cfg.consume_videos, cfg.consume_audio)
+            (config.consume_videos, config.consume_audio)
         };
         let should_consume =
             consume && ((is_video && consume_videos) || (is_audio && consume_audio));
@@ -364,26 +208,6 @@ impl App {
             "consume check"
         );
         (should_consume, is_audio)
-    }
-
-    /// Removes a completed slot from the local playback queue by identity.
-    /// Uses `consume_slot` rather than `remove_slot` so a slot that is
-    /// currently marked active can still be consumed. Returns the removed
-    /// item's id, or `None` if the slot no longer exists.
-    pub(in crate::app) fn consume_slot_from_active_playback_queue(
-        &mut self,
-        slot_id: QueueSlotId,
-    ) -> Option<String> {
-        let removed = match self.playback_queue_mut().queue.consume_slot(slot_id) {
-            QueueMutationResult::Applied(slot) => slot,
-            QueueMutationResult::NotFound => return None,
-        };
-        self.playback_queue_mut().clamp_cursor();
-        if !self.player.is_remote() {
-            self.player
-                .send_command(PlayerCommand::QueueRemove(slot_id));
-        }
-        Some(removed.item.id().to_string())
     }
 
     /// Connected to an mbv daemon/client: the peer's queue is the displayed

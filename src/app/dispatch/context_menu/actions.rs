@@ -261,7 +261,7 @@ impl App {
             // (ContextAction::PlayQueue, D2); bare Play on Queue
             // focus should not occur, but keep the legacy read for
             // defensive parity with the pre-D2 behavior.
-            let index = self.displayed_queue().queue_cursor;
+            let index = self.displayed_queue().cursor();
             self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
                 index,
             ));
@@ -274,27 +274,6 @@ impl App {
             if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                 self.select_item(lib_idx, item);
             }
-        }
-    }
-
-    /// Rebuild the local canonical queue from a context-menu selection only
-    /// when this process owns playback. A direct remote queue rebuilds its own
-    /// queue on submission, while an attached Session must leave the local
-    /// Composed queue untouched. Replayed by `run_routed_replacement` for the
-    /// gated `PlaySelection`/`ShuffleSelection` sites.
-    pub(in crate::app) fn rebuild_queue_for_selection(
-        &mut self,
-        items: &[EmbyItem],
-        source: mbv_queue::QueueSource,
-    ) {
-        let rebuild_local_queue =
-            !self.has_direct_remote_queue() && self.connected_session_id.is_none();
-        if rebuild_local_queue {
-            self.replace_playback_queue(items.to_vec(), 0);
-        }
-        self.set_queue_source_if_not_local_daemon(source);
-        if rebuild_local_queue {
-            self.save_queue_state();
         }
     }
 

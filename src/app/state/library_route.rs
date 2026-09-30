@@ -44,8 +44,7 @@ impl App {
     /// `enqueue_route_conflict`) that previously duplicated this condition
     /// verbatim.
     pub(in crate::app) fn in_non_library_thin_client_mode(&self) -> bool {
-        self.connected_session_id.is_some()
-            || (self.player.is_remote() && self.active_route.is_none())
+        self.connected_session_id.is_some() || self.active_route.is_none()
     }
 
     /// Resolves the configured library route for a library name (#256):

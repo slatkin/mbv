@@ -6,20 +6,32 @@ use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the
 /// injected `store`, so tests can observe it without touching real state.
-pub(crate) fn persist_stay_alive_owner_queue(
+pub(crate) fn stay_alive_owner_queue_snapshot(
     owner: &DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
-    store: &mut dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), crate::DaemonLibError>,
-) -> Result<(), crate::DaemonLibError> {
-    store(&mbv_config::StayAliveQueueState {
+) -> mbv_config::StayAliveQueueState {
+    mbv_config::StayAliveQueueState {
         queue: project_queue_state(
             &owner.core.queue,
             &owner.core.source,
             &player.status.lock().unwrap(),
         ),
         lineage: *shared_queue.lineage.lock().unwrap(),
-    })
+    }
+}
+
+pub(crate) fn persist_stay_alive_owner_queue(
+    owner: &DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    store: &mut dyn FnMut(&mbv_config::StayAliveQueueState) -> Result<(), crate::DaemonLibError>,
+) -> Result<(), crate::DaemonLibError> {
+    store(&stay_alive_owner_queue_snapshot(
+        owner,
+        player,
+        shared_queue,
+    ))
 }
 
 pub(crate) fn project_queue_state(
@@ -136,6 +148,7 @@ pub(crate) fn broadcast_queue_state(
     queue: &PlaybackQueue,
     source: &mbv_queue::QueueSource,
     transitions: &mbv_player::transition::OwnerTransitionState,
+    except: Option<crate::CtrlClientId>,
 ) {
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();
@@ -204,6 +217,7 @@ pub(crate) fn broadcast_queue_state(
             &unified_abs_json,
             &unified_book_json,
             &unified_json,
+            except,
         );
     }
 

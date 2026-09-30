@@ -479,12 +479,7 @@ impl Model {
             let (items, remove_targets, capabilities) = slot_ids
                 .iter()
                 .filter_map(|sid| {
-                    let slot = self
-                        .app
-                        .queue_for_scope(scope)
-                        .slots()
-                        .iter()
-                        .find(|s| s.slot_id == *sid)?;
+                    let slot = self.app.queue_for_scope(scope).slot(*sid)?;
                     let item = slot.item.as_emby().cloned();
                     let remove = mbv_ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
                     let capability =

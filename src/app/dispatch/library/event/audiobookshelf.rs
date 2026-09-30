@@ -30,7 +30,7 @@ impl App {
                 library_id,
                 result,
             } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation,
                 library_item_id,
                 result,
@@ -40,12 +40,6 @@ impl App {
                     &library_item_id,
                     result,
                 );
-            }
-            AudiobookshelfEvent::ProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_progress_acknowledged(&update);
-            }
-            AudiobookshelfEvent::BookProgressAcknowledged(update) => {
-                self.handle_audiobookshelf_book_progress_acknowledged(&update);
             }
         }
     }
@@ -261,40 +255,6 @@ impl App {
             self.audiobookshelf_shelf_cache.insert(library_id, items);
         }
     }
-
-    pub(super) fn handle_audiobookshelf_progress_acknowledged(
-        &mut self,
-        update: &mbv_player::AudiobookshelfProgressUpdate,
-    ) {
-        if self.audiobookshelf_runtime.accepts(update.generation) {
-            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-                update.current_time_seconds,
-            );
-            self.reconcile_audiobookshelf_progress(
-                &update.library_item_id,
-                &update.episode_id,
-                position_ticks,
-                update.current_time_seconds,
-                update.is_finished,
-            );
-        }
-    }
-
-    pub(super) fn handle_audiobookshelf_book_progress_acknowledged(
-        &mut self,
-        update: &mbv_player::AudiobookshelfBookProgressUpdate,
-    ) {
-        if self.audiobookshelf_runtime.accepts(update.generation) {
-            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-                update.current_time_seconds,
-            );
-            self.reconcile_audiobookshelf_book_progress(
-                &update.library_item_id,
-                position_ticks,
-                update.is_finished,
-            );
-        }
-    }
 }
 
 #[cfg(test)]
@@ -430,7 +390,7 @@ mod tests {
         state.detail_loading_ids.insert("book-a".into());
         state.detail_loading = true;
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 library_item_id: "book-a".into(),
                 result: detail_result(succeeds),
@@ -448,7 +408,7 @@ mod tests {
             app.audiobookshelf_runtime.begin_setup();
         }
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 library_item_id: if stale_generation {
                     "book-a"

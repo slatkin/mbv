@@ -248,7 +248,7 @@ pub enum AudiobookshelfEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    BookDetailFetched {
+    BookDetailLoaded {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_item_id: String,
         result: Result<
@@ -259,8 +259,6 @@ pub enum AudiobookshelfEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    ProgressAcknowledged(mbv_player::AudiobookshelfProgressUpdate),
-    BookProgressAcknowledged(mbv_player::AudiobookshelfBookProgressUpdate),
 }
 
 #[derive(Debug)]
@@ -311,12 +309,6 @@ pub enum LibEvent {
     Audiobookshelf(AudiobookshelfEvent),
     Playlist(PlaylistEvent),
     ModelContent(ModelContentEvent),
-
-    /// Best-effort background refresh of played/position state for the queue
-    /// that `restore_queue_state` already populated synchronously from disk.
-    /// See `spawn_enrich_queue_state`.
-    #[rustfmt::skip]
-    QueueEnriched { items: Vec<EmbyItem> },
     Error(String),
 }
 

@@ -1,6 +1,5 @@
 use super::*;
 
-mod actions_tests_queue_state_reseat;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_runtime;
 mod auto_reconnect;
@@ -15,12 +14,9 @@ mod library_route;
 mod lifecycle;
 mod music_grouping;
 mod narrow_browse_migration;
-mod next_up_accept_dispatch;
 mod panel_focus;
-mod player_event;
 mod podcast;
 mod queue;
-mod reattach;
 mod remote_commands;
 pub(crate) mod render_fixtures;
 mod route_state;
@@ -51,6 +47,105 @@ pub(crate) fn confirm_replace_queue(app: &mut App) {
     );
 }
 
+pub(crate) trait QueueViewTestExt {
+    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);
+    fn emby_items(&self) -> Vec<EmbyItem>;
+    fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize);
+    fn adopt_queue_items_with_active(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active_index: usize,
+    );
+    fn adopt_source(&mut self, source: mbv_queue::QueueSource);
+}
+
+impl QueueViewTestExt for QueueView {
+    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+        adopt_queue_view(
+            self,
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            cursor,
+            None,
+            mbv_queue::QueueSource::Unknown,
+        );
+    }
+
+    fn emby_items(&self) -> Vec<EmbyItem> {
+        self.slots()
+            .iter()
+            .filter_map(|slot| slot.item.as_emby().cloned())
+            .collect()
+    }
+
+    fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize) {
+        adopt_queue_view(self, items, cursor, None, mbv_queue::QueueSource::Unknown);
+    }
+
+    fn adopt_queue_items_with_active(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active_index: usize,
+    ) {
+        adopt_queue_view(
+            self,
+            items,
+            cursor,
+            Some(active_index),
+            mbv_queue::QueueSource::Unknown,
+        );
+    }
+
+    fn adopt_source(&mut self, source: mbv_queue::QueueSource) {
+        adopt_queue_view(
+            self,
+            self.slots().iter().map(|slot| slot.item.clone()).collect(),
+            self.cursor(),
+            None,
+            source,
+        );
+    }
+}
+
+fn adopt_queue_view(
+    view: &mut QueueView,
+    items: Vec<mbv_queue::QueueItem>,
+    cursor: usize,
+    active_index: Option<usize>,
+    source: mbv_queue::QueueSource,
+) {
+    let slots: Vec<_> = items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: index as u64 + 1,
+            item,
+        })
+        .collect();
+    let state = mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus {
+            current_idx: active_index.unwrap_or_default(),
+            ..Default::default()
+        },
+        active_slot: active_index.and_then(|index| slots.get(index).map(|slot| slot.slot_id)),
+        slots,
+        revision: 1,
+        source,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+    view.adopt(
+        &state,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    view.set_cursor(cursor);
+}
+
 pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {
@@ -59,10 +154,6 @@ pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
             item
         })
         .collect()
-}
-
-pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> mbv_queue::QueueState {
-    mbv_queue::QueueState::from_emby_items(items, 0, mbv_queue::QueueSource::Unknown)
 }
 
 pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
@@ -80,6 +171,11 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
 /// construction (`make_built_app`) plus the stub-friendly defaults below.
 pub(crate) fn make_app_stub() -> App {
     let mut app = make_built_app();
+    apply_app_stub_defaults(&mut app);
+    app
+}
+
+fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
     app.images.set_cache_capacity_for_test(50);
@@ -91,7 +187,20 @@ pub(crate) fn make_app_stub() -> App {
     // without arming focus explicitly. The refocus guard itself is tested
     // directly in input_music_track_focus_tests.
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
-    app
+}
+
+/// Re-anchor a stub app onto a fresh remote stub with a live command
+/// channel, returning the receiver the test must hold so owner-bound
+/// commands report success instead of a dropped-peer disconnect. Unit 4
+/// deleted Bare ownership, so `make_app_stub`'s player is a
+/// `RemotePlayer::stub` whose command channel is already dropped.
+pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd> {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.status.lock().unwrap().volume_max = 100;
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    app.player_rx = player_rx;
+    cmd_rx
 }
 
 #[test]
@@ -151,22 +260,17 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 }
 
 pub(crate) fn make_built_app() -> App {
-    use mbv_ctrl::player::PlayerStatus;
     use mbv_player::PlayerProxy;
     use std::sync::Mutex;
 
-    let status = Arc::new(Mutex::new(PlayerStatus {
-        volume_max: 100,
-        ..Default::default()
-    }));
-
-    let (_, player_rx) = std::sync::mpsc::channel();
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
+    remote.status.lock().unwrap().volume_max = 100;
     let (_, ws_rx) = std::sync::mpsc::channel();
-    let (transport_tx, transport_rx) = std::sync::mpsc::channel();
+    let (_, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
-    let player = PlayerProxy::stub(status);
+    let player = PlayerProxy::from_remote(remote, false);
 
     let config = crate::config::Config::default();
 
@@ -180,7 +284,6 @@ pub(crate) fn make_built_app() -> App {
         player_rx,
         ws_rx,
         transport_rx,
-        transport_tx,
         ws_send_tx: None,
         audiobookshelf_socket_rx: {
             let (_, rx) = std::sync::mpsc::channel();
@@ -188,8 +291,8 @@ pub(crate) fn make_built_app() -> App {
         },
         audiobookshelf_socket_tx: None,
         audiobookshelf_socket_generation: None,
-        player_tab: PlayerTab::default(),
-        remote_player_tab: None,
+        local_view: QueueView::default(),
+        remote_view: None,
         initial_queue_scope: QueueScope::Local,
         system_notifications: false,
         image_protocol: None,
@@ -214,12 +317,28 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
+fn remote_stub_config() -> crate::config::Config {
+    crate::config::Config::default()
+}
+
+fn close_initial_services(app: &mut App) {
+    app.close_settings();
+    app.pending_overlay = None;
+}
+
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
-    use crate::config::Config;
+    make_remote_app_stub_at_index(local_items, remote_items, 0)
+}
+
+pub(crate) fn make_remote_app_stub_at_index(
+    local_items: Vec<EmbyItem>,
+    remote_items: Vec<EmbyItem>,
+    current_idx: usize,
+) -> App {
     use mbv_emby::EmbyClient;
 
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(remote_items, 0);
-    let config = Config::default();
+    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(remote_items, current_idx);
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -227,9 +346,10 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    close_initial_services(&mut app);
+    app.local_view
+        .adopt_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     // Default to "focused, past grace window" for mouse tests.
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     app
@@ -239,12 +359,11 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    use crate::config::Config;
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
-    let config = Config::default();
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -252,9 +371,10 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    close_initial_services(&mut app);
+    app.local_view
+        .adopt_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     while cmd_rx.try_recv().is_ok() {}
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     (app, cmd_rx)
@@ -264,12 +384,11 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     local_items: Vec<EmbyItem>,
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    use crate::config::Config;
     use mbv_emby::EmbyClient;
 
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
-    let config = Config::default();
+    let config = remote_stub_config();
     let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
@@ -277,9 +396,10 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
-    app.player_tab
-        .set_items(local_items, app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
+    close_initial_services(&mut app);
+    app.local_view
+        .adopt_items(local_items, app.local_view.cursor());
+    app.local_view.set_cursor(0);
     // `App::new_remote` synchronizes this client's subtitle/audio-language
     // prefs to the freshly attached daemon before returning; drain that so
     // callers see only commands their own test actions send.
@@ -303,17 +423,18 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
         mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
     let config = Config {
         stay_alive: true,
-        ..Default::default()
+        ..remote_stub_config()
     };
     // A local-daemon stub is always stay-alive: tests that model this
     // path must never send RequestShutdown to the real daemon socket.
-    let app = App::new_remote_with_config(
+    let mut app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
         &mbv_remote_player::DaemonEndpoint::Local,
         config,
     );
+    close_initial_services(&mut app);
     (app, cmd_rx)
 }
 

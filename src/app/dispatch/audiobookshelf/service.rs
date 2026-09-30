@@ -1,50 +1,8 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::service_runtime::ServiceState;
-use mbv_queue::QueueState;
-
-fn audiobookshelf_progress_event(
-    update: mbv_player::AudiobookshelfProgressUpdate,
-) -> crate::app::state::events::LibEvent {
-    crate::app::state::events::LibEvent::Audiobookshelf(
-        crate::app::state::events::AudiobookshelfEvent::ProgressAcknowledged(update),
-    )
-}
-
-fn audiobookshelf_book_progress_event(
-    update: mbv_player::AudiobookshelfBookProgressUpdate,
-) -> crate::app::state::events::LibEvent {
-    crate::app::state::events::LibEvent::Audiobookshelf(
-        crate::app::state::events::AudiobookshelfEvent::BookProgressAcknowledged(update),
-    )
-}
-
-fn forward_audiobookshelf_updates<T, F>(
-    receiver: &std::sync::mpsc::Receiver<T>,
-    sender: &std::sync::mpsc::Sender<crate::app::state::events::LibEvent>,
-    event: F,
-) where
-    T: Send + 'static,
-    F: Fn(T) -> crate::app::state::events::LibEvent + Send + 'static,
-{
-    for update in receiver {
-        if sender.send(event(update)).is_err() {
-            break;
-        }
-    }
-}
 
 impl App {
-    fn update_local_audiobookshelf_context(
-        &self,
-        context: Option<mbv_player::AudiobookshelfPlayerContext>,
-    ) {
-        self.player.update_audiobookshelf_context(context.clone());
-        if let Some(suspended) = &self.suspended_local {
-            suspended.player.update_audiobookshelf_context(context);
-        }
-    }
-
     fn signal_running_local_daemon(&mut self, revision: u64) {
         if let Err(error) = mbv_remote_player::signal_local_daemon_service_setup(
             mbv_queue::ServiceKind::Audiobookshelf,
@@ -63,19 +21,17 @@ impl App {
             .cancel_setup(current_generation, ServiceState::NeedsAuthentication);
         self.clear_audiobookshelf_catalog();
         self.stop_active_audiobookshelf_playback();
-        self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
         mbv_config::clear_service_secret_result(mbv_queue::ServiceKind::Audiobookshelf)
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_audiobookshelf = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf());
+            .item_at(active_index)
+            .is_some_and(mbv_queue::QueueItem::is_audiobookshelf);
         if active_is_audiobookshelf {
-            self.reset_bare_transitions();
             self.player.stop();
         }
     }
@@ -130,7 +86,6 @@ impl App {
                     self.audiobookshelf_runtime
                         .commit_ready(completion.generation, user.clone());
                     self.start_audiobookshelf_socket(completion.generation);
-                    self.install_audiobookshelf_player_context(completion.generation);
                     self.setup.audiobookshelf_setup_form = None;
                     self.signal_running_local_daemon(revision);
                     self.flash(
@@ -173,67 +128,26 @@ impl App {
         self.audiobookshelf_runtime.state = previous;
     }
 
-    /// Helper that persists a filtered queue or clears the file when empty.
-    /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
-    fn persist_filtered_queue_abs(
-        state: Option<&QueueState>,
-    ) -> Result<(), mbv_config::ConfigError> {
-        match state {
-            Some(state) if !state.items.is_empty() => mbv_config::save_queue_state(state),
-            _ => mbv_config::clear_queue_state(),
-        }
-    }
-
     fn clear_audiobookshelf_queue_memory(&mut self) {
         // If the currently active slot is Audiobookshelf, stop playback.
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_is_abs = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .is_some_and(|slot| slot.item.is_audiobookshelf());
+            .item_at(active_index)
+            .is_some_and(mbv_queue::QueueItem::is_audiobookshelf);
         if active_is_abs {
             self.player.stop();
         }
-        // Filter both local and remote player tabs, keeping Emby + Feed items.
-        let mut queues = vec![&mut self.player_tab];
-        if let Some(queue) = self.remote_player_tab.as_mut() {
-            queues.push(queue);
-        }
-        for queue in queues {
-            let cursor_before = queue.queue_cursor;
-            let kept = queue
-                .all_queue_items()
-                .into_iter()
-                .filter(|item| !item.is_audiobookshelf())
-                .collect::<Vec<_>>();
-            let new_cursor = cursor_before.min(kept.len().saturating_sub(1));
-            queue.set_queue_items(kept, new_cursor);
-        }
+        self.remove_queue_slots_where(mbv_queue::QueueItem::is_audiobookshelf);
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
-        // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
-        // but future-proof: if items empty, reset source).
-        if self.player_tab.total_queue_len() == 0 {
-            self.set_queue_source_if_not_local_daemon(mbv_queue::QueueSource::Unknown);
-        }
         self.queue_dirty = false;
     }
 
     pub(in crate::app) fn remove_audiobookshelf_confirmed(&mut self) {
         self.stop_audiobookshelf_socket();
         self.stop_active_audiobookshelf_playback();
-        // Snapshot for rollback if persistence fails, mirroring Emby removal.
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
-        // Use the transactional boundary that accepts a clear_owned_state closure.
-        // Queue filtering (persisted + in-memory) is performed inside that closure
-        // so setup/secret removal and queue purge are atomic from the caller's view.
-        let persist_result = mbv_config::remove_audiobookshelf_setup_and_secret_with_owned_state(
-            || Self::persist_filtered_queue_abs(filtered.as_ref()),
-            || {},
-        );
-
-        if let Err(error) = persist_result {
+        if let Err(error) = mbv_config::remove_audiobookshelf_setup_and_secret() {
             // Rollback: restore setup/secret handled inside transaction rollback;
             // The transaction restores durable setup, secret, and queue state;
             // in-memory queues have not been changed on this path.
@@ -245,7 +159,6 @@ impl App {
         }
 
         self.clear_audiobookshelf_catalog();
-        self.update_local_audiobookshelf_context(None);
         self.clear_audiobookshelf_queue_memory();
         self.config.lock().unwrap().audiobookshelf_setup = None;
         self.audiobookshelf_runtime.remove_setup();
@@ -278,42 +191,14 @@ impl App {
         let user = candidate.user.clone();
         let setup = candidate.setup.clone();
 
-        // Snapshot old queue for rollback explanation (persisted state rollback
-        // itself is handled inside the transaction's restore hook, but we also
-        // need to restore in-memory queue on failure).
-        let old_queue = mbv_config::load_queue_state();
-        let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
-        let old_player_items = self.player_tab.all_queue_items();
-        let old_player_cursor = self.player_tab.queue_cursor;
-        let old_remote_items = self
-            .remote_player_tab
-            .as_ref()
-            .map(|tab| (tab.all_queue_items(), tab.queue_cursor));
-
         let result = mbv_audiobookshelf::replace_audiobookshelf_candidate(
             mbv_audiobookshelf::AudiobookshelfValidatedSetup::new(
                 candidate.setup,
                 candidate.user,
                 candidate.api_key,
             ),
-            || {
-                Self::persist_filtered_queue_abs(filtered.as_ref()).map_err(|error| {
-                    mbv_audiobookshelf::AudiobookshelfError::persistence(error.to_string())
-                })
-            },
-            || {
-                // Restore in-memory queues on failure.
-                self.player_tab
-                    .set_queue_items(old_player_items.clone(), old_player_cursor);
-                if let Some((items, cursor)) = old_remote_items.clone()
-                    && let Some(tab) = self.remote_player_tab.as_mut()
-                {
-                    tab.set_queue_items(items, cursor);
-                }
-                if let Some(q) = old_queue.as_ref() {
-                    let _ = mbv_config::save_queue_state(q);
-                }
-            },
+            || Ok(()),
+            || {},
         );
         match result {
             Ok((_, revision)) => {
@@ -328,7 +213,6 @@ impl App {
                 self.audiobookshelf_runtime
                     .commit_ready(replacement_generation, user.clone());
                 self.start_audiobookshelf_socket(replacement_generation);
-                self.install_audiobookshelf_player_context(replacement_generation);
                 self.signal_running_local_daemon(revision);
                 self.flash(
                     format!(
@@ -346,46 +230,6 @@ impl App {
                 );
             }
         }
-    }
-
-    pub(in crate::app) fn install_audiobookshelf_player_context(
-        &self,
-        generation: mbv_core::service_runtime::SetupGeneration,
-    ) {
-        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
-        let credential = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf);
-        let context = setup.zip(credential).and_then(|(setup, credential)| {
-            mbv_player::AudiobookshelfPlayerContext::new(
-                generation,
-                setup,
-                credential,
-                mbv_emby::device_id(),
-            )
-            .map(|context| {
-                let (sender, receiver) = std::sync::mpsc::channel();
-                let context = context.with_progress_updates(sender);
-                let lib_tx = self.channels.lib_tx.clone();
-                let _ = std::thread::spawn(move || {
-                    forward_audiobookshelf_updates(
-                        &receiver,
-                        &lib_tx,
-                        audiobookshelf_progress_event,
-                    );
-                });
-                let (book_sender, book_receiver) = std::sync::mpsc::channel();
-                let context = context.with_book_progress_updates(book_sender);
-                let lib_tx = self.channels.lib_tx.clone();
-                let _ = std::thread::spawn(move || {
-                    forward_audiobookshelf_updates(
-                        &book_receiver,
-                        &lib_tx,
-                        audiobookshelf_book_progress_event,
-                    );
-                });
-                context
-            })
-        });
-        self.update_local_audiobookshelf_context(context);
     }
 
     // ---- Audiobookshelf Socket.IO lifecycle (tasks 2.5-2.6) ----
@@ -457,8 +301,8 @@ impl App {
 
     /// Apply a `user_item_progress_updated` event from the socket.
     ///
-    /// Task 3.1-3.3: generation gate, active-slot skip, in-place merge
-    /// via reconcile (no REST call). Task 3.4 covers test cases.
+    /// Generation-gate, skip the active Player-owned slot, relay progress to
+    /// the home owner, and merge the event into browse state without a REST call.
     fn apply_audiobookshelf_socket_progress(
         &mut self,
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
@@ -492,7 +336,7 @@ impl App {
                             && ep.episode_id == progress.episode_id
                     })
                 })
-        }) || self.player_tab.queue.slots().iter().any(|slot| {
+        }) || self.local_view.slots().iter().any(|slot| {
             slot.item.as_audiobookshelf().is_some_and(|ep| {
                 ep.library_item_id == progress.library_item_id
                     && ep.episode_id == progress.episode_id
@@ -504,13 +348,30 @@ impl App {
 
         // Task 3.1: merge in place (no REST call) via the existing
         // shared reconcile path that the daemon-route ack also uses.
-        let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
-            progress.current_time_seconds,
-        );
+        let update = mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: progress.library_item_id.clone(),
+                episode_id: progress.episode_id.clone(),
+            },
+            position_ticks: crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+                progress.current_time_seconds,
+            ),
+            finished: progress.is_finished,
+        };
+        let result = {
+            let (player, _) = self.queue_link(crate::app::QueueScope::Local);
+            player
+                .remote()
+                .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {
+                    updates: vec![update],
+                })
+        };
+        if let Err(error) = result {
+            self.flash(error.to_string(), ToastSeverity::Warning);
+        }
         self.reconcile_audiobookshelf_progress(
             &progress.library_item_id,
             &progress.episode_id,
-            position_ticks,
             progress.current_time_seconds,
             progress.is_finished,
         );
@@ -522,10 +383,10 @@ impl App {
         &self,
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) -> bool {
+        let active_index = self.player.status.lock().unwrap().current_idx;
         self.playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|slot| slot.item.as_audiobookshelf())
+            .item_at(active_index)
+            .and_then(mbv_queue::QueueItem::as_audiobookshelf)
             .is_some_and(|episode| {
                 episode.library_item_id == progress.library_item_id
                     && episode.episode_id == progress.episode_id

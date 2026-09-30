@@ -1,6 +1,5 @@
 pub use mbv_config::{
-    Config, clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
-    migrate_legacy_emby_token, prefs_path, save_queue_state,
+    Config, is_system_instance, load_library_position_state, migrate_legacy_emby_token, prefs_path,
 };
 #[cfg(test)]
 pub use mbv_config::{LastRemoteConnection, TestStateDirGuard};

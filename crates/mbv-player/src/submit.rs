@@ -224,16 +224,6 @@ impl Player {
             audio_device,
         }
     }
-
-    pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
-        if slots.is_empty()
-            || (slots.iter().any(|slot| slot.item.is_audiobookshelf())
-                && !self.can_admit_audiobookshelf())
-        {
-            return false;
-        }
-        self.send_command(PlayerCommand::QueueAppend { items: slots })
-    }
 }
 
 fn make_reporter(

@@ -71,9 +71,9 @@ impl App {
             .flatten()
             .filter(|idx| *idx < total);
         if let Some(idx) = active_slot {
-            queue.queue_cursor = idx;
-        } else if queue.queue_cursor >= total && total > 0 {
-            queue.queue_cursor = 0;
+            queue.set_cursor(idx);
+        } else if queue.cursor() >= total && total > 0 {
+            queue.set_cursor(0);
         }
     }
 

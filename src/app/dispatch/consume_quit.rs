@@ -28,10 +28,6 @@ impl App {
             }
         }
         self.save_prefs();
-        if !self.player.is_remote() {
-            self.reset_bare_transitions();
-            self.player.stop();
-        }
         true
     }
 
@@ -53,7 +49,7 @@ impl App {
     /// playlist see the consumed items already removed instead of stale, longer state.
     ///
     /// Both checks are gated on `local_queue_metadata_applies`: `save_playlist_to_emby`
-    /// always pushes `player_tab.items` (the *local* queue), so if the consume actually
+    /// always pushes `local_view.items` (the *local* queue), so if the consume actually
     /// happened on a direct-remote/daemon queue, autosaving here would push an unrelated,
     /// unmodified local playlist to Emby instead of the queue that actually changed.
     pub(in crate::app) fn on_video_consumed(&mut self) {

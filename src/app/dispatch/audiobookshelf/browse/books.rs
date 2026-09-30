@@ -143,14 +143,15 @@ impl App {
             return;
         };
         let target_seconds = chapter.start;
+        let active_index = self.player.status.lock().unwrap().current_idx;
         let active_book = self
             .playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|slot| slot.item.as_audiobookshelf_book())
+            .item_at(active_index)
+            .and_then(mbv_queue::QueueItem::as_audiobookshelf_book)
             .is_some_and(|book| book.library_item_id == target.book_library_item_id());
         if active_book {
-            self.player
+            let _ = self
+                .player
                 .send_command(mbv_ctrl::player::PlayerCommand::SeekAbsolute(
                     target_seconds,
                 ));
@@ -183,52 +184,7 @@ impl App {
             return;
         }
 
-        let scope = self.playing_queue_scope();
-        let previous_queue = self.queue_for_scope(scope).clone();
-        let existing_index = self
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.item.content_id() == item.content_id());
-        let selected_index = existing_index.unwrap_or_else(|| {
-            self.queue_for_scope_mut(scope).queue.append(item.clone());
-            self.queue_for_scope(scope).total_queue_len() - 1
-        });
-        let selected_slot = self
-            .queue_for_scope(scope)
-            .slot_id_at(selected_index)
-            .expect("selected Audiobookshelf book queue slot disappeared");
-        {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.queue_cursor = selected_index;
-            let _ = queue.queue.set_active_slot(selected_slot);
-        }
-
-        let all_slots = self.queue_for_scope(scope).all_queue_slots();
-        let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
-        let submitted = self.player.submit_queue_slots(
-            all_slots,
-            selected_index,
-            self.queue_source.clone(),
-            None,
-            audio_only,
-            self.ui_volume,
-        );
-        if !submitted {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(
-                "Playback owner rejected this Audiobookshelf book".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.set_queue_scope(scope);
-        if !matches!(
-            self.effective_panel_focus(),
-            mbv_ui_model::settings::PanelFocus::Library
-        ) {
-            self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
-        }
+        let _ = self.submit_queue_item(item, true);
     }
 
     pub(in crate::app) fn enqueue_selected_audiobookshelf_book(&mut self, index: usize) {
@@ -242,9 +198,6 @@ impl App {
             );
             return;
         }
-        self.queue_for_scope_mut(self.viewed_queue_scope())
-            .queue
-            .append(item);
-        self.queue_dirty = true;
+        let _ = self.submit_queue_item(item, false);
     }
 }

@@ -17,14 +17,10 @@ impl App {
     pub(in crate::app) fn remote_slot_state(&self) -> RemoteSlotState {
         if self.connected_session_id.is_some() {
             RemoteSlotState::AttachedSession
-        } else if self.player.is_remote() {
-            if self.has_remote_queue() {
-                RemoteSlotState::DirectRemote
-            } else {
-                RemoteSlotState::LocalDaemon
-            }
+        } else if self.has_remote_queue() {
+            RemoteSlotState::DirectRemote
         } else {
-            RemoteSlotState::Off
+            RemoteSlotState::LocalDaemon
         }
     }
 
