@@ -515,7 +515,7 @@ impl App {
         drop(st);
         if active && self.queue_scope_is_playback(scope) && self.local_queue_is_owner_queue(scope) {
             if t == current_idx {
-                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {
                 let Some(slot_id) = slot_id else {
                     return;

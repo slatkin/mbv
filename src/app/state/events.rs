@@ -248,7 +248,7 @@ pub enum AudiobookshelfEvent {
             mbv_audiobookshelf::AudiobookshelfError,
         >,
     },
-    BookDetailFetched {
+    BookDetailLoaded {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_item_id: String,
         result: Result<

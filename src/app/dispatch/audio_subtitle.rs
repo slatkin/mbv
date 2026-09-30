@@ -90,7 +90,8 @@ impl App {
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
     pub(in crate::app) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
-        self.player
+        let _ = self
+            .player
             .send_command(mbv_ctrl::player::PlayerCommand::SetSubtitlePrefs {
                 mode: prefs.mode,
                 subtitle_lang: prefs.subtitle_lang,

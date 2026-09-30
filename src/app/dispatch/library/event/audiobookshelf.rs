@@ -30,7 +30,7 @@ impl App {
                 library_id,
                 result,
             } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation,
                 library_item_id,
                 result,
@@ -390,7 +390,7 @@ mod tests {
         state.detail_loading_ids.insert("book-a".into());
         state.detail_loading = true;
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 library_item_id: "book-a".into(),
                 result: detail_result(succeeds),
@@ -408,7 +408,7 @@ mod tests {
             app.audiobookshelf_runtime.begin_setup();
         }
         app.handle_lib_event(LibEvent::Audiobookshelf(
-            AudiobookshelfEvent::BookDetailFetched {
+            AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
                 library_item_id: if stale_generation {
                     "book-a"

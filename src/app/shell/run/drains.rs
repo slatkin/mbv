@@ -310,7 +310,7 @@ impl Model {
                     let _ = self.app.request_relative_step(direction);
                 }
                 mbv_ctrl::TransportCommand::Player(command) => {
-                    self.app.player.send_command(command);
+                    let _ = self.app.player.send_command(command);
                 }
             }
         }

@@ -77,11 +77,10 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
     ));
     app.local_view
         .adopt_queue_items_with_active(vec![episode_a, other], 0, 1);
-    {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 1;
-    }
+    let mut status = app.player.status.lock().unwrap();
+    status.active = true;
+    status.current_idx = 1;
+    drop(status);
     assert_eq!(
         app.local_view.slots()[1]
             .item

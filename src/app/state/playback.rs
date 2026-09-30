@@ -54,7 +54,7 @@ impl QueueScopeResolution {
 /// moved; the owner rejects the undo as stale when that slot is gone.
 #[derive(Debug)]
 pub(in crate::app) enum UndoEntry {
-    Remove { item: QueueItem, index: usize },
+    Remove { item: Box<QueueItem>, index: usize },
     Move { slot_id: QueueSlotId, from: usize },
 }
 

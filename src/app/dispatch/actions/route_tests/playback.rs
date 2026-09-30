@@ -220,11 +220,8 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     assert!(command_rx.try_iter().any(|command| {
         matches!(
             command,
-            mbv_ctrl::CtrlCmd::UnifiedQueueAppend {
-                items,
-                before: _,
-                op: _,
-            } if items.len() == 1 && items[0].id() == item.id
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. }
+                if items.len() == 1 && items[0].id() == item.id
         )
     }));
 }

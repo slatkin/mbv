@@ -129,7 +129,7 @@ impl App {
                 },
             );
             let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
-                AudiobookshelfEvent::BookDetailFetched {
+                AudiobookshelfEvent::BookDetailLoaded {
                     generation,
                     library_item_id,
                     result,

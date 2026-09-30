@@ -123,7 +123,8 @@ impl App {
             return;
         }
         self.set_queue_scope(scope);
-        self.player
+        let _ = self
+            .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 

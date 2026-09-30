@@ -200,8 +200,8 @@ impl App {
         // only thing that decides whether to skip.
         if self.config.lock().unwrap().always_skip_intro {
             let secs = mbv_emby_model::ticks_to_seconds(intro_end_ticks);
-            self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+            let _ = self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+            let _ = self.player.send_command(PlayerCommand::SkipIntroDismiss);
         }
     }
 
@@ -526,12 +526,12 @@ impl App {
         *self.player.status.lock().unwrap() = unified.status.clone();
         let scope = self.playing_queue_scope();
         let view = self.queue_for_scope(scope);
-        let cause = if view.lineage() != unified.lineage {
-            crate::app::state::queue_view::AdoptCause::Replacement
-        } else {
+        let cause = if view.lineage() == unified.lineage {
             crate::app::state::queue_view::AdoptCause::Background {
                 held: self.queue_cursor_held_by_user(),
             }
+        } else {
+            crate::app::state::queue_view::AdoptCause::Replacement
         };
         self.queue_for_scope_mut(scope).adopt(unified, cause);
         if scope == crate::app::QueueScope::Local {
@@ -575,8 +575,8 @@ impl App {
             let artist = item.artist.clone();
             self.next_up_item = Some(item.clone());
             // Daemon sends NextUpShow to mpv directly; only send from local player.
-            if !self.player.as_remote().is_some() {
-                self.player.send_command(PlayerCommand::NextUpShow {
+            if self.player.as_remote().is_none() {
+                let _ = self.player.send_command(PlayerCommand::NextUpShow {
                     item_id,
                     show_title,
                     ep_title,

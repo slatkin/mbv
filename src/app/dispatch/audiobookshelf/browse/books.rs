@@ -150,7 +150,8 @@ impl App {
             .and_then(mbv_queue::QueueItem::as_audiobookshelf_book)
             .is_some_and(|book| book.library_item_id == target.book_library_item_id());
         if active_book {
-            self.player
+            let _ = self
+                .player
                 .send_command(mbv_ctrl::player::PlayerCommand::SeekAbsolute(
                     target_seconds,
                 ));

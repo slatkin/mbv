@@ -41,14 +41,7 @@ impl App {
         }
         self.player_endpoint = Some(endpoint.clone());
         let keep_home_link = current_is_home;
-        if !keep_home_link {
-            // #233: tear down the previous remote connection's socket
-            // before dropping the old PlayerProxy, so its reader thread
-            // observes the shutdown and exits instead of leaking.
-            self.player.disconnect_remote();
-            self.player = PlayerProxy::remote(remote, always_play_next);
-            self.player_rx = remote_rx;
-        } else {
+        if keep_home_link {
             if !self.config.lock().unwrap().stay_alive {
                 self.player.stop();
             }
@@ -59,6 +52,13 @@ impl App {
                 ),
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
             });
+        } else {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
         }
         debug_assert!(self.player.as_remote().is_some());
         self.sync_subtitle_prefs_to_player();
@@ -147,14 +147,7 @@ impl App {
         }
         self.player_endpoint = Some(endpoint.clone());
         let keep_home_link = current_is_home;
-        if !keep_home_link {
-            // #233: tear down the previous remote connection's socket
-            // before dropping the old PlayerProxy, so its reader thread
-            // observes the shutdown and exits instead of leaking.
-            self.player.disconnect_remote();
-            self.player = PlayerProxy::remote(remote, always_play_next);
-            self.player_rx = remote_rx;
-        } else {
+        if keep_home_link {
             if !self.config.lock().unwrap().stay_alive {
                 self.player.stop();
             }
@@ -165,6 +158,13 @@ impl App {
                 ),
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
             });
+        } else {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
         }
         debug_assert!(self.player.as_remote().is_some());
         self.sync_subtitle_prefs_to_player();

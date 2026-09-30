@@ -182,10 +182,10 @@ impl App {
                 *self.player.status.lock().unwrap() = unified.status.clone();
             }
             let view = self.queue_for_scope(scope);
-            let cause = if view.lineage() != unified.lineage {
-                crate::app::state::queue_view::AdoptCause::Replacement
-            } else {
+            let cause = if view.lineage() == unified.lineage {
                 crate::app::state::queue_view::AdoptCause::OwnAnswer
+            } else {
+                crate::app::state::queue_view::AdoptCause::Replacement
             };
             self.queue_for_scope_mut(scope).adopt(unified, cause);
             if scope == QueueScope::Local {

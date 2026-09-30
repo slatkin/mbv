@@ -15,56 +15,57 @@ impl App {
                 self.player.stop();
             }
             WsEvent::Pause => {
-                self.player.set_paused(true);
+                let _ = self.player.set_paused(true);
             }
             WsEvent::Unpause => {
-                self.player.set_paused(false);
+                let _ = self.player.set_paused(false);
             }
             WsEvent::NextTrack => {
-                self.player.next();
+                let _ = self.player.next();
             }
             WsEvent::PreviousTrack => {
-                self.player.previous();
+                let _ = self.player.previous();
             }
             WsEvent::TogglePause => {
-                self.player.send_command(PlayerCommand::TogglePause);
+                let _ = self.player.send_command(PlayerCommand::TogglePause);
             }
             WsEvent::Seek(ticks) => {
-                self.player.send_command(PlayerCommand::SeekAbsolute(
+                let _ = self.player.send_command(PlayerCommand::SeekAbsolute(
                     mbv_emby_model::ticks_to_seconds(ticks),
                 ));
             }
             WsEvent::SeekRelative(secs) => {
-                self.player.send_command(PlayerCommand::Seek(secs));
+                let _ = self.player.send_command(PlayerCommand::Seek(secs));
             }
             WsEvent::SetVolume(v) => {
                 let vol_max = self.player.status.lock().unwrap().volume_max;
-                self.player
+                let _ = self
+                    .player
                     .send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max)));
             }
             WsEvent::VolumeUp => {
                 let st = self.player.status.lock().unwrap();
                 let v = (st.volume + 5).min(st.volume_max);
                 drop(st);
-                self.player.send_command(PlayerCommand::SetVolume(v));
+                let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::VolumeDown => {
                 let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
-                self.player.send_command(PlayerCommand::SetVolume(v));
+                let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::SetMute(muted) => {
                 self.mute_on = muted;
-                self.player.send_command(PlayerCommand::SetMute(muted));
+                let _ = self.player.send_command(PlayerCommand::SetMute(muted));
                 self.save_prefs();
             }
             WsEvent::ToggleMute => {
                 let muted = !self.player.status.lock().unwrap().muted;
                 self.mute_on = muted;
-                self.player.send_command(PlayerCommand::SetMute(muted));
+                let _ = self.player.send_command(PlayerCommand::SetMute(muted));
                 self.save_prefs();
             }
             WsEvent::SetAudio(index) => {
-                self.player.send_command(PlayerCommand::SetAudio(index));
+                let _ = self.player.send_command(PlayerCommand::SetAudio(index));
             }
             WsEvent::SetSub(index) => {
                 let sid = self
@@ -74,7 +75,7 @@ impl App {
                     .unwrap()
                     .subtitle_stream_index_to_mpv_id(index);
                 if let Some(sid) = sid {
-                    self.player.send_command(PlayerCommand::SetSub(sid));
+                    let _ = self.player.send_command(PlayerCommand::SetSub(sid));
                 }
             }
             WsEvent::UserDataChanged => {

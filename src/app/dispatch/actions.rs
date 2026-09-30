@@ -305,7 +305,8 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return;
         }
-        self.player
+        let _ = self
+            .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
         if let Some(count) = mixed_unplayable
             && !direct_remote
@@ -395,7 +396,8 @@ impl App {
                 if sent == QueueOpEdit::NotApplied {
                     return;
                 }
-                self.player
+                let _ = self
+                    .player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 return;
             }
@@ -417,7 +419,8 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return;
         }
-        self.player
+        let _ = self
+            .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
@@ -491,25 +494,7 @@ impl App {
             self.viewed_queue_scope()
         };
         if !start_playback {
-            // Row 5.3 (design D6): the enqueue reaches the scope's Player
-            // owner as an answered Append op; the Client holds no editable
-            // queue, so the entry appears only when the owner's answer is
-            // adopted.
-            let sent = self.queue_op(
-                scope,
-                mbv_remote_player::QueueOp::Append {
-                    items: vec![item],
-                    before: None,
-                },
-            );
-            if sent != QueueOpEdit::NotApplied {
-                if self.local_queue_metadata_applies(scope) {
-                    self.queue_dirty = true;
-                }
-                self.advance_queue_epoch();
-                return true;
-            }
-            return false;
+            return self.enqueue_queue_item(item, scope);
         }
         if !self.is_cast_attached() && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -603,6 +588,25 @@ impl App {
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
+        true
+    }
+
+    fn enqueue_queue_item(&mut self, item: QueueItem, scope: crate::app::QueueScope) -> bool {
+        // The entry appears only when the owner's answered Append is adopted.
+        let sent = self.queue_op(
+            scope,
+            mbv_remote_player::QueueOp::Append {
+                items: vec![item],
+                before: None,
+            },
+        );
+        if sent == QueueOpEdit::NotApplied {
+            return false;
+        }
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.advance_queue_epoch();
         true
     }
 

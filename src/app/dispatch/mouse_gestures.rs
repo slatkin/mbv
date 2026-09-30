@@ -39,7 +39,8 @@ impl App {
             return;
         }
         let target_secs = fraction * mbv_emby_model::ticks_to_seconds(runtime_ticks);
-        self.player
+        let _ = self
+            .player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).

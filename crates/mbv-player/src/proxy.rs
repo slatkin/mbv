@@ -22,11 +22,13 @@ impl PlayerProxy {
         }
     }
 
+    #[must_use]
     pub fn can_admit_audiobookshelf(&self) -> bool {
         self.remote.supports_audiobookshelf_queue()
             && self.remote.supports_audiobookshelf_book_queue()
     }
 
+    #[must_use]
     pub fn owner_is_audio_only(&self) -> bool {
         self.remote.supports_audio_only()
     }
@@ -54,6 +56,7 @@ impl PlayerProxy {
             .play_queue(items, start_idx, source, client, initial_volume);
     }
 
+    #[must_use]
     pub fn submit_queue_slots(
         &self,
         slots: Vec<ExecSlot>,
@@ -88,6 +91,7 @@ impl PlayerProxy {
             ))
     }
 
+    #[must_use]
     pub fn clear_queue(&self) -> bool {
         self.remote
             .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueClear)
@@ -101,22 +105,27 @@ impl PlayerProxy {
         self.remote.disconnect();
     }
 
+    #[must_use]
     pub fn send_ctrl_cmd(&self, cmd: mbv_ctrl::CtrlCmd) -> bool {
         self.remote.send_ctrl_cmd(cmd)
     }
 
+    #[must_use]
     pub fn send_playback_intent(&self, intent: mbv_ctrl::PlaybackIntent) -> bool {
         self.remote.send_playback_intent(intent)
     }
 
+    #[must_use]
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         self.remote.send_command(cmd)
     }
 
+    #[must_use]
     pub fn supports_queue_append(&self) -> bool {
         self.remote.supports_queue_append()
     }
 
+    #[must_use]
     pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
         if slots.iter().any(|slot| {
             (slot.item.as_audiobookshelf().is_some()
@@ -130,22 +139,27 @@ impl PlayerProxy {
             .queue_append(slots.into_iter().map(|slot| slot.item).collect())
     }
 
+    #[must_use]
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
         self.remote.queue_remove_slot(slot_id)
     }
 
+    #[must_use]
     pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
         self.remote.queue_remove_slots(slot_ids)
     }
 
+    #[must_use]
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
         self.remote.queue_move_slot(slot_id, to_index)
     }
 
+    #[must_use]
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
         self.remote.queue_play_slot(slot_id)
     }
 
+    #[must_use]
     pub fn next(&self) -> bool {
         self.remote.send_playback_intent(
             self.remote
@@ -153,6 +167,7 @@ impl PlayerProxy {
         )
     }
 
+    #[must_use]
     pub fn previous(&self) -> bool {
         self.remote.send_playback_intent(
             self.remote
@@ -160,6 +175,7 @@ impl PlayerProxy {
         )
     }
 
+    #[must_use]
     pub fn set_paused(&self, paused: bool) -> bool {
         self.remote.send_playback_intent(
             self.remote
@@ -167,22 +183,27 @@ impl PlayerProxy {
         )
     }
 
+    #[must_use]
     pub fn as_remote(&self) -> Option<mbv_remote_player::RemotePlayer> {
         Some(self.remote.clone())
     }
 
+    #[must_use]
     pub fn is_remote_disconnected(&self) -> bool {
         self.remote.is_disconnected()
     }
 
+    #[must_use]
     pub fn is_shutdown_announced(&self) -> bool {
         self.remote.is_shutdown_announced()
     }
 
+    #[must_use]
     pub fn disconnected_flag(&self) -> Option<Arc<AtomicBool>> {
         Some(self.remote.disconnected_flag())
     }
 
+    #[must_use]
     pub fn transport_sender(
         &self,
         _local_tx: std::sync::mpsc::Sender<mbv_ctrl::TransportCommand>,

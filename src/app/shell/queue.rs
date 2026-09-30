@@ -530,13 +530,12 @@ mod tests {
         });
         let mut app = make_app_stub();
         app.local_view = crate::app::QueueView::from_snapshot(&snapshot);
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 0;
-            status.position_ticks = 500;
-            status.runtime_ticks = 1_000;
-        }
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.position_ticks = 500;
+        status.runtime_ticks = 1_000;
+        drop(status);
 
         let displayed = app.displayed_playback_state();
         let rows = mbv_components::queue::queue_media_rows(
@@ -749,7 +748,9 @@ mod tests {
         app.local_view.adopt_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove {
             index: 0,
-            item: mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),
+            item: Box::new(mbv_queue::QueueItem::Emby(Box::new(make_item(
+                "restored", "Movie",
+            )))),
         });
         let mut model = Model::new(app);
         assert!(!model.app.has_direct_remote_queue());

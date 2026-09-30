@@ -64,12 +64,24 @@ impl App {
                 };
                 self.queue_for_scope_mut(scope)
                     .set_cursor(cursor.min(len.saturating_sub(1)));
-                self.record_undoable_queue_edit(scope, UndoEntry::Remove { item, index: pos });
+                self.record_undoable_queue_edit(
+                    scope,
+                    UndoEntry::Remove {
+                        item: Box::new(item),
+                        index: pos,
+                    },
+                );
             }
             QueueOpEdit::SentLegacy => {
                 // The edit was delivered; the displayed queue follows the
                 // legacy owner's later snapshots.
-                self.record_undoable_queue_edit(scope, UndoEntry::Remove { item, index: pos });
+                self.record_undoable_queue_edit(
+                    scope,
+                    UndoEntry::Remove {
+                        item: Box::new(item),
+                        index: pos,
+                    },
+                );
             }
             QueueOpEdit::NotApplied => {}
         }
@@ -170,7 +182,7 @@ impl App {
             let stack = self.undo_stack_for_scope_mut(scope);
             for (pos, item) in removed.iter().rev() {
                 stack.push(UndoEntry::Remove {
-                    item: item.clone(),
+                    item: Box::new(item.clone()),
                     index: *pos,
                 });
             }
@@ -286,7 +298,7 @@ impl App {
                 let sent = self.queue_op(
                     scope,
                     mbv_remote_player::QueueOp::Append {
-                        items: vec![item],
+                        items: vec![*item],
                         before,
                     },
                 );
