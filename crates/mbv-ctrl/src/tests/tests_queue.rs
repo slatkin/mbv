@@ -60,6 +60,8 @@ fn stub_feed_entry() -> mbv_queue::FeedEntry {
     }
 }
 
+// Contract: answered-queue-op support is additive — legacy peers' queue
+// commands must keep deserializing, and the current hello advertises it.
 #[test]
 fn unified_ctrl_behavior_is_capability_gated_and_additive() {
     assert!(CtrlHello::current().supports_answered_queue_ops());

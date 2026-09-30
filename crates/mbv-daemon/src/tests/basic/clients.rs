@@ -146,9 +146,11 @@ fn ordinary_disconnect_is_not_shutdown_emits_when_gated_broadcast_prunes_last_cl
 }
 
 #[test]
-fn ordinary_disconnect_is_not_shutdown_fresh_registry_emits_nothing() {
+fn gated_broadcast_on_an_empty_registry_emits_nothing() {
     let (merged_tx, merged_rx) = mpsc::channel();
-    let clients = CtrlClients::new(merged_tx);
+    let mut clients = CtrlClients::new(merged_tx);
+
+    clients.broadcast_state_gated("full", "abs", "book", "legacy", None);
 
     assert!(!clients.has_driver());
     assert!(matches!(

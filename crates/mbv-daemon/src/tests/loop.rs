@@ -237,18 +237,13 @@ fn daemon_reads_consume_audio_turned_on_during_the_session() {
     assert_eq!(t.persisted.borrow()[0].cursor, 0);
 }
 
+/// A shutdown request is rejected while stay-alive is on, and the decision
+/// reads the settings closure at request time (spawn config stays off).
 #[test]
-fn daemon_reads_stay_alive_when_it_decides_to_accept_shutdown() {
-    let _state_dir = mbv_config::TestStateDirGuard::new();
+fn daemon_reads_stay_alive_at_shutdown_decision_time_and_rejects_while_on() {
     let mut t = test_loop_with_role(crate::DaemonRole::Local);
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
-        consume_videos: false,
-        consume_audio: false,
-    };
-    assert!((t.event_loop.owner_settings)().stay_alive);
-    *t.settings.lock().unwrap() = OwnerSettings {
-        stay_alive: false,
         consume_videos: false,
         consume_audio: false,
     };
@@ -262,8 +257,14 @@ fn daemon_reads_stay_alive_when_it_decides_to_accept_shutdown() {
     ));
 
     assert_eq!(flow, LoopFlow::Continue);
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
-    assert!(matches!(t.merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::ShutdownRejected { reason } if reason == "daemon is in stay-alive mode"
+    ));
+    assert!(matches!(
+        t.merged_rx.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }
 
 #[test]
