@@ -26,14 +26,19 @@ accepts its re-anchor, or when the active tab no longer matches the recorded
 tab. The state records which tab was settled, and the re-anchor checks that the
 active tab still matches it.
 
-Launch restoration's other two properties are enforced: `LaunchRestore` keeps
-the pending snapshot and settled destination together, and resolution occurs
-at the appropriate boundary. Home and Feeds identities, plus unavailable-at-
-startup Service identities, resolve on the sync pass; a live Service identity
-resolves when its catalog arrives; and a Service startup failure or disconnect
-expires the matching pending identity to Home. Each resolution uses
-`select_tab`, preserving the destination re-anchor pass; readiness-marker state
-is not used.
+`LaunchRestore` keeps the pending snapshot and settled destination together,
+and each identity resolves at its own boundary. Home and Feeds identities, plus
+unavailable-at-startup Service identities, resolve on the sync pass
+(`resolve_launch_tab_on_sync`); a live Service identity resolves when its
+catalog arrives; and a Service startup failure or disconnect expires the
+matching pending identity to Home. Each resolution uses `select_tab`,
+preserving the destination re-anchor pass; readiness-marker state is not used.
+
+A failed Service state is written only through `fail_emby_service` and
+`fail_audiobookshelf_service`, which pair the state write with
+`expire_launch_service`, so a failure cannot leave the snapshot Pending. The
+residual is the Audiobookshelf catalog failure in `drains.rs` that does not
+change Service state: it calls `expire_launch_service` directly.
 
 ## What remains unenforced
 
