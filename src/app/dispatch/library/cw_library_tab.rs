@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::{App, PanelFocus, TabSelection};
 use mbv_config::TabIdentity;
 use mbv_emby_model::EmbyItem;
@@ -7,12 +8,9 @@ impl App {
     /// Resolve the saved launch identity on the shell sync pass.
     /// Service identities wait until their catalog is marked ready.
     pub(in crate::app) fn resolve_library_tab_pending(&mut self) {
-        let Some(state) = self.pending_launch_state.as_ref() else {
+        let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
         };
-        if self.pending_launch_tab_resolved {
-            return;
-        }
         let resolved = match &state.tab {
             TabIdentity::Home => Some(TabSelection::Home),
             TabIdentity::Feeds => {
@@ -27,14 +25,12 @@ impl App {
             }
         };
         if let Some(tab) = resolved {
-            self.tab = tab;
-            self.pending_launch_tab_resolved = true;
             // The snapshot names a tab, not a browse position, so the
             // resolved tab must be activated exactly like a user tab switch:
             // otherwise the panel is handed an empty owner and the restored
             // tab paints blank. The destination re-anchor then applies the
             // snapshot's pill and item over this loaded root.
-            self.settle_tab_selection();
+            self.select_tab(tab);
         }
     }
 
@@ -91,6 +87,21 @@ impl App {
         false
     }
 
+    /// Select and settle a tab, binding a pending launch snapshot to the
+    /// resulting tab after stale-index normalization.
+    fn select_tab(&mut self, tab: TabSelection) {
+        self.tab = tab;
+        self.settle_tab_selection();
+        if let LaunchRestore::Pending(state) =
+            std::mem::replace(&mut self.launch_restore, LaunchRestore::Done)
+        {
+            self.launch_restore = LaunchRestore::TabSettled {
+                state,
+                tab: self.tab,
+            };
+        }
+    }
+
     /// Move to left-panel tab `pos` and settle all state that follows from a
     /// tab change (panel focus, stale image dims, library activation).
     fn apply_tab_position(&mut self, pos: usize) {
@@ -101,18 +112,14 @@ impl App {
         self.pending_navigate_tab_switch = None;
         self.pending_series_landing = None;
         self.pending_series_handoff = None;
-        // A user-selected tab owns the rest of the launch intent. Once the
-        // user moves explicitly, a later catalog refresh must not replay the
-        // saved tab or its destination identities.
-        self.pending_launch_tab_resolved = false;
-        self.pending_launch_state = None;
-        self.tab = TabSelection::from_position_with_counts(
+        // An explicit move abandons the remaining launch intent.
+        self.launch_restore = LaunchRestore::Done;
+        self.select_tab(TabSelection::from_position_with_counts(
             pos,
             self.libs.len(),
             self.audiobookshelf_libraries.len(),
             self.has_feeds_subscriptions(),
-        );
-        self.settle_tab_selection();
+        ));
     }
 
     /// Settle all state that follows from `self.tab` being set: stale

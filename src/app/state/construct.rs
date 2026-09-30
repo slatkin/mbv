@@ -59,7 +59,10 @@ impl App {
         #[cfg(test)]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
-        let pending_launch_state = mbv_config::load_tui_launch_state();
+        let launch_restore = mbv_config::load_tui_launch_state().map_or(
+            crate::app::state::app_struct::LaunchRestore::Done,
+            crate::app::state::app_struct::LaunchRestore::Pending,
+        );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
@@ -146,11 +149,8 @@ impl App {
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
-            // Always start on Home until the live catalog resolves the
-            // stable pending launch tab. The saved queue is restored
-            // independently; destination state remains pending for task 3.2.
-            pending_launch_tab_resolved: false,
-            pending_launch_state,
+            // Always start on Home until the saved launch tab settles.
+            launch_restore,
             emby_catalog_ready: false,
             audiobookshelf_catalog_ready: false,
             pending_navigate_tab_switch: None,

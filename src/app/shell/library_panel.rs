@@ -219,12 +219,15 @@ impl Model {
     /// owner has received its current content. Resolution is deliberately
     /// pill-before-item and happens once; later refreshes only project content.
     pub(in crate::app) fn reanchor_pending_launch_destination(&mut self) {
-        if !self.app.pending_launch_tab_resolved {
-            return;
-        }
-        let Some(state) = self.app.pending_launch_state.clone() else {
+        let crate::app::state::app_struct::LaunchRestore::TabSettled { state, tab } =
+            self.app.launch_restore.clone()
+        else {
             return;
         };
+        if self.app.tab != tab {
+            self.app.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
+            return;
+        }
         let Some(key) = self.active_library_key() else {
             return;
         };
@@ -253,8 +256,7 @@ impl Model {
             // the same path as an ordinary panel-focus change; no Queue
             // target is carried by the launch snapshot.
             self.sync_queue();
-            self.app.pending_launch_state = None;
-            self.app.pending_launch_tab_resolved = false;
+            self.app.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
         }
     }
 

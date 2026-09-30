@@ -44,13 +44,14 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.panel_focus = PanelFocus::Library;
-    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
-        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_config::TabIdentity::Home,
-        panel_focus: mbv_config::LaunchPanelFocus::Queue,
-        selector: None,
-        item: None,
-    });
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::Home,
+            panel_focus: mbv_config::LaunchPanelFocus::Queue,
+            selector: None,
+            item: None,
+        });
     let mut harness = TickHarness::new(app);
 
     // One production tick (no events reach the app) + the sync pass; no draw

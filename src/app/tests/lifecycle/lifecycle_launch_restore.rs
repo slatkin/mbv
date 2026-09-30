@@ -15,21 +15,29 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
         selector: None,
         item: None,
     };
-    app.pending_launch_state = Some(saved.clone());
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(saved.clone());
     app.resolve_library_tab_pending();
     assert_eq!(
         app.tab,
         TabSelection::Home,
         "catalog identity is not ready yet"
     );
-    assert!(!app.pending_launch_tab_resolved);
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Pending(_)
+    ));
 
     app.emby_catalog_ready = true;
     app.resolve_library_tab_pending();
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
-    assert!(app.pending_launch_tab_resolved);
-    // #810: tab resolution consumes the destination, not the stored snapshot.
-    assert_eq!(app.pending_launch_state, Some(saved));
+    // #810: tab resolution binds the destination to the selected tab.
+    assert_eq!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled {
+            state: saved,
+            tab: TabSelection::EmbyLibrary(0),
+        }
+    );
 }
 
 /// A local-daemon/remote launch attaches a live Emby client at construction
@@ -58,21 +66,25 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     );
 
     app.tab = TabSelection::Home;
-    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
-        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_config::TabIdentity::ServiceLibrary {
-            kind: ServiceKind::Emby,
-            library_id: "lib-shows".into(),
-        },
-        panel_focus: mbv_config::LaunchPanelFocus::Library,
-        selector: None,
-        item: None,
-    });
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-shows".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Library,
+            selector: None,
+            item: None,
+        });
 
     app.resolve_library_tab_pending();
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
-    assert!(app.pending_launch_tab_resolved);
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled { .. }
+    ));
     assert_eq!(
         app.libs[1].nav_stack.len(),
         1,
@@ -80,7 +92,10 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     );
     assert!(app.libs[1].nav_stack[0].loading);
     assert!(
-        app.pending_launch_state.is_some(),
+        matches!(
+            app.launch_restore,
+            crate::app::state::app_struct::LaunchRestore::TabSettled { .. }
+        ),
         "destination state remains for the pill/item re-anchor"
     );
 }
@@ -88,23 +103,59 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
 #[test]
 fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
-        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_config::TabIdentity::ServiceLibrary {
-            kind: ServiceKind::Emby,
-            library_id: "lib-movies".into(),
-        },
-        panel_focus: mbv_config::LaunchPanelFocus::Library,
-        selector: None,
-        item: None,
-    });
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-movies".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Library,
+            selector: None,
+            item: None,
+        });
     app.set_library_tab(0);
     app.emby_catalog_ready = true;
     app.resolve_library_tab_pending();
 
     assert_eq!(app.tab, TabSelection::Home);
-    assert!(!app.pending_launch_tab_resolved);
-    assert!(app.pending_launch_state.is_none());
+    assert_eq!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+}
+
+#[test]
+fn reanchor_does_not_apply_to_a_tab_changed_by_stale_destination_normalization() {
+    // #810: asynchronous catalog removal must not redirect a resolved launch
+    // destination's remaining focus state onto the normalized Home tab.
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.panel_focus = PanelFocus::Library;
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::TabSettled {
+        state: mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-movies".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Queue,
+            selector: None,
+            item: None,
+        },
+        tab: TabSelection::EmbyLibrary(0),
+    };
+    let mut model = Model::new(app);
+    model.app.libs.clear();
+
+    assert!(model.app.normalize_stale_browse_destination());
+    model.reanchor_pending_launch_destination();
+
+    assert_eq!(model.app.tab, TabSelection::Home);
+    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+    assert_eq!(
+        model.app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
 }
 
 #[test]

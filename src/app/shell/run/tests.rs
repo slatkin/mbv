@@ -526,8 +526,8 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
 #[test]
 fn music_launch_state_artist_survives_a_stale_saved_position_restore() {
     let mut app = music_two_artist_stale_pf();
-    app.pending_launch_state = Some(music_launch_state_aaliyah());
-    app.pending_launch_tab_resolved = false;
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(music_launch_state_aaliyah());
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     assert_eq!(
