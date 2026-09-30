@@ -286,21 +286,16 @@ fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
 
 fn stop_running_instance() {
     let lock = single_instance::lock_path();
-    if let Some(pid) = single_instance::read_pid(&lock) {
-        // SAFETY: sending SIGTERM to the PID read from the single-instance lock is intentional.
-        let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-        if ok {
-            println!("mbv: quit signal sent (pid {pid})");
-        } else {
-            eprintln!(
-                "mbv: failed to signal pid {pid}: {}",
-                std::io::Error::last_os_error()
-            );
+    match single_instance::terminate_owner(&lock) {
+        Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
+        Err(single_instance::TerminateOwnerError::NoOwnerPid) => {
+            eprintln!("mbv: no running instance found; if one just started, try again in a moment");
             std::process::exit(1);
         }
-    } else {
-        eprintln!("mbv: no running instance found; if one just started, try again in a moment");
-        std::process::exit(1);
+        Err(error @ single_instance::TerminateOwnerError::Signal(_)) => {
+            eprintln!("mbv: {error}");
+            std::process::exit(1);
+        }
     }
 }
 

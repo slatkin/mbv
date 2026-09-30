@@ -91,6 +91,50 @@ pub fn read_pid(lock: &Path) -> Option<u32> {
     std::fs::read_to_string(lock).ok()?.trim().parse().ok()
 }
 
+#[derive(Debug)]
+pub enum TerminateOwnerError {
+    NoOwnerPid,
+    Signal(io::Error),
+}
+
+impl std::fmt::Display for TerminateOwnerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoOwnerPid => {
+                write!(
+                    f,
+                    "no running instance found; if one just started, try again in a moment"
+                )
+            }
+            Self::Signal(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for TerminateOwnerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::NoOwnerPid => None,
+            Self::Signal(error) => Some(error),
+        }
+    }
+}
+
+pub fn terminate_owner(lock: &Path) -> Result<u32, TerminateOwnerError> {
+    let pid = read_pid(lock).ok_or(TerminateOwnerError::NoOwnerPid)?;
+    // SAFETY: sending SIGTERM to the PID read from the single-instance lock is intentional.
+    let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
+    if ok {
+        Ok(pid)
+    } else {
+        let error = io::Error::last_os_error();
+        Err(TerminateOwnerError::Signal(io::Error::new(
+            error.kind(),
+            format!("failed to signal pid {pid}: {error}"),
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
