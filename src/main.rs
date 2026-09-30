@@ -403,19 +403,19 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 if let Err(error) =
                     local_daemon::spawn_detached(&socket_path.to_string_lossy(), log_level.cloned())
                 {
-                    eprintln!("mbv: failed to start local daemon: {error}");
+                    eprintln!("mbv: failed to start Owner process: {error}");
                     std::process::exit(1);
                 }
             }
             single_instance::Resolution::Attach => {
-                tracing::info!(name: "startup.local_daemon.detected", target: "startup", "local daemon detected; attaching");
+                tracing::info!(name: "startup.owner_process.detected", target: "startup", "Owner process detected; attaching");
             }
             single_instance::Resolution::Refuse => refuse_local_owner(&lock_path),
         }
 
-        match attach_local_daemon(config) {
+        match attach_owner_process(config) {
             Ok(()) => return,
-            Err(error) if error.kind_name() == "remote-player.owner_shutting_down" => {
+            Err(error) if error.is_owner_shutting_down() => {
                 let deadline = *shutdown_deadline.get_or_insert_with(|| {
                     std::time::Instant::now() + std::time::Duration::from_secs(10)
                 });
@@ -434,7 +434,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                     }
                 };
             }
-            Err(error) if error.kind_name() == "remote-player.exclusive_owner" => {
+            Err(error) if error.is_exclusive_owner() => {
                 eprintln!("mbv: refusing a second terminal: {error}.");
                 eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
                 eprintln!(
@@ -443,14 +443,14 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 std::process::exit(1);
             }
             Err(error) => {
-                eprintln!("mbv: failed to attach to local daemon: {error}");
+                eprintln!("mbv: failed to attach to Owner process: {error}");
                 std::process::exit(1);
             }
         }
     }
 }
 
-fn attach_local_daemon(config: &config::Config) -> Result<(), remote_player::RemotePlayerError> {
+fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::RemotePlayerError> {
     let client = cached_emby_client(config);
     let (remote, player_rx) =
         remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;

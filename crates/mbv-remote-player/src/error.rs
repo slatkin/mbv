@@ -76,6 +76,16 @@ impl RemotePlayerError {
     }
 
     #[must_use]
+    pub fn is_owner_shutting_down(&self) -> bool {
+        matches!(self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
+    }
+
+    #[must_use]
+    pub fn is_exclusive_owner(&self) -> bool {
+        matches!(self.kind, RemotePlayerErrorKind::ExclusiveOwner { .. })
+    }
+
+    #[must_use]
     pub fn kind_name(&self) -> &'static str {
         match self.kind {
             RemotePlayerErrorKind::Endpoint => "remote-player.endpoint",

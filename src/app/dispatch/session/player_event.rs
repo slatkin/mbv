@@ -209,7 +209,7 @@ impl App {
         if from_home_link || self.is_local_daemon() {
             self.suspended_local = None;
             self.pending_exit_message =
-                Some("mbv: the local daemon was stopped — exiting.".to_string());
+                Some("mbv: the Owner process was stopped — exiting.".to_string());
             QUIT_REQUESTED.store(true, Ordering::Relaxed);
         } else {
             self.restore_local_mode("Daemon disconnected — returned to local mode");

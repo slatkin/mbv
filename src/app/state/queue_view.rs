@@ -75,10 +75,6 @@ impl QueueView {
         self.cursor = clamp_cursor(cursor, self.queue.len());
     }
 
-    pub fn clamp_cursor(&mut self) {
-        self.cursor = clamp_cursor(self.cursor, self.queue.len());
-    }
-
     #[must_use]
     pub fn slots(&self) -> &[QueueSlot] {
         self.queue.slots()

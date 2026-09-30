@@ -33,3 +33,10 @@ the replacement queue. These remain process rules across the control protocol.
   stale observations.
 - `QueueView` exposes adoption, not queue mutation; `queue_op` waits for the
   owner's answer and adopts it before subsequent input.
+
+## Where it currently fails
+
+No known violation. Known residual (observed in review, not a regression): on
+a plain autostart play, the owner's Queue source stays at its previous value
+until the next idle load or clear — a property of the adoption model, since
+submission does not carry a source update.

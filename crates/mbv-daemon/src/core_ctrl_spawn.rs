@@ -59,7 +59,7 @@ fn send_admission_refusal(
     ev_tx: &crate::ctrl::CtrlSender,
 ) -> bool {
     let admin_local_connection = service_setup_admin && transport == CtrlTransport::Local;
-    let reason = if clients.shutting_down {
+    let reason = if role == DaemonRole::Local && clients.shutting_down {
         Some(mbv_ctrl::DisconnectReason::OwnerShuttingDown)
     } else if role == DaemonRole::Local
         && !stay_alive

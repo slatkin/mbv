@@ -878,9 +878,8 @@ _Avoid_: ABS book item, audiobook episode, book queue entry
 The QueueItem snapshot of a downloaded podcast episode. It carries content
 identity, presentation, progress, completion, and Service-scoped artwork
 identity, but no credential, server URL, playback-session ID, resolved source,
-or request headers. Currently eligible only for bare-mode owners with
-Audiobookshelf setup and credential (Owner process and mbvd eligibility is
-milestone #524 — issues #525-528).
+or request headers. Eligible only for Player owners (Owner process, packaged mbvd) with
+Audiobookshelf setup and credential.
 _Avoid_: Audiobookshelf episode, ABS item, feed entry
 
 **Audiobookshelf playback session**:

@@ -71,4 +71,4 @@ also changed shared playback mechanics:
 - A known residual of the adoption model: on a plain autostart play, the
   owner's Queue source stays at its previous value until the next idle
   load or clear (see
-  [Invariant 13](../invariants/13-stay-alive-owner-is-the-queue.md)).
+  [Invariant 13](../invariants/13-owner-lineage-and-run-identity.md)).

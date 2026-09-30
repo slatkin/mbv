@@ -134,7 +134,7 @@ fn suspended_home_shutdown_announced_exits_cleanly() {
     assert!(harness.model().app.suspended_local.is_none());
     assert_eq!(
         harness.model().app.pending_exit_message.as_deref(),
-        Some("mbv: the local daemon was stopped — exiting.")
+        Some("mbv: the Owner process was stopped — exiting.")
     );
     assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -192,7 +192,7 @@ fn local_home_shutdown_announced_exits_cleanly() {
     );
     assert_eq!(
         harness.model().app.pending_exit_message.as_deref(),
-        Some("mbv: the local daemon was stopped — exiting.")
+        Some("mbv: the Owner process was stopped — exiting.")
     );
     assert!(crate::app::QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);

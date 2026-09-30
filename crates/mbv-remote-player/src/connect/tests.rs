@@ -177,17 +177,14 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
 #[test]
 fn connect_endpoint_maps_owner_admission_refusals() {
     let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
-    assert_eq!(exclusive.kind_name(), "remote-player.exclusive_owner");
+    assert!(exclusive.is_exclusive_owner());
     assert_eq!(
         exclusive.to_string(),
         "local owner process 1234 already has a client"
     );
 
     let shutting_down = admission_error(DisconnectReason::OwnerShuttingDown);
-    assert_eq!(
-        shutting_down.kind_name(),
-        "remote-player.owner_shutting_down"
-    );
+    assert!(shutting_down.is_owner_shutting_down());
     assert_eq!(shutting_down.to_string(), "the owner is shutting down");
 }
 

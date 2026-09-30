@@ -179,7 +179,7 @@ impl App {
         }
         let (remote, player_rx) = Self::try_daemon_route_connect(
             &mbv_remote_player::DaemonEndpoint::Local,
-            "local daemon",
+            "owner process",
         )?;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         Ok(Some(SuspendedLocalSession {
@@ -326,7 +326,7 @@ impl App {
             // baseline instead of leaving the player disconnected.
             match Self::try_daemon_route_connect(
                 &mbv_remote_player::DaemonEndpoint::Local,
-                "local daemon",
+                "owner process",
             ) {
                 Ok((remote, remote_rx)) => {
                     let initial_unified_state = remote.unified_queue_state();

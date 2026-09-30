@@ -20,7 +20,8 @@ impl App {
     pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         if pos >= self.queue_for_scope(scope).total_queue_len() {
-            self.queue_for_scope_mut(scope).clamp_cursor();
+            let view = self.queue_for_scope_mut(scope);
+            view.set_cursor(view.cursor());
             return;
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {
