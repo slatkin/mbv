@@ -290,11 +290,7 @@ fn stop_running_instance() {
     let lock = single_instance::lock_path();
     match single_instance::terminate_owner(&lock) {
         Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
-        Err(single_instance::TerminateOwnerError::NoOwnerPid) => {
-            eprintln!("mbv: no running instance found; if one just started, try again in a moment");
-            std::process::exit(1);
-        }
-        Err(error @ single_instance::TerminateOwnerError::Signal(_)) => {
+        Err(error) => {
             eprintln!("mbv: {error}");
             std::process::exit(1);
         }
@@ -433,17 +429,13 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 owner_restart::FollowUp::WaitForOwnerExit => {
                     resolution = wait_for_owner_exit();
                 }
-                owner_restart::FollowUp::Prompt => {
+                owner_restart::FollowUp::Prompt(owner_version) => {
                     if !std::io::stdin().is_terminal() {
                         eprintln!("mbv: {error}");
                         std::process::exit(1);
                     }
                     let mut input = std::io::stdin().lock();
                     let mut output = std::io::stderr().lock();
-                    let Some(owner_version) = error.owner_build_mismatch() else {
-                        eprintln!("mbv: failed to attach to Owner process: {error}");
-                        std::process::exit(1);
-                    };
                     match owner_restart::ask(owner_version, &mut input, &mut output) {
                         owner_restart::Choice::Quit => {
                             eprintln!(

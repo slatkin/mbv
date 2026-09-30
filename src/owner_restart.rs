@@ -9,8 +9,8 @@ pub(super) enum Choice {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum FollowUp {
-    Prompt,
+pub(super) enum FollowUp<'a> {
+    Prompt(&'a str),
     WaitForOwnerExit,
     Other,
 }
@@ -35,15 +35,14 @@ pub(super) fn ask(
     }
 }
 
-pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp {
-    if error.is_owner_shutting_down()
-        || (restart_requested && error.owner_build_mismatch().is_some())
-    {
-        FollowUp::WaitForOwnerExit
-    } else if error.owner_build_mismatch().is_some() {
-        FollowUp::Prompt
-    } else {
-        FollowUp::Other
+pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp<'_> {
+    if error.is_owner_shutting_down() {
+        return FollowUp::WaitForOwnerExit;
+    }
+    match error.owner_build_mismatch() {
+        Some(_) if restart_requested => FollowUp::WaitForOwnerExit,
+        Some(owner_version) => FollowUp::Prompt(owner_version),
+        None => FollowUp::Other,
     }
 }
 

@@ -31,6 +31,12 @@ mod endpoint;
 
 pub use endpoint::{DaemonEndpoint, resolve_library_route};
 
+#[derive(Clone, Copy)]
+pub(crate) enum PeerBuild {
+    Any,
+    MustMatch,
+}
+
 /// Performs the daemon control-protocol handshake (hello exchange, then the
 /// initial state) on `stream`, returning a reader ready for the long-running
 /// event-reading loop plus the initial `UnifiedQueueState`. Split out of
@@ -38,12 +44,7 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 /// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
 /// directly against a real stalled `TcpListener` without going through
 /// `connect_endpoint`'s full setup.
-#[derive(Clone, Copy)]
-pub(crate) enum PeerBuild {
-    Any,
-    MustMatch,
-}
-
+#[cfg(test)]
 pub(crate) fn perform_handshake<F>(
     stream: SocketStream,
     load_control_token: F,
@@ -504,16 +505,12 @@ fn connect_stream(
     let handshake_stream = stream.try_clone()?;
     let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
-            let load_control_token = || Ok(mbv_config::load_or_create_control_credential()?);
-            match peer_build {
-                PeerBuild::Any => perform_handshake(handshake_stream, load_control_token),
-                PeerBuild::MustMatch => perform_handshake_with_role(
-                    handshake_stream,
-                    load_control_token,
-                    false,
-                    PeerBuild::MustMatch,
-                ),
-            }
+            perform_handshake_with_role(
+                handshake_stream,
+                || Ok(mbv_config::load_or_create_control_credential()?),
+                false,
+                peer_build,
+            )
         },
         || {
             crate::RemotePlayerError::connection(format!(

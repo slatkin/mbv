@@ -31,9 +31,15 @@ fn prompt_names_both_versions_and_restart_consequences() {
     assert!(output.contains("Restarting stops playback and closes any other mbv terminals"));
 }
 
-#[test]
-fn mismatch_after_restart_waits_instead_of_reprompting() {
+// #559: prompt once with the Owner version, then wait after requesting restart.
+#[rstest]
+#[case::before_restart(false, FollowUp::Prompt("1.0.0"))]
+#[case::after_restart(true, FollowUp::WaitForOwnerExit)]
+fn mismatch_after_restart_waits_instead_of_reprompting(
+    #[case] restart_requested: bool,
+    #[case] expected: FollowUp<'_>,
+) {
     let error = RemotePlayerError::owner_build_mismatch_error("1.0.0");
 
-    assert_eq!(follow_up(&error, true), FollowUp::WaitForOwnerExit);
+    assert_eq!(follow_up(&error, restart_requested), expected);
 }
