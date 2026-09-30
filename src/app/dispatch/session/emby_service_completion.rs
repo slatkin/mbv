@@ -71,6 +71,7 @@ impl App {
                 Some(content)
             }
             Err(error) => {
+                self.expire_launch_service(mbv_queue::ServiceKind::Emby);
                 let state =
                     crate::app::dispatch::session::service_startup::classify_failure(&error);
                 self.emby_runtime.state = state;
@@ -112,6 +113,7 @@ impl App {
             return;
         }
         let config = self.config.lock().unwrap().clone();
+        self.expire_launch_service(mbv_queue::ServiceKind::Emby);
         self.emby_runtime.state = if config.emby_setup.is_some()
             && mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
         {
@@ -228,6 +230,7 @@ impl App {
                 Some(content)
             }
             Err(error) => {
+                self.expire_launch_service(mbv_queue::ServiceKind::Emby);
                 self.emby_runtime.state = completion.previous_state;
                 if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;

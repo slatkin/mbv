@@ -61,6 +61,121 @@ fn saved_service_tab_stays_on_home_keeps_focus_and_later_configure_does_not_move
     assert_eq!(model.app.tab, TabSelection::Home);
 }
 
+fn pending_emby_launch() -> crate::app::App {
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Connecting;
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-movies".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Queue,
+            selector: None,
+            item: None,
+        });
+    app
+}
+
+fn assert_expired_launch_restores_saved_focus(app: crate::app::App) {
+    assert_eq!(app.tab, TabSelection::Home);
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled {
+            tab: TabSelection::Home,
+            ..
+        }
+    ));
+
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    assert_eq!(model.app.panel_focus, PanelFocus::Queue);
+    assert_eq!(
+        model.app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+}
+
+/// #810: failed startup expires only the pending Emby launch and later catalog
+/// arrival cannot move the selected tab.
+#[test]
+fn failed_emby_startup_then_successful_catalog_keeps_tab_unchanged() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = pending_emby_launch();
+    let generation = app.emby_runtime.generation();
+
+    app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+        generation,
+        result: Err(mbv_emby::EmbyFailure::unavailable("startup failed")),
+    });
+    assert_eq!(app.tab, TabSelection::Home);
+
+    let views = app
+        .libs
+        .iter()
+        .map(|library| library.library.clone())
+        .collect::<Vec<_>>();
+    app.rebuild_library_tabs_from_views(&views);
+    assert_eq!(app.tab, TabSelection::Home);
+}
+
+/// #810: a current startup Err resolves Home and preserves saved Panel focus.
+#[test]
+fn emby_startup_error_expires_launch_and_restores_saved_focus() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = pending_emby_launch();
+
+    let generation = app.emby_runtime.generation();
+    app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+        generation,
+        result: Err(mbv_emby::EmbyFailure::unavailable("startup failed")),
+    });
+
+    assert_expired_launch_restores_saved_focus(app);
+}
+
+/// #810: setup Err resolves Home and preserves saved Panel focus.
+#[test]
+fn emby_setup_error_expires_launch_and_restores_saved_focus() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = pending_emby_launch();
+    let generation = app.emby_runtime.begin_setup();
+
+    app.apply_emby_setup_completion_without_network(
+        crate::app::dispatch::session::service_startup::SetupCompletion {
+            generation,
+            previous_state: mbv_core::service_runtime::ServiceState::NotConfigured,
+            result: Err(mbv_emby::EmbyError::resolve("setup failed")),
+        },
+    );
+
+    assert_expired_launch_restores_saved_focus(app);
+}
+
+/// #810: startup-worker disconnect resolves Home and preserves saved Panel focus.
+#[test]
+fn emby_startup_worker_disconnect_expires_launch_and_restores_saved_focus() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = pending_emby_launch();
+
+    let generation = app.emby_runtime.generation();
+    app.handle_emby_startup_worker_disconnect(generation);
+
+    assert_expired_launch_restores_saved_focus(app);
+}
+
+/// #810: a later runtime failure resolves Home and preserves saved Panel focus.
+#[test]
+fn emby_runtime_failure_expires_launch_and_restores_saved_focus() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = pending_emby_launch();
+
+    app.handle_emby_runtime_failure(mbv_emby::EmbyFailure::unavailable("request failed"));
+
+    assert_expired_launch_restores_saved_focus(app);
+}
+
 #[test]
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();

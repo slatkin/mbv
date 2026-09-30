@@ -70,6 +70,19 @@ impl App {
         }
     }
 
+    /// Expire a saved destination after its Service startup fails.
+    pub(in crate::app) fn expire_launch_service(&mut self, kind: ServiceKind) {
+        if matches!(
+            &self.launch_restore,
+            LaunchRestore::Pending(mbv_config::TuiLaunchState {
+                tab: TabIdentity::ServiceLibrary { kind: saved_kind, .. },
+                ..
+            }) if *saved_kind == kind
+        ) {
+            self.select_tab(TabSelection::Home);
+        }
+    }
+
     /// Normalizes a selected Service library index that no longer exists.
     ///
     /// A `TabSelection::EmbyLibrary(index)` with `index >= self.libs.len()`,
