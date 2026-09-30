@@ -90,10 +90,10 @@ impl RemoteSnapshot {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
             (
-                QueueView::empty(),
+                QueueView::default(),
                 Some(
                     self.unified_state
-                        .map_or_else(QueueView::empty, |state| QueueView::from_snapshot(&state)),
+                        .map_or_else(QueueView::default, |state| QueueView::from_snapshot(&state)),
                 ),
             )
         }

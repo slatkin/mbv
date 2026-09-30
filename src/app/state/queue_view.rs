@@ -1,6 +1,6 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{
-    ExecSlot, PlaybackQueue, QueueItem, QueueLineage, QueueRevision, QueueRevisionMint, QueueSlot,
+    PlaybackQueue, QueueItem, QueueLineage, QueueRevision, QueueRevisionMint, QueueSlot,
     QueueSlotId, QueueSource,
 };
 use std::sync::Arc;
@@ -39,32 +39,10 @@ impl Default for QueueView {
 }
 
 impl QueueView {
-    /// Build an empty local view before an owner snapshot is available.
-    #[must_use]
-    pub fn empty() -> Self {
-        Self::default()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn new(items: Vec<QueueItem>, cursor: usize) -> Self {
-        let revision_mint = Arc::new(QueueRevisionMint::default());
-        let queue = PlaybackQueue::from_queue_items(items, None, Arc::clone(&revision_mint));
-        let cursor = clamp_cursor(cursor, queue.len());
-        Self {
-            cursor,
-            queue,
-            source: QueueSource::Unknown,
-            lineage: QueueLineage::default(),
-            pending_playback_slot: None,
-            revision_mint,
-        }
-    }
-
     /// Build a view from an initial owner snapshot.
     #[must_use]
     pub fn from_snapshot(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
-        let mut view = Self::empty();
+        let mut view = Self::default();
         view.adopt(state, AdoptCause::Replacement);
         view
     }
@@ -90,84 +68,6 @@ impl QueueView {
         self.source = state.source.clone();
         self.lineage = state.lineage;
         self.pending_playback_slot = pending_playback_slot(state);
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn from_unified_state(state: &mbv_ctrl::UnifiedQueueStateData) -> Self {
-        Self::from_snapshot(state)
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn from_emby_items(items: Vec<EmbyItem>, cursor: usize) -> Self {
-        let revision_mint = Arc::new(QueueRevisionMint::default());
-        let queue = PlaybackQueue::from_items(items, None, Arc::clone(&revision_mint));
-        let cursor = clamp_cursor(cursor, queue.len());
-        Self {
-            cursor,
-            queue,
-            source: QueueSource::Unknown,
-            lineage: QueueLineage::default(),
-            pending_playback_slot: None,
-            revision_mint,
-        }
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn emby_items(&self) -> Vec<EmbyItem> {
-        self.slots()
-            .iter()
-            .filter_map(|slot| slot.item.as_emby().cloned())
-            .collect()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn all_queue_items(&self) -> Vec<QueueItem> {
-        self.slots().iter().map(|slot| slot.item.clone()).collect()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn clone_emby_item_at(&self, index: usize) -> Option<EmbyItem> {
-        self.emby_item_at(index).cloned()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn all_queue_slots(&self) -> Vec<ExecSlot> {
-        self.queue.slot_pairs()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn active_slot_id(&self) -> Option<QueueSlotId> {
-        self.queue.active_slot_id()
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn playback_queue(&self) -> &PlaybackQueue {
-        &self.queue
-    }
-
-    // transitional: removed in segment C
-    #[must_use]
-    pub fn queue_cursor(&self) -> usize {
-        self.cursor
-    }
-
-    // transitional: removed in segment C
-    pub fn clamp_cursor(&mut self) {
-        self.cursor = clamp_cursor(self.cursor, self.queue.len());
-    }
-
-    // transitional: removed in segment C
-    pub fn set_unified_state(&mut self, state: &mbv_ctrl::UnifiedQueueStateData, cursor: usize) {
-        self.adopt(state, AdoptCause::Replacement);
-        self.set_cursor(cursor);
     }
 
     /// Set the selected queue position after user navigation.

@@ -70,7 +70,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     app.local_view.adopt_queue_items(vec![abs_item], 0);
     assert_eq!(app.local_view.total_queue_len(), 1);
 
-    let ep = app.local_view.playback_queue().slots()[0]
+    let ep = app.local_view.slots()[0]
         .item
         .as_audiobookshelf()
         .expect("surviving slot must be an Audiobookshelf item");

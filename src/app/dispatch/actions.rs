@@ -575,7 +575,12 @@ impl App {
             let Some(selected_index) = selected_index else {
                 return false;
             };
-            let all_items = self.queue_for_scope(scope).all_queue_items();
+            let all_items = self
+                .queue_for_scope(scope)
+                .slots()
+                .iter()
+                .map(|slot| slot.item.clone())
+                .collect();
             self.dispatch_selection_to_cast(all_items, selected_index);
             self.set_queue_scope(scope);
             if !matches!(self.effective_panel_focus(), PanelFocus::Library) {

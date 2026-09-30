@@ -207,7 +207,7 @@ impl App {
                 Some(disconnected),
             );
         }
-        let mut tab = QueueView::empty();
+        let mut tab = QueueView::default();
         if let Some(snapshot) = initial_unified_state.as_ref() {
             tab.adopt(
                 snapshot,

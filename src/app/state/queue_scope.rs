@@ -177,9 +177,10 @@ impl App {
     ) -> (bool, bool) {
         let item = self
             .playback_queue()
-            .playback_queue()
-            .slot(slot_id)
-            .map(|s| &s.item);
+            .slots()
+            .iter()
+            .find(|slot| slot.slot_id == slot_id)
+            .map(|slot| &slot.item);
         let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
         let (consume_videos, consume_audio) = {

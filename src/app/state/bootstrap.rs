@@ -2,7 +2,7 @@ use crate::app::state::queue_view::QueueView;
 
 pub(in crate::app) fn bootstrap_legacy_queue() -> LocalDaemonBootstrap {
     LocalDaemonBootstrap {
-        local_view: QueueView::empty(),
+        local_view: QueueView::default(),
         last_played_item_id: None,
         last_played_completed: false,
     }

@@ -70,9 +70,10 @@ impl App {
         let mutation_id = mutation.mutation_id();
         let ids: Vec<String> = self
             .local_view
-            .emby_items()
+            .slots()
             .iter()
-            .map(|e| e.id.clone())
+            .filter_map(|slot| slot.item.as_emby())
+            .map(|item| item.id.clone())
             .collect();
         match mutation {
             PlaylistMutation::Save {

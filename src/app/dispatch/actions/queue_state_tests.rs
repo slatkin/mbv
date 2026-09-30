@@ -128,7 +128,7 @@ fn audiobookshelf_service_removal_and_replacement_wait_for_owner_queue_snapshot(
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
     app.local_view.adopt_queue_items(mixed.clone(), 2);
-    app.remote_view = Some(crate::app::state::queue_view::QueueView::empty());
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::default());
     app.remote_view
         .as_mut()
         .unwrap()
@@ -158,7 +158,7 @@ fn audiobookshelf_service_removal_and_replacement_wait_for_owner_queue_snapshot(
     app.local_view
         .adopt_queue_items_with_active(mixed.clone(), 2, 2);
     app.player.status.lock().unwrap().active = true;
-    app.remote_view = Some(crate::app::state::queue_view::QueueView::empty());
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::default());
     app.remote_view
         .as_mut()
         .unwrap()

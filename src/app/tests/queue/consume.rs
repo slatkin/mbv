@@ -161,7 +161,7 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
     let mut app = make_app_stub();
     app.local_view
         .adopt_items(make_items(3), app.local_view.cursor());
-    let slot_b = app.local_view.playback_queue().slots()[1].slot_id;
+    let slot_b = app.local_view.slots()[1].slot_id;
     app.config.lock().unwrap().consume_videos = true;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -172,14 +172,14 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
         consume: true,
         progress_report_accepted: false,
     });
-    assert_eq!(app.local_view.playback_queue().slots().len(), 3);
+    assert_eq!(app.local_view.slots().len(), 3);
 
     app.handle_player_event(PlayerEvent::TrackChanged {
         slot_id: slot_b,
         transition: None,
     });
 
-    assert_eq!(app.local_view.playback_queue().slots().len(), 3);
+    assert_eq!(app.local_view.slots().len(), 3);
     assert_eq!(app.local_view.cursor(), 1);
 }
 

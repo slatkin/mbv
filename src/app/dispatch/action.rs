@@ -454,7 +454,14 @@ impl App {
             .iter()
             .filter_map(|slot| slot.item.as_emby().cloned())
             .collect();
-        let all_slots = queue.all_queue_slots();
+        let all_slots = queue
+            .slots()
+            .iter()
+            .map(|slot| mbv_queue::ExecSlot {
+                slot_id: slot.slot_id,
+                item: slot.item.clone(),
+            })
+            .collect();
         let slot_id = queue.slot_id_at(t);
         // Pre-compute the Emby-only projection index for the cursor
         // position, needed by the session API boundary.

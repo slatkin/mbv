@@ -127,7 +127,7 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
         app.status
     );
     assert!(
-        app.playback_queue().playback_queue().slots().is_empty(),
+        app.playback_queue().slots().is_empty(),
         "no-source entry must not be mirrored into the queue panel"
     );
 }

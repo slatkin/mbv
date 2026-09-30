@@ -139,7 +139,7 @@ impl App {
             (mbv_ui_model::settings::PanelFocus::Queue, _) => {
                 let cursor = self.displayed_queue().cursor();
                 queue_cursor = Some(cursor);
-                self.displayed_queue().clone_emby_item_at(cursor)
+                self.displayed_queue().emby_item_at(cursor).cloned()
             }
         };
         Some((current_item, queue_cursor))

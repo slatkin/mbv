@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 fn replacement_view(snapshot: Option<&mbv_ctrl::UnifiedQueueStateData>) -> QueueView {
-    let mut view = QueueView::empty();
+    let mut view = QueueView::default();
     if let Some(snapshot) = snapshot {
         view.adopt(
             snapshot,

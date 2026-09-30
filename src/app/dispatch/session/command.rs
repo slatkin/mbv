@@ -58,7 +58,12 @@ impl App {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
         };
-        let emby_items = self.local_view.emby_items();
+        let emby_items: Vec<_> = self
+            .local_view
+            .slots()
+            .iter()
+            .filter_map(|slot| slot.item.as_emby().cloned())
+            .collect();
         // Remap the canonical queue index to the Emby-only item index used by
         // the session API.
         let emby_start = self
@@ -155,7 +160,12 @@ mod tests {
 
     #[test]
     fn remote_jump_target_moves_to_adjacent_queue_item() {
-        let player = crate::app::QueueView::from_emby_items(crate::app::tests::make_items(3), 0);
+        let mut player = crate::app::QueueView::default();
+        crate::app::tests::QueueViewTestExt::adopt_items(
+            &mut player,
+            crate::app::tests::make_items(3),
+            0,
+        );
         assert_eq!(
             remote_jump_target(&player, Some("id1"), 1).map(|(index, _)| index),
             Some(2)

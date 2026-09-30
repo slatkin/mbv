@@ -21,7 +21,7 @@ impl App {
         let scope = self.viewed_queue_scope();
         if pos >= self.queue_for_scope(scope).total_queue_len() {
             let queue = self.queue_for_scope_mut(scope);
-            queue.clamp_cursor();
+            queue.set_cursor(queue.cursor());
             return;
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {

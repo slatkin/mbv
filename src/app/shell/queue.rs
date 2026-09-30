@@ -11,6 +11,7 @@ use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRe
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
+    lineage: mbv_queue::QueueLineage,
     scope: QueueScope,
     active: bool,
     active_target: Option<QueueSlotId>,
@@ -152,6 +153,7 @@ impl Model {
         let queue = self.app.queue_for_scope(scope);
         QueueProjectionFingerprint {
             revision: queue.revision().raw(),
+            lineage: queue.lineage(),
             scope,
             active: playback.active,
             active_target: projected_active_target(queue, playback, pending_slot),
@@ -168,6 +170,7 @@ impl Model {
         let rows_changed = previous != Some(fingerprint);
         let bucket_only = previous.is_some_and(|old| {
             old.revision == fingerprint.revision
+                && old.lineage == fingerprint.lineage
                 && old.scope == fingerprint.scope
                 && old.active == fingerprint.active
                 && old.active_target == fingerprint.active_target
@@ -506,7 +509,10 @@ mod tests {
         let mut replacement = crate::app::tests::emby_unified_state(&make_items(1), 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.local_view.set_unified_state(&replacement, 0);
+        model.app.local_view.adopt(
+            &replacement,
+            crate::app::state::queue_view::AdoptCause::Replacement,
+        );
         model.sync_queue();
 
         let component = queue_component(&model);
@@ -566,7 +572,9 @@ mod tests {
     }
 
     #[test]
-    fn owner_purge_revision_change_rebuilds_same_sized_rows() {
+    fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
+        // A replacement QueueView restarts its private revision mint; lineage
+        // still distinguishes its rows from the prior owner's queue.
         let mut state = crate::app::tests::emby_unified_state(&make_items(2), 0);
         state.active_slot = None;
         state.revision = 7;
@@ -574,13 +582,16 @@ mod tests {
         app.local_view = crate::app::QueueView::from_snapshot(&state);
         let mut model = Model::new(app);
         model.sync_queue();
+        let previous_revision = model.app.local_view.revision();
 
         let mut replacement_items = make_items(2);
         replacement_items[0].id = "replacement".into();
         let mut replacement = crate::app::tests::emby_unified_state(&replacement_items, 0);
         replacement.active_slot = None;
         replacement.revision = 7;
-        model.app.local_view.set_unified_state(&replacement, 0);
+        replacement.lineage = mbv_queue::QueueLineage(1);
+        model.app.local_view = crate::app::QueueView::from_snapshot(&replacement);
+        assert_eq!(model.app.local_view.revision(), previous_revision);
         let update = model.prepare_queue_projection();
 
         assert!(update.slots.is_some());

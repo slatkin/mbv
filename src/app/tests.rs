@@ -49,6 +49,7 @@ pub(crate) fn confirm_replace_queue(app: &mut App) {
 
 pub(crate) trait QueueViewTestExt {
     fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);
+    fn emby_items(&self) -> Vec<EmbyItem>;
     fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize);
     fn adopt_queue_items_with_active(
         &mut self,
@@ -71,6 +72,13 @@ impl QueueViewTestExt for QueueView {
             None,
             mbv_queue::QueueSource::Unknown,
         );
+    }
+
+    fn emby_items(&self) -> Vec<EmbyItem> {
+        self.slots()
+            .iter()
+            .filter_map(|slot| slot.item.as_emby().cloned())
+            .collect()
     }
 
     fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize) {
@@ -284,7 +292,7 @@ pub(crate) fn make_built_app() -> App {
         },
         audiobookshelf_socket_tx: None,
         audiobookshelf_socket_generation: None,
-        local_view: QueueView::empty(),
+        local_view: QueueView::default(),
         remote_view: None,
         initial_queue_scope: QueueScope::Local,
         system_notifications: false,

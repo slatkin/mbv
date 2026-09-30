@@ -141,7 +141,8 @@ impl App {
             }
             let queue = self.displayed_queue();
             queue
-                .clone_emby_item_at(queue.cursor())
+                .emby_item_at(queue.cursor())
+                .cloned()
                 .map(|item| (queue.cursor(), item))
         })
     }

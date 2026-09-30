@@ -1,6 +1,8 @@
 use crate::app::QueueScope;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests::{emby_unified_state, make_items, make_local_daemon_app_stub};
+use crate::app::tests::{
+    QueueViewTestExt, emby_unified_state, make_items, make_local_daemon_app_stub,
+};
 use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use std::sync::mpsc;
