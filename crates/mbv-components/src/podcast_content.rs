@@ -502,6 +502,7 @@ impl PodcastContent {
                 facts,
                 overview: data.overview,
                 credits: data.credits,
+                overview_title: None,
                 // No Workspace (design D1): the hero focuses episode
                 // information only.
                 workspace: None,

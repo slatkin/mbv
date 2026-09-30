@@ -47,13 +47,20 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                // Fixed Storm stripes in both focus states: the
-                // resting-content fill, not the sidebar body it used to
-                // borrow (sidebar fills move independently); the focused
-                // selection paints the Iris bar.
+                // Focused, the rows stripe against the focused box fill
+                // (`WORKSPACE_FOCUSED_STRIPE` on `WORKSPACE_FOCUSED_FILL`,
+                // painted by the workspace box); unfocused keeps the fixed
+                // resting stripe. The focused selection paints the Iris bar.
+                let zebra = if focused {
+                    ZebraStripe {
+                        focused: palette::WORKSPACE_FOCUSED_STRIPE,
+                        unfocused: palette::SURFACE_RESTING,
+                    }
+                } else {
+                    ZebraStripe::fixed(palette::SURFACE_RESTING)
+                };
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused)
-                        .with_zebra(ZebraStripe::fixed(palette::SURFACE_RESTING)),
+                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(zebra),
                 );
             }
         }
@@ -246,10 +253,10 @@ mod panel_list_tests {
         );
     }
 
-    /// The Workspace's zebra stripes rest at the fixed resting content Storm
-    /// in both focus states and both geometries, matching the box's resting
-    /// Slate fill; the stripe painter itself is owned by the media-list
-    /// regressions.
+    /// The Workspace's zebra stripe follows the box fill: unfocused rests at
+    /// the fixed resting content Storm; focused the rows stripe
+    /// `WORKSPACE_FOCUSED_STRIPE` against `WORKSPACE_FOCUSED_FILL`. The
+    /// stripe painter itself is owned by the media-list regressions.
     #[test]
     fn workspace_stripes_zebra_rows_with_the_resting_storm() {
         let mut carrier = MediaListCarrier::new();
@@ -257,7 +264,10 @@ mod panel_list_tests {
         let area = Rect::new(0, 0, 20, 2);
         let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
 
-        for focused in [true, false] {
+        for (focused, expected) in [
+            (true, palette::WORKSPACE_FOCUSED_STRIPE),
+            (false, palette::SURFACE_RESTING),
+        ] {
             terminal
                 .draw(|f| {
                     PanelList::set_paint_policy(
@@ -273,7 +283,7 @@ mod panel_list_tests {
             // background, so the stripe is read from the title column.
             assert_eq!(
                 buf[(area.x + 2, area.y + 1)].bg,
-                palette::SURFACE_RESTING,
+                expected,
                 "striped row, focused={focused}"
             );
         }

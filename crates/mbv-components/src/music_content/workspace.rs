@@ -596,6 +596,7 @@ impl MusicContent {
             // represents that as `None`.
             overview: data.overview,
             credits: data.credits,
+            overview_title: None,
             workspace: Some(Workspace {
                 header: Some(WorkspaceHeader::Tracklist),
                 selector: None,

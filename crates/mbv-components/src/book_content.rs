@@ -326,6 +326,7 @@ impl BookContent {
                 facts: data.facts,
                 overview: data.overview,
                 credits: data.credits,
+                overview_title: None,
                 workspace: Some(Workspace {
                     header: None,
                     selector: None,

@@ -100,6 +100,7 @@ impl LibraryContentOwner for FixtureOwner {
                     },
                 },
                 overview: None,
+                overview_title: None,
                 credits: None,
                 workspace: None,
             }),

@@ -17,7 +17,7 @@
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
     HeroContent, HeroContentData, LibraryContentOwner, LibraryPanelContent, LibrarySlotEvent,
-    ListSlot, SelectorRow, Workspace, hero_content_emby,
+    ListSlot, SelectorRow, Workspace, hero_content_emby, hero_content_series_with_episode,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};

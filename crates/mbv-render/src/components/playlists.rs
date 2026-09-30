@@ -1,35 +1,40 @@
 use super::chrome;
-use crate::components::modal_frame::render_modal_frame;
+use super::confirm_modal::render_button_row;
+use crate::components::modal_frame::render_modal_frame_bounds;
 use mbv_emby_model::EmbyItem;
 use mbv_theme as palette;
+use mbv_ui_model::confirm::ConfirmButton;
 use mbv_ui_model::ui_util::trunc_str;
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 /// Geometry painted by the save-playlist modal, reused by its mouse
-/// hit-testing (task 5.1, design.md D6). The modal has no click targets —
-/// the single name input is always keyboard-focused — so only the frame
-/// (the outside-click boundary) is published.
+/// hit-testing (task 5.1, design.md D6). The modal's click targets are the
+/// button pills; the frame is the outside-click boundary.
 #[derive(Debug)]
 pub struct SavePlaylistRenderGeometry {
     pub frame: Rect,
+    /// Painted button pill rects in button order (save, cancel).
+    pub buttons: Vec<Rect>,
 }
 
 pub fn render_save_playlist_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     input: &str,
+    rename: bool,
 ) -> SavePlaylistRenderGeometry {
-    let inner = render_modal_frame(
+    let modal = render_modal_frame_bounds(
         f,
         dim_backdrop_active,
-        52,
+        60,
         7,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
+    let inner = modal.inner;
     let label = "Name: ";
     let cursor = "▏";
     let max_input = inner.width as usize - label.len() - cursor.len() - 2;
@@ -42,34 +47,52 @@ pub fn render_save_playlist_content(
         .rev()
         .collect();
     let input_line = format!("{label}{visible}{cursor}");
-    let hint = "Enter to save · Esc to cancel";
+    let title = if rename {
+        "Rename Playlist"
+    } else {
+        "Save Playlist"
+    };
     let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
-    let hint_y = input_y + 2;
+    let buttons_y = input_y + 2;
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            title,
+            Style::default()
+                .fg(palette::TEXT_HERO_TITLE)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .alignment(Alignment::Center),
+        Rect {
+            x: inner.x,
+            y: input_y.saturating_sub(1),
+            width: inner.width,
+            height: 1,
+        },
+    );
     f.render_widget(
         Paragraph::new(Span::styled(
             input_line,
             Style::default().fg(palette::TEXT_STRONG),
-        )),
+        ))
+        .alignment(Alignment::Center),
         Rect {
-            x: inner.x + 1,
+            x: inner.x,
             y: input_y,
-            width: inner.width.saturating_sub(2),
+            width: inner.width,
             height: 1,
         },
     );
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            hint,
-            Style::default().fg(palette::TEXT_SECONDARY),
-        )),
-        Rect {
-            x: inner.x + 1,
-            y: hint_y,
-            width: inner.width.saturating_sub(2),
-            height: 1,
-        },
-    );
-    SavePlaylistRenderGeometry { frame: inner }
+    let affirmative = if rename {
+        ConfirmButton::affirmative("Enter", "Rename")
+    } else {
+        ConfirmButton::affirmative("Enter", "Save")
+    };
+    let buttons = vec![affirmative, ConfirmButton::cancel("Esc", "Cancel")];
+    let buttons_rect = render_button_row(f, inner, buttons_y, &buttons);
+    SavePlaylistRenderGeometry {
+        frame: modal.outer,
+        buttons: buttons_rect,
+    }
 }
 
 #[derive(Default, Debug)]

@@ -51,6 +51,11 @@ pub fn paint_overview_box(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty());
+    let title = content
+        .overview_title
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     let credits = content.credits.as_deref().filter(|rows| !rows.is_empty());
     if overview.is_none() && credits.is_none() {
         return None;
@@ -74,7 +79,8 @@ pub fn paint_overview_box(
     } else {
         0
     };
-    let inner_rows = text_rows + gap_rows + credit_rows;
+    let title_rows = usize::from(title.is_some());
+    let inner_rows = title_rows + text_rows + gap_rows + credit_rows;
     let box_y = next_row.saturating_add(1);
     let room = area.bottom().saturating_sub(box_y);
     let box_height = overview_box_height(
@@ -119,23 +125,9 @@ pub fn paint_overview_box(
     let viewport = inner.height as usize;
     let max_offset = inner_rows.saturating_sub(viewport);
     let offset = scroll_offset.min(max_offset);
-    paint_overview_text(f, inner, overview, offset);
-    if has_credits_gap {
-        // The separator follows the overview in the same flow; the blank row
-        // below it is the flow's next row.
-        if let Some(y) = visible_overview_row(inner, text_rows, offset) {
-            mbv_render::components::widgets::render_block_separator(
-                f,
-                Rect {
-                    x: inner.x,
-                    y,
-                    width: inner.width,
-                    height: 1,
-                },
-            );
-        }
-    }
-    paint_overview_credits(f, inner, credits, text_rows, gap_rows, offset);
+    paint_overview_flow(
+        f, inner, title, overview, credits, title_rows, text_rows, gap_rows, offset,
+    );
     if max_offset > 0 && viewport > 0 {
         render_right_scrollbar_with_viewport(
             f,
@@ -184,7 +176,63 @@ fn visible_overview_row(inner: Rect, flow_row: usize, offset: usize) -> Option<u
     (y < inner.bottom()).then_some(y)
 }
 
-fn paint_overview_text(f: &mut Frame, inner: Rect, overview: Option<&str>, offset: usize) {
+/// The overview box's one scrollable flow: the yellow title row (the focused
+/// TV Workspace's selected episode), the wrapped overview text, the credits
+/// separator, and the credits table. `gap_rows` is the separator block's
+/// height (zero when there are no credits).
+fn paint_overview_flow(
+    f: &mut Frame,
+    inner: Rect,
+    title: Option<&str>,
+    overview: Option<&str>,
+    credits: Option<&[HeroCredit]>,
+    title_rows: usize,
+    text_rows: usize,
+    gap_rows: usize,
+    offset: usize,
+) {
+    if let Some(title) = title
+        && let Some(y) = visible_overview_row(inner, 0, offset)
+    {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                title,
+                Style::default().fg(palette::TEXT_HERO_TITLE),
+            ))),
+            Rect {
+                x: inner.x,
+                y,
+                width: inner.width,
+                height: 1,
+            },
+        );
+    }
+    paint_overview_text(f, inner, overview, offset, title_rows);
+    if gap_rows > 0 {
+        // The separator follows the overview in the same flow; the blank row
+        // below it is the flow's next row.
+        if let Some(y) = visible_overview_row(inner, title_rows + text_rows, offset) {
+            mbv_render::components::widgets::render_block_separator(
+                f,
+                Rect {
+                    x: inner.x,
+                    y,
+                    width: inner.width,
+                    height: 1,
+                },
+            );
+        }
+    }
+    paint_overview_credits(f, inner, credits, title_rows + text_rows, gap_rows, offset);
+}
+
+fn paint_overview_text(
+    f: &mut Frame,
+    inner: Rect,
+    overview: Option<&str>,
+    offset: usize,
+    flow_base: usize,
+) {
     let Some(text) = overview else {
         return;
     };
@@ -192,7 +240,7 @@ fn paint_overview_text(f: &mut Frame, inner: Rect, overview: Option<&str>, offse
     // positions stay exact while it scrolls.
     let wrapped = textwrap::wrap(text, (inner.width as usize).saturating_sub(1).max(1));
     for (index, line) in wrapped.iter().enumerate() {
-        let Some(y) = visible_overview_row(inner, index, offset) else {
+        let Some(y) = visible_overview_row(inner, flow_base + index, offset) else {
             continue;
         };
         if line.is_empty() {
@@ -477,4 +525,67 @@ pub fn overlay_links_grid(
         1,
     );
     paint_link_hit_row(f, cell, area.bottom(), facts, hovered_link, link_hits);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mbv_render::components::tv_wide::HeroImageState;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    fn content_with_title(title: &str) -> HeroContent<'static> {
+        HeroContent {
+            facts: HeroFacts {
+                title: String::new(),
+                meta_rows: Vec::new(),
+                duration_row: None,
+                progress_row: None,
+                links: Vec::new(),
+                artwork: crate::library_panel::HeroArtwork {
+                    shape: crate::library_panel::ArtworkShape::Landscape,
+                    source: None,
+                    decoration: None,
+                    image: HeroImageState::None,
+                },
+            },
+            overview: Some("The overview text.".into()),
+            overview_title: Some(title.into()),
+            credits: None,
+            workspace: None,
+        }
+    }
+
+    /// The overview flow's first row is the title in the yellow hero-title
+    /// role, with the overview text starting on the next row.
+    #[test]
+    fn title_row_paints_yellow_above_the_overview() {
+        let content = content_with_title("Episode 1");
+        let area = Rect::new(0, 0, 40, 10);
+        let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("terminal");
+        terminal
+            .draw(|f| {
+                paint_overview_box(f, area, 0, &content, 0, palette::Surface::HeroPane, 40);
+            })
+            .expect("draw");
+        let buf = terminal.backend().buffer().clone();
+        let title_y = 1 + PANE_PAD_Y;
+        let row = |y: u16| {
+            (0..40)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+        assert!(row(title_y).contains("Episode 1"), "{}", row(title_y));
+        let title_cell = (0..40)
+            .map(|x| buf[(x, title_y)].clone())
+            .find(|cell| !cell.symbol().trim().is_empty())
+            .expect("title cell");
+        assert_eq!(title_cell.fg, palette::TEXT_HERO_TITLE);
+        assert!(row(title_y + 1).contains("The overview text."));
+        let text_cell = (0..40)
+            .map(|x| buf[(x, title_y + 1)].clone())
+            .find(|cell| !cell.symbol().trim().is_empty())
+            .expect("overview cell");
+        assert_eq!(text_cell.fg, palette::TEXT_EMPHASIS);
+    }
 }

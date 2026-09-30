@@ -362,6 +362,7 @@ impl LibraryContentOwner for HomeContent {
                 facts,
                 overview: data.overview,
                 credits: data.credits,
+                overview_title: None,
                 workspace: None,
             }
         });

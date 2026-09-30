@@ -360,6 +360,15 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         container: raw["Container"].as_str().unwrap_or("").to_string(),
         genres: parse_genres(raw),
         people: parse_people(raw),
+        studios: raw["Studios"]
+            .as_array()
+            .map(|studios| {
+                studios
+                    .iter()
+                    .filter_map(|studio| studio["Name"].as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
         external_urls: parse_external_urls(raw),
         video_info: raw["MediaStreams"]
             .as_array()

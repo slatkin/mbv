@@ -10,6 +10,7 @@ use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
 
 use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
+use mbv_render::components::home_video::format_release_date;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
@@ -257,7 +258,7 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 #[must_use]
 pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let movie = item.item_type == "Movie";
-    let (mut meta_rows, duration_row) = emby_hero_meta_rows_plain(item);
+    let (mut meta_rows, _, duration_row) = emby_hero_meta_rows_plain(item);
     if movie {
         let links = item
             .external_urls
@@ -344,6 +345,117 @@ pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         facts,
         overview: (!overview.is_empty()).then_some(overview),
         credits: None,
+    }
+}
+
+/// The TV series producer with the Workspace selection overlay. When the
+/// Workspace has focus, the air-date and duration rows reflect the episode
+/// selected in the Workspace (the selection is component-local, so the
+/// overlay happens at production time), falling back per row to the series'
+/// own value when the episode does not carry one; the overview and the hero
+/// artwork likewise become the episode's (its Primary still, landscape).
+/// Without Workspace focus the rows are show-level: the year range, no
+/// duration row, and the series' overview and artwork. The show's season
+/// count and network are show-level rows in both states.
+#[must_use]
+pub fn hero_content_series_with_episode(
+    series: &EmbyItem,
+    episode: Option<&EmbyItem>,
+    workspace_focused: bool,
+    seasons: Option<usize>,
+) -> HeroContentData {
+    let (mut meta_rows, date_row, mut duration_row) = emby_hero_meta_rows_plain(series);
+    let mut overview_item = series;
+    let mut artwork = emby_artwork_policy(series);
+    if workspace_focused {
+        if let Some(episode) = episode {
+            if let Some(row) = date_row
+                && !episode.premiere_date.is_empty()
+            {
+                meta_rows[row] = format_release_date(&episode.premiere_date);
+            }
+            if let Some(row) = duration_row
+                && episode.runtime_ticks > 0
+            {
+                meta_rows[row] = fmt_duration_hms(episode.runtime_ticks / TICKS_PER_SECOND);
+            }
+            if !episode.overview.is_empty() {
+                overview_item = episode;
+            }
+            // The selected episode's own still: its Primary image is a
+            // landscape frame, fetched straight off the episode.
+            if !episode.id.is_empty() {
+                artwork = HeroArtwork {
+                    shape: ArtworkShape::Landscape,
+                    source: Some(emby_source(episode, &["Primary"])),
+                    decoration: None,
+                    image: HeroImageState::None,
+                };
+            }
+        }
+    } else {
+        if let Some(row) = date_row
+            && let Some(range) = series_years_range(series)
+        {
+            meta_rows[row] = range;
+        }
+        if let Some(row) = duration_row {
+            meta_rows.remove(row);
+        }
+        duration_row = None;
+    }
+    if let Some(seasons) = seasons
+        && seasons > 0
+    {
+        meta_rows.push(seasons_label(seasons));
+    }
+    if let Some(network) = series_network(series) {
+        meta_rows.push(network);
+    }
+    let facts = HeroFacts {
+        title: series.name.clone(),
+        meta_rows,
+        duration_row,
+        progress_row: None,
+        links: Vec::new(),
+        artwork,
+    };
+    let overview = clean_overview(&overview_item.overview);
+    HeroContentData {
+        facts,
+        overview: (!overview.is_empty()).then_some(overview),
+        credits: None,
+    }
+}
+
+/// The show's release year: the parsed production year, falling back to the
+/// leading year of the premiere date.
+/// The show's year range: `1982 - 1993` for an ended show, `2026 - Present`
+/// for an ongoing one (no end year), `1982` for a single-year series.
+fn series_years_range(series: &EmbyItem) -> Option<String> {
+    let start = series.production_year;
+    (start > 0).then(|| {
+        if series.end_year > start {
+            format!("{start} - {}", series.end_year)
+        } else if series.end_year > 0 {
+            start.to_string()
+        } else {
+            format!("{start} - Present")
+        }
+    })
+}
+
+/// The show's network: its first studio (NBC, BBC, Netflix).
+fn series_network(series: &EmbyItem) -> Option<String> {
+    series.studios.first().cloned().filter(|n| !n.is_empty())
+}
+
+/// The show's season count, pluralised.
+fn seasons_label(seasons: usize) -> String {
+    if seasons == 1 {
+        "1 Season".to_string()
+    } else {
+        format!("{seasons} Seasons")
     }
 }
 
@@ -505,5 +617,136 @@ pub fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
         facts,
         overview: None,
         credits: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mbv_emby_model::test_support::make_item;
+    use rstest::rstest;
+
+    const MINUTE: i64 = 60 * TICKS_PER_SECOND;
+
+    fn series() -> EmbyItem {
+        let mut item = make_item("Ann Droid", "Series");
+        item.production_year = 2026;
+        item.premiere_date = "2026-07-16".into();
+        item.runtime_ticks = 28 * MINUTE;
+        item.genres = vec!["Science Fiction".into()];
+        item
+    }
+
+    fn episode(premiere_date: &str, runtime_minutes: i64) -> EmbyItem {
+        let mut item = make_item("Episode 1", "Episode");
+        item.premiere_date = premiere_date.into();
+        item.runtime_ticks = runtime_minutes * MINUTE;
+        item
+    }
+
+    /// The focused Workspace swaps the episode's overview and Primary still
+    /// into the hero; unfocused keeps the show-level ones.
+    #[rstest]
+    #[case::focused(true, "Episode overview")]
+    #[case::unfocused(false, "Series overview")]
+    fn workspace_focus_swaps_episode_overview_and_artwork(
+        #[case] workspace_focused: bool,
+        #[case] expected_overview: &str,
+    ) {
+        let mut series = series();
+        series.overview = "Series overview".into();
+        series.image_tags.primary = "series-poster".into();
+        let mut episode = episode("2026-07-20", 25);
+        episode.overview = "Episode overview".into();
+        let data =
+            hero_content_series_with_episode(&series, Some(&episode), workspace_focused, Some(11));
+        assert_eq!(data.overview.as_deref(), Some(expected_overview));
+        let source = data.facts.artwork.source.expect("artwork source");
+        let ArtworkSource::Emby {
+            item_id,
+            image_types,
+            ..
+        } = source
+        else {
+            panic!("emby artwork source");
+        };
+        if workspace_focused {
+            assert_eq!(item_id, episode.id);
+            assert_eq!(image_types, vec!["Primary".to_string()]);
+            assert_eq!(data.facts.artwork.shape, ArtworkShape::Landscape);
+        } else {
+            assert_eq!(item_id, series.id);
+        }
+    }
+
+    /// The hero meta rows follow the Workspace selection: focused shows the
+    /// selected episode's air date and duration; unfocused shows the show's
+    /// year range and no duration row. The show's season count and network
+    /// are show-level rows in both states. Per-row fallback when the episode
+    /// does not carry the value.
+    #[rstest]
+    #[case::focused_episode_overrides_both(
+        true,
+        Some(("2026-07-20", 25)),
+        &["SCIENCE FICTION", "20 Jul 2026", "25:00", "11 Seasons", "NBC"],
+    )]
+    #[case::unfocused_shows_year_range_and_no_duration(
+        false,
+        Some(("2026-07-20", 25)),
+        &["SCIENCE FICTION", "2026 - Present", "11 Seasons", "NBC"],
+    )]
+    #[case::focused_without_episode_keeps_series_rows(
+        true,
+        None,
+        &["SCIENCE FICTION", "16 Jul 2026", "28:00", "11 Seasons", "NBC"],
+    )]
+    #[case::episode_without_date_keeps_series_date(
+        true,
+        Some(("", 25)),
+        &["SCIENCE FICTION", "16 Jul 2026", "25:00", "11 Seasons", "NBC"],
+    )]
+    #[case::episode_without_runtime_keeps_series_duration(
+        true,
+        Some(("2026-07-20", 0)),
+        &["SCIENCE FICTION", "20 Jul 2026", "28:00", "11 Seasons", "NBC"],
+    )]
+    fn workspace_selection_overlays_air_date_and_duration(
+        #[case] workspace_focused: bool,
+        #[case] selection: Option<(&str, i64)>,
+        #[case] expected: &[&str],
+    ) {
+        let mut show = series();
+        show.studios = vec!["NBC".into()];
+        let episode = selection.map(|(date, minutes)| episode(date, minutes));
+        let data =
+            hero_content_series_with_episode(&show, episode.as_ref(), workspace_focused, Some(11));
+        assert_eq!(data.facts.meta_rows, expected);
+        assert_eq!(
+            data.facts.duration_row.is_some(),
+            workspace_focused,
+            "duration row presence follows workspace focus"
+        );
+    }
+
+    /// The year range distinguishes an ongoing show from an ended one, and a
+    /// single-year series shows just its year; the season label pluralises.
+    #[rstest]
+    #[case::ongoing(2026, 0, "2026 - Present")]
+    #[case::ended(1982, 1993, "1982 - 1993")]
+    #[case::single_year(2020, 2020, "2020")]
+    fn show_year_range_covers_end_states(
+        #[case] start: u32,
+        #[case] end: u32,
+        #[case] expected: &str,
+    ) {
+        let mut show = series();
+        show.production_year = start;
+        show.end_year = end;
+        show.premiere_date = "2026-07-16".into();
+        let data = hero_content_series_with_episode(&show, None, false, Some(1));
+        assert_eq!(
+            data.facts.meta_rows,
+            &["SCIENCE FICTION", expected, "1 Season"]
+        );
     }
 }

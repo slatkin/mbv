@@ -3,7 +3,7 @@ use super::{
     InlineSearchHost, KeyEvent, LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner,
     LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane,
     SelectorIdentity, SelectorRow, TvContent, TvDisplayMode, TvTreeTarget, Workspace,
-    hero_content_emby,
+    hero_content_emby, hero_content_series_with_episode,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 
@@ -14,6 +14,30 @@ impl TvContent {
     /// Workspace is the season pills plus the episode list. The Inline Search
     /// session takes the list slot while active (the panel places its box in
     /// the Selector row and its results in the list box).
+    /// The series-mode hero with the Workspace selection overlay, plus the
+    /// selected episode's title for the overview box's title row: the
+    /// workspace's own focus bit decides whether the rows, overview, artwork,
+    /// and overview title reflect the selected episode or stay show-level.
+    /// Shared by the panel paint and the shell's image projection so both see
+    /// one set of facts.
+    fn workspace_hero(&self) -> (Option<HeroContentData>, Option<String>) {
+        let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
+        let episode = self.selected_episode_item();
+        let seasons = self
+            .context
+            .series_detail
+            .as_ref()
+            .map(|detail| detail.seasons.len());
+        let data = self.context.selected_series.as_ref().map(|series| {
+            hero_content_series_with_episode(series, episode.as_ref(), workspace_focused, seasons)
+        });
+        let overview_title = match episode {
+            Some(episode) if workspace_focused => Some(episode.name.clone()),
+            _ => None,
+        };
+        (data, overview_title)
+    }
+
     pub fn panel_content(&mut self) -> LibraryPanelContent<'_> {
         let searching = self.inline_search.is_active();
         // Hero facts first: reading the projected snapshot and image state
@@ -27,13 +51,11 @@ impl TvContent {
         } else {
             None
         };
-        let hero_data = if flat_episode_mode {
-            hero_item.map(|episode| hero_content_emby(&episode))
+        let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
+        let (hero_data, overview_title) = if flat_episode_mode {
+            (hero_item.map(|episode| hero_content_emby(&episode)), None)
         } else {
-            self.context
-                .selected_series
-                .clone()
-                .map(|series| hero_content_emby(&series))
+            self.workspace_hero()
         };
         let hero_data = hero_data.map(|mut data| {
             data.facts.artwork.image = self.context.hero_image.clone();
@@ -52,11 +74,11 @@ impl TvContent {
                 markers: vec![],
                 active: Some(self.season_cursor.min(detail.seasons.len() - 1)),
             });
-        let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let selector = self.selector_row(searching);
         let hero = hero_data.map(|data| HeroContent {
             facts: data.facts,
             overview: data.overview,
+            overview_title,
             credits: data.credits,
             workspace: (!flat_episode_mode).then_some(Workspace {
                 header: None,
@@ -302,7 +324,7 @@ impl LibraryContentOwner for TvContent {
                 .flatten()
                 .map(|episode| hero_content_emby(&episode))
         } else {
-            self.context.selected_series.as_ref().map(hero_content_emby)
+            self.workspace_hero().0
         }
     }
     fn set_hero_image(&mut self, state: HeroImageState) {

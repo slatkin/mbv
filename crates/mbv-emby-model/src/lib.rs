@@ -104,6 +104,10 @@ pub struct EmbyItem {
     pub is_folder: bool,
     #[serde(default)]
     pub child_count: Option<u32>,
+    /// `Studios[].Name`: the production studios — a series' network (NBC,
+    /// BBC, Netflix).
+    #[serde(default)]
+    pub studios: Vec<String>,
     pub media_type: String,
     pub collection_type: String,
     pub runtime_ticks: i64,
@@ -282,6 +286,7 @@ impl EmbyItem {
             item_type: "CollectionFolder".to_string(),
             is_folder: true,
             child_count: None,
+            studios: Vec::new(),
             collection_type,
             media_type: String::new(),
             runtime_ticks: 0,

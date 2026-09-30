@@ -241,6 +241,9 @@ impl std::fmt::Debug for Workspace<'_> {
 pub struct HeroContent<'a> {
     pub facts: HeroFacts,
     pub overview: Option<String>,
+    /// The overview flow's title row (the focused TV Workspace's selected
+    /// episode): painted yellow above the overview text, scrolling with it.
+    pub overview_title: Option<String>,
     pub credits: Option<Vec<HeroCredit>>,
     pub workspace: Option<Workspace<'a>>,
 }

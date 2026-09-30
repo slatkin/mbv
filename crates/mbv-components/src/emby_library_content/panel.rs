@@ -78,6 +78,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 facts,
                 overview: data.overview,
                 credits: data.credits,
+                overview_title: None,
                 workspace: None,
             }
         });

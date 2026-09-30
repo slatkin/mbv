@@ -184,9 +184,14 @@ fn paint_workspace_box(
         };
     }
     let panel = box_area;
-    // The Workspace box rests at the hero boxes' own Slate in both focus
-    // states and both geometries — one unified look, no focused soft fill.
-    let background = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+    // The Workspace box rests at the hero boxes' own Slate unfocused; focused
+    // it lightens one step (`WORKSPACE_FOCUSED_FILL`) and its rows stripe
+    // against it (`WORKSPACE_FOCUSED_STRIPE`, set on the list's paint policy).
+    let background = if box_focused {
+        palette::WORKSPACE_FOCUSED_FILL
+    } else {
+        palette::surface_colors(palette::Surface::MainContentBox, false).fill
+    };
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,

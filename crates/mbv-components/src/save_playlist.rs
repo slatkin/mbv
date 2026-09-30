@@ -7,6 +7,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use mbv_render::render_save_playlist_content;
 use mbv_ui_model::feed::SavePlaylistStage;
 use mbv_ui_msg::UserEvent;
@@ -20,6 +21,8 @@ pub struct SavePlaylistComponent {
     dim_backdrop_active: bool,
     /// The painted modal rect (last frame) — the outside-click boundary.
     frame: Rect,
+    /// Painted button pills (last frame): 0 = save, 1 = cancel.
+    hit_buttons: HitRegions<usize>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
 }
@@ -33,6 +36,7 @@ impl SavePlaylistComponent {
             rename_id: None,
             dim_backdrop_active: false,
             frame: Rect::default(),
+            hit_buttons: HitRegions::new(),
             mouse_gestures: MouseGestureState::new(),
         }
     }
@@ -84,23 +88,34 @@ impl SavePlaylistComponent {
         }
     }
 
-    /// Mouse handling (task 5.1): the modal is a single always-focused
-    /// name input with no painted buttons and no focus/select keyboard
-    /// path, so the only click with a keyboard equivalent is an outside
-    /// click mirroring Esc (`SavePlaylistIntent::Dismiss`). Typing,
-    /// submit, and right-click/wheel stay keyboard-only.
+    /// Mouse handling: a click on a button pill presses that pill's key
+    /// (save/cancel), like the confirm modal; an outside click mirrors Esc
+    /// (`SavePlaylistIntent::Dismiss`). Typing, submit, and
+    /// right-click/wheel stay keyboard-only.
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
-        match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } if !self.frame.contains(at) => {
-                Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
+        let gesture = self.mouse_gestures.recognize(mouse)?;
+        let MouseGesture::Click { at, .. } = gesture else {
+            return None;
+        };
+        if let Some(&index) = self.hit_buttons.resolve(at) {
+            return Some(match index {
+                0 => Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
+                    SavePlaylistIntent::Submit,
+                ))),
+                _ => Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
                     SavePlaylistIntent::Dismiss,
-                ))))
-            }
-            _ => None,
+                ))),
+            });
         }
+        if self.frame.contains(at) {
+            return None;
+        }
+        Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
+            SavePlaylistIntent::Dismiss,
+        ))))
     }
 }
 
@@ -112,10 +127,19 @@ impl Default for SavePlaylistComponent {
 
 impl Component for SavePlaylistComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
-        let geometry =
-            render_save_playlist_content(frame, &mut self.dim_backdrop_active, &self.input);
-        // Adopt the painted frame for outside-click dismissal (task 5.1).
+        let geometry = render_save_playlist_content(
+            frame,
+            &mut self.dim_backdrop_active,
+            &self.input,
+            self.rename,
+        );
+        // Adopt the painted frame for outside-click dismissal and the pill
+        // rects for button clicks (task 5.1).
         self.frame = geometry.frame;
+        self.hit_buttons.clear();
+        for (index, rect) in geometry.buttons.into_iter().enumerate() {
+            self.hit_buttons.push(rect, index);
+        }
     }
 
     fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
@@ -147,5 +171,101 @@ impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
             Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use tuirealm::event::{KeyModifiers, MouseButton};
+
+    fn left_down(column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    fn painted_modal(rename: bool) -> (SavePlaylistComponent, ratatui::buffer::Buffer) {
+        let mut comp = SavePlaylistComponent::new();
+        comp.set_dialog(
+            "Road Trip".into(),
+            if rename {
+                SavePlaylistStage::RenamePlaylist { id: "p1".into() }
+            } else {
+                SavePlaylistStage::EnterName
+            },
+        );
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .expect("draw save-playlist modal");
+        let buffer = terminal.backend().buffer().clone();
+        (comp, buffer)
+    }
+
+    /// The save-playlist modal must match the confirm modals' look: the
+    /// storm frame with a centered input line and two button pills
+    /// (Enter save / Esc cancel), not a text hint row.
+    #[test]
+    fn modal_paints_input_and_two_button_pills() {
+        let (comp, buffer) = painted_modal(false);
+        let regions = comp.hit_buttons.regions();
+        assert_eq!(regions.len(), 2);
+        let save = regions[0].0;
+        let cancel = regions[1].0;
+        let text = |rect: ratatui::layout::Rect| {
+            (rect.x..rect.right())
+                .map(|x| buffer.cell((x, rect.y)).expect("pill cell").symbol())
+                .collect::<String>()
+        };
+        assert_eq!(text(save), " Enter Save ");
+        assert_eq!(text(cancel), " Esc Cancel ");
+        assert_eq!(save.right() + 2, cancel.x, "two cells between pills");
+        // The input row sits between the pills and the frame's content area,
+        // same geometry as the confirm modal's message row.
+        assert_eq!(save.y, comp.frame.y + 1 + 2 + 2);
+        // A yellow bold "Save Playlist" title on the row above the input.
+        let title_y = save.y - 3;
+        let title_text: String = ((comp.frame.x + 2)..(comp.frame.right() - 2))
+            .map(|x| buffer.cell((x, title_y)).expect("title cell").symbol())
+            .collect::<String>();
+        assert!(title_text.trim() == "Save Playlist", "{title_text:?}");
+        let title_cell = ((comp.frame.x + 2)..(comp.frame.right() - 2))
+            .map(|x| buffer.cell((x, title_y)).expect("title cell"))
+            .find(|cell| !cell.symbol().trim().is_empty())
+            .expect("title text");
+        assert_eq!(title_cell.fg, mbv_theme::TEXT_HERO_TITLE);
+        assert!(title_cell.modifier.contains(ratatui::style::Modifier::BOLD));
+    }
+
+    /// A pill click presses that pill's key: save submits, cancel dismisses.
+    #[test]
+    fn click_on_pill_submits_or_dismisses() {
+        let (mut comp, _) = painted_modal(false);
+        let save = comp.hit_buttons.regions()[0].0;
+        let submit = comp.on(&Event::Mouse(left_down(save.x + 1, save.y)));
+        assert!(matches!(
+            submit,
+            Some(Msg::Shell(ref shell_boxed))
+            if matches!(shell_boxed.as_ref(), ShellRequest::SavePlaylistIntent(
+                SavePlaylistIntent::Submit
+            ))
+        ));
+
+        comp.mouse_gestures.reset_for_test();
+        let cancel = comp.hit_buttons.regions()[1].0;
+        let dismiss = comp.on(&Event::Mouse(left_down(cancel.x + 1, cancel.y)));
+        assert!(matches!(
+            dismiss,
+            Some(Msg::Shell(ref shell_boxed))
+            if matches!(shell_boxed.as_ref(), ShellRequest::SavePlaylistIntent(
+                SavePlaylistIntent::Dismiss
+            ))
+        ));
     }
 }

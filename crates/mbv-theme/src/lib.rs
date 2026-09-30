@@ -125,6 +125,13 @@ pub const SETTINGS_STRIPE_BG: Color = Palette::Green1.color();
 /// (`SURFACE_CHROME`, `#1e2326` ink), independently editable from that chrome
 /// and the other lists' stripes.
 pub const SESSIONS_STRIPE_BG: Color = Palette::Green1.color();
+/// The TV Workspace box's focused fill (`#374145`): the focused Workspace
+/// body, one step lighter than its resting `MainContentBox` backdrop.
+pub const WORKSPACE_FOCUSED_FILL: Color = Palette::Green2.color();
+/// The TV Workspace list's focused secondary zebra fill (`#2e383c`): the
+/// stripe the focused Workspace's rows alternate against
+/// [`WORKSPACE_FOCUSED_FILL`].
+pub const WORKSPACE_FOCUSED_STRIPE: Color = Palette::Green1.color();
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the

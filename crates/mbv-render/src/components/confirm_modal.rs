@@ -80,7 +80,12 @@ fn button_fg(tone: ConfirmButtonTone) -> Color {
 /// Paint the centered button pills and return each painted rect in button
 /// order. Pills are ink blocks with one pad space each side, separated
 /// by two cells, the whole group centered on `y` (issue #855).
-fn render_button_row(f: &mut Frame, inner: Rect, y: u16, buttons: &[ConfirmButton]) -> Vec<Rect> {
+pub(crate) fn render_button_row(
+    f: &mut Frame,
+    inner: Rect,
+    y: u16,
+    buttons: &[ConfirmButton],
+) -> Vec<Rect> {
     let widths: Vec<u16> = buttons.iter().map(button_width).collect();
     let gaps = u16::try_from(buttons.len().saturating_sub(1).saturating_mul(2)).unwrap_or(u16::MAX);
     let total = widths

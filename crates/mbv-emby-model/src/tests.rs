@@ -8,6 +8,7 @@ fn item(name: &str, item_type: &str) -> EmbyItem {
         item_type: item_type.into(),
         is_folder: false,
         child_count: None,
+        studios: Vec::new(),
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 0,
