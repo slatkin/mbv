@@ -183,15 +183,15 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 6. `QueueView`: an adopt-only queue (design D5)
 
-- [ ] 6.1 Create `src/app/state/queue_view.rs` with `QueueView`: private fields; read accessors including `source()` and `lineage()`; `set_cursor`; `from_snapshot`; `adopt(&UnifiedQueueStateData, AdoptCause)`. It mints a Client-local revision on each adoption.
+- [x] 6.1 Create `src/app/state/queue_view.rs` with `QueueView`: private fields; read accessors including `source()` and `lineage()`; `set_cursor`; `from_snapshot`; `adopt(&UnifiedQueueStateData, AdoptCause)`. It mints a Client-local revision on each adoption.
   - Tests:
     - one `#[case]` table over the selection outcomes in "Queue selection follows the selected slot": move keeps the selected slot; removal selects the next entry; removing the last entry selects the new last; background not held follows the active slot; background held keeps the selection; replacement selects the start.
     - each adoption yields a new revision. Owns `queue-canonical-list` "A queue revision names one queue state".
-- [ ] 6.2 Replace `player_tab`/`remote_player_tab` with `local_view`/`remote_view`, delete `App.queue_source` (read `view.source()`), and delete `src/app/state/player_tab.rs`.
+- [x] 6.2 Replace `player_tab`/`remote_player_tab` with `local_view`/`remote_view`, delete `App.queue_source` (read `view.source()`), and delete `src/app/state/player_tab.rs`.
   - Route adoptions through `adopt`: `handle_unified_queue_updated` uses `Background{held: queue_cursor_held_by_user()}`, or `Replacement` on a lineage change; `adopt_home_snapshot` uses `Background`; `await_queue_op` uses `OwnAnswer`; attach/connect/switch bootstraps use `Replacement`.
   - Delete `pending_queue_edit_cursor` and `pending_remote_move_cursor`.
   - Verify: the `mbv` gate passes, and `rg 'PlayerTab|pending_queue_edit_cursor|pending_remote_move_cursor|\.queue_source\b' src/app` is empty.
-- [ ] 6.3 Projection: read the pending slot only from the adopted snapshot (`playback_target.rs` `pending_playback_slot`, `displayed_playback_state`), and delete `queue_row_playback_state`'s fence clause.
+- [x] 6.3 Projection: read the pending slot only from the adopted snapshot (`playback_target.rs` `pending_playback_slot`, `displayed_playback_state`), and delete `queue_row_playback_state`'s fence clause.
   - Test: a snapshot whose pending transition differs from the observed slot projects the pending slot with no progress. Owns `queue-canonical-list` "Queue projection is bounded presentation data".
 
 ## 7. Documentation
