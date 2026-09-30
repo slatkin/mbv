@@ -73,6 +73,7 @@ impl App {
                     );
                 self.audiobookshelf_runtime
                     .complete(completion.generation, state);
+                self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     let deletion = self.clear_audiobookshelf_authentication();
                     self.flash(
@@ -110,5 +111,6 @@ impl App {
             mbv_core::service_runtime::ServiceState::NotConfigured
         };
         self.audiobookshelf_runtime.complete(generation, state);
+        self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
     }
 }

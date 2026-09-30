@@ -163,7 +163,7 @@ fn catalog_receiver(
     let (tx, rx) = std::sync::mpsc::channel();
     tx.send(AudiobookshelfCatalogCompletion { generation, result })
         .expect("catalog channel");
-    AudiobookshelfCatalogReceiver { rx }
+    AudiobookshelfCatalogReceiver { generation, rx }
 }
 
 /// Reads exactly `expected` library-fetch events off the shell's `lib_tx`

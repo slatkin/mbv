@@ -73,7 +73,11 @@ impl App {
                 self.setup.audiobookshelf_catalog_rx = Some(receiver);
                 false
             }
-            _ => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.handle_audiobookshelf_worker_disconnect(receiver.generation);
+                true
+            }
+            Ok(_) => false,
         }
     }
 
@@ -98,9 +102,12 @@ impl App {
                     completion.generation,
                     mbv_core::service_runtime::ServiceState::NeedsAuthentication,
                 );
+                self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
                 let _ = self.clear_audiobookshelf_authentication();
             }
-            Err(_) => {}
+            Err(_) => {
+                self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
+            }
         }
     }
 
