@@ -20,6 +20,7 @@ fn cap_glibc_arenas() {
 mod app;
 mod config;
 mod local_daemon;
+mod owner_restart;
 mod single_instance;
 
 use crate::app::state::home_latest::{capture_launch_window, current_launch_secs};

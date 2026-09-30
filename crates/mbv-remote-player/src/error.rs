@@ -57,7 +57,7 @@ impl RemotePlayerError {
         }
     }
 
-    pub(crate) fn owner_build_mismatch_error(app_version: impl Into<String>) -> Self {
+    pub fn owner_build_mismatch_error(app_version: impl Into<String>) -> Self {
         Self {
             kind: RemotePlayerErrorKind::OwnerBuildMismatch {
                 app_version: app_version.into(),
