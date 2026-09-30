@@ -143,7 +143,14 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
             item: None,
         });
     app.set_library_tab(0);
-    app.resolve_library_tab_pending();
+    // #810: a catalog arriving after an explicit move must not restore the
+    // abandoned Service tab over the user's selection.
+    let views: Vec<mbv_emby_model::EmbyItem> = app
+        .libs
+        .iter()
+        .map(|library| library.library.clone())
+        .collect();
+    app.rebuild_library_tabs_from_views(&views);
 
     assert_eq!(app.tab, TabSelection::Home);
     assert_eq!(
