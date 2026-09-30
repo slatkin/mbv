@@ -215,24 +215,13 @@ impl App {
             .pending_playback_slot()
     }
 
-    /// The playback projection the queue ROWS are painted from. Bare mode
-    /// blanks a queue fenced ahead of its local Player; out-of-process owner
-    /// snapshots reconcile queue slots and playback coordinates together.
-    pub(in crate::app) fn queue_row_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
-        let mut state = self.displayed_queue_playback_state();
-        if state.active && !self.local_queue_is_owner_queue(self.viewed_queue_scope()) {
-            state.active = false;
-        }
-        state
-    }
-
     /// The playhead presentation reads: the confirmed playback state, or --
     /// while a selected slot awaits the playback owner's report -- that slot
     /// with no progress. Presentation only: authority consumers (transport
     /// gates, effects, reporting) keep `effective_playback_state`.
     pub(in crate::app) fn displayed_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let state = self.effective_playback_state();
-        let Some(index) = self.predicted_active_index() else {
+        let Some(index) = self.pending_playback_index() else {
             return state;
         };
         if state.active && state.active_idx == Some(index) {
@@ -253,9 +242,8 @@ impl App {
         }
     }
 
-    /// The position of the slot the user selected to play in the playing
-    /// queue, while the playback owner has not yet confirmed it.
-    fn predicted_active_index(&self) -> Option<usize> {
+    /// The adopted pending slot's position while the owner has not confirmed it.
+    fn pending_playback_index(&self) -> Option<usize> {
         let target = self.pending_playback_slot()?;
         self.queue_for_scope(self.playing_queue_scope())
             .slots()

@@ -14,8 +14,8 @@ pub(in crate::app) struct QueueProjectionFingerprint {
     scope: QueueScope,
     active: bool,
     active_target: Option<QueueSlotId>,
-    /// The optimistic selection awaiting playback-owner confirmation. It moves
-    /// the now-playing row before the owner reports anything, so it has to be
+    /// The adopted pending transition awaiting playback-owner observation.
+    /// It moves the now-playing row before the owner reports it, so it remains
     /// part of the fingerprint even while `active_target` is unchanged.
     pending_target: Option<QueueSlotId>,
     progress_bucket: u16,
@@ -30,8 +30,7 @@ fn progress_bucket(playback: PlaybackState) -> u16 {
     }
 }
 
-/// The observed active slot, or the predicted selection when nothing is
-/// playing yet (the pending slot is pre-filtered to the viewed queue).
+/// The observed active slot, or the owner's pending slot when idle.
 fn projected_active_target(
     queue: &super::QueueView,
     playback: PlaybackState,
@@ -108,7 +107,7 @@ impl Model {
 
     fn prepare_queue_projection(&mut self) -> QueueProjectionUpdate {
         let scope = self.app.viewed_queue_scope();
-        let playback = self.app.queue_row_playback_state();
+        let playback = self.app.displayed_queue_playback_state();
         let pending_slot = self.pending_queue_projection_slot(scope);
         let fingerprint = self.queue_projection_fingerprint(scope, playback, pending_slot);
         let (rows_changed, bucket_only) = self.queue_projection_changes(&fingerprint);
@@ -128,9 +127,8 @@ impl Model {
         update
     }
 
-    // An optimistic selection counts only while its slot is still in the
-    // viewed queue: a stale target (removed by an edit or the owner) must
-    // not move the now-playing state off the row that is really playing.
+    // The adopted pending slot counts only while it is still in the viewed
+    // queue: a stale target must not move now-playing off the observed row.
     fn pending_queue_projection_slot(&self, scope: QueueScope) -> Option<QueueSlotId> {
         self.app
             .queue_scope_is_playback(scope)
@@ -513,6 +511,46 @@ mod tests {
 
         let component = queue_component(&model);
         assert_eq!(component.projected_row_states().len(), 1);
+    }
+
+    #[test]
+    fn queue_projection_uses_adopted_pending_transition_without_progress() {
+        // Owns queue-canonical-list, "Queue projection is bounded presentation data".
+        let mut snapshot = crate::app::tests::emby_unified_state(&make_items(2), 0);
+        snapshot.in_flight_transition = Some(mbv_ctrl::TransitionSummary {
+            request_id: 1,
+            generation: 1,
+            target_slot: 101,
+        });
+        let mut app = make_app_stub();
+        app.local_view = crate::app::QueueView::from_snapshot(&snapshot);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+            status.position_ticks = 500;
+            status.runtime_ticks = 1_000;
+        }
+
+        let displayed = app.displayed_playback_state();
+        let rows = mbv_components::queue::queue_media_rows(
+            app.local_view.slots(),
+            app.displayed_queue_playback_state(),
+            app.pending_playback_slot(),
+        );
+
+        assert_eq!(displayed.active_idx, Some(1));
+        assert_eq!(displayed.position_ticks, 0);
+        assert!(matches!(
+            &rows[1],
+            mbv_render::components::media_list::MediaListRow::Item {
+                semantic_state:
+                    mbv_render::components::media_list::MediaSemanticState::NowPlaying {
+                        progress: None
+                    },
+                ..
+            }
+        ));
     }
 
     #[test]
