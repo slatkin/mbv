@@ -27,5 +27,5 @@ umbrella #810 (invariant 11) in a comment.
 
 ## 5. Docs and integration
 
-- [ ] 5.1 Rewrite `docs/invariants/11-launch-state-catalog-boundary.md` (rename if the title no longer fits) to the residual only: `App::tab` has several production writers and no type stops a new one skipping settle. State that properties 1 and 2 are enforced by `LaunchRestore` and by resolving at catalog arrival. Verify: doc no longer claims the marker rule; links from `docs/invariants/` index (if any) resolve.
-- [ ] 5.2 Integration: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run` for the workspace, and `make check-code-file-lines` just before pushing. Verify: all green; record any edited file over 800 lines and split it before the PR.
+- [x] 5.1 Rewrite `docs/invariants/11-launch-state-catalog-boundary.md` (rename if the title no longer fits) to the residual only: `App::tab` has several production writers and no type stops a new one skipping settle. State that properties 1 and 2 are enforced by `LaunchRestore` and by resolving at catalog arrival. Verify: doc no longer claims the marker rule; links from `docs/invariants/` index (if any) resolve.
+- [x] 5.2 Integration: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run` for the workspace, and `make check-code-file-lines` just before pushing. Verify: all green; record any edited file over 800 lines and split it before the PR.
