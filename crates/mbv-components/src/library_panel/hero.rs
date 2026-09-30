@@ -258,7 +258,7 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 #[must_use]
 pub fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let movie = item.item_type == "Movie";
-    let (mut meta_rows, _, duration_row) = emby_hero_meta_rows_plain(item);
+    let (mut meta_rows, duration_row) = emby_hero_meta_rows_plain(item);
     if movie {
         let links = item
             .external_urls
@@ -364,45 +364,53 @@ pub fn hero_content_series_with_episode(
     workspace_focused: bool,
     seasons: Option<usize>,
 ) -> HeroContentData {
-    let (mut meta_rows, date_row, mut duration_row) = emby_hero_meta_rows_plain(series);
+    let release_date = |item: &EmbyItem| {
+        (!item.premiere_date.is_empty()).then(|| format_release_date(&item.premiere_date))
+    };
+    let runtime = |item: &EmbyItem| {
+        (item.runtime_ticks > 0).then(|| fmt_duration_hms(item.runtime_ticks / TICKS_PER_SECOND))
+    };
+    let focused_episode = episode.filter(|_| workspace_focused);
+    let mut meta_rows: Vec<String> = series
+        .genres
+        .first()
+        .map(|genre| genre.to_uppercase())
+        .filter(|genre| !genre.is_empty())
+        .into_iter()
+        .collect();
+    let date = if workspace_focused {
+        focused_episode
+            .and_then(release_date)
+            .or_else(|| release_date(series))
+    } else {
+        series_years_range(series).or_else(|| release_date(series))
+    };
+    meta_rows.extend(date);
+    let duration = workspace_focused
+        .then(|| {
+            focused_episode
+                .and_then(runtime)
+                .or_else(|| runtime(series))
+        })
+        .flatten();
+    let duration_row = duration.is_some().then_some(meta_rows.len());
+    meta_rows.extend(duration);
     let mut overview_item = series;
     let mut artwork = emby_artwork_policy(series);
-    if workspace_focused {
-        if let Some(episode) = episode {
-            if let Some(row) = date_row
-                && !episode.premiere_date.is_empty()
-            {
-                meta_rows[row] = format_release_date(&episode.premiere_date);
-            }
-            if let Some(row) = duration_row
-                && episode.runtime_ticks > 0
-            {
-                meta_rows[row] = fmt_duration_hms(episode.runtime_ticks / TICKS_PER_SECOND);
-            }
-            if !episode.overview.is_empty() {
-                overview_item = episode;
-            }
-            // The selected episode's own still: its Primary image is a
-            // landscape frame, fetched straight off the episode.
-            if !episode.id.is_empty() {
-                artwork = HeroArtwork {
-                    shape: ArtworkShape::Landscape,
-                    source: Some(emby_source(episode, &["Primary"])),
-                    decoration: None,
-                    image: HeroImageState::None,
-                };
-            }
+    if let Some(episode) = focused_episode {
+        if !episode.overview.is_empty() {
+            overview_item = episode;
         }
-    } else {
-        if let Some(row) = date_row
-            && let Some(range) = series_years_range(series)
-        {
-            meta_rows[row] = range;
+        // The selected episode's own still: its Primary image is a
+        // landscape frame, fetched straight off the episode.
+        if !episode.id.is_empty() {
+            artwork = HeroArtwork {
+                shape: ArtworkShape::Landscape,
+                source: Some(emby_source(episode, &["Primary"])),
+                decoration: None,
+                image: HeroImageState::None,
+            };
         }
-        if let Some(row) = duration_row {
-            meta_rows.remove(row);
-        }
-        duration_row = None;
     }
     if let Some(seasons) = seasons
         && seasons > 0
@@ -428,8 +436,6 @@ pub fn hero_content_series_with_episode(
     }
 }
 
-/// The show's release year: the parsed production year, falling back to the
-/// leading year of the premiere date.
 /// The show's year range: `1982 - 1993` for an ended show, `2026 - Present`
 /// for an ongoing one (no end year), `1982` for a single-year series.
 fn series_years_range(series: &EmbyItem) -> Option<String> {

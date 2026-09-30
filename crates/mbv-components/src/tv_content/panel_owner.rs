@@ -8,12 +8,6 @@ use super::{
 use mbv_render::components::tv_wide::HeroImageState;
 
 impl TvContent {
-    /// This frame's typed Library panel content (design D3, task 8.2): the
-    /// letter pills are the one Selector row, the hero comes from the shared
-    /// `EmbyItem` producer with the shell-projected image state, and the
-    /// Workspace is the season pills plus the episode list. The Inline Search
-    /// session takes the list slot while active (the panel places its box in
-    /// the Selector row and its results in the list box).
     /// The series-mode hero with the Workspace selection overlay, plus the
     /// selected episode's title for the overview box's title row: the
     /// workspace's own focus bit decides whether the rows, overview, artwork,
@@ -38,6 +32,12 @@ impl TvContent {
         (data, overview_title)
     }
 
+    /// This frame's typed Library panel content (design D3, task 8.2): the
+    /// letter pills are the one Selector row, the hero comes from the shared
+    /// `EmbyItem` producer with the shell-projected image state, and the
+    /// Workspace is the season pills plus the episode list. The Inline Search
+    /// session takes the list slot while active (the panel places its box in
+    /// the Selector row and its results in the list box).
     pub fn panel_content(&mut self) -> LibraryPanelContent<'_> {
         let searching = self.inline_search.is_active();
         // Hero facts first: reading the projected snapshot and image state

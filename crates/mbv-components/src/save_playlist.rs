@@ -13,6 +13,10 @@ use mbv_ui_model::feed::SavePlaylistStage;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, SavePlaylistIntent, ShellRequest};
 
+fn intent_msg(intent: SavePlaylistIntent) -> Msg {
+    Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(intent)))
+}
+
 #[derive(Debug)]
 pub struct SavePlaylistComponent {
     input: String,
@@ -21,8 +25,8 @@ pub struct SavePlaylistComponent {
     dim_backdrop_active: bool,
     /// The painted modal rect (last frame) — the outside-click boundary.
     frame: Rect,
-    /// Painted button pills (last frame): 0 = save, 1 = cancel.
-    hit_buttons: HitRegions<usize>,
+    /// Painted button pills (last frame): save, then cancel.
+    hit_buttons: HitRegions<SavePlaylistIntent>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
 }
@@ -78,12 +82,8 @@ impl SavePlaylistComponent {
                 self.input.push(c);
                 None
             }
-            Key::Esc => Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
-                SavePlaylistIntent::Dismiss,
-            )))),
-            Key::Enter => Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
-                SavePlaylistIntent::Submit,
-            )))),
+            Key::Esc => Some(intent_msg(SavePlaylistIntent::Dismiss)),
+            Key::Enter => Some(intent_msg(SavePlaylistIntent::Submit)),
             _ => None,
         }
     }
@@ -100,22 +100,13 @@ impl SavePlaylistComponent {
         let MouseGesture::Click { at, .. } = gesture else {
             return None;
         };
-        if let Some(&index) = self.hit_buttons.resolve(at) {
-            return Some(match index {
-                0 => Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
-                    SavePlaylistIntent::Submit,
-                ))),
-                _ => Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
-                    SavePlaylistIntent::Dismiss,
-                ))),
-            });
+        if let Some(&intent) = self.hit_buttons.resolve(at) {
+            return Some(intent_msg(intent));
         }
         if self.frame.contains(at) {
             return None;
         }
-        Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
-            SavePlaylistIntent::Dismiss,
-        ))))
+        Some(intent_msg(SavePlaylistIntent::Dismiss))
     }
 }
 
@@ -137,8 +128,9 @@ impl Component for SavePlaylistComponent {
         // rects for button clicks (task 5.1).
         self.frame = geometry.frame;
         self.hit_buttons.clear();
-        for (index, rect) in geometry.buttons.into_iter().enumerate() {
-            self.hit_buttons.push(rect, index);
+        let intents = [SavePlaylistIntent::Submit, SavePlaylistIntent::Dismiss];
+        for (rect, intent) in geometry.buttons.into_iter().zip(intents) {
+            self.hit_buttons.push(rect, intent);
         }
     }
 
