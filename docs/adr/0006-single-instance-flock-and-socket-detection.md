@@ -1,5 +1,7 @@
 # Single-instance via flock + socket connectability
 
+> **Amended (2026-09-30):** The Owner process is now the only local Player-owner host; refusal no longer means a Bare TUI. See [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 ## Decision
 
 mbv enforces single-instance (Discord-style, always on and independent of

@@ -241,7 +241,7 @@ A lineage change between the previous and the adopted snapshot marks the adoptio
 - `App::queue_op(scope, op)` sends, then `await_queue_op(scope, id)` pumps that link's receiver until `QueueOpResult{op: id}` or `QUEUE_OP_ANSWER_BOUND = 250 ms`. The pump:
   - adopts `UnifiedQueueUpdated` inline as `Background` (or through `adopt_home_snapshot` for a suspended home link);
   - adopts the matching `QueueOpResult` as `OwnAnswer`;
-  - appends **every other event** to `App.deferred_player_events: VecDeque<PlayerEvent>`. `drain_player_events` takes from it before `player_rx`, so `RemoteDisconnected`, `RestartLoop`, and the per-event `push_*` projections keep running at the tick level, in order.
+  - appends every other event to `App.deferred_player_events: VecDeque<PlayerEvent>`. For a suspended home link, pump deferrals go to the home drain (`deferred_home_events`) instead; `drain_player_events` takes from its deferred queue before `player_rx`, so `RemoteDisconnected`, `RestartLoop`, and the per-event `push_*` projections keep running at the tick level, in order.
 - **Late answers.** An `Applied` that arrives after the bound, or that matches no waiting op, is adopted as `Background`. A late `Rejected` flashes nothing more, because the timeout already reported.
 - **Legacy peers.** Peers without the capability get the edit and no wait. Undo of a removal, refresh, and progress relay report "not supported by this owner".
 

@@ -4,6 +4,8 @@ status: accepted
 
 # The Stay-alive Process Owns and Persists Its Queue
 
+> **Status (2026-09-30):** Owner-process queue adoption is now the rule for all local launches, not only Stay-alive. See [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 Beside [ADR 0015](0015-local-daemon-for-stay-alive.md), which made Stay-alive
 "ensure the local daemon exists, then attach". 0015 settled *who runs*; this
 ADR settles *who owns the queue*.

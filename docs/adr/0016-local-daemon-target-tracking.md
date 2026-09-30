@@ -1,5 +1,7 @@
 # Tracking the current daemon target separately from launch mode
 
+> **Status (2026-09-30):** Local launches always attach to the sole Owner process; target tracking remains relevant to non-local endpoints. See [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 > **Amended (PR #426, `3359c81`).** The decision below stands: current target
 > and launch mode remain two separate pieces of state. What changed is how the
 > first one is represented — the mutable `is_local_daemon` boolean became

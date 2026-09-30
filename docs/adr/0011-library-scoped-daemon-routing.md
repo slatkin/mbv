@@ -1,5 +1,7 @@
 # Library-Scoped Daemon Routing
 
+> **Status (2026-09-30):** Local routing now targets the sole local Owner process; see [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+
 ## Decision
 
 Daemon routing can be decided per library via a `[daemon_routes]` config

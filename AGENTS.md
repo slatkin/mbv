@@ -1,7 +1,9 @@
 # mbv
 
-Rust terminal media client for Emby, Audiobookshelf, Feeds. Embeds mpv; playback
-runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
+Rust terminal media client for Emby, Audiobookshelf, Feeds. Embeds mpv; every
+local TUI is a Client of the per-user Owner process, the sole local Player-owner
+host. Stay-alive controls whether that process outlives its Clients; packaged
+`mbvd` remains a separate Player owner.
 
 ## Start here
 
