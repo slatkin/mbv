@@ -487,7 +487,7 @@ fn partition_dispatch_with_start(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{QueueViewTestExt, make_app_stub};
     use mbv_queue::FeedEntry;
 
     fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, CastError> {
@@ -538,15 +538,10 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
-        let mint = app.local_view.playback_queue().revision_mint();
-        app.local_view.queue = mbv_queue::PlaybackQueue::from_queue_items(
-            vec![feed_item("a", Some("https://feed/a.mp3"))],
-            Some(0),
-            mint,
-        );
+        app.local_view
+            .adopt_queue_items(vec![feed_item("a", Some("https://feed/a.mp3"))], 0);
         let before: Vec<String> = app
             .local_view
-            .queue
             .slots()
             .iter()
             .map(|s| s.item.id().to_string())
@@ -569,7 +564,6 @@ mod tests {
         );
         let after: Vec<String> = app
             .local_view
-            .queue
             .slots()
             .iter()
             .map(|s| s.item.id().to_string())

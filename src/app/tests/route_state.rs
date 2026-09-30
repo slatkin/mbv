@@ -49,7 +49,7 @@ fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconn
 fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = make_session("remote-host", "mbv");
 
@@ -65,7 +65,7 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     let remote_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(remote_items.clone(), 0);
     let sess = make_session("remote-host", "mbv");
@@ -95,7 +95,7 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
 fn library_route_connect_shows_the_peer_queue_even_when_empty() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
 
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
@@ -217,7 +217,7 @@ fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
 fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     let daemon_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
 
@@ -238,7 +238,7 @@ fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
 fn local_daemon_route_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     let daemon_items = make_items(1);
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(daemon_items.clone(), 0);
 

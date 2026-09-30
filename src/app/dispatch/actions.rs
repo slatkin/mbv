@@ -1,5 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
+#[cfg(test)]
+use crate::app::tests::QueueViewTestExt;
 use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };

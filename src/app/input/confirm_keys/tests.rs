@@ -107,11 +107,12 @@ fn mount_confirmation(app: &mut App) {
 /// confirmed replacement must still run through `replace_queue_or_prompt`.
 fn dirty_saved_playlist_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut app, cmd_rx) = gate_app();
-    app.local_view.set_items(vec![audio("existing")], 0);
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("playlist-1".into()),
-        name: "Saved".into(),
-    };
+    app.local_view.adopt_items(vec![audio("existing")], 0);
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Saved".into(),
+        });
     app.queue_dirty = true;
     (app, cmd_rx)
 }
@@ -154,7 +155,7 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
 fn populated_local_target_queue_stores_the_action_and_prompts() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.local_view.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
@@ -180,7 +181,7 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
 fn confirming_a_populated_local_queue_executes_the_stored_action() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = gate_app();
-    app.local_view.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(
@@ -203,7 +204,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player.status.lock().unwrap().active = false;
-    app.local_view.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
@@ -364,7 +365,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player.status.lock().unwrap().active = false;
-    app.local_view.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     app.execute_context_action(
         Some(crate::app::ContextAction::PlaySelection(vec![
@@ -500,7 +501,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
 fn play_item_on_a_populated_queue_does_not_raise_the_replace_modal() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = gate_app();
-    app.local_view.set_items(vec![audio("existing")], 0);
+    app.local_view.adopt_items(vec![audio("existing")], 0);
 
     let mut item = audio("movie-1");
     item.media_type = "Video".into();

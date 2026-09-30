@@ -1,6 +1,6 @@
 //! Attached generic Emby Session commands remain direct operations.
 
-use crate::app::tests::{install_test_emby, live_owner_channel, make_app_stub};
+use crate::app::tests::{QueueViewTestExt, install_test_emby, live_owner_channel, make_app_stub};
 use crate::app::*;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
@@ -14,7 +14,7 @@ fn attached_app() -> App {
     app.connected_session_id = Some("session".into());
     app.connected_session_state = Some(mbv_emby::test_support::make_session("Client", "Emby"));
     app.terminal_width = 160;
-    app.local_view.set_items(
+    app.local_view.adopt_items(
         vec![make_item("a", "Movie"), make_item("b", "Movie")],
         app.local_view.cursor(),
     );
@@ -47,13 +47,7 @@ fn remote_command_app() -> (App, MockHttp) {
     item_b.playback_position_ticks = 200;
     let mut item_c = make_item("c", "Movie");
     item_c.playback_position_ticks = 300;
-    app.local_view
-        .set_item_at(0, mbv_queue::QueueItem::Emby(Box::new(item_a)));
-    app.local_view
-        .set_item_at(1, mbv_queue::QueueItem::Emby(Box::new(item_b)));
-    app.local_view
-        .queue
-        .append(mbv_queue::QueueItem::Emby(Box::new(item_c)));
+    app.local_view.adopt_items(vec![item_a, item_b, item_c], 0);
     let mut session = mbv_emby::test_support::make_session("Client", "Emby");
     session.id = "session".into();
     session.now_playing_item_id = Some("a".into());
@@ -110,13 +104,13 @@ fn seek_dispatches_and_reports_errors_without_tracking() {
 }
 
 #[test]
-fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
+fn session_item_change_selects_owner_reported_queue_slot_and_unblocks_removal() {
     let mut app = attached_app();
     let mut first = app.local_view.emby_items()[0].clone();
     first.id = "a".into();
     let mut second = app.local_view.emby_items()[1].clone();
     second.id = "b".into();
-    app.local_view.set_items(vec![first, second], 0);
+    app.local_view.adopt_items(vec![first, second], 0);
     // Receiver auto-advanced: item "b" (slot 2) is now playing.
     let mut advanced = mbv_emby::test_support::make_session("Client", "Emby");
     advanced.id = "session".into();
@@ -125,15 +119,8 @@ fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
         sessions: vec![advanced],
     });
 
-    let b_slot = app.local_view.playback_queue().slots()[1].slot_id;
-    assert_eq!(
-        app.local_view.playback_queue().active_slot_id(),
-        Some(b_slot)
-    );
-
-    // The stale previously-played first row is deletable again: no confirm
-    // modal, and the removal is dispatched to the Player owner rather than
-    // silently refused by a stale active slot.
+    // The client does not stamp the owner-reported active slot into its view;
+    // removal still reaches the Player owner rather than being locally refused.
     let cmd_rx = live_owner_channel(&mut app);
     // The live stub starts active on row 0; this scenario watches the remote
     // session's now-playing item, so park the local player idle again.

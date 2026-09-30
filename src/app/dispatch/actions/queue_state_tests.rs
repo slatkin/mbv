@@ -80,22 +80,14 @@ fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
     ]
 }
 
-fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
-    assert_eq!(items.len(), 2);
-    assert!(matches!(&items[0], QueueItem::Emby(item) if item.name == "Emby"));
-    assert!(matches!(&items[1], QueueItem::Feed(item) if item.guid == "feed-entry"));
-    assert!(items.iter().all(|item| !item.is_audiobookshelf()));
-}
-
 fn assert_attached_context_selection_preserves_local_queue(action: ContextAction) {
     let mut app = crate::app::tests::make_app_stub();
     app.connected_session_id = Some("session-1".into());
     app.local_view
-        .set_items(crate::app::tests::make_items(2), app.local_view.cursor());
+        .adopt_items(crate::app::tests::make_items(2), app.local_view.cursor());
     app.local_view.set_cursor(1);
     let before: Vec<_> = app
         .local_view
-        .queue
         .slots()
         .iter()
         .map(|slot| (slot.slot_id, slot.item.id().to_string()))
@@ -105,7 +97,6 @@ fn assert_attached_context_selection_preserves_local_queue(action: ContextAction
 
     let after: Vec<_> = app
         .local_view
-        .queue
         .slots()
         .iter()
         .map(|slot| (slot.slot_id, slot.item.id().to_string()))
@@ -127,7 +118,7 @@ fn attached_context_selection_preserves_local_queue(
 }
 
 #[test]
-fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() {
+fn audiobookshelf_service_removal_and_replacement_wait_for_owner_queue_snapshot() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();
     let mixed = mixed_audiobookshelf_queue();
@@ -136,17 +127,25 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         "https://old-books.example",
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "old-secret").unwrap();
-    app.local_view.set_queue_items(mixed.clone(), 2);
-    app.remote_view = Some(crate::app::state::queue_view::QueueView::new(
-        mixed.clone(),
-        3,
-    ));
+    app.local_view.adopt_queue_items(mixed.clone(), 2);
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::empty());
+    app.remote_view
+        .as_mut()
+        .unwrap()
+        .adopt_queue_items(mixed.clone(), 3);
 
-    // A cold local queue is Composed; the remote tab is the remote Bound view.
+    // D5: Service cleanup requests owner edits; adopted views stay intact
+    // until the owner publishes the resulting queue snapshot.
     app.remove_audiobookshelf_confirmed();
 
-    assert_audiobookshelf_queue_purged(&app.local_view.all_queue_items());
-    assert_audiobookshelf_queue_purged(&app.remote_view.as_ref().unwrap().all_queue_items());
+    assert_eq!(app.local_view.slots().len(), mixed.len());
+    assert_eq!(app.remote_view.as_ref().unwrap().slots().len(), mixed.len());
+    assert!(
+        app.local_view
+            .slots()
+            .iter()
+            .any(|slot| slot.item.is_audiobookshelf())
+    );
 
     // Refill the projections and make the local slot active: this is the
     // local Bound replacement path, while remote_view remains remote Bound.
@@ -156,17 +155,14 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     ));
     mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "replacement-secret")
         .unwrap();
-    app.local_view.set_queue_items(mixed.clone(), 2);
-    let active_slot = app.local_view.slot_id_at(2).unwrap();
-    assert!(matches!(
-        app.local_view.playback_queue().set_active_slot(active_slot),
-        mbv_queue::QueueMutationResult::Applied(())
-    ));
+    app.local_view
+        .adopt_queue_items_with_active(mixed.clone(), 2, 2);
     app.player.status.lock().unwrap().active = true;
-    app.remote_view = Some(crate::app::state::queue_view::QueueView::new(
-        mixed.clone(),
-        3,
-    ));
+    app.remote_view = Some(crate::app::state::queue_view::QueueView::empty());
+    app.remote_view
+        .as_mut()
+        .unwrap()
+        .adopt_queue_items_with_active(mixed.clone(), 3, 3);
     let generation = app.audiobookshelf_runtime.generation();
     app.setup.pending_audiobookshelf_replacement = Some(
         crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
@@ -187,6 +183,12 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
 
     app.replace_audiobookshelf_confirmed(generation);
 
-    assert_audiobookshelf_queue_purged(&app.local_view.all_queue_items());
-    assert_audiobookshelf_queue_purged(&app.remote_view.as_ref().unwrap().all_queue_items());
+    assert_eq!(app.local_view.slots().len(), mixed.len());
+    assert_eq!(app.remote_view.as_ref().unwrap().slots().len(), mixed.len());
+    assert!(
+        app.local_view
+            .slots()
+            .iter()
+            .any(|slot| slot.item.is_audiobookshelf())
+    );
 }

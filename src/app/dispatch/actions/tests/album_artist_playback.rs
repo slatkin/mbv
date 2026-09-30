@@ -207,11 +207,12 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
     app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("playlist-1".into()),
-        name: "Playlist".into(),
-    };
+        .adopt_items(vec![existing], 0);
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Playlist".into(),
+        });
 
     assert!(!app.play_grouped_track("album-1", "missing-track"));
     assert_eq!(

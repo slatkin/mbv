@@ -152,7 +152,7 @@ use crate::app::tests::make_items;
 use mbv_emby_model::test_support::make_item;
 
 fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
-    app.local_view.set_items(items, cursor);
+    app.local_view.adopt_items(items, cursor);
 }
 
 #[test]

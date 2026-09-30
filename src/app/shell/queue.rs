@@ -487,7 +487,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{live_owner_channel, make_app_stub, make_items};
+    use crate::app::tests::{QueueViewTestExt, live_owner_channel, make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
     use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn unchanged_queue_revision_skips_projection_rebuild() {
         let mut app = make_app_stub();
-        app.local_view.set_items(make_items(2), 0);
+        app.local_view.adopt_items(make_items(2), 0);
         let mut model = Model::new(app);
         model.sync_queue();
 
@@ -559,7 +559,7 @@ mod tests {
         // reservation set and counters together pin the request count.
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
-        app.local_view.set_queue_items(
+        app.local_view.adopt_queue_items(
             items
                 .into_iter()
                 .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
         let mut app = make_app_stub();
-        app.local_view.set_items(make_items(2), 0);
+        app.local_view.adopt_items(make_items(2), 0);
         app.images.configure_protocol(None, true);
         app.visual_slot_hidden = true;
         {
@@ -622,7 +622,7 @@ mod tests {
         // `queue_cursor` (the shell-owned follow position) is not written
         // (task 3.2 — the mirror in select_queue_slot is gone).
         let mut app = make_app_stub();
-        app.local_view.set_queue_items(
+        app.local_view.adopt_queue_items(
             vec![
                 mbv_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
                 mbv_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
@@ -697,7 +697,7 @@ mod tests {
         use crate::app::state::playback::UndoEntry;
         let mut app = make_app_stub();
         let _cmd_rx = live_owner_channel(&mut app);
-        app.local_view.set_queue_items(emby_items(2), 0);
+        app.local_view.adopt_queue_items(emby_items(2), 0);
         app.queue_undo_stack.push(UndoEntry::Remove {
             index: 0,
             item: mbv_queue::QueueItem::Emby(Box::new(make_item("restored", "Movie"))),

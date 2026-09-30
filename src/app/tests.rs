@@ -47,6 +47,97 @@ pub(crate) fn confirm_replace_queue(app: &mut App) {
     );
 }
 
+pub(crate) trait QueueViewTestExt {
+    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize);
+    fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize);
+    fn adopt_queue_items_with_active(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active_index: usize,
+    );
+    fn adopt_source(&mut self, source: mbv_queue::QueueSource);
+}
+
+impl QueueViewTestExt for QueueView {
+    fn adopt_items(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+        adopt_queue_view(
+            self,
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            cursor,
+            None,
+            mbv_queue::QueueSource::Unknown,
+        );
+    }
+
+    fn adopt_queue_items(&mut self, items: Vec<mbv_queue::QueueItem>, cursor: usize) {
+        adopt_queue_view(self, items, cursor, None, mbv_queue::QueueSource::Unknown);
+    }
+
+    fn adopt_queue_items_with_active(
+        &mut self,
+        items: Vec<mbv_queue::QueueItem>,
+        cursor: usize,
+        active_index: usize,
+    ) {
+        adopt_queue_view(
+            self,
+            items,
+            cursor,
+            Some(active_index),
+            mbv_queue::QueueSource::Unknown,
+        );
+    }
+
+    fn adopt_source(&mut self, source: mbv_queue::QueueSource) {
+        adopt_queue_view(
+            self,
+            self.slots().iter().map(|slot| slot.item.clone()).collect(),
+            self.cursor(),
+            None,
+            source,
+        );
+    }
+}
+
+fn adopt_queue_view(
+    view: &mut QueueView,
+    items: Vec<mbv_queue::QueueItem>,
+    cursor: usize,
+    active_index: Option<usize>,
+    source: mbv_queue::QueueSource,
+) {
+    let slots: Vec<_> = items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: index as u64 + 1,
+            item,
+        })
+        .collect();
+    let state = mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus {
+            current_idx: active_index.unwrap_or_default(),
+            ..Default::default()
+        },
+        active_slot: active_index.and_then(|index| slots.get(index).map(|slot| slot.slot_id)),
+        slots,
+        revision: 1,
+        source,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+    view.adopt(
+        &state,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    view.set_cursor(cursor);
+}
+
 pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {
@@ -250,7 +341,7 @@ pub(crate) fn make_remote_app_stub_at_index(
     );
     close_initial_services(&mut app);
     app.local_view
-        .set_items(local_items, app.local_view.cursor());
+        .adopt_items(local_items, app.local_view.cursor());
     app.local_view.set_cursor(0);
     // Default to "focused, past grace window" for mouse tests.
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
@@ -275,7 +366,7 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
     );
     close_initial_services(&mut app);
     app.local_view
-        .set_items(local_items, app.local_view.cursor());
+        .adopt_items(local_items, app.local_view.cursor());
     app.local_view.set_cursor(0);
     while cmd_rx.try_recv().is_ok() {}
     app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
@@ -300,7 +391,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     );
     close_initial_services(&mut app);
     app.local_view
-        .set_items(local_items, app.local_view.cursor());
+        .adopt_items(local_items, app.local_view.cursor());
     app.local_view.set_cursor(0);
     // `App::new_remote` synchronizes this client's subtitle/audio-language
     // prefs to the freshly attached daemon before returning; drain that so

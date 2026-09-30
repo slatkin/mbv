@@ -109,7 +109,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
     // Populated target queue + a browse level whose parent holds the item.
     let mut existing = make_item("Existing", "Movie");
     existing.id = "existing".into();
-    app.local_view.set_items(vec![existing], 0);
+    app.local_view.adopt_items(vec![existing], 0);
     let mut anchor = make_item("Anchor", "Movie");
     anchor.id = "anchor-1".into();
     let mut sibling = make_item("Sibling", "Movie");

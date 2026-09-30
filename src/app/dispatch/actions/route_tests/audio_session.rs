@@ -1,3 +1,5 @@
+use crate::app::tests::QueueViewTestExt;
+
 fn make_remote_session(audio_only: bool) -> mbv_emby::SessionInfo {
     mbv_emby::SessionInfo {
         media_info: mbv_emby::SessionMediaInfo {
@@ -12,7 +14,7 @@ fn make_remote_session(audio_only: bool) -> mbv_emby::SessionInfo {
 fn is_audio_item_falls_back_to_local_state_when_no_session() {
     let mut app = crate::app::tests::make_app_stub();
     assert!(app.connected_session_id.is_none());
-    app.local_view.set_items(
+    app.local_view.adopt_items(
         vec![mbv_emby_model::test_support::make_item("song", "Audio")],
         app.local_view.cursor(),
     );

@@ -40,29 +40,25 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
     make_socket_merge_ready_app: (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>),
 ) {
     let (mut app, cmd_rx) = make_socket_merge_ready_app;
-    // Seed the known episode as an inactive slot directly: this test owns
+    // The adopted owner snapshot keeps episode-a inactive; this test owns
     // the socket merge, not the enqueue (row 5.3 made the enqueue an owner
     // op whose result only reaches the view through the owner's answer).
-    app.local_view
-        .playback_queue()
-        .append(QueueItem::Audiobookshelf(
-            mbv_queue::AudiobookshelfItem::Episode(mbv_queue::AudiobookshelfQueueItem {
-                library_item_id: "show-a".into(),
-                episode_id: "episode-a".into(),
-                title: "Episode A".into(),
-                show_title: None,
-                author: None,
-                description: None,
-                duration_ticks: None,
-                position_ticks: 0,
-                played: false,
-                pub_date_secs: None,
-                is_finished: false,
-                cover_path: None,
-            }),
-        ));
-
-    // Activate a different slot so episode-a is inactive.
+    let episode_a = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+        mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ));
     let other = QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
         mbv_queue::AudiobookshelfQueueItem {
             library_item_id: "show-b".into(),
@@ -79,16 +75,20 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
             cover_path: None,
         },
     ));
-    app.local_view.playback_queue().append(other);
-    let other_slot = app.local_view.playback_queue().slots()[1].slot_id;
-    let _ = app.local_view.playback_queue().set_active_slot(other_slot);
-
-    assert!(
-        app.playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|s| s.item.as_audiobookshelf())
-            .is_some_and(|e| e.episode_id != "episode-a")
+    app.local_view
+        .adopt_queue_items_with_active(vec![episode_a, other], 0, 1);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 1;
+    }
+    assert_eq!(
+        app.local_view.slots()[1]
+            .item
+            .as_audiobookshelf()
+            .unwrap()
+            .episode_id,
+        "ep-b"
     );
 
     // Fire the socket progress event.
@@ -101,7 +101,6 @@ fn clients_hold_no_editable_queue_socket_progress_relays_and_updates_browse_stat
 
     let slot = app
         .local_view
-        .queue
         .slots()
         .iter()
         .find(|s| {

@@ -7,8 +7,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
-    close_initial_services, emby_unified_state, make_items, make_local_daemon_app_stub,
-    make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
+    QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
+    make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
 use crate::app::{App, PanelFocus, PendingQueueAction, QueueScope};
 use mbv_ctrl::player::PlayerEvent;
@@ -231,7 +231,7 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
     // a missing answer times out with a flash and leaves the view unchanged;
     // a late `Applied` is still adopted afterwards as a background snapshot.
     let mut app = make_local_daemon_app_stub(make_items(2));
-    app.local_view.set_items(make_items(2), 0);
+    app.local_view.adopt_items(make_items(2), 0);
     let tx = inject_player_rx(&mut app);
 
     app.await_queue_op_with_bound(QueueScope::Local, QueueOpId(3), Duration::ZERO);
@@ -273,7 +273,7 @@ fn rapid_repeated_removals_each_act_on_the_answered_state() {
     // Client holds no editable queue of its own.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.set_items(make_items(4), 0);
+    app.local_view.adopt_items(make_items(4), 0);
     // Nothing is playing: the stub player starts active on row 0, which
     // would route row-0 removals into the now-playing confirm flow.
     app.player.status.lock().unwrap().active = false;
@@ -317,7 +317,7 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
     // Append anchored before the slot now at the removed entry's position.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.set_items(make_items(4), 0);
+    app.local_view.adopt_items(make_items(4), 0);
     app.player.status.lock().unwrap().active = false;
     // Owner answer: the third entry (index 2) is gone; the entry that
     // followed it now sits at index 2 with slot 102.
@@ -356,7 +356,7 @@ fn undoing_a_removal_past_the_end_appends_at_the_end() {
     // exists, the anchor is absent and the item is appended at the end.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.set_items(make_items(2), 0);
+    app.local_view.adopt_items(make_items(2), 0);
     app.player.status.lock().unwrap().active = false;
     // Owner answer: the last entry is gone; one entry remains (slot 100).
     tx.send(applied(1, snapshot_from_base(1, 100))).unwrap();
@@ -437,7 +437,7 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // snapshot — the Client merges nothing of its own.
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
-    app.local_view.set_items(make_items(2), 0);
+    app.local_view.adopt_items(make_items(2), 0);
     app.panel_focus = PanelFocus::Queue;
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
@@ -479,7 +479,7 @@ fn idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result() {
     // it inline while waiting for an answer that never comes on this path.
     tx.send(PlayerEvent::RemoteDisconnected("marker".into()))
         .unwrap();
-    app.local_view.set_items(make_items(2), 0);
+    app.local_view.adopt_items(make_items(2), 0);
 
     app.execute_pending_queue_action(PendingQueueAction::PlayItems {
         items: make_items(3),

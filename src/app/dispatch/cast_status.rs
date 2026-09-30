@@ -289,7 +289,7 @@ fn cast_progress_for_status<'a>(
 mod tests {
     use super::*;
     use crate::app::state::types::cast::CastProgressTarget as ProgressTarget;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{QueueViewTestExt, make_app_stub};
     use mbv_queue::QueueItemContentId;
 
     fn dispatched(url: &str) -> DispatchedCastItem {
@@ -399,7 +399,7 @@ mod tests {
     fn a_dropped_connection_presents_disconnected_stops_polling_and_leaves_the_queue_intact() {
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
-        app.local_view.set_items(items.clone(), 0);
+        app.local_view.adopt_items(items.clone(), 0);
         app.attach_cast("device-1".to_string());
         let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
             crate::app::state::types::cast::FakeCastTransport::default(),
@@ -417,7 +417,6 @@ mod tests {
         );
         assert_eq!(
             app.local_view
-                .queue
                 .slots()
                 .iter()
                 .map(|slot| slot.item.content_id())

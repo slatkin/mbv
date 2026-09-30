@@ -8,7 +8,7 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(3), app.local_view.cursor());
+        .adopt_items(make_items(3), app.local_view.cursor());
     // TrackChanged(0) activates slot 0, mirroring real playback where the
     // model's active_slot_id becomes Some before the delete.
     app.handle_player_event(PlayerEvent::TrackChanged {
@@ -74,7 +74,7 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(1), app.local_view.cursor());
+        .adopt_items(make_items(1), app.local_view.cursor());
     app.ask_confirm(ConfirmModal {
         title: String::new(),
         message: String::new(),
@@ -101,7 +101,7 @@ fn stopped_consume_keeps_the_client_view_until_the_owner_snapshot() {
     // consume_videos already works for a video's Stopped-path removal.
     let items = make_audio_items(1);
     let mut app = make_app_stub();
-    app.local_view.set_items(items, app.local_view.cursor());
+    app.local_view.adopt_items(items, app.local_view.cursor());
     app.config.lock().unwrap().consume_audio = true;
 
     app.handle_player_event(PlayerEvent::Stopped {
@@ -121,14 +121,8 @@ fn stopped_consume_keeps_the_client_view_until_the_owner_snapshot() {
 fn track_completed_for_removed_slot_does_not_mutate_queue() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
-    let ids_before: Vec<_> = app
-        .local_view
-        .queue
-        .slots()
-        .iter()
-        .map(|s| s.slot_id)
-        .collect();
+        .adopt_items(make_items(2), app.local_view.cursor());
+    let ids_before: Vec<_> = app.local_view.slots().iter().map(|s| s.slot_id).collect();
 
     // a slot id that was never allocated in this queue
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -140,13 +134,7 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
         progress_report_accepted: false,
     });
 
-    let ids_after: Vec<_> = app
-        .local_view
-        .queue
-        .slots()
-        .iter()
-        .map(|s| s.slot_id)
-        .collect();
+    let ids_after: Vec<_> = app.local_view.slots().iter().map(|s| s.slot_id).collect();
     assert_eq!(ids_before, ids_after);
 }
 
@@ -154,18 +142,16 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
 fn track_changed_activates_the_current_slot() {
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(3), app.local_view.cursor());
-    let slot_b = app.local_view.playback_queue().slots()[1].slot_id;
-
+        .adopt_items(make_items(3), app.local_view.cursor());
     app.handle_player_event(PlayerEvent::TrackChanged {
         slot_id: app.playback_queue().slot_id_at(1).unwrap(),
         transition: None,
     });
 
     assert_eq!(
-        app.local_view.playback_queue().active_slot_id(),
-        Some(slot_b),
-        "TrackChanged must set the model's active slot by identity, not just move the raw cursor"
+        app.local_view.cursor(),
+        1,
+        "TrackChanged resolves the owner's stable slot to the selected view position"
     );
 }
 
@@ -174,7 +160,7 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
     // The completion reaction must not consume the Client's read-only queue.
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(3), app.local_view.cursor());
+        .adopt_items(make_items(3), app.local_view.cursor());
     let slot_b = app.local_view.playback_queue().slots()[1].slot_id;
     app.config.lock().unwrap().consume_videos = true;
 
@@ -194,10 +180,7 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
     });
 
     assert_eq!(app.local_view.playback_queue().slots().len(), 3);
-    assert_eq!(
-        app.local_view.playback_queue().active_slot_id(),
-        Some(slot_b)
-    );
+    assert_eq!(app.local_view.cursor(), 1);
 }
 
 #[test]
@@ -206,7 +189,7 @@ fn a_video_consume_flag_is_ignored_when_video_consumption_is_disabled() {
     // owner-provided consume flag only when this media kind is enabled.
     let mut app = make_app_stub();
     app.local_view
-        .set_items(make_items(2), app.local_view.cursor());
+        .adopt_items(make_items(2), app.local_view.cursor());
     app.config.lock().unwrap().consume_videos = false;
     app.config.lock().unwrap().save_playlist_on_consume = true;
 
@@ -230,11 +213,12 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view.set_items(items, app.local_view.cursor());
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("pl1".to_string()),
-        name: "My Playlist".to_string(),
-    };
+    app.local_view.adopt_items(items, app.local_view.cursor());
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        });
     app.config.lock().unwrap().consume_videos = true;
     app.config.lock().unwrap().save_playlist_on_consume = false;
 
@@ -262,11 +246,12 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.local_view.set_items(items, app.local_view.cursor());
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("pl1".to_string()),
-        name: "My Playlist".to_string(),
-    };
+    app.local_view.adopt_items(items, app.local_view.cursor());
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        });
     app.config.lock().unwrap().consume_videos = true;
     app.config.lock().unwrap().save_playlist_on_consume = true;
 
@@ -298,10 +283,11 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
     // the trap scenario: before the scope gate, consuming on the *remote* queue would
     // still fire save_playlist_to_emby() and push the unrelated, unmodified local
     // playlist to Emby.
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("pl1".to_string()),
-        name: "My Playlist".to_string(),
-    };
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        });
     app.config.lock().unwrap().consume_videos = true;
     app.config.lock().unwrap().save_playlist_on_consume = true;
 
@@ -335,26 +321,25 @@ fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.local_view.set_items(items, app.local_view.cursor());
-    let slot_id = app.local_view.playback_queue().slots()[0].slot_id;
+    app.local_view.adopt_items(items, app.local_view.cursor());
+    let slot_id = app.local_view.slot_id_at(0).unwrap();
     let item_before = app
         .local_view
-        .queue
-        .slot(slot_id)
+        .item_at(0)
         .unwrap()
-        .item
         .as_emby()
         .unwrap()
         .clone();
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("pl1".to_string()),
-        name: "My Playlist".to_string(),
-    };
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        });
     app.config.lock().unwrap().consume_audio = true;
     app.config.lock().unwrap().save_playlist_on_consume_audio = false;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
-        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+        slot_id,
         run_identity: 0,
         position_ticks: 600_000_000,
         played: true,
@@ -364,13 +349,7 @@ fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until
 
     assert_eq!(app.local_view.emby_items().len(), 2);
     assert_eq!(
-        app.local_view
-            .queue
-            .slot(slot_id)
-            .unwrap()
-            .item
-            .as_emby()
-            .unwrap(),
+        app.local_view.item_at(0).unwrap().as_emby().unwrap(),
         &item_before
     );
     assert!(
@@ -386,11 +365,12 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.local_view.set_items(items, app.local_view.cursor());
-    app.queue_source = mbv_queue::QueueSource::Playlist {
-        id: Some("pl1".to_string()),
-        name: "My Playlist".to_string(),
-    };
+    app.local_view.adopt_items(items, app.local_view.cursor());
+    app.local_view
+        .adopt_source(mbv_queue::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        });
     app.config.lock().unwrap().consume_audio = true;
     app.config.lock().unwrap().save_playlist_on_consume_audio = true;
 

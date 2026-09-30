@@ -101,7 +101,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.local_view
-        .set_items(vec![make_item("Queue Movie", "Movie")], 0);
+        .adopt_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu(false, None);
     let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =

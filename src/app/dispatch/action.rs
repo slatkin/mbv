@@ -16,6 +16,8 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
+#[cfg(test)]
+use crate::app::tests::QueueViewTestExt;
 use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;

@@ -128,7 +128,7 @@ fn entering_queue_focus_selects_now_playing_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.local_view.set_items(make_items(3), 0);
+    app.local_view.adopt_items(make_items(3), 0);
     app.local_view.set_cursor(2);
     {
         let mut status = app.player.status.lock().unwrap();
@@ -146,7 +146,7 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.local_view.set_items(make_items(3), 0);
+    app.local_view.adopt_items(make_items(3), 0);
     app.local_view.set_cursor(99);
 
     app.set_panel_focus(PanelFocus::Queue);

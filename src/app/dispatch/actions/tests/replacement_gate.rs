@@ -10,7 +10,7 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
     app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
+        .adopt_items(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
     app.album_tracks_cache
@@ -45,7 +45,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
     app.remote_view
         .as_mut()
         .expect("the direct remote fixture keeps a target queue")
-        .set_items(vec![existing], 0);
+        .adopt_items(vec![existing], 0);
     let mut track = make_item("Track", "Audio");
     track.id = "track-1".into();
     app.album_tracks_cache
@@ -93,12 +93,12 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     // Populated target queue + a music library holding the played folder.
     let mut existing = make_item("Existing", "Audio");
     existing.id = "existing".into();
-    app.local_view.set_items(vec![existing], 0);
+    app.local_view.adopt_items(vec![existing], 0);
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.collection_type = "music".into();
     app.libs.push(LibraryTab::new(library));
-    app.queue_source = mbv_queue::QueueSource::Album;
+    app.local_view.adopt_source(mbv_queue::QueueSource::Album);
 
     http.respond(
         200,
