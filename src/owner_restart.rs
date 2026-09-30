@@ -3,19 +3,23 @@ use std::io::{BufRead, Write};
 use crate::remote_player::RemotePlayerError;
 
 #[derive(Debug, PartialEq, Eq)]
-enum Choice {
+pub(super) enum Choice {
     Restart,
     Quit,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum FollowUp {
+pub(super) enum FollowUp {
     Prompt,
     WaitForOwnerExit,
     Other,
 }
 
-fn ask(owner_app_version: &str, input: &mut impl BufRead, output: &mut impl Write) -> Choice {
+pub(super) fn ask(
+    owner_app_version: &str,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+) -> Choice {
     let _ = writeln!(
         output,
         "Owner process version: {owner_app_version}\nThis terminal version: {}\nRestarting stops playback and closes any other mbv terminals.\n[R] Restart  [Q] Quit",
@@ -31,7 +35,7 @@ fn ask(owner_app_version: &str, input: &mut impl BufRead, output: &mut impl Writ
     }
 }
 
-fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp {
+pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> FollowUp {
     if error.is_owner_shutting_down()
         || (restart_requested && error.owner_build_mismatch().is_some())
     {
