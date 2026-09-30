@@ -44,7 +44,7 @@ pub enum ConfirmButtonTone {
 
 /// One button on the shared confirmation modal's button row (issue #855).
 ///
-/// `keys` is the key-binding hint shown inside the pill (`"y/Enter"`, `"Esc"`)
+/// `keys` is the key-binding hint shown inside the pill (`"Enter"`, `"Esc"`)
 /// and is also what a mouse click resolves through: the click presses the
 /// button's first key, so the pill and the keyboard share one intent mapping
 /// (`confirm_intent_for_key`).
@@ -88,4 +88,28 @@ pub struct ConfirmModal {
     pub message: String,
     pub buttons: Vec<ConfirmButton>,
     pub on_confirm: ConfirmAction,
+}
+
+impl ConfirmModal {
+    /// The standard two-button modal: `affirmative_label` answers on Enter,
+    /// `cancel_label` on Esc (issue #855). Every confirmation except the
+    /// three-way dirty-playlist prompt uses this shape.
+    #[must_use]
+    pub fn two_button(
+        title: String,
+        message: String,
+        affirmative_label: &str,
+        cancel_label: &str,
+        on_confirm: ConfirmAction,
+    ) -> Self {
+        Self {
+            title,
+            message,
+            buttons: vec![
+                ConfirmButton::affirmative("Enter", affirmative_label),
+                ConfirmButton::cancel("Esc", cancel_label),
+            ],
+            on_confirm,
+        }
+    }
 }

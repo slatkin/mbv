@@ -149,18 +149,16 @@ impl super::Model {
         let Some(name) = name else {
             return;
         };
-        self.app.ask_confirm(super::ConfirmModal {
-            title: " Remove Feed ".into(),
-            message: format!(
+        self.app.ask_confirm(super::ConfirmModal::two_button(
+            " Remove Feed ".into(),
+            format!(
                 "Remove subscription '{}'?",
                 mbv_ui_model::ui_util::trunc_str(&name, 40)
             ),
-            buttons: vec![
-                super::ConfirmButton::affirmative("Enter", "Confirm"),
-                super::ConfirmButton::cancel("Esc", "Cancel"),
-            ],
-            on_confirm: super::ConfirmAction::RemoveFeedSubscription(index),
-        });
+            "Confirm",
+            "Cancel",
+            super::ConfirmAction::RemoveFeedSubscription(index),
+        ));
     }
 
     /// Esc from the add/edit form (§6.2): discards unsaved input and, for

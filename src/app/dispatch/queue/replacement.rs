@@ -1,8 +1,9 @@
 use super::{
-    App, ConfirmAction, ConfirmButton, ConfirmModal, PanelFocus, PendingQueueAction,
-    ReplacementExecutor, RoutedReplacementPrep,
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, ReplacementExecutor,
+    RoutedReplacementPrep,
 };
 use crate::app::SidebarId;
+use mbv_ui_model::confirm::ConfirmButton;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
@@ -62,15 +63,13 @@ impl App {
     ) {
         if self.queue_replacement_needs_confirmation(&action) {
             self.queue_deferrals.hold_gated_replacement(action, via);
-            self.ask_confirm(ConfirmModal {
-                title: " Replace Queue ".into(),
-                message: "Replace the current queue?".into(),
-                buttons: vec![
-                    ConfirmButton::affirmative("Enter", "Confirm"),
-                    ConfirmButton::cancel("Esc", "Cancel"),
-                ],
-                on_confirm: ConfirmAction::ReplacePopulatedQueue,
-            });
+            self.ask_confirm(ConfirmModal::two_button(
+                " Replace Queue ".into(),
+                "Replace the current queue?".into(),
+                "Confirm",
+                "Cancel",
+                ConfirmAction::ReplacePopulatedQueue,
+            ));
         } else {
             self.run_replacement(action, &via);
         }

@@ -201,18 +201,13 @@ impl App {
                     self.emby_runtime.state = completion.previous_state;
                     self.setup.pending_emby_replacement = Some(startup);
                     self.setup.emby_setup_form = None;
-                    self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
-                        title: " Replace Emby ".into(),
-                        message: "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
-                        buttons: vec![
-                            mbv_ui_model::confirm::ConfirmButton::affirmative(
-                                "Enter",
-                                "Replace",
-                            ),
-                            mbv_ui_model::confirm::ConfirmButton::cancel("Esc", "Cancel"),
-                        ],
-                        on_confirm: mbv_ui_model::confirm::ConfirmAction::ReplaceEmby(generation),
-                    });
+                    self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
+                        " Replace Emby ".into(),
+                        "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
+                        "Replace",
+                        "Cancel",
+                        mbv_ui_model::confirm::ConfirmAction::ReplaceEmby(generation),
+                    ));
                     return None;
                 }
                 let token = startup.client.token.clone();

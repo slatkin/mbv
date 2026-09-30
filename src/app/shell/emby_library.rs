@@ -1,5 +1,5 @@
 use super::Model;
-use super::{ConfirmAction, ConfirmButton, ConfirmModal};
+use super::{ConfirmAction, ConfirmModal};
 use crate::app::infra::image_fetch::NAV_IMAGE_FETCH_IDLE_DELAY;
 use mbv_ui_msg::ShellRequest;
 use std::time::Instant;
@@ -64,15 +64,13 @@ impl Model {
             // state (the library name comes from the active library).
             ShellRequest::EmbyLibraryRescan => {
                 let name = self.app.libs[lib_idx].library.name.clone();
-                self.app.ask_confirm(ConfirmModal {
-                    title: " Rescan Library ".into(),
-                    message: format!("Rescan '{name}'?"),
-                    buttons: vec![
-                        ConfirmButton::affirmative("Enter", "Confirm"),
-                        ConfirmButton::cancel("Esc", "Cancel"),
-                    ],
-                    on_confirm: ConfirmAction::RescanLibrary(lib_idx),
-                });
+                self.app.ask_confirm(ConfirmModal::two_button(
+                    " Rescan Library ".into(),
+                    format!("Rescan '{name}'?"),
+                    "Confirm",
+                    "Cancel",
+                    ConfirmAction::RescanLibrary(lib_idx),
+                ));
             }
             // Esc/Backspace go back through the browse history (task 5.3d,
             // Emby browser back): the shell derives the active Emby library

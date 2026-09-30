@@ -7,24 +7,14 @@ use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 
 impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
-        let key = match intent {
-            ConfirmIntent::Accept => {
-                KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Cancel => {
-                KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Save => {
-                KeyEvent::new(KeyCode::Char('s'), crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Discard => {
-                KeyEvent::new(KeyCode::Char('d'), crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Dismiss => {
-                KeyEvent::new(KeyCode::Char('x'), crossterm::event::KeyModifiers::NONE)
-            }
+        let code = match intent {
+            ConfirmIntent::Accept => KeyCode::Enter,
+            ConfirmIntent::Cancel => KeyCode::Esc,
+            ConfirmIntent::Save => KeyCode::Char('s'),
+            ConfirmIntent::Discard => KeyCode::Char('d'),
+            ConfirmIntent::Dismiss => KeyCode::Char('x'),
         };
-        self.handle_confirm_key(key);
+        self.handle_confirm_key(KeyEvent::new(code, crossterm::event::KeyModifiers::NONE));
     }
 
     pub(in crate::app) fn handle_confirm_key(&mut self, key: KeyEvent) {
@@ -116,21 +106,19 @@ impl Model {
             .find(|playlist| playlist.name.to_lowercase() == name.to_lowercase())
         {
             self.dismiss_modal(&id);
-            self.app.ask_confirm(super::ConfirmModal {
-                title: " Overwrite Playlist ".into(),
-                message: format!(
+            self.app.ask_confirm(super::ConfirmModal::two_button(
+                " Overwrite Playlist ".into(),
+                format!(
                     "\"{}\" already exists.",
                     mbv_ui_model::ui_util::trunc_str(&name, 40)
                 ),
-                buttons: vec![
-                    super::ConfirmButton::affirmative("Enter", "Overwrite"),
-                    super::ConfirmButton::cancel("Esc", "Back"),
-                ],
-                on_confirm: ConfirmAction::SaveOverwritePlaylist {
+                "Overwrite",
+                "Back",
+                ConfirmAction::SaveOverwritePlaylist {
                     existing_id: existing.id,
                     name,
                 },
-            });
+            ));
         } else {
             self.dismiss_modal(&id);
             self.app.force_clear = true;

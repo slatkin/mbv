@@ -50,7 +50,7 @@ use mbv_ui_model::browse::{
     AlbumIndex, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
     restore_library_position_with_fetched_rows_for_kind,
 };
-use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
+use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};

@@ -63,12 +63,9 @@ impl ConfirmComponent {
     /// Set the modal's display content from a shell request. Called by
     /// the shell via `get_component_mut`+downcast before each render.
     pub fn set_content(&mut self, title: &str, message: &str, buttons: &[ConfirmButton]) {
-        self.title.clear();
-        self.title.push_str(title);
-        self.message.clear();
-        self.message.push_str(message);
-        self.buttons.clear();
-        self.buttons.extend_from_slice(buttons);
+        title.clone_into(&mut self.title);
+        message.clone_into(&mut self.message);
+        self.buttons = buttons.to_vec();
     }
 
     pub fn set_modal(&mut self, modal: &ConfirmModal) {
@@ -100,7 +97,7 @@ impl Component for ConfirmComponent {
         // Adopt the rects the painter just produced (task 5.1, design.md D6).
         self.frame = geometry.frame;
         self.hit_buttons.clear();
-        for (rect, index) in geometry.buttons {
+        for (index, rect) in geometry.buttons.into_iter().enumerate() {
             self.hit_buttons.push(rect, index);
         }
     }

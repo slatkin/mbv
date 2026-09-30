@@ -1,18 +1,17 @@
 use crate::app::SidebarId;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
-    App, ConfirmAction, ConfirmButton, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use mbv_queue::RemoveSlotResult;
 
 impl App {
-    /// Shared dispatcher for the confirmation-modal component (see
-    /// `render/overlays/confirm_modal.rs`, `types_confirm.rs`): matches on
-    /// which `ConfirmAction` is pending and re-uses each action's existing
-    /// effect, preserving the exact key bindings each confirmation had
-    /// before migrating off status-bar toast text / bespoke dialogs.
+    /// Shared dispatcher for the confirmation modal: matches on which
+    /// `ConfirmAction` is pending and re-uses each action's existing effect.
+    /// Only Enter (and `d`/Esc on the dirty-playlist prompt) answers; every
+    /// other key is a no-op that leaves the modal mounted.
     pub(in crate::app) fn apply_confirm_action(
         &mut self,
         action: ConfirmAction,
@@ -96,7 +95,6 @@ impl App {
     fn confirm_remove_emby(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Enter {
             self.remove_emby_confirmed();
-        } else if key.code == KeyCode::Esc {
         }
     }
 
@@ -115,7 +113,6 @@ impl App {
     fn confirm_remove_audiobookshelf(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Enter {
             self.remove_audiobookshelf_confirmed();
-        } else if key.code == KeyCode::Esc {
         }
     }
 
@@ -249,15 +246,13 @@ impl App {
         if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }
-        self.ask_confirm(ConfirmModal {
-            title: " Clear Queue ".into(),
-            message: "Clear the queue?".into(),
-            buttons: vec![
-                ConfirmButton::affirmative("Enter", "Confirm"),
-                ConfirmButton::cancel("Esc", "Cancel"),
-            ],
-            on_confirm: ConfirmAction::ClearQueue,
-        });
+        self.ask_confirm(ConfirmModal::two_button(
+            " Clear Queue ".into(),
+            "Clear the queue?".into(),
+            "Confirm",
+            "Cancel",
+            ConfirmAction::ClearQueue,
+        ));
     }
 }
 

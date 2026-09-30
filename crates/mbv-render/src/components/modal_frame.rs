@@ -68,55 +68,27 @@ pub fn render_modal_frame_bounds(
     };
 
     f.render_widget(Clear, rect);
-    // The modal is a storm frame around a content body: a 2-column border on
-    // the left and right, one row along the bottom, and one full-width row
-    // just under the top (`SURFACE_RESTING`, `#2b3238`). The ink header band
-    // is the topmost row; the title text is rendered last, on top of it
-    // (issue #855).
+    // The modal is a storm frame around a content body: the whole modal is
+    // filled with the border color (`SURFACE_RESTING`, `#2b3238`), then the
+    // content body (`bg`) and the ink header band are cut out of it — the
+    // same pixels as painting the two 2-column sides, the row under the
+    // header, and the bottom row individually, in three widgets instead of
+    // six. The title text renders last, on top of the header (issue #855).
     let border = Style::default().bg(palette::SURFACE_RESTING);
-    f.render_widget(Block::default().style(Style::default().bg(bg)), rect);
+    f.render_widget(Block::default().style(border), rect);
     let header_h = 1_u16.min(rect.height);
     let top_h = 1_u16.min(rect.height.saturating_sub(header_h));
     let bottom_h = 1_u16.min(rect.height.saturating_sub(header_h + top_h));
     let side_y = rect.y.saturating_add(header_h + top_h);
     let side_h = rect.height.saturating_sub(header_h + top_h + bottom_h);
     let side_w = 2_u16.min(rect.width);
-    f.render_widget(
-        Block::default().style(border),
-        Rect {
-            x: rect.x,
-            y: rect.y.saturating_add(header_h),
-            width: rect.width,
-            height: top_h,
-        },
-    );
-    f.render_widget(
-        Block::default().style(border),
-        Rect {
-            x: rect.x,
-            y: side_y,
-            width: side_w,
-            height: side_h,
-        },
-    );
-    f.render_widget(
-        Block::default().style(border),
-        Rect {
-            x: rect.right().saturating_sub(side_w),
-            y: side_y,
-            width: side_w,
-            height: side_h,
-        },
-    );
-    f.render_widget(
-        Block::default().style(border),
-        Rect {
-            x: rect.x,
-            y: rect.bottom().saturating_sub(bottom_h),
-            width: rect.width,
-            height: bottom_h,
-        },
-    );
+    let inner = Rect {
+        x: rect.x.saturating_add(side_w),
+        y: side_y,
+        width: rect.width.saturating_sub(side_w.saturating_mul(2)),
+        height: side_h,
+    };
+    f.render_widget(Block::default().style(Style::default().bg(bg)), inner);
     f.render_widget(
         Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
         Rect {
@@ -126,12 +98,6 @@ pub fn render_modal_frame_bounds(
             height: header_h,
         },
     );
-    let inner = Rect {
-        x: rect.x.saturating_add(side_w),
-        y: side_y,
-        width: rect.width.saturating_sub(side_w.saturating_mul(2)),
-        height: side_h,
-    };
     let block = Block::default()
         .title(Span::styled(
             title.to_string(),

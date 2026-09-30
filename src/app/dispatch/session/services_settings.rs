@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::{ConfirmAction, ConfirmButton, ConfirmModal};
+use crate::app::{ConfirmAction, ConfirmModal};
 use mbv_core::service_runtime::ServiceState;
 use mbv_ui_model::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 
@@ -233,30 +233,26 @@ impl App {
         if self.emby_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.ask_confirm(ConfirmModal {
-            title: " Remove Emby ".into(),
-            message: "Remove Emby? Service-owned setup and state will be cleared.".into(),
-            buttons: vec![
-                ConfirmButton::affirmative("Enter", "Confirm"),
-                ConfirmButton::cancel("Esc", "Cancel"),
-            ],
-            on_confirm: ConfirmAction::RemoveEmby,
-        });
+        self.ask_confirm(ConfirmModal::two_button(
+            " Remove Emby ".into(),
+            "Remove Emby? Service-owned setup and state will be cleared.".into(),
+            "Confirm",
+            "Cancel",
+            ConfirmAction::RemoveEmby,
+        ));
     }
 
     pub(in crate::app) fn request_audiobookshelf_removal(&mut self) {
         if self.audiobookshelf_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.ask_confirm(ConfirmModal {
-            title: " Remove Audiobookshelf ".into(),
-            message: "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
-            buttons: vec![
-                ConfirmButton::affirmative("Enter", "Confirm"),
-                ConfirmButton::cancel("Esc", "Cancel"),
-            ],
-            on_confirm: ConfirmAction::RemoveAudiobookshelf,
-        });
+        self.ask_confirm(ConfirmModal::two_button(
+            " Remove Audiobookshelf ".into(),
+            "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
+            "Confirm",
+            "Cancel",
+            ConfirmAction::RemoveAudiobookshelf,
+        ));
     }
 
     pub(in crate::app) fn service_state_label(&self, entry: ServiceEntry) -> &'static str {

@@ -1,8 +1,8 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PlaylistMutation;
 use crate::app::{
-    App, ConfirmAction, ConfirmButton, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction,
-    QueueScope, ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
+    App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
+    ReplacementExecutor, RoutedReplacementPrep, SessionEvent, UndoEntry,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
@@ -25,15 +25,13 @@ impl App {
             return;
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {
-            self.ask_confirm(ConfirmModal {
-                title: " Remove Item ".into(),
-                message: "Remove now-playing item and stop playback?".into(),
-                buttons: vec![
-                    ConfirmButton::affirmative("Enter", "Confirm"),
-                    ConfirmButton::cancel("Esc", "Cancel"),
-                ],
-                on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
-            });
+            self.ask_confirm(ConfirmModal::two_button(
+                " Remove Item ".into(),
+                "Remove now-playing item and stop playback?".into(),
+                "Confirm",
+                "Cancel",
+                ConfirmAction::RemoveActiveQueueItem(pos),
+            ));
             return;
         }
         let cursor_before = self.queue_for_scope(scope).queue_cursor;

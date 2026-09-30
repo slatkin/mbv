@@ -15,8 +15,8 @@ use unicode_width::UnicodeWidthStr;
 pub struct ConfirmRenderGeometry {
     /// The painted modal rect — the outside-click boundary.
     pub frame: Rect,
-    /// Painted button pill rect -> index into the modal's `buttons`.
-    pub buttons: Vec<(Rect, usize)>,
+    /// Painted button pill rects in button order.
+    pub buttons: Vec<Rect>,
 }
 
 /// Paint the confirm modal: centered frame around a 60-wide content area with
@@ -78,27 +78,19 @@ fn button_fg(tone: ConfirmButtonTone) -> Color {
     }
 }
 
-/// Paint the centered button pills and return each painted rect with its
-/// button index. Pills are ink blocks with one pad space each side, separated
+/// Paint the centered button pills and return each painted rect in button
+/// order. Pills are ink blocks with one pad space each side, separated
 /// by two cells, the whole group centered on `y` (issue #855).
-fn render_button_row(
-    f: &mut Frame,
-    inner: Rect,
-    y: u16,
-    buttons: &[ConfirmButton],
-) -> Vec<(Rect, usize)> {
+fn render_button_row(f: &mut Frame, inner: Rect, y: u16, buttons: &[ConfirmButton]) -> Vec<Rect> {
     let widths: Vec<u16> = buttons.iter().map(button_width).collect();
-    let text_total = widths.iter().map(|w| u32::from(*w)).sum::<u32>();
-    let gaps = u32::try_from(buttons.len().saturating_sub(1))
-        .unwrap_or(u32::MAX)
-        .saturating_mul(2);
-    let pad_left =
-        u16::try_from(u32::from(inner.width).saturating_sub(text_total.saturating_add(gaps)) / 2)
-            .unwrap_or(u16::MAX);
+    let gaps = u16::try_from(buttons.len().saturating_sub(1).saturating_mul(2)).unwrap_or(u16::MAX);
+    let total = widths
+        .iter()
+        .fold(gaps, |total, width| total.saturating_add(*width));
+    let pad_left = inner.width.saturating_sub(total) / 2;
     let mut x = inner.x.saturating_add(pad_left);
     let mut geometry = Vec::with_capacity(buttons.len());
-    for (index, button) in buttons.iter().enumerate() {
-        let width = widths[index];
+    for (button, width) in buttons.iter().zip(widths) {
         let rect = Rect {
             x,
             y,
@@ -114,7 +106,7 @@ fn render_button_row(
             )),
             rect,
         );
-        geometry.push((rect, index));
+        geometry.push(rect);
         x = x.saturating_add(width).saturating_add(2);
     }
     geometry
