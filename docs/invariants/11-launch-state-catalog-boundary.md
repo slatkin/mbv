@@ -1,59 +1,36 @@
-# Invariant 11 — Launch restoration needs a live catalog and a loaded tab
+# Invariant 11 — Tab changes settle launch restoration
 
-**Scope:** launch-tab resolution (`src/app/dispatch/library/cw_library_tab.rs`), the
-`emby_catalog_ready` / `audiobookshelf_catalog_ready` markers, and every place
-live Emby views become `App::libs` (`apply_emby_bootstrap`, `fetch_home`).
+Umbrella: #810.
 
 ## The invariant
 
-Launch-state restoration has two prerequisites, and both must hold on *every*
-launch path, not just the plain local one.
-
-1. **The catalog is live.** `resolve_service_tab` returns `None` until the
-   owning catalog has arrived, so the marker that says so must be set where
-   the catalog is actually applied. `App::build` starts both markers false;
-   `rebuild_library_tabs_from_views` — the one choke point both Emby catalog
-   paths go through — sets `emby_catalog_ready` after the rebuild. It must not
-   be set by a specific *attach* path: a plain local launch reaches the catalog
-   through the Emby startup worker's `apply_emby_bootstrap`, while a
-   local-daemon/remote attach has a live client at construction and never runs
-   that worker, reaching the catalog through `fetch_home` instead.
-
-2. **The resolved tab is settled, not merely selected.** Assigning
-   `self.tab` alone leaves the destination's `nav_stack` empty, so the panel
-   owner is handed no content and the restored tab paints blank. The restore
-   path must run the same settle step as a user tab switch
-   (`settle_tab_selection`: stale-destination fallback, image dims, panel
-   focus, library activation, tab-bar visibility, prefs), because the launch
-   snapshot names a tab and a pill/item, never a browse position.
-
-The pending snapshot is deliberately *not* consumed by settling: the pill/item
-re-anchor still needs it.
+`App::tab` has several production writers. Every tab change that occurs while
+launch restoration is pending must pass through `select_tab` so the selected
+tab is settled before a destination re-anchor. No type currently prevents a
+new writer from assigning `App::tab` directly and skipping that settle step.
+This remains a caller discipline, not a type-enforced boundary.
 
 ## Why it matters
 
-The launch snapshot stores opaque Service ids, not tab indices. If the marker
-is never set on a path, `resolve_library_tab_pending` returns early forever,
-the one-shot pending state leaks, and the TUI silently stays on Home. If the
-tab is selected without activation, the tab bar shows the right tab over an
-empty panel. Both look identical to "the feature doesn't work".
+Selecting a tab without settling it can leave its destination inactive and the
+panel blank. Skipping the settle step can also leave `LaunchRestore` in a state
+that does not describe the selected tab, so the pending destination may be
+re-anchored against the wrong tab.
 
 ## How the code maintains it today
 
-`App::build` sets both ready markers false. `rebuild_library_tabs_from_views`
-rebuilds `libs` from live views and then sets `emby_catalog_ready`.
-Audiobookshelf completion sets `audiobookshelf_catalog_ready` in the run-loop
-drain, after its libraries are assigned. `resolve_library_tab_pending` assigns
-`self.tab` and calls `settle_tab_selection()`, which is the same function
-`apply_tab_position` calls after user tab movement.
+`LaunchRestore` encodes the restoration lifecycle: a snapshot moves from
+`Pending` to `TabSettled { state, tab }` through `select_tab`, then to `Done`
+after the destination accepts its re-anchor or the active tab no longer
+matches the recorded tab. The state records which tab was settled, and the
+re-anchor checks that the active tab still matches it.
 
-## What breaks if it is violated
+Launch restoration's other two properties are enforced: `LaunchRestore` keeps
+the pending snapshot and settled destination together, and Service-tab identity
+is resolved only when that Service's catalog arrives. Catalog arrival is the
+resolution boundary; readiness-marker state is not used.
 
-- A local-daemon/remote launch restores the queue but never the tab, and the
-  pending launch state leaks for the rest of the session.
-- Marking ready before the catalog is populated downgrades a saved Service tab
-  to Home.
-- Selecting the restored tab without activating it paints a blank panel.
+## What remains unenforced
 
-Regression: `app::tests_lifecycle::
-restored_launch_tab_loads_its_library_content_not_just_the_tab`.
+`App::tab` still has several production writers, and no accessor or single-writer
+type prevents a future writer from bypassing `select_tab` and its settle step.
