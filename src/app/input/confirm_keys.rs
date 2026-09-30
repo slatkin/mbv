@@ -7,11 +7,10 @@ use crate::app::{
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl App {
-    /// Shared dispatcher for the confirmation-modal component (see
-    /// `render/overlays/confirm_modal.rs`, `types_confirm.rs`): matches on
-    /// which `ConfirmAction` is pending and re-uses each action's existing
-    /// effect, preserving the exact key bindings each confirmation had
-    /// before migrating off status-bar toast text / bespoke dialogs.
+    /// Shared dispatcher for the confirmation modal: matches on which
+    /// `ConfirmAction` is pending and re-uses each action's existing effect.
+    /// Only Enter (and `d`/Esc on the dirty-playlist prompt) answers; every
+    /// other key is a no-op that leaves the modal mounted.
     pub(in crate::app) fn apply_confirm_action(
         &mut self,
         action: ConfirmAction,
@@ -52,26 +51,26 @@ impl App {
     }
 
     fn confirm_clear_queue(&mut self, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        if key.code == KeyCode::Enter {
             self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
         }
     }
 
     fn confirm_remove_active_queue_item_for_key(&mut self, pos: usize, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y')) {
+        if key.code == KeyCode::Enter {
             self.confirm_remove_active_queue_item(pos);
         }
     }
 
     fn confirm_rescan_library(&mut self, lib_idx: usize, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        if key.code == KeyCode::Enter {
             self.trigger_lib_rescan(lib_idx);
         }
     }
 
     fn confirm_save_overwrite_playlist(&mut self, existing_id: &str, name: String, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y') => self.do_overwrite_playlist(existing_id, &name),
+            KeyCode::Enter => self.do_overwrite_playlist(existing_id, &name),
             KeyCode::Esc => self.open_save_playlist_dialog(SavePlaylistDialog {
                 input: name,
                 stage: SavePlaylistStage::EnterName,
@@ -81,21 +80,20 @@ impl App {
     }
 
     fn confirm_delete_playlist(&mut self, id: String, name: String, key: KeyEvent) {
-        if key.code == KeyCode::Char('y') {
+        if key.code == KeyCode::Enter {
             self.spawn_delete_playlist(id, name);
         }
     }
 
     fn confirm_remove_feed_subscription(&mut self, index: usize, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y')) {
+        if key.code == KeyCode::Enter {
             self.remove_feed_confirmed(index);
         }
     }
 
     fn confirm_remove_emby(&mut self, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        if key.code == KeyCode::Enter {
             self.remove_emby_confirmed();
-        } else if key.code == KeyCode::Esc {
         }
     }
 
@@ -106,15 +104,14 @@ impl App {
     ) {
         if key.code == KeyCode::Esc {
             self.setup.pending_emby_replacement = None;
-        } else if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        } else if key.code == KeyCode::Enter {
             self.replace_emby_confirmed(generation);
         }
     }
 
     fn confirm_remove_audiobookshelf(&mut self, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        if key.code == KeyCode::Enter {
             self.remove_audiobookshelf_confirmed();
-        } else if key.code == KeyCode::Esc {
         }
     }
 
@@ -125,26 +122,28 @@ impl App {
     ) {
         if key.code == KeyCode::Esc {
             self.setup.pending_audiobookshelf_replacement = None;
-        } else if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        } else if key.code == KeyCode::Enter {
             self.replace_audiobookshelf_confirmed(generation);
         }
     }
 
     fn confirm_play_locally(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
+            KeyCode::Enter => {
                 self.play_pending_local_play();
             }
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+            KeyCode::Esc => {
                 self.queue_deferrals.cancel_local_play();
             }
             _ => {}
         }
     }
 
-    /// `[s]` saves the dirty playlist, `[d]` discards it and runs the pending
+    /// Enter saves the dirty playlist, `[d]` discards it and runs the pending
     /// queue action (restoring the Queue panel and dismissing the playlists
-    /// sidebar when that action was a play), and Esc/`[c]` cancels.
+    /// sidebar when that action was a play), and Esc cancels. The shell
+    /// receives `ConfirmIntent::Save`/`Discard`/`Cancel`, translated to
+    /// `s`/`d`/Esc in `Model::handle_confirm_intent`.
     fn confirm_discard_or_save_dirty_playlist(&mut self, key: KeyEvent) {
         let play_after = self.queue_deferrals.save_answer_is_play();
         match key.code {
@@ -161,7 +160,7 @@ impl App {
                     self.set_panel_focus(PanelFocus::Queue);
                 }
             }
-            KeyCode::Esc | KeyCode::Char('c' | 'C') => {
+            KeyCode::Esc => {
                 self.queue_deferrals.cancel_save_answer();
             }
             _ => {}
@@ -173,7 +172,7 @@ impl App {
     /// executable payload can fire at a later step.
     fn confirm_replace_populated_queue(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
+            KeyCode::Enter => {
                 if let Some((action, via)) = self.queue_deferrals.take_confirmed_replacement() {
                     self.run_replacement(action, &via);
                 }
@@ -223,12 +222,13 @@ impl App {
         if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }
-        self.ask_confirm(ConfirmModal {
-            title: " Clear Queue ".into(),
-            message: "Clear the queue?".into(),
-            hint: "[y] Confirm    [Esc] Cancel".into(),
-            on_confirm: ConfirmAction::ClearQueue,
-        });
+        self.ask_confirm(ConfirmModal::two_button(
+            " Clear Queue ".into(),
+            "Clear the queue?".into(),
+            "Confirm",
+            "Cancel",
+            ConfirmAction::ClearQueue,
+        ));
     }
 }
 

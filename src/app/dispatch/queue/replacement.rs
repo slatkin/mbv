@@ -3,6 +3,7 @@ use super::{
     RoutedReplacementPrep,
 };
 use crate::app::SidebarId;
+use mbv_ui_model::confirm::ConfirmButton;
 
 impl App {
     pub(in crate::app) fn on_queue_replace_silent(&mut self) {
@@ -19,7 +20,11 @@ impl App {
             self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{name}\"?"),
-                hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),
+                buttons: vec![
+                    ConfirmButton::affirmative("Enter", "Save"),
+                    ConfirmButton::cancel("d", "Discard"),
+                    ConfirmButton::cancel("Esc", "Cancel"),
+                ],
                 on_confirm: ConfirmAction::DiscardOrSaveDirtyPlaylist,
             });
         } else {
@@ -56,12 +61,13 @@ impl App {
     ) {
         if self.queue_replacement_needs_confirmation(&action) {
             self.queue_deferrals.hold_gated_replacement(action, via);
-            self.ask_confirm(ConfirmModal {
-                title: " Replace Queue ".into(),
-                message: "Replace the current queue?".into(),
-                hint: "[y] Confirm    [Esc] Cancel".into(),
-                on_confirm: ConfirmAction::ReplacePopulatedQueue,
-            });
+            self.ask_confirm(ConfirmModal::two_button(
+                " Replace Queue ".into(),
+                "Replace the current queue?".into(),
+                "Confirm",
+                "Cancel",
+                ConfirmAction::ReplacePopulatedQueue,
+            ));
         } else {
             self.run_replacement(action, &via);
         }

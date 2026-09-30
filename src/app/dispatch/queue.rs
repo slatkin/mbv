@@ -25,12 +25,13 @@ impl App {
             return;
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {
-            self.ask_confirm(ConfirmModal {
-                title: " Remove Item ".into(),
-                message: "Remove now-playing item and stop playback?".into(),
-                hint: "[y] Confirm    [Esc] Cancel".into(),
-                on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
-            });
+            self.ask_confirm(ConfirmModal::two_button(
+                " Remove Item ".into(),
+                "Remove now-playing item and stop playback?".into(),
+                "Confirm",
+                "Cancel",
+                ConfirmAction::RemoveActiveQueueItem(pos),
+            ));
             return;
         }
         // Slot identity and the undo payload are resolved against the

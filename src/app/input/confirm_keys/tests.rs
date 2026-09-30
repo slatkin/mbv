@@ -184,10 +184,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
     app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
 
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(
@@ -231,10 +228,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
 
     assert_eq!(
         pending_confirm_action(&app),
@@ -256,10 +250,7 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
     let (mut app, cmd_rx) = dirty_saved_playlist_app();
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
     mount_confirmation(&mut app);
 
     app.apply_confirm_action(
@@ -286,10 +277,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     // behind the dirty-playlist save prompt's `s` answer.
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
@@ -346,10 +334,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     // Only the gated payload's own confirmation executes it: the save
     // completion did not leave the mounted prompt inert.
     mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
     assert_eq!(
         sent_replace_ids(&cmd_rx),
         ["track-2"],
@@ -482,10 +467,7 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
     assert_eq!(queue_ids(&app), ["existing"], "the gate changes no queue");
 
     mount_confirmation(&mut app);
-    app.apply_confirm_action(
-        ConfirmAction::ReplacePopulatedQueue,
-        key(KeyCode::Char('y')),
-    );
+    app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Enter));
 
     assert_eq!(
         pending_confirm_action(&app),

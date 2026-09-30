@@ -69,7 +69,7 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
     harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
         title: "Block resize?".into(),
         message: "overlay owns the pointer".into(),
-        hint: "[Esc] Cancel".into(),
+        buttons: vec![ConfirmButton::cancel("Esc", "Cancel")],
         on_confirm: ConfirmAction::ClearQueue,
     }));
     harness.model_mut().sync_mounted_surfaces();

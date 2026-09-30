@@ -1,5 +1,5 @@
 /// What happens when the shared confirmation modal (`ConfirmModal`) is
-/// answered "yes". Each variant carries whatever state its effect needs, so
+/// accepted. Each variant carries whatever state its effect needs, so
 /// the modal's trigger site can hand off the whole decision to the single
 /// the shell's confirm-action dispatcher instead of a bespoke bool/option
 /// field per confirmation.
@@ -33,14 +33,83 @@ pub enum ConfirmAction {
     ReplacePopulatedQueue,
 }
 
-/// State for the shared confirmation-modal overlay: a centered, bordered
-/// dialog with a title, a message, and a key-binding hint line. Only one can
-/// be active at a time (`App::confirm_modal: Option<ConfirmModal>`); setting
-/// a new one replaces whatever was showing.
+/// How a modal button reads: the affirmative choice in the accent green, the
+/// cancel/destructive choices (including `Discard`/`Back`) in the error red
+/// (issue #855).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfirmButtonTone {
+    Affirmative,
+    Cancel,
+}
+
+/// One button on the shared confirmation modal's button row (issue #855).
+///
+/// `keys` is the key-binding hint shown inside the pill (`"Enter"`, `"Esc"`)
+/// and is also what a mouse click resolves through: the click presses the
+/// button's first key, so the pill and the keyboard share one intent mapping
+/// (`confirm_intent_for_key`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConfirmButton {
+    pub keys: String,
+    pub label: String,
+    pub tone: ConfirmButtonTone,
+}
+
+impl ConfirmButton {
+    /// The affirmative button (green text on the ink pill).
+    #[must_use]
+    pub fn affirmative(keys: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            keys: keys.into(),
+            label: label.into(),
+            tone: ConfirmButtonTone::Affirmative,
+        }
+    }
+
+    /// A cancel/destructive button (red text on the ink pill): `Cancel`,
+    /// `Back`, `Discard`.
+    #[must_use]
+    pub fn cancel(keys: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            keys: keys.into(),
+            label: label.into(),
+            tone: ConfirmButtonTone::Cancel,
+        }
+    }
+}
+
+/// State for the shared confirmation-modal overlay: a centered dialog with a
+/// title, a message, and a row of keypress buttons. Only one can be active at
+/// a time (`App::confirm_modal: Option<ConfirmModal>`); setting a new one
+/// replaces whatever was showing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmModal {
     pub title: String,
     pub message: String,
-    pub hint: String,
+    pub buttons: Vec<ConfirmButton>,
     pub on_confirm: ConfirmAction,
+}
+
+impl ConfirmModal {
+    /// The standard two-button modal: `affirmative_label` answers on Enter,
+    /// `cancel_label` on Esc (issue #855). Every confirmation except the
+    /// three-way dirty-playlist prompt uses this shape.
+    #[must_use]
+    pub fn two_button(
+        title: String,
+        message: String,
+        affirmative_label: &str,
+        cancel_label: &str,
+        on_confirm: ConfirmAction,
+    ) -> Self {
+        Self {
+            title,
+            message,
+            buttons: vec![
+                ConfirmButton::affirmative("Enter", affirmative_label),
+                ConfirmButton::cancel("Esc", cancel_label),
+            ],
+            on_confirm,
+        }
+    }
 }

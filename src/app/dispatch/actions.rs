@@ -112,12 +112,13 @@ impl App {
             .or_else(|| self.remote.direct_remote_label.clone())
             .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
             .unwrap_or_else(|| "this owner".into());
-        self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
-            title: format!(" Play locally instead of {owner} "),
-            message: format!("Play \"{label}\" on this machine instead?"),
-            hint: "[y] Play here    [n] Cancel".into(),
-            on_confirm: mbv_ui_model::confirm::ConfirmAction::PlayLocallyInstead,
-        });
+        self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
+            format!(" Play locally instead of {owner} "),
+            format!("Play \"{label}\" on this machine instead?"),
+            "Play here",
+            "Cancel",
+            mbv_ui_model::confirm::ConfirmAction::PlayLocallyInstead,
+        ));
     }
 
     /// Fetch the episodes of `item`'s series starting at `item`. `None` when

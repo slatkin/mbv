@@ -58,16 +58,16 @@ impl App {
                             previous_state: completion.previous_state,
                         });
                     self.setup.audiobookshelf_setup_form = None;
-                    self.ask_confirm(mbv_ui_model::confirm::ConfirmModal {
-                        title: " Replace Audiobookshelf ".into(),
-                        message:
-                            "Replace Audiobookshelf? Service-owned setup and state will be cleared."
-                                .into(),
-                        hint: "[y/Enter] Replace    [Esc] Cancel".into(),
-                        on_confirm: mbv_ui_model::confirm::ConfirmAction::ReplaceAudiobookshelf(
+                    self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
+                        " Replace Audiobookshelf ".into(),
+                        "Replace Audiobookshelf? Service-owned setup and state will be cleared."
+                            .into(),
+                        "Replace",
+                        "Cancel",
+                        mbv_ui_model::confirm::ConfirmAction::ReplaceAudiobookshelf(
                             completion.generation,
                         ),
-                    });
+                    ));
                     return;
                 }
                 let user = candidate.user.clone();

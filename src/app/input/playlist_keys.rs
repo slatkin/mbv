@@ -3,8 +3,8 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PlaylistMutation;
 
 impl App {
-    /// Effect for `ConfirmAction::SaveOverwritePlaylist`'s "yes" answer
-    /// (`y`): deletes the existing playlist and recreates it under the same
+    /// Effect for `ConfirmAction::SaveOverwritePlaylist`'s accept answer
+    /// (Enter): deletes the existing playlist and recreates it under the same
     /// name with the current queue's items. Extracted from the old
     /// `SavePlaylistStage::ConfirmOverwrite` key handler so the shared
     /// confirmation-modal dispatcher can call it directly.

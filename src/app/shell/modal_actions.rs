@@ -7,24 +7,14 @@ use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 
 impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
-        let key = match intent {
-            ConfirmIntent::Accept => {
-                KeyEvent::new(KeyCode::Char('y'), crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Cancel => {
-                KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Save => {
-                KeyEvent::new(KeyCode::Char('s'), crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Discard => {
-                KeyEvent::new(KeyCode::Char('d'), crossterm::event::KeyModifiers::NONE)
-            }
-            ConfirmIntent::Dismiss => {
-                KeyEvent::new(KeyCode::Char('x'), crossterm::event::KeyModifiers::NONE)
-            }
+        let code = match intent {
+            ConfirmIntent::Accept => KeyCode::Enter,
+            ConfirmIntent::Cancel => KeyCode::Esc,
+            ConfirmIntent::Save => KeyCode::Char('s'),
+            ConfirmIntent::Discard => KeyCode::Char('d'),
+            ConfirmIntent::Dismiss => KeyCode::Char('x'),
         };
-        self.handle_confirm_key(key);
+        self.handle_confirm_key(KeyEvent::new(code, crossterm::event::KeyModifiers::NONE));
     }
 
     pub(in crate::app) fn handle_confirm_key(&mut self, key: KeyEvent) {
@@ -116,18 +106,19 @@ impl Model {
             .find(|playlist| playlist.name.to_lowercase() == name.to_lowercase())
         {
             self.dismiss_modal(&id);
-            self.app.ask_confirm(super::ConfirmModal {
-                title: " Overwrite Playlist ".into(),
-                message: format!(
+            self.app.ask_confirm(super::ConfirmModal::two_button(
+                " Overwrite Playlist ".into(),
+                format!(
                     "\"{}\" already exists.",
                     mbv_ui_model::ui_util::trunc_str(&name, 40)
                 ),
-                hint: "[y] Overwrite    [Esc] Back".into(),
-                on_confirm: ConfirmAction::SaveOverwritePlaylist {
+                "Overwrite",
+                "Back",
+                ConfirmAction::SaveOverwritePlaylist {
                     existing_id: existing.id,
                     name,
                 },
-            });
+            ));
         } else {
             self.dismiss_modal(&id);
             self.app.force_clear = true;
@@ -136,35 +127,14 @@ impl Model {
     }
 }
 
+/// Whether answering `action` with `key` should also close the modal. Only
+/// the keys an action actually answers on dismiss it; any other key is a
+/// no-op that leaves the modal open.
 fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
     match action {
-        ConfirmAction::ClearQueue
-        | ConfirmAction::RemoveActiveQueueItem(_)
-        | ConfirmAction::RescanLibrary(_)
-        | ConfirmAction::RemoveFeedSubscription(_)
-        | ConfirmAction::ReplacePopulatedQueue => true,
-        ConfirmAction::SaveOverwritePlaylist { .. } | ConfirmAction::DeletePlaylist { .. } => {
-            matches!(key, KeyCode::Char('y') | KeyCode::Esc)
+        ConfirmAction::DiscardOrSaveDirtyPlaylist => {
+            matches!(key, KeyCode::Char('s' | 'S' | 'd' | 'D') | KeyCode::Esc)
         }
-        ConfirmAction::RemoveEmby | ConfirmAction::RemoveAudiobookshelf => {
-            matches!(
-                key,
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
-            )
-        }
-        ConfirmAction::ReplaceEmby(_) | ConfirmAction::ReplaceAudiobookshelf(_) => {
-            matches!(
-                key,
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
-            )
-        }
-        ConfirmAction::PlayLocallyInstead => matches!(
-            key,
-            KeyCode::Char('y' | 'Y' | 'n' | 'N') | KeyCode::Enter | KeyCode::Esc
-        ),
-        ConfirmAction::DiscardOrSaveDirtyPlaylist => matches!(
-            key,
-            KeyCode::Char('s' | 'S' | 'd' | 'D' | 'c' | 'C') | KeyCode::Esc
-        ),
+        _ => matches!(key, KeyCode::Enter | KeyCode::Esc),
     }
 }

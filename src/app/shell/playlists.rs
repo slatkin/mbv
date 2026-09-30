@@ -117,18 +117,19 @@ impl Model {
             }
             ShellRequest::PlaylistsDelete(index) => {
                 if let Some(playlist) = self.app.playlists.get(*index).cloned() {
-                    self.app.ask_confirm(crate::app::ConfirmModal {
-                        title: " Delete Playlist ".into(),
-                        message: format!(
+                    self.app.ask_confirm(crate::app::ConfirmModal::two_button(
+                        " Delete Playlist ".into(),
+                        format!(
                             "Delete playlist '{}'?",
                             mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)
                         ),
-                        hint: "[y] Confirm    [Esc] Cancel".into(),
-                        on_confirm: crate::app::ConfirmAction::DeletePlaylist {
+                        "Confirm",
+                        "Cancel",
+                        crate::app::ConfirmAction::DeletePlaylist {
                             id: playlist.id,
                             name: playlist.name,
                         },
-                    });
+                    ));
                 }
             }
             ShellRequest::PlaylistsRefresh => {

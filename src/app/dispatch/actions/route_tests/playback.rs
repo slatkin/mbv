@@ -85,7 +85,7 @@ fn confirm_local_fall_through(app: &mut App) {
     app.apply_confirm_action(
         ConfirmAction::PlayLocallyInstead,
         crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
         ),
     );
