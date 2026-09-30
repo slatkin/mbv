@@ -14,14 +14,14 @@ use mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX;
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
         // Tasks 1.1/1.2: the draw-time state mutations run here, before any
-        // draw. The saved-tab resolution and the stale-destination fallback
+        // draw. The launch-tab resolution and the stale-destination fallback
         // settle the active tab so every projection below -- and the frame --
         // sees the resolved tab (the sync pass no longer writes `self.tab`),
         // and the terminal-resize handling (card-image clear, queue-column
         // clamp + prefs save, and the mini-view focus hand-off on a real
         // Resize event) leaves the draw path, which now only reads geometry.
         self.sync_terminal_resize();
-        self.app.resolve_library_tab_pending();
+        self.app.resolve_launch_tab_on_sync();
         self.app.normalize_stale_browse_destination();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):

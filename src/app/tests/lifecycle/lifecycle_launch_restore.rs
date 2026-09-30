@@ -8,7 +8,7 @@ fn saved_service_tab_resolves_to_home_when_service_is_unconfigured() {
     let mut app = pending_emby_launch();
     app.emby_runtime.state = mbv_core::service_runtime::ServiceState::NotConfigured;
 
-    app.resolve_library_tab_pending();
+    app.resolve_launch_tab_on_sync();
 
     assert_eq!(app.tab, TabSelection::Home);
     assert!(matches!(
@@ -164,7 +164,7 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
         "lib-movies",
         mbv_config::LaunchPanelFocus::Library,
     );
-    app.resolve_library_tab_pending();
+    app.resolve_launch_tab_on_sync();
     assert_eq!(app.tab, TabSelection::Home, "catalog has not arrived yet");
     assert!(matches!(
         app.launch_restore,

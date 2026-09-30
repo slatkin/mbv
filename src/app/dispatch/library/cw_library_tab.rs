@@ -6,7 +6,7 @@ use mbv_queue::ServiceKind;
 
 impl App {
     /// Resolve Home/Feeds identities and Services unavailable at startup on the shell sync pass.
-    pub(in crate::app) fn resolve_library_tab_pending(&mut self) {
+    pub(in crate::app) fn resolve_launch_tab_on_sync(&mut self) {
         let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
         };
@@ -20,12 +20,12 @@ impl App {
                 }
             }
             TabIdentity::ServiceLibrary { kind, .. } => {
-                let state = match kind {
+                let service_state = match kind {
                     ServiceKind::Emby => self.emby_runtime.state,
                     ServiceKind::Audiobookshelf => self.audiobookshelf_runtime.state,
                 };
                 matches!(
-                    state,
+                    service_state,
                     mbv_core::service_runtime::ServiceState::NotConfigured
                         | mbv_core::service_runtime::ServiceState::NeedsAuthentication
                 )
