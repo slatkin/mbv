@@ -1,10 +1,71 @@
 use super::*;
 use mbv_ui_model::library::LibraryKey;
 
+#[rstest]
+#[case::unconfigured(None, mbv_core::service_runtime::ServiceState::NotConfigured)]
+#[case::configured_without_credential(
+    Some(mbv_config::EmbySetup::new("http://emby.example", "user")),
+    mbv_core::service_runtime::ServiceState::NeedsAuthentication
+)]
+fn saved_service_tab_stays_on_home_keeps_focus_and_later_configure_does_not_move_tab(
+    #[case] setup: Option<mbv_config::EmbySetup>,
+    #[case] initial_state: mbv_core::service_runtime::ServiceState,
+) {
+    // #810: a Service unavailable at build resolves once; later setup/catalog arrival cannot yank the tab.
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.config.lock().unwrap().emby_setup = setup;
+    app.emby_runtime.state = initial_state;
+    app.panel_focus = PanelFocus::Library;
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-movies".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Queue,
+            selector: None,
+            item: None,
+        });
+
+    app.resolve_library_tab_pending();
+
+    assert_eq!(app.tab, TabSelection::Home);
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled {
+            tab: TabSelection::Home,
+            ..
+        }
+    ));
+
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+
+    assert_eq!(model.app.panel_focus, PanelFocus::Queue);
+    assert_eq!(
+        model.app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+
+    model.app.config.lock().unwrap().emby_setup =
+        Some(mbv_config::EmbySetup::new("http://emby.example", "user"));
+    let views: Vec<mbv_emby_model::EmbyItem> = model
+        .app
+        .libs
+        .iter()
+        .map(|library| library.library.clone())
+        .collect();
+    model.app.rebuild_library_tabs_from_views(&views);
+
+    assert_eq!(model.app.tab, TabSelection::Home);
+}
+
 #[test]
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
+    app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Connecting;
     let saved = mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::ServiceLibrary {
