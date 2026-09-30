@@ -61,6 +61,7 @@ pub(in crate::app) struct AudiobookshelfCatalogCompletion {
 }
 
 pub(in crate::app) struct AudiobookshelfCatalogReceiver {
+    pub(in crate::app) generation: SetupGeneration,
     pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
 }
 
@@ -113,7 +114,7 @@ pub(in crate::app) fn start_audiobookshelf_catalog(
         });
         let _ = tx.send(AudiobookshelfCatalogCompletion { generation, result });
     });
-    AudiobookshelfCatalogReceiver { rx }
+    AudiobookshelfCatalogReceiver { generation, rx }
 }
 
 pub(in crate::app) fn start_audiobookshelf_shows(

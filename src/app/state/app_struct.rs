@@ -6,6 +6,7 @@ use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::types::cast::CastAttachment;
+use mbv_config::TuiLaunchState;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
@@ -25,6 +26,17 @@ use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_ws::WsEvent;
 use std::sync::mpsc;
 use std::time::Instant;
+
+/// Startup restoration state, scoped to the tab selected by launch resolution.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::app) enum LaunchRestore {
+    Pending(TuiLaunchState),
+    TabSettled {
+        state: TuiLaunchState,
+        tab: TabSelection,
+    },
+    Done,
+}
 
 /// Lifecycle of the one background album-artist request per music level
 /// (design D4 of `fix-music-artist-resolution-batching`). `Failed` levels are
@@ -197,23 +209,8 @@ pub struct App {
     pub(in crate::app) list_pane_width: Option<u16>,
     pub(in crate::app) visual_slot_hidden: bool,
     pub(in crate::app) panel_mode: PanelMode,
-    pub(in crate::app) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    /// The one startup launch snapshot loaded from disk. Its tab identity is
-    /// the sole source for tab restoration; `pending_launch_tab_resolved`
-    /// consumes only that level while selector/item identities remain pending
-    /// for the selected destination's discrete re-anchor.
-    pub(in crate::app) pending_launch_state: Option<mbv_config::TuiLaunchState>,
-    pub(in crate::app) pending_launch_tab_resolved: bool,
-    /// Legacy selected-tab preference retained only until its stable identity
-    /// can be recovered from the current catalogs. It is never used as a
-    /// launch-state identity after migration.
-    pub(in crate::app) legacy_launch_tab: Option<usize>,
-    /// Prevents a legacy seed from being derived more than once in this
-    /// process. The legacy files remain read-only compatibility inputs; the
-    /// orderly-exit snapshot makes the new file authoritative.
-    pub(in crate::app) legacy_launch_migration_attempted: bool,
-    pub(in crate::app) emby_catalog_ready: bool,
-    pub(in crate::app) audiobookshelf_catalog_ready: bool,
+    /// The one startup snapshot and its tab-scoped destination re-anchor.
+    pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
     /// of change `per-destination-item-navigation`): set when the recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`

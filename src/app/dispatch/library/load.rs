@@ -348,13 +348,7 @@ impl App {
             });
         }
 
-        // Rebuilding the tabs from live views IS the live Emby catalog
-        // boundary. A plain local launch reaches it through the Emby startup
-        // worker's bootstrap, but a local-daemon/remote attach has a live
-        // client at construction and never runs that worker: its catalog
-        // arrives here, through `fetch_home`. Without this the launch tab
-        // could never resolve stable Emby identities on that path.
-        self.emby_catalog_ready = true;
+        self.resolve_launch_service_tab(mbv_queue::ServiceKind::Emby);
     }
 
     /// Compute the Home Continue Watching snapshot. Continue Watching and

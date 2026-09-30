@@ -1,17 +1,15 @@
 use super::*;
 use crate::app::AudiobookshelfEvent;
 use crate::app::SessionEvent;
-use crate::app::dispatch::session::service_startup::{
-    AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
-};
+use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::make_movie_app;
+use crate::app::tests::render_fixtures::{catalog_receiver, make_movie_app};
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
 };
-use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_core::service_runtime::ServiceState;
 use mbv_images::series_image_cache_key;
 use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_ui_model::browse::ServerRows;
@@ -145,25 +143,6 @@ fn audiobookshelf_library(id: &str, media_type: &str) -> AudiobookshelfLibrary {
         name: id.into(),
         media_type: media_type.into(),
     }
-}
-
-type CatalogResult = Result<
-    (
-        Vec<AudiobookshelfLibrary>,
-        HashMap<(String, String), AudiobookshelfProgress>,
-        HashMap<String, AudiobookshelfBookProgress>,
-    ),
-    AudiobookshelfError,
->;
-
-fn catalog_receiver(
-    generation: SetupGeneration,
-    result: CatalogResult,
-) -> AudiobookshelfCatalogReceiver {
-    let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(AudiobookshelfCatalogCompletion { generation, result })
-        .expect("catalog channel");
-    AudiobookshelfCatalogReceiver { rx }
 }
 
 /// Reads exactly `expected` library-fetch events off the shell's `lib_tx`
@@ -311,7 +290,6 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
         "the catalog completion must be reported"
     );
 
-    assert!(app.audiobookshelf_catalog_ready);
     assert_eq!(app.audiobookshelf_libraries.len(), 2);
     assert_eq!(
         app.audiobookshelf_browse.len(),
@@ -439,7 +417,6 @@ fn music_two_artist_stale_pf() -> App {
     app.tab = crate::app::TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.music_levels = vec!["group".into(), "album".into()];
-    app.emby_catalog_ready = true;
     let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.is_folder = true;
@@ -526,8 +503,9 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
 #[test]
 fn music_launch_state_artist_survives_a_stale_saved_position_restore() {
     let mut app = music_two_artist_stale_pf();
-    app.pending_launch_state = Some(music_launch_state_aaliyah());
-    app.pending_launch_tab_resolved = false;
+    app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(music_launch_state_aaliyah());
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     assert_eq!(

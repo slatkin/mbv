@@ -71,8 +71,7 @@ impl App {
                     crate::app::dispatch::session::service_startup::classify_audiobookshelf_failure(
                         &error,
                     );
-                self.audiobookshelf_runtime
-                    .complete(completion.generation, state);
+                self.fail_audiobookshelf_service(completion.generation, state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     let deletion = self.clear_audiobookshelf_authentication();
                     self.flash(
@@ -109,6 +108,6 @@ impl App {
         } else {
             mbv_core::service_runtime::ServiceState::NotConfigured
         };
-        self.audiobookshelf_runtime.complete(generation, state);
+        self.fail_audiobookshelf_service(generation, state);
     }
 }

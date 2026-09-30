@@ -52,9 +52,6 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
-                // The bootstrap is the live Emby catalog boundary. Launch-tab
-                // restoration is allowed to resolve stable identities only after it.
-                self.emby_catalog_ready = true;
                 // Warm the music group levels in the background (design D5 of
                 // `fix-music-artist-resolution-batching`); never gates startup.
                 self.spawn_music_group_warmup();
@@ -76,7 +73,7 @@ impl App {
             Err(error) => {
                 let state =
                     crate::app::dispatch::session::service_startup::classify_failure(&error);
-                self.emby_runtime.state = state;
+                self.fail_emby_service(state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     self.emby_runtime.client = None;
                     self.ws_send_tx = None;
@@ -115,7 +112,7 @@ impl App {
             return;
         }
         let config = self.config.lock().unwrap().clone();
-        self.emby_runtime.state = if config.emby_setup.is_some()
+        let state = if config.emby_setup.is_some()
             && mbv_config::load_service_secret(mbv_queue::ServiceKind::Emby).is_some()
         {
             mbv_core::service_runtime::ServiceState::Unavailable
@@ -124,6 +121,7 @@ impl App {
         } else {
             mbv_core::service_runtime::ServiceState::NotConfigured
         };
+        self.fail_emby_service(state);
         self.flash(
             crate::app::dispatch::session::service_startup::startup_status(self.emby_runtime.state)
                 .into(),
@@ -208,8 +206,6 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
-                // Setup completion also carries a fresh live Emby catalog.
-                self.emby_catalog_ready = true;
                 // Warm the music group levels in the background (design D5 of
                 // `fix-music-artist-resolution-batching`); never gates startup.
                 self.spawn_music_group_warmup();
@@ -233,7 +229,7 @@ impl App {
                 Some(content)
             }
             Err(error) => {
-                self.emby_runtime.state = completion.previous_state;
+                self.fail_emby_service(completion.previous_state);
                 if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;
                     form.error = error.to_string();

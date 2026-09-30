@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_resize_worker};
 use mbv_render::layout;
@@ -59,18 +60,8 @@ impl App {
         #[cfg(test)]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
-        let pending_launch_state = mbv_config::load_tui_launch_state();
-        // The legacy selected-tab preference is only a migration input. Never
-        // let it compete with a versioned launch snapshot that already exists.
-        let legacy_launch_tab = pending_launch_state
-            .is_none()
-            .then(|| {
-                prefs["library_tab"]
-                    .as_u64()
-                    .or_else(|| prefs["power_left_tab"].as_u64())
-                    .and_then(|position| usize::try_from(position).ok())
-            })
-            .flatten();
+        let launch_restore =
+            mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
@@ -157,16 +148,8 @@ impl App {
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
-            // Always start on Home until the live catalog resolves the
-            // stable pending launch tab. The saved queue is restored
-            // independently; destination state remains pending for task 3.2.
-            library_tab_pending: 0,
-            pending_launch_tab_resolved: false,
-            pending_launch_state,
-            legacy_launch_tab,
-            legacy_launch_migration_attempted: false,
-            emby_catalog_ready: false,
-            audiobookshelf_catalog_ready: false,
+            // Always start on Home until the saved launch tab settles.
+            launch_restore,
             pending_navigate_tab_switch: None,
             pending_series_landing: None,
             pending_series_handoff: None,

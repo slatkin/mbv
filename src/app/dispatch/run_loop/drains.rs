@@ -73,7 +73,11 @@ impl App {
                 self.setup.audiobookshelf_catalog_rx = Some(receiver);
                 false
             }
-            _ => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.handle_audiobookshelf_worker_disconnect(receiver.generation);
+                true
+            }
+            Ok(_) => false,
         }
     }
 
@@ -94,13 +98,15 @@ impl App {
                     mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected
                 ) =>
             {
-                self.audiobookshelf_runtime.complete(
+                self.fail_audiobookshelf_service(
                     completion.generation,
                     mbv_core::service_runtime::ServiceState::NeedsAuthentication,
                 );
                 let _ = self.clear_audiobookshelf_authentication();
             }
-            Err(_) => {}
+            Err(_) => {
+                self.expire_launch_service(mbv_queue::ServiceKind::Audiobookshelf);
+            }
         }
     }
 
@@ -117,8 +123,6 @@ impl App {
             mbv_audiobookshelf::AudiobookshelfBookProgress,
         >,
     ) {
-        // This completion is the live Audiobookshelf catalog boundary for stable tab restoration.
-        self.audiobookshelf_catalog_ready = true;
         self.audiobookshelf_libraries = libraries;
         self.audiobookshelf_browse = self
             .audiobookshelf_libraries
@@ -138,6 +142,7 @@ impl App {
         }
         self.apply_audiobookshelf_catalog_progress(progress, book_progress);
         self.start_audiobookshelf_catalog_fetches(generation);
+        self.resolve_launch_service_tab(mbv_queue::ServiceKind::Audiobookshelf);
     }
 
     fn apply_audiobookshelf_catalog_progress(
