@@ -210,8 +210,8 @@ Every new test names the spec requirement it owns, in a comment or in its name (
 
 ## 8. Integration verification
 
-- [ ] 8.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All must pass.
-- [ ] 8.2 Manual checks against the built binary. Record each result on this line when done.
+- [x] 8.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All must pass.
+- [x] 8.2 Manual checks against the built binary. Record each result on this line when done. PASS — user-run, 2026-09-30
   - Stay Alive off:
     - launching starts one local daemon, and quitting leaves no mbv process;
     - relaunching immediately after quitting starts cleanly;
@@ -226,4 +226,4 @@ Every new test names the spec requirement it owns, in a comment or in its name (
   - A fall-through video plays on the local daemon, including while controlling an audio-only Emby session.
   - The queue survives quitting and relaunching with Stay Alive off.
   - Packaged `mbvd` still admits two clients and survives both leaving.
-- [ ] 8.3 Just before pushing, run `make check-code-file-lines` and split any governed file over 800 lines along responsibility seams.
+- [x] 8.3 Just before pushing, run `make check-code-file-lines` and split any governed file over 800 lines along responsibility seams.
