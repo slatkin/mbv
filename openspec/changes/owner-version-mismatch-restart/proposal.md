@@ -12,10 +12,11 @@ decision and quit flushes settings first. It is out of scope here.)
 
 ## What Changes
 
-- A local Client SHALL refuse to attach to an Owner process whose `app_version` or
-  ctrl protocol version differs from its own. The refusal happens on the Owner's
-  hello, before the Client sends its hello: no control credential is transmitted
-  and no client is admitted.
+- A local Client SHALL refuse to attach to an Owner process whose `app_version`
+  differs from its own. The Owner is the same binary, so application version is the
+  only comparison; ctrl protocol version is an mbvd (server) concern and is not
+  involved. The refusal happens on the Owner's hello, before the Client sends its
+  hello: no control credential is transmitted and no client is admitted.
 - Before any UI starts, the terminal SHALL prompt: **[R]** stop the Owner and
   relaunch from this binary, or **[Q]** quit. Enter alone, unknown input, EOF, or a
   non-TTY stdin means quit (exit non-zero, naming `mbv -q`). There is no
@@ -24,8 +25,8 @@ decision and quit flushes settings first. It is out of scope here.)
   it works across versions and regardless of `stay_alive` — then reuses the existing
   bounded retry-resolve loop to wait for the old Owner to release the lock, spawn a
   fresh Owner from this binary, and attach.
-- The same gate replaces today's bare "protocol-version mismatch" failure for the
-  local Owner, so a protocol skew gets the same remedy instead of a dead end.
+- Ctrl protocol negotiation is untouched: no protocol check is added, removed, or
+  reworded, and no `CTRL_PROTOCOL_VERSION` bump is needed.
 - Explicit `unix://`/`tcp://` endpoints (packaged `mbvd`) are unaffected.
 - `mbv -q`'s signalling is extracted into a helper shared with the restart path;
   its behaviour and messages do not change.
@@ -50,7 +51,4 @@ None.
   and retry helper in `run_local_instance`.
 - New `src/owner_restart.rs`: prompt and follow-up decision.
 - No ctrl protocol change and no `CTRL_PROTOCOL_VERSION` bump; no config change; no
-  new dependency.
-- Interacts with `ctrl-protocol`'s "v11 client connects to an older daemon" scenario
-  only for the local Owner (the gate preempts it there); that requirement is not
-  modified — the no-credential guarantee is preserved.
+  new dependency. The `ctrl-protocol` capability is not modified.

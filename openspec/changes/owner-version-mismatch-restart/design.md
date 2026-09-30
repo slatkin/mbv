@@ -10,8 +10,8 @@ reacts to two typed admission refusals from `RemotePlayerError`: `is_owner_shutt
 The handshake order is: Owner sends hello → Client sends its hello (and control credential) →
 Owner sends initial state or a `Disconnected` refusal (`connect.rs` `read_server_hello`,
 `send_client_hello`, `read_initial_state`). The Owner's hello carries `app_version` and
-`protocol_version`; the Client currently logs `app_version` and drops it, and rejects a
-`protocol_version` mismatch with a generic protocol error (`validate_peer`).
+`protocol_version`; the Client currently logs `app_version` and drops it, and `validate_peer`
+separately handles protocol compatibility (left as is).
 
 `mbv -q` (`stop_running_instance`) reads the PID from the lock file and sends SIGTERM; the Owner
 handles SIGTERM as a graceful shutdown (`mbv-daemon/src/run_shutdown.rs`).
@@ -27,8 +27,8 @@ handles SIGTERM as a graceful shutdown (`mbv-daemon/src/run_shutdown.rs`).
   endpoints are untouched.
 - No in-session (TUI) handling: in-app reconnect paths spawn the current binary, so a mismatch
   there is not expected; if it occurs it surfaces as an ordinary connect error.
-- No build-identity beyond `app_version` + protocol version (a same-version dev rebuild is not
-  detected).
+- No ctrl protocol handling of any kind, and no build identity beyond `app_version` (a
+  same-version dev rebuild is not detected).
 - #559 Feature 2 (already shipped).
 
 ## Decisions
@@ -40,13 +40,15 @@ then compare (admits a client and sends the credential to an outdated process; w
 off it would also occupy the single slot); a separate probe connection (extra connection, extra
 admission surface, nothing gained).
 
-**D2. Mismatch = `app_version` differs OR `protocol_version` differs, checked before
-`validate_peer`.** Protocol skew then gets the same remedy instead of the generic protocol
-error, and a developer bumping `CTRL_PROTOCOL_VERSION` without a version bump is still caught.
-The `ctrl-protocol` requirement is preserved, not modified: still refused, still before any
-credential. Missing-capability failures with an identical build are unchanged. If a much older
-Owner's hello cannot even be deserialised, the existing "invalid daemon protocol hello" error
-stands (no prompt) — accepted limit.
+**D2. Mismatch = `app_version` differs, nothing else.** The local Owner is the same binary as the
+Client, so its application version is the only meaningful comparison. Ctrl protocol version is
+an mbvd (server) concern: `protocol_version` is neither compared nor reported by this feature,
+`validate_peer` and its errors are untouched, and `ctrl-protocol` is not modified. The
+`app_version` check runs immediately before `validate_peer()` (it must precede
+`send_client_hello` either way); when a release differs in both fields, the prompt therefore
+wins over the generic protocol error for the local Owner, and when only the protocol differs
+the existing error is unchanged. If an older Owner's hello cannot be deserialised at all, the
+existing "invalid daemon protocol hello" error stands (no prompt) — accepted limit.
 
 **D3. Local-only via an explicit parameter, not by inspecting the stream.** A two-variant enum
 (`PeerBuild::Any` / `PeerBuild::MustMatch`) is threaded from `connect_endpoint` (which knows the
@@ -56,9 +58,9 @@ current behaviour and tests are untouched. A bool would be an unnamed flag at fi
 boundaries; the enum is the named state. `signal_local_daemon_service_setup` keeps `Any`: it is
 best-effort and already reports a restart requirement on failure.
 
-**D4. New `RemotePlayerError` kind `OwnerBuildMismatch`** carrying the Owner's `app_version`
-and protocol version, with an accessor returning them (sibling of `is_owner_shutting_down`).
-Its `Display` names both versions and `mbv -q`, so every caller that only prints the error
+**D4. New `RemotePlayerError` kind `OwnerBuildMismatch`** carrying the Owner's `app_version`,
+with an accessor returning it (sibling of `is_owner_shutting_down`). Its `Display` names both
+application versions and `mbv -q`, so every caller that only prints the error
 (in-app connect paths) still shows an actionable message.
 
 **D5. Restart is SIGTERM-by-PID, reusing the existing wait loop.** Stay Alive on makes
