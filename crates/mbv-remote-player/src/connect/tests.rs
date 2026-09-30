@@ -254,6 +254,8 @@ fn resolve_library_route_rejects_unix_and_local_endpoints() {
 }
 
 #[test]
+// Issue #559: the build gate fires on the Owner's hello, before the Client
+// sends its own hello/control credential (design D1).
 fn local_handshake_rejects_different_owner_build_before_client_hello() {
     use std::io::{BufRead, Write};
 
@@ -290,6 +292,7 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
 }
 
 #[test]
+// Issue #559: a matching Owner build attaches normally under the build gate.
 fn local_handshake_accepts_identical_owner_build() {
     use std::io::{BufRead, BufReader, Write};
 
@@ -336,6 +339,8 @@ fn local_handshake_accepts_identical_owner_build() {
 }
 
 #[test]
+// Issue #559 (design D2): the build gate never touches CTRL_PROTOCOL_VERSION;
+// a protocol-only difference is accepted and stays a protocol concern.
 fn local_handshake_keeps_protocol_compatibility_independent_of_build() {
     use std::io::Write;
 

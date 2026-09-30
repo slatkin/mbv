@@ -7,7 +7,7 @@ pub struct RemotePlayerError {
     source: Option<Box<dyn Error + Send + Sync>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum RemotePlayerErrorKind {
     Endpoint,
     Protocol,

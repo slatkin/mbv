@@ -438,7 +438,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                     let mut output = std::io::stderr().lock();
                     match owner_restart::ask(&error, &mut input, &mut output) {
                         owner_restart::Choice::Quit => {
-                            eprintln!("mbv: {error}");
+                            // `ask` already rendered the mismatch text.
                             std::process::exit(1);
                         }
                         owner_restart::Choice::Restart => {
