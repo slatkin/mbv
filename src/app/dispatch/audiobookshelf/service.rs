@@ -377,13 +377,13 @@ impl App {
         };
         let result = {
             let (player, _) = self.queue_link(crate::app::QueueScope::Local);
-            player.as_remote().map(|owner| {
-                owner.send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {
+            player
+                .remote()
+                .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {
                     updates: vec![update],
                 })
-            })
         };
-        if let Some(Err(error)) = result {
+        if let Err(error) = result {
             self.flash(error.to_string(), ToastSeverity::Warning);
         }
         self.reconcile_audiobookshelf_progress(

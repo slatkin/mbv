@@ -201,7 +201,7 @@ fn lang_code_to_name_matches_api_table() {
 #[test]
 fn disconnect_remote_disconnects_a_remote_player() {
     let (remote, _event_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    let proxy = PlayerProxy::remote(remote, false);
+    let proxy = PlayerProxy::from_remote(remote, false);
     proxy.disconnect_remote(); // must not panic; a stub has no real
     // socket, so this only exercises the
     // dispatch, not the shutdown itself

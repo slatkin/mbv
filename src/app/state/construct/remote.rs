@@ -190,7 +190,7 @@ impl App {
         app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
-        let (transport_tx, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
+        let (_, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
@@ -224,7 +224,7 @@ impl App {
         let mpris_handle = Some(start_mpris(&remote));
         #[cfg(test)]
         let mpris_handle = None;
-        let player = PlayerProxy::remote(remote, always_play_next);
+        let player = PlayerProxy::from_remote(remote, always_play_next);
         let audiobookshelf_startup_requested =
             services.audiobookshelf_configured && services.audiobookshelf_credential_present;
         let (local_view, remote_view) =
@@ -237,7 +237,6 @@ impl App {
             player_rx,
             ws_rx,
             transport_rx,
-            transport_tx,
             ws_send_tx: None,
             audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,
@@ -265,11 +264,7 @@ impl App {
         app.home_is_local_daemon = endpoint.is_local();
         app.sync_subtitle_prefs_to_player();
         app.launched_as_remote = true;
-        debug_assert_eq!(
-            app.player.as_remote().is_some(),
-            app.player_endpoint.is_some(),
-            "player-endpoint invariant"
-        );
+        debug_assert!(app.player_endpoint.is_some(), "player-endpoint invariant");
         if endpoint.is_local() {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.last_played_item_id = bootstrap.last_played_item_id;

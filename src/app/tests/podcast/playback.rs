@@ -20,7 +20,7 @@ fn make_socket_merge_ready_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::Ct
     let mut app = super::podcast::audiobookshelf_app();
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(Vec::new(), 0);
-    app.player = mbv_player::PlayerProxy::remote(remote, false);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app.player_rx = player_rx;
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
     app.audiobookshelf_browse[0].progress.insert(

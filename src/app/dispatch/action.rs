@@ -23,7 +23,6 @@ use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum Command {
@@ -454,14 +453,7 @@ impl App {
             .iter()
             .filter_map(|slot| slot.item.as_emby().cloned())
             .collect();
-        let all_slots = queue
-            .slots()
-            .iter()
-            .map(|slot| mbv_queue::ExecSlot {
-                slot_id: slot.slot_id,
-                item: slot.item.clone(),
-            })
-            .collect();
+        let all_slots = queue.slot_pairs();
         let slot_id = queue.slot_id_at(t);
         // Pre-compute the Emby-only projection index for the cursor
         // position, needed by the session API boundary.
@@ -513,7 +505,7 @@ impl App {
         let active = st.active;
         let current_idx = st.current_idx;
         drop(st);
-        if active && self.queue_scope_is_playback(scope) && self.local_queue_is_owner_queue(scope) {
+        if active && self.queue_scope_is_playback(scope) {
             if t == current_idx {
                 let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {
@@ -530,7 +522,7 @@ impl App {
                 }
             }
         } else {
-            self.cold_start_queue_play(t, item, scope, all_slots);
+            self.cold_start_queue_play(t, item, all_slots);
         }
     }
 
@@ -538,7 +530,6 @@ impl App {
         &mut self,
         t: usize,
         item: &mbv_queue::QueueItem,
-        _scope: crate::app::QueueScope,
         all_slots: Vec<mbv_queue::ExecSlot>,
     ) {
         // Cold start: submit the full canonical queue (all
@@ -575,14 +566,10 @@ impl App {
                     .count()
                     .min(eligible.len().saturating_sub(1))
             });
-        let headless = eligible.iter().all(|slot| slot.item.is_audio());
         let submitted = self.player.submit_queue_slots(
             eligible,
             start_idx,
             self.playback_queue().source().clone(),
-            self.emby_snapshot().map(Arc::new),
-            headless,
-            self.ui_volume,
         );
         if !submitted && self.player.is_remote_disconnected() {
             self.flash(

@@ -70,10 +70,7 @@ impl App {
         scope: QueueScope,
         operation: mbv_remote_player::QueueOp,
     ) -> QueueOpEdit {
-        let remote = self.queue_link(scope).0.as_remote();
-        let Some(remote) = remote else {
-            return QueueOpEdit::NotApplied;
-        };
+        let remote = self.queue_link(scope).0.remote();
         let answer = match remote.send_queue_op(operation) {
             Ok(answer) => answer,
             Err(e) => {

@@ -181,7 +181,7 @@ fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
     let (dead_home, dead_home_rx, dead_home_peer) =
         mbv_remote_player::connect_stub_daemon_pair().unwrap();
     app.suspended_local.as_mut().unwrap().player =
-        mbv_player::PlayerProxy::remote(dead_home.clone(), false);
+        mbv_player::PlayerProxy::from_remote(dead_home.clone(), false);
     app.suspended_local.as_mut().unwrap().player_rx = dead_home_rx;
     dead_home.disconnect();
     app.suspended_local
@@ -198,8 +198,7 @@ fn restore_local_mode_reconnects_when_suspended_home_is_disconnected() {
     assert!(app.is_local_daemon());
     assert_eq!(
         app.player
-            .as_remote()
-            .unwrap()
+            .remote()
             .unified_queue_state()
             .unwrap()
             .slots

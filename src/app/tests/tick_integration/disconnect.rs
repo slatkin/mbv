@@ -233,8 +233,7 @@ fn suspended_home_disconnect_clears_link_before_local_fallthrough_reconnects() {
     assert_eq!(
         prepared
             .player
-            .as_remote()
-            .unwrap()
+            .remote()
             .unified_queue_state()
             .unwrap()
             .slots

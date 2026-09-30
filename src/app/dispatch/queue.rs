@@ -20,8 +20,7 @@ impl App {
     pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         if pos >= self.queue_for_scope(scope).total_queue_len() {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.set_cursor(queue.cursor());
+            self.queue_for_scope_mut(scope).clamp_cursor();
             return;
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {
@@ -51,40 +50,24 @@ impl App {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
             },
         );
-        match sent {
-            QueueOpEdit::Applied => {
-                // The selected slot is gone; the selection moves to the
-                // entry now at the removed entry's former position — the
-                // follower when one followed it, the selection itself when
-                // it sat below the removed row.
-                let len = self.queue_for_scope(scope).total_queue_len();
-                let cursor = if pos < cursor_before {
-                    cursor_before - 1
-                } else {
-                    cursor_before
-                };
-                self.queue_for_scope_mut(scope)
-                    .set_cursor(cursor.min(len.saturating_sub(1)));
-                self.record_undoable_queue_edit(
-                    scope,
-                    UndoEntry::Remove {
-                        item: Box::new(item),
-                        index: pos,
-                    },
-                );
-            }
-            QueueOpEdit::SentLegacy => {
-                // The edit was delivered; the displayed queue follows the
-                // legacy owner's later snapshots.
-                self.record_undoable_queue_edit(
-                    scope,
-                    UndoEntry::Remove {
-                        item: Box::new(item),
-                        index: pos,
-                    },
-                );
-            }
-            QueueOpEdit::NotApplied => {}
+        if sent != QueueOpEdit::NotApplied {
+            self.record_undoable_queue_edit(
+                scope,
+                UndoEntry::Remove {
+                    item: Box::new(item),
+                    index: pos,
+                },
+            );
+        }
+        if sent == QueueOpEdit::Applied {
+            // The selected slot is gone; the selection moves to the entry
+            // now at its former position.
+            let cursor = if pos < cursor_before {
+                cursor_before - 1
+            } else {
+                cursor_before
+            };
+            self.queue_for_scope_mut(scope).set_cursor(cursor);
         }
     }
 
@@ -181,10 +164,10 @@ impl App {
         // resolves its anchor against the state the previous undo produced.
         {
             let stack = self.undo_stack_for_scope_mut(scope);
-            for (pos, item) in removed.iter().rev() {
+            for (pos, item) in removed.into_iter().rev() {
                 stack.push(UndoEntry::Remove {
-                    item: Box::new(item.clone()),
-                    index: *pos,
+                    item: Box::new(item),
+                    index: pos,
                 });
             }
         }
@@ -192,9 +175,7 @@ impl App {
             self.queue_dirty = true;
         }
         if sent == QueueOpEdit::Applied {
-            let len = self.queue_for_scope(scope).total_queue_len();
-            self.queue_for_scope_mut(scope)
-                .set_cursor(cursor_after.min(len.saturating_sub(1)));
+            self.queue_for_scope_mut(scope).set_cursor(cursor_after);
             // The mounted component owns the painted cursor and only adopts
             // `App`'s value when a re-anchor is armed; the adopted snapshot
             // moved the cursor onto the item preceding the range.
@@ -263,9 +244,7 @@ impl App {
                 if scope != QueueScope::Remote {
                     // The selection stays on the moved entry at its new
                     // position.
-                    let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope)
-                        .set_cursor(to.min(len.saturating_sub(1)));
+                    self.queue_for_scope_mut(scope).set_cursor(to);
                 }
                 self.record_undoable_queue_edit(scope, UndoEntry::Move { slot_id, from });
             }
@@ -304,9 +283,7 @@ impl App {
                     },
                 );
                 if sent == QueueOpEdit::Applied {
-                    let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope)
-                        .set_cursor(index.min(len.saturating_sub(1)));
+                    self.queue_for_scope_mut(scope).set_cursor(index);
                 }
             }
             UndoEntry::Move { slot_id, from } => {
@@ -318,9 +295,7 @@ impl App {
                     },
                 );
                 if sent == QueueOpEdit::Applied {
-                    let len = self.queue_for_scope(scope).total_queue_len();
-                    self.queue_for_scope_mut(scope)
-                        .set_cursor(from.min(len.saturating_sub(1)));
+                    self.queue_for_scope_mut(scope).set_cursor(from);
                 }
             }
         }

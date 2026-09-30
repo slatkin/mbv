@@ -189,18 +189,18 @@ impl App {
             .filter(|home| !home.player.is_remote_disconnected())
             .map(|home| &home.player)
             .or_else(|| {
-                self.player_endpoint
+                (self
+                    .player_endpoint
                     .as_ref()
                     .is_some_and(mbv_remote_player::DaemonEndpoint::is_local)
-                    .then_some(&self.player)
+                    && !self.player.is_remote_disconnected())
+                .then_some(&self.player)
             });
-        let Some(home_link) = home_link
-            .filter(|player| player.as_remote().is_some() && !player.is_remote_disconnected())
-        else {
+        let Some(home_link) = home_link else {
             tracing::info!(name: "daemon_shutdown.connection.unavailable", target: "daemon_shutdown", reason = "home_link_unavailable", "home link unavailable for shutdown request");
             return None;
         };
-        let remote = home_link.as_remote()?;
+        let remote = home_link.remote();
         tracing::info!(name: "daemon_shutdown.request.started", target: "daemon_shutdown", connection = if self.suspended_local.is_some() { "suspended_home" } else { "current_home" }, "invoking shutdown request through home link");
         Some(remote.request_shutdown(quit_timeout))
     }
@@ -268,11 +268,11 @@ mod tests {
         let (home_remote, home_rx, home_peer) =
             mbv_remote_player::connect_stub_daemon_pair().unwrap();
         app.suspended_local = Some(SuspendedLocalSession {
-            player: PlayerProxy::remote(home_remote, false),
+            player: PlayerProxy::from_remote(home_remote, false),
             player_rx: home_rx,
         });
         let (routed_remote, routed_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-        app.player = PlayerProxy::remote(routed_remote, false);
+        app.player = PlayerProxy::from_remote(routed_remote, false);
         app.player_rx = routed_rx;
         app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
             "127.0.0.1:1234".parse().unwrap(),
@@ -290,8 +290,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .player
-            .as_remote()
-            .unwrap()
+            .remote()
             .disconnect();
         home_peer.join().unwrap();
     }
@@ -308,13 +307,13 @@ mod tests {
         dead_home.disconnect();
         dead_peer.join().unwrap();
         app.suspended_local = Some(SuspendedLocalSession {
-            player: PlayerProxy::remote(dead_home, false),
+            player: PlayerProxy::from_remote(dead_home, false),
             player_rx: dead_rx,
         });
 
         let (restarted_home, restarted_rx, restarted_peer) =
             mbv_remote_player::connect_stub_daemon_pair().unwrap();
-        app.player = PlayerProxy::remote(restarted_home, false);
+        app.player = PlayerProxy::from_remote(restarted_home, false);
         app.player_rx = restarted_rx;
         app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
 

@@ -50,29 +50,22 @@ impl App {
             .collect();
         let result = self
             .player
-            .as_remote()
-            .map(|remote| remote.load_queue_idle(request_id, slots, start_idx, source));
+            .remote()
+            .load_queue_idle(request_id, slots, start_idx, source);
         match result {
-            Some(Ok(())) => {
+            Ok(()) => {
                 self.set_queue_scope(self.playing_queue_scope());
                 true
             }
-            Some(Err(_)) if self.player.is_remote_disconnected() => {
+            Err(_) if self.player.is_remote_disconnected() => {
                 self.flash(
                     crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                     ToastSeverity::Warning,
                 );
                 false
             }
-            Some(Err(reason)) => {
+            Err(reason) => {
                 self.flash(reason.to_string(), ToastSeverity::Error);
-                false
-            }
-            None => {
-                self.flash(
-                    "Could not send idle queue load to Player owner".into(),
-                    ToastSeverity::Error,
-                );
                 false
             }
         }

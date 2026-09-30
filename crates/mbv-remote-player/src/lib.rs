@@ -259,8 +259,7 @@ impl RemotePlayer {
         let wire_cmd = match cmd {
             // Queue mutation has no legacy wire form; it crosses ctrl
             // exclusively as `CtrlCmd::UnifiedQueue*`. Callers use the unified
-            // path (`RemotePlayer::queue_append`/`queue_remove_slot`/
-            // `queue_move_slot`, `PlayerProxy::submit_queue_slots`).
+            // path (`RemotePlayer::send_queue_op`, `PlayerProxy::submit_queue_slots`).
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..) => {
@@ -276,23 +275,6 @@ impl RemotePlayer {
             },
         };
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
-    }
-
-    #[must_use]
-    pub fn adopt_queue(
-        &self,
-        items: Vec<QueueItem>,
-        cursor: usize,
-        source: mbv_queue::QueueSource,
-    ) -> bool {
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        self.cmd_tx
-            .send(CtrlCmd::UnifiedAdoptQueue {
-                items,
-                cursor,
-                source,
-            })
-            .is_ok()
     }
 
     #[must_use]
@@ -511,50 +493,6 @@ impl RemotePlayer {
     #[must_use]
     pub fn unified_queue_state(&self) -> Option<mbv_ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
-    }
-
-    #[must_use]
-    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
-        if items.is_empty() {
-            return true;
-        }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend {
-            items,
-            before: None,
-            op: None,
-        })
-    }
-
-    /// Remove a slot by its stable identity.
-    #[must_use]
-    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op: None })
-    }
-
-    /// Remove several slots in one owner edit, so the owner publishes one
-    /// queue snapshot instead of one per slot.
-    #[must_use]
-    pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
-        if slot_ids.is_empty() {
-            return true;
-        }
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op: None })
-    }
-
-    /// Move a slot by its stable identity to `to_index`.
-    #[must_use]
-    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot {
-            slot_id,
-            to_index,
-            op: None,
-        })
-    }
-
-    /// Begin playback of an existing slot by its stable identity.
-    #[must_use]
-    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
-        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id, op: None })
     }
 
     #[cfg(any(test, feature = "test"))]

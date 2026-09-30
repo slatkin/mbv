@@ -246,9 +246,7 @@ impl App {
     fn pending_playback_index(&self) -> Option<usize> {
         let target = self.pending_playback_slot()?;
         self.queue_for_scope(self.playing_queue_scope())
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == target)
+            .slot_index(target)
     }
 
     pub(in crate::app) fn displayed_queue_playback_state(

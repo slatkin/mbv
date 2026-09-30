@@ -1,6 +1,6 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{
-    PlaybackQueue, QueueItem, QueueLineage, QueueRevision, QueueRevisionMint, QueueSlot,
+    ExecSlot, PlaybackQueue, QueueItem, QueueLineage, QueueRevision, QueueRevisionMint, QueueSlot,
     QueueSlotId, QueueSource,
 };
 use std::sync::Arc;
@@ -75,9 +75,32 @@ impl QueueView {
         self.cursor = clamp_cursor(cursor, self.queue.len());
     }
 
+    pub fn clamp_cursor(&mut self) {
+        self.cursor = clamp_cursor(self.cursor, self.queue.len());
+    }
+
     #[must_use]
     pub fn slots(&self) -> &[QueueSlot] {
         self.queue.slots()
+    }
+
+    #[must_use]
+    pub fn slot(&self, id: QueueSlotId) -> Option<&QueueSlot> {
+        self.queue.slot(id)
+    }
+
+    #[must_use]
+    pub fn slot_pairs(&self) -> Vec<ExecSlot> {
+        self.queue.slot_pairs()
+    }
+
+    #[must_use]
+    pub fn items(&self) -> Vec<QueueItem> {
+        self.queue
+            .slots()
+            .iter()
+            .map(|slot| slot.item.clone())
+            .collect()
     }
 
     #[must_use]

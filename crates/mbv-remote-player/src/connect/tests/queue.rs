@@ -160,51 +160,6 @@ fn inbound_queue_op_result_follows_prior_state_event() {
 }
 
 #[test]
-fn adopt_queue_does_not_write_projection_before_owner_snapshot() {
-    let (remote, _events, commands) =
-        RemotePlayer::stub_with_command_rx(vec![make_media_item("existing")], 0);
-    let projected_before = remote.unified_queue_state().expect("stub queue projection");
-    let (before_revision, before_source, before_active_slot, before_slots) = (
-        projected_before.revision,
-        projected_before.source,
-        projected_before.active_slot,
-        projected_before
-            .slots
-            .iter()
-            .map(|slot| (slot.slot_id, slot.item.content_id()))
-            .collect::<Vec<_>>(),
-    );
-    assert!(remote.adopt_queue(
-        vec![QueueItem::Emby(Box::new(make_media_item("replacement")))],
-        0,
-        QueueSource::Album,
-    ));
-    let status = remote.status.lock().unwrap();
-    assert_eq!(status.current_idx, 0);
-    assert_eq!(status.queue_len, 1);
-    assert!(status.active);
-    drop(status);
-    let projected_after = remote
-        .unified_queue_state()
-        .expect("existing queue projection");
-    assert_eq!(projected_after.revision, before_revision);
-    assert_eq!(projected_after.source, before_source);
-    assert_eq!(projected_after.active_slot, before_active_slot);
-    assert_eq!(
-        projected_after
-            .slots
-            .iter()
-            .map(|slot| (slot.slot_id, slot.item.content_id()))
-            .collect::<Vec<_>>(),
-        before_slots
-    );
-    assert!(matches!(
-        commands.try_recv(),
-        Ok(CtrlCmd::UnifiedAdoptQueue { .. })
-    ));
-}
-
-#[test]
 fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     use std::net::Shutdown;
     use std::time::Duration;

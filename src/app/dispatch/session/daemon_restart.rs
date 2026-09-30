@@ -66,26 +66,16 @@ impl App {
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
         self.player.disconnect_remote();
         let always_play_next = self.config.lock().unwrap().always_play_next;
-        let mpris_remote = remote.clone();
-        self.player = PlayerProxy::remote(remote, always_play_next);
+        self.player = PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = remote_rx;
         self.suspended_local = None;
-        if let Some(handle) = &self.mpris {
-            let disconnected = mpris_remote.disconnected_flag();
-            mbv_desktop::mpris::rebind(
-                handle,
-                std::sync::Arc::clone(&mpris_remote.status),
-                move |transport| mpris_remote.send_transport(transport),
-                Some(disconnected),
-            );
-        }
+        self.rebind_mpris_to_current_player();
 
         self.local_view = bootstrap.local_view;
         self.reset_local_daemon_queue_view();
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);
-        debug_assert!(self.player.as_remote().is_some());
         self.advance_queue_epoch();
         self.sync_subtitle_prefs_to_player();
         self.next_up_item = None;

@@ -135,13 +135,7 @@ impl Model {
             .queue_scope_is_playback(scope)
             .then(|| self.app.pending_playback_slot())
             .flatten()
-            .filter(|target| {
-                self.app
-                    .queue_for_scope(scope)
-                    .slots()
-                    .iter()
-                    .any(|slot| slot.slot_id == *target)
-            })
+            .filter(|target| self.app.queue_for_scope(scope).slot(*target).is_some())
     }
 
     fn queue_projection_fingerprint(
@@ -199,24 +193,18 @@ impl Model {
             .bucket_only
             .then(|| {
                 let queue = self.app.queue_for_scope(update.scope);
-                update.fingerprint.active_target.and_then(|target| {
-                    queue
-                        .slots()
-                        .iter()
-                        .enumerate()
-                        .find(|(_, slot)| slot.slot_id == target)
-                        .map(|(index, slot)| {
-                            (
-                                target,
-                                mbv_components::queue::queue_media_row(
-                                    slot,
-                                    index,
-                                    update.playback,
-                                    update.pending_slot,
-                                ),
-                            )
-                        })
-                })
+                let target = update.fingerprint.active_target?;
+                let index = queue.slot_index(target)?;
+                let slot = queue.slots().get(index)?;
+                Some((
+                    target,
+                    mbv_components::queue::queue_media_row(
+                        slot,
+                        index,
+                        update.playback,
+                        update.pending_slot,
+                    ),
+                ))
             })
             .flatten();
     }
@@ -406,9 +394,7 @@ impl Model {
                 };
                 if active {
                     self.app.playback_queue_mut().set_cursor(current_idx);
-                    if self.app.player.as_remote().is_some() {
-                        self.app.set_queue_scope(QueueScope::Remote);
-                    }
+                    self.app.set_queue_scope(QueueScope::Remote);
                     // Jump-to-now-playing is an explicit, authoritative move.
                     self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_scope());
                 } else {

@@ -74,11 +74,7 @@ impl App {
     ) -> Option<usize> {
         self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         let slot_id = slot_id?;
-        let index = self
-            .displayed_queue()
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)?;
+        let index = self.displayed_queue().slot_index(slot_id)?;
         self.mark_queue_cursor_user_active();
         self.displayed_queue_mut().set_cursor(index);
         Some(index)

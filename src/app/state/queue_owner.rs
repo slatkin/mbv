@@ -14,8 +14,8 @@ impl App {
     pub(in crate::app) fn queue_origin(&self) -> Option<QueueOrigin> {
         let lineage = self
             .local_queue_player()
-            .as_remote()
-            .and_then(|remote| remote.unified_queue_state())
+            .remote()
+            .unified_queue_state()
             .map(|state| state.lineage)?;
         Some(QueueOrigin {
             epoch: self.queue_epoch,

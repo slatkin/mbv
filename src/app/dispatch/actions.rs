@@ -73,7 +73,7 @@ impl App {
     /// Return the audio-only fall-through decision for an explicit Emby play.
     /// Empty/unknown selections and Library routes remain on today's path.
     pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
-        let attached = self.connected_session_id.is_some() || self.player.as_remote().is_some();
+        let attached = true;
         let owner_is_audio_only = if self.connected_session_id.is_some() {
             self.session_owner_is_audio_only()
         } else {
@@ -507,8 +507,8 @@ impl App {
         let answered = self
             .queue_link(scope)
             .0
-            .as_remote()
-            .is_some_and(|remote| remote.supports_answered_queue_ops());
+            .remote()
+            .supports_answered_queue_ops();
         if !answered {
             return self.submit_queue_item_legacy_play(&item, scope);
         }
@@ -553,20 +553,11 @@ impl App {
         // The receiver is handed the owner-accepted queue, so the played
         // entry must already be an owner-accepted slot.
         if self.is_cast_attached() {
-            let selected_index = self
-                .queue_for_scope(scope)
-                .slots()
-                .iter()
-                .position(|slot| slot.slot_id == selected_slot);
+            let selected_index = self.queue_for_scope(scope).slot_index(selected_slot);
             let Some(selected_index) = selected_index else {
                 return false;
             };
-            let all_items = self
-                .queue_for_scope(scope)
-                .slots()
-                .iter()
-                .map(|slot| slot.item.clone())
-                .collect();
+            let all_items = self.queue_for_scope(scope).items();
             self.dispatch_selection_to_cast(all_items, selected_index);
             self.set_queue_scope(scope);
             if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -620,12 +611,7 @@ impl App {
         item: &QueueItem,
         scope: crate::app::QueueScope,
     ) -> bool {
-        let mut items = self
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .map(|slot| slot.item.clone())
-            .collect::<Vec<_>>();
+        let mut items = self.queue_for_scope(scope).items();
         let selected_index = items
             .iter()
             .position(|queued| queued.content_id() == item.content_id())

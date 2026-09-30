@@ -39,7 +39,7 @@ impl App {
     /// own host config — so without this, direct-daemon and `stay_alive`
     /// sessions would silently ignore the controlling client's language
     /// preferences until the user manually cycled subtitle mode once.
-    /// Call this right after any `self.player = PlayerProxy::remote(...)`
+    /// Call this right after any `self.player = PlayerProxy::from_remote(...)`
     /// assignment.
     pub(in crate::app) fn sync_subtitle_prefs_to_player(&mut self) {
         let prefs = {

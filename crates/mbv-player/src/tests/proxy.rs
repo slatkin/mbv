@@ -31,7 +31,7 @@ fn capability_abs_disabled() -> CtrlCompatibility {
 #[test]
 fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
     let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
-    let proxy = PlayerProxy::remote(remote, false);
+    let proxy = PlayerProxy::from_remote(remote, false);
 
     let paired = |item: QueueItem| ExecSlot {
         slot_id: QueueSlotId::from_raw(900),
@@ -42,36 +42,28 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
         vec![paired(proxy_audiobookshelf_item())],
         0,
         mbv_queue::QueueSource::Unknown,
-        None,
-        false,
-        100
     ));
-    assert!(proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     assert!(matches!(
         cmd_rx.recv().unwrap(),
         CtrlCmd::UnifiedQueueReplace { .. }
-    ));
-    assert!(matches!(
-        cmd_rx.recv().unwrap(),
-        CtrlCmd::UnifiedQueueAppend { .. }
     ));
 }
 
 #[test]
 fn owner_audio_only_reflects_remote_capability() {
     let (mut remote, _event_rx, _cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
-    assert!(!PlayerProxy::remote(remote.clone(), false).owner_is_audio_only());
+    assert!(!PlayerProxy::from_remote(remote.clone(), false).owner_is_audio_only());
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
     compatibility.supports_audio_only = true;
     remote.set_ctrl_compatibility_for_test(compatibility);
-    assert!(PlayerProxy::remote(remote, false).owner_is_audio_only());
+    assert!(PlayerProxy::from_remote(remote, false).owner_is_audio_only());
 }
 
 #[test]
 fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     remote.set_ctrl_compatibility_for_test(capability_abs_disabled());
-    let proxy = PlayerProxy::remote(remote, false);
+    let proxy = PlayerProxy::from_remote(remote, false);
 
     let paired = |item: QueueItem| ExecSlot {
         slot_id: QueueSlotId::from_raw(900),
@@ -82,10 +74,6 @@ fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
         vec![paired(proxy_audiobookshelf_item())],
         0,
         mbv_queue::QueueSource::Unknown,
-        None,
-        false,
-        100
     ));
-    assert!(!proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     cmd_rx.try_recv().unwrap_err();
 }

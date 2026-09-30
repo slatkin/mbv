@@ -243,13 +243,7 @@ impl App {
                 if !is_delete {
                     self.apply_stopped_slot_progress(slot_id, position_ticks, played);
                 }
-                if preserve_local_state
-                    && let Some(slot) = self
-                        .playback_queue()
-                        .slots()
-                        .iter()
-                        .find(|slot| slot.slot_id == slot_id)
-                {
+                if preserve_local_state && let Some(slot) = self.playback_queue().slot(slot_id) {
                     self.last_played_item_id = Some(slot.item.id().to_string());
                     self.last_played_completed = played;
                 }
@@ -302,12 +296,7 @@ impl App {
         position_ticks: i64,
         played: bool,
     ) {
-        let Some(slot) = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
-        else {
+        let Some(slot) = self.playback_queue().slot(slot_id) else {
             return;
         };
         let observation = mbv_queue::ProgressObservation::Stopped {
@@ -315,15 +304,10 @@ impl App {
             played,
         };
         let position = observation.position_to_record(&slot.item);
+        let feed_runtime =
+            matches!(slot.item, mbv_queue::QueueItem::Feed(_)).then(|| slot.item.runtime_ticks());
         // Persist Feed lifecycle state from the report; the owner publishes the queue update.
-        if let Some(slot) = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
-            && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
-        {
-            let runtime = slot.item.runtime_ticks();
+        if let Some(runtime) = feed_runtime {
             let feed_completed = played || (runtime > 0 && position >= runtime * 95 / 100);
             self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
@@ -377,21 +361,8 @@ impl App {
         else {
             return;
         };
-        if !self
-            .playback_queue()
-            .slots()
-            .iter()
-            .any(|slot| slot.slot_id == slot_id)
-        {
+        let Some(slot) = self.playback_queue().slot(slot_id) else {
             tracing::warn!(name: "consume.track_completed.slot_missing", target: "consume", slot = ?slot_id, "completed track has no live slot; dropping");
-            return;
-        }
-        let Some(slot) = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
-        else {
             return;
         };
         let observation = mbv_queue::ProgressObservation::Completed {
@@ -399,18 +370,13 @@ impl App {
             played,
         };
         let position = observation.position_to_record(&slot.item);
+        let feed_runtime =
+            matches!(slot.item, mbv_queue::QueueItem::Feed(_)).then(|| slot.item.runtime_ticks());
         // Persist Feed lifecycle state from the report. TrackCompleted with
         // `played` means EOF; for Feed entries,
         // only known-runtime EOF marks played (unknown runtime keeps
         // played=false per spec).
-        if let Some(slot) = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
-            && matches!(slot.item, mbv_queue::QueueItem::Feed(_))
-        {
-            let runtime = slot.item.runtime_ticks();
+        if let Some(runtime) = feed_runtime {
             let feed_completed = played && runtime > 0;
             self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
         }
@@ -443,15 +409,8 @@ impl App {
         // Activate by owner-assigned identity. Slot identity is stable
         // across the pending-removal consume above, so resolving it to
         // a display position afterward is order-independent.
-        let adjusted = if self
-            .playback_queue()
-            .slots()
-            .iter()
-            .any(|slot| slot.slot_id == target_slot_id)
-        {
-            self.playback_queue()
-                .slot_index(target_slot_id)
-                .unwrap_or(0)
+        let adjusted = if let Some(index) = self.playback_queue().slot_index(target_slot_id) {
+            index
         } else {
             tracing::warn!(name: "player.track_changed.slot_missing", target: "player", slot = ?target_slot_id, "track change has no live slot; skipping activation");
             let status = self.player.status.lock().unwrap();
@@ -569,20 +528,7 @@ impl App {
     /// `handle_player_event`).
     fn handle_queue_next_up(&mut self, next_idx: usize) {
         if let Some(item) = self.playback_queue().emby_item_at(next_idx).cloned() {
-            let item_id = item.id.clone();
-            let show_title = item.series_name.clone();
-            let ep_title = item.name.clone();
-            let artist = item.artist.clone();
-            self.next_up_item = Some(item.clone());
-            // Daemon sends NextUpShow to mpv directly; only send from local player.
-            if self.player.as_remote().is_none() {
-                let _ = self.player.send_command(PlayerCommand::NextUpShow {
-                    item_id,
-                    show_title,
-                    ep_title,
-                    artist,
-                });
-            }
+            self.next_up_item = Some(item);
         }
     }
 
@@ -609,11 +555,7 @@ impl App {
     /// exists and carries a feed identity. Shared by the pause and
     /// seek-completion paths (extracted from `handle_player_event`).
     fn persist_feed_slot_position(&mut self, slot_id: mbv_queue::QueueSlotId) {
-        if let Some(slot) = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
+        if let Some(slot) = self.playback_queue().slot(slot_id)
             && let mbv_queue::QueueItem::Feed(ref entry) = slot.item
             && entry.feed_id.is_some()
         {

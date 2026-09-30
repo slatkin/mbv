@@ -338,8 +338,7 @@ impl App {
             return;
         };
         let scope = self.viewed_queue_scope();
-        let bound = scope == self.playing_queue_scope()
-            && (self.player.as_remote().is_some() || self.player.status.lock().unwrap().active);
+        let bound = scope == self.playing_queue_scope();
         if bound && !self.player.can_admit_audiobookshelf() {
             self.flash(
                 "Audiobookshelf playback owner is unavailable".into(),

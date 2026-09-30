@@ -92,7 +92,6 @@ impl App {
             deferred_home_events: std::collections::VecDeque::new(),
             ws_rx: init.ws_rx,
             transport_rx: init.transport_rx,
-            transport_tx: init.transport_tx,
             ws_send_tx: init.ws_send_tx,
             audiobookshelf_socket_rx: init.audiobookshelf_socket_rx,
             audiobookshelf_socket_tx: init.audiobookshelf_socket_tx,

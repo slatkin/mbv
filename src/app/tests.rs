@@ -198,7 +198,7 @@ pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.status.lock().unwrap().volume_max = 100;
-    app.player = mbv_player::PlayerProxy::remote(remote, false);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app.player_rx = player_rx;
     cmd_rx
 }
@@ -266,11 +266,11 @@ pub(crate) fn make_built_app() -> App {
     let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     remote.status.lock().unwrap().volume_max = 100;
     let (_, ws_rx) = std::sync::mpsc::channel();
-    let (transport_tx, transport_rx) = std::sync::mpsc::channel();
+    let (_, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
-    let player = PlayerProxy::remote(remote, false);
+    let player = PlayerProxy::from_remote(remote, false);
 
     let config = crate::config::Config::default();
 
@@ -284,7 +284,6 @@ pub(crate) fn make_built_app() -> App {
         player_rx,
         ws_rx,
         transport_rx,
-        transport_tx,
         ws_send_tx: None,
         audiobookshelf_socket_rx: {
             let (_, rx) = std::sync::mpsc::channel();

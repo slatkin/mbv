@@ -7,14 +7,7 @@ impl App {
     }
 
     pub(in crate::app) fn has_direct_remote_queue(&self) -> bool {
-        self.player.as_remote().is_some() && self.has_remote_queue()
-    }
-
-    /// Whether the scope's canonical queue is the playback owner's accepted
-    /// submission. The Stay-alive owner is authoritative from its snapshots,
-    /// while direct remote scope is already independently projected.
-    pub(in crate::app) fn local_queue_is_owner_queue(&self, _scope: QueueScope) -> bool {
-        self.player.as_remote().is_some()
+        self.has_remote_queue()
     }
 
     /// Return the Player link and event receiver that own the requested
@@ -57,10 +50,7 @@ impl App {
         scope: QueueScope,
         slot_id: QueueSlotId,
     ) -> Option<usize> {
-        self.queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)
+        self.queue_for_scope(scope).slot_index(slot_id)
     }
 
     pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut QueueView {
@@ -175,12 +165,7 @@ impl App {
         slot_id: QueueSlotId,
         consume: bool,
     ) -> (bool, bool) {
-        let item = self
-            .playback_queue()
-            .slots()
-            .iter()
-            .find(|slot| slot.slot_id == slot_id)
-            .map(|slot| &slot.item);
+        let item = self.playback_queue().slot(slot_id).map(|slot| &slot.item);
         let is_video = item.is_some_and(mbv_queue::QueueItem::is_video);
         let is_audio = item.is_some_and(mbv_queue::QueueItem::is_audio);
         let (consume_videos, consume_audio) = {
