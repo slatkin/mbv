@@ -8,7 +8,7 @@
 
 ## 2. Shared owner-terminate helper (`src/single_instance.rs`, `src/main.rs`)
 
-- [ ] 2.1 Add `pub fn terminate_owner(lock: &Path) -> Result<u32, TerminateOwnerError>` to `single_instance.rs` (enum `NoOwnerPid` / `Signal(io::Error)`, with `Display`; no `anyhow`/`thiserror`), containing the `read_pid` + `libc::kill(pid, SIGTERM)` body currently inline in `stop_running_instance`, including its `// SAFETY:` comment. Rewrite `stop_running_instance` to call it and print the same three messages as today (`quit signal sent (pid N)`, `failed to signal pid N: …`, `no running instance found; …`) with the same exit codes. No new test: the signal is a live side effect and the `mbv -q` path has no existing test. Verify: `cargo check -p mbv`, and read the diff to confirm the message strings are byte-identical.
+- [x] 2.1 Add `pub fn terminate_owner(lock: &Path) -> Result<u32, TerminateOwnerError>` to `single_instance.rs` (enum `NoOwnerPid` / `Signal(io::Error)`, with `Display`; no `anyhow`/`thiserror`), containing the `read_pid` + `libc::kill(pid, SIGTERM)` body currently inline in `stop_running_instance`, including its `// SAFETY:` comment. Rewrite `stop_running_instance` to call it and print the same three messages as today (`quit signal sent (pid N)`, `failed to signal pid N: …`, `no running instance found; …`) with the same exit codes. No new test: the signal is a live side effect and the `mbv -q` path has no existing test. Verify: `cargo check -p mbv`, and read the diff to confirm the message strings are byte-identical.
 
 ## 3. Prompt and follow-up decision (new `src/owner_restart.rs`)
 
