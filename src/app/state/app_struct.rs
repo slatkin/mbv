@@ -211,8 +211,6 @@ pub struct App {
     pub(in crate::app) panel_mode: PanelMode,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
-    pub(in crate::app) emby_catalog_ready: bool,
-    pub(in crate::app) audiobookshelf_catalog_ready: bool,
     /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
     /// of change `per-destination-item-navigation`): set when the recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`

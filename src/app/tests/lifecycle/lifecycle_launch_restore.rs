@@ -17,20 +17,20 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
     };
     app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(saved.clone());
     app.resolve_library_tab_pending();
-    assert_eq!(
-        app.tab,
-        TabSelection::Home,
-        "catalog identity is not ready yet"
-    );
+    assert_eq!(app.tab, TabSelection::Home, "catalog has not arrived yet");
     assert!(matches!(
         app.launch_restore,
         crate::app::state::app_struct::LaunchRestore::Pending(_)
     ));
 
-    app.emby_catalog_ready = true;
-    app.resolve_library_tab_pending();
+    let views: Vec<mbv_emby_model::EmbyItem> = app
+        .libs
+        .iter()
+        .map(|library| library.library.clone())
+        .collect();
+    app.rebuild_library_tabs_from_views(&views);
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
-    // #810: tab resolution binds the destination to the selected tab.
+    // #810: catalog arrival binds the destination to the selected tab.
     assert_eq!(
         app.launch_restore,
         crate::app::state::app_struct::LaunchRestore::TabSettled {
@@ -40,31 +40,16 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
     );
 }
 
-/// A local-daemon/remote launch attaches a live Emby client at construction
-/// and never spawns the Emby startup worker, so `apply_emby_bootstrap` never
-/// runs. Its live catalog arrives through `fetch_home`'s view rebuild, which
-/// must mark the catalog ready or the saved launch tab never resolves. The
-/// resolved tab must also load its library's content, not just select the
-/// tab, or the panel's owner is empty and the tab paints blank.
+/// The selected tab must load its library's content, not just select the
+/// tab, or the panel's owner is empty and the tab paints blank. #810 regression.
 #[test]
 fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.emby_catalog_ready = false;
-
     let mut second_library = make_item("Shows", "CollectionFolder");
     second_library.id = "lib-shows".into();
     second_library.is_folder = true;
     second_library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(second_library));
-
-    let views: Vec<mbv_emby_model::EmbyItem> =
-        app.libs.iter().map(|lib| lib.library.clone()).collect();
-    app.rebuild_library_tabs_from_views(&views);
-    assert!(
-        app.emby_catalog_ready,
-        "rebuilding tabs from live views is the Emby catalog boundary"
-    );
-
     app.tab = TabSelection::Home;
     app.launch_restore =
         crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
@@ -78,7 +63,12 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
             item: None,
         });
 
-    app.resolve_library_tab_pending();
+    let views: Vec<mbv_emby_model::EmbyItem> = app
+        .libs
+        .iter()
+        .map(|library| library.library.clone())
+        .collect();
+    app.rebuild_library_tabs_from_views(&views);
 
     assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
     assert!(matches!(
@@ -91,13 +81,51 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
         "the restored tab must load its root level"
     );
     assert!(app.libs[1].nav_stack[0].loading);
-    assert!(
-        matches!(
-            app.launch_restore,
-            crate::app::state::app_struct::LaunchRestore::TabSettled { .. }
-        ),
-        "destination state remains for the pill/item re-anchor"
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled { .. }
+    ));
+}
+
+/// A daemon attach has a live Emby client but no startup worker; `fetch_home`
+/// supplies the catalog and must resolve launch restoration (#810).
+#[test]
+fn daemon_attach_fetch_home_restores_service_tab_without_startup_worker() {
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.tab = TabSelection::Home;
+    app.launch_restore =
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_config::TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "lib-movies".into(),
+            },
+            panel_focus: mbv_config::LaunchPanelFocus::Library,
+            selector: None,
+            item: None,
+        });
+    let http = mbv_net::mock_http::MockHttp::new();
+    http.respond(
+        200,
+        r#"[{"ItemId":"lib-movies","Name":"Movies","CollectionType":"movies"}]"#,
     );
+    http.respond(200, r#"{"Items":[]}"#);
+    http.respond(200, r#"{"Items":[]}"#);
+    app.config.lock().unwrap().server_url = "http://127.0.0.1:1".into();
+    let mut client =
+        mbv_emby::EmbyClient::new(app.config.lock().unwrap().clone()).with_test_agent(http.agent());
+    client.user_id = "user".into();
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    app.fetch_home().expect("daemon-attach catalog fetch");
+
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::TabSettled { .. }
+    ));
 }
 
 #[test]
@@ -115,7 +143,6 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
             item: None,
         });
     app.set_library_tab(0);
-    app.emby_catalog_ready = true;
     app.resolve_library_tab_pending();
 
     assert_eq!(app.tab, TabSelection::Home);

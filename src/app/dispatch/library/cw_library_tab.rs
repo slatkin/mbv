@@ -5,8 +5,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
 impl App {
-    /// Resolve the saved launch identity on the shell sync pass.
-    /// Service identities wait until their catalog is marked ready.
+    /// Resolve the saved Home or Feeds identity on the shell sync pass.
     pub(in crate::app) fn resolve_library_tab_pending(&mut self) {
         let LaunchRestore::Pending(state) = &self.launch_restore else {
             return;
@@ -20,9 +19,7 @@ impl App {
                     Some(TabSelection::Home)
                 }
             }
-            TabIdentity::ServiceLibrary { kind, library_id } => {
-                self.resolve_service_tab(*kind, library_id)
-            }
+            TabIdentity::ServiceLibrary { .. } => None,
         };
         if let Some(tab) = resolved {
             // The snapshot names a tab, not a browse position, so the
@@ -34,30 +31,31 @@ impl App {
         }
     }
 
-    fn resolve_service_tab(&self, kind: ServiceKind, library_id: &str) -> Option<TabSelection> {
-        match kind {
-            ServiceKind::Emby => {
-                if !self.emby_catalog_ready {
-                    return None;
-                }
-                Some(
-                    self.libs
+    /// Resolve a saved Service identity only after its catalog has been built.
+    pub(in crate::app) fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
+        let tab = match &self.launch_restore {
+            LaunchRestore::Pending(state) => match &state.tab {
+                TabIdentity::ServiceLibrary {
+                    kind: saved_kind,
+                    library_id,
+                } if *saved_kind == kind => Some(match kind {
+                    ServiceKind::Emby => self
+                        .libs
                         .iter()
-                        .position(|library| library.library.id == library_id)
+                        .position(|library| library.library.id == *library_id)
                         .map_or(TabSelection::Home, TabSelection::EmbyLibrary),
-                )
-            }
-            ServiceKind::Audiobookshelf => {
-                if !self.audiobookshelf_catalog_ready {
-                    return None;
-                }
-                Some(
-                    self.audiobookshelf_libraries
+                    ServiceKind::Audiobookshelf => self
+                        .audiobookshelf_libraries
                         .iter()
-                        .position(|library| library.id == library_id)
+                        .position(|library| library.id == *library_id)
                         .map_or(TabSelection::Home, TabSelection::AudiobookshelfLibrary),
-                )
-            }
+                }),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(tab) = tab {
+            self.select_tab(tab);
         }
     }
 

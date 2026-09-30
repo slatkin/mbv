@@ -311,7 +311,6 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
         "the catalog completion must be reported"
     );
 
-    assert!(app.audiobookshelf_catalog_ready);
     assert_eq!(app.audiobookshelf_libraries.len(), 2);
     assert_eq!(
         app.audiobookshelf_browse.len(),
@@ -439,7 +438,6 @@ fn music_two_artist_stale_pf() -> App {
     app.tab = crate::app::TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.music_levels = vec!["group".into(), "album".into()];
-    app.emby_catalog_ready = true;
     let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
     library.is_folder = true;

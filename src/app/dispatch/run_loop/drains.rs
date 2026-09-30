@@ -117,8 +117,6 @@ impl App {
             mbv_audiobookshelf::AudiobookshelfBookProgress,
         >,
     ) {
-        // This completion is the live Audiobookshelf catalog boundary for stable tab restoration.
-        self.audiobookshelf_catalog_ready = true;
         self.audiobookshelf_libraries = libraries;
         self.audiobookshelf_browse = self
             .audiobookshelf_libraries
@@ -138,6 +136,7 @@ impl App {
         }
         self.apply_audiobookshelf_catalog_progress(progress, book_progress);
         self.start_audiobookshelf_catalog_fetches(generation);
+        self.resolve_launch_service_tab(mbv_queue::ServiceKind::Audiobookshelf);
     }
 
     fn apply_audiobookshelf_catalog_progress(

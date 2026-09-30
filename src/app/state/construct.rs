@@ -151,8 +151,6 @@ impl App {
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.
             launch_restore,
-            emby_catalog_ready: false,
-            audiobookshelf_catalog_ready: false,
             pending_navigate_tab_switch: None,
             pending_series_landing: None,
             pending_series_handoff: None,
