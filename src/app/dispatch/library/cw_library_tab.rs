@@ -1,38 +1,12 @@
 use crate::app::{App, PanelFocus, TabSelection};
-use mbv_config::{
-    AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
-    LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity, TUI_LAUNCH_STATE_VERSION, TabIdentity,
-    TuiLaunchState,
-};
+use mbv_config::TabIdentity;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 
 impl App {
-    /// Resolve the one startup launch intent against the current live
-    /// Service catalogs. Stable IDs are matched only after their owning
-    /// catalog has arrived; no saved presentation index is consulted.
-    ///
-    /// The tab identity is consumed here, while the complete snapshot stays
-    /// pending for destination-level restoration (task 3.2). Explicit tab
-    /// movement clears both levels in `apply_tab_position`.
+    /// Resolve the saved launch identity on the shell sync pass.
+    /// Service identities wait until their catalog is marked ready.
     pub(in crate::app) fn resolve_library_tab_pending(&mut self) {
-        self.migrate_legacy_launch_state();
-        // Keep the pre-launch-state numeric fallback alive for the existing
-        // test seam. A legacy on-disk preference is converted above before
-        // this path runs; new snapshots always take the branch below.
-        if self.pending_launch_state.is_none()
-            && self.library_tab_pending > 0
-            && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
-        {
-            let fp = self.feeds_tab_pos();
-            let emby = self.libs.len();
-            let audio = self.audiobookshelf_libraries.len();
-            let max_pos = fp.unwrap_or(emby + audio);
-            let pos = self.library_tab_pending.min(max_pos);
-            self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
-            self.library_tab_pending = 0;
-            return;
-        }
         let Some(state) = self.pending_launch_state.as_ref() else {
             return;
         };
@@ -62,143 +36,6 @@ impl App {
             // snapshot's pill and item over this loaded root.
             self.settle_tab_selection();
         }
-    }
-
-    /// Derive one bounded launch snapshot from the old selected-tab and
-    /// browse-position files. The old tab position is used only to identify
-    /// the currently selected destination while its catalog is available; it
-    /// is never copied into the new snapshot. Browse cursors are deliberately
-    /// ignored: only stable focused-item IDs and fixed letter buckets are
-    /// recoverable identities.
-    fn migrate_legacy_launch_state(&mut self) {
-        if self.pending_launch_state.is_some() || self.legacy_launch_migration_attempted {
-            return;
-        }
-        let Some(position) = self.legacy_launch_tab else {
-            self.legacy_launch_migration_attempted = true;
-            return;
-        };
-        let Some(tab) = self.legacy_tab_identity(position) else {
-            // The selected Service catalog has not arrived yet. Keep the
-            // legacy input armed, but do not derive from a partial catalog.
-            return;
-        };
-        self.legacy_launch_migration_attempted = true;
-
-        let (selector, item) = match tab {
-            TabSelection::EmbyLibrary(index) => self
-                .libs
-                .get(index)
-                .and_then(|library| self.legacy_position_for_key(&library.library.id))
-                .map_or((None, None), |position| {
-                    Self::legacy_identities(&position, false)
-                }),
-            TabSelection::AudiobookshelfLibrary(index) => self
-                .audiobookshelf_position_key(index)
-                .and_then(|key| self.legacy_position_for_key(key.as_str()))
-                .map_or((None, None), |position| {
-                    Self::legacy_identities(&position, true)
-                }),
-            TabSelection::Home | TabSelection::Feeds => (None, None),
-        };
-        let tab = match tab {
-            TabSelection::Home => TabIdentity::Home,
-            TabSelection::Feeds => TabIdentity::Feeds,
-            TabSelection::EmbyLibrary(index) => TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: self.libs[index].library.id.clone(),
-            },
-            TabSelection::AudiobookshelfLibrary(index) => TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Audiobookshelf,
-                library_id: self.audiobookshelf_libraries[index].id.clone(),
-            },
-        };
-        self.pending_launch_state = Some(TuiLaunchState {
-            version: TUI_LAUNCH_STATE_VERSION,
-            tab,
-            panel_focus: match self.panel_focus {
-                PanelFocus::Library => LaunchPanelFocus::Library,
-                PanelFocus::Queue => LaunchPanelFocus::Queue,
-            },
-            selector,
-            item,
-        });
-        self.pending_launch_tab_resolved = false;
-    }
-
-    fn legacy_tab_identity(&self, position: usize) -> Option<TabSelection> {
-        if position == 0 {
-            return Some(TabSelection::Home);
-        }
-        let emby_configured = self.config.lock().unwrap().emby_setup.is_some();
-        if emby_configured && !self.emby_catalog_ready {
-            return None;
-        }
-        if position <= self.libs.len() {
-            return Some(TabSelection::EmbyLibrary(position - 1));
-        }
-        let audiobookshelf_configured = self.config.lock().unwrap().audiobookshelf_setup.is_some();
-        if audiobookshelf_configured && !self.audiobookshelf_catalog_ready {
-            return None;
-        }
-        if position <= self.libs.len() + self.audiobookshelf_libraries.len() {
-            return Some(TabSelection::AudiobookshelfLibrary(
-                position - self.libs.len() - 1,
-            ));
-        }
-        Some(if self.has_feeds_subscriptions() {
-            TabSelection::Feeds
-        } else {
-            TabSelection::Home
-        })
-    }
-
-    fn legacy_position_for_key(&self, key: &str) -> Option<mbv_queue::LibraryPosition> {
-        self.library_position_state.libraries.get(key).cloned()
-    }
-
-    fn legacy_identities(
-        position: &mbv_queue::LibraryPosition,
-        audiobookshelf: bool,
-    ) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let root = position.levels.first();
-        let selector = if audiobookshelf {
-            root.and_then(|level| {
-                level
-                    .item_types
-                    .as_deref()
-                    .filter(|kind| *kind == "book")
-                    .and_then(|_| {
-                        level
-                            .letter_filter_index
-                            .and_then(AudiobookshelfBookBucket::from_bucket_index)
-                    })
-                    .map(|key| SelectorIdentity::Audiobookshelf {
-                        key: AudiobookshelfSelectorKey::BookBucket(key),
-                    })
-            })
-        } else {
-            root.and_then(|level| {
-                level
-                    .letter_filter_index
-                    .and_then(EmbyLetterBucket::from_index)
-                    .map(|key| SelectorIdentity::Emby {
-                        key: EmbySelectorKey::Letter(key),
-                    })
-            })
-        };
-        let item_level =
-            root.filter(|level| !audiobookshelf || level.item_types.as_deref() == Some("book"));
-        let item = item_level
-            .and_then(|level| level.focused_item_id.clone())
-            .map(|id| {
-                if audiobookshelf {
-                    LibraryItemIdentity::Audiobookshelf { id }
-                } else {
-                    LibraryItemIdentity::Emby { id }
-                }
-            });
-        (selector, item)
     }
 
     fn resolve_service_tab(&self, kind: ServiceKind, library_id: &str) -> Option<TabSelection> {
@@ -269,8 +106,6 @@ impl App {
         // saved tab or its destination identities.
         self.pending_launch_tab_resolved = false;
         self.pending_launch_state = None;
-        self.legacy_launch_tab = None;
-        self.legacy_launch_migration_attempted = true;
         self.tab = TabSelection::from_position_with_counts(
             pos,
             self.libs.len(),

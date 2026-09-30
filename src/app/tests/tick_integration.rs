@@ -41,9 +41,16 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 }
 
 #[test]
-fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
+fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.library_tab_pending = 1;
+    app.panel_focus = PanelFocus::Library;
+    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Queue,
+        selector: None,
+        item: None,
+    });
     let mut harness = TickHarness::new(app);
 
     // One production tick (no events reach the app) + the sync pass; no draw
@@ -58,16 +65,8 @@ fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
     }
     harness.model_mut().sync_mounted_surfaces();
 
-    assert_eq!(
-        harness.model().app.library_tab_pending,
-        0,
-        "the pending tab is consumed"
-    );
-    assert_eq!(
-        harness.model().app.tab,
-        TabSelection::EmbyLibrary(0),
-        "the pending position resolves onto the loaded library"
-    );
+    assert_eq!(harness.model().app.tab, TabSelection::Home);
+    assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
 }
 
 fn queue_focused_harness() -> TickHarness {

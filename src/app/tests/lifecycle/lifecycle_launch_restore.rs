@@ -5,7 +5,7 @@ use mbv_ui_model::library::LibraryKey;
 fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
-    app.pending_launch_state = Some(mbv_config::TuiLaunchState {
+    let saved = mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
@@ -14,7 +14,8 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
         panel_focus: mbv_config::LaunchPanelFocus::Library,
         selector: None,
         item: None,
-    });
+    };
+    app.pending_launch_state = Some(saved.clone());
     app.resolve_library_tab_pending();
     assert_eq!(
         app.tab,
@@ -27,10 +28,8 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
     app.resolve_library_tab_pending();
     assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
     assert!(app.pending_launch_tab_resolved);
-    assert!(
-        app.pending_launch_state.is_some(),
-        "destination state remains for 3.2"
-    );
+    // #810: tab resolution consumes the destination, not the stored snapshot.
+    assert_eq!(app.pending_launch_state, Some(saved));
 }
 
 /// A local-daemon/remote launch attaches a live Emby client at construction
