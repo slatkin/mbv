@@ -2,7 +2,9 @@
 
 ## Purpose
 Defines secure Audiobookshelf API-key setup, identity validation, runtime availability, and connection testing without introducing catalog or playback behavior.
+
 ## Requirements
+
 ### Requirement: Audiobookshelf setup validates an API-key identity before commit
 mbv SHALL accept an Audiobookshelf server URL and API key through Services settings, send the key as `Authorization: Bearer <api-key>` to `GET /api/me`, and commit the setup only when the response confirms the associated active user. Audiobookshelf setup SHALL NOT offer a username/password flow.
 
@@ -138,22 +140,7 @@ A Local daemon and packaged `mbvd` SHALL load their owner-scoped Audiobookshelf 
 - **WHEN** an owner constructs Audiobookshelf owner context
 - **THEN** it SHALL load the same stable, non-secret device identifier used by every Audiobookshelf playback session request
 
-### Requirement: Committed Audiobookshelf owner state is reconciled by rereading owner storage
-Committed Audiobookshelf owner state SHALL be reconciled by signaling what changed and making the owner reread its own storage. The owner SHALL compare the persisted revision to the signaled revision, apply the committed state when they match, and reject a stale signal. Bare mode SHALL invoke the same semantic operation directly, without a ctrl round trip.
-
-#### Scenario: Owner applies a matching revision
-- **WHEN** an owner receives a reconciliation signal whose revision equals the persisted Audiobookshelf setup revision
-- **THEN** the owner SHALL reread its own setup and secret and install the committed runtime state with an advanced generation
-
-#### Scenario: Owner rejects a mismatched revision
-- **WHEN** an owner receives a reconciliation signal whose revision differs from the persisted setup revision
-- **THEN** the owner SHALL reject the signal and keep the installed runtime unchanged
-
-#### Scenario: Bare mode applies directly
-- **WHEN** bare-mode mbv commits an Audiobookshelf setup, repair, replacement, or removal
-- **THEN** the in-process owner SHALL apply the committed state directly without signaling another process
-
-### Requirement: Bare-mode Audiobookshelf changes apply to a running same-user Local daemon
+### Requirement: Audiobookshelf changes apply to a running same-user Local daemon
 After mbv commits an Audiobookshelf setup, repair, replacement, or removal through Services, a running same-user Local daemon SHALL adopt the committed state when possible by rereading its own storage. The durable commit SHALL be preserved whether or not a running Local daemon acknowledges it.
 
 #### Scenario: Running Local daemon adopts the commit
@@ -188,7 +175,6 @@ A different-server Audiobookshelf replacement and an Audiobookshelf removal SHAL
 - **THEN** the owner SHALL continue treating Audiobookshelf podcast episodes as unplayable
 - **THEN** no Audiobookshelf item SHALL enter a daemon Bound queue or start playback
 
-
 ### Requirement: Audiobookshelf teardown purges every Audiobookshelf queue-item shape
 Audiobookshelf Service replacement or removal SHALL finalize an active Audiobookshelf lifecycle and remove every Audiobookshelf-owned slot from the affected owner's live and persisted queue state. This SHALL include both podcast episodes and books while preserving Emby items and Feed entries.
 
@@ -205,3 +191,14 @@ Audiobookshelf Service replacement or removal SHALL finalize an active Audiobook
 #### Scenario: Interactive process removes Audiobookshelf
 - **WHEN** the interactive process removes Audiobookshelf from either a Composed queue or its in-process owner's Bound queue
 - **THEN** both Audiobookshelf queue-item shapes SHALL be purged through the same Service-owned-state rule
+
+### Requirement: Committed Audiobookshelf owner state is reconciled by the owner rereading its storage
+Committed Audiobookshelf owner state SHALL be reconciled by signaling what changed and making the owner reread its own storage. The owner SHALL compare the persisted revision to the signaled revision, apply the committed state when they match, and reject a stale signal.
+
+#### Scenario: Owner applies a matching revision
+- **WHEN** an owner receives a reconciliation signal whose revision equals the persisted Audiobookshelf setup revision
+- **THEN** the owner SHALL reread its own setup and secret and install the committed runtime state with an advanced generation
+
+#### Scenario: Owner rejects a mismatched revision
+- **WHEN** an owner receives a reconciliation signal whose revision differs from the persisted setup revision
+- **THEN** the owner SHALL reject the signal and keep the installed runtime unchanged

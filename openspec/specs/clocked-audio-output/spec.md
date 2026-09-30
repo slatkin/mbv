@@ -6,7 +6,7 @@ Define responsive packaged-daemon playback through a hardware-paced ALSA endpoin
 ## Requirements
 
 ### Requirement: Packaged mbvd defaults to clocked ALSA output
-Packaged `mbvd` SHALL use clocked ALSA device output when `audio_pipe_enabled` is absent or false. Owner-local configuration SHALL accept an `audio_device` value equal to `alsa` or beginning with `alsa/`; an absent value SHALL resolve to `alsa`. Bare-mode and Local-daemon output defaults SHALL remain unchanged.
+Packaged `mbvd` SHALL use clocked ALSA device output when `audio_pipe_enabled` is absent or false. Owner-local configuration SHALL accept an `audio_device` value equal to `alsa` or beginning with `alsa/`; an absent value SHALL resolve to `alsa`. Local-daemon output defaults SHALL remain unchanged.
 
 #### Scenario: Packaged daemon uses inherited output
 - **WHEN** packaged `mbvd` starts a Playback run without an explicit pipe selection or ALSA device
@@ -18,7 +18,7 @@ Packaged `mbvd` SHALL use clocked ALSA device output when `audio_pipe_enabled` i
 - **THEN** that run selects exactly `alsa/hw:Loopback,0,0`
 
 #### Scenario: Another Player owner starts playback
-- **WHEN** bare mode or the Local daemon starts a Playback run without an explicit audio-device setting
+- **WHEN** the Local daemon starts a Playback run without an explicit audio-device setting
 - **THEN** its existing audio-output selection remains unchanged
 
 ### Requirement: ALSA device configuration is validated and daemon-bound

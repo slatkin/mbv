@@ -29,9 +29,9 @@ Queue SHALL project selectable rows with stable opaque `QueueSlotId` targets and
 
 The now-playing row SHALL show its total duration like every other row. It SHALL project the `NowPlaying` semantic state with live progress following the playback position; the live percentage renders inline as trailing metadata, exactly as resume progress does. No throbber glyph SHALL appear in the row. When runtime is unknown the row SHALL project no `progress_percent` and show no duration. A non-active row SHALL project its stored resume position as inline trailing progress metadata, whatever the item's provider kind — feed, Audiobookshelf, or Emby — with the duration slot unchanged. The playing row's live ticks SHALL win over that stored position.
 
-The projection's semantic active state — which queue scope is playing, which slot within it, and whether that slot is confirmed by the playback owner or is an optimistic prediction awaiting confirmation — SHALL be one owned value, reconciled against playback-owner status in one place outside the render path. An optimistic prediction SHALL record why it is optimistic: a queue edit relocated the still-playing item, or a different item was selected to play. Reconciliation SHALL clear a prediction once the owner's reported slot and queue length match it.
+The projection's semantic active state — which queue scope is playing, which slot within it, and whether that slot is observed by the Player owner or is the owner's pending transition awaiting observation — SHALL be one owned value derived from the adopted owner snapshot outside the render path. The Client SHALL NOT originate a prediction of its own: a pending slot SHALL come only from the transition the owner published.
 
-While a prediction says a different item was selected, the projection SHALL report that item's slot as now-playing with no `progress_percent` until reconciliation confirms it. While a prediction says the still-playing item was relocated, and whenever the active slot is confirmed, `progress_percent` SHALL follow the live playback position.
+While the owner's pending transition names a different slot from the observed one, the projection SHALL report the pending slot as now-playing with no `progress_percent` until the owner observes it. Whenever the active slot is observed, `progress_percent` SHALL follow the live playback position.
 
 `QueueRevision` SHALL be authoritative for every mutation that changes a projected row (slot add/remove/move/replace, item replacement, progress application, refresh merge); queue replacement SHALL invalidate previously issued revisions. Queue rows SHALL rebuild only when the `(viewed_scope, revision, playback.active, projected active target, progress-percentage bucket)` fingerprint changes. The no-change tick path SHALL perform no slot clone, no row projection, and no row push. A change to the progress bucket alone SHALL patch the now-playing row in place rather than rebuild every row. Cursor pushes and scope/chrome/title delivery SHALL NOT be gated by the fingerprint: they are delivered on every tick regardless of whether rows changed.
 
@@ -78,15 +78,15 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 #### Scenario: Selecting a different item to play
 
-- **WHEN** the user starts a different queue item and the playback owner has not yet reported the change
-- **THEN** the projection reports the newly selected slot as now-playing
-- **AND** it reports no progress for that slot until the owner confirms the change
+- **WHEN** the user starts a different queue item and the owner has published it as its pending transition but not yet observed it
+- **THEN** the projection reports the pending slot as now-playing
+- **AND** it reports no progress for that slot until the owner observes it
 - **AND** it never carries the previously playing item's position or runtime onto the new slot
 
 #### Scenario: A queue edit relocates the playing item
 
-- **WHEN** a queue edit moves or removes rows such that the still-playing item's index changes, before the playback owner reports the new index
-- **THEN** the projection reports the item's new index as now-playing
+- **WHEN** a queue edit moves or removes rows such that the still-playing item's index changes
+- **THEN** the projection reports the item's new index as now-playing from the owner's answering snapshot
 - **AND** it keeps that item's existing progress unchanged
 
 #### Scenario: Paused playback keeps state without animation
@@ -109,8 +109,8 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 #### Scenario: Predicted selection shows no progress
 
-- **WHEN** a prediction says a different item was selected and the owner has not yet confirmed it
-- **THEN** the newly selected slot renders as now-playing with no percentage
+- **WHEN** the owner's pending transition names a different item and the owner has not yet observed it
+- **THEN** the pending slot renders as now-playing with no percentage
 - **AND** its duration slot shows that item's own total duration, like every other row
 - **AND** it never carries the previously playing item's position or runtime
 
@@ -129,8 +129,8 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 #### Scenario: Reconciliation does not run during paint
 
 - **WHEN** the queue projection or playback indicator is read to render a frame
-- **THEN** reading it does not consume or clear any pending prediction
-- **AND** predictions are cleared only by the single reconciliation step that runs against playback-owner status
+- **THEN** reading it does not change the derived active state
+- **AND** the active state changes only when an owner snapshot is adopted
 
 ### Requirement: Queue preserves the visual contract through continuous verification
 
@@ -202,21 +202,6 @@ SHALL be told to make the same move addressed by slot identity.
 - **WHEN** the user drags the currently playing Queue entry to a new position
 - **THEN** playback continues on that entry uninterrupted
 - **AND** the playing position tracks the entry's new index
-
-### Requirement: Prediction is cleared by reconciliation
-
-When a local owner rejects a slot-addressed playback command, it SHALL emit `CommandRejected`. The Client SHALL clear the in-flight bare playhead transition on that event; rejection SHALL NOT wait for the blind transition timeout. A replacement that has not been explicitly submitted SHALL not reseat or claim a new now-playing row.
-
-#### Scenario: A rejected jump clears its prediction immediately
-
-- **WHEN** the local owner reports `CommandRejected` for a slot-addressed command
-- **THEN** the Client clears the in-flight bare playhead transition at once
-- **AND** no now-playing prediction survives on the timeout alone
-
-#### Scenario: A populate-only replacement claims nothing
-
-- **WHEN** a queue replacement has not been explicitly submitted to the playing owner
-- **THEN** no slot of that replacement is presented as the playing row
 
 ### Requirement: A queue revision names one queue state
 
