@@ -155,7 +155,15 @@ fn audiobookshelf_catalog_disconnect_then_success_keeps_tab_unchanged() {
 
     app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
-        Ok((Vec::new(), HashMap::new(), HashMap::new())),
+        Ok((
+            vec![mbv_audiobookshelf::AudiobookshelfLibrary {
+                id: "abs-books".into(),
+                name: "Books".into(),
+                media_type: "book".into(),
+            }],
+            HashMap::new(),
+            HashMap::new(),
+        )),
     ));
     assert!(app.drain_audiobookshelf_events());
     assert_eq!(app.tab, TabSelection::Home);
