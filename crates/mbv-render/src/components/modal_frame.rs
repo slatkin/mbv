@@ -1,39 +1,30 @@
 use super::backdrop::dim_backdrop;
 use mbv_theme as palette;
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
-use ratatui::widgets::{Block, Borders, Clear};
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Style};
+use ratatui::widgets::{Block, Clear};
 
 /// Columns the storm side borders add to a modal's content width (2 each
 /// side).
 const FRAME_COLUMNS: u16 = 4;
-/// Rows the frame adds around a modal's content height: the top band under
-/// the header and the bottom row. The header row was already part of the
-/// height callers pass.
+/// Rows the frame adds around a modal's content height: the top band and the
+/// bottom row.
 const FRAME_ROWS: u16 = 2;
 
 /// The painted modal's outer rect and its content area.
 #[derive(Debug)]
 pub struct ModalFrame {
-    /// The whole modal, including the header and border bands — the
-    /// click-outside boundary for pointer handling.
+    /// The whole modal, including the border bands — the click-outside
+    /// boundary for pointer handling.
     pub outer: Rect,
-    /// The content area inside the header and border bands.
+    /// The content area inside the border bands.
     pub inner: Rect,
 }
 
 /// Paints the modal frame and returns its content area.
-pub fn render_modal_frame(
-    f: &mut Frame,
-    dim_flag: &mut bool,
-    title: &str,
-    w: u16,
-    h: u16,
-    bg: Color,
-) -> Rect {
-    render_modal_frame_bounds(f, dim_flag, title, w, h, bg).inner
+pub fn render_modal_frame(f: &mut Frame, dim_flag: &mut bool, w: u16, h: u16, bg: Color) -> Rect {
+    render_modal_frame_bounds(f, dim_flag, w, h, bg).inner
 }
 
 /// Paints the modal frame and returns both its outer rect (the click-outside
@@ -41,7 +32,6 @@ pub fn render_modal_frame(
 pub fn render_modal_frame_bounds(
     f: &mut Frame,
     dim_flag: &mut bool,
-    title: &str,
     width: u16,
     height: u16,
     bg: Color,
@@ -51,9 +41,8 @@ pub fn render_modal_frame_bounds(
 
     let full = f.area();
     // `width`/`height` describe the content area: the storm frame (2 columns
-    // each side, one row under the header and one along the bottom) and the
-    // ink header row are added around it, so every caller's content layout is
-    // unchanged by the frame.
+    // each side, one top band row and one bottom row) is added around it, so
+    // every caller's content layout is unchanged by the frame.
     let width = width
         .saturating_add(FRAME_COLUMNS)
         .min(full.width.saturating_sub(2));
@@ -70,17 +59,15 @@ pub fn render_modal_frame_bounds(
     f.render_widget(Clear, rect);
     // The modal is a storm frame around a content body: the whole modal is
     // filled with the border color (`SURFACE_RESTING`, `#2b3238`), then the
-    // content body (`bg`) and the ink header band are cut out of it — the
-    // same pixels as painting the two 2-column sides, the row under the
-    // header, and the bottom row individually, in three widgets instead of
-    // six. The title text renders last, on top of the header (issue #855).
+    // content body (`bg`) is cut out of it — the same pixels as painting the
+    // two 2-column sides, the top band, and the bottom row individually, in
+    // two widgets instead of four.
     let border = Style::default().bg(palette::SURFACE_RESTING);
     f.render_widget(Block::default().style(border), rect);
-    let header_h = 1_u16.min(rect.height);
-    let top_h = 1_u16.min(rect.height.saturating_sub(header_h));
-    let bottom_h = 1_u16.min(rect.height.saturating_sub(header_h + top_h));
-    let side_y = rect.y.saturating_add(header_h + top_h);
-    let side_h = rect.height.saturating_sub(header_h + top_h + bottom_h);
+    let top_h = 1_u16.min(rect.height);
+    let bottom_h = 1_u16.min(rect.height.saturating_sub(top_h));
+    let side_y = rect.y.saturating_add(top_h);
+    let side_h = rect.height.saturating_sub(top_h + bottom_h);
     let side_w = 2_u16.min(rect.width);
     let inner = Rect {
         x: rect.x.saturating_add(side_w),
@@ -89,24 +76,5 @@ pub fn render_modal_frame_bounds(
         height: side_h,
     };
     f.render_widget(Block::default().style(Style::default().bg(bg)), inner);
-    f.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
-        Rect {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: header_h,
-        },
-    );
-    let block = Block::default()
-        .title(Span::styled(
-            title.to_string(),
-            Style::default()
-                .fg(palette::TEXT_PRIMARY)
-                .add_modifier(Modifier::BOLD),
-        ))
-        .title_alignment(Alignment::Center)
-        .borders(Borders::NONE);
-    f.render_widget(block, rect);
     ModalFrame { outer: rect, inner }
 }

@@ -79,12 +79,11 @@ impl ConfirmButton {
 }
 
 /// State for the shared confirmation-modal overlay: a centered dialog with a
-/// title, a message, and a row of keypress buttons. Only one can be active at
-/// a time (`App::confirm_modal: Option<ConfirmModal>`); setting a new one
-/// replaces whatever was showing.
+/// message and a row of keypress buttons. Only one can be active at a time
+/// (`App::confirm_modal: Option<ConfirmModal>`); setting a new one replaces
+/// whatever was showing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmModal {
-    pub title: String,
     pub message: String,
     pub buttons: Vec<ConfirmButton>,
     pub on_confirm: ConfirmAction,
@@ -96,14 +95,12 @@ impl ConfirmModal {
     /// three-way dirty-playlist prompt uses this shape.
     #[must_use]
     pub fn two_button(
-        title: String,
         message: String,
         affirmative_label: &str,
         cancel_label: &str,
         on_confirm: ConfirmAction,
     ) -> Self {
         Self {
-            title,
             message,
             buttons: vec![
                 ConfirmButton::affirmative("Enter", affirmative_label),

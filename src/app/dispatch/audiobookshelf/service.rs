@@ -59,7 +59,6 @@ impl App {
                         });
                     self.setup.audiobookshelf_setup_form = None;
                     self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
-                        " Replace Audiobookshelf ".into(),
                         "Replace Audiobookshelf? Service-owned setup and state will be cleared."
                             .into(),
                         "Replace",

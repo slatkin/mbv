@@ -65,7 +65,6 @@ impl Model {
             ShellRequest::EmbyLibraryRescan => {
                 let name = self.app.libs[lib_idx].library.name.clone();
                 self.app.ask_confirm(ConfirmModal::two_button(
-                    " Rescan Library ".into(),
                     format!("Rescan '{name}'?"),
                     "Confirm",
                     "Cancel",

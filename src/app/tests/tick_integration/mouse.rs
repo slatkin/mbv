@@ -114,7 +114,6 @@ fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
     let (mut harness, rows) = search_sidebar_with_painted_results();
     let modal_id = ComponentId::Modal(ModalId::Confirm);
     harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        title: "Clear queue?".into(),
         message: "Remove queued items".into(),
         buttons: vec![
             ConfirmButton::affirmative("Enter", "Confirm"),

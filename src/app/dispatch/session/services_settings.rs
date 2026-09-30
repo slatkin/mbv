@@ -234,7 +234,6 @@ impl App {
             return;
         }
         self.ask_confirm(ConfirmModal::two_button(
-            " Remove Emby ".into(),
             "Remove Emby? Service-owned setup and state will be cleared.".into(),
             "Confirm",
             "Cancel",
@@ -247,7 +246,6 @@ impl App {
             return;
         }
         self.ask_confirm(ConfirmModal::two_button(
-            " Remove Audiobookshelf ".into(),
             "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
             "Confirm",
             "Cancel",

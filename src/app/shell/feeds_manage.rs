@@ -150,7 +150,6 @@ impl super::Model {
             return;
         };
         self.app.ask_confirm(super::ConfirmModal::two_button(
-            " Remove Feed ".into(),
             format!(
                 "Remove subscription '{}'?",
                 mbv_ui_model::ui_util::trunc_str(&name, 40)

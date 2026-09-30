@@ -26,7 +26,6 @@ impl App {
         }
         if self.queue_pos_needs_active_confirm(scope, pos) {
             self.ask_confirm(ConfirmModal::two_button(
-                " Remove Item ".into(),
                 "Remove now-playing item and stop playback?".into(),
                 "Confirm",
                 "Cancel",

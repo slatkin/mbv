@@ -107,7 +107,6 @@ impl Model {
         {
             self.dismiss_modal(&id);
             self.app.ask_confirm(super::ConfirmModal::two_button(
-                " Overwrite Playlist ".into(),
                 format!(
                     "\"{}\" already exists.",
                     mbv_ui_model::ui_util::trunc_str(&name, 40)

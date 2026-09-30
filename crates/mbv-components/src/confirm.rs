@@ -1,7 +1,7 @@
 //! Interactive Component for the Confirm modal overlay (design D3–D9).
 //!
-//! Owns the modal's display content (title, message, buttons) set by the shell
-//! via downcast before each render. The component owns key interpretation and
+//! Owns the modal's display content (message, buttons) set by the shell via
+//! downcast before each render. The component owns key interpretation and
 //! emits semantic confirmation intents; the shell owns the `ConfirmAction` and
 //! effect dispatch. Non-key events return `None` because the permanent `UiRoot`
 //! observer owns the redraw signal (design D12).
@@ -23,7 +23,7 @@ use mbv_ui_msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
 
 /// The Interactive Component for the Confirm modal.
 ///
-/// Owns display content (title, message, buttons) set by the shell via
+/// Owns display content (message, buttons) set by the shell via
 /// `get_component_mut`+downcast before each render. The
 /// `dim_backdrop_active` field is a scratch flag for `render_modal_frame`
 /// (design D9: the visual backdrop is painted by `dim_backdrop`; the flag
@@ -32,7 +32,6 @@ use mbv_ui_msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
 /// image lookups, so no shell↔component sync is needed).
 #[derive(Debug)]
 pub struct ConfirmComponent {
-    title: String,
     message: String,
     buttons: Vec<ConfirmButton>,
     on_confirm: Option<ConfirmAction>,
@@ -49,7 +48,6 @@ impl ConfirmComponent {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            title: String::new(),
             message: String::new(),
             buttons: Vec::new(),
             on_confirm: None,
@@ -62,14 +60,13 @@ impl ConfirmComponent {
 
     /// Set the modal's display content from a shell request. Called by
     /// the shell via `get_component_mut`+downcast before each render.
-    pub fn set_content(&mut self, title: &str, message: &str, buttons: &[ConfirmButton]) {
-        title.clone_into(&mut self.title);
+    pub fn set_content(&mut self, message: &str, buttons: &[ConfirmButton]) {
         message.clone_into(&mut self.message);
         self.buttons = buttons.to_vec();
     }
 
     pub fn set_modal(&mut self, modal: &ConfirmModal) {
-        self.set_content(&modal.title, &modal.message, &modal.buttons);
+        self.set_content(&modal.message, &modal.buttons);
         self.on_confirm = Some(modal.on_confirm.clone());
     }
 
@@ -90,7 +87,6 @@ impl Component for ConfirmComponent {
         let geometry = render_confirm_modal_content(
             frame,
             &mut self.dim_backdrop_active,
-            &self.title,
             &self.message,
             &self.buttons,
         );
@@ -236,7 +232,6 @@ mod tests {
     ) -> (ConfirmComponent, ratatui::buffer::Buffer) {
         let mut comp = ConfirmComponent::new();
         comp.set_modal(&ConfirmModal {
-            title: " Clear Queue ".into(),
             message: "Clear the queue?".into(),
             buttons,
             on_confirm,
@@ -253,7 +248,6 @@ mod tests {
     fn key_emits_accept_intent() {
         let mut comp = ConfirmComponent::new();
         comp.set_modal(&ConfirmModal {
-            title: String::new(),
             message: String::new(),
             buttons: Vec::new(),
             on_confirm: ConfirmAction::ClearQueue,
@@ -305,7 +299,6 @@ mod tests {
     fn esc_emits_cancel_intent() {
         let mut comp = ConfirmComponent::new();
         comp.set_modal(&ConfirmModal {
-            title: String::new(),
             message: String::new(),
             buttons: Vec::new(),
             on_confirm: ConfirmAction::ClearQueue,
@@ -319,11 +312,11 @@ mod tests {
            ))));
     }
 
-    /// Issue #855: ink header band, storm frame (2-column sides, one row under
-    /// the header and one along the bottom), and centered pills with an
-    /// affirmative green / cancel red tone and two cells between them.
+    /// Issue #855: storm frame (2-column sides, one top band row and one
+    /// along the bottom) and centered pills with an affirmative green /
+    /// cancel red tone and two cells between them.
     #[test]
-    fn modal_paints_ink_header_storm_frame_and_toned_centered_pills() {
+    fn modal_paints_storm_frame_and_toned_centered_pills() {
         let (comp, buffer) = painted_modal(
             vec![
                 ConfirmButton::affirmative("Enter", "Confirm"),
@@ -336,11 +329,6 @@ mod tests {
         for x in frame.x..frame.right() {
             assert_eq!(
                 bg(x, frame.y),
-                mbv_theme::SURFACE_CHROME,
-                "header ink at {x}"
-            );
-            assert_eq!(
-                bg(x, frame.y + 1),
                 mbv_theme::SURFACE_RESTING,
                 "top band at {x}"
             );
@@ -350,11 +338,38 @@ mod tests {
                 "bottom band at {x}"
             );
         }
-        for y in (frame.y + 2)..frame.bottom().saturating_sub(1) {
+        for y in (frame.y + 1)..frame.bottom().saturating_sub(1) {
             for x in [frame.x, frame.x + 1, frame.right() - 2, frame.right() - 1] {
                 assert_eq!(bg(x, y), mbv_theme::SURFACE_RESTING, "side band at {x},{y}");
             }
         }
+
+        // The message is horizontally centered in the content area: its
+        // leading and trailing blank margins are symmetric.
+        let inner_x = frame.x + 2;
+        let inner_right = frame.right() - 2;
+        let message_y = frame.y + 1 + 2;
+        let symbol_at = |x: u16| {
+            buffer
+                .cell((x, message_y))
+                .expect("message row cell")
+                .symbol()
+                .trim()
+                .is_empty()
+        };
+        let first = (inner_x..inner_right)
+            .find(|x| !symbol_at(*x))
+            .expect("message text");
+        let last = (inner_x..inner_right)
+            .rev()
+            .find(|x| !symbol_at(*x))
+            .expect("message text");
+        let left_pad = first - inner_x;
+        let right_pad = inner_right - 1 - last;
+        assert!(
+            left_pad.abs_diff(right_pad) <= 1,
+            "message centered: {left_pad} vs {right_pad}"
+        );
 
         let regions = comp.hit_buttons.regions();
         assert_eq!(regions.len(), 2);

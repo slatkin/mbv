@@ -18,7 +18,6 @@ impl App {
             self.queue_deferrals.defer_for_save_answer(action);
             let name = mbv_ui_model::ui_util::trunc_str(self.queue_playlist_name(), 36);
             self.ask_confirm(ConfirmModal {
-                title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{name}\"?"),
                 buttons: vec![
                     ConfirmButton::affirmative("Enter", "Save"),
@@ -62,7 +61,6 @@ impl App {
         if self.queue_replacement_needs_confirmation(&action) {
             self.queue_deferrals.hold_gated_replacement(action, via);
             self.ask_confirm(ConfirmModal::two_button(
-                " Replace Queue ".into(),
                 "Replace the current queue?".into(),
                 "Confirm",
                 "Cancel",

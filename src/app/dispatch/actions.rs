@@ -37,16 +37,6 @@ fn playback_request_message(label: &str, mixed_unplayable: Option<usize>) -> Str
     }
 }
 
-fn daemon_endpoint_name(endpoint: &mbv_remote_player::DaemonEndpoint) -> String {
-    match endpoint {
-        mbv_remote_player::DaemonEndpoint::Local => "the local daemon".into(),
-        mbv_remote_player::DaemonEndpoint::Unix(path) => {
-            format!("the Unix socket {}", path.display())
-        }
-        mbv_remote_player::DaemonEndpoint::Tcp(address) => address.to_string(),
-    }
-}
-
 fn classify_playback_eligibility(
     attached: bool,
     library_route: bool,
@@ -105,15 +95,7 @@ impl App {
                 source,
                 autostart: true,
             });
-        let owner = self
-            .connected_session_state
-            .as_ref()
-            .map(|session| session.device_name.clone())
-            .or_else(|| self.remote.direct_remote_label.clone())
-            .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
-            .unwrap_or_else(|| "this owner".into());
         self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
-            format!(" Play locally instead of {owner} "),
             format!("Play \"{label}\" on this machine instead?"),
             "Play here",
             "Cancel",

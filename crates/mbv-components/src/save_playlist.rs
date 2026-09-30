@@ -112,12 +112,8 @@ impl Default for SavePlaylistComponent {
 
 impl Component for SavePlaylistComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
-        let geometry = render_save_playlist_content(
-            frame,
-            &mut self.dim_backdrop_active,
-            &self.input,
-            self.rename,
-        );
+        let geometry =
+            render_save_playlist_content(frame, &mut self.dim_backdrop_active, &self.input);
         // Adopt the painted frame for outside-click dismissal (task 5.1).
         self.frame = geometry.frame;
     }

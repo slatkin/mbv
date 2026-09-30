@@ -102,7 +102,7 @@ pub fn render_library_routes_content(
     dim_backdrop_active: &mut bool,
     model: &LibraryRoutesRenderModel<'_>,
 ) -> LibraryRoutesRenderGeometry {
-    let (title, lines) = route_lines(model.stage, model.cursor);
+    let (_, lines) = route_lines(model.stage, model.cursor);
 
     let max_w = lines.iter().map(Line::width).max().unwrap_or(0);
     let inner_w = u16::try_from(max_w.saturating_add(6))
@@ -115,7 +115,6 @@ pub fn render_library_routes_content(
     let inner = render_modal_frame(
         f,
         dim_backdrop_active,
-        title,
         width,
         height,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,

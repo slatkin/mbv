@@ -492,7 +492,6 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
     app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        title: "Clear queue?".into(),
         message: "Remove queued items".into(),
         buttons: vec![
             ConfirmButton::affirmative("Enter", "Confirm"),
@@ -543,7 +542,6 @@ fn stray_key_is_a_noop_on_the_confirm_modal() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
     app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        title: "Clear queue?".into(),
         message: "Remove queued items".into(),
         buttons: vec![
             ConfirmButton::affirmative("Enter", "Confirm"),

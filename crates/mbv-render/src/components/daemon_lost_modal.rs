@@ -23,7 +23,6 @@ pub fn render_daemon_lost_modal_content(
     let inner = render_modal_frame(
         f,
         dim_flag,
-        " Daemon Lost ",
         64,
         10,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,

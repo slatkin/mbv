@@ -2,7 +2,7 @@ use crate::components::modal_frame::render_modal_frame_bounds;
 use mbv_theme as palette;
 use mbv_ui_model::confirm::{ConfirmButton, ConfirmButtonTone};
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -31,14 +31,12 @@ pub struct ConfirmRenderGeometry {
 pub fn render_confirm_modal_content(
     f: &mut Frame,
     dim_flag: &mut bool,
-    title: &str,
     message: &str,
     buttons: &[ConfirmButton],
 ) -> ConfirmRenderGeometry {
     let modal = render_modal_frame_bounds(
         f,
         dim_flag,
-        title,
         60,
         7,
         mbv_theme::surface_colors(mbv_theme::Surface::PopupFrame, false).fill,
@@ -49,11 +47,12 @@ pub fn render_confirm_modal_content(
         Paragraph::new(Span::styled(
             message,
             Style::default().fg(mbv_theme::TEXT_STRONG),
-        )),
+        ))
+        .alignment(Alignment::Center),
         Rect {
-            x: inner.x + 1,
+            x: inner.x,
             y: base_y,
-            width: inner.width.saturating_sub(2),
+            width: inner.width,
             height: 1,
         },
     );

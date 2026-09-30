@@ -22,17 +22,10 @@ pub fn render_save_playlist_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     input: &str,
-    rename: bool,
 ) -> SavePlaylistRenderGeometry {
-    let title_text = if rename {
-        " Rename Playlist "
-    } else {
-        " Save as Playlist "
-    };
     let inner = render_modal_frame(
         f,
         dim_backdrop_active,
-        title_text,
         52,
         7,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,

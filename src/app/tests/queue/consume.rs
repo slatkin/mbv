@@ -21,7 +21,6 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
         st.current_idx = 0;
     };
     app.ask_confirm(ConfirmModal {
-        title: String::new(),
         message: String::new(),
         buttons: Vec::new(),
         on_confirm: ConfirmAction::RemoveActiveQueueItem(0),
@@ -76,7 +75,6 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     app.local_view
         .adopt_items(make_items(1), app.local_view.cursor());
     app.ask_confirm(ConfirmModal {
-        title: String::new(),
         message: String::new(),
         buttons: Vec::new(),
         on_confirm: ConfirmAction::RemoveActiveQueueItem(1),

@@ -34,11 +34,6 @@ pub fn render_multiselect_content(
     dim_backdrop_active: &mut bool,
     model: &MultiSelectRenderModel<'_>,
 ) -> MultiSelectRenderGeometry {
-    let title = match model.kind {
-        MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
-        MultiSelectKind::FeedViewLibraries => " Feed View ",
-        MultiSelectKind::MyLanguages => " My Languages ",
-    };
     let max_name = model
         .items
         .iter()
@@ -55,7 +50,6 @@ pub fn render_multiselect_content(
     let inner = render_modal_frame(
         f,
         dim_backdrop_active,
-        title,
         width,
         height,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,

@@ -174,7 +174,6 @@ impl App {
                     self.setup.pending_emby_replacement = Some(startup);
                     self.setup.emby_setup_form = None;
                     self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
-                        " Replace Emby ".into(),
                         "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
                         "Replace",
                         "Cancel",

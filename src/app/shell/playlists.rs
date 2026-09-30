@@ -118,7 +118,6 @@ impl Model {
             ShellRequest::PlaylistsDelete(index) => {
                 if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.ask_confirm(crate::app::ConfirmModal::two_button(
-                        " Delete Playlist ".into(),
                         format!(
                             "Delete playlist '{}'?",
                             mbv_ui_model::ui_util::trunc_str(&playlist.name, 40)

@@ -223,7 +223,6 @@ impl App {
             return;
         }
         self.ask_confirm(ConfirmModal::two_button(
-            " Clear Queue ".into(),
             "Clear the queue?".into(),
             "Confirm",
             "Cancel",

@@ -48,7 +48,6 @@ fn render_feeds_manage_list(
     dim_backdrop_active: &mut bool,
     model: &FeedsManageRenderModel<'_>,
 ) -> FeedsManageRenderGeometry {
-    let title = " Manage Feeds ";
     let hint = "[a]add  [↵/e]edit  [d]remove  [Esc]close";
     let width: u16 = 58;
     let content_h = u16::try_from(model.feeds.len().max(1))
@@ -59,7 +58,6 @@ fn render_feeds_manage_list(
     let inner = render_modal_frame(
         f,
         dim_backdrop_active,
-        title,
         width,
         height,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,
@@ -163,7 +161,6 @@ fn render_feeds_manage_form(
     pending_add: Option<u64>,
 ) -> FeedsManageRenderGeometry {
     let editing = form.editing_index.is_some();
-    let title = if editing { " Edit Feed " } else { " Add Feed " };
     let submitting = pending_add.is_some();
 
     let width = 58;
@@ -171,7 +168,6 @@ fn render_feeds_manage_form(
     let inner = render_modal_frame(
         f,
         dim_backdrop_active,
-        title,
         width,
         height,
         palette::surface_colors(palette::Surface::PopupFrame, false).fill,
