@@ -53,6 +53,7 @@ pub(crate) fn make_media_item(id: &str) -> mbv_emby_model::EmbyItem {
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,
+        studios: Vec::new(),
         overview: String::new(),
         premiere_date: String::new(),
         date_added: String::new(),

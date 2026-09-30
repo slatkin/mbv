@@ -27,6 +27,7 @@ pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,
+        studios: Vec::new(),
         overview: String::new(),
         premiere_date: String::new(),
         date_added: String::new(),

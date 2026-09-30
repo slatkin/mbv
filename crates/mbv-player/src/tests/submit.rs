@@ -202,6 +202,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,
+        studios: Vec::new(),
         overview: String::new(),
         premiere_date: String::new(),
         date_added: String::new(),

@@ -29,6 +29,7 @@ fn emby(date_added: &str) -> QueueItem {
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,
+        studios: Vec::new(),
         overview: String::new(),
         premiere_date: String::new(),
         date_added: date_added.into(),
