@@ -38,6 +38,12 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 /// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
 /// directly against a real stalled `TcpListener` without going through
 /// `connect_endpoint`'s full setup.
+#[derive(Clone, Copy)]
+pub(crate) enum PeerBuild {
+    Any,
+    MustMatch,
+}
+
 pub(crate) fn perform_handshake<F>(
     stream: SocketStream,
     load_control_token: F,
@@ -45,7 +51,7 @@ pub(crate) fn perform_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    perform_handshake_with_role(stream, load_control_token, false)
+    perform_handshake_with_role(stream, load_control_token, false, PeerBuild::Any)
 }
 
 fn perform_service_setup_admin_handshake<F>(
@@ -55,19 +61,20 @@ fn perform_service_setup_admin_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    perform_handshake_with_role(stream, load_control_token, true)
+    perform_handshake_with_role(stream, load_control_token, true, PeerBuild::Any)
 }
 
 fn perform_handshake_with_role<F>(
     stream: SocketStream,
     load_control_token: F,
     service_setup_admin: bool,
+    peer_build: PeerBuild,
 ) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
     let mut reader = BufReader::new(stream);
-    let ctrl_compatibility = read_server_hello(&mut reader)?;
+    let ctrl_compatibility = read_server_hello(&mut reader, peer_build)?;
     send_client_hello(
         &mut reader,
         &ctrl_compatibility,
@@ -81,6 +88,7 @@ where
 
 fn read_server_hello(
     reader: &mut BufReader<SocketStream>,
+    peer_build: PeerBuild,
 ) -> Result<CtrlCompatibility, crate::RemotePlayerError> {
     let mut first_line = String::new();
     reader.read_line(&mut first_line).map_err(|e| {
@@ -99,6 +107,11 @@ fn read_server_hello(
             "daemon did not send protocol hello",
         ));
     };
+    if matches!(peer_build, PeerBuild::MustMatch) && info.app_version != env!("CARGO_PKG_VERSION") {
+        return Err(crate::RemotePlayerError::owner_build_mismatch_error(
+            info.app_version,
+        ));
+    }
     info.validate_peer()?;
     let mut compatibility = info.compatibility()?;
     compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
@@ -421,9 +434,14 @@ fn apply_unified_queue_state(
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
+    let peer_build = if matches!(endpoint, DaemonEndpoint::Local) {
+        PeerBuild::MustMatch
+    } else {
+        PeerBuild::Any
+    };
     let stream = endpoint.connect_stream()?;
     tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
-    connect_stream(stream)
+    connect_stream(stream, peer_build)
 }
 
 struct ReaderThreadState {
@@ -444,6 +462,7 @@ struct ReaderThreadState {
 /// instead of a real listener.
 fn connect_stream(
     stream: SocketStream,
+    peer_build: PeerBuild,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
@@ -485,9 +504,16 @@ fn connect_stream(
     let handshake_stream = stream.try_clone()?;
     let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
-            perform_handshake(handshake_stream, || {
-                Ok(mbv_config::load_or_create_control_credential()?)
-            })
+            let load_control_token = || Ok(mbv_config::load_or_create_control_credential()?);
+            match peer_build {
+                PeerBuild::Any => perform_handshake(handshake_stream, load_control_token),
+                PeerBuild::MustMatch => perform_handshake_with_role(
+                    handshake_stream,
+                    load_control_token,
+                    false,
+                    PeerBuild::MustMatch,
+                ),
+            }
         },
         || {
             crate::RemotePlayerError::connection(format!(
@@ -726,7 +752,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             }
         }
     });
-    let (player, rx) =
-        connect_stream(SocketStream::Unix(client)).map_err(|error| error.to_string())?;
+    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any)
+        .map_err(|error| error.to_string())?;
     Ok((player, rx, peer))
 }

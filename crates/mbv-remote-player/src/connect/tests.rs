@@ -94,7 +94,7 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
     });
-    let (remote, events) = connect_stream(SocketStream::Unix(client)).unwrap();
+    let (remote, events) = connect_stream(SocketStream::Unix(client), PeerBuild::Any).unwrap();
     let daemon = daemon_rx.recv().unwrap();
     peer.join().unwrap();
     (remote, events, daemon)
@@ -251,6 +251,127 @@ fn resolve_library_route_rejects_unix_and_local_endpoints() {
     routes.insert("movies".to_string(), "local".to_string());
     assert_eq!(resolve_library_route(&routes, "music"), None);
     assert_eq!(resolve_library_route(&routes, "movies"), None);
+}
+
+#[test]
+fn local_handshake_rejects_different_owner_build_before_client_hello() {
+    use std::io::{BufRead, Write};
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (received_tx, received_rx) = mpsc::channel();
+    let owner_version = "different-owner-build";
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.app_version = owner_version.to_string();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        received_tx.send(client_hello).unwrap();
+    });
+
+    let error = perform_handshake_with_role(
+        SocketStream::Unix(client),
+        || Ok("unused".to_string()),
+        false,
+        PeerBuild::MustMatch,
+    )
+    .unwrap_err();
+
+    assert_eq!(error.owner_build_mismatch(), Some(owner_version));
+    assert_eq!(error.kind_name(), "remote-player.owner_build_mismatch");
+    assert!(error.to_string().contains(owner_version));
+    assert!(error.to_string().contains(env!("CARGO_PKG_VERSION")));
+    assert!(error.to_string().contains("mbv -q"));
+    peer.join().unwrap();
+    assert_eq!(received_rx.recv().unwrap(), "");
+}
+
+#[test]
+fn local_handshake_accepts_identical_owner_build() {
+    use std::io::{BufRead, BufReader, Write};
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.app_version = env!("CARGO_PKG_VERSION").to_string();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+    });
+
+    perform_handshake_with_role(
+        SocketStream::Unix(client),
+        || Ok("unused".to_string()),
+        false,
+        PeerBuild::MustMatch,
+    )
+    .unwrap();
+    peer.join().unwrap();
+}
+
+#[test]
+fn local_handshake_keeps_protocol_compatibility_independent_of_build() {
+    use std::io::Write;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon;
+        let mut hello = CtrlHello::current();
+        hello.protocol_version += 1;
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+    });
+
+    let error = perform_handshake_with_role(
+        SocketStream::Unix(client),
+        || Ok("unused".to_string()),
+        false,
+        PeerBuild::MustMatch,
+    )
+    .unwrap_err();
+
+    assert_eq!(error.owner_build_mismatch(), None);
+    assert_eq!(error.kind_name(), "remote-player.control");
+    assert!(
+        error
+            .to_string()
+            .contains("incompatible daemon protocol version")
+    );
+    peer.join().unwrap();
 }
 
 #[test]

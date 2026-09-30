@@ -7,7 +7,7 @@ pub struct RemotePlayerError {
     source: Option<Box<dyn Error + Send + Sync>>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum RemotePlayerErrorKind {
     Endpoint,
     Protocol,
@@ -17,6 +17,7 @@ enum RemotePlayerErrorKind {
     Control,
     ExclusiveOwner { pid: u32 },
     OwnerShuttingDown,
+    OwnerBuildMismatch { app_version: String },
 }
 
 impl RemotePlayerError {
@@ -56,6 +57,16 @@ impl RemotePlayerError {
         }
     }
 
+    pub(crate) fn owner_build_mismatch_error(app_version: impl Into<String>) -> Self {
+        Self {
+            kind: RemotePlayerErrorKind::OwnerBuildMismatch {
+                app_version: app_version.into(),
+            },
+            message: String::new(),
+            source: None,
+        }
+    }
+
     fn new(kind: RemotePlayerErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
@@ -77,17 +88,25 @@ impl RemotePlayerError {
 
     #[must_use]
     pub fn is_owner_shutting_down(&self) -> bool {
-        matches!(self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
+        matches!(&self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
+    }
+
+    #[must_use]
+    pub fn owner_build_mismatch(&self) -> Option<&str> {
+        match &self.kind {
+            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => Some(app_version),
+            _ => None,
+        }
     }
 
     #[must_use]
     pub fn is_exclusive_owner(&self) -> bool {
-        matches!(self.kind, RemotePlayerErrorKind::ExclusiveOwner { .. })
+        matches!(&self.kind, RemotePlayerErrorKind::ExclusiveOwner { .. })
     }
 
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
-        match self.kind {
+        match &self.kind {
             RemotePlayerErrorKind::Endpoint => "remote-player.endpoint",
             RemotePlayerErrorKind::Protocol => "remote-player.protocol",
             RemotePlayerErrorKind::Connection => "remote-player.connection",
@@ -96,6 +115,9 @@ impl RemotePlayerError {
             RemotePlayerErrorKind::Control => "remote-player.control",
             RemotePlayerErrorKind::ExclusiveOwner { .. } => "remote-player.exclusive_owner",
             RemotePlayerErrorKind::OwnerShuttingDown => "remote-player.owner_shutting_down",
+            RemotePlayerErrorKind::OwnerBuildMismatch { .. } => {
+                "remote-player.owner_build_mismatch"
+            }
         }
     }
 }
@@ -106,6 +128,11 @@ impl fmt::Display for RemotePlayerError {
             RemotePlayerErrorKind::ExclusiveOwner { pid } => {
                 write!(f, "local owner process {pid} already has a client")
             }
+            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => write!(
+                f,
+                "Owner process is running version {app_version}, but this mbv is version {}; run `mbv -q` to restart it",
+                env!("CARGO_PKG_VERSION")
+            ),
             _ => f.write_str(&self.message),
         }
     }
