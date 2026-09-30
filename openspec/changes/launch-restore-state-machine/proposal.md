@@ -27,9 +27,12 @@ the mid-session tab jump.
   production writer of each catalog (`rebuild_library_tabs_from_views`,
   `apply_audiobookshelf_catalog`) resolves a saved Service identity at its end,
   so only code that just built the catalog can resolve one.
-- **Expiry:** a saved Service tab resolves to Home immediately when its service
-  is not configured, and is dropped on that service's first failure. Launch
-  restoration never moves the tab after the startup outcome is known.
+- **Expiry:** a saved Service tab falls back to Home immediately when its
+  service is not configured (or configured without a credential) or when that
+  service's startup fails — the same Home settle the gone-tab fallback uses,
+  still followed by one re-anchor pass so the saved Panel focus is applied —
+  and a later connection never moves the tab. Launch restoration never moves
+  the tab after the startup outcome is known.
 - **BREAKING (one-time):** delete legacy selected-tab migration
   (`legacy_launch_tab`, `legacy_launch_migration_attempted`,
   `library_tab_pending`, the numeric fallback branch). A user who has not
@@ -60,5 +63,5 @@ None.
   `src/app/shell/library_panel.rs`, `src/app/shell/run.rs`,
   `src/app/state/app_struct.rs`, `construct.rs`.
 - Tests: `lifecycle_launch_restore.rs`, `lifecycle_launch_migration.rs`
-  (migration tests deleted), `tick_integration.rs:84`, `panel_focus.rs:102`.
+  (migration tests deleted), `tick_integration.rs:46`, `panel_focus.rs:102`.
 - No persisted-format change; `tui_launch_state.json` is unchanged.
