@@ -217,19 +217,7 @@ impl App {
     /// enqueue success toast is emitted.
     pub(super) fn append_item_to_queue(&mut self, item: EmbyItem) {
         let scope = self.viewed_queue_scope();
-        let sent = self.queue_op(
-            scope,
-            mbv_remote_player::QueueOp::Append {
-                items: vec![QueueItem::Emby(Box::new(item))],
-                before: None,
-            },
-        );
-        if sent != QueueOpEdit::NotApplied {
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.advance_queue_epoch();
-        }
+        self.append_on_owner(scope, vec![QueueItem::Emby(Box::new(item))]);
     }
 }
 

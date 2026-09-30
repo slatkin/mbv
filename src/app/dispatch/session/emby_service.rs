@@ -25,24 +25,7 @@ impl App {
         if !active_is_feed {
             self.player.stop();
         }
-        for scope in [
-            crate::app::QueueScope::Local,
-            crate::app::QueueScope::Remote,
-        ] {
-            if scope == crate::app::QueueScope::Remote && !self.has_remote_queue() {
-                continue;
-            }
-            let slot_ids = self
-                .queue_for_scope(scope)
-                .slots()
-                .iter()
-                .filter(|slot| matches!(slot.item, QueueItem::Emby(_)))
-                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
-                .collect::<Vec<_>>();
-            if !slot_ids.is_empty() {
-                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
-            }
-        }
+        self.remove_queue_slots_where(QueueItem::is_emby);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();

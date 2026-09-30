@@ -138,24 +138,7 @@ impl App {
         if active_is_abs {
             self.player.stop();
         }
-        for scope in [
-            crate::app::QueueScope::Local,
-            crate::app::QueueScope::Remote,
-        ] {
-            if scope == crate::app::QueueScope::Remote && !self.has_remote_queue() {
-                continue;
-            }
-            let slot_ids = self
-                .queue_for_scope(scope)
-                .slots()
-                .iter()
-                .filter(|slot| slot.item.is_audiobookshelf())
-                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
-                .collect::<Vec<_>>();
-            if !slot_ids.is_empty() {
-                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
-            }
-        }
+        self.remove_queue_slots_where(mbv_queue::QueueItem::is_audiobookshelf);
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
         self.queue_dirty = false;

@@ -134,12 +134,9 @@ impl App {
         if start_position_ticks > 0 {
             items[start_idx].playback_position_ticks = start_position_ticks;
         }
-        self.replace_queue_on_owner(
+        self.replace_emby_queue_on_owner(
             self.playing_queue_scope(),
-            items
-                .into_iter()
-                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
-                .collect(),
+            items,
             start_idx,
             mbv_queue::QueueSource::Remote,
         );

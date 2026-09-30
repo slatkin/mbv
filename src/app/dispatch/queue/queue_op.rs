@@ -58,6 +58,24 @@ impl App {
         )
     }
 
+    pub(in crate::app) fn replace_emby_queue_on_owner(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<mbv_emby_model::EmbyItem>,
+        start_idx: usize,
+        source: mbv_queue::QueueSource,
+    ) -> QueueOpEdit {
+        self.replace_queue_on_owner(
+            scope,
+            items
+                .into_iter()
+                .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            start_idx,
+            source,
+        )
+    }
+
     /// Send `operation` to `scope`'s Player owner, then adopt its answer.
     /// Owners without the capability get the legacy form and no wait (the
     /// displayed queue follows their later snapshots instead). Returns
@@ -178,13 +196,10 @@ impl App {
             if scope == self.playing_queue_scope() {
                 *self.player.status.lock().unwrap() = unified.status.clone();
             }
-            let view = self.queue_for_scope(scope);
-            let cause = if view.lineage() == unified.lineage {
-                crate::app::state::queue_view::AdoptCause::OwnAnswer
-            } else {
-                crate::app::state::queue_view::AdoptCause::Replacement
-            };
-            self.queue_for_scope_mut(scope).adopt(unified, cause);
+            self.queue_for_scope_mut(scope).adopt(
+                unified,
+                crate::app::state::queue_view::AdoptCause::OwnAnswer,
+            );
             if scope == QueueScope::Local {
                 self.adopt_owner_source(unified);
             }

@@ -25,7 +25,7 @@ impl App {
             self.load_idle_queue_on_owner(items, start_idx, source);
             return;
         }
-        self.start_pending_queue_playback(&items, start_idx, source);
+        self.start_pending_queue_playback(items, start_idx, source);
     }
 
     /// Sends the idle queue load to the current Player owner. Returns whether
@@ -73,7 +73,7 @@ impl App {
 
     fn start_pending_queue_playback(
         &mut self,
-        items: &[EmbyItem],
+        items: Vec<EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
     ) {
@@ -82,20 +82,20 @@ impl App {
         // op always starts playback, so it must not be used while another
         // target owns playback), then playback starts on the session.
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            if !self.load_idle_queue_on_owner(items.to_vec(), start_idx, source) {
+            if !self.load_idle_queue_on_owner(items.clone(), start_idx, source) {
                 return;
             }
             self.clear_playback_overlays();
-            let id = conn_id.clone();
             let label = items
                 .get(start_idx)
                 .map(mbv_emby_model::EmbyItem::playback_label)
                 .unwrap_or_default();
+            let id = conn_id.clone();
             self.flash(
                 format!("Requesting playback: {label}"),
                 ToastSeverity::Neutral,
             );
-            self.submit_attached_sequence(&id, items, start_idx);
+            self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
         // Row 5.3 (design D6): the replacement is an answered owner op —
@@ -103,15 +103,7 @@ impl App {
         // `start_idx`, and the Client adopts the resulting snapshot; the
         // Client holds no editable queue of its own.
         let scope = self.playing_queue_scope();
-        let sent = self.replace_queue_on_owner(
-            scope,
-            items
-                .iter()
-                .map(|i| QueueItem::Emby(Box::new(i.clone())))
-                .collect(),
-            start_idx,
-            source,
-        );
+        let sent = self.replace_emby_queue_on_owner(scope, items, start_idx, source);
         if sent == QueueOpEdit::NotApplied {
             return;
         }

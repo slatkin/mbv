@@ -116,6 +116,10 @@ impl CtrlContext<'_> {
             op: &self.op,
         }
     }
+
+    pub(super) fn except_op_client(&self) -> Option<CtrlClientId> {
+        self.op.get().map(|_| self.client_id)
+    }
 }
 
 /// The reply and queue snapshot a command rejection needs. Passed whole to

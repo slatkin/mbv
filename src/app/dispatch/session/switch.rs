@@ -6,36 +6,26 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 fn replacement_view(snapshot: Option<&mbv_ctrl::UnifiedQueueStateData>) -> QueueView {
-    let mut view = QueueView::default();
-    if let Some(snapshot) = snapshot {
-        view.adopt(
-            snapshot,
-            crate::app::state::queue_view::AdoptCause::Replacement,
-        );
-    }
-    view
+    snapshot.map_or_else(QueueView::default, QueueView::from_snapshot)
 }
 
 impl App {
-    pub(in crate::app) fn switch_to_direct_remote(
+    fn attach_remote_owner(
         &mut self,
-        sess: &mbv_emby::SessionInfo,
         remote: mbv_remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &mbv_remote_player::DaemonEndpoint,
-    ) {
-        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
-        self.stop_visualizer_capture();
+        current_is_home: bool,
+    ) -> bool {
         let initial_unified_state = remote.unified_queue_state();
         let always_play_next = self.config.lock().unwrap().always_play_next;
         if endpoint.is_local() && (self.suspended_local.is_some() || current_is_home) {
             remote.disconnect();
             self.restore_local_mode("Local playback restored");
-            return;
+            return false;
         }
         self.player_endpoint = Some(endpoint.clone());
-        let keep_home_link = current_is_home;
-        if keep_home_link {
+        if current_is_home {
             if !self.config.lock().unwrap().stay_alive {
                 self.player.stop();
             }
@@ -54,9 +44,7 @@ impl App {
             self.player = PlayerProxy::from_remote(remote, always_play_next);
             self.player_rx = remote_rx;
         }
-
         self.sync_subtitle_prefs_to_player();
-
         self.rebind_mpris_to_current_player();
 
         let daemon_view = replacement_view(initial_unified_state.as_ref());
@@ -65,9 +53,24 @@ impl App {
         } else {
             self.remote_view = Some(daemon_view);
         }
+        self.advance_queue_epoch();
+        true
+    }
+
+    pub(in crate::app) fn switch_to_direct_remote(
+        &mut self,
+        sess: &mbv_emby::SessionInfo,
+        remote: mbv_remote_player::RemotePlayer,
+        remote_rx: mpsc::Receiver<PlayerEvent>,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) {
+        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
+        self.stop_visualizer_capture();
+        if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
+            return;
+        }
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.advance_queue_epoch();
         self.remote.direct_remote_connected = true;
         self.remote.direct_remote_label = {
             let name = sess.device_name.trim();
@@ -120,46 +123,9 @@ impl App {
         let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
         let previous_route = self.active_route.clone();
-        let initial_unified_state = remote.unified_queue_state();
-        let always_play_next = self.config.lock().unwrap().always_play_next;
-        if endpoint.is_local() && (self.suspended_local.is_some() || current_is_home) {
-            remote.disconnect();
-            self.restore_local_mode("Local playback restored");
+        if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
             return;
         }
-        self.player_endpoint = Some(endpoint.clone());
-        let keep_home_link = current_is_home;
-        if keep_home_link {
-            if !self.config.lock().unwrap().stay_alive {
-                self.player.stop();
-            }
-            self.suspended_local = Some(SuspendedLocalSession {
-                player: std::mem::replace(
-                    &mut self.player,
-                    PlayerProxy::from_remote(remote, always_play_next),
-                ),
-                player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
-            });
-        } else {
-            // #233: tear down the previous remote connection's socket
-            // before dropping the old PlayerProxy, so its reader thread
-            // observes the shutdown and exits instead of leaking.
-            self.player.disconnect_remote();
-            self.player = PlayerProxy::from_remote(remote, always_play_next);
-            self.player_rx = remote_rx;
-        }
-
-        self.sync_subtitle_prefs_to_player();
-
-        self.rebind_mpris_to_current_player();
-
-        let daemon_view = replacement_view(initial_unified_state.as_ref());
-        if endpoint.is_local() {
-            self.adopt_local_daemon_queue(daemon_view);
-        } else {
-            self.remote_view = Some(daemon_view);
-        }
-        self.advance_queue_epoch();
         self.remote.direct_remote_connected = false;
         self.remote.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());

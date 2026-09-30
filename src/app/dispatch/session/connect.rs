@@ -197,13 +197,9 @@ impl App {
         self.player_rx = remote_rx;
         self.player_endpoint = Some(endpoint.clone());
         self.rebind_mpris_to_current_player();
-        let mut tab = QueueView::default();
-        if let Some(snapshot) = initial_unified_state.as_ref() {
-            tab.adopt(
-                snapshot,
-                crate::app::state::queue_view::AdoptCause::Replacement,
-            );
-        }
+        let tab = initial_unified_state
+            .as_ref()
+            .map_or_else(QueueView::default, QueueView::from_snapshot);
         self.remote_view = Some(tab);
         self.remote.direct_remote_connected = true;
         self.advance_queue_epoch();

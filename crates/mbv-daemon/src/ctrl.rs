@@ -88,6 +88,12 @@ impl CtrlClients {
         }
     }
 
+    fn retain_clients(&mut self, keep: impl FnMut(&CtrlClient) -> bool) {
+        let was_nonempty = !self.connection.is_empty();
+        self.connection.retain(keep);
+        self.notify_last_client_gone(was_nonempty);
+    }
+
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
@@ -150,9 +156,7 @@ impl CtrlClients {
     }
 
     pub(crate) fn remove(&mut self, id: CtrlClientId) {
-        let was_nonempty = !self.connection.is_empty();
-        self.connection.retain(|c| c.id != id);
-        self.notify_last_client_gone(was_nonempty);
+        self.retain_clients(|client| client.id != id);
         if self.connection.is_empty() && self.authority == AuthorityHolder::Ctrl {
             self.authority = AuthorityHolder::None;
         }
@@ -214,10 +218,12 @@ impl CtrlClients {
     /// Broadcast `json` to all connected ctrl clients. Removes any client
     /// whose channel has failed (broken pipe / disconnected).
     pub(crate) fn broadcast_to_all(&mut self, json: &str) {
-        let was_nonempty = !self.connection.is_empty();
-        self.connection
-            .retain(|c| c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok());
-        self.notify_last_client_gone(was_nonempty);
+        self.retain_clients(|client| {
+            client
+                .tx
+                .send(CtrlOutbound::Event(json.to_string()))
+                .is_ok()
+        });
     }
 
     /// Broadcasts a state event gated per client, excluding `except` when
@@ -236,20 +242,24 @@ impl CtrlClients {
         unified_json: &str,
         except: Option<CtrlClientId>,
     ) {
-        let was_nonempty = !self.connection.is_empty();
-        self.connection.retain(|c| {
-            if except == Some(c.id) {
+        self.retain_clients(|client| {
+            if except == Some(client.id) {
                 return true;
             }
-            let json = match (c.audiobookshelf.queue, c.audiobookshelf.book_queue) {
+            let json = match (
+                client.audiobookshelf.queue,
+                client.audiobookshelf.book_queue,
+            ) {
                 (true, true) => unified_full_json,
                 (true, false) => unified_abs_json,
                 (false, true) => unified_book_json,
                 (false, false) => unified_json,
             };
-            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
+            client
+                .tx
+                .send(CtrlOutbound::Event(json.to_string()))
+                .is_ok()
         });
-        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Sends redacted Audiobookshelf progress `json` only to clients that
@@ -257,27 +267,29 @@ impl CtrlClients {
     /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
     /// drop-on-failed-send semantics for the peers that do receive it.
     pub(crate) fn broadcast_progress_gated(&mut self, json: &str) {
-        let was_nonempty = !self.connection.is_empty();
-        self.connection.retain(|c| {
-            if !c.audiobookshelf.progress {
+        self.retain_clients(|client| {
+            if !client.audiobookshelf.progress {
                 return true;
             }
-            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
+            client
+                .tx
+                .send(CtrlOutbound::Event(json.to_string()))
+                .is_ok()
         });
-        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Sends redacted Audiobookshelf book progress `json` only to clients
     /// that advertised `abs-book-progress` at Hello.
     pub(crate) fn broadcast_book_progress_gated(&mut self, json: &str) {
-        let was_nonempty = !self.connection.is_empty();
-        self.connection.retain(|c| {
-            if !c.audiobookshelf.book_progress {
+        self.retain_clients(|client| {
+            if !client.audiobookshelf.book_progress {
                 return true;
             }
-            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
+            client
+                .tx
+                .send(CtrlOutbound::Event(json.to_string()))
+                .is_ok()
         });
-        self.notify_last_client_gone(was_nonempty);
     }
 
     /// Broadcast a `Disconnected` notification to all connected ctrl clients

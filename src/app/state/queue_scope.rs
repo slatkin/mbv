@@ -1,5 +1,5 @@
 use crate::app::{App, PendingQueueAction, QueueScope, QueueScopeResolution, QueueView, UndoEntry};
-use mbv_queue::QueueSlotId;
+use mbv_queue::{QueueItem, QueueSlotId};
 
 impl App {
     pub(in crate::app) fn has_remote_queue(&self) -> bool {
@@ -51,6 +51,27 @@ impl App {
         slot_id: QueueSlotId,
     ) -> Option<usize> {
         self.queue_for_scope(scope).slot_index(slot_id)
+    }
+
+    pub(in crate::app) fn remove_queue_slots_where(
+        &mut self,
+        predicate: impl Fn(&QueueItem) -> bool,
+    ) {
+        for scope in [QueueScope::Local, QueueScope::Remote] {
+            if scope == QueueScope::Remote && !self.has_remote_queue() {
+                continue;
+            }
+            let slot_ids = self
+                .queue_for_scope(scope)
+                .slots()
+                .iter()
+                .filter(|slot| predicate(&slot.item))
+                .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
+                .collect::<Vec<_>>();
+            if !slot_ids.is_empty() {
+                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+            }
+        }
     }
 
     pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut QueueView {

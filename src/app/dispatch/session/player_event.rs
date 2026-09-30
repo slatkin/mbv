@@ -484,15 +484,11 @@ impl App {
         // queue with a separately delivered PlayerStatus coordinate.
         *self.player.status.lock().unwrap() = unified.status.clone();
         let scope = self.playing_queue_scope();
-        let view = self.queue_for_scope(scope);
-        let cause = if view.lineage() == unified.lineage {
-            crate::app::state::queue_view::AdoptCause::Background {
-                held: self.queue_cursor_held_by_user(),
-            }
-        } else {
-            crate::app::state::queue_view::AdoptCause::Replacement
-        };
-        self.queue_for_scope_mut(scope).adopt(unified, cause);
+        let held = self.queue_cursor_held_by_user();
+        self.queue_for_scope_mut(scope).adopt(
+            unified,
+            crate::app::state::queue_view::AdoptCause::Background { held },
+        );
         if scope == crate::app::QueueScope::Local {
             self.adopt_owner_source(unified);
         }

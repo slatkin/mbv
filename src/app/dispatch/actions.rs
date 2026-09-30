@@ -294,12 +294,9 @@ impl App {
         // owner replaces its canonical queue, begins playback at `start_idx`,
         // and the Client adopts the resulting snapshot; the Client holds no
         // editable queue of its own.
-        let sent = self.replace_queue_on_owner(
+        let sent = self.replace_emby_queue_on_owner(
             self.playing_queue_scope(),
-            items
-                .iter()
-                .map(|i| QueueItem::Emby(Box::new(i.clone())))
-                .collect(),
+            items,
             start_idx,
             queue_source,
         );
@@ -385,12 +382,9 @@ impl App {
                 }
                 // Row 5.3 (design D6): the replacement is an answered owner
                 // op; the Client holds no editable queue of its own.
-                let sent = self.replace_queue_on_owner(
+                let sent = self.replace_emby_queue_on_owner(
                     self.playing_queue_scope(),
-                    episodes
-                        .iter()
-                        .map(|i| QueueItem::Emby(Box::new(i.clone())))
-                        .collect(),
+                    episodes,
                     0,
                     mbv_queue::QueueSource::Series,
                 );
@@ -411,9 +405,9 @@ impl App {
         }
         // Row 5.3 (design D6): the replacement is an answered owner op; the
         // Client holds no editable queue of its own.
-        let sent = self.replace_queue_on_owner(
+        let sent = self.replace_emby_queue_on_owner(
             self.playing_queue_scope(),
-            vec![QueueItem::Emby(Box::new(item))],
+            vec![item],
             0,
             mbv_queue::QueueSource::Unknown,
         );
@@ -451,22 +445,13 @@ impl App {
                 // no editable queue, so the entries appear only when the
                 // owner's answer is adopted.
                 let scope = self.viewed_queue_scope();
-                let sent = self.queue_op(
+                self.append_on_owner(
                     scope,
-                    mbv_remote_player::QueueOp::Append {
-                        items: items
-                            .into_iter()
-                            .map(|i| mbv_queue::QueueItem::Emby(Box::new(i)))
-                            .collect(),
-                        before: None,
-                    },
+                    items
+                        .into_iter()
+                        .map(|item| QueueItem::Emby(Box::new(item)))
+                        .collect(),
                 );
-                if sent != QueueOpEdit::NotApplied {
-                    if self.local_queue_metadata_applies(scope) {
-                        self.queue_dirty = true;
-                    }
-                    self.advance_queue_epoch();
-                }
             }
             Err(e) => {
                 drop(client);
@@ -495,7 +480,7 @@ impl App {
             self.viewed_queue_scope()
         };
         if !start_playback {
-            return self.enqueue_queue_item(item, scope);
+            return self.append_on_owner(scope, vec![item]);
         }
         if !self.is_cast_attached() && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -524,20 +509,9 @@ impl App {
             // The item is new to the owner's queue: append it as an
             // answered op, then start the slot the answer adopted at the
             // tail.
-            let sent = self.queue_op(
-                scope,
-                mbv_remote_player::QueueOp::Append {
-                    items: vec![item],
-                    before: None,
-                },
-            );
-            if sent == QueueOpEdit::NotApplied {
+            if !self.append_on_owner(scope, vec![item]) {
                 return false;
             }
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.advance_queue_epoch();
             let last = self
                 .queue_for_scope(scope)
                 .total_queue_len()
@@ -583,12 +557,16 @@ impl App {
         true
     }
 
-    fn enqueue_queue_item(&mut self, item: QueueItem, scope: crate::app::QueueScope) -> bool {
-        // The entry appears only when the owner's answered Append is adopted.
+    pub(in crate::app) fn append_on_owner(
+        &mut self,
+        scope: crate::app::QueueScope,
+        items: Vec<QueueItem>,
+    ) -> bool {
+        // Entries appear only when the owner's answered Append is adopted.
         let sent = self.queue_op(
             scope,
             mbv_remote_player::QueueOp::Append {
-                items: vec![item],
+                items,
                 before: None,
             },
         );

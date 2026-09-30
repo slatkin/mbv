@@ -157,6 +157,7 @@ pub(super) fn handle_queue_source_update(
     new_source: mbv_queue::QueueSource,
     cmd_lineage: mbv_queue::QueueLineage,
 ) {
+    let except_op_client = ctx.except_op_client();
     let supports_operation = ctx
         .ctrl_clients
         .lock()
@@ -200,7 +201,7 @@ pub(super) fn handle_queue_source_update(
             queue,
             source,
             transitions,
-            ctx.op.get().map(|_| ctx.client_id),
+            except_op_client,
         );
     }
 }
@@ -283,6 +284,7 @@ pub(super) fn handle_queue_replace(
                 return;
             }
         };
+    let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -337,7 +339,7 @@ pub(super) fn handle_queue_replace(
         &ctx.owner.core.queue,
         &ctx.owner.core.source,
         &ctx.owner.core.transitions,
-        ctx.op.get().map(|_| ctx.client_id),
+        except_op_client,
     );
 }
 
@@ -379,6 +381,7 @@ pub(super) fn handle_queue_append(
     items: Vec<QueueItem>,
     before: Option<u64>,
 ) {
+    let except_op_client = ctx.except_op_client();
     if items.is_empty() {
         return;
     }
@@ -476,7 +479,7 @@ pub(super) fn handle_queue_append(
         queue,
         source,
         transitions,
-        ctx.op.get().map(|_| ctx.client_id),
+        except_op_client,
     );
     // Append to the player's queue rather than replacing the whole queue.
     // A following move keeps the run's order aligned with canonical inserts.
