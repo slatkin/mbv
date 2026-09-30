@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_resize_worker};
 use mbv_render::layout;
@@ -59,10 +60,8 @@ impl App {
         #[cfg(test)]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
-        let launch_restore = mbv_config::load_tui_launch_state().map_or(
-            crate::app::state::app_struct::LaunchRestore::Done,
-            crate::app::state::app_struct::LaunchRestore::Pending,
-        );
+        let launch_restore =
+            mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {

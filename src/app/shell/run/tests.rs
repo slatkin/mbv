@@ -1,17 +1,15 @@
 use super::*;
 use crate::app::AudiobookshelfEvent;
 use crate::app::SessionEvent;
-use crate::app::dispatch::session::service_startup::{
-    AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
-};
+use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
 use crate::app::state::events::LibEvent;
 use crate::app::tests::make_app_stub;
-use crate::app::tests::render_fixtures::make_movie_app;
+use crate::app::tests::render_fixtures::{catalog_receiver, make_movie_app};
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfUser,
 };
-use mbv_core::service_runtime::{ServiceState, SetupGeneration};
+use mbv_core::service_runtime::ServiceState;
 use mbv_images::series_image_cache_key;
 use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_ui_model::browse::ServerRows;
@@ -145,25 +143,6 @@ fn audiobookshelf_library(id: &str, media_type: &str) -> AudiobookshelfLibrary {
         name: id.into(),
         media_type: media_type.into(),
     }
-}
-
-type CatalogResult = Result<
-    (
-        Vec<AudiobookshelfLibrary>,
-        HashMap<(String, String), AudiobookshelfProgress>,
-        HashMap<String, AudiobookshelfBookProgress>,
-    ),
-    AudiobookshelfError,
->;
-
-fn catalog_receiver(
-    generation: SetupGeneration,
-    result: CatalogResult,
-) -> AudiobookshelfCatalogReceiver {
-    let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(AudiobookshelfCatalogCompletion { generation, result })
-        .expect("catalog channel");
-    AudiobookshelfCatalogReceiver { generation, rx }
 }
 
 /// Reads exactly `expected` library-fetch events off the shell's `lib_tx`

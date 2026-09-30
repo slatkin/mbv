@@ -5,12 +5,20 @@
 //! The render presentation suite that once lived beside these was pruned in
 //! issue #801 section 2; only the fixtures with surviving callers remain.
 
+use crate::app::dispatch::session::service_startup::{
+    AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver,
+};
 use crate::app::tests::{QueueViewTestExt, make_app_stub};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
+use mbv_audiobookshelf::{
+    AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfLibrary, AudiobookshelfProgress,
+};
+use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
+use std::collections::HashMap;
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -139,4 +147,23 @@ pub fn make_music_group_app() -> App {
     });
 
     app
+}
+
+pub(in crate::app) type CatalogResult = Result<
+    (
+        Vec<AudiobookshelfLibrary>,
+        HashMap<(String, String), AudiobookshelfProgress>,
+        HashMap<String, AudiobookshelfBookProgress>,
+    ),
+    AudiobookshelfError,
+>;
+
+pub(in crate::app) fn catalog_receiver(
+    generation: SetupGeneration,
+    result: CatalogResult,
+) -> AudiobookshelfCatalogReceiver {
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(AudiobookshelfCatalogCompletion { generation, result })
+        .expect("catalog channel");
+    AudiobookshelfCatalogReceiver { generation, rx }
 }

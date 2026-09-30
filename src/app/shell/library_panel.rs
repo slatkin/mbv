@@ -12,6 +12,7 @@ use ratatui::layout::Rect;
 
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::book_content::BookContent;
 use mbv_components::library_panel::owner::LaunchSelector;
@@ -219,13 +220,13 @@ impl Model {
     /// owner has received its current content. Resolution is deliberately
     /// pill-before-item and happens once; later refreshes only project content.
     pub(in crate::app) fn reanchor_pending_launch_destination(&mut self) {
-        let crate::app::state::app_struct::LaunchRestore::TabSettled { state, tab } =
-            self.app.launch_restore.clone()
-        else {
+        // Borrow-match first so the Pending/Done sync passes never clone the snapshot.
+        let LaunchRestore::TabSettled { state, tab } = &self.app.launch_restore else {
             return;
         };
+        let (state, tab) = (state.clone(), *tab);
         if self.app.tab != tab {
-            self.app.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
+            self.app.launch_restore = LaunchRestore::Done;
             return;
         }
         let Some(key) = self.active_library_key() else {
@@ -256,7 +257,7 @@ impl Model {
             // the same path as an ordinary panel-focus change; no Queue
             // target is carried by the launch snapshot.
             self.sync_queue();
-            self.app.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
+            self.app.launch_restore = LaunchRestore::Done;
         }
     }
 

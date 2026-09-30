@@ -44,33 +44,37 @@ impl App {
 
     /// Resolve a saved Service identity only after its catalog has been built.
     pub(in crate::app) fn resolve_launch_service_tab(&mut self, kind: ServiceKind) {
-        let tab = match &self.launch_restore {
-            LaunchRestore::Pending(state) => match &state.tab {
-                TabIdentity::ServiceLibrary {
-                    kind: saved_kind,
-                    library_id,
-                } if *saved_kind == kind => Some(match kind {
-                    ServiceKind::Emby => self
-                        .libs
-                        .iter()
-                        .position(|library| library.library.id == *library_id)
-                        .map_or(TabSelection::Home, TabSelection::EmbyLibrary),
-                    ServiceKind::Audiobookshelf => self
-                        .audiobookshelf_libraries
-                        .iter()
-                        .position(|library| library.id == *library_id)
-                        .map_or(TabSelection::Home, TabSelection::AudiobookshelfLibrary),
-                }),
-                _ => None,
-            },
-            _ => None,
+        let LaunchRestore::Pending(state) = &self.launch_restore else {
+            return;
         };
-        if let Some(tab) = tab {
-            self.select_tab(tab);
+        let TabIdentity::ServiceLibrary {
+            kind: saved_kind,
+            library_id,
+        } = &state.tab
+        else {
+            return;
+        };
+        if *saved_kind != kind {
+            return;
         }
+        let tab = match kind {
+            ServiceKind::Emby => self
+                .libs
+                .iter()
+                .position(|library| library.library.id == *library_id)
+                .map_or(TabSelection::Home, TabSelection::EmbyLibrary),
+            ServiceKind::Audiobookshelf => self
+                .audiobookshelf_libraries
+                .iter()
+                .position(|library| library.id == *library_id)
+                .map_or(TabSelection::Home, TabSelection::AudiobookshelfLibrary),
+        };
+        self.select_tab(tab);
     }
 
-    /// Expire a saved destination after its Service startup fails.
+    /// Abandon a saved Service destination after its Service startup fails:
+    /// re-target the snapshot to Home, where the destination re-anchor still
+    /// applies its focus.
     pub(in crate::app) fn expire_launch_service(&mut self, kind: ServiceKind) {
         if matches!(
             &self.launch_restore,

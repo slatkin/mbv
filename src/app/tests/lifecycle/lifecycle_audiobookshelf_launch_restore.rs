@@ -1,65 +1,21 @@
+use super::lifecycle_launch_restore::{assert_expired_launch_restores_saved_focus, launch_state};
 use super::*;
 use crate::app::dispatch::session::service_startup::{
-    AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfCompletion,
-    AudiobookshelfCompletionKind,
+    AudiobookshelfCatalogReceiver, AudiobookshelfCompletion, AudiobookshelfCompletionKind,
 };
+use crate::app::tests::render_fixtures::catalog_receiver;
 use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
-use mbv_core::service_runtime::SetupGeneration;
 use std::collections::HashMap;
 
 fn pending_audiobookshelf_launch() -> App {
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Audiobookshelf,
-                library_id: "abs-books".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            selector: None,
-            item: None,
-        });
-    app
-}
-
-fn assert_audiobookshelf_expiry_restores_focus(app: App) {
-    assert_eq!(app.tab, TabSelection::Home);
-    assert!(matches!(
-        app.launch_restore,
-        crate::app::state::app_struct::LaunchRestore::TabSettled {
-            tab: TabSelection::Home,
-            ..
-        }
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Audiobookshelf,
+        "abs-books",
+        mbv_config::LaunchPanelFocus::Queue,
     ));
-
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    assert_eq!(model.app.panel_focus, PanelFocus::Queue);
-    assert_eq!(
-        model.app.launch_restore,
-        crate::app::state::app_struct::LaunchRestore::Done
-    );
-}
-
-type CatalogResult = Result<
-    (
-        Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
-        HashMap<(String, String), mbv_audiobookshelf::AudiobookshelfProgress>,
-        HashMap<String, mbv_audiobookshelf::AudiobookshelfBookProgress>,
-    ),
-    AudiobookshelfError,
->;
-
-fn catalog_receiver(
-    generation: SetupGeneration,
-    result: CatalogResult,
-) -> AudiobookshelfCatalogReceiver {
-    let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(AudiobookshelfCatalogCompletion { generation, result })
-        .expect("catalog completion channel");
-    AudiobookshelfCatalogReceiver { generation, rx }
+    app
 }
 
 /// #810: validation failure expires the snapshot before catalog startup exists.
@@ -76,7 +32,7 @@ fn audiobookshelf_validation_error_expires_launch_and_restores_saved_focus() {
         )),
     });
 
-    assert_audiobookshelf_expiry_restores_focus(app);
+    assert_expired_launch_restores_saved_focus(app);
 }
 
 /// #810: non-auth catalog failure expires the launch snapshot too.
@@ -92,7 +48,7 @@ fn audiobookshelf_catalog_error_expires_launch_and_restores_saved_focus() {
     ));
 
     assert!(app.drain_audiobookshelf_events());
-    assert_audiobookshelf_expiry_restores_focus(app);
+    assert_expired_launch_restores_saved_focus(app);
 }
 
 /// #810: validation-worker disconnect expires only its accepted generation.
@@ -103,7 +59,7 @@ fn audiobookshelf_startup_worker_disconnect_expires_launch_and_restores_saved_fo
 
     app.handle_audiobookshelf_worker_disconnect(generation);
 
-    assert_audiobookshelf_expiry_restores_focus(app);
+    assert_expired_launch_restores_saved_focus(app);
 }
 
 /// #810: a current catalog-worker disconnect settles Home and applies saved focus.
@@ -116,7 +72,7 @@ fn audiobookshelf_catalog_worker_disconnect_expires_launch_and_restores_saved_fo
     app.setup.audiobookshelf_catalog_rx = Some(AudiobookshelfCatalogReceiver { generation, rx });
 
     assert!(app.drain_audiobookshelf_events());
-    assert_audiobookshelf_expiry_restores_focus(app);
+    assert_expired_launch_restores_saved_focus(app);
 }
 
 /// #810: a stale catalog-worker disconnect cannot settle or move the launch.

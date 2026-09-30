@@ -121,9 +121,8 @@ impl App {
 
     pub(in crate::app) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
-        // Keep legacy launch keys readable for the one-time migration, but do
-        // not update them during the session. Launch state is written only by
-        // the exit snapshot path; these writes are for unrelated preferences.
+        // Launch state is written only by the exit snapshot path; these
+        // writes are for unrelated preferences.
         let mut v = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())

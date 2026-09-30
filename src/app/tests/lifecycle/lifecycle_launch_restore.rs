@@ -16,17 +16,11 @@ fn saved_service_tab_stays_on_home_keeps_focus_and_later_configure_does_not_move
     app.config.lock().unwrap().emby_setup = setup;
     app.emby_runtime.state = initial_state;
     app.panel_focus = PanelFocus::Library;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-movies".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            selector: None,
-            item: None,
-        });
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Emby,
+        "lib-movies",
+        mbv_config::LaunchPanelFocus::Queue,
+    ));
 
     app.resolve_library_tab_pending();
 
@@ -61,24 +55,35 @@ fn saved_service_tab_stays_on_home_keeps_focus_and_later_configure_does_not_move
     assert_eq!(model.app.tab, TabSelection::Home);
 }
 
+pub(super) fn launch_state(
+    kind: ServiceKind,
+    library_id: &str,
+    panel_focus: mbv_config::LaunchPanelFocus,
+) -> mbv_config::TuiLaunchState {
+    mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::ServiceLibrary {
+            kind,
+            library_id: library_id.into(),
+        },
+        panel_focus,
+        selector: None,
+        item: None,
+    }
+}
+
 fn pending_emby_launch() -> crate::app::App {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Connecting;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-movies".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            selector: None,
-            item: None,
-        });
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Emby,
+        "lib-movies",
+        mbv_config::LaunchPanelFocus::Queue,
+    ));
     app
 }
 
-fn assert_expired_launch_restores_saved_focus(app: crate::app::App) {
+pub(super) fn assert_expired_launch_restores_saved_focus(app: crate::app::App) {
     assert_eq!(app.tab, TabSelection::Home);
     assert!(matches!(
         app.launch_restore,
@@ -181,16 +186,11 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
     app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Connecting;
-    let saved = mbv_config::TuiLaunchState {
-        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-        tab: mbv_config::TabIdentity::ServiceLibrary {
-            kind: ServiceKind::Emby,
-            library_id: "lib-movies".into(),
-        },
-        panel_focus: mbv_config::LaunchPanelFocus::Library,
-        selector: None,
-        item: None,
-    };
+    let saved = launch_state(
+        ServiceKind::Emby,
+        "lib-movies",
+        mbv_config::LaunchPanelFocus::Library,
+    );
     app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(saved.clone());
     app.resolve_library_tab_pending();
     assert_eq!(app.tab, TabSelection::Home, "catalog has not arrived yet");
@@ -227,17 +227,11 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     second_library.collection_type = "tvshows".into();
     app.libs.push(crate::app::LibraryTab::new(second_library));
     app.tab = TabSelection::Home;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-shows".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Library,
-            selector: None,
-            item: None,
-        });
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Emby,
+        "lib-shows",
+        mbv_config::LaunchPanelFocus::Library,
+    ));
 
     let views: Vec<mbv_emby_model::EmbyItem> = app
         .libs
@@ -269,17 +263,11 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
 fn daemon_attach_fetch_home_restores_service_tab_without_startup_worker() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-movies".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Library,
-            selector: None,
-            item: None,
-        });
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Emby,
+        "lib-movies",
+        mbv_config::LaunchPanelFocus::Library,
+    ));
     let http = mbv_net::mock_http::MockHttp::new();
     http.respond(
         200,
@@ -307,17 +295,11 @@ fn daemon_attach_fetch_home_restores_service_tab_without_startup_worker() {
 #[test]
 fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.launch_restore =
-        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-movies".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Library,
-            selector: None,
-            item: None,
-        });
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
+        ServiceKind::Emby,
+        "lib-movies",
+        mbv_config::LaunchPanelFocus::Library,
+    ));
     app.set_library_tab(0);
     // #810: a catalog arriving after an explicit move must not restore the
     // abandoned Service tab over the user's selection.
@@ -342,16 +324,11 @@ fn reanchor_does_not_apply_to_a_tab_changed_by_stale_destination_normalization()
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.panel_focus = PanelFocus::Library;
     app.launch_restore = crate::app::state::app_struct::LaunchRestore::TabSettled {
-        state: mbv_config::TuiLaunchState {
-            version: mbv_config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_config::TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id: "lib-movies".into(),
-            },
-            panel_focus: mbv_config::LaunchPanelFocus::Queue,
-            selector: None,
-            item: None,
-        },
+        state: launch_state(
+            ServiceKind::Emby,
+            "lib-movies",
+            mbv_config::LaunchPanelFocus::Queue,
+        ),
         tab: TabSelection::EmbyLibrary(0),
     };
     let mut model = Model::new(app);
