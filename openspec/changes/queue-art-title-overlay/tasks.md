@@ -58,7 +58,7 @@
 - [ ] 4.1 Manual probe against the real Emby server (no code): confirm a Movie has a Logo image
   (`/Items/{id}/Images/Logo`) and that an Episode's show answers `/Items/{SeriesId}/Images/Logo`;
   record any mismatch with D7's owner rule in design.md before 4.3.
-- [ ] 4.2 Extend `compose_title_overlay` (mbv-images) with an optional ready logo image: contain-fit
+- [x] 4.2 Extend `compose_title_overlay` (mbv-images) with an optional ready logo image: contain-fit
   into the top-left box (two cell rows tall, at most half the width, inset by the side padding),
   no scrim for that row, bottom title row kept for a two-part title, nothing drawn for the top row
   of a one-part title. Contract owned: the compositor's pixel output. Verify with unit tests: with
