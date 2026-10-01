@@ -34,7 +34,8 @@ fn compose_title_overlay_bitmap(
             mbv_theme::PLAYBACK_CONTEXT_FG
         }),
     };
-    mbv_images::title_overlay::compose_title_overlay(&base, font, text, colours)
+    // Logo ownership and wiring land in task 4.3; the compositor takes `None` here.
+    mbv_images::title_overlay::compose_title_overlay(&base, None, font, text, colours)
 }
 
 impl App {

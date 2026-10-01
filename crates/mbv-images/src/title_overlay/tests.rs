@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
+use image::{DynamicImage, GenericImageView, Rgb, RgbImage, Rgba, RgbaImage};
 use num_traits::ToPrimitive;
 use ratatui_image::FontSize;
 
@@ -13,6 +13,12 @@ const COLOURS: TitleOverlayColours = TitleOverlayColours {
 
 fn black_image(width: u32, height: u32) -> DynamicImage {
     DynamicImage::ImageRgb8(RgbImage::from_pixel(width, height, Rgb([80, 90, 100])))
+}
+
+/// A solid opaque-green logo, so [`bounds_for`]'s green channel isolates the
+/// logo's pixels from the base and from the red/blue title ink.
+fn logo_image(width: u32, height: u32) -> DynamicImage {
+    DynamicImage::ImageRgba8(RgbaImage::from_pixel(width, height, Rgba([0, 255, 0, 255])))
 }
 
 fn has_darker_than_scrim_pixel(
@@ -50,6 +56,7 @@ fn one_part_paints_top_row_with_down_right_shadow_and_preserves_bottom_pixels() 
     let base = black_image(240, 120);
     let image = compose_title_overlay(
         &base,
+        None,
         FontSize::new(12, 20),
         TitleOverlayText {
             context: None,
@@ -76,6 +83,7 @@ fn one_part_paints_top_row_with_down_right_shadow_and_preserves_bottom_pixels() 
 fn two_parts_paint_context_at_top_and_title_at_bottom() {
     let image = compose_title_overlay(
         &black_image(240, 120),
+        None,
         FontSize::new(12, 20),
         TitleOverlayText {
             context: Some("Artist"),
@@ -96,6 +104,7 @@ fn long_text_is_ellipsised_within_the_artwork_margin_regression_aed359900() {
     let cell = FontSize::new(8, 20);
     let image = compose_title_overlay(
         &black_image(80, 80),
+        None,
         cell,
         TitleOverlayText {
             context: None,
@@ -144,6 +153,7 @@ fn blank_context_is_absent_and_leaves_bottom_untouched_regression_aed359900() {
     let base = black_image(240, 120);
     let without_context = compose_title_overlay(
         &base,
+        None,
         FontSize::new(12, 20),
         TitleOverlayText {
             context: None,
@@ -153,6 +163,7 @@ fn blank_context_is_absent_and_leaves_bottom_untouched_regression_aed359900() {
     );
     let with_blank_context = compose_title_overlay(
         &base,
+        None,
         FontSize::new(12, 20),
         TitleOverlayText {
             context: Some(" \t "),
@@ -174,6 +185,7 @@ fn unsupported_cjk_character_is_not_covered() {
 fn title_height_tracks_cell_rows_at_different_box_sizes() {
     let small = compose_title_overlay(
         &black_image(240, 120),
+        None,
         FontSize::new(12, 20),
         TitleOverlayText {
             context: None,
@@ -183,6 +195,7 @@ fn title_height_tracks_cell_rows_at_different_box_sizes() {
     );
     let large = compose_title_overlay(
         &black_image(480, 240),
+        None,
         FontSize::new(24, 40),
         TitleOverlayText {
             context: None,
@@ -196,4 +209,140 @@ fn title_height_tracks_cell_rows_at_different_box_sizes() {
     let large_rows = f64::from(large_bounds.3 - large_bounds.1 + 1) / 40.0;
 
     assert!((small_rows - large_rows).abs() < 0.05);
+}
+
+#[test]
+fn a_logo_replaces_the_top_row_without_a_scrim() {
+    let base = black_image(240, 120);
+    let image = compose_title_overlay(
+        &base,
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: None,
+            title: "A title",
+        },
+        COLOURS,
+    );
+    let logo = bounds_for(&image, 1).expect("logo pixels should be painted");
+    let padding = 240 * 3 / 100;
+
+    // Top-left, inside a box two cell rows tall (40) and half the width (120).
+    assert_eq!(logo, (padding, padding, padding + 39, padding + 39));
+    assert!(logo.3 - logo.1 < 40);
+    assert!(logo.2 - logo.0 < 120);
+    // No scrim: the top row outside the logo keeps the base's pixels.
+    assert_eq!(image.get_pixel(0, 0), base.get_pixel(0, 0));
+    assert_eq!(image.get_pixel(200, 5), base.get_pixel(200, 5));
+    assert_eq!(image.get_pixel(239, 19), base.get_pixel(239, 19));
+}
+
+#[test]
+fn a_two_part_title_keeps_its_bottom_row_when_a_logo_is_present() {
+    let image = compose_title_overlay(
+        &black_image(240, 120),
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: Some("Artist"),
+            title: "Song",
+        },
+        COLOURS,
+    );
+    let logo = bounds_for(&image, 1).expect("logo pixels should be painted");
+    let title = bounds_for(&image, 2).expect("title glyphs should be painted");
+
+    assert!(logo.3 - logo.1 < 40);
+    assert_eq!(bounds_for(&image, 0), None);
+    assert!(title.1 >= 100);
+}
+
+#[test]
+fn a_one_part_title_with_a_logo_draws_no_text() {
+    let image = compose_title_overlay(
+        &black_image(240, 120),
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: None,
+            title: "A title",
+        },
+        COLOURS,
+    );
+
+    assert!(bounds_for(&image, 0).is_none());
+    assert!(bounds_for(&image, 2).is_none());
+    assert!(bounds_for(&image, 1).is_some());
+}
+
+#[test]
+fn a_logo_is_drawn_when_the_replaced_top_row_text_is_uncovered() {
+    let image = compose_title_overlay(
+        &black_image(240, 120),
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: None,
+            title: "界",
+        },
+        COLOURS,
+    );
+
+    assert!(bounds_for(&image, 1).is_some());
+    assert!(bounds_for(&image, 0).is_none());
+}
+
+#[test]
+fn an_uncovered_context_row_is_not_gated_when_a_logo_replaces_it() {
+    let image = compose_title_overlay(
+        &black_image(240, 120),
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: Some("界"),
+            title: "Song",
+        },
+        COLOURS,
+    );
+
+    assert!(bounds_for(&image, 1).is_some());
+    assert!(bounds_for(&image, 2).is_some());
+}
+
+#[test]
+fn an_uncovered_title_row_keeps_the_base_when_a_logo_is_present() {
+    let base = black_image(240, 120);
+    let image = compose_title_overlay(
+        &base,
+        Some(&logo_image(40, 40)),
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: Some("Artist"),
+            title: "界",
+        },
+        COLOURS,
+    );
+
+    assert_eq!(image.to_rgb8(), base.to_rgb8());
+}
+
+#[test]
+fn without_a_logo_the_text_only_composition_is_unchanged() {
+    let base = black_image(240, 120);
+    let image = compose_title_overlay(
+        &base,
+        None,
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: None,
+            title: "A title",
+        },
+        COLOURS,
+    );
+
+    // The top row is still scrimmed across its whole height (the logo path
+    // would leave these pixels at the base value) and the title ink remains.
+    assert_eq!(image.get_pixel(239, 0), image.get_pixel(239, 19));
+    assert_ne!(image.get_pixel(0, 0), base.get_pixel(0, 0));
+    assert!(bounds_for(&image, 0).is_some());
 }

@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
-use image::{DynamicImage, RgbaImage};
+use image::{DynamicImage, GenericImageView, RgbaImage};
 use num_traits::ToPrimitive;
 use ratatui_image::FontSize;
 
@@ -60,9 +60,18 @@ pub fn covers(text: &str) -> bool {
 }
 
 /// Draws a title over a cover-sized image without changing pixels outside its text rows.
+///
+/// A ready `logo` replaces the top text row: it is contain-fitted into a
+/// top-left box two cell rows tall and at most half the artwork wide, inset by
+/// the side padding, and painted with no scrim (design D7). A two-part title
+/// then keeps its bottom row; a one-part title is the logo alone. The
+/// [`covers`] gate applies only to the text rows actually drawn, so a logo is
+/// painted even when the top row's text is uncovered. Without a logo the
+/// output is the text-only composition, unchanged.
 #[must_use]
 pub fn compose_title_overlay(
     base: &DynamicImage,
+    logo: Option<&DynamicImage>,
     cell: FontSize,
     text: TitleOverlayText<'_>,
     colours: TitleOverlayColours,
@@ -74,21 +83,28 @@ pub fn compose_title_overlay(
 
     let context = text.context.filter(|context| !context.trim().is_empty());
     let has_context = context.is_some();
-    let top_text = context.unwrap_or(text.title);
-    if !covers(top_text) || (has_context && !covers(text.title)) {
-        return DynamicImage::ImageRgba8(image);
-    }
-
     let row_height = u32::from(cell.height).min(image.height());
-    let top_y = 0;
-    paint_row(
-        &mut image,
-        top_y,
-        row_height,
-        cell.height,
-        top_text,
-        colours.context,
-    );
+
+    if let Some(logo) = logo {
+        // The top text row is not drawn, so only the bottom title row is gated.
+        if has_context && !covers(text.title) {
+            return DynamicImage::ImageRgba8(image);
+        }
+        paint_logo(&mut image, logo, cell.height);
+    } else {
+        let top_text = context.unwrap_or(text.title);
+        if !covers(top_text) || (has_context && !covers(text.title)) {
+            return DynamicImage::ImageRgba8(image);
+        }
+        paint_row(
+            &mut image,
+            0,
+            row_height,
+            cell.height,
+            top_text,
+            colours.context,
+        );
+    }
 
     if has_context {
         let bottom_y = image.height().saturating_sub(row_height);
@@ -103,6 +119,26 @@ pub fn compose_title_overlay(
     }
 
     DynamicImage::ImageRgba8(image)
+}
+
+/// Contain-fits `logo` into a top-left box inset by [`SIDE_PADDING_PERCENT`],
+/// at most two cell rows tall and at most half the artwork wide, then paints it
+/// source-over. No scrim is drawn behind it.
+fn paint_logo(image: &mut RgbaImage, logo: &DynamicImage, cell_height: u16) {
+    let (width, height) = image.dimensions();
+    let padding = (width * SIDE_PADDING_PERCENT / 100).min(width / 2);
+    let box_width = (width / 2).min(width.saturating_sub(padding * 2)).max(1);
+    let box_height = (u32::from(cell_height) * 2)
+        .min(height.saturating_sub(padding * 2))
+        .max(1);
+    let fitted = logo.resize(box_width, box_height, image::imageops::FilterType::Lanczos3);
+    let (logo_width, logo_height) = fitted.dimensions();
+    if logo_width == 0 || logo_height == 0 {
+        return;
+    }
+    let x = padding.min(width.saturating_sub(logo_width));
+    let y = padding.min(height.saturating_sub(logo_height));
+    image::imageops::overlay(image, &fitted.to_rgba8(), i64::from(x), i64::from(y));
 }
 
 fn paint_row(
