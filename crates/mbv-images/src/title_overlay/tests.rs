@@ -15,6 +15,25 @@ fn black_image(width: u32, height: u32) -> DynamicImage {
     DynamicImage::ImageRgb8(RgbImage::from_pixel(width, height, Rgb([80, 90, 100])))
 }
 
+fn has_dark_outline_adjacent_to_red_ink(image: &DynamicImage) -> bool {
+    let rgb = image.to_rgb8();
+    rgb.enumerate_pixels().any(|(x, y, pixel)| {
+        let dark = pixel.0[0] < 40 && pixel.0[1] < 45 && pixel.0[2] < 50;
+        dark && [
+            (x.checked_sub(1), Some(y)),
+            (x.checked_add(1), Some(y)),
+            (Some(x), y.checked_sub(1)),
+            (Some(x), y.checked_add(1)),
+        ]
+        .into_iter()
+        .filter_map(|(x, y)| Some((x?, y?)))
+        .any(|(x, y)| {
+            rgb.get_pixel_checked(x, y)
+                .is_some_and(|adjacent| adjacent.0[0] > 80 && adjacent.0[1] < 80)
+        })
+    })
+}
+
 fn bounds_for(image: &DynamicImage, channel: usize) -> Option<(u32, u32, u32, u32)> {
     let mut bounds: Option<(u32, u32, u32, u32)> = None;
     for (x, y, pixel) in image.to_rgb8().enumerate_pixels() {
@@ -44,6 +63,7 @@ fn one_part_paints_top_row_and_preserves_bottom_pixels() {
     );
 
     assert_ne!(image.get_pixel(0, 0), base.get_pixel(0, 0));
+    assert!(has_dark_outline_adjacent_to_red_ink(&image));
     assert_eq!(image.get_pixel(239, 0), image.get_pixel(239, 19));
     assert_eq!(image.get_pixel(120, 60), base.get_pixel(120, 60));
     assert_eq!(image.get_pixel(0, 119), base.get_pixel(0, 119));

@@ -7,7 +7,7 @@ use num_traits::ToPrimitive;
 use ratatui_image::FontSize;
 
 static FONT: LazyLock<FontArc> = LazyLock::new(|| {
-    FontArc::try_from_slice(include_bytes!("../assets/LexendDeca-Medium.ttf"))
+    FontArc::try_from_slice(include_bytes!("../assets/LexendDeca-SemiBold.ttf"))
         .expect("the embedded Lexend Deca font should be valid")
 });
 
@@ -147,6 +147,12 @@ fn paint_row(
         let glyph = glyph_id.with_scale_and_position(scale, point(x, baseline));
         if let Some(outlined) = FONT.outline_glyph(glyph) {
             let bounds = outlined.px_bounds();
+            let outline_radius = (glyph_height / 16.0)
+                .round()
+                .max(1.0)
+                .to_i32()
+                .expect("glyph outline radius should fit in a signed pixel coordinate");
+            let mut coverage_pixels = Vec::new();
             outlined.draw(|glyph_x, glyph_y, coverage| {
                 let origin_x = bounds
                     .min
@@ -164,34 +170,63 @@ fn paint_row(
                     .expect("glyph width should fit in a signed pixel coordinate");
                 let glyph_y = i32::try_from(glyph_y)
                     .expect("glyph height should fit in a signed pixel coordinate");
-                let Some(pixel_x) = origin_x
-                    .checked_add(glyph_x)
-                    .and_then(|x| u32::try_from(x).ok())
-                else {
+                let Some(pixel_x) = origin_x.checked_add(glyph_x) else {
                     return;
                 };
-                let Some(pixel_y) = origin_y
-                    .checked_add(glyph_y)
-                    .and_then(|y| u32::try_from(y).ok())
-                else {
+                let Some(pixel_y) = origin_y.checked_add(glyph_y) else {
                     return;
                 };
-                if pixel_x >= right_limit || pixel_y >= height {
+                let alpha = (coverage.clamp(0.0, 1.0) * 255.0)
+                    .round()
+                    .to_u8()
+                    .expect("clamped glyph coverage should fit in one byte");
+                if alpha == 0 {
                     return;
                 }
-                blend_pixel(
-                    image,
-                    pixel_x,
-                    pixel_y,
-                    colour,
-                    (coverage.clamp(0.0, 1.0) * 255.0)
-                        .round()
-                        .to_u8()
-                        .expect("clamped glyph coverage should fit in one byte"),
-                );
+                coverage_pixels.push((pixel_x, pixel_y, alpha));
             });
+            paint_glyph(image, &coverage_pixels, outline_radius, colour, right_limit);
         }
         x += advance;
+    }
+}
+
+fn paint_glyph(
+    image: &mut RgbaImage,
+    coverage_pixels: &[(i32, i32, u8)],
+    radius: i32,
+    colour: [u8; 3],
+    right_limit: u32,
+) {
+    let (width, height) = image.dimensions();
+    for &(pixel_x, pixel_y, alpha) in coverage_pixels {
+        for (offset_x, offset_y) in [
+            (-radius, 0),
+            (radius, 0),
+            (0, -radius),
+            (0, radius),
+            (-radius, -radius),
+            (radius, -radius),
+            (-radius, radius),
+            (radius, radius),
+        ] {
+            let outline = pixel_x
+                .checked_add(offset_x)
+                .zip(pixel_y.checked_add(offset_y))
+                .and_then(|(x, y)| Some((u32::try_from(x).ok()?, u32::try_from(y).ok()?)))
+                .filter(|(x, y)| *x < width && *y < height);
+            if let Some((x, y)) = outline {
+                blend_pixel(image, x, y, [0, 0, 0], alpha);
+            }
+        }
+    }
+    for &(x, y, alpha) in coverage_pixels {
+        if let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y))
+            && x < right_limit
+            && y < height
+        {
+            blend_pixel(image, x, y, colour, alpha);
+        }
     }
 }
 
