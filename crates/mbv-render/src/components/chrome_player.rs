@@ -148,13 +148,13 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
 }
 
 /// The queue column's transport: the controls and status text on the top
-/// row (right below the visual slot), the title row, then the seekbar with
-/// its flanking times. The shared [`transport_rows`] positions still name
-/// the rows top-down; the queue band reinterprets R0..R2 — the controls
-/// ride R0, R1 is the title row, the seekbar rides R2 — while the Library
-/// strip keeps the seekbar on R0. Anything short of the three rows degrades
-/// to the rows present (controls keep painting, missing rows clear their
-/// hit geometry).
+/// row (right below the visual slot), the title row, the seekbar with its
+/// flanking times, then one blank row. The shared [`transport_rows`]
+/// positions still name the rows top-down; the queue band reinterprets
+/// R0..R3 — the controls ride R0, R1 is the title row, the seekbar rides
+/// R2, R3 stays blank — while the Library strip keeps the seekbar on R0.
+/// Anything short of the four rows degrades to the rows present (controls
+/// keep painting, missing rows clear their hit geometry).
 fn render_queue_panel(
     frame: &mut Frame,
     ctx: &mut PlaybackRenderContext<'_>,
@@ -177,13 +177,18 @@ fn render_queue_panel(
         ctx.playback.next = Rect::default();
         ctx.playback.seekbar = Rect::default();
     }
-    let (Some(controls_row), Some(title_row), Some(seek_row)) =
-        (rows.seekbar, rows.title, rows.indicator_row)
+    let (Some(controls_row), Some(title_row), Some(seek_row), Some(gap_row)) =
+        (rows.seekbar, rows.title, rows.indicator_row, rows.extra_row)
     else {
         // Short of a full band: keep whatever top row exists painted and
         // clear the rest rather than borrow a neighbour's row.
         clear_hits(ctx);
-        if let Some(first) = rows.seekbar.or(rows.title).or(rows.indicator_row) {
+        if let Some(first) = rows
+            .seekbar
+            .or(rows.title)
+            .or(rows.indicator_row)
+            .or(rows.extra_row)
+        {
             blank(frame, first, panel_bg);
         }
         return;
@@ -195,6 +200,7 @@ fn render_queue_panel(
                 controls: controls_row,
                 title: title_row,
                 seek: seek_row,
+                gap: gap_row,
             },
             title.as_str(),
             ctx,
@@ -204,6 +210,7 @@ fn render_queue_panel(
         blank(frame, controls_row, panel_bg);
         blank(frame, title_row, panel_bg);
         blank(frame, seek_row, panel_bg);
+        blank(frame, gap_row, panel_bg);
     }
 }
 

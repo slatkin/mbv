@@ -171,6 +171,12 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
 /// Queue playback panel's paint step both call, so the breakpoint, the gap,
 /// and the side-by-side/stacked split cannot drift between them (review of
 /// tasks 3.5-3.8).
+/// Blank rows at the bottom of the queue column's transport band, below the
+/// seekbar. The queue band is always
+/// `PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS` rows: controls, title,
+/// seekbar, gap.
+pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
+
 #[must_use]
 pub fn queue_playback_transport_area(
     slot_region: Rect,
@@ -178,11 +184,11 @@ pub fn queue_playback_transport_area(
     card_width: u16,
     card_height: u16,
 ) -> Rect {
-    // The transport band is always three rows: the controls with the status
+    // The transport band is always four rows: the controls with the status
     // text, the title row (a two-part title shares it, context left and
-    // title right; a lone title paints yellow), and the seekbar with its
-    // flanking times.
-    let player_rows = PLAYER_BOX_HEIGHT;
+    // title right; a lone title paints yellow), the seekbar with its
+    // flanking times, and one blank row.
+    let player_rows = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
     if column_wide {
         let gap = if card_width > 0 {
             SLOT_TRANSPORT_GAP
@@ -207,8 +213,8 @@ pub fn queue_playback_transport_area(
 
 /// Rows the queue column spends on the visual slot and the transport, above
 /// the Queue panel (the header row is a separate, always-spent input). Stacked
-/// below 100 columns: slot rows plus the transport's three rows (controls,
-/// title, seekbar); 100+ side by side: the taller of the two governs. Idle collapses both to
+/// below 100 columns: slot rows plus the transport's four rows (controls,
+/// title, seekbar, gap); 100+ side by side: the taller of the two governs. Idle collapses both to
 /// zero rows (task 3.6); paused counts as active. Shared by the root
 /// placements and the Queue playback panel's draw-path paint.
 #[must_use]

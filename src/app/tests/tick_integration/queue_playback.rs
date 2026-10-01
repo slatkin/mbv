@@ -159,7 +159,9 @@ mod strip_hits {
 
 #[test]
 fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints() {
-    use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
+    use mbv_render::arrangements::chrome::{
+        PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS, QUEUE_TRANSPORT_GAP_ROWS,
+    };
 
     for width in [80, 120] {
         let mut app = active_app(PanelMode::QueueOnly);
@@ -201,12 +203,12 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         let queue = root.queue.expect("queue placed");
         assert_eq!(
             playback.height,
-            QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT,
+            QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS,
             "header and transport remain at width {width}"
         );
         assert_eq!(
             queue.y,
-            playback.y + QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT,
+            playback.y + QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS,
             "queue starts below the header and transport at width {width}"
         );
 

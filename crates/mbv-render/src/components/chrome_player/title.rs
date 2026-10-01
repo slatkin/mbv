@@ -228,11 +228,13 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
 }
 
 /// The queue column's band rows in paint order: the transport controls and
-/// status text, the title row, then the seekbar flanked by its times.
+/// status text, the title row, the seekbar flanked by its times, then one
+/// blank row.
 pub struct QueueBand {
     pub controls: Rect,
     pub title: Rect,
     pub seek: Rect,
+    pub gap: Rect,
 }
 
 /// The queue column's band: the controls and status text on the top row
@@ -250,12 +252,14 @@ pub fn render_queue_band(
     title: &str,
     ctx: &mut PlaybackRenderContext<'_>,
 ) {
-    if band.title.height == 0
+    if band.controls.height == 0
+        || band.controls.width == 0
+        || band.title.height == 0
         || band.title.width == 0
         || band.seek.height == 0
         || band.seek.width == 0
-        || band.controls.height == 0
-        || band.controls.width == 0
+        || band.gap.height == 0
+        || band.gap.width == 0
     {
         ctx.playback.play_pause = Rect::default();
         ctx.playback.stop = Rect::default();
@@ -292,6 +296,12 @@ pub fn render_queue_band(
         render_queue_title_only(frame, band.title, title, ctx, panel_bg);
     }
     render_queue_seek_row(frame, band.seek, ctx, panel_bg);
+    // The blank row below the seekbar: panel fill, no hit geometry.
+    frame.render_widget(
+        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
+            .style(Style::default().bg(panel_bg)),
+        band.gap,
+    );
 }
 
 /// The queue band's status indicators as plain text on `row_bg`: no pill

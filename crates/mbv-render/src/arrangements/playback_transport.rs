@@ -11,7 +11,7 @@ use ratatui::layout::Rect;
 /// The transport's rows for one panel rect, top-down (row 0 first). A row
 /// shows only when the panel has rows to spend on it. The Library strip
 /// paints seekbar, title, then a blank trailing row; the queue band
-/// reinterprets the same positions as controls, title, seekbar.
+/// reinterprets the same positions as controls, title, seekbar, gap.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TransportRows {
     pub seekbar: Option<Rect>,
@@ -19,8 +19,8 @@ pub struct TransportRows {
     /// Row 2: the Library strip's blank trailing row; the queue band's
     /// seekbar row.
     pub indicator_row: Option<Rect>,
-    /// The fourth row (row 3), present only when the band is tall enough.
-    /// No current panel paints it.
+    /// The fourth row (row 3), present only when the band is tall enough:
+    /// the queue band's blank gap row.
     pub extra_row: Option<Rect>,
 }
 
