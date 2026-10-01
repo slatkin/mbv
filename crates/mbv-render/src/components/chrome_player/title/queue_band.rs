@@ -63,9 +63,9 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
 /// behind it, separator spans (`⧸`, `│`, `[`, `]`) are dropped, and the
 /// surviving items join with one space. A chip-style span (dark text on its
 /// own fill) recovers its fill as the text colour so it stays readable on
-/// the row. Uppercased like the strip's cluster; one trailing space when
-/// non-empty so the value never touches the row edge. Returns the spans
-/// and their width.
+/// the row. Uppercased like the strip's cluster; no trailing space — the
+/// controls row's one-column inset owns the edge pad, so a trailing space
+/// here would double it. Returns the spans and their width.
 fn queue_indicator_spans(
     ctx: &PlaybackRenderContext<'_>,
     row_bg: Color,
@@ -85,9 +85,6 @@ fn queue_indicator_spans(
             spans.push(Span::styled(" ", Style::default().bg(row_bg)));
         }
         spans.push(Span::styled(trimmed.to_uppercase(), style));
-    }
-    if !spans.is_empty() {
-        spans.push(Span::styled(" ", Style::default().bg(row_bg)));
     }
     let width: u16 = spans
         .iter()
