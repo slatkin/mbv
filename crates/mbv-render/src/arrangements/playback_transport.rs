@@ -8,20 +8,28 @@
 
 use ratatui::layout::Rect;
 
-/// The transport's rows for one panel rect, top-down (row 0 first). A row
-/// shows only when the panel has rows to spend on it. The Library strip
-/// paints seekbar, title, then a blank trailing row; the queue band
-/// reinterprets the same positions as controls, title, seekbar, gap.
+/// The Library strip's rows for one panel rect, top-down (row 0 first). A
+/// row shows only when the panel has rows to spend on it: seekbar, title,
+/// then a blank trailing row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TransportRows {
     pub seekbar: Option<Rect>,
     pub title: Option<Rect>,
-    /// Row 2: the Library strip's blank trailing row; the queue band's
-    /// seekbar row.
+    /// Row 2: the blank trailing row.
     pub indicator_row: Option<Rect>,
-    /// The fourth row (row 3), present only when the band is tall enough:
-    /// the queue band's blank gap row.
-    pub extra_row: Option<Rect>,
+}
+
+/// The queue band's rows for one panel rect, top-down: the controls, a blank
+/// row (the now-playing title rides the queue header row), the seekbar with
+/// its flanking times, then a blank gap row. Each shows only when the panel
+/// has rows to spend on it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QueueBandRows {
+    pub controls: Option<Rect>,
+    /// The blank row between the controls and the seekbar.
+    pub blank: Option<Rect>,
+    pub seek: Option<Rect>,
+    pub gap: Option<Rect>,
 }
 
 /// The title row's width decision: whether the stop/next transport buttons
@@ -40,19 +48,32 @@ pub struct TransportMeasure {
 /// Pure placement — no painting, no app state.
 #[must_use]
 pub fn transport_rows(area: Rect, rows: u16) -> TransportRows {
-    let row = |n: u16| {
-        (rows > n && area.width > 0).then_some(Rect {
-            y: area.y + n,
-            height: 1,
-            ..area
-        })
-    };
     TransportRows {
-        seekbar: row(0),
-        title: row(1),
-        indicator_row: row(2),
-        extra_row: row(3),
+        seekbar: row_at(area, rows, 0),
+        title: row_at(area, rows, 1),
+        indicator_row: row_at(area, rows, 2),
     }
+}
+
+/// Which queue band rows render in a panel rect of `rows` available height.
+/// Pure placement — no painting, no app state.
+#[must_use]
+pub fn queue_band_rows(area: Rect, rows: u16) -> QueueBandRows {
+    QueueBandRows {
+        controls: row_at(area, rows, 0),
+        blank: row_at(area, rows, 1),
+        seek: row_at(area, rows, 2),
+        gap: row_at(area, rows, 3),
+    }
+}
+
+/// Row `n` of `area`, present only when `rows` of height reach it.
+fn row_at(area: Rect, rows: u16, n: u16) -> Option<Rect> {
+    (rows > n && area.width > 0).then_some(Rect {
+        y: area.y + n,
+        height: 1,
+        ..area
+    })
 }
 
 /// Whether the title row's stop/next buttons fit: only when the glyph, the

@@ -111,10 +111,10 @@ impl App {
         remote_state: RemoteSlotState,
         daemon_endpoint: &str,
     ) -> (&'static str, String) {
-        let icon = if self.use_nerd_fonts {
-            "\u{f1616}"
-        } else {
-            "\u{1F5A7}"
+        let icon = match (self.use_nerd_fonts, remote_state) {
+            (false, _) => "\u{1F5A7}",
+            (true, RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote) => "\u{f0119}",
+            (true, _) => "\u{f0118}",
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = match remote_state {
@@ -227,7 +227,11 @@ impl App {
                     .fill),
                 ),
                 Span::styled(
-                    " UNSAVED ",
+                    if self.use_nerd_fonts {
+                        " \u{f0f42} "
+                    } else {
+                        " UNSAVED "
+                    },
                     Style::default()
                         .fg(mbv_theme::TEXT_FOCUS_ACCENT)
                         .bg(
@@ -256,7 +260,11 @@ impl App {
                     .fill),
                 ),
                 Span::styled(
-                    " AUTOSAVE ",
+                    if self.use_nerd_fonts {
+                        " \u{f18ea} "
+                    } else {
+                        " AUTOSAVE "
+                    },
                     Style::default()
                         .fg(mbv_theme::ACCENT)
                         .bg(

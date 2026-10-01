@@ -332,6 +332,9 @@ mod tests {
     /// background.
     type PaintedRow = (String, Vec<Color>, Vec<Color>);
 
+    /// The header row plus the band's four rows.
+    type BandRows = (PaintedRow, PaintedRow, PaintedRow, PaintedRow, PaintedRow);
+
     /// The media-type families of the requirements table, as the projection
     /// carries them (title part, optional context part). The mapping itself is
     /// core's table (task 1.1); these fixtures pin the painted behaviour per
@@ -355,9 +358,7 @@ mod tests {
     /// the now-playing title while a target plays. The band is always four
     /// rows: the controls on y 2, the former title row kept blank on y 3,
     /// the seekbar flanked by its times on y 4, one blank row on y 5.
-    fn painted_band_rows(
-        parts: PlaybackTitleParts,
-    ) -> (PaintedRow, PaintedRow, PaintedRow, PaintedRow, PaintedRow) {
+    fn painted_band_rows(parts: PlaybackTitleParts) -> BandRows {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.show_controls = true;
@@ -379,18 +380,15 @@ mod tests {
         (row(1), row(2), row(3), row(4), row(5))
     }
 
-    /// The former title band row's contract: blank, panel fill edge to
-    /// edge.
-    fn assert_title_row_blank(text: &str, bgs: &[Color]) {
-        assert!(
-            text.trim().is_empty(),
-            "the former title row paints blank: {text:?}"
-        );
+    /// A blank band row's contract (the former title row and the gap row):
+    /// no text, panel fill edge to edge.
+    fn assert_row_blank(text: &str, bgs: &[Color]) {
+        assert!(text.trim().is_empty(), "the row carries no text: {text:?}");
         let panel_bg =
             palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
         assert!(
             bgs.iter().all(|bg| *bg == panel_bg),
-            "the former title row keeps the panel fill: {text:?}"
+            "the row keeps the panel fill: {text:?}"
         );
     }
 
@@ -413,20 +411,6 @@ mod tests {
         assert!(
             !text.contains('/'),
             "the seekbar row carries no `pos/dur` cluster: {label}: {text:?}"
-        );
-    }
-
-    /// The gap row's contract: no text, panel fill edge to edge.
-    fn assert_gap_row_blank(text: &str, bgs: &[Color]) {
-        assert!(
-            text.trim().is_empty(),
-            "the gap row carries no text: {text:?}"
-        );
-        let panel_bg =
-            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
-        assert!(
-            bgs.iter().all(|bg| *bg == panel_bg),
-            "the gap row keeps the panel fill: {text:?}"
         );
     }
 
@@ -455,107 +439,116 @@ mod tests {
     /// column's header row: the now-playing title rides the header while a
     /// target plays. A two-part title shares the row — the context part
     /// (the show) left-aligned in the yellow context role, the title part
-    /// right-aligned in the green title role, neither carrying a time. A
+    /// right-aligned in the aqua title role, neither carrying a time. A
     /// single title paints yellow. The band keeps the controls on top, the
     /// former title row blank, the seekbar, and the gap row. (The Library
     /// strip's combined row keeps its own contract, owned by
     /// `chrome_player.rs`'s painter test.)
+    fn band_for(title: &str, context: Option<&str>) -> BandRows {
+        painted_band_rows(parts_for(title, context))
+    }
+
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
-    fn split_title_band_paints_each_media_types_parts_in_their_roles(
+    fn band_keeps_slate_controls_blank_title_row_and_blank_gap_row(
         #[case] title: &str,
         #[case] context: Option<&str>,
     ) {
-        let (
-            (header, header_fgs, _),
-            (first, _, first_bgs),
-            (title_row, _, title_row_bgs),
-            (third, _, _),
-            (fourth, _, fourth_bgs),
-        ) = painted_band_rows(parts_for(title, context));
-        // The controls row rides the top of the band on the slate fill
-        // edge to edge in either family.
+        let (_, (first, _, first_bgs), (title_row, _, title_row_bgs), _, (gap, _, gap_bgs)) =
+            band_for(title, context);
         assert_controls_row_fill(&first, &first_bgs);
-        // The former title row paints blank on the panel fill.
-        assert_title_row_blank(&title_row, &title_row_bgs);
-        // The gap row below the seekbar carries no text on the panel
-        // fill in either family.
-        assert_gap_row_blank(&fourth, &fourth_bgs);
-        if let Some(context) = context {
-            // One shared header row: the show left-aligned in the context
-            // role, the title right-aligned in the title role, no time on
-            // it.
-            assert_cells_carry(
-                &header,
-                &header_fgs,
-                context,
-                palette::PLAYBACK_CONTEXT_FG,
-                "the context part",
-            );
-            assert_cells_carry(
-                &header,
-                &header_fgs,
-                title,
-                palette::PLAYBACK_TITLE_FG,
-                "the title part",
-            );
-            assert!(
-                header.starts_with(format!("   > {context}").as_str()),
-                "the aqua play icon leads and the show hugs the left indent: {header:?}"
-            );
-            assert!(
-                header.ends_with(format!("{title}   ").as_str()),
-                "the title hugs the right indent (one plus two inset cells): {header:?}"
-            );
-            assert!(
-                !header.contains('/'),
-                "no time rides the shared header row: {header:?}"
-            );
-            // The seekbar rides below the blank title row with its times.
-            assert_seek_row_flanks_times(&third, "the two-part band");
-            assert!(!third.contains(title) && !third.contains(context));
-            assert!(
-                first.contains('X'),
-                "the stop glyph paints on the top row: {first:?}"
-            );
-            assert!(!first.contains(title) && !first.contains(context));
-            assert!(
-                !first.contains("0:00"),
-                "no time on the controls row: {first:?}"
-            );
-        } else {
-            // The lone title paints yellow on the header row behind the
-            // play icon.
-            assert!(
-                header.starts_with(format!("   > {title}").as_str()),
-                "the play icon leads the lone title: {header:?}"
-            );
-            assert!(
-                !header.contains('/'),
-                "no time rides the header row: {header:?}"
-            );
-            assert_cells_carry(
-                &header,
-                &header_fgs,
-                title,
-                palette::PLAYBACK_CONTEXT_FG,
-                "the lone title",
-            );
-            assert!(
-                !third.contains(title),
-                "the title stays on its row: {third:?}"
-            );
-            assert_seek_row_flanks_times(&third, "the single-part band");
-            assert!(
-                first.contains('X'),
-                "the stop glyph paints on the controls row: {first:?}"
-            );
-            assert!(
-                !first.contains(title) && !first.contains("0:00"),
-                "a single-part title stays off the controls row: {first:?}"
-            );
-        }
+        assert_row_blank(&title_row, &title_row_bgs);
+        assert_row_blank(&gap, &gap_bgs);
+    }
+
+    #[rstest]
+    #[case::emby_movie("Movie Name", None)]
+    #[case::emby_episode("Pilot", Some("Series"))]
+    fn seek_row_flanks_times_and_carries_no_title(
+        #[case] title: &str,
+        #[case] context: Option<&str>,
+    ) {
+        let (_, _, _, (seek, _, _), _) = band_for(title, context);
+        assert_seek_row_flanks_times(&seek, title);
+        assert!(
+            !seek.contains(title),
+            "the title stays off the seek row: {seek:?}"
+        );
+    }
+
+    #[rstest]
+    #[case::emby_movie("Movie Name", None)]
+    #[case::emby_episode("Pilot", Some("Series"))]
+    fn controls_row_carries_the_stop_glyph_and_neither_title_nor_time(
+        #[case] title: &str,
+        #[case] context: Option<&str>,
+    ) {
+        let (_, (controls, _, _), _, _, _) = band_for(title, context);
+        assert!(
+            controls.contains('X'),
+            "the stop glyph paints on the controls row: {controls:?}"
+        );
+        assert!(
+            !controls.contains(title) && !controls.contains("0:00"),
+            "no title or time on the controls row: {controls:?}"
+        );
+    }
+
+    #[test]
+    fn two_part_header_paints_context_and_title_in_their_roles() {
+        let ((header, fgs, _), ..) = band_for("Pilot", Some("Series"));
+        assert_cells_carry(
+            &header,
+            &fgs,
+            "Series",
+            palette::PLAYBACK_CONTEXT_FG,
+            "the context part",
+        );
+        assert_cells_carry(
+            &header,
+            &fgs,
+            "Pilot",
+            palette::PLAYBACK_TITLE_FG,
+            "the title part",
+        );
+    }
+
+    #[test]
+    fn two_part_header_hugs_both_indents_and_carries_no_time() {
+        let ((header, _, _), ..) = band_for("Pilot", Some("Series"));
+        assert!(
+            header.starts_with("   > Series"),
+            "the aqua play icon leads and the show hugs the left indent: {header:?}"
+        );
+        assert!(
+            header.ends_with("Pilot   "),
+            "the title hugs the right indent (one plus two inset cells): {header:?}"
+        );
+        assert!(
+            !header.contains('/'),
+            "no time rides the shared header row: {header:?}"
+        );
+    }
+
+    #[test]
+    fn single_title_header_paints_the_context_role_behind_the_play_icon() {
+        let ((header, fgs, _), ..) = band_for("Movie Name", None);
+        assert!(
+            header.starts_with("   > Movie Name"),
+            "the play icon leads the lone title: {header:?}"
+        );
+        assert!(
+            !header.contains('/'),
+            "no time rides the header row: {header:?}"
+        );
+        assert_cells_carry(
+            &header,
+            &fgs,
+            "Movie Name",
+            palette::PLAYBACK_CONTEXT_FG,
+            "the lone title",
+        );
     }
 
     #[test]
@@ -612,10 +605,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn seek_row_shows_partial_progress_and_seeks_from_the_bar_only() {
-        // Regression guard: at 75s of 300s the seek row paints a 25% fill
-        // between its flanking times, and only the bar span seeks.
+    /// The seek row painted at 75s of 300s: each cell's glyph and fg, and
+    /// the retained seekbar hit rect.
+    fn painted_quarter_seek_row() -> (Vec<(String, Color)>, Rect) {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
@@ -628,36 +620,76 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
             .unwrap();
         let buf = terminal.backend().buffer();
-        let text: String = (0..40).map(|x| buf[(x, 4)].symbol().to_string()).collect();
-        // ` 1:15 <bar> 5:00 `: elapsed left, total right, bar of 28.
+        let cells = (0..40)
+            .map(|x| (buf[(x, 4)].symbol().to_string(), buf[(x, 4)].fg))
+            .collect();
+        let (_, seekbar) = panel.transport_hits();
+        (cells, seekbar)
+    }
+
+    fn seek_row_text(cells: &[(String, Color)]) -> String {
+        cells.iter().map(|(symbol, _)| symbol.as_str()).collect()
+    }
+
+    fn glyph_fgs(cells: &[(String, Color)], glyph: &str) -> Vec<Color> {
+        cells
+            .iter()
+            .filter(|(symbol, _)| symbol == glyph)
+            .map(|(_, fg)| *fg)
+            .collect()
+    }
+
+    // Regression guards for 7fdb7fee8 (seekbar between the titles and the
+    // controls, flanked by its times): at 75s of 300s the seek row paints a
+    // 25% fill, and only the bar span seeks.
+    #[test]
+    fn seek_row_flanks_the_bar_with_elapsed_and_total() {
+        let (cells, _) = painted_quarter_seek_row();
+        let text = seek_row_text(&cells);
         assert!(
             text.starts_with(" 1:15 "),
             "elapsed left of the bar: {text:?}"
         );
         assert!(text.ends_with(" 5:00 "), "total right of the bar: {text:?}");
-        assert_eq!(text.chars().filter(|c| *c == '\u{2593}').count(), 7);
-        assert_eq!(text.chars().filter(|c| *c == '\u{2591}').count(), 21);
-        // A quarter fill: 7 accent cells, then the track colour.
-        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 4)].fg).collect();
-        for x in 6u16..13 {
-            assert_eq!(
-                fgs[usize::from(x)],
-                palette::ACCENT,
-                "filled cell {x}: {text:?}"
-            );
-        }
-        for x in 13u16..34 {
-            assert_eq!(
-                fgs[usize::from(x)],
-                palette::PROGRESS_TRACK,
-                "unplayed cell {x}: {text:?}"
-            );
-        }
-        // The retained hit rect is the bar span only: x 6, width 28.
-        let (_, seekbar) = panel.transport_hits();
+    }
+
+    #[test]
+    fn seek_row_fills_a_quarter_of_the_bar() {
+        let (cells, _) = painted_quarter_seek_row();
+        let filled = glyph_fgs(&cells, "\u{2593}").len();
+        let unplayed = glyph_fgs(&cells, "\u{2591}").len();
+        assert_eq!(filled * 3, unplayed, "a quarter of the bar is filled");
+    }
+
+    #[test]
+    fn seek_row_paints_the_fill_accent() {
+        let (cells, _) = painted_quarter_seek_row();
+        assert!(
+            glyph_fgs(&cells, "\u{2593}")
+                .iter()
+                .all(|fg| *fg == palette::ACCENT)
+        );
+    }
+
+    #[test]
+    fn seek_row_paints_the_unplayed_span_in_the_track_colour() {
+        let (cells, _) = painted_quarter_seek_row();
+        assert!(
+            glyph_fgs(&cells, "\u{2591}")
+                .iter()
+                .all(|fg| *fg == palette::PROGRESS_TRACK)
+        );
+    }
+
+    #[test]
+    fn seek_hit_rect_covers_only_the_bar_not_the_flanking_times() {
+        let (cells, seekbar) = painted_quarter_seek_row();
+        let is_bar = |(symbol, _): &(String, Color)| symbol == "\u{2593}" || symbol == "\u{2591}";
+        let first = cells.iter().position(is_bar).unwrap();
+        let last = cells.iter().rposition(is_bar).unwrap();
         assert_eq!(
-            (seekbar.x, seekbar.y, seekbar.width),
-            (6, 4, 28),
+            (usize::from(seekbar.x), usize::from(seekbar.right())),
+            (first, last + 1),
             "the bar span seeks, the time labels never do"
         );
     }

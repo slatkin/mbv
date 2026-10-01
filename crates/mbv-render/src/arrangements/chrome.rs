@@ -168,7 +168,8 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
 /// seekbar.
 pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
 
-/// The queue column's transport band height: controls, title, seekbar, gap.
+/// The queue column's transport band height: controls, a blank row (the
+/// now-playing title rides the header row), seekbar, gap.
 pub const QUEUE_TRANSPORT_ROWS: u16 = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
 
 /// The transport rect for one painted visual slot, within the queue playback
@@ -186,9 +187,8 @@ pub fn queue_playback_transport_area(
     card_height: u16,
 ) -> Rect {
     // The transport band is always four rows: the controls with the status
-    // text, the title row (a two-part title shares it, context left and
-    // title right; a lone title paints yellow), the seekbar with its
-    // flanking times, and one blank row.
+    // text, a blank row (the now-playing title rides the queue header row,
+    // not the band), the seekbar with its flanking times, and one blank row.
     let player_rows = QUEUE_TRANSPORT_ROWS;
     if column_wide {
         let gap = if card_width > 0 {
@@ -215,8 +215,8 @@ pub fn queue_playback_transport_area(
 /// Rows the queue column spends on the visual slot and the transport, above
 /// the Queue panel (the header row is a separate, always-spent input). Stacked
 /// below 100 columns: slot rows plus the transport's four rows (controls,
-/// title, seekbar, gap); 100+ side by side: the taller of the two governs. Idle collapses both to
-/// zero rows (task 3.6); paused counts as active. Shared by the root
+/// blank, seekbar, gap); 100+ side by side: the taller of the two governs.
+/// Idle collapses both to zero rows (task 3.6); paused counts as active. Shared by the root
 /// placements and the Queue playback panel's draw-path paint.
 #[must_use]
 pub fn queue_playback_rows(column_wide: bool, card_height: u16, playback_active: bool) -> u16 {

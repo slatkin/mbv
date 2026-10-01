@@ -224,9 +224,8 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     spans
 }
 
-/// The queue column's band rows in paint order: the transport controls and
-/// status text, the title row, the seekbar flanked by its times, then one
-/// blank row.
+/// The queue column's painted band rows (the blank title row between the
+/// controls and the seekbar is painted by the caller).
 pub struct QueueBand {
     pub controls: Rect,
     pub seek: Rect,
@@ -269,10 +268,7 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
     );
     render_queue_seek_row(frame, band.seek, ctx, panel_bg);
     // The blank row below the seekbar: panel fill, no hit geometry.
-    frame.render_widget(
-        Block::default().style(Style::default().bg(panel_bg)),
-        band.gap,
-    );
+    blank_row(frame, band.gap, panel_bg);
 }
 
 /// The queue band's status indicators as plain text on `row_bg`: no pill
@@ -350,7 +346,7 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
         .parts
         .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))
     {
-        Some((context, title)) => render_queue_combined_title(
+        Some((context, title)) => render_queue_header_combined_title(
             frame,
             row,
             header,
@@ -358,7 +354,7 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
             (&context.text, title_part_fg(context.role)),
             (&title.text, title_part_fg(title.role)),
         ),
-        None => render_queue_title_only(frame, row, header, panel_bg),
+        None => render_queue_header_title_only(frame, row, header, panel_bg),
     }
 }
 
@@ -371,11 +367,11 @@ fn icon_prefix(icon: (&'static str, Color), panel_bg: Color) -> [Span<'static>; 
     ]
 }
 
-/// One queue title row without its time: ` <title> ` with the marquee
-/// window sized to the row minus its two indent cells. Only called when no
-/// context part projects (a two-part title shares the combined row); the
-/// lone title always paints yellow.
-fn render_queue_title_only(
+/// The queue header row's lone title, no time: ` <icon> <title> ` with the
+/// marquee window sized to the row minus its indent cells. Only called when
+/// no context part projects (a two-part title takes the combined painter);
+/// the lone title always paints yellow.
+fn render_queue_header_title_only(
     frame: &mut Frame,
     row: Rect,
     header: &mut HeaderTitle<'_>,
@@ -397,12 +393,12 @@ fn render_queue_title_only(
     );
 }
 
-/// A two-part title on one row: ` <show> ... <title> ` — the context part
+/// A two-part title on the queue header row: ` <icon> <show> ... <title> ` — the context part
 /// left-aligned and clipped without scrolling (no marquee), the title part
 /// right-aligned with the marquee window of the remaining space. The show
 /// keeps priority: it clips only past `content - 2`, so the title always
 /// keeps at least a one-cell marquee floor and no part is ever dropped.
-fn render_queue_combined_title(
+fn render_queue_header_combined_title(
     frame: &mut Frame,
     row: Rect,
     header: &mut HeaderTitle<'_>,
@@ -412,11 +408,7 @@ fn render_queue_combined_title(
 ) {
     let icon_w = usize::from(width_u16(header.icon.0.width()));
     let content = row.width.saturating_sub(2) as usize;
-    let mut show = show_text;
-    let show_max = content.saturating_sub(icon_w + 1 + 2);
-    while show.width() > show_max {
-        show = &show[..show.len() - show.chars().last().map_or(1, char::len_utf8)];
-    }
+    let show = clip_to_width(show_text, content.saturating_sub(icon_w + 1 + 2));
     let sw = width_u16(show.width());
     let title_win = content.saturating_sub(icon_w + 1 + usize::from(sw) + 1);
     let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
@@ -445,6 +437,27 @@ fn render_queue_combined_title(
     spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+        row,
+    );
+}
+
+/// `text` cut char by char from the end until it fits `max` cells.
+fn clip_to_width(text: &str, max: usize) -> &str {
+    let mut clipped = text;
+    while clipped.width() > max
+        && let Some(last) = clipped.chars().last()
+    {
+        clipped = &clipped[..clipped.len() - last.len_utf8()];
+    }
+    clipped
+}
+
+/// Blank one row with the panel fill: spaces over whatever was painted
+/// there. The one blank-row painter for the playback panels.
+pub(super) fn blank_row(frame: &mut Frame, row: Rect, panel_bg: Color) {
+    frame.render_widget(
+        Paragraph::new(Span::raw(" ".repeat(row.width as usize)))
+            .style(Style::default().bg(panel_bg)),
         row,
     );
 }
@@ -505,10 +518,7 @@ fn render_queue_seek_row(
     if bar_w == 0 {
         ctx.playback.seekbar = Rect::default();
         let text = format!("{pos_str} {dur_str}");
-        let mut clipped = text.as_str();
-        while clipped.width() > row.width as usize && !clipped.is_empty() {
-            clipped = &clipped[..clipped.len() - clipped.chars().last().map_or(1, char::len_utf8)];
-        }
+        let clipped = clip_to_width(&text, row.width as usize);
         let gap = (row.width as usize).saturating_sub(clipped.width());
         frame.render_widget(
             Paragraph::new(Line::from(vec![

@@ -646,9 +646,10 @@ column when the Queue column is hidden.
 _Avoid_: player strip
 
 **Queue playback panel**:
-The root-composed Panel in the Queue column that owns the playback status/target
-header, visual slot, and transport when the Queue column is visible. Its header
-remains while idle; its visual slot and transport collapse while idle.
+The root-composed Panel in the Queue column that owns the header, visual slot,
+and transport when the Queue column is visible. The header shows the
+now-playing title while a target plays, else the playback status/target; it
+remains while idle, when the visual slot and transport collapse.
 _Avoid_: now-playing panel
 
 **Selector row**:

@@ -25,6 +25,7 @@ mod services_settings_lifecycle;
 mod session_connect;
 mod settings_activation;
 mod split_browse_state_browse_level_tests;
+mod status_glyphs;
 pub(crate) mod tick_integration;
 
 use mbv_emby::test_support::make_session;
