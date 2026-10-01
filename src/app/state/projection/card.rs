@@ -5,7 +5,6 @@ use mbv_images::{
 };
 use mbv_queue::QueueItem;
 use mbv_render::components::card::{queue_card_reserved_rect, render_card_painting};
-use mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -228,37 +227,24 @@ fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
     match item.item_type.as_str() {
         "MusicAlbum" => MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
-        _ if emby_card_is_landscape(item) => landscape_card_image_types(&item.item_type),
-        // A poster-shaped Movie keeps its `Logo` last resort.
-        "Movie" => &["Backdrop", "Primary", "Logo"],
-        // Non-landscape items keep their existing poster-first fallback chain.
+        "Movie" => &["Backdrop", "Primary"],
+        // Every other non-music kind fetches its own images poster-first:
+        // `Primary` is the item's own still (an episode's still lives on the
+        // episode; the server only redirects Thumb/Backdrop/Logo to the
+        // series). Guard: user-reported regression, an episode's queue card
+        // must show the episode's own art, never the series'.
         _ => &["Primary", "Thumb", "Backdrop", "Logo"],
     }
 }
 
-/// The fetch chain for a landscape card, per item kind — mirrors the hero's
-/// `landscape_image_chain` (crates/mbv-components/src/library_panel/hero.rs).
-/// `Thumb` is load-bearing for non-movie landscape items: a home video's
-/// landscape art is commonly a `Thumb` with no Primary/Backdrop at all, and the
-/// card fetch is a first-success fallthrough, so a two-element
-/// Backdrop/Primary chain painted the placeholder while the Thumb existed.
-fn landscape_card_image_types(item_type: &str) -> &'static [&'static str] {
-    match item_type {
-        "Series" | "Episode" => SERIES_LANDSCAPE_IMAGE_TYPES,
-        "Movie" => &["Backdrop", "Primary"],
-        _ => &["Thumb", "Backdrop", "Primary", "Logo"],
-    }
-}
-
-fn emby_card_is_landscape(item: &EmbyItem) -> bool {
-    mbv_components::library_panel::hero::emby_artwork_policy(item).shape
-        == mbv_components::library_panel::ArtworkShape::Landscape
-}
-
+/// The artwork cache key for a queue card. The landscape `{id}:QB` key is
+/// Movie-only: the artwork policy also classifies an Episode as Landscape
+/// through its series tags, but an episode's card shows the episode's own
+/// still, so it keeps the portrait `{id}:P` key (user-reported regression).
 fn card_cache_key(item: &EmbyItem) -> String {
     if item.item_type == "Audio" {
         mbv_images::emby_card_cache_key(&item.id, &item.album_id)
-    } else if emby_card_is_landscape(item) {
+    } else if item.item_type == "Movie" {
         mbv_images::emby_queue_landscape_cache_key(&item.id)
     } else {
         mbv_images::emby_card_cache_key(&item.id, "")
@@ -266,9 +252,10 @@ fn card_cache_key(item: &EmbyItem) -> String {
 }
 
 /// The artwork cache key for an Emby item id held without an `EmbyItem` (a
-/// watched remote Session's now-playing item).
+/// watched remote Session's now-playing item). The landscape key is Movie-only,
+/// matching [`card_cache_key`].
 fn card_cache_key_for_id(item_id: &str, item_type: Option<&str>) -> String {
-    if matches!(item_type, Some("Movie" | "Episode")) {
+    if item_type == Some("Movie") {
         mbv_images::emby_queue_landscape_cache_key(item_id)
     } else {
         mbv_images::emby_card_cache_key(item_id, "")
@@ -276,14 +263,13 @@ fn card_cache_key_for_id(item_id: &str, item_type: Option<&str>) -> String {
 }
 
 /// The fetch chain for a watched remote Session's now-playing item, which is
-/// held without an `EmbyItem` and so cannot consult the artwork policy.
-/// Movie and Episode are the two kinds `card_cache_key_for_id` keys landscape;
-/// an episode's declared landscape art is its series' `Thumb`, so it takes the
-/// same Thumb-first chain as a local landscape episode.
+/// held without an `EmbyItem` and so cannot consult the artwork policy. Only a
+/// Movie is fetched landscape; an Episode fetches its own poster-first chain
+/// (`Primary` is the episode's own still, not the series thumb).
 fn slotless_card_image_types(item_type: Option<&str>) -> &'static [&'static str] {
     match item_type {
         Some("Movie") => &["Backdrop", "Primary"],
-        Some("Episode") => SERIES_LANDSCAPE_IMAGE_TYPES,
+        Some("Episode") => &["Primary", "Thumb", "Backdrop", "Logo"],
         _ => &["Primary"],
     }
 }

@@ -9,18 +9,14 @@ const KEY: &str = "art:t:8x4:1";
 
 #[rstest::rstest]
 #[case::movie("Movie", "item:QB", &["Backdrop", "Primary"])]
-#[case::episode(
-    "Episode",
-    "item:QB",
-    mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
-)]
+#[case::episode("Episode", "item:P", &["Primary", "Thumb", "Backdrop", "Logo"])]
 #[case::audio("Audio", "item:P", &["Primary"])]
 #[case::music_album(
     "MusicAlbum",
     "item:P",
     mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES
 )]
-fn queue_card_key_follows_hero_shape_and_preserves_music_keys(
+fn queue_card_key_uses_landscape_for_movies_and_preserves_music_keys(
     #[case] item_type: &str,
     #[case] expected: &str,
     #[case] expected_image_types: &[&str],
@@ -33,40 +29,41 @@ fn queue_card_key_follows_hero_shape_and_preserves_music_keys(
 
 #[rstest::rstest]
 #[case::movie(Some("Movie"), "item:QB")]
-#[case::episode(Some("Episode"), "item:QB")]
+#[case::episode(Some("Episode"), "item:P")]
 #[case::audio(Some("Audio"), "item:P")]
 #[case::unknown(None, "item:P")]
-fn slotless_card_key_uses_landscape_only_for_known_video_types(
+fn slotless_card_key_is_landscape_for_movies_only(
     #[case] item_type: Option<&str>,
     #[case] expected: &str,
 ) {
     assert_eq!(card_cache_key_for_id("item", item_type), expected);
 }
 
-// Regression for the P1 review on feat/queue-art-title-overlay: the landscape
-// card chain hardcoded `["Backdrop", "Primary"]` for every kind, so a
-// Thumb-only home video requested nothing available and painted the
-// placeholder. `fetch_emby_image` is a first-success fallthrough, so the chain
-// must reach a declared `Thumb`.
+// Guard for the P1 review on feat/queue-art-title-overlay and the follow-up
+// user-reported episode regression: the chain must still reach a declared
+// `Thumb` (a Thumb-only home video resolves, since `fetch_emby_image` is a
+// first-success fallthrough), but only a Movie takes the landscape chain — an
+// episode keeps its own poster-first chain so its card never shows series art.
 #[test]
-fn thumb_only_landscape_video_card_chain_requests_thumb_first() {
+fn thumb_only_video_card_chain_reaches_thumb() {
     let mut item = mbv_emby_model::test_support::make_item("Home Video", "Video");
     item.id = "item".into();
     item.image_tags.thumb = "thumb-tag".into();
     assert_eq!(
         card_image_types(&item),
-        &["Thumb", "Backdrop", "Primary", "Logo"]
+        &["Primary", "Thumb", "Backdrop", "Logo"]
     );
 }
 
 #[test]
-fn landscape_episode_card_chain_requests_series_thumb_first() {
+fn episode_card_stays_episode_owned_despite_series_tags() {
     let mut item = mbv_emby_model::test_support::make_item("Pilot", "Episode");
     item.id = "item".into();
     item.image_tags.series_thumb = "series-thumb-tag".into();
+    assert_eq!(card_cache_key(&item), "item:P");
     assert_eq!(
         card_image_types(&item),
-        mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
+        &["Primary", "Thumb", "Backdrop", "Logo"]
     );
 }
 
@@ -79,22 +76,20 @@ fn landscape_movie_card_chain_stays_backdrop_first() {
 }
 
 #[test]
-fn poster_movie_card_chain_keeps_the_logo_last_resort() {
+fn poster_only_movie_card_still_takes_the_landscape_chain() {
     let mut item = mbv_emby_model::test_support::make_item("Feature", "Movie");
     item.id = "item".into();
     item.image_tags.primary = "primary-tag".into();
-    assert_eq!(card_image_types(&item), &["Backdrop", "Primary", "Logo"]);
+    assert_eq!(card_cache_key(&item), "item:QB");
+    assert_eq!(card_image_types(&item), &["Backdrop", "Primary"]);
 }
 
 #[rstest::rstest]
 #[case::movie(Some("Movie"), &["Backdrop", "Primary"])]
-#[case::episode(
-    Some("Episode"),
-    mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
-)]
+#[case::episode(Some("Episode"), &["Primary", "Thumb", "Backdrop", "Logo"])]
 #[case::audio(Some("Audio"), &["Primary"])]
 #[case::unknown(None, &["Primary"])]
-fn slotless_chain_matches_the_local_landscape_episode_chain(
+fn slotless_chain_reserves_landscape_for_movies_only(
     #[case] item_type: Option<&str>,
     #[case] expected: &[&str],
 ) {
