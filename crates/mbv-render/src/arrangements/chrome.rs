@@ -65,10 +65,6 @@ pub struct ChromeGeometryInput {
     /// transport to zero rows (task 3.6): the connected-idle exception is
     /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
-    /// Whether the queue column's transport projects a two-part now-playing
-    /// title (a context part): the title band expands onto its third row,
-    /// so the transport's footprint grows one row (the expanded title band).
-    pub queue_title_expanded: bool,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -181,11 +177,11 @@ pub fn queue_playback_transport_area(
     column_wide: bool,
     card_width: u16,
     card_height: u16,
-    title_expanded: bool,
 ) -> Rect {
-    // The expanded title band (a context part plays) spends one more row:
-    // controls + pills, show + pos/dur, title.
-    let player_rows = PLAYER_BOX_HEIGHT + u16::from(title_expanded);
+    // The transport band is always three rows: the title row (a two-part
+    // title shares it, context left and title right), the seekbar with its
+    // flanking times, and the controls with the status pills.
+    let player_rows = PLAYER_BOX_HEIGHT;
     if column_wide {
         let gap = if card_width > 0 {
             SLOT_TRANSPORT_GAP
@@ -215,12 +211,7 @@ pub fn queue_playback_transport_area(
 /// zero rows (task 3.6); paused counts as active. Shared by the root
 /// placements and the Queue playback panel's draw-path paint.
 #[must_use]
-pub fn queue_playback_rows(
-    column_wide: bool,
-    card_height: u16,
-    playback_active: bool,
-    title_expanded: bool,
-) -> u16 {
+pub fn queue_playback_rows(column_wide: bool, card_height: u16, playback_active: bool) -> u16 {
     if !playback_active {
         return 0;
     }
@@ -236,7 +227,6 @@ pub fn queue_playback_rows(
         column_wide,
         0,
         card_height,
-        title_expanded,
     )
     .bottom()
 }
@@ -335,7 +325,6 @@ fn queue_column_geometry(
         queue_playback_column_wide(left_area.width),
         input.card_height,
         input.playback_active,
-        input.queue_title_expanded,
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,

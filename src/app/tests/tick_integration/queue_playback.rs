@@ -413,15 +413,17 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         };
 
         // Every transport-signature cell in the frame — the seekbar's filled
-        // track, a `▔` in the ACCENT foreground — lies inside the owning
-        // panel's placement, and the transport painted at all: exactly one
-        // transport per frame.
+        // track, a `▓` in the queue band or `▔` in the strip, in the ACCENT
+        // foreground — lies inside the owning panel's placement, and the
+        // transport painted at all: exactly one transport per frame.
         let buf = terminal.backend().buffer();
         let mut painted = 0;
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(mbv_theme::ACCENT) {
+                if (cell.symbol() == "\u{2594}" || cell.symbol() == "\u{2593}")
+                    && cell.style().fg == Some(mbv_theme::ACCENT)
+                {
                     painted += 1;
                     assert!(
                         owner.contains((x, y).into()),

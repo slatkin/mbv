@@ -226,32 +226,47 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     spans
 }
 
-/// The queue column's split title band: content rows first, the transport
-/// controls last. With a context part and a `third` row the band is three
-/// rows — the show (context) and the `pos / dur` time on the first row, the
-/// title alone with its marquee window on the second, the controls and
-/// status pills on the bottom row — otherwise the title and the time share
-/// the first row and the controls move to the row below. The show clips to
-/// its row without scrolling; the marquee belongs to the title row. Hit
-/// geometry rides the bottom row, where the glyphs paint.
-pub fn render_queue_title_rows(
+/// The queue column's band rows in paint order: the title row first, the
+/// seekbar flanked by its times next, the transport controls and status
+/// pills last.
+pub struct QueueBand {
+    pub title: Rect,
+    pub seek: Rect,
+    pub controls: Rect,
+}
+
+/// The queue column's band: the title row, then the seekbar with the elapsed
+/// time left and the total time right (one space between each time and the
+/// bar), then the controls and status pills. A two-part title shares its row:
+/// the context part (the show) left-aligned and clipped without scrolling,
+/// the title part right-aligned with the marquee window of the remaining
+/// space. Hit geometry rides the controls row (the glyphs) and the seekbar's
+/// bar span — the time labels never seek. Pure painter over projected state.
+pub fn render_queue_band(
     frame: &mut Frame,
-    first: Rect,
-    second: Rect,
-    third: Option<Rect>,
+    band: &QueueBand,
     title: &str,
     title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
 ) {
-    if first.height == 0 || first.width == 0 || second.height == 0 || second.width == 0 {
+    if band.title.height == 0
+        || band.title.width == 0
+        || band.seek.height == 0
+        || band.seek.width == 0
+        || band.controls.height == 0
+        || band.controls.width == 0
+    {
         ctx.playback.play_pause = Rect::default();
         ctx.playback.stop = Rect::default();
         ctx.playback.prev = Rect::default();
         ctx.playback.next = Rect::default();
+        ctx.playback.seekbar = Rect::default();
         return;
     }
+    // A two-part title shares the one title row; anything else paints the
+    // title alone.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
-    let (pos_ticks, rt_ticks, paused) = ctx.controls.progress;
+    let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
     // The pill is padded on both sides before measuring: without the
     // trailing pad the value (e.g. FLAC) touches the panel fill on the
@@ -261,42 +276,20 @@ pub fn render_queue_title_rows(
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
-    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_emby_model::TICKS_PER_SECOND);
-    let time_text = format!("{pos_str}/{dur_str}");
-    let time_w = width_u16(time_text.width());
     let has_context = ctx
         .title_parts
         .as_ref()
         .is_some_and(|parts| parts.context.is_some());
-    if let (Some(third), true) = (third, has_context) {
-        render_context_title_rows(frame, first, second, third, title, title_color, ctx);
-        return;
+    if has_context {
+        render_queue_combined_title(frame, band.title, title, title_color, ctx, panel_bg);
+    } else {
+        render_queue_title_only(frame, band.title, title, title_color, ctx, panel_bg);
     }
-    // Two rows: the title and the time share the first row, the controls
-    // and pills move to the row below.
-    // ` <title> ... <pos / dur> ` — one left indent, at least one gap cell
-    // before the time, one right indent.
-    let title_max = first.width.saturating_sub(1 + 1 + time_w + 1) as usize;
-    let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
-    let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    row.extend(marquee_spans(ctx, &title_parts, title_max));
-    let row_w: u16 = row.iter().map(|span| width_u16(span.content.width())).sum();
-    let gap = (first.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
-    row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
-    row.push(Span::styled(
-        time_text,
-        Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
-    ));
-    row.push(Span::styled(" ", Style::default().bg(panel_bg)));
-    frame.render_widget(
-        Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-        first,
-    );
+    render_queue_seek_row(frame, band.seek, ctx, panel_bg);
     render_transport_pill_row(
         ctx,
         frame,
-        inset_row(second),
+        inset_row(band.controls),
         panel_bg,
         &glyphs,
         pills,
@@ -304,91 +297,206 @@ pub fn render_queue_title_rows(
     );
 }
 
-fn render_context_title_rows(
+/// One queue title row without its time: ` <title> ` with the marquee
+/// window sized to the row minus its two indent cells. When the projected
+/// title carries a context part it stays on the show row; this row paints
+/// the title part alone.
+fn render_queue_title_only(
     frame: &mut Frame,
-    first: Rect,
-    second: Rect,
-    third: Rect,
+    row: Rect,
     title: &str,
     title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
+    panel_bg: Color,
 ) {
-    if third.height == 0 || third.width == 0 {
-        return;
-    }
-    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
-    let (pos_ticks, rt_ticks, paused) = ctx.controls.progress;
-    let glyphs = control_glyphs(ctx, paused);
-    let pills = padded_status_pill(ctx);
-    let pills_w: u16 = pills
+    let title_parts: Vec<(String, Color)> = match ctx.title_parts.as_ref() {
+        Some(parts) if parts.context.is_some() => {
+            vec![(parts.title.text.clone(), title_part_fg(parts.title.role))]
+        }
+        _ => playback_title_spans(ctx.title_parts.as_ref(), title, title_color),
+    };
+    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+    spans.extend(marquee_spans(
+        ctx,
+        &title_parts,
+        row.width.saturating_sub(2) as usize,
+    ));
+    let row_w: u16 = spans
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
-    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_emby_model::TICKS_PER_SECOND);
-    let time_text = format!("{pos_str}/{dur_str}");
-    let time_w = width_u16(time_text.width());
-    let Some(context) = ctx
-        .title_parts
-        .as_ref()
-        .and_then(|parts| parts.context.as_ref())
-        .map(|context| (context.text.clone(), title_part_fg(context.role)))
+    let gap = (row.width as usize).saturating_sub(row_w as usize);
+    if gap > 0 {
+        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+        row,
+    );
+}
+
+/// A two-part title on one row: ` <show> ... <title> ` — the context part
+/// left-aligned and clipped without scrolling (no marquee), the title part
+/// right-aligned with the marquee window of the remaining space. The show
+/// keeps priority: it clips only past `content - 2`, so the title always
+/// keeps at least a one-cell marquee floor and no part is ever dropped.
+/// Falls back to the single title row when no context part projects.
+fn render_queue_combined_title(
+    frame: &mut Frame,
+    row: Rect,
+    title: &str,
+    title_color: Color,
+    ctx: &mut PlaybackRenderContext<'_>,
+    panel_bg: Color,
+) {
+    let Some((show_text, show_fg, title_text, title_fg)) =
+        ctx.title_parts.as_ref().and_then(|parts| {
+            parts.context.as_ref().map(|context| {
+                (
+                    context.text.clone(),
+                    title_part_fg(context.role),
+                    parts.title.text.clone(),
+                    title_part_fg(parts.title.role),
+                )
+            })
+        })
     else {
+        render_queue_title_only(frame, row, title, title_color, ctx, panel_bg);
         return;
     };
-    // First row: ` <show> ... <pos / dur> ` — the show left with one
-    // space of indent, the time right with one space of indent. The
-    // show clips to the row (no marquee); the marquee belongs to the
-    // title row below.
-    let show_max = first.width.saturating_sub(1 + 1 + time_w + 1) as usize;
-    let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    let mut show = context.0.as_str();
+    let content = row.width.saturating_sub(2) as usize;
+    let mut show = show_text.as_str();
+    let show_max = content.saturating_sub(2);
     while show.width() > show_max {
         show = &show[..show.len() - show.chars().last().map_or(1, char::len_utf8)];
     }
-    row.push(Span::styled(
+    let sw = width_u16(show.width());
+    let title_win = content.saturating_sub(sw as usize + 1);
+    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+    spans.push(Span::styled(
         show.to_string(),
-        Style::default().fg(context.1).bg(panel_bg),
+        Style::default().fg(show_fg).bg(panel_bg),
     ));
-    let row_w: u16 = row.iter().map(|span| width_u16(span.content.width())).sum();
-    let gap = (first.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
-    row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
-    row.push(Span::styled(
-        time_text,
-        Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
-    ));
-    row.push(Span::styled(" ", Style::default().bg(panel_bg)));
+    spans.extend(marquee_spans(ctx, &[(title_text, title_fg)], title_win));
+    let mid_w: u16 = spans
+        .iter()
+        .map(|span| width_u16(span.content.width()))
+        .sum();
+    // Right-anchor the title: every spare cell lands in the middle gap;
+    // the trailing indent is kept outside the gap math.
+    let gap = (row.width as usize).saturating_sub(mid_w as usize + 1);
+    if gap > 0 {
+        spans.insert(
+            2,
+            Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
+        );
+    }
+    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
     frame.render_widget(
-        Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-        first,
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+        row,
     );
-    // Second row: ` <title> ` alone, the marquee window sized to the row
-    // minus its two indent cells.
-    let title_parts = ctx
-        .title_parts
-        .as_ref()
-        .map(|parts| vec![(parts.title.text.clone(), title_part_fg(parts.title.role))]);
-    let fallback = [(title.to_string(), title_color)];
-    let title_parts = title_parts.as_deref().unwrap_or(&fallback[..]);
-    let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    row.extend(marquee_spans(
-        ctx,
-        title_parts,
-        second.width.saturating_sub(2) as usize,
-    ));
+}
+
+/// The queue seekbar row: ` <elapsed> <bar> <total> ` — one outer indent
+/// each side plus one space between each time and the bar. The bar is a
+/// full-cell shade run: dense `▓` for the played span, sparse `░` for the
+/// unplayed span (same ACCENT / track colours as before), spanning whatever
+/// columns remain; only the bar seeks (the time labels never do). Too
+/// narrow for any bar paints the two times left-aligned with no hit;
+/// hidden controls (`!show`) keep the legacy track-only bar with no hit.
+fn render_queue_seek_row(
+    frame: &mut Frame,
+    row: Rect,
+    ctx: &mut PlaybackRenderContext<'_>,
+    panel_bg: Color,
+) {
+    if !ctx.controls.show {
+        ctx.playback.seekbar = Rect::default();
+        let bar = "\u{2591}".repeat(row.width as usize);
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                bar,
+                Style::default().fg(palette::PROGRESS_TRACK),
+            ))
+            .style(Style::default().bg(panel_bg)),
+            row,
+        );
+        return;
+    }
+    let (pos_ticks, rt_ticks, _paused) = ctx.controls.progress;
+    let pos_str = fmt_duration_short(pos_ticks / mbv_emby_model::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_emby_model::TICKS_PER_SECOND);
+    let elapsed_w = width_u16(pos_str.width());
+    let total_w = width_u16(dur_str.width());
+    let bar_w = row
+        .width
+        .saturating_sub(1 + elapsed_w + 1 + 1 + total_w + 1);
+    if bar_w == 0 {
+        ctx.playback.seekbar = Rect::default();
+        let text = format!("{pos_str} {dur_str}");
+        let mut clipped = text.as_str();
+        while clipped.width() > row.width as usize && !clipped.is_empty() {
+            clipped = &clipped[..clipped.len() - clipped.chars().last().map_or(1, char::len_utf8)];
+        }
+        let gap = (row.width as usize).saturating_sub(clipped.width());
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    clipped.to_string(),
+                    Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                ),
+                Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
+            ]))
+            .style(Style::default().bg(panel_bg)),
+            row,
+        );
+        return;
+    }
+    let ratio = if rt_ticks > 0 {
+        (mbv_emby_model::ticks_to_seconds(pos_ticks) / mbv_emby_model::ticks_to_seconds(rt_ticks))
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
+    let filled = ((ratio * f64::from(bar_w)).round() as usize).min(bar_w as usize);
+    let rest = (bar_w as usize).saturating_sub(filled);
+    ctx.playback.seekbar = Rect {
+        x: row.x + 1 + elapsed_w + 1,
+        y: row.y,
+        width: bar_w,
+        height: 1,
+    };
     frame.render_widget(
-        Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-        second,
-    );
-    // Bottom row: the transport controls and the status pills.
-    render_transport_pill_row(
-        ctx,
-        frame,
-        inset_row(third),
-        panel_bg,
-        &glyphs,
-        pills,
-        pills_w,
+        Paragraph::new(Line::from(vec![
+            Span::styled(" ", Style::default().bg(panel_bg)),
+            Span::styled(
+                pos_str,
+                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+            ),
+            Span::styled(" ", Style::default().bg(panel_bg)),
+            Span::styled(
+                "\u{2593}".repeat(filled),
+                Style::default().fg(palette::ACCENT),
+            ),
+            Span::styled(
+                "\u{2591}".repeat(rest),
+                Style::default().fg(palette::PROGRESS_TRACK),
+            ),
+            Span::styled(" ", Style::default().bg(panel_bg)),
+            Span::styled(
+                dur_str,
+                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+            ),
+            Span::styled(" ", Style::default().bg(panel_bg)),
+        ]))
+        .style(Style::default().bg(panel_bg)),
+        row,
     );
 }
 

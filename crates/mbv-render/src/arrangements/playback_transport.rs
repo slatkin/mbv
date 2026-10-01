@@ -17,9 +17,8 @@ pub struct TransportRows {
     pub title: Option<Rect>,
     /// The blank row below the title (row 2).
     pub indicator_row: Option<Rect>,
-    /// The fourth row (row 3), present only when the band is tall enough:
-    /// the queue column's expanded title band paints the title's second row
-    /// there. The Library strip's three-row band never has it.
+    /// The fourth row (row 3), present only when the band is tall enough.
+    /// No current panel requests it: the queue band is always three rows.
     pub extra_row: Option<Rect>,
 }
 
