@@ -235,6 +235,8 @@ impl Component for QueuePlaybackPanel {
                         self.transport.state.paused,
                     ),
                     title_site: self.transport.title_site,
+                    host: &self.host,
+                    host_is_remote: self.host_is_remote,
                 },
             );
         } else {

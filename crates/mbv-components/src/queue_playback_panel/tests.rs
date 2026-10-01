@@ -2,7 +2,7 @@ use super::*;
 use mbv_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier};
 use rstest::rstest;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -206,14 +206,13 @@ fn two_part_header_hugs_both_indents_and_carries_no_time() {
 }
 
 /// Paint the panel at the artwork title site and return the header row's
-/// text and per-cell fgs.
-fn artwork_site_header(paused: bool) -> (String, Vec<Color>) {
+/// text plus each cell's fg and modifier.
+fn artwork_site_header(host: &str, host_is_remote: bool) -> (String, Vec<Color>, Vec<Modifier>) {
     let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+    panel.set_header(NowPlayingStatus::Playing, host.into(), host_is_remote);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.title_parts = Some(parts_for("Pilot", Some("Series")));
     panel.transport.title_site = mbv_ui_model::playback::NowPlayingTitleSite::Artwork;
-    panel.transport.state.paused = paused;
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
@@ -222,36 +221,80 @@ fn artwork_site_header(paused: bool) -> (String, Vec<Color>) {
     let buf = terminal.backend().buffer();
     let text = (0..40).map(|x| buf[(x, 1)].symbol().to_string()).collect();
     let fgs = (0..40).map(|x| buf[(x, 1)].fg).collect();
-    (text, fgs)
+    let mods = (0..40).map(|x| buf[(x, 1)].modifier).collect();
+    (text, fgs, mods)
 }
 
 #[test]
-fn artwork_title_site_label_carries_the_context_role() {
-    let (text, fgs) = artwork_site_header(false);
+fn artwork_title_site_paints_the_mbv_brand_row() {
+    let (text, fgs, mods) = artwork_site_header("music-box", false);
+    // The header row sits inside the queue column's two-column inset.
+    let row = &text[2..38];
+    assert!(
+        row.starts_with(" [mbv]"),
+        "the brand hugs the left edge: {text:?}"
+    );
+    assert!(
+        row.ends_with("PLAYING:music-box "),
+        "the status and host hug the right edge: {text:?}"
+    );
     assert_cells_carry(
         &text,
         &fgs,
-        "Now Playing",
-        palette::PLAYBACK_CONTEXT_FG,
-        "the artwork-site label",
+        "[",
+        palette::TEXT_EMPHASIS,
+        "the opening bracket",
+    );
+    assert_cells_carry(&text, &fgs, "mbv", palette::TEXT_FOCUS_ACCENT, "the brand");
+    assert_cells_carry(
+        &text,
+        &fgs,
+        "]",
+        palette::TEXT_EMPHASIS,
+        "the closing bracket",
+    );
+    assert_cells_carry(
+        &text,
+        &fgs,
+        "PLAYING",
+        palette::TEXT_METADATA,
+        "the status word",
+    );
+    assert_cells_carry(&text, &fgs, ":", palette::TEXT_EMPHASIS, "the colon");
+    assert_cells_carry(
+        &text,
+        &fgs,
+        "music-box",
+        palette::TEXT_EMPHASIS,
+        "the local host",
+    );
+    let brand = text.find("mbv").unwrap();
+    assert!(
+        mods[brand].contains(Modifier::BOLD),
+        "the brand paints bold: {text:?}"
     );
 }
 
-#[rstest]
-#[case::playing(false, ">", palette::ACCENT)]
-#[case::paused(true, "||", palette::TEXT_FOCUS_ACCENT)]
-fn artwork_title_site_state_icon_carries_its_state_colour(
-    #[case] paused: bool,
-    #[case] icon: &str,
-    #[case] icon_fg: Color,
-) {
-    let (text, fgs) = artwork_site_header(paused);
-    assert_cells_carry(&text, &fgs, icon, icon_fg, "the state icon");
+#[test]
+fn artwork_title_site_remote_host_carries_the_remote_role() {
+    let (text, fgs, _) = artwork_site_header("tv-box", true);
+    let row = &text[2..38];
+    assert!(
+        row.starts_with(" [mbv]") && row.ends_with("PLAYING:tv-box "),
+        "the brand row reads `[mbv]` left and `PLAYING:<host>` right: {text:?}"
+    );
+    assert_cells_carry(
+        &text,
+        &fgs,
+        "tv-box",
+        palette::PLAYBACK_HOST_REMOTE_FG,
+        "the remote host",
+    );
 }
 
 #[test]
 fn artwork_title_site_paints_no_title_parts() {
-    let (text, _) = artwork_site_header(false);
+    let (text, _, _) = artwork_site_header("music-box", false);
     assert!(
         !text.contains("Pilot") && !text.contains("Series"),
         "{text:?}"

@@ -7,7 +7,7 @@ use mbv_queue::PlaybackTitleParts;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
@@ -36,6 +36,11 @@ pub struct HeaderTitle<'a> {
     pub panel: palette::Surface,
     pub icon: (&'static str, Color),
     pub title_site: NowPlayingTitleSite,
+    /// The playback target's host label and whether it names a remote
+    /// target; the artwork-site brand row paints it after `on`
+    /// (`PLAYBACK_HOST_REMOTE_FG` when remote, cream when local).
+    pub host: &'a str,
+    pub host_is_remote: bool,
 }
 
 /// The header row's now-playing title (moved up from the band's title row):
@@ -47,15 +52,13 @@ pub struct HeaderTitle<'a> {
 pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
     let panel_bg = palette::surface_colors(header.panel, false).fill;
     if header.title_site == NowPlayingTitleSite::Artwork {
-        let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
-        spans.push(Span::styled(
-            "Now Playing",
-            Style::default()
-                .fg(palette::PLAYBACK_CONTEXT_FG)
-                .bg(panel_bg),
-        ));
         frame.render_widget(
-            Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+            Paragraph::new(Line::from(artwork_brand_spans(
+                header,
+                panel_bg,
+                row.width as usize,
+            )))
+            .style(Style::default().bg(panel_bg)),
             row,
         );
         return;
@@ -74,6 +77,56 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
         ),
         None => render_queue_header_title_only(frame, row, header, panel_bg),
     }
+}
+
+/// The artwork title site's header row: ` [mbv]` left-anchored and
+/// `PLAYING:<host>` right-anchored, one trailing space outside the right
+/// edge. The icon is dropped (the word carries the state), the brackets and
+/// the colon are cream, `mbv` is yellow and bold, `PLAYING` is foam, and the
+/// host is cream when local / `PLAYBACK_HOST_REMOTE_FG` when remote.
+fn artwork_brand_spans(
+    header: &HeaderTitle<'_>,
+    panel_bg: Color,
+    row_width: usize,
+) -> Vec<Span<'static>> {
+    let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
+    let mut spans = vec![
+        Span::styled(" ", Style::default().bg(panel_bg)),
+        Span::styled("[", cream),
+        Span::styled(
+            "mbv",
+            Style::default()
+                .fg(palette::TEXT_FOCUS_ACCENT)
+                .bg(panel_bg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("]", cream),
+    ];
+    let mut right = vec![Span::styled(
+        "PLAYING",
+        Style::default().fg(palette::TEXT_METADATA).bg(panel_bg),
+    )];
+    if !header.host.is_empty() {
+        let host_fg = if header.host_is_remote {
+            palette::PLAYBACK_HOST_REMOTE_FG
+        } else {
+            palette::TEXT_EMPHASIS
+        };
+        right.push(Span::styled(":", cream));
+        right.push(Span::styled(
+            header.host.to_string(),
+            Style::default().fg(host_fg).bg(panel_bg),
+        ));
+    }
+    let left_w: usize = spans.iter().map(|span| span.content.width()).sum();
+    let right_w: usize = right.iter().map(|span| span.content.width()).sum();
+    let gap = row_width.saturating_sub(left_w + right_w + 1);
+    if gap > 0 {
+        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+    }
+    spans.extend(right);
+    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
+    spans
 }
 
 /// The ` <icon> ` prefix every header title row starts with.

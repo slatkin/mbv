@@ -217,6 +217,12 @@ pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 /// two are equal today and independently editable, so an accent edit moves
 /// the accent alone (now-playing-media-type-titles D2).
 pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
+/// The now-playing header's remote target name: the device or route the
+/// media plays on, painted after `on`. Its own role rather than the audio
+/// indicator's `Palette::Mauve` value it shares today
+/// (`INDICATOR_AUDIO_FG`): the two are equal today and independently
+/// editable, so an indicator edit moves the indicator alone.
+pub const PLAYBACK_HOST_REMOTE_FG: Color = Palette::Mauve.color();
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progress track
