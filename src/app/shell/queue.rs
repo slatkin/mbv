@@ -75,9 +75,25 @@ impl Model {
         // playback is active (idle collapse), so the projection follows the
         // same gate the card's render used.
         if self.app.visual_slot_shown() {
-            self.app.refresh_queue_card_image();
+            let column_resizing = self.queue_column_resizing();
+            self.app.refresh_queue_card_image(column_resizing);
         }
         self.push_queue_projection(update);
+    }
+
+    /// Whether the queue column's resize drag is in progress. The boundary
+    /// component owns the gesture (`changed` persists across ticks until
+    /// `DragEnd`), so the shell asks it rather than mirroring the bit into
+    /// `App`; the projection reads the resolved value as an input.
+    fn queue_column_resizing(&self) -> bool {
+        self.application
+            .get_component(&ComponentId::QueueBoundary)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<mbv_components::QueueBoundaryComponent>()
+            })
+            .is_some_and(mbv_components::QueueBoundaryComponent::is_resizing)
     }
 
     fn mount_and_focus_queue(&mut self) {
@@ -610,8 +626,10 @@ mod tests {
         let mut model = Model::new(app);
 
         model.sync_queue();
+        // `make_items` builds Movies, whose card now reserves the landscape
+        // key (`{id}:QB`), not the portrait `{id}:P` (commit 55c37ea71).
         assert!(
-            model.app.images.is_loading("id0:P"),
+            model.app.images.is_loading("id0:QB"),
             "the now-playing key must be reserved by the projection push"
         );
         let fetch_work = model.app.images.fetch_work_snapshot();
@@ -623,7 +641,7 @@ mod tests {
         // A new now-playing key reserves exactly one new key.
         model.app.player.status.lock().unwrap().current_idx = 1;
         model.sync_queue();
-        assert!(model.app.images.is_loading("id1:P"));
+        assert!(model.app.images.is_loading("id1:QB"));
     }
 
     #[test]
@@ -641,12 +659,13 @@ mod tests {
 
         model.sync_queue();
         assert_eq!(model.app.images.card_image_fetch_calls(), 0);
-        assert!(!model.app.images.is_loading("id0:P"));
+        // `make_items` builds Movies → the landscape card key (commit 55c37ea71).
+        assert!(!model.app.images.is_loading("id0:QB"));
 
         model.app.visual_slot_hidden = false;
         model.sync_queue();
         assert!(model.app.images.card_image_fetch_calls() > 0);
-        assert!(model.app.images.is_loading("id0:P"));
+        assert!(model.app.images.is_loading("id0:QB"));
     }
 
     #[test]

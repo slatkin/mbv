@@ -1,5 +1,6 @@
 use super::{CachedImage, ImageFetchReq};
 use crate::resize::{ResizeRegisterTx, ResizeResponseRx};
+use crate::title_overlay::DERIVED_SEP;
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 
@@ -10,6 +11,7 @@ pub struct ImageCache {
     card_image_loading: std::collections::HashSet<String>,
     last_card_height: u16,
     last_card_width: u16,
+    painted_title_overlay_key: Option<String>,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
@@ -59,6 +61,7 @@ impl ImageCache {
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
             last_card_width: 0,
+            painted_title_overlay_key: None,
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             card_image_tx,
@@ -128,6 +131,15 @@ impl ImageCache {
         self.last_card_width = width;
     }
 
+    pub fn record_painted_title_overlay(&mut self, key: Option<String>) {
+        self.painted_title_overlay_key = key;
+    }
+
+    #[must_use]
+    pub fn painted_title_overlay_key(&self) -> Option<&str> {
+        self.painted_title_overlay_key.as_deref()
+    }
+
     #[must_use]
     pub fn has_loading_images(&self) -> bool {
         !self.card_image_loading.is_empty()
@@ -162,23 +174,55 @@ impl ImageCache {
     }
 
     pub fn insert_image(&mut self, key: String, entry: CachedImage) {
+        self.remove_derived_variants_for(&key);
         self.card_image_states.insert(key, entry);
     }
 
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
+        self.remove_derived_variants_for(key);
+        self.clear_painted_if(|painted| painted == key);
         self.card_image_states.remove(key)
+    }
+
+    pub fn insert_derived_image(&mut self, key: String, entry: CachedImage) {
+        let Some((identity, _)) = key.split_once(DERIVED_SEP) else {
+            self.card_image_states.insert(key, entry);
+            return;
+        };
+        self.remove_derived_variants_for_identity(identity);
+        self.card_image_states.insert(key, entry);
+    }
+
+    fn remove_derived_variants_for(&mut self, cache_key: &str) {
+        self.remove_derived_variants_for_identity(crate::cache_identity(cache_key));
+    }
+
+    fn remove_derived_variants_for_identity(&mut self, identity: &str) {
+        let prefix = format!("{identity}{DERIVED_SEP}");
+        self.card_image_states
+            .retain(|key, _| !key.starts_with(&prefix));
+        self.image_lru.retain(|key| !key.starts_with(&prefix));
+        self.clear_painted_if(|painted| painted.starts_with(&prefix));
+    }
+
+    fn clear_painted_if(&mut self, pred: impl Fn(&str) -> bool) {
+        if self.painted_title_overlay_key.as_deref().is_some_and(pred) {
+            self.painted_title_overlay_key = None;
+        }
     }
 
     pub fn clear_images_and_loading(&mut self) {
         self.card_image_states.clear();
         self.card_image_loading.clear();
+        self.painted_title_overlay_key = None;
     }
 
     pub fn clear_audiobookshelf_images(&mut self) {
         let prefix = crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX;
         self.card_image_states
             .retain(|key, _| !key.starts_with(prefix));
+        self.clear_painted_if(|painted| painted.starts_with(prefix));
         self.card_image_loading
             .retain(|key| !key.starts_with(prefix));
         self.image_lru.retain(|key| !key.starts_with(prefix));
@@ -227,6 +271,7 @@ impl ImageCache {
     pub fn complete_fetch(&mut self, key: String, entry: CachedImage) {
         self.card_image_loading.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
+        self.remove_derived_variants_for(&key);
         if entry.img.is_some() {
             self.image_lru.retain(|cached| cached != &key);
             self.image_lru.push_back(key.clone());
@@ -234,7 +279,7 @@ impl ImageCache {
                 let Some(evict) = self.image_lru.pop_front() else {
                     break;
                 };
-                self.card_image_states.remove(&evict);
+                self.remove_image(&evict);
             }
         }
         self.card_image_states.insert(key, entry);
@@ -311,5 +356,128 @@ impl ImageCache {
 impl std::fmt::Debug for ImageCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImageCache").finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CachedImage, ImageCache};
+    use std::sync::mpsc;
+
+    fn cache(capacity: usize) -> ImageCache {
+        let (card_image_tx, card_image_rx) = mpsc::channel();
+        let (resize_register_tx, _) = mpsc::channel();
+        let (_, resize_response_rx) = mpsc::channel();
+        let mut cache = ImageCache::new(
+            capacity,
+            None,
+            true,
+            card_image_tx,
+            card_image_rx,
+            resize_register_tx,
+            resize_response_rx,
+        );
+        cache.set_cache_capacity_for_test(capacity);
+        cache
+    }
+
+    fn image() -> CachedImage {
+        CachedImage {
+            img: Some(image::DynamicImage::ImageRgba8(
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
+            )),
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        }
+    }
+
+    #[test]
+    fn review_a05a530ba_new_variant_replaces_old_without_displacing_base_images() {
+        let mut cache = cache(2);
+        cache.complete_fetch("base:P".into(), image());
+        cache.complete_fetch("other:P".into(), image());
+
+        cache.insert_derived_image("base:P:t:8x4:old".into(), image());
+        cache.insert_derived_image("base:P:t:8x4:new".into(), image());
+
+        assert!(cache.is_cached("base:P"));
+        assert!(cache.is_cached("other:P"));
+        assert!(!cache.is_cached("base:P:t:8x4:old"));
+        assert!(cache.is_cached("base:P:t:8x4:new"));
+    }
+
+    #[test]
+    fn review_a05a530ba_removing_base_drops_derived_variants() {
+        let mut cache = cache(1);
+        let base_key = "audiobookshelf:server:cover:item:kitty";
+        cache.insert_image(base_key.into(), image());
+        cache.insert_derived_image(
+            "audiobookshelf:server:cover:item:t:8x4:title".into(),
+            image(),
+        );
+
+        cache.remove_image(base_key);
+
+        assert!(!cache.is_cached(base_key));
+        assert!(!cache.is_cached("audiobookshelf:server:cover:item:t:8x4:title"));
+    }
+
+    #[test]
+    fn reported_movie_primary_reservation_does_not_block_queue_backdrop_fetch() {
+        // Regression: a Primary-only reservation under {id}:P must not pin the queue card's landscape bytes.
+        use crate::ImageSource;
+        use crate::cache::FetchReservation;
+
+        let mut cache = cache(2);
+        let primary = super::ImageFetchReq {
+            cache_key: "item:P".into(),
+            item_id: "item".into(),
+            series_id: String::new(),
+            types: vec!["Primary".into()],
+            source: ImageSource::Emby,
+        };
+        let landscape = super::ImageFetchReq {
+            cache_key: "item:QB".into(),
+            item_id: "item".into(),
+            series_id: String::new(),
+            types: vec!["Backdrop".into(), "Primary".into()],
+            source: ImageSource::Emby,
+        };
+
+        assert!(matches!(
+            cache.reserve_card_image_fetch(primary, 2),
+            FetchReservation::Start(_)
+        ));
+        assert!(matches!(
+            cache.reserve_card_image_fetch(landscape, 2),
+            FetchReservation::Start(_)
+        ));
+    }
+
+    #[test]
+    fn queue_landscape_overlay_key_is_stable_and_base_changes_remove_it() {
+        use crate::title_overlay::{TitleOverlayText, title_overlay_cache_key};
+
+        let base_key = crate::emby_queue_landscape_cache_key("item");
+        let text = TitleOverlayText {
+            context: Some("context"),
+            title: "title",
+        };
+        let variant_key = title_overlay_cache_key(&base_key, 8, 4, text, None);
+        assert_eq!(
+            variant_key,
+            title_overlay_cache_key(&base_key, 8, 4, text, None)
+        );
+
+        let mut cache = cache(2);
+        cache.insert_image(base_key.clone(), image());
+        cache.insert_derived_image(variant_key.clone(), image());
+        cache.insert_image(base_key.clone(), image());
+        assert!(!cache.is_cached(&variant_key));
+
+        cache.insert_derived_image(variant_key.clone(), image());
+        cache.remove_image(&base_key);
+        assert!(!cache.is_cached(&variant_key));
     }
 }

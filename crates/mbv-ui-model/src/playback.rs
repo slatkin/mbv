@@ -28,11 +28,22 @@ pub enum QueueScope {
 /// Volume change applied by one volume key press or status-bar pill notch.
 pub const VOLUME_STEP: i64 = 5;
 
+/// Where the now-playing title is drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NowPlayingTitleSite {
+    #[default]
+    Header,
+    Artwork,
+}
+
 /// Per-slot render knobs for a queue card, owned by the shell and pushed to
 /// the render card painter.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueCardProjection {
     pub cache_key: Option<String>,
+    /// Plain artwork used if a projected title-overlay protocol is unavailable.
+    pub plain_cache_key: Option<String>,
     pub images_enabled: bool,
     pub visualizer: bool,
+    pub title_site: NowPlayingTitleSite,
 }

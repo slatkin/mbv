@@ -7,6 +7,42 @@ use mbv_theme as palette;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 
+fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
+    match color {
+        ratatui::style::Color::Rgb(r, g, b) => [r, g, b],
+        _ => unreachable!("playback overlay roles are RGB colours"),
+    }
+}
+
+/// Resolve the overlay's foreground roles. `title` is read only for the bottom
+/// row of a two-part title: it paints the warm `TEXT_EMPHASIS` cream without
+/// touching the shared `PLAYBACK_TITLE_FG` role the playback strip owns. The
+/// context row — and a one-part title, which paints as the top text — keeps
+/// `PLAYBACK_CONTEXT_FG`.
+fn title_overlay_colours() -> mbv_images::title_overlay::TitleOverlayColours {
+    mbv_images::title_overlay::TitleOverlayColours {
+        context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
+        title: color_rgb(mbv_theme::TEXT_EMPHASIS),
+    }
+}
+
+fn compose_title_overlay_bitmap(
+    source: &image::DynamicImage,
+    logo: Option<&image::DynamicImage>,
+    font: ratatui_image::FontSize,
+    cols: u16,
+    rows: u16,
+    text: mbv_images::title_overlay::TitleOverlayText<'_>,
+) -> image::DynamicImage {
+    let base = source.resize_exact(
+        u32::from(cols) * u32::from(font.width.max(1)),
+        u32::from(rows) * u32::from(font.height.max(1)),
+        RENDER_FILTER,
+    );
+    let colours = title_overlay_colours();
+    mbv_images::title_overlay::compose_title_overlay(&base, logo, font, text, colours)
+}
+
 impl App {
     /// Pre-warm nearby movie poster images for the migrated browser owner.
     /// The caller supplies the projected item window and the owner's
@@ -148,6 +184,127 @@ impl App {
             u32::from(box_w) * u32::from(font.width.max(1)),
             u32::from(box_h) * u32::from(font.height.max(1)),
         )
+    }
+
+    /// The size `key`'s cached protocol paints within `available`, if it is ready.
+    fn title_protocol_size(
+        &mut self,
+        key: &str,
+        available: ratatui::layout::Size,
+    ) -> Option<ratatui::layout::Size> {
+        self.cached_image_protocol_mut(key)?
+            .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
+    }
+
+    /// Compose and encode the title artwork at the size the base card protocol paints.
+    pub(in crate::app) fn ensure_title_overlay_protocol(
+        &mut self,
+        cache_key: &str,
+        available: ratatui::layout::Size,
+        parts: &mbv_queue::PlaybackTitleParts,
+        logo_cache_key: Option<&str>,
+        item_kind: &str,
+    ) -> Option<String> {
+        let Some(entry) = self.images.image(cache_key) else {
+            self.title_log_gate
+                .log_decision(cache_key, item_kind, "NoBaseEntry", None);
+            return None;
+        };
+        let source_dimensions = entry.img.as_ref().map(image::GenericImageView::dimensions);
+        let Some(size) = self.title_protocol_size(cache_key, available) else {
+            self.title_log_gate.log_decision(
+                cache_key,
+                item_kind,
+                "NoBaseProtocolSize",
+                source_dimensions,
+            );
+            return None;
+        };
+        let (cols, rows) = (size.width, size.height);
+        let context = parts.context.as_ref().map(|part| part.text.as_str());
+        let overlay_text = mbv_images::title_overlay::TitleOverlayText {
+            context,
+            title: &parts.title.text,
+        };
+        // The ready logo joins the variant key (design D7): a late-arriving
+        // logo builds a new variant, while an absent or failed one leaves the
+        // text variant valid.
+        let ready_logo_key = self.images.ready_logo_key(logo_cache_key);
+        let key = mbv_images::title_overlay::title_overlay_cache_key(
+            cache_key,
+            cols,
+            rows,
+            overlay_text,
+            ready_logo_key.as_deref(),
+        );
+        if !self.images.is_cached(&key)
+            && !self.build_title_overlay_variant(
+                cache_key,
+                &key,
+                cols,
+                rows,
+                overlay_text,
+                ready_logo_key.as_deref(),
+                item_kind,
+            )
+        {
+            return None;
+        }
+        if self.title_protocol_size(&key, available).is_none() {
+            self.title_log_gate.log_decision(
+                cache_key,
+                item_kind,
+                "VariantNotReady",
+                source_dimensions,
+            );
+            return None;
+        }
+        Some(key)
+    }
+
+    /// Compose the overlay variant from the base entry's source and the ready
+    /// logo, then register it under `key` (design D3/D7). Returns whether the
+    /// variant was composed; a missing base bitmap logs and leaves the text
+    /// site to the caller.
+    fn build_title_overlay_variant(
+        &mut self,
+        cache_key: &str,
+        key: &str,
+        cols: u16,
+        rows: u16,
+        text: mbv_images::title_overlay::TitleOverlayText<'_>,
+        ready_logo_key: Option<&str>,
+        item_kind: &str,
+    ) -> bool {
+        let Some(source) = self
+            .images
+            .image(cache_key)
+            .and_then(|entry| entry.img.as_ref())
+        else {
+            self.title_log_gate
+                .log_decision(cache_key, item_kind, "BaseImageMissing", None);
+            return false;
+        };
+        let source_dimensions = (source.width(), source.height());
+        let logo = ready_logo_key
+            .and_then(|key| self.images.image(key))
+            .and_then(|entry| entry.img.as_ref());
+        let composed =
+            compose_title_overlay_bitmap(source, logo, self.image_font_size(), cols, rows, text);
+        let suffix = self.current_protocol_suffix();
+        let entry = self.images.build_cached_image(key, Some(composed), suffix);
+        self.images.insert_derived_image(key.to_owned(), entry);
+        tracing::debug!(
+            name: "queue.title_overlay.built",
+            target: "queue_art",
+            key,
+            base_width = source_dimensions.0,
+            base_height = source_dimensions.1,
+            box_cols = cols,
+            box_rows = rows,
+            "built queue title overlay"
+        );
+        true
     }
 
     /// Ensure the hero cover-fit protocol for `cache_key` matches
@@ -412,96 +569,4 @@ fn fetch_url(url: &str) -> Option<Vec<u8>> {
     })
 }
 #[cfg(test)]
-mod protocol_tests {
-    use super::super::App;
-    use crate::app::tests::make_app_stub;
-    use mbv_images::CachedImage;
-    use ratatui_image::picker::{Picker, ProtocolType};
-
-    const BASE_KEY: &str = "hero-base";
-    const LOGO_KEY: &str = "hero-logo";
-    const BOX: (u16, u16) = (8, 4);
-
-    fn image(width: u32, height: u32) -> image::DynamicImage {
-        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            width,
-            height,
-            image::Rgba([20, 40, 60, 255]),
-        ))
-    }
-
-    fn cached(img: Option<image::DynamicImage>) -> CachedImage {
-        CachedImage {
-            img,
-            protocols: std::collections::HashMap::new(),
-            cover_box: None,
-            applied_logo_key: None,
-        }
-    }
-
-    fn app_with_base() -> App {
-        let mut app = make_app_stub();
-        let mut picker = Picker::halfblocks();
-        picker.set_protocol_type(ProtocolType::Kitty);
-        app.images.configure_protocol(None, true);
-        app.images
-            .set_image_pickers_for_test(picker, Picker::halfblocks());
-        app.images
-            .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
-        app
-    }
-
-    fn build_count(app: &App) -> u32 {
-        app.images.image_protocol_builds()
-    }
-
-    #[test]
-    fn arriving_logo_rebuilds_base_only_protocol_once() {
-        let mut app = app_with_base();
-
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
-        assert_eq!(build_count(&app), 1);
-
-        app.images
-            .insert_image(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 2);
-        assert_eq!(
-            app.images
-                .image(BASE_KEY)
-                .and_then(|entry| entry.applied_logo_key.as_deref()),
-            Some(LOGO_KEY)
-        );
-
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&app), 2);
-    }
-
-    #[test]
-    fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
-        let mut absent = app_with_base();
-        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
-        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&absent), 1);
-        assert!(
-            absent
-                .images
-                .image(BASE_KEY)
-                .is_some_and(|entry| entry.applied_logo_key.is_none())
-        );
-
-        let mut failed = app_with_base();
-        failed
-            .images
-            .insert_image(LOGO_KEY.to_owned(), CachedImage::empty());
-        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert_eq!(build_count(&failed), 1);
-        assert!(
-            failed
-                .images
-                .image(BASE_KEY)
-                .is_some_and(|entry| entry.applied_logo_key.is_none())
-        );
-    }
-}
+mod protocol_tests;

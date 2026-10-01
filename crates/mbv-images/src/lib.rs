@@ -1,6 +1,7 @@
 pub mod cache;
 mod protocol;
 pub mod resize;
+pub mod title_overlay;
 pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 pub static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
@@ -14,6 +15,16 @@ pub fn mem_key(cache_key: &str, suffix: &str) -> String {
 /// Prefix shared by every Audiobookshelf-sourced cache key, used to filter
 /// or clear Audiobookshelf entries from the image caches.
 pub const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
+
+/// A cache key without its Audiobookshelf protocol suffix; other keys are
+/// already identities.
+pub(crate) fn cache_identity(key: &str) -> &str {
+    if key.starts_with(AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
+        key.rsplit_once(':').map_or(key, |(base, _)| base)
+    } else {
+        key
+    }
+}
 
 /// Cache key for an Audiobookshelf cover under `server`, keyed by the
 /// library item's `id` and the active protocol `suffix`.
@@ -67,6 +78,13 @@ pub fn emby_card_cache_key(item_id: &str, album_id: &str) -> String {
     } else {
         format!("{album_id}:P")
     }
+}
+
+/// Cache key for landscape Emby queue-card artwork, isolated from Primary art
+/// shared by MPRIS and other consumers.
+#[must_use]
+pub fn emby_queue_landscape_cache_key(item_id: &str) -> String {
+    format!("{item_id}:QB")
 }
 
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.

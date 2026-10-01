@@ -86,6 +86,7 @@ impl QueuePlaybackPanel {
                 panel_focused: false,
                 now_playing_title: None,
                 title_parts: None,
+                title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
                 status_indicators: None,
                 use_nerd_fonts: false,
                 idle_feed_title: None,
@@ -233,6 +234,7 @@ impl Component for QueuePlaybackPanel {
                         self.transport.use_nerd_fonts,
                         self.transport.state.paused,
                     ),
+                    title_site: self.transport.title_site,
                 },
             );
         } else {

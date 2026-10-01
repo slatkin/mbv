@@ -9,32 +9,203 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
-use mbv_ui_model::playback::QueueCardProjection;
+use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
 
-fn card_image_types(item_type: &str) -> &'static [&'static str] {
-    match item_type {
+/// Log-dedup memo for the title overlay's decision and paint lines; shell
+/// state, not presentation.
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct TitleLogGate {
+    decision: Option<(String, &'static str)>,
+    paint: Option<(String, &'static str)>,
+}
+
+impl TitleLogGate {
+    pub(in crate::app) fn last_decision_reason(&self) -> Option<&'static str> {
+        self.decision.as_ref().map(|(_, reason)| *reason)
+    }
+
+    fn log_paint(&mut self, identity: &str, outcome: &'static str, reason: &'static str) {
+        let paint = (identity.to_owned(), outcome);
+        if self.paint.as_ref() == Some(&paint) {
+            return;
+        }
+        self.paint = Some(paint);
+        tracing::debug!(
+            name: "queue.title_overlay.paint",
+            target: "queue_art",
+            item = identity,
+            outcome,
+            reason,
+            "queue title overlay paint"
+        );
+    }
+
+    pub(in crate::app) fn log_decision(
+        &mut self,
+        identity: &str,
+        item_kind: &str,
+        reason: &'static str,
+        base_dimensions: Option<(u32, u32)>,
+    ) {
+        let decision = (identity.to_owned(), reason);
+        if self.decision.as_ref() == Some(&decision) {
+            return;
+        }
+        self.decision = Some(decision);
+        let (base_width, base_height) = base_dimensions.unwrap_or_default();
+        tracing::debug!(
+            name: "queue.title_overlay.decision",
+            target: "queue_art",
+            item = identity,
+            item_kind,
+            reason,
+            base_width,
+            base_height,
+            "queue title site decision"
+        );
+    }
+}
+
+fn title_site_skip_reason(
+    app: &App,
+    projection: &QueueCardProjection,
+    playback: mbv_ui_model::playback::PlaybackState,
+    item: Option<&QueueItem>,
+    slotless_active: bool,
+    slotless_title_present: bool,
+    height: u16,
+    width: u16,
+    base_dimensions: Option<(u32, u32)>,
+    column_resizing: bool,
+) -> Option<&'static str> {
+    if !playback.active {
+        Some("NotActive")
+    } else if projection.visualizer {
+        Some("Visualizer")
+    } else if !projection.images_enabled {
+        Some("ImagesOff")
+    } else if column_resizing {
+        // User-reported regression: a queue-column resize drag builds a new
+        // Lanczos3 overlay variant for every fitted width on the tick thread.
+        // While the drag is active the card paints plain base art; the drag's
+        // final width composes the overlay once the `DragEnd` clears the gate.
+        Some("ColumnResizing")
+    } else if app.images.is_halfblock_configured() {
+        Some("HalfblockConfigured")
+    } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
+        Some("NoSlot")
+    } else if slotless_active && !slotless_title_present {
+        Some("NoTitle")
+    } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
+        Some("NoActiveItem")
+    } else if base_dimensions.is_none() {
+        Some("NoBaseArt")
+    } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
+        Some("NoBaseProtocolSize")
+    } else {
+        None
+    }
+}
+
+fn item_kind(item: &QueueItem) -> &str {
+    match item {
+        QueueItem::Emby(item) => item.item_type.as_str(),
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(_)) => {
+            "AudiobookshelfEpisode"
+        }
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => "AudiobookshelfBook",
+        QueueItem::Feed(_) => "Feed",
+    }
+}
+
+fn resolve_title_site(variant_key: &str, painted_key: Option<&str>) -> NowPlayingTitleSite {
+    if painted_key == Some(variant_key) {
+        NowPlayingTitleSite::Artwork
+    } else {
+        NowPlayingTitleSite::Header
+    }
+}
+
+fn painted_overlay_key(key: Option<&str>) -> Option<&str> {
+    key.filter(|key| key.contains(mbv_images::title_overlay::DERIVED_SEP))
+}
+
+fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
+    match item.item_type.as_str() {
         "MusicAlbum" => MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
-        "Movie" => &["Backdrop", "Primary", "Logo"],
-        // `Thumb` before the poster chain: home videos (and other non-Movie
-        // video items) often carry only a landscape `Thumb`.
+        "Movie" => &["Backdrop", "Primary"],
+        // Every other non-music kind fetches its own images poster-first:
+        // `Primary` is the item's own still (an episode's still lives on the
+        // episode; the server only redirects Thumb/Backdrop/Logo to the
+        // series). Guard: user-reported regression, an episode's queue card
+        // must show the episode's own art, never the series'.
         _ => &["Primary", "Thumb", "Backdrop", "Logo"],
     }
 }
 
+/// The logo owner for the title overlay (design D7): a Movie draws its own
+/// Logo, keyed like the Library hero's `movie_logo_source`; an Episode draws
+/// its show's Logo. The cache key is independent of any protocol suffix, and
+/// the fetch owner keeps the Movie's Logo on the item and the Episode's on the
+/// series. Every other item has no logo and keeps the text row.
+struct OverlayLogoSource {
+    cache_key: String,
+    item_id: String,
+    series_id: String,
+}
+
+fn overlay_logo_source(item: &EmbyItem) -> Option<OverlayLogoSource> {
+    match item.item_type.as_str() {
+        "Movie" if !item.image_tags.logo.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{}:Logo:{}", item.id, item.image_tags.logo),
+            item_id: item.id.clone(),
+            series_id: String::new(),
+        }),
+        "Episode" if !item.series_id.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{}:Logo", item.series_id),
+            item_id: item.id.clone(),
+            series_id: item.series_id.clone(),
+        }),
+        _ => None,
+    }
+}
+
+/// The artwork cache key for a queue card. The landscape `{id}:QB` key is
+/// Movie-only: the artwork policy also classifies an Episode as Landscape
+/// through its series tags, but an episode's card shows the episode's own
+/// still, so it keeps the portrait `{id}:P` key (user-reported regression).
 fn card_cache_key(item: &EmbyItem) -> String {
-    let album_id = if item.item_type == "Audio" {
-        item.album_id.as_str()
+    if item.item_type == "Audio" {
+        mbv_images::emby_card_cache_key(&item.id, &item.album_id)
+    } else if item.item_type == "Movie" {
+        mbv_images::emby_queue_landscape_cache_key(&item.id)
     } else {
-        ""
-    };
-    mbv_images::emby_card_cache_key(&item.id, album_id)
+        mbv_images::emby_card_cache_key(&item.id, "")
+    }
 }
 
 /// The artwork cache key for an Emby item id held without an `EmbyItem` (a
-/// watched remote Session's now-playing item).
-fn card_cache_key_for_id(item_id: &str) -> String {
-    mbv_images::emby_card_cache_key(item_id, "")
+/// watched remote Session's now-playing item). The landscape key is Movie-only,
+/// matching [`card_cache_key`].
+fn card_cache_key_for_id(item_id: &str, item_type: Option<&str>) -> String {
+    if item_type == Some("Movie") {
+        mbv_images::emby_queue_landscape_cache_key(item_id)
+    } else {
+        mbv_images::emby_card_cache_key(item_id, "")
+    }
+}
+
+/// The fetch chain for a watched remote Session's now-playing item, which is
+/// held without an `EmbyItem` and so cannot consult the artwork policy. Only a
+/// Movie is fetched landscape; an Episode fetches its own poster-first chain
+/// (`Primary` is the episode's own still, not the series thumb).
+fn slotless_card_image_types(item_type: Option<&str>) -> &'static [&'static str] {
+    match item_type {
+        Some("Movie") => &["Backdrop", "Primary"],
+        Some("Episode") => &["Primary", "Thumb", "Backdrop", "Logo"],
+        _ => &["Primary"],
+    }
 }
 
 impl App {
@@ -106,7 +277,7 @@ impl App {
         let last_card = self.images.last_card_size();
         let terminal_height = self.terminal_height;
         let image = self.cached_image_protocol_mut(key);
-        let (height, width, loading) = render_card_painting(
+        let (height, width, loading, painted) = render_card_painting(
             f,
             area,
             left_align,
@@ -116,7 +287,45 @@ impl App {
             last_card,
             terminal_height,
         );
+        let fallback_key = projection.plain_cache_key.as_deref().filter(|key| {
+            self.images
+                .image(key)
+                .is_some_and(|entry| entry.img.is_some())
+        });
+        let mut plain_fallback_painted = false;
+        let mut out = (height, width, loading);
+        if !painted && let Some(fallback_key) = fallback_key {
+            let fallback_loading = self.images.is_loading(fallback_key);
+            let fallback_image = self.cached_image_protocol_mut(fallback_key);
+            projection.cache_key = Some(fallback_key.to_owned());
+            let (height, width, loading, fallback_painted) = render_card_painting(
+                f,
+                area,
+                left_align,
+                &projection,
+                fallback_loading,
+                fallback_image,
+                last_card,
+                terminal_height,
+            );
+            plain_fallback_painted = fallback_painted;
+            out = (height, width, loading);
+        }
+        let (height, width, loading) = out;
         self.images.record_card_size(height, width);
+        if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref()) {
+            self.images
+                .record_painted_title_overlay(Some(key.to_owned()));
+            self.title_log_gate
+                .log_paint(key, "overlay_recorded", "OverlayPainted");
+        } else if plain_fallback_painted {
+            let key = artwork_key.as_deref().unwrap_or("<none>");
+            let reason = self
+                .title_log_gate
+                .last_decision_reason()
+                .unwrap_or("OverlayNotReady");
+            self.title_log_gate.log_paint(key, "plain_fallback", reason);
+        }
         (height, width, loading)
     }
 
@@ -147,18 +356,22 @@ impl App {
         })
     }
 
-    /// A watched remote Session names an item outside the local queue. Its own
-    /// Primary image is used (an episode's still lives there), never the selected row.
+    /// A watched remote Session names an item outside the local queue, never the selected row.
     fn project_slotless_session(&mut self, projection: &mut QueueCardProjection) -> bool {
-        let Some(item_id) = self
-            .connected_session_state
-            .as_ref()
-            .and_then(|session| session.now_playing_item_id.clone())
+        let Some((item_id, item_type, series_id)) =
+            self.connected_session_state.as_ref().and_then(|session| {
+                Some((
+                    session.now_playing_item_id.clone()?,
+                    session.now_playing_item_type.as_deref(),
+                    session.now_playing_series_id.clone().unwrap_or_default(),
+                ))
+            })
         else {
             return true;
         };
-        let cache_key = card_cache_key_for_id(&item_id);
-        self.fetch_card_image(cache_key.clone(), item_id, String::new(), &["Primary"]);
+        let cache_key = card_cache_key_for_id(&item_id, item_type);
+        let image_types = slotless_card_image_types(item_type);
+        self.fetch_card_image(cache_key.clone(), item_id, series_id, image_types);
         projection.cache_key = Some(cache_key);
         true
     }
@@ -232,7 +445,8 @@ impl App {
         let n = queue_ref.total_queue_len();
         let start = cursor.saturating_sub(PREFETCH_BEHIND).min(n);
         let end = (cursor + PREFETCH_AHEAD + 1).min(n);
-        let prefetch: Vec<(String, String, String, String)> = queue_ref.slots()[start..end]
+        let prefetch: Vec<(String, String, String, &'static [&'static str])> = queue_ref.slots()
+            [start..end]
             .iter()
             .enumerate()
             .filter(|(i, _)| start + i != cursor)
@@ -242,24 +456,31 @@ impl App {
                     card_cache_key(item),
                     item.id.clone(),
                     item.series_id.clone(),
-                    item.item_type.clone(),
+                    card_image_types(item),
                 )
             })
             .collect();
-        for (key, id, series_id, item_type) in prefetch {
-            self.fetch_list_card_image_when_idle(key, id, series_id, card_image_types(&item_type));
+        for (key, id, series_id, image_types) in prefetch {
+            self.fetch_list_card_image_when_idle(key, id, series_id, image_types);
         }
     }
 
     /// The queue projection issues every fetch for the now-playing item and
     /// projects the slot the painter consumes. Active-first, then viewed selection.
-    pub(in crate::app) fn refresh_queue_card_image(&mut self) {
+    pub(in crate::app) fn refresh_queue_card_image(&mut self, column_resizing: bool) {
         let mut projection = QueueCardProjection {
             cache_key: None,
+            plain_cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
+            title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
         };
         if projection.visualizer || !projection.images_enabled {
+            self.queue_title_site(
+                &mut projection,
+                self.displayed_playback_state(),
+                column_resizing,
+            );
             self.queue_card_projection = projection;
             return;
         }
@@ -273,16 +494,168 @@ impl App {
             } else {
                 self.project_audiobookshelf_cover(playback, &mut projection);
             }
+            self.queue_title_site(&mut projection, playback, column_resizing);
             self.queue_card_projection = projection;
             return;
         };
 
-        let img_types = card_image_types(&item.item_type);
+        let img_types = card_image_types(&item);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
         let cache_key = card_cache_key(&item);
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         self.prefetch_card_images(cursor);
         projection.cache_key = Some(cache_key);
+        self.queue_title_site(&mut projection, playback, column_resizing);
         self.queue_card_projection = projection;
     }
+
+    fn queue_title_site(
+        &mut self,
+        projection: &mut QueueCardProjection,
+        playback: mbv_ui_model::playback::PlaybackState,
+        column_resizing: bool,
+    ) {
+        let (height, width) = self.images.last_card_size();
+        let slotless_active =
+            playback.active && playback.active_idx.is_none() && projection.cache_key.is_some();
+        let item = if slotless_active {
+            None
+        } else {
+            playback
+                .active_idx
+                .and_then(|index| self.playback_queue().item_at(index))
+                .or_else(|| {
+                    let queue = self.displayed_queue();
+                    queue.item_at(queue.cursor())
+                })
+        };
+        let parts = item
+            .map(|item| self.playback_title_parts(item))
+            .or_else(|| {
+                slotless_active
+                    .then(|| self.slotless_playback_title_parts())
+                    .flatten()
+            });
+        let item_kind = if slotless_active {
+            "Remote".to_owned()
+        } else {
+            item.map_or_else(|| "Unknown".to_owned(), |item| item_kind(item).to_owned())
+        };
+        let identity = projection
+            .cache_key
+            .as_deref()
+            .unwrap_or("<none>")
+            .to_owned();
+        let base_dimensions = projection
+            .cache_key
+            .as_deref()
+            .and_then(|key| self.images.image(key))
+            .and_then(|entry| entry.img.as_ref())
+            .map(image::GenericImageView::dimensions);
+        let reason = title_site_skip_reason(
+            self,
+            projection,
+            playback,
+            item,
+            slotless_active,
+            parts.is_some(),
+            height,
+            width,
+            base_dimensions,
+            column_resizing,
+        );
+        if let Some(reason) = reason {
+            self.title_log_gate
+                .log_decision(&identity, &item_kind, reason, base_dimensions);
+            return;
+        }
+        let Some(parts) = parts else {
+            self.title_log_gate
+                .log_decision(&identity, &item_kind, "NoTitle", base_dimensions);
+            return;
+        };
+        // The logo owner is resolved before the overlay builds so its fetch
+        // starts as early as the overlay path itself (design D7); a pending
+        // or failed fetch simply leaves `ready_logo_key` empty below.
+        let logo_cache_key = item
+            .and_then(|item| match item {
+                QueueItem::Emby(emby) => overlay_logo_source(emby),
+                _ => None,
+            })
+            .map(|logo| {
+                self.fetch_card_image(
+                    logo.cache_key.clone(),
+                    logo.item_id,
+                    logo.series_id,
+                    &["Logo"],
+                );
+                logo.cache_key
+            });
+        self.queue_title_overlay(projection, &parts, &item_kind, logo_cache_key.as_deref());
+    }
+
+    fn queue_title_overlay(
+        &mut self,
+        projection: &mut QueueCardProjection,
+        parts: &mbv_queue::PlaybackTitleParts,
+        item_kind: &str,
+        logo_cache_key: Option<&str>,
+    ) {
+        let (height, width) = self.images.last_card_size();
+        let Some(key) = projection.cache_key.clone() else {
+            self.title_log_gate
+                .log_decision("<none>", item_kind, "NoSlot", None);
+            return;
+        };
+        let base_dimensions = self
+            .images
+            .image(&key)
+            .and_then(|entry| entry.img.as_ref())
+            .map(image::GenericImageView::dimensions);
+        let text = mbv_images::title_overlay::TitleOverlayText {
+            context: parts.context.as_ref().map(|part| part.text.as_str()),
+            title: &parts.title.text,
+        };
+        // The `covers` gate applies to the text rows actually drawn (design
+        // D7): a ready logo replaces the top row, and a one-part title then
+        // draws no text at all.
+        let draws_logo = self.images.ready_logo_key(logo_cache_key).is_some();
+        let title_covers = if draws_logo {
+            text.context.is_none() || mbv_images::title_overlay::covers(text.title)
+        } else {
+            mbv_images::title_overlay::covers(text.title)
+                && text.context.is_none_or(mbv_images::title_overlay::covers)
+        };
+        if !title_covers {
+            self.title_log_gate
+                .log_decision(&key, item_kind, "UncoveredGlyph", base_dimensions);
+            return;
+        }
+        let Some(variant_key) = self.ensure_title_overlay_protocol(
+            &key,
+            ratatui::layout::Size { width, height },
+            parts,
+            logo_cache_key,
+            item_kind,
+        ) else {
+            return;
+        };
+        projection.plain_cache_key = Some(key.clone());
+        projection.cache_key = Some(variant_key.clone());
+        projection.title_site =
+            resolve_title_site(&variant_key, self.images.painted_title_overlay_key());
+        self.title_log_gate.log_decision(
+            &key,
+            item_kind,
+            if projection.title_site == NowPlayingTitleSite::Artwork {
+                "Artwork"
+            } else {
+                "NotYetPainted"
+            },
+            base_dimensions,
+        );
+    }
 }
+
+#[cfg(test)]
+mod title_site_tests;

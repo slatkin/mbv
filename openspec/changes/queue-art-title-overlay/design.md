@@ -53,21 +53,21 @@ paints about 1:1.
 text blurs and its size would track the source resolution.
 
 **D2. Text size is cell-relative, not image-relative.** Nominal row height = one cell row
-(`font.height`); glyph size ~70% of it; floor ~60% of nominal; below the floor, ellipsis.
+(`font.height`); glyph size 100% of it; floor ~60% of nominal; below the floor, ellipsis.
 Image size only changes how many characters fit. *Alternative:* percentage of image width (the
 logo's model) - rejected, text would be huge on large art and illegible on small art.
 Fallback `FontSize` (10x20, used when no picker is active) makes size approximate, but the
 overlay is only live when a real protocol is configured.
 
-**D3. Separate cache entry, not the `:P` entry.** The composed variant is its own `CachedImage`
+**D3. Separate cache entry, not the plain entry.** The composed variant is its own `CachedImage`
 under `{item-identity}:t:{cols}x{rows}:{title-hash}`, where *item identity* is the card's cache
 key with any protocol suffix stripped (Emby `{id}:P` as is; Audiobookshelf's cover/book key
 without its suffix), so the variant key is stable when a dimmed backdrop flips the suffix. Its `img` is the composed bitmap and its
-`protocols` map is filled per suffix like any entry. The plain `:P` entry stays plain (MPRIS
+`protocols` map is filled per suffix like any entry. The plain entry (`{id}:QB` for a Movie, `{id}:P` otherwise, D9) stays plain (MPRIS
 and Library read it) and doubles as the measuring protocol and the fallback paint. Under a dimmed backdrop the variant
 re-encodes through `cached_image_protocol_mut` with no change (`cover_box` is `None`, so it encodes
 the composed `img` directly); no re-compose path is added. Stale variants age out through the
-existing image LRU. *Alternative:* extend `:P` with another applied-
+existing image LRU. *Alternative:* extend the plain entry with another applied-
 key field - rejected, one entry cannot be both the plain and composed artwork, and sharing a key
 across consumers is the exact flash bug `audiobookshelf_hero_cover_cache_key` documents.
 
@@ -77,8 +77,10 @@ panel (header text) and the card painter.
 
 *Overlay eligible* (drives what the card paints and composes) iff all of: playback is active per
 `displayed_playback_state().active` (paused counts as active and keeps the overlay; an idle card
-that shows the cursor row's art, or a cast/session title with no active local item, is never
-eligible); images enabled; visualizer off; `visual_slot_shown()` (not idle, not
+that shows the cursor row's art is never eligible; a watched remote Emby session with no
+local queue slot IS eligible, its card art keyed by the session's now-playing item and its title
+taken from the session's now-playing name as a one-part title, because the header already carries that same
+title there); images enabled; visualizer off; `visual_slot_shown()` (not idle, not
 `visual_slot_hidden`) with a non-zero card size; `!is_halfblock_configured()`; the title passes
 `covers`; and a composed variant is ready for the current identity+box+title. The card paints the
 overlay variant whenever eligible.
@@ -90,21 +92,42 @@ twice for a frame at most, never zero times). The painted fact and the variant k
 suffix-independent (item identity, D3), and the dim-backdrop `halfblock` suffix is not an input,
 so opening a dialog cannot flip the site for Emby or Audiobookshelf items.
 
-**D5. Font and rasteriser.** Embed one static Lexend Deca weight (OFL; licence text shipped
-beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
-Coverage is Latin / Latin-Ext / Vietnamese; the compositor exposes `covers(text) -> bool`
+**D5. Font and rasteriser.** Embed one static JetBrainsMono Nerd Font SemiBold face (OFL; licence text
+shipped beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
+The monospaced face covers Latin and more scripts than Lexend Deca, but not CJK; the header
+fallback remains for uncovered glyphs. The compositor exposes `covers(text) -> bool`
 (`glyph_id != 0` for every char) and the site rule treats `false` as `Header`.
 *Alternatives:* `fontdue` (comparable); system font via fontconfig (heavy dependency, still no
 CJK guarantee); variable TTF (needs variation support - use a static instance instead).
-Task 1.1 confirms the crate and weight before anything else builds on them.
 
 **D6. Compositor home and shape.** A pure `mbv-images` module (`title_overlay.rs`):
 `compose_title_overlay(base: &DynamicImage, cell: FontSize, parts: &TitleOverlayText, colours)
 -> DynamicImage`, plus `covers`. It takes resolved RGB colours (the theme roles are `Color::Rgb`), no `App`.
 Colours: a context part paints `PLAYBACK_CONTEXT_FG` (yellow), a title part under a context
-paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow), the
-same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
-gets a vertical alpha gradient scrim.
+paints `TEXT_EMPHASIS` (cream), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow).
+Placement is top row for the context-or-lone title, bottom row for a two-part title; each row's
+text is horizontally centred within the side padding and gets a flat translucent scrim at constant
+alpha across the whole row. The logo remains top-left.  Each glyph is painted over a soft translucent dark drop shadow, offset down-right about 1/16 of the glyph height (minimum 1px), for legibility on any artwork.
+
+**D7. A show or movie logo replaces the top row.** When the playing Emby item has a logo image
+that is decoded and ready, the compositor draws that logo in the upper-left corner of the artwork
+instead of the top text row, with no scrim behind it. Logo owner: a Movie uses its own logo
+(`image_tags.logo`, key `{id}:Logo:{tag}` as the Library hero's `movie_logo_source`); an Episode
+uses its show's logo (`series_id`, key `{series_id}:Logo`, no tag - `ParentLogoImageTag` is not
+parsed today and is not needed). Every other item (music, Audiobookshelf, feeds) has no logo and
+keeps the text. The fetch is issued by the title-site path itself (`overlay_logo_source`, a `Logo`-only
+fetch), not by the card's chain (a Movie's chain no longer includes `Logo`, D9), and
+`fetch_emby_image_type` takes the series as owner for a Logo of an episode;
+no new endpoint or `Fields=` is needed. Layout: the logo is contain-fitted into a box at the
+artwork's top-left inset by the side padding, at most two cell rows tall (cell-relative, as D2)
+and at most half the artwork's width. A two-part title keeps its bottom (title) row, so an
+episode shows the show logo above and the episode title below; a one-part title (movie) is the
+logo alone. The `covers` gate applies only to the text rows actually drawn. The logo's ready key
+joins the variant key (D3) so a late-arriving logo recomposes the variant; an absent or failed
+logo keeps the text variant (the same base-only-valid rule as the hero's `applied_logo_key`). The
+title site is unchanged: it is `Artwork` once the variant has painted, and for a one-part title
+the logo then carries the title graphically. *Alternative:* keep the top text row beside the logo
+- rejected, the logo is the show name.
 
 ## Risks / Trade-offs
 
@@ -115,12 +138,31 @@ gets a vertical alpha gradient scrim.
   hero already pays on box change; measure in task 2.4, move to the resize worker only if it
   hitches. Not speculative-patched beforehand.
 - **Missing glyphs for non-Latin titles** -> header fallback; the user sees no tofu.
-- **Resize / split-drag churn** -> each new box recomposes; debounced by the existing box-keyed
-  entry check, old variants LRU out.
+- **Resize / split-drag churn** -> while a queue-column resize drag is active, no overlay variant
+  is built and plain base art paints; one overlay composition occurs after the drag ends. This
+  avoids composing intermediate widths; old variants age out through the existing LRU.
 - **Memory** -> at most a few composed bitmaps live; the LRU bounds them. Must not regress the
   headless footprint (a headless owner never composes: it has no card).
 
+**D8. Defer overlay composition during queue-column resize drag.** While the resize drag is active,
+paint plain base artwork and do not build an overlay variant. Compose the current variant once after
+the drag ends, rather than doing work for transient widths.
+
+**D9. Movie-only landscape card key.** The queue card's key and fetch chain depend on the item
+type, because the artwork policy also classifies an Episode as Landscape through its series tags
+while an episode's card must show the episode's own still. A Movie uses the landscape key
+`{id}:QB` (`emby_queue_landscape_cache_key`) and fetches `Backdrop`, `Primary` (no `Logo`; the
+overlay logo is its own fetch, D7). An Episode keeps `{id}:P` and fetches `Primary`, `Thumb`,
+`Backdrop`, `Logo`. A slotless watched Session holds only an item id and type, so it chooses key
+and chain by item type with the same split (Movie landscape; Episode poster-first; else `Primary`).
+MPRIS reads `{id}:P` first and falls back to the landscape key `{id}:QB`, so a Movie's art is
+still found (#833). Cast targets with no Emby Session are not slotless-eligible: the cast
+attachment holds no Emby item id or type, so no card key is projected and the header carries the
+title. *Alternative:* landscape for every item the policy calls Landscape - rejected, an
+episode card would show series art.
+
 ## Open Questions
 
-- Exact scrim opacity/height and Lexend weight (Medium vs SemiBold): tuned visually during
-  task 3.3; no spec impact.
+- Exact scrim opacity/height: tuned visually during task 3.3; no spec impact.
+- Logo box (two cell rows tall, half the width) and whether light logos need a subtle backing over
+  bright art: tuned visually in task 4.5; no spec impact unless a backing is added.

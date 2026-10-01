@@ -4,6 +4,29 @@ use mbv_components::PlaybackProjection;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_ui_msg::PlaybackRequest;
 
+impl crate::app::App {
+    pub(in crate::app) fn slotless_playback_title_parts(
+        &self,
+    ) -> Option<mbv_queue::PlaybackTitleParts> {
+        let title = self
+            .cast_attachment
+            .as_ref()
+            .and_then(crate::app::App::cast_now_playing_title)
+            .or_else(|| {
+                self.connected_session_state
+                    .as_ref()
+                    .and_then(|session| session.now_playing.clone())
+            })?;
+        Some(mbv_queue::PlaybackTitleParts {
+            title: mbv_queue::PlaybackTitlePart {
+                role: mbv_queue::PlaybackTitlePartRole::Title,
+                text: title,
+            },
+            context: None,
+        })
+    }
+}
+
 impl Model {
     /// The shared transport projection both playback panels consume (task
     /// 3.5, D10): one builder so the queue-column panel and the right-column
@@ -23,28 +46,16 @@ impl Model {
             .active_idx
             .filter(|_| state.active)
             .and_then(|idx| self.app.playback_queue().item_at(idx));
-        let title_parts = active_item.map(|item| self.app.playback_title_parts(item));
+        let slotless_title_parts = (state.active && active_item.is_none())
+            .then(|| self.app.slotless_playback_title_parts())
+            .flatten();
+        let title_parts = active_item
+            .map(|item| self.app.playback_title_parts(item))
+            .or_else(|| slotless_title_parts.clone());
         let title = if state.active {
             active_item
                 .map(|item| item.title().to_string())
-                // `effective_playback_state` reports `active` for a cast target
-                // or watched remote Session, but the local queue may hold no
-                // matching slot (a cast with an empty local queue, a remote
-                // device playing its own selection). Fall back to the attached
-                // target's now-playing title so the panel paints what the
-                // legacy player chrome used to (3.9).
-                .or_else(|| {
-                    self.app
-                        .cast_attachment
-                        .as_ref()
-                        .and_then(crate::app::App::cast_now_playing_title)
-                })
-                .or_else(|| {
-                    self.app
-                        .connected_session_state
-                        .as_ref()
-                        .and_then(|session| session.now_playing.clone())
-                })
+                .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
         } else if let Some(cast) = self.app.cast_attachment.as_ref() {
             crate::app::App::cast_now_playing_title(cast)
         } else {
@@ -68,6 +79,7 @@ impl Model {
             panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
             now_playing_title,
             title_parts,
+            title_site: self.app.queue_card_projection.title_site,
             status_indicators: self.app.build_status_indicator_spans(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
@@ -117,6 +129,26 @@ mod tests {
     use super::*;
     use mbv_ui_msg::Msg;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn slotless_transport_and_artwork_share_the_remote_title() {
+        let mut app = crate::app::tests::make_app_stub();
+        let mut session = mbv_emby::test_support::make_session("Remote", "Emby");
+        session.now_playing = Some("Remote movie".to_owned());
+        app.connected_session_state = Some(session);
+
+        let parts = app
+            .slotless_playback_title_parts()
+            .expect("session title is available");
+        let transport_title = parts.title.text.clone();
+        let overlay_text = mbv_images::title_overlay::TitleOverlayText {
+            context: parts.context.as_ref().map(|part| part.text.as_str()),
+            title: &parts.title.text,
+        };
+
+        assert_eq!(transport_title, overlay_text.title);
+        assert_eq!(overlay_text.context, None);
+    }
 
     #[test]
     fn playback_chrome_request_routes_through_shell_authority() {

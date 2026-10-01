@@ -143,13 +143,15 @@ struct MediaPlayer2Player {
 /// URL: that would embed the API token in a query string and leak it onto
 /// the session D-Bus. An uncached track simply omits `mpris:artUrl`.
 ///
-/// Uses the same cache-key builder as the queue-card projection
-/// (`mbv_images::emby_card_cache_key`), so this lookup can never drift from
-/// what the card projection actually wrote to disk (issue #833).
+/// Uses the same cache-key builders as the queue-card projection
+/// (`mbv_images::emby_card_cache_key`, then the Movie-only
+/// `mbv_images::emby_queue_landscape_cache_key`), so this lookup can never
+/// drift from what the card projection actually wrote to disk (issue #833).
+/// A Movie's card writes the landscape key `{id}:QB`, so the portrait lookup
+/// alone omitted `mpris:artUrl` for a now-playing Movie.
 ///
 /// `resolve_path` is injected so the URI decision stays pure and never
 /// touches a real cache directory; the caller supplies the path lookup.
-#[cfg(not(test))]
 fn resolve_art_url(
     item_id: &str,
     album_id: &str,
@@ -158,8 +160,13 @@ fn resolve_art_url(
     if item_id.is_empty() && album_id.is_empty() {
         return None;
     }
-    let key = mbv_images::emby_card_cache_key(item_id, album_id);
-    resolve_path(&key).map(|path| format!("file://{}", path.display()))
+    let path = resolve_path(&mbv_images::emby_card_cache_key(item_id, album_id)).or_else(|| {
+        if item_id.is_empty() {
+            return None;
+        }
+        resolve_path(&mbv_images::emby_queue_landscape_cache_key(item_id))
+    })?;
+    Some(format!("file://{}", path.display()))
 }
 
 /// Convert a microsecond position to seconds; exact while |µs| < 2^53 (about 285 years of media).
@@ -639,4 +646,22 @@ pub fn rebind(
     source.status = status;
     source.send = Arc::new(send);
     source.disconnected = disconnected;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::resolve_art_url;
+
+    // Regression guard: a Movie's queue card writes its art under the
+    // landscape key (`{id}:QB`), so MPRIS must fall back to that key after
+    // the portrait key misses instead of omitting `mpris:artUrl`.
+    #[test]
+    fn movie_art_cached_only_under_landscape_key_resolves() {
+        let art_url = resolve_art_url("movie", "", |key| {
+            (key == "movie:QB").then(|| PathBuf::from("/cache/movie-qb"))
+        });
+        assert_eq!(art_url.as_deref(), Some("file:///cache/movie-qb"));
+    }
 }
