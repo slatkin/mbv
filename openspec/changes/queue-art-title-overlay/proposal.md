@@ -14,7 +14,7 @@ of scrolled.
   now-playing title is rasterised into the artwork bitmap: a one-part title in a scrim row at the
   top; a two-part title (artist / song, show / episode) with the context in a scrim row at the top
   and the title in a scrim row at the bottom.
-- Text uses an embedded Lexend Deca (OFL) face, sized from the terminal's cell pixel size, fitted
+- Text uses an embedded JetBrainsMono Nerd Font Medium (OFL) face, sized from the terminal's cell pixel size, fitted
   to the row by shrinking to a floor, then ellipsis.
 - The queue header row says `Now Playing` (keeping its state icon: aqua play, yellow pause) while the overlay is
   live, and keeps carrying the title as it does today in every other state: halfblocks, visualizer,
@@ -48,5 +48,5 @@ of scrolled.
   (the card paints the overlay variant), `crates/mbv-ui-model` (typed title-site fact),
   `crates/mbv-components/src/queue_playback_panel.rs` and `crates/mbv-render` header painter.
 - New dependency: a pure-Rust glyph rasteriser (`ab_glyph`, to be confirmed in task 1.1);
-  new binary asset: Lexend Deca static weight plus its OFL text.
+  new binary asset: JetBrainsMono Nerd Font Medium static weight plus its OFL text.
 - No change to Player/queue authority, protocols, or persisted state.

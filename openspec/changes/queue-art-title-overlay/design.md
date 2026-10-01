@@ -90,13 +90,13 @@ twice for a frame at most, never zero times). The painted fact and the variant k
 suffix-independent (item identity, D3), and the dim-backdrop `halfblock` suffix is not an input,
 so opening a dialog cannot flip the site for Emby or Audiobookshelf items.
 
-**D5. Font and rasteriser.** Embed one static Lexend Deca SemiBold weight (OFL; licence text shipped
-beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
-Coverage is Latin / Latin-Ext / Vietnamese; the compositor exposes `covers(text) -> bool`
+**D5. Font and rasteriser.** Embed one static JetBrainsMono Nerd Font Medium face (OFL; licence text
+shipped beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
+The monospaced face covers Latin and more scripts than Lexend Deca, but not CJK; the header
+fallback remains for uncovered glyphs. The compositor exposes `covers(text) -> bool`
 (`glyph_id != 0` for every char) and the site rule treats `false` as `Header`.
 *Alternatives:* `fontdue` (comparable); system font via fontconfig (heavy dependency, still no
 CJK guarantee); variable TTF (needs variation support - use a static instance instead).
-Task 1.1 confirms the crate and weight before anything else builds on them.
 
 **D6. Compositor home and shape.** A pure `mbv-images` module (`title_overlay.rs`):
 `compose_title_overlay(base: &DynamicImage, cell: FontSize, parts: &TitleOverlayText, colours)
