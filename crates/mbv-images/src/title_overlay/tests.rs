@@ -51,6 +51,47 @@ fn bounds_for(image: &DynamicImage, channel: usize) -> Option<(u32, u32, u32, u3
     bounds
 }
 
+/// Mean horizontal position of the ink pixels in `channel`, i.e. the raw ink
+/// centroid the centring contract is stated in terms of.
+fn centroid_x(image: &DynamicImage, channel: usize) -> Option<f64> {
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for (x, _, pixel) in image.to_rgb8().enumerate_pixels() {
+        if pixel.0[channel] > 180 && pixel.0[(channel + 1) % 3] < 80 {
+            sum += f64::from(x);
+            count += 1.0;
+        }
+    }
+    (count > 0.0).then(|| sum / count)
+}
+
+#[test]
+fn text_rows_are_horizontally_centred_within_the_side_padding() {
+    let width = 400;
+    let image = compose_title_overlay(
+        &black_image(width, 120),
+        None,
+        FontSize::new(12, 20),
+        TitleOverlayText {
+            context: Some("Artist"),
+            title: "Song",
+        },
+        COLOURS,
+    );
+    let centre = f64::from(width) / 2.0;
+    let context_centroid = centroid_x(&image, 0).expect("context glyphs should be painted");
+    let title_centroid = centroid_x(&image, 2).expect("title glyphs should be painted");
+
+    assert!(
+        (context_centroid - centre).abs() <= 3.0,
+        "context ink centroid {context_centroid} should sit near {centre}"
+    );
+    assert!(
+        (title_centroid - centre).abs() <= 3.0,
+        "title ink centroid {title_centroid} should sit near {centre}"
+    );
+}
+
 #[test]
 fn one_part_paints_top_row_with_down_right_shadow_and_preserves_bottom_pixels() {
     let base = black_image(240, 120);

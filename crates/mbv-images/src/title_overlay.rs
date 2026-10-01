@@ -70,10 +70,12 @@ pub fn covers(text: &str) -> bool {
 /// A ready `logo` replaces the top text row: it is contain-fitted into a
 /// top-left box two cell rows tall and at most half the artwork wide, inset by
 /// the side padding, and painted with no scrim (design D7). A two-part title
-/// then keeps its bottom row; a one-part title is the logo alone. The
-/// [`covers`] gate applies only to the text rows actually drawn, so a logo is
-/// painted even when the top row's text is uncovered. Without a logo the
-/// output is the text-only composition, unchanged.
+/// then keeps its bottom row; a one-part title is the logo alone. Text rows are
+/// horizontally centred within the side padding, which stays the clipping and
+/// truncation bound. The [`covers`] gate applies only to the text rows actually
+/// drawn, so a logo is painted even when the top row's text is uncovered.
+/// Without a logo the output is the text-only composition, unchanged apart from
+/// the centring.
 #[must_use]
 pub fn compose_title_overlay(
     base: &DynamicImage,
@@ -183,7 +185,10 @@ fn paint_row(
 
     let mut x = padding
         .to_f32()
-        .expect("image padding should fit in floating point");
+        .expect("image padding should fit in floating point")
+        + ((max_width - text_width(&fitted, scale)).max(0.0) / 2.0)
+            .to_f32()
+            .expect("centred text offset should fit in floating point");
     for character in fitted {
         let glyph_id = FONT.glyph_id(character);
         let advance = scaled_font.h_advance(glyph_id);

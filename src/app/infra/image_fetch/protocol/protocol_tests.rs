@@ -288,3 +288,14 @@ fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
             .is_some_and(|entry| entry.applied_logo_key.is_none())
     );
 }
+
+#[test]
+fn title_overlay_title_row_resolves_to_text_emphasis() {
+    let colours = super::title_overlay_colours();
+
+    assert_eq!(colours.title, super::color_rgb(mbv_theme::TEXT_EMPHASIS));
+    assert_eq!(
+        colours.context,
+        super::color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG)
+    );
+}

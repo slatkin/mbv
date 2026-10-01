@@ -14,6 +14,18 @@ fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
     }
 }
 
+/// Resolve the overlay's foreground roles. `title` is read only for the bottom
+/// row of a two-part title: it paints the warm `TEXT_EMPHASIS` cream without
+/// touching the shared `PLAYBACK_TITLE_FG` role the playback strip owns. The
+/// context row — and a one-part title, which paints as the top text — keeps
+/// `PLAYBACK_CONTEXT_FG`.
+fn title_overlay_colours() -> mbv_images::title_overlay::TitleOverlayColours {
+    mbv_images::title_overlay::TitleOverlayColours {
+        context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
+        title: color_rgb(mbv_theme::TEXT_EMPHASIS),
+    }
+}
+
 fn compose_title_overlay_bitmap(
     source: &image::DynamicImage,
     logo: Option<&image::DynamicImage>,
@@ -27,14 +39,7 @@ fn compose_title_overlay_bitmap(
         u32::from(rows) * u32::from(font.height.max(1)),
         image::imageops::FilterType::Lanczos3,
     );
-    let colours = mbv_images::title_overlay::TitleOverlayColours {
-        context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
-        title: color_rgb(if text.context.is_some() {
-            mbv_theme::PLAYBACK_TITLE_FG
-        } else {
-            mbv_theme::PLAYBACK_CONTEXT_FG
-        }),
-    };
+    let colours = title_overlay_colours();
     mbv_images::title_overlay::compose_title_overlay(&base, logo, font, text, colours)
 }
 
