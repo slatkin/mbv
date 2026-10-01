@@ -47,15 +47,7 @@ fn ensure_title_overlay_protocol(
     parts: &mbv_queue::PlaybackTitleParts,
     logo_cache_key: Option<&str>,
 ) -> Option<String> {
-    let mut projection = mbv_ui_model::playback::QueueCardProjection::default();
-    app.ensure_title_overlay_protocol(
-        cache_key,
-        available,
-        parts,
-        logo_cache_key,
-        &mut projection,
-        "Movie",
-    )
+    app.ensure_title_overlay_protocol(cache_key, available, parts, logo_cache_key, "Movie")
 }
 
 fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {

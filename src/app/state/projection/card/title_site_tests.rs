@@ -41,8 +41,8 @@ fn slotless_card_key_is_landscape_for_movies_only(
     assert_eq!(card_cache_key_for_id("item", item_type), expected);
 }
 
-// Guard for the P1 review on feat/queue-art-title-overlay and the follow-up
-// user-reported episode regression: the chain must still reach a declared
+// Guards 55c37ea71 (landscape key for movies and episodes) and its fix
+// e39b5a8f4 (episode keeps its own still, Movie-only key): the chain must still reach a declared
 // `Thumb` (a Thumb-only home video resolves, since `fetch_emby_image` is a
 // first-success fallthrough), but only a Movie takes the landscape chain — an
 // episode keeps its own poster-first chain so its card never shows series art.

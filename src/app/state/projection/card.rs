@@ -11,20 +11,25 @@ use ratatui::layout::Rect;
 
 use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
 
-impl App {
-    fn log_title_paint(
-        &mut self,
-        projection: &mut QueueCardProjection,
-        identity: &str,
-        outcome: &'static str,
-        reason: &'static str,
-    ) {
+/// Log-dedup memo for the title overlay's decision and paint lines; shell
+/// state, not presentation.
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct TitleLogGate {
+    decision: Option<(String, &'static str)>,
+    paint: Option<(String, &'static str)>,
+}
+
+impl TitleLogGate {
+    pub(in crate::app) fn last_decision_reason(&self) -> Option<&'static str> {
+        self.decision.as_ref().map(|(_, reason)| *reason)
+    }
+
+    fn log_paint(&mut self, identity: &str, outcome: &'static str, reason: &'static str) {
         let paint = (identity.to_owned(), outcome);
-        if projection.last_title_paint.as_ref() == Some(&paint) {
+        if self.paint.as_ref() == Some(&paint) {
             return;
         }
-        projection.last_title_paint = Some(paint.clone());
-        self.queue_card_projection.last_title_paint = Some(paint);
+        self.paint = Some(paint);
         tracing::debug!(
             name: "queue.title_overlay.paint",
             target: "queue_art",
@@ -35,18 +40,18 @@ impl App {
         );
     }
 
-    pub(in crate::app) fn log_title_decision(
-        projection: &mut QueueCardProjection,
+    pub(in crate::app) fn log_decision(
+        &mut self,
         identity: &str,
         item_kind: &str,
         reason: &'static str,
         base_dimensions: Option<(u32, u32)>,
     ) {
         let decision = (identity.to_owned(), reason);
-        if projection.last_title_decision.as_ref() == Some(&decision) {
+        if self.decision.as_ref() == Some(&decision) {
             return;
         }
-        projection.last_title_decision = Some(decision);
+        self.decision = Some(decision);
         let (base_width, base_height) = base_dimensions.unwrap_or_default();
         tracing::debug!(
             name: "queue.title_overlay.decision",
@@ -311,14 +316,15 @@ impl App {
         if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref()) {
             self.images
                 .record_painted_title_overlay(Some(key.to_owned()));
-            self.log_title_paint(&mut projection, key, "overlay_recorded", "OverlayPainted");
+            self.title_log_gate
+                .log_paint(key, "overlay_recorded", "OverlayPainted");
         } else if plain_fallback_painted {
             let key = artwork_key.as_deref().unwrap_or("<none>");
-            let reason = projection
-                .last_title_decision
-                .as_ref()
-                .map_or("OverlayNotReady", |(_, reason)| *reason);
-            self.log_title_paint(&mut projection, key, "plain_fallback", reason);
+            let reason = self
+                .title_log_gate
+                .last_decision_reason()
+                .unwrap_or("OverlayNotReady");
+            self.title_log_gate.log_paint(key, "plain_fallback", reason);
         }
         (height, width, loading)
     }
@@ -468,8 +474,6 @@ impl App {
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
             title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
-            last_title_decision: self.queue_card_projection.last_title_decision.clone(),
-            last_title_paint: self.queue_card_projection.last_title_paint.clone(),
         };
         if projection.visualizer || !projection.images_enabled {
             self.queue_title_site(
@@ -561,17 +565,13 @@ impl App {
             column_resizing,
         );
         if let Some(reason) = reason {
-            Self::log_title_decision(projection, &identity, &item_kind, reason, base_dimensions);
+            self.title_log_gate
+                .log_decision(&identity, &item_kind, reason, base_dimensions);
             return;
         }
         let Some(parts) = parts else {
-            Self::log_title_decision(
-                projection,
-                &identity,
-                &item_kind,
-                "NoTitle",
-                base_dimensions,
-            );
+            self.title_log_gate
+                .log_decision(&identity, &item_kind, "NoTitle", base_dimensions);
             return;
         };
         // The logo owner is resolved before the overlay builds so its fetch
@@ -603,7 +603,8 @@ impl App {
     ) {
         let (height, width) = self.images.last_card_size();
         let Some(key) = projection.cache_key.clone() else {
-            Self::log_title_decision(projection, "<none>", item_kind, "NoSlot", None);
+            self.title_log_gate
+                .log_decision("<none>", item_kind, "NoSlot", None);
             return;
         };
         let base_dimensions = self
@@ -626,13 +627,8 @@ impl App {
                 && text.context.is_none_or(mbv_images::title_overlay::covers)
         };
         if !title_covers {
-            Self::log_title_decision(
-                projection,
-                &key,
-                item_kind,
-                "UncoveredGlyph",
-                base_dimensions,
-            );
+            self.title_log_gate
+                .log_decision(&key, item_kind, "UncoveredGlyph", base_dimensions);
             return;
         }
         let Some(variant_key) = self.ensure_title_overlay_protocol(
@@ -640,7 +636,6 @@ impl App {
             ratatui::layout::Size { width, height },
             parts,
             logo_cache_key,
-            projection,
             item_kind,
         ) else {
             return;
@@ -649,8 +644,7 @@ impl App {
         projection.cache_key = Some(variant_key.clone());
         projection.title_site =
             resolve_title_site(&variant_key, self.images.painted_title_overlay_key());
-        Self::log_title_decision(
-            projection,
+        self.title_log_gate.log_decision(
             &key,
             item_kind,
             if projection.title_site == NowPlayingTitleSite::Artwork {

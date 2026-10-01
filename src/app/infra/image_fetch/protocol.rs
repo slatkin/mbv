@@ -203,17 +203,16 @@ impl App {
         available: ratatui::layout::Size,
         parts: &mbv_queue::PlaybackTitleParts,
         logo_cache_key: Option<&str>,
-        projection: &mut mbv_ui_model::playback::QueueCardProjection,
         item_kind: &str,
     ) -> Option<String> {
         let Some(entry) = self.images.image(cache_key) else {
-            Self::log_title_decision(projection, cache_key, item_kind, "NoBaseEntry", None);
+            self.title_log_gate
+                .log_decision(cache_key, item_kind, "NoBaseEntry", None);
             return None;
         };
         let source_dimensions = entry.img.as_ref().map(image::GenericImageView::dimensions);
         let Some(size) = self.title_protocol_size(cache_key, available) else {
-            Self::log_title_decision(
-                projection,
+            self.title_log_gate.log_decision(
                 cache_key,
                 item_kind,
                 "NoBaseProtocolSize",
@@ -246,15 +245,13 @@ impl App {
                 rows,
                 overlay_text,
                 ready_logo_key.as_deref(),
-                projection,
                 item_kind,
             )
         {
             return None;
         }
         if self.title_protocol_size(&key, available).is_none() {
-            Self::log_title_decision(
-                projection,
+            self.title_log_gate.log_decision(
                 cache_key,
                 item_kind,
                 "VariantNotReady",
@@ -277,7 +274,6 @@ impl App {
         rows: u16,
         text: mbv_images::title_overlay::TitleOverlayText<'_>,
         ready_logo_key: Option<&str>,
-        projection: &mut mbv_ui_model::playback::QueueCardProjection,
         item_kind: &str,
     ) -> bool {
         let Some(source) = self
@@ -285,7 +281,8 @@ impl App {
             .image(cache_key)
             .and_then(|entry| entry.img.as_ref())
         else {
-            Self::log_title_decision(projection, cache_key, item_kind, "BaseImageMissing", None);
+            self.title_log_gate
+                .log_decision(cache_key, item_kind, "BaseImageMissing", None);
             return false;
         };
         let source_dimensions = (source.width(), source.height());

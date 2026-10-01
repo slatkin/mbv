@@ -59,15 +59,15 @@ logo's model) - rejected, text would be huge on large art and illegible on small
 Fallback `FontSize` (10x20, used when no picker is active) makes size approximate, but the
 overlay is only live when a real protocol is configured.
 
-**D3. Separate cache entry, not the `:P` entry.** The composed variant is its own `CachedImage`
+**D3. Separate cache entry, not the plain entry.** The composed variant is its own `CachedImage`
 under `{item-identity}:t:{cols}x{rows}:{title-hash}`, where *item identity* is the card's cache
 key with any protocol suffix stripped (Emby `{id}:P` as is; Audiobookshelf's cover/book key
 without its suffix), so the variant key is stable when a dimmed backdrop flips the suffix. Its `img` is the composed bitmap and its
-`protocols` map is filled per suffix like any entry. The plain `:P` entry stays plain (MPRIS
+`protocols` map is filled per suffix like any entry. The plain entry (`{id}:QB` for a Movie, `{id}:P` otherwise, D9) stays plain (MPRIS
 and Library read it) and doubles as the measuring protocol and the fallback paint. Under a dimmed backdrop the variant
 re-encodes through `cached_image_protocol_mut` with no change (`cover_box` is `None`, so it encodes
 the composed `img` directly); no re-compose path is added. Stale variants age out through the
-existing image LRU. *Alternative:* extend `:P` with another applied-
+existing image LRU. *Alternative:* extend the plain entry with another applied-
 key field - rejected, one entry cannot be both the plain and composed artwork, and sharing a key
 across consumers is the exact flash bug `audiobookshelf_hero_cover_cache_key` documents.
 
@@ -77,9 +77,9 @@ panel (header text) and the card painter.
 
 *Overlay eligible* (drives what the card paints and composes) iff all of: playback is active per
 `displayed_playback_state().active` (paused counts as active and keeps the overlay; an idle card
-that shows the cursor row's art is never eligible; a watched remote session or cast target with no
-local queue slot IS eligible, its card art keyed by the session item and its title taken from the
-session's now-playing name as a one-part title, because the header already carries that same
+that shows the cursor row's art is never eligible; a watched remote Emby session with no
+local queue slot IS eligible, its card art keyed by the session's now-playing item and its title
+taken from the session's now-playing name as a one-part title, because the header already carries that same
 title there); images enabled; visualizer off; `visual_slot_shown()` (not idle, not
 `visual_slot_hidden`) with a non-zero card size; `!is_halfblock_configured()`; the title passes
 `covers`; and a composed variant is ready for the current identity+box+title. The card paints the
@@ -115,8 +115,9 @@ instead of the top text row, with no scrim behind it. Logo owner: a Movie uses i
 (`image_tags.logo`, key `{id}:Logo:{tag}` as the Library hero's `movie_logo_source`); an Episode
 uses its show's logo (`series_id`, key `{series_id}:Logo`, no tag - `ParentLogoImageTag` is not
 parsed today and is not needed). Every other item (music, Audiobookshelf, feeds) has no logo and
-keeps the text. The fetch already exists: `card_image_types` requests `Logo` for Movie and the
-default case, and `fetch_emby_image_type` takes the series as owner for a Logo of an episode;
+keeps the text. The fetch is issued by the title-site path itself (`overlay_logo_source`, a `Logo`-only
+fetch), not by the card's chain (a Movie's chain no longer includes `Logo`, D9), and
+`fetch_emby_image_type` takes the series as owner for a Logo of an episode;
 no new endpoint or `Fields=` is needed. Layout: the logo is contain-fitted into a box at the
 artwork's top-left inset by the side padding, at most two cell rows tall (cell-relative, as D2)
 and at most half the artwork's width. A two-part title keeps its bottom (title) row, so an
@@ -146,6 +147,19 @@ the logo then carries the title graphically. *Alternative:* keep the top text ro
 **D8. Defer overlay composition during queue-column resize drag.** While the resize drag is active,
 paint plain base artwork and do not build an overlay variant. Compose the current variant once after
 the drag ends, rather than doing work for transient widths.
+
+**D9. Movie-only landscape card key.** The queue card's key and fetch chain depend on the item
+type, because the artwork policy also classifies an Episode as Landscape through its series tags
+while an episode's card must show the episode's own still. A Movie uses the landscape key
+`{id}:QB` (`emby_queue_landscape_cache_key`) and fetches `Backdrop`, `Primary` (no `Logo`; the
+overlay logo is its own fetch, D7). An Episode keeps `{id}:P` and fetches `Primary`, `Thumb`,
+`Backdrop`, `Logo`. A slotless watched Session holds only an item id and type, so it chooses key
+and chain by item type with the same split (Movie landscape; Episode poster-first; else `Primary`).
+MPRIS reads `{id}:P` first and falls back to the landscape key `{id}:QB`, so a Movie's art is
+still found (#833). Cast targets with no Emby Session are not slotless-eligible: the cast
+attachment holds no Emby item id or type, so no card key is projected and the header carries the
+title. *Alternative:* landscape for every item the policy calls Landscape - rejected, an
+episode card would show series art.
 
 ## Open Questions
 

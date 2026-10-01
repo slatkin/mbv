@@ -124,7 +124,7 @@ the title.
 
 #### Scenario: Playing on a remote target
 
-- **WHEN** a movie plays on a watched remote session or cast target with no local queue slot, and
+- **WHEN** a movie plays on a watched remote Emby session with no local queue slot, and
   the card shows that item's artwork
 - **THEN** the title is drawn onto the artwork as a one-part title from the session's now-playing
   name
@@ -166,3 +166,28 @@ or failed, and items that are not Emby movies or episodes SHALL keep the text ro
 
 - **WHEN** the item has no logo, or the logo fails to load
 - **THEN** the text overlay is unchanged
+
+### Requirement: The queue card key and fetch chain are item-type specific
+
+The Queue card's artwork key and fetch chain SHALL depend on the item type. A Movie SHALL use the
+landscape key `{id}:QB` and fetch `Backdrop` then `Primary`, without `Logo`. An Episode SHALL
+keep the portrait key `{id}:P` and fetch `Primary`, `Thumb`, `Backdrop`, `Logo`, so its card shows
+the episode's own still and never the series' art. A watched Session's now-playing item held
+without an item record SHALL choose key and chain by its item type with the same split. MPRIS art
+SHALL fall back to the landscape key when the portrait key is not cached.
+
+#### Scenario: Movie card uses the landscape key
+
+- **WHEN** a Movie is the card's item
+- **THEN** its artwork is cached and read under `{id}:QB`
+- **AND** its fetch chain does not request `Logo`
+
+#### Scenario: Episode card keeps its own still
+
+- **WHEN** an Episode is the card's item
+- **THEN** its artwork is cached under `{id}:P` and fetched `Primary` first
+
+#### Scenario: MPRIS finds a Movie's art
+
+- **WHEN** a Movie plays and only `{id}:QB` is cached
+- **THEN** MPRIS publishes that image as the track art

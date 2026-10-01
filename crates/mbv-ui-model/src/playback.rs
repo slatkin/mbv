@@ -46,8 +46,4 @@ pub struct QueueCardProjection {
     pub images_enabled: bool,
     pub visualizer: bool,
     pub title_site: NowPlayingTitleSite,
-    /// Last title-overlay decision logged for this projection's current identity.
-    pub last_title_decision: Option<(String, &'static str)>,
-    /// Last title-overlay paint outcome logged for this projection identity.
-    pub last_title_paint: Option<(String, &'static str)>,
 }

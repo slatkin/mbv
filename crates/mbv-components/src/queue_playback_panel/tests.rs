@@ -205,14 +205,9 @@ fn two_part_header_hugs_both_indents_and_carries_no_time() {
     );
 }
 
-#[rstest]
-#[case::playing(false, ">", palette::ACCENT)]
-#[case::paused(true, "||", palette::TEXT_FOCUS_ACCENT)]
-fn artwork_title_site_replaces_title_with_yellow_now_playing_label(
-    #[case] paused: bool,
-    #[case] icon: &str,
-    #[case] icon_fg: Color,
-) {
+/// Paint the panel at the artwork title site and return the header row's
+/// text and per-cell fgs.
+fn artwork_site_header(paused: bool) -> (String, Vec<Color>) {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
@@ -225,13 +220,14 @@ fn artwork_title_site_replaces_title_with_yellow_now_playing_label(
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
     let buf = terminal.backend().buffer();
-    let text: String = (0..40).map(|x| buf[(x, 1)].symbol().to_string()).collect();
-    let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 1)].fg).collect();
-    assert!(
-        text.starts_with(&format!("   {icon} Now Playing")),
-        "{text:?}"
-    );
-    assert_eq!(fgs[3], icon_fg, "state icon colour: {text:?}");
+    let text = (0..40).map(|x| buf[(x, 1)].symbol().to_string()).collect();
+    let fgs = (0..40).map(|x| buf[(x, 1)].fg).collect();
+    (text, fgs)
+}
+
+#[test]
+fn artwork_title_site_label_carries_the_context_role() {
+    let (text, fgs) = artwork_site_header(false);
     assert_cells_carry(
         &text,
         &fgs,
@@ -239,7 +235,27 @@ fn artwork_title_site_replaces_title_with_yellow_now_playing_label(
         palette::PLAYBACK_CONTEXT_FG,
         "the artwork-site label",
     );
-    assert!(!text.contains("Pilot") && !text.contains("Series"));
+}
+
+#[rstest]
+#[case::playing(false, ">", palette::ACCENT)]
+#[case::paused(true, "||", palette::TEXT_FOCUS_ACCENT)]
+fn artwork_title_site_state_icon_carries_its_state_colour(
+    #[case] paused: bool,
+    #[case] icon: &str,
+    #[case] icon_fg: Color,
+) {
+    let (text, fgs) = artwork_site_header(paused);
+    assert_cells_carry(&text, &fgs, icon, icon_fg, "the state icon");
+}
+
+#[test]
+fn artwork_title_site_paints_no_title_parts() {
+    let (text, _) = artwork_site_header(false);
+    assert!(
+        !text.contains("Pilot") && !text.contains("Series"),
+        "{text:?}"
+    );
 }
 
 #[test]
