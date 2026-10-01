@@ -324,7 +324,7 @@ fn single_title_header_paints_the_context_role_behind_the_play_icon() {
 fn header_carries_the_title_while_playing_and_idle_status_when_not() {
     // While a target plays the header row paints the aqua play icon and
     // the now-playing title (no status word, no host); paused swaps in
-    // the yellow pause icon; idle keeps `IDLE [host]`.
+    // the yellow pause icon; idle paints the brand row, `[mbv] ... IDLE`.
     let painted = |status: NowPlayingStatus, paused: bool| {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(status, "music-box".into(), false);
@@ -366,10 +366,19 @@ fn header_carries_the_title_while_playing_and_idle_status_when_not() {
         palette::TEXT_FOCUS_ACCENT,
         "the pause icon paints yellow: {paused:?}"
     );
-    let (idle, _) = painted(NowPlayingStatus::Idle, false);
+    let (idle, idle_fgs) = painted(NowPlayingStatus::Idle, false);
+    let idle_row = &idle[2..38];
     assert!(
-        idle.contains("IDLE") && idle.contains("music-box"),
-        "idle keeps the status/host header: {idle:?}"
+        idle_row.starts_with(" [mbv]") && idle_row.ends_with("IDLE "),
+        "idle paints the brand row with a right-anchored IDLE: {idle:?}"
+    );
+    assert!(!idle.contains("music-box"), "idle drops the host: {idle:?}");
+    assert_cells_carry(
+        &idle,
+        &idle_fgs,
+        "IDLE",
+        palette::TEXT_MUTED,
+        "the idle status word",
     );
 }
 

@@ -79,15 +79,14 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
     }
 }
 
-/// The artwork title site's header row: ` [mbv]` left-anchored and
-/// `PLAYING:<host>` right-anchored, one trailing space outside the right
-/// edge. The icon is dropped (the word carries the state), the brackets and
-/// the colon are cream, `mbv` is foam, `PLAYING` is aqua and bold, and the
-/// host is cream when local / `PLAYBACK_HOST_REMOTE_FG` when remote.
-fn artwork_brand_spans(
-    header: &HeaderTitle<'_>,
+/// The shared queue-header brand anchor: ` [mbv]` left-anchored (cream
+/// brackets, foam `mbv`), `right` right-anchored, one trailing space outside
+/// the right edge. The artwork-site playing row and the idle row both paint
+/// through this so the left anchor cannot drift.
+pub(crate) fn brand_row_spans(
     panel_bg: Color,
     row_width: usize,
+    right: Vec<Span<'static>>,
 ) -> Vec<Span<'static>> {
     let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
     let mut spans = vec![
@@ -99,6 +98,28 @@ fn artwork_brand_spans(
         ),
         Span::styled("]", cream),
     ];
+    let left_w: usize = spans.iter().map(|span| span.content.width()).sum();
+    let right_w: usize = right.iter().map(|span| span.content.width()).sum();
+    let gap = row_width.saturating_sub(left_w + right_w + 1);
+    if gap > 0 {
+        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+    }
+    spans.extend(right);
+    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
+    spans
+}
+
+/// The artwork title site's header row: ` [mbv]` left-anchored and
+/// `PLAYING:<host>` right-anchored. The icon is dropped (the word carries
+/// the state), the brackets and the colon are cream, `mbv` is foam,
+/// `PLAYING` is aqua and bold, and the host is cream when local /
+/// `PLAYBACK_HOST_REMOTE_FG` when remote.
+fn artwork_brand_spans(
+    header: &HeaderTitle<'_>,
+    panel_bg: Color,
+    row_width: usize,
+) -> Vec<Span<'static>> {
+    let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
     let mut right = vec![Span::styled(
         "PLAYING",
         Style::default()
@@ -118,15 +139,7 @@ fn artwork_brand_spans(
             Style::default().fg(host_fg).bg(panel_bg),
         ));
     }
-    let left_w: usize = spans.iter().map(|span| span.content.width()).sum();
-    let right_w: usize = right.iter().map(|span| span.content.width()).sum();
-    let gap = row_width.saturating_sub(left_w + right_w + 1);
-    if gap > 0 {
-        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
-    }
-    spans.extend(right);
-    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
-    spans
+    brand_row_spans(panel_bg, row_width, right)
 }
 
 /// The ` <icon> ` prefix every header title row starts with.

@@ -1,6 +1,7 @@
 //! The Queue playback panel (task 3.5, design D10): the queue column's
 //! playback surface, mounted in every queue-visible layout, idle included.
-//! It owns the always-painted header row (`STATUS [host]`, left-aligned),
+//! It owns the always-painted header row (`[mbv]` left, the status word or
+//! the now-playing title right),
 //! the visual slot's region (painted by the shell's App-side slot adapter on
 //! the panel's behalf — the ABS `paint_home_image` seam) and the queue-column
 //! transport presentation, which routes through the shared width-driven
@@ -45,9 +46,10 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
-    /// The header's projected facts: status word left, playback target
-    /// right (`App::playback_host_label_and_remote`, no tracking suffix)
-    /// with its remote flag for the hostname colour.
+    /// The header's projected facts: the status word (idle's right-anchored
+    /// `IDLE`) and the playback target (`App::playback_host_label_and_remote`,
+    /// no tracking suffix) with its remote flag — the target and flag feed
+    /// only the artwork-site playing brand row's `PLAYING:<host>`.
     status: NowPlayingStatus,
     host: String,
     host_is_remote: bool,
@@ -217,7 +219,7 @@ impl Component for QueuePlaybackPanel {
         // While a target plays, the header row carries the now-playing
         // title (moved up from the band's former title row — two-part
         // titles keep their context-left/title-right split, a lone title
-        // paints yellow); idle keeps the status/host row, `IDLE [host]`.
+        // paints yellow); idle paints the brand row, `[mbv] ... IDLE`.
         if self.status != NowPlayingStatus::Idle
             && let Some((title, _)) = &self.transport.now_playing_title
         {
@@ -240,7 +242,7 @@ impl Component for QueuePlaybackPanel {
                 },
             );
         } else {
-            render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
+            render_playback_header(frame, header, self.status);
         }
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
