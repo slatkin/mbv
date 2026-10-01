@@ -53,7 +53,7 @@ paints about 1:1.
 text blurs and its size would track the source resolution.
 
 **D2. Text size is cell-relative, not image-relative.** Nominal row height = one cell row
-(`font.height`); glyph size ~80% of it; floor ~60% of nominal; below the floor, ellipsis.
+(`font.height`); glyph size ~90% of it; floor ~60% of nominal; below the floor, ellipsis.
 Image size only changes how many characters fit. *Alternative:* percentage of image width (the
 logo's model) - rejected, text would be huge on large art and illegible on small art.
 Fallback `FontSize` (10x20, used when no picker is active) makes size approximate, but the
@@ -104,7 +104,7 @@ Task 1.1 confirms the crate and weight before anything else builds on them.
 Colours: a context part paints `PLAYBACK_CONTEXT_FG` (yellow), a title part under a context
 paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow), the
 same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
-gets a vertical alpha gradient scrim.
+gets a scrim that is solid across the outer 60% of the row, then fades into the unmodified artwork.
 
 ## Risks / Trade-offs
 
