@@ -65,21 +65,13 @@ pub fn queue_list_box(placement: Rect) -> Rect {
     box_area
 }
 
-/// The framed list content inside the recessed box. Shared by the root
-/// placement (`queue_panel_geometry`) and the mounted `QueuePanel`'s own
-/// view, which derives the same content from the placement it is handed
-/// (task 3.1) -- one source for the panel's internal geometry. The list keeps
-/// the box's own one-row top inset and bottom padding; there is no title band
-/// above it. The status bar lives in the `QueueColumn` footer below the box. A
-/// degenerate box reserves nothing.
+/// The framed list content inside the recessed box: the box itself, top to
+/// bottom. The list begins on the box's first row (right below the playback
+/// band) and runs to the footer row; there is no inset padding inside the
+/// box.
 #[must_use]
 pub fn queue_panel_subareas(panel_box: Rect) -> Rect {
-    let padding = u16::from(panel_box.height >= 3);
-    Rect {
-        y: panel_box.y + padding,
-        height: panel_box.height.saturating_sub(padding * 2),
-        ..panel_box
-    }
+    panel_box
 }
 
 /// Places the complete queue panel and its framed sub-areas.

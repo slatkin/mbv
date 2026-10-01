@@ -261,10 +261,9 @@ impl Component for QueueComponent {
         self.area = area;
         // Component-retained geometry (task 3.1): the framed content area
         // derives from the placement through the shared arrangement
-        // helpers, replacing the legacy queue geometry mirror. The list keeps
-        // the recessed box's own one-row top inset and bottom padding; the
-        // status bar lives in the QueueColumn footer below the box, with one
-        // gap row above and below it.
+        // helpers, replacing the legacy queue geometry mirror. The list
+        // begins on the box's first row (right below the playback band) and
+        // runs to the footer status row.
         let footer_row = queue_footer_row(area);
         let panel_box = queue_list_box(area);
         let content_area = queue_panel_subareas(panel_box);
@@ -294,16 +293,11 @@ impl Component for QueueComponent {
         if content_area.height < 1 {
             return;
         }
-        if self.carrier.is_empty() && content_area.height > 1 {
-            let empty_area = Rect {
-                y: content_area.y + 1,
-                height: content_area.height - 1,
-                ..content_area
-            };
+        if self.carrier.is_empty() && content_area.height > 0 {
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
                     .style(Style::default().fg(palette::TEXT_EMPHASIS)),
-                empty_area,
+                content_area,
             );
         }
         // The persistent canonical child is the sole Queue body painter and
