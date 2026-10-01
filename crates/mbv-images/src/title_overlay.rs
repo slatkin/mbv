@@ -49,8 +49,9 @@ pub fn compose_title_overlay(
         return DynamicImage::ImageRgba8(image);
     }
 
-    let has_context = text.context.is_some();
-    let top_text = text.context.unwrap_or(text.title);
+    let context = text.context.filter(|context| !context.trim().is_empty());
+    let has_context = context.is_some();
+    let top_text = context.unwrap_or(text.title);
     if !covers(top_text) || (has_context && !covers(text.title)) {
         return DynamicImage::ImageRgba8(image);
     }
@@ -183,10 +184,13 @@ fn fit_text(text: &str, max_width: f64, nominal: f32, floor: f32) -> (f32, Vec<c
         return (nominal, fitted);
     }
     let mut scale = nominal;
-    while scale > floor {
+    loop {
         let fitted: Vec<_> = text.chars().collect();
         if text_width(&fitted, scale) <= max_width {
             return (scale, fitted);
+        }
+        if scale <= floor {
+            break;
         }
         scale = (scale - 1.0).max(floor);
     }
