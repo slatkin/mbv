@@ -160,10 +160,11 @@ fn render_transport_glyphs(
 }
 
 /// The status-indicator pills (codec/res/aud/sub, uppercased on the pill
-/// surface): the right side of the single title row and of the queue
-/// column's upper split row. Opens with one pill-background space so the
-/// resolution pill never touches the panel fill on the left. No other
-/// trailing space; callers pad after merging (`padded_status_pill`).
+/// surface): the Library strip's single title row. Opens with one
+/// pill-background space so the resolution pill never touches the panel
+/// fill on the left. No other trailing space; callers pad after merging
+/// (`padded_status_pill`). The queue band paints its own plain-text cluster
+/// (`queue_indicator_spans`) instead.
 fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
@@ -226,22 +227,24 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     spans
 }
 
-/// The queue column's band rows in paint order: the title row first, the
-/// seekbar flanked by its times next, the transport controls and status
-/// pills last.
+/// The queue column's band rows in paint order: the title row, the seekbar
+/// flanked by its times, one blank row, then the transport controls and
+/// status text on the bottom row.
 pub struct QueueBand {
     pub title: Rect,
     pub seek: Rect,
+    pub gap: Rect,
     pub controls: Rect,
 }
 
 /// The queue column's band: the title row, then the seekbar with the elapsed
 /// time left and the total time right (one space between each time and the
-/// bar), then the controls and status pills. A two-part title shares its row:
-/// the context part (the show) left-aligned and clipped without scrolling,
-/// the title part right-aligned with the marquee window of the remaining
-/// space. Hit geometry rides the controls row (the glyphs) and the seekbar's
-/// bar span — the time labels never seek. Pure painter over projected state.
+/// bar), one blank row, then the controls and status text on the bottom
+/// row. A two-part title shares its row: the context part (the show)
+/// left-aligned and clipped without scrolling, the title part right-aligned
+/// with the marquee window of the remaining space. Hit geometry rides the
+/// controls row (the glyphs) and the seekbar's bar span — the time labels
+/// never seek. Pure painter over projected state.
 pub fn render_queue_band(
     frame: &mut Frame,
     band: &QueueBand,
@@ -253,6 +256,8 @@ pub fn render_queue_band(
         || band.title.width == 0
         || band.seek.height == 0
         || band.seek.width == 0
+        || band.gap.height == 0
+        || band.gap.width == 0
         || band.controls.height == 0
         || band.controls.width == 0
     {
@@ -268,14 +273,10 @@ pub fn render_queue_band(
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
-    // The pill is padded on both sides before measuring: without the
-    // trailing pad the value (e.g. FLAC) touches the panel fill on the
-    // right. `render_title_row` pads the same way after its own merge.
-    let pills = padded_status_pill(ctx);
-    let pills_w: u16 = pills
-        .iter()
-        .map(|span| width_u16(span.content.width()))
-        .sum();
+    // The bottom row's own fill (the slate backdrop role) plus its plain
+    // indicator text, measured for the buttons-fit rule below.
+    let row_bg = palette::SURFACE_BACKDROP;
+    let (indicators, indicators_w) = queue_indicator_spans(ctx, row_bg);
     let has_context = ctx
         .title_parts
         .as_ref()
@@ -286,21 +287,69 @@ pub fn render_queue_band(
         render_queue_title_only(frame, band.title, title, title_color, ctx, panel_bg);
     }
     render_queue_seek_row(frame, band.seek, ctx, panel_bg);
-    render_transport_pill_row(
+    // The blank row between the seekbar and the controls: panel fill, no
+    // hit geometry.
+    frame.render_widget(
+        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
+            .style(Style::default().bg(panel_bg)),
+        band.gap,
+    );
+    render_transport_controls_row(
         ctx,
         frame,
-        inset_row(band.controls),
-        panel_bg,
+        band.controls,
+        row_bg,
         &glyphs,
-        pills,
-        pills_w,
+        indicators,
+        indicators_w,
     );
 }
 
+/// The queue band's status indicators as plain text on `row_bg`: no pill
+/// wrap, so each projected span keeps its own foreground with the row fill
+/// behind it, separator spans (`⧸`, `│`, `[`, `]`) are dropped, and the
+/// surviving items join with one space. A chip-style span (dark text on its
+/// own fill) recovers its fill as the text colour so it stays readable on
+/// the row. Uppercased like the strip's cluster; one trailing space when
+/// non-empty so the value never touches the row edge. Returns the spans
+/// and their width.
+fn queue_indicator_spans(
+    ctx: &PlaybackRenderContext<'_>,
+    row_bg: Color,
+) -> (Vec<Span<'static>>, u16) {
+    let mut items = Vec::new();
+    for span in ctx.status_indicators.clone().unwrap_or_default() {
+        let trimmed = span.content.trim();
+        if trimmed.is_empty() || matches!(trimmed, "⧸" | "│" | "[" | "]") {
+            continue;
+        }
+        let mut style = span.style;
+        if style.fg == Some(palette::TEXT_ON_ACCENT) && style.bg.is_some() {
+            style.fg = style.bg;
+        }
+        style.bg = Some(row_bg);
+        items.push(Span::styled(trimmed.to_uppercase(), style));
+    }
+    let mut spans = Vec::new();
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" ", Style::default().bg(row_bg)));
+        }
+        spans.push(item);
+    }
+    if !spans.is_empty() {
+        spans.push(Span::styled(" ", Style::default().bg(row_bg)));
+    }
+    let width: u16 = spans
+        .iter()
+        .map(|span| width_u16(span.content.width()))
+        .sum();
+    (spans, width)
+}
+
 /// One queue title row without its time: ` <title> ` with the marquee
-/// window sized to the row minus its two indent cells. When the projected
-/// title carries a context part it stays on the show row; this row paints
-/// the title part alone.
+/// window sized to the row minus its two indent cells. Only called when no
+/// context part projects (a two-part title shares the combined row).
 fn render_queue_title_only(
     frame: &mut Frame,
     row: Rect,
@@ -509,20 +558,32 @@ fn inset_row(row: Rect) -> Rect {
     }
 }
 
-/// The transport controls and status pills on one row: glyphs left, pills
-/// flush right. The buttons show whenever the glyphs, buttons and pills
-/// fit — no title competes on the controls row. Hit geometry lands on this
-/// row.
-fn render_transport_pill_row(
+/// The queue band's bottom controls row: glyphs left, indicators flush
+/// right, the whole row on the slate fill edge to edge. The buttons show
+/// whenever the glyphs, buttons and indicators fit — no title competes on
+/// the row. Hit geometry lands on the inset cells, where the glyphs paint.
+fn render_transport_controls_row(
     ctx: &mut PlaybackRenderContext<'_>,
     frame: &mut Frame,
     row: Rect,
-    panel_bg: Color,
+    row_bg: Color,
     glyphs: &TransportGlyphs,
-    pills: Vec<Span<'static>>,
-    pills_w: u16,
+    indicators: Vec<Span<'static>>,
+    indicators_w: u16,
 ) {
     if row.height == 0 || row.width == 0 {
+        ctx.playback.play_pause = Rect::default();
+        ctx.playback.stop = Rect::default();
+        ctx.playback.next = Rect::default();
+        return;
+    }
+    frame.render_widget(
+        Paragraph::new(Span::raw(" ".repeat(row.width as usize)))
+            .style(Style::default().bg(row_bg)),
+        row,
+    );
+    let inner = inset_row(row);
+    if inner.width == 0 {
         ctx.playback.play_pause = Rect::default();
         ctx.playback.stop = Rect::default();
         ctx.playback.next = Rect::default();
@@ -534,11 +595,11 @@ fn render_transport_pill_row(
     let prev_w = width_u16(glyphs.prev.0.width());
     let next_w = width_u16(glyphs.next.0.width());
     let buttons_w = stop_w as usize + 1 + prev_w as usize + 1 + next_w as usize + 1;
-    let show_buttons = row.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
+    let show_buttons = inner.width as usize >= glyph_w as usize + buttons_w + indicators_w as usize;
     let mut spans = render_transport_glyphs(
         ctx,
-        row.y,
-        row.x,
+        inner.y,
+        inner.x,
         show_buttons,
         &glyph_text,
         glyph_w,
@@ -551,12 +612,12 @@ fn render_transport_pill_row(
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
-    let gap = (row.width as usize).saturating_sub(left_w as usize + pills_w as usize);
+    let gap = (inner.width as usize).saturating_sub(left_w as usize + indicators_w as usize);
     spans.push(Span::raw(" ".repeat(gap)));
-    spans.extend(pills);
+    spans.extend(indicators);
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
-        row,
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(row_bg)),
+        inner,
     );
 }
 

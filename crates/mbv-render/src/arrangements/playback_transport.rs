@@ -17,8 +17,8 @@ pub struct TransportRows {
     pub title: Option<Rect>,
     /// The blank row below the title (row 2).
     pub indicator_row: Option<Rect>,
-    /// The fourth row (row 3), present only when the band is tall enough.
-    /// No current panel requests it: the queue band is always three rows.
+    /// The fourth row (row 3), present only when the band is tall enough:
+    /// the queue band's bottom controls row.
     pub extra_row: Option<Rect>,
 }
 
