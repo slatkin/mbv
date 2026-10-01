@@ -194,27 +194,6 @@ the two times. The title row and the gap row SHALL paint blank on the panel fill
 geometry rides the controls row (the glyphs) and the seekbar row (the bar span alone; the time labels
 never seek).
 
-The active Queue seekbar SHALL show solid full-height accent blocks and a left-filled fractional
-leading block over a solid `#272e33` track, with each cell supporting eight horizontal fill
-increments. Its clamped playback-position/runtime fraction across the available bar width SHALL be
-rounded to the nearest eighth-cell, with half increments rounded upward. It SHALL NOT impose a
-minimum visible fill on positive positions below that rounding threshold. A non-positive runtime,
-or a non-positive position with a positive runtime, SHALL produce an empty fill; a position at or
-beyond a positive runtime SHALL produce a full fill. The fill SHALL be recomputed from the current
-projected position and width on each paint, including while paused or after a backward seek, without
-extrapolating playback. This presentation SHALL apply to the Queue panel independent of media kind or
-playback target, SHALL NOT alter the Library panel's thin upper-line seekbar or whole-cell rounding,
-and SHALL NOT change transport visibility or inactive/non-interactive bar presentation.
-
-The fractional fill SHALL preserve the existing elapsed-time, bar, total-time order, spacing, outer
-indent, height, available width, and time-label formatting and metadata colour. The fill SHALL retain
-the accent role; only the unplayed track uses the Queue playback panel's slate backdrop colour
-(`#272e33`), without changing shared theme values or the Library `PROGRESS_TRACK` role. The bar span
-alone SHALL remain the pointer target: partial cells resolve the same terminal-column-based seek
-fraction as before, with no sub-cell pointer precision. Time labels, padding, and blank transport
-rows SHALL resolve no seek intent. If no bar width remains, the existing clipped time-only fallback
-SHALL remain and expose no seek region. No border, label, or extra row SHALL be added.
-
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list
 directly below the panel. When the terminal is 100 columns or more the visual slot and the panel SHALL render

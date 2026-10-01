@@ -18,6 +18,37 @@ const ONE_EIGHTH: &str = "\u{258f}";
 /// The Library strip's thin upper-line character.
 const UPPER_LINE: &str = "\u{2594}";
 
+/// The shared render context for both seek-row painters.
+fn seek_context<'a>(
+    area: Rect,
+    player_h: u16,
+    panel: palette::Surface,
+    progress_ticks: (i64, i64),
+    playback: &'a mut PlaybackStripAreas,
+    marquee_text: &'a mut String,
+    marquee_started_at: &'a mut std::time::Instant,
+) -> PlaybackRenderContext<'a> {
+    PlaybackRenderContext {
+        area,
+        playback,
+        player_h,
+        controls: PlaybackControls {
+            show: true,
+            use_nerd_fonts: false,
+            availability: TransportAvailability::default(),
+            panel_focused: false,
+            progress: (progress_ticks.0, progress_ticks.1, false),
+            idle_feed_title: None,
+        },
+        now_playing_title: None,
+        panel,
+        status_indicators: None,
+        title_parts: None,
+        marquee_text,
+        marquee_started_at,
+    }
+}
+
 /// Paint one Queue seek row into the terminal's current buffer. Painting via
 /// `get_frame` (no buffer swap) lets repeated calls repaint the same cells,
 /// which is how the stale-fill guard observes a backward seek.
@@ -30,25 +61,15 @@ fn paint_queue_seek_row(
     let mut playback = PlaybackStripAreas::default();
     let mut marquee_text = String::new();
     let mut marquee_started_at = std::time::Instant::now();
-    let mut ctx = PlaybackRenderContext {
-        area: row,
-        playback: &mut playback,
-        player_h: row.height,
-        controls: PlaybackControls {
-            show: true,
-            use_nerd_fonts: false,
-            availability: TransportAvailability::default(),
-            panel_focused: false,
-            progress: (position_ticks, runtime_ticks, false),
-            idle_feed_title: None,
-        },
-        now_playing_title: None,
-        panel: palette::Surface::QueueOnlyPlaybackPanel,
-        status_indicators: None,
-        title_parts: None,
-        marquee_text: &mut marquee_text,
-        marquee_started_at: &mut marquee_started_at,
-    };
+    let mut ctx = seek_context(
+        row,
+        row.height,
+        palette::Surface::QueueOnlyPlaybackPanel,
+        (position_ticks, runtime_ticks),
+        &mut playback,
+        &mut marquee_text,
+        &mut marquee_started_at,
+    );
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let mut frame = terminal.get_frame();
     render_queue_seek_row(&mut frame, row, &mut ctx, panel_bg);
@@ -63,28 +84,16 @@ fn paint_library_seek_row(position_ticks: i64, runtime_ticks: i64) -> Buffer {
     let mut marquee_started_at = std::time::Instant::now();
     terminal
         .draw(|frame| {
-            render_player_panel(
-                frame,
-                PlaybackRenderContext {
-                    area: Rect::new(0, 0, 40, 1),
-                    playback: &mut playback,
-                    player_h: 1,
-                    controls: PlaybackControls {
-                        show: true,
-                        use_nerd_fonts: false,
-                        availability: TransportAvailability::default(),
-                        panel_focused: false,
-                        progress: (position_ticks, runtime_ticks, false),
-                        idle_feed_title: None,
-                    },
-                    now_playing_title: None,
-                    panel: palette::Surface::PlaybackPanel,
-                    status_indicators: None,
-                    title_parts: None,
-                    marquee_text: &mut marquee_text,
-                    marquee_started_at: &mut marquee_started_at,
-                },
+            let ctx = seek_context(
+                Rect::new(0, 0, 40, 1),
+                1,
+                palette::Surface::PlaybackPanel,
+                (position_ticks, runtime_ticks),
+                &mut playback,
+                &mut marquee_text,
+                &mut marquee_started_at,
             );
+            render_player_panel(frame, ctx);
         })
         .unwrap();
     terminal.backend().buffer().clone()
@@ -140,35 +149,48 @@ fn filled_columns(cells: &[(String, Color, Color)]) -> Vec<usize> {
 #[test]
 fn seek_row_flanks_the_bar_with_elapsed_and_total() {
     let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
-    let seekbar = paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
-    let cells = row_cells(terminal.current_buffer_mut(), 40);
-    let text = row_text(&cells);
+    paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
+    let text = row_text(&row_cells(terminal.current_buffer_mut(), 40));
     assert!(
         text.starts_with(" 1:15 "),
         "elapsed left of the bar: {text:?}"
     );
     assert!(text.ends_with(" 5:00 "), "total right of the bar: {text:?}");
-    assert_eq!(seekbar, Rect::new(6, 0, 28, 1));
 }
 
 // Migrated from `queue_playback_panel/tests.rs` (7fdb7fee8): a quarter of the
-// bar is accent fill over the muted track, and no percentage label appears.
+// bar is accent fill.
 #[test]
-fn seek_row_fills_a_quarter_of_the_bar_in_accent_over_the_track() {
+fn seek_row_fills_a_quarter_of_the_bar_in_accent() {
     let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
-    paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
+    let seekbar = paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
     let cells = row_cells(terminal.current_buffer_mut(), 40);
     let full = cells
         .iter()
         .filter(|(symbol, fg, _)| symbol == FULL && *fg == palette::ACCENT)
         .count();
-    assert_eq!(full, 7, "a quarter of the 28-cell bar is filled");
-    assert_eq!(track_columns(&cells).len(), 28, "the whole bar is track");
-    assert!(
-        !row_text(&cells).contains('%'),
-        "no Gauge percentage label: {:?}",
-        row_text(&cells)
-    );
+    assert_eq!(full, usize::from(seekbar.width) / 4);
+}
+
+// Migrated from `queue_playback_panel/tests.rs` (7fdb7fee8): the whole bar sits
+// over the muted track.
+#[test]
+fn seek_row_paints_the_whole_bar_over_the_track() {
+    let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
+    let seekbar = paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
+    let cells = row_cells(terminal.current_buffer_mut(), 40);
+    assert_eq!(track_columns(&cells).len(), usize::from(seekbar.width));
+}
+
+// Migrated from `queue_playback_panel/tests.rs` (7fdb7fee8): no Gauge
+// percentage label or border on the bar.
+#[test]
+fn seek_row_has_no_percentage_label_or_border() {
+    let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
+    paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 40, 1), 75 * TPS, 300 * TPS);
+    let text = row_text(&row_cells(terminal.current_buffer_mut(), 40));
+    assert!(!text.contains('%'), "no Gauge percentage label: {text:?}");
+    assert!(!text.contains('\u{2502}'), "no border on the bar: {text:?}");
 }
 
 // Migrated from `queue_playback_panel/tests.rs` (7fdb7fee8): the retained seek
@@ -186,11 +208,8 @@ fn seek_hit_rect_covers_only_the_bar_not_the_flanking_times() {
     );
 }
 
-// Regression for this change (`queue-seekbar-fractional-progress`): 10 seconds
-// of a 45-minute episode in a 24-cell bar shows one eighth of a cell. The old
-// whole-cell rounding left it empty.
-#[test]
-fn early_progress_paints_a_one_eighth_edge() {
+/// Paint 10 seconds of a 45-minute episode and return the bar and its cells.
+fn paint_early_progress() -> (Rect, Vec<(String, Color, Color)>) {
     let mut terminal = Terminal::new(TestBackend::new(37, 1)).unwrap();
     let seekbar = paint_queue_seek_row(
         &mut terminal,
@@ -198,38 +217,69 @@ fn early_progress_paints_a_one_eighth_edge() {
         10 * TPS,
         45 * 60 * TPS,
     );
-    assert_eq!(seekbar.width, 24, "the bar keeps its available width");
-    let cells = row_cells(terminal.current_buffer_mut(), 37);
-    let start = usize::from(seekbar.x);
-    assert_eq!(cells[start].0, ONE_EIGHTH, "the leading edge is one eighth");
-    assert_eq!(cells[start].1, palette::ACCENT);
+    (seekbar, row_cells(terminal.current_buffer_mut(), 37))
+}
+
+// Regression for this change (`queue-seekbar-fractional-progress`): 10 seconds
+// of a 45-minute episode shows one eighth of a cell. The old whole-cell
+// rounding left it empty.
+#[test]
+fn early_progress_paints_a_one_eighth_edge() {
+    let (seekbar, cells) = paint_early_progress();
+    let leading = &cells[usize::from(seekbar.x)];
     assert_eq!(
-        track_columns(&cells).len(),
-        24,
-        "the bar is one muted track"
+        (leading.0.as_str(), leading.1),
+        (ONE_EIGHTH, palette::ACCENT)
     );
+}
+
+// Regression for this change: the one-eighth edge is the only fill.
+#[test]
+fn early_progress_fills_no_whole_cell() {
+    let (_, cells) = paint_early_progress();
     let full = cells.iter().filter(|(symbol, _, _)| symbol == FULL).count();
-    assert_eq!(full, 0, "no whole cell fills at one eighth");
-    let text = row_text(&cells);
-    assert!(!text.contains('%'), "no Gauge percentage label: {text:?}");
-    assert!(!text.contains('\u{2502}'), "no border on the bar: {text:?}");
+    assert_eq!(full, 0);
+}
+
+// Regression for this change: the bar is one muted track at its full width.
+#[test]
+fn early_progress_keeps_the_bar_one_muted_track() {
+    let (seekbar, cells) = paint_early_progress();
+    assert_eq!(track_columns(&cells).len(), usize::from(seekbar.width));
+}
+
+/// Paint 7s of 16s (3.5 cells of the bar) and return the bar and its cells.
+fn paint_three_and_a_half_cells() -> (Rect, Vec<(String, Color, Color)>) {
+    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    let seekbar = paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 20, 1), 7 * TPS, 16 * TPS);
+    (seekbar, row_cells(terminal.current_buffer_mut(), 20))
 }
 
 // Spec scenario: completed cells precede the fractional leading cell.
 #[test]
 fn completed_cells_precede_the_fractional_leading_cell() {
-    let mut terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
-    let seekbar = paint_queue_seek_row(&mut terminal, Rect::new(0, 0, 20, 1), 7 * TPS, 16 * TPS);
-    assert_eq!(seekbar.width, 8);
-    let cells = row_cells(terminal.current_buffer_mut(), 20);
+    let (seekbar, cells) = paint_three_and_a_half_cells();
     let start = usize::from(seekbar.x);
-    assert_eq!(cells[start].0, FULL);
-    assert_eq!(cells[start + 1].0, FULL);
-    assert_eq!(cells[start + 2].0, FULL);
-    assert_eq!(cells[start + 3].0, HALF, "the next cell is half filled");
-    assert_eq!(cells[start + 3].1, palette::ACCENT);
-    assert_eq!(track_columns(&cells).len(), 8, "the rest stays track");
-    assert!(!row_text(&cells).contains('%'), "no percentage label");
+    let symbols: Vec<&str> = cells[start..start + 3]
+        .iter()
+        .map(|c| c.0.as_str())
+        .collect();
+    assert_eq!(symbols, [FULL; 3]);
+}
+
+// Spec scenario: the cell after the completed ones is half filled.
+#[test]
+fn the_cell_after_completed_cells_is_half_filled() {
+    let (seekbar, cells) = paint_three_and_a_half_cells();
+    let next = &cells[usize::from(seekbar.x) + 3];
+    assert_eq!((next.0.as_str(), next.1), (HALF, palette::ACCENT));
+}
+
+// Spec scenario: the remainder of the bar stays track.
+#[test]
+fn the_rest_of_the_bar_stays_track_after_the_fractional_cell() {
+    let (seekbar, cells) = paint_three_and_a_half_cells();
+    assert_eq!(track_columns(&cells).len(), usize::from(seekbar.width));
 }
 
 // Spec scenario: a non-positive runtime leaves the whole bar as muted track.
@@ -270,27 +320,35 @@ fn a_position_beyond_runtime_fills_the_bar_without_spilling() {
     );
 }
 
+/// Paint a late position, then repaint an early one over the same cells.
+fn repaint_backward() -> (Rect, Rect, Vec<(String, Color, Color)>) {
+    let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
+    let row = Rect::new(0, 0, 40, 1);
+    let late = paint_queue_seek_row(&mut terminal, row, 200 * TPS, 300 * TPS);
+    let early = paint_queue_seek_row(&mut terminal, row, TPS, 300 * TPS);
+    (late, early, row_cells(terminal.current_buffer_mut(), 40))
+}
+
+// Regression for this change (`queue-seekbar-fractional-progress`): repainting
+// back to an earlier position keeps the bar rectangle.
+#[test]
+fn backward_repaint_keeps_the_bar_rect() {
+    let (late, early, _) = repaint_backward();
+    assert_eq!(early, late);
+}
+
 // Regression for this change (`queue-seekbar-fractional-progress`): repainting
 // back to an earlier position clears the obsolete accent fill.
 #[test]
 fn backward_repaint_clears_obsolete_fill() {
-    let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
-    let row = Rect::new(0, 0, 40, 1);
-    let late = paint_queue_seek_row(&mut terminal, row, 200 * TPS, 300 * TPS);
-    assert!(
-        filled_columns(&row_cells(terminal.current_buffer_mut(), 40)).len() > 1,
-        "the later position fills several cells"
-    );
-    let early = paint_queue_seek_row(&mut terminal, row, TPS, 300 * TPS);
-    assert_eq!(early, late, "the bar rectangle is unchanged");
-    let cells = row_cells(terminal.current_buffer_mut(), 40);
-    let start = usize::from(early.x);
-    assert_eq!(cells[start].0, ONE_EIGHTH, "the early edge is one eighth");
-    assert_eq!(
-        filled_columns(&cells),
-        vec![start],
-        "only the leading cell stays filled"
-    );
+    let (_, early, cells) = repaint_backward();
+    assert_eq!(filled_columns(&cells), vec![usize::from(early.x)]);
+}
+
+// Regression for this change: the cleared cells return to the muted track.
+#[test]
+fn backward_repaint_restores_the_track() {
+    let (_, early, cells) = repaint_backward();
     assert_eq!(track_columns(&cells).len(), usize::from(early.width));
 }
 

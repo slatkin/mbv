@@ -436,8 +436,8 @@ fn transport_clicks_resolve_against_retained_geometry() {
     panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.show_controls = true;
-    // 37.5s of 5:00 is 3.5 of the 28-cell bar: the leading half cell is a
-    // partial-cell seek target like any other column.
+    // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
+    // like any other column.
     panel.transport.state.position_ticks = 375_000_000;
     panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
@@ -465,15 +465,6 @@ fn transport_clicks_resolve_against_retained_geometry() {
         Some(Msg::Playback(PlaybackRequest::SeekTo(f)))
             if (f - 3.0 / f64::from(seekbar.width)).abs() < 1e-9
     ));
-    // Either flanking time label resolves no seek intent.
-    assert!(
-        panel.on(&click(seekbar.x - 3, seekbar.y)).is_none(),
-        "the elapsed label never seeks"
-    );
-    assert!(
-        panel.on(&click(seekbar.right() + 1, seekbar.y)).is_none(),
-        "the total label never seeks"
-    );
     // Prev and next keep distinct painted rects and resolve to their own
     // intents (the prev control was painted without a hit rect until now).
     panel.transport.availability.previous = true;
@@ -493,4 +484,33 @@ fn transport_clicks_resolve_against_retained_geometry() {
     panel.set_transport_area(None);
     assert!(panel.on(&click(5, 4)).is_none());
     let _ = KeyEvent::new(Key::Null, KeyModifiers::NONE);
+}
+
+// The time labels flank the bar span and resolve no seek intent. The label
+// rect is not retained, so click the columns just outside the bar span.
+#[test]
+fn time_label_clicks_beside_the_bar_resolve_no_seek() {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    panel.transport.show_controls = true;
+    panel.transport.state.position_ticks = 75 * mbv_emby_model::TICKS_PER_SECOND;
+    panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
+    panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+
+    let (_, seekbar) = panel.transport_hits();
+    let click = |column: u16| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row: seekbar.y,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    assert!(panel.on(&click(seekbar.x - 1)).is_none());
+    assert!(panel.on(&click(seekbar.right())).is_none());
 }
