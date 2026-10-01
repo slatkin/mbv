@@ -16,6 +16,8 @@ pub fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
 
 pub const PLAY_ICON: &str = "\u{f04b}";
 const PLAY_ICON_FALLBACK: &str = ">";
+const PAUSE_ICON: &str = "\u{f04c}";
+const PAUSE_ICON_FALLBACK: &str = "||";
 
 #[must_use]
 pub fn play_icon(use_nerd_fonts: bool) -> &'static str {
@@ -23,6 +25,15 @@ pub fn play_icon(use_nerd_fonts: bool) -> &'static str {
         PLAY_ICON
     } else {
         PLAY_ICON_FALLBACK
+    }
+}
+
+#[must_use]
+pub fn pause_icon(use_nerd_fonts: bool) -> &'static str {
+    if use_nerd_fonts {
+        PAUSE_ICON
+    } else {
+        PAUSE_ICON_FALLBACK
     }
 }
 

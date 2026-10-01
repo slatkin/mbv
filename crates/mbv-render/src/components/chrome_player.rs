@@ -23,6 +23,13 @@ pub struct PlaybackStripAreas {
     pub prev: Rect,
 }
 
+impl PlaybackStripAreas {
+    /// Drop every hit rect: nothing actionable painted.
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Debug)]
 pub struct PlaybackControls {
     pub show: bool,
@@ -77,8 +84,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
     // its flanking times; the Library strip keeps the seekbar on top with
     // the single title row below. Derived from the context's panel surface
     // so neither panel can point at the other's layout.
-    let split = split_title_rows(ctx.panel);
-    if split {
+    if ctx.panel == palette::Surface::QueueOnlyPlaybackPanel {
         render_queue_panel(frame, &mut ctx, rows, panel_bg);
         return;
     }
@@ -172,20 +178,12 @@ fn render_queue_panel(
             row,
         );
     }
-    /// Clear every hit rect: the band painted nothing actionable.
-    fn clear_hits(ctx: &mut PlaybackRenderContext<'_>) {
-        ctx.playback.play_pause = Rect::default();
-        ctx.playback.stop = Rect::default();
-        ctx.playback.prev = Rect::default();
-        ctx.playback.next = Rect::default();
-        ctx.playback.seekbar = Rect::default();
-    }
     let (Some(controls_row), Some(title_row), Some(seek_row), Some(gap_row)) =
         (rows.seekbar, rows.title, rows.indicator_row, rows.extra_row)
     else {
         // Short of a full band: keep whatever top row exists painted and
         // clear the rest rather than borrow a neighbour's row.
-        clear_hits(ctx);
+        ctx.playback.clear();
         if let Some(first) = rows
             .seekbar
             .or(rows.title)
@@ -207,15 +205,30 @@ fn render_queue_panel(
             ctx,
         );
     } else {
-        clear_hits(ctx);
+        ctx.playback.clear();
         blank(frame, controls_row, panel_bg);
-        blank(frame, title_row, panel_bg);
         blank(frame, seek_row, panel_bg);
         blank(frame, gap_row, panel_bg);
     }
     // The former title row stays as a blank band row (the title lives on
     // the header row now).
     blank(frame, title_row, panel_bg);
+}
+
+/// Played cells of a `width`-cell seekbar at `position` of `runtime` ticks.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+)]
+fn seek_fill(position: i64, runtime: i64, width: u16) -> usize {
+    let ratio = if runtime > 0 {
+        (mbv_emby_model::ticks_to_seconds(position) / mbv_emby_model::ticks_to_seconds(runtime))
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    ((ratio * f64::from(width)).round() as usize).min(usize::from(width))
 }
 
 fn render_seekbar(
@@ -229,20 +242,9 @@ fn render_seekbar(
         playback.seekbar = Rect::default();
         return;
     }
-    let ratio = if runtime > 0 {
-        (mbv_emby_model::ticks_to_seconds(position) / mbv_emby_model::ticks_to_seconds(runtime))
-            .clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
     playback.seekbar = area;
     let width = area.width as usize;
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let filled = ((ratio * f64::from(area.width)).round() as usize).min(width);
+    let filled = seek_fill(position, runtime, area.width);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -257,13 +259,6 @@ fn render_seekbar(
         .style(Style::default().bg(panel_bg)),
         area,
     );
-}
-
-/// Whether the panel behind `surface` paints the queue band layout (title
-/// row(s), seekbar with flanking times, controls + pills) rather than the
-/// Library strip's single title row.
-fn split_title_rows(surface: palette::Surface) -> bool {
-    surface == palette::Surface::QueueOnlyPlaybackPanel
 }
 
 /// Resolves a now-playing title part role to its theme role.

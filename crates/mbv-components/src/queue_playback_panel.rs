@@ -26,7 +26,7 @@ use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
 use mbv_render::PlaybackStripAreas;
-use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_TRANSPORT_GAP_ROWS};
+use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
@@ -217,10 +217,9 @@ impl Component for QueuePlaybackPanel {
         // title (moved up from the band's former title row — two-part
         // titles keep their context-left/title-right split, a lone title
         // paints yellow); idle keeps the status/host row, `IDLE [host]`.
-        let title = self.transport.now_playing_title.clone();
-        if self.status == NowPlayingStatus::Idle {
-            render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
-        } else if let Some((title, _)) = title {
+        if self.status != NowPlayingStatus::Idle
+            && let Some((title, _)) = &self.transport.now_playing_title
+        {
             render_header_title(
                 frame,
                 header,
@@ -257,9 +256,7 @@ impl Component for QueuePlaybackPanel {
         // the controls with the status text (right below the visual slot),
         // the title row kept blank (the title lives on the header row), the
         // seekbar with its flanking times, and one blank row.
-        let player_h = transport_area
-            .height
-            .min(PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS);
+        let player_h = transport_area.height.min(QUEUE_TRANSPORT_ROWS);
         let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,
@@ -564,8 +561,8 @@ mod tests {
     #[test]
     fn header_carries_the_title_while_playing_and_idle_status_when_not() {
         // While a target plays the header row paints the aqua play icon and
-        // the now-playing title (no status word, no host); paused swaps the
-        // icon; idle keeps `IDLE [host]`.
+        // the now-playing title (no status word, no host); paused swaps in
+        // the yellow pause icon; idle keeps `IDLE [host]`.
         let painted = |status: NowPlayingStatus, paused: bool| {
             let mut panel = QueuePlaybackPanel::new();
             panel.set_header(status, "music-box".into(), false);
@@ -605,8 +602,8 @@ mod tests {
         );
         assert_eq!(
             fgs[3],
-            palette::ACCENT,
-            "the pause icon paints aqua too: {paused:?}"
+            palette::TEXT_FOCUS_ACCENT,
+            "the pause icon paints yellow: {paused:?}"
         );
         let (idle, _) = painted(NowPlayingStatus::Idle, false);
         assert!(

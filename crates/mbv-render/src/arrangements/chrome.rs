@@ -164,6 +164,13 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
     left_area_width >= QUEUE_PLAYBACK_WIDE_COLUMNS
 }
 
+/// Blank rows at the bottom of the queue column's transport band, below the
+/// seekbar.
+pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
+
+/// The queue column's transport band height: controls, title, seekbar, gap.
+pub const QUEUE_TRANSPORT_ROWS: u16 = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
+
 /// The transport rect for one painted visual slot, within the queue playback
 /// rows below the header row (`slot_region`'s top row): side by side at 100+
 /// columns with the 2-cell gap, stacked below the slot otherwise. One
@@ -171,12 +178,6 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
 /// Queue playback panel's paint step both call, so the breakpoint, the gap,
 /// and the side-by-side/stacked split cannot drift between them (review of
 /// tasks 3.5-3.8).
-/// Blank rows at the bottom of the queue column's transport band, below the
-/// seekbar. The queue band is always
-/// `PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS` rows: controls, title,
-/// seekbar, gap.
-pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
-
 #[must_use]
 pub fn queue_playback_transport_area(
     slot_region: Rect,
@@ -188,7 +189,7 @@ pub fn queue_playback_transport_area(
     // text, the title row (a two-part title shares it, context left and
     // title right; a lone title paints yellow), the seekbar with its
     // flanking times, and one blank row.
-    let player_rows = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
+    let player_rows = QUEUE_TRANSPORT_ROWS;
     if column_wide {
         let gap = if card_width > 0 {
             SLOT_TRANSPORT_GAP

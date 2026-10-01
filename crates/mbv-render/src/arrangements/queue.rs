@@ -65,15 +65,6 @@ pub fn queue_list_box(placement: Rect) -> Rect {
     box_area
 }
 
-/// The framed list content inside the recessed box: the box itself, top to
-/// bottom. The list begins on the box's first row (right below the playback
-/// band) and runs to the footer row; there is no inset padding inside the
-/// box.
-#[must_use]
-pub fn queue_panel_subareas(panel_box: Rect) -> Rect {
-    panel_box
-}
-
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
@@ -86,10 +77,7 @@ pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
         height: input.left_content.height.saturating_sub(playback_rows),
         ..input.left_content
     };
-    let (content_area, footer_row) = (
-        queue_panel_subareas(queue_list_box(panel_area)),
-        queue_footer_row(panel_area),
-    );
+    let (content_area, footer_row) = (queue_list_box(panel_area), queue_footer_row(panel_area));
     QueuePanelGeometry {
         panel_area,
         content_area,

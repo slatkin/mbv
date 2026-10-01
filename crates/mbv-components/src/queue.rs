@@ -12,7 +12,7 @@ use tuirealm::state::State;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
 use mbv_queue::{QueueSlot, QueueSlotId};
-use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box, queue_panel_subareas};
+use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box};
 use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
@@ -265,8 +265,7 @@ impl Component for QueueComponent {
         // begins on the box's first row (right below the playback band) and
         // runs to the footer status row.
         let footer_row = queue_footer_row(area);
-        let panel_box = queue_list_box(area);
-        let content_area = queue_panel_subareas(panel_box);
+        let content_area = queue_list_box(area);
         self.content_area = content_area;
         // The panel fills its own placement: the frame painter covers the
         // whole placement with the QueueColumn surface and the recessed box
@@ -293,7 +292,7 @@ impl Component for QueueComponent {
         if content_area.height < 1 {
             return;
         }
-        if self.carrier.is_empty() && content_area.height > 0 {
+        if self.carrier.is_empty() {
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
                     .style(Style::default().fg(palette::TEXT_EMPHASIS)),

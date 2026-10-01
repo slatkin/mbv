@@ -1,7 +1,8 @@
-use super::super::chrome::play_icon;
+use super::super::chrome::{pause_icon, play_icon};
 use super::super::marquee;
 use super::PlaybackRenderContext;
 use super::palette;
+use super::seek_fill;
 use super::title_part_fg;
 use crate::arrangements::playback_transport::{TransportMeasure, transport_buttons_fit};
 use mbv_queue::PlaybackTitleParts;
@@ -10,7 +11,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 /// The transport control glyphs and their colours for one render context.
@@ -32,11 +33,7 @@ fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGly
         (play_icon(ctx.controls.use_nerd_fonts), palette::ACCENT)
     } else {
         (
-            if ctx.controls.use_nerd_fonts {
-                "\u{f04c}"
-            } else {
-                "||"
-            },
+            pause_icon(ctx.controls.use_nerd_fonts),
             palette::TEXT_FOCUS_ACCENT,
         )
     };
@@ -251,11 +248,7 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
         || band.gap.height == 0
         || band.gap.width == 0
     {
-        ctx.playback.play_pause = Rect::default();
-        ctx.playback.stop = Rect::default();
-        ctx.playback.prev = Rect::default();
-        ctx.playback.next = Rect::default();
-        ctx.playback.seekbar = Rect::default();
+        ctx.playback.clear();
         return;
     }
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
@@ -277,8 +270,7 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
     render_queue_seek_row(frame, band.seek, ctx, panel_bg);
     // The blank row below the seekbar: panel fill, no hit geometry.
     frame.render_widget(
-        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
-            .style(Style::default().bg(panel_bg)),
+        Block::default().style(Style::default().bg(panel_bg)),
         band.gap,
     );
 }
@@ -295,8 +287,8 @@ fn queue_indicator_spans(
     ctx: &PlaybackRenderContext<'_>,
     row_bg: Color,
 ) -> (Vec<Span<'static>>, u16) {
-    let mut items = Vec::new();
-    for span in ctx.status_indicators.clone().unwrap_or_default() {
+    let mut spans = Vec::new();
+    for span in ctx.status_indicators.as_deref().unwrap_or_default() {
         let trimmed = span.content.trim();
         if trimmed.is_empty() || matches!(trimmed, "⧸" | "│" | "[" | "]") {
             continue;
@@ -306,14 +298,10 @@ fn queue_indicator_spans(
             style.fg = style.bg;
         }
         style.bg = Some(row_bg);
-        items.push(Span::styled(trimmed.to_uppercase(), style));
-    }
-    let mut spans = Vec::new();
-    for (i, item) in items.into_iter().enumerate() {
-        if i > 0 {
+        if !spans.is_empty() {
             spans.push(Span::styled(" ", Style::default().bg(row_bg)));
         }
-        spans.push(item);
+        spans.push(Span::styled(trimmed.to_uppercase(), style));
     }
     if !spans.is_empty() {
         spans.push(Span::styled(" ", Style::default().bg(row_bg)));
@@ -327,13 +315,13 @@ fn queue_indicator_spans(
 
 /// The header row's state icon: the play glyph while playing, the pause
 /// glyph while paused (same nerd-font/fallback pairs as the transport
-/// controls).
+/// controls), aqua for play and yellow for pause.
 #[must_use]
-pub fn playback_state_icon(use_nerd_fonts: bool, paused: bool) -> &'static str {
+pub fn playback_state_icon(use_nerd_fonts: bool, paused: bool) -> (&'static str, Color) {
     if paused {
-        if use_nerd_fonts { "\u{f04c}" } else { "||" }
+        (pause_icon(use_nerd_fonts), palette::TEXT_FOCUS_ACCENT)
     } else {
-        play_icon(use_nerd_fonts)
+        (play_icon(use_nerd_fonts), palette::ACCENT)
     }
 }
 
@@ -347,23 +335,40 @@ pub struct HeaderTitle<'a> {
     pub marquee_text: &'a mut String,
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
-    pub icon: &'static str,
+    pub icon: (&'static str, Color),
 }
 
 /// The header row's now-playing title (moved up from the band's title row):
-/// the aqua state icon first, one space, then a two-part title — the
+/// the state icon first, one space, then a two-part title — the
 /// context part (the show) left-aligned and clipped without scrolling, the
 /// title part with the marquee window of the remaining space — or a lone
 /// yellow title. Painted only while a target plays; idle keeps the
 /// status/host header row.
 pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
     let panel_bg = palette::surface_colors(header.panel, false).fill;
-    let has_context = header.parts.is_some_and(|parts| parts.context.is_some());
-    if has_context {
-        render_queue_combined_title(frame, row, header, panel_bg);
-    } else {
-        render_queue_title_only(frame, row, header, panel_bg);
+    match header
+        .parts
+        .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))
+    {
+        Some((context, title)) => render_queue_combined_title(
+            frame,
+            row,
+            header,
+            panel_bg,
+            (&context.text, title_part_fg(context.role)),
+            (&title.text, title_part_fg(title.role)),
+        ),
+        None => render_queue_title_only(frame, row, header, panel_bg),
     }
+}
+
+/// The ` <icon> ` prefix every header title row starts with.
+fn icon_prefix(icon: (&'static str, Color), panel_bg: Color) -> [Span<'static>; 3] {
+    [
+        Span::styled(" ", Style::default().bg(panel_bg)),
+        Span::styled(icon.0, Style::default().fg(icon.1).bg(panel_bg)),
+        Span::styled(" ", Style::default().bg(panel_bg)),
+    ]
 }
 
 /// One queue title row without its time: ` <title> ` with the marquee
@@ -376,34 +381,16 @@ fn render_queue_title_only(
     header: &mut HeaderTitle<'_>,
     panel_bg: Color,
 ) {
-    let text = match header.parts {
-        Some(parts) => parts.title.text.clone(),
-        None => header.title.to_string(),
-    };
-    let title_parts = vec![(text, palette::PLAYBACK_CONTEXT_FG)];
-    let icon_w = width_u16(header.icon.width());
-    let mut spans = vec![
-        Span::styled(" ", Style::default().bg(panel_bg)),
-        Span::styled(
-            header.icon.to_string(),
-            Style::default().fg(palette::ACCENT).bg(panel_bg),
-        ),
-        Span::styled(" ", Style::default().bg(panel_bg)),
-    ];
+    let text = header.parts.map_or(header.title, |parts| &parts.title.text);
+    let icon_w = width_u16(header.icon.0.width());
+    let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
     spans.extend(marquee_spans_at(
-        &title_parts,
+        &[(text, palette::PLAYBACK_CONTEXT_FG)],
         (row.width.saturating_sub(2 + icon_w + 1)) as usize,
         header.marquee_text,
         header.marquee_started_at,
     ));
-    let row_w: u16 = spans
-        .iter()
-        .map(|span| width_u16(span.content.width()))
-        .sum();
-    let gap = (row.width as usize).saturating_sub(row_w as usize);
-    if gap > 0 {
-        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
-    }
+    // `Paragraph::style` fills the cells the spans leave uncovered.
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
         row,
@@ -415,65 +402,46 @@ fn render_queue_title_only(
 /// right-aligned with the marquee window of the remaining space. The show
 /// keeps priority: it clips only past `content - 2`, so the title always
 /// keeps at least a one-cell marquee floor and no part is ever dropped.
-/// Falls back to the single title row when no context part projects.
 fn render_queue_combined_title(
     frame: &mut Frame,
     row: Rect,
     header: &mut HeaderTitle<'_>,
     panel_bg: Color,
+    (show_text, show_fg): (&str, Color),
+    (title_text, title_fg): (&str, Color),
 ) {
-    let Some((show_text, show_fg, title_text, title_fg)) = header.parts.and_then(|parts| {
-        parts.context.as_ref().map(|context| {
-            (
-                context.text.clone(),
-                title_part_fg(context.role),
-                parts.title.text.clone(),
-                title_part_fg(parts.title.role),
-            )
-        })
-    }) else {
-        render_queue_title_only(frame, row, header, panel_bg);
-        return;
-    };
-    let icon = header.icon;
-    let icon_w = usize::from(width_u16(icon.width()));
+    let icon_w = usize::from(width_u16(header.icon.0.width()));
     let content = row.width.saturating_sub(2) as usize;
-    let mut show = show_text.as_str();
+    let mut show = show_text;
     let show_max = content.saturating_sub(icon_w + 1 + 2);
     while show.width() > show_max {
         show = &show[..show.len() - show.chars().last().map_or(1, char::len_utf8)];
     }
     let sw = width_u16(show.width());
     let title_win = content.saturating_sub(icon_w + 1 + usize::from(sw) + 1);
-    let mut spans = vec![
-        Span::styled(" ", Style::default().bg(panel_bg)),
-        Span::styled(
-            icon.to_string(),
-            Style::default().fg(palette::ACCENT).bg(panel_bg),
-        ),
-        Span::styled(" ", Style::default().bg(panel_bg)),
-        Span::styled(show.to_string(), Style::default().fg(show_fg).bg(panel_bg)),
-    ];
-    spans.extend(marquee_spans_at(
+    let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
+    spans.push(Span::styled(
+        show,
+        Style::default().fg(show_fg).bg(panel_bg),
+    ));
+    let marquee = marquee_spans_at(
         &[(title_text, title_fg)],
         title_win,
         header.marquee_text,
         header.marquee_started_at,
-    ));
-    let mid_w: u16 = spans
+    );
+    let used = spans
         .iter()
-        .map(|span| width_u16(span.content.width()))
-        .sum();
-    // Right-anchor the title: every spare cell lands in the middle gap;
-    // the trailing indent is kept outside the gap math. The gap lands
-    // after the icon + show prefix (four spans in).
-    let gap = (row.width as usize).saturating_sub(mid_w as usize + 1);
+        .chain(&marquee)
+        .map(|span| span.content.width())
+        .sum::<usize>();
+    // Right-anchor the title: every spare cell lands between the show and the
+    // title; the trailing indent is kept outside the gap math.
+    let gap = (row.width as usize).saturating_sub(used + 1);
     if gap > 0 {
-        spans.insert(
-            4,
-            Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
-        );
+        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
     }
+    spans.extend(marquee);
     spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
@@ -481,22 +449,18 @@ fn render_queue_combined_title(
     );
 }
 
-/// Marquee spans for one part set without a full render context: the header
-/// painter's entry into the shared marquee machinery.
+/// Marquee spans for one part set: the single adapter into the shared
+/// marquee machinery, used by the header painter and `marquee_spans`.
 fn marquee_spans_at(
-    parts: &[(String, Color)],
+    parts: &[(&str, Color)],
     max_width: usize,
     marquee_text: &mut String,
     marquee_started_at: &mut std::time::Instant,
 ) -> Vec<Span<'static>> {
-    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
-    let borrowed: Vec<(&str, Color)> = parts
-        .iter()
-        .map(|(text, color)| (text.as_str(), *color))
-        .collect();
+    let key: String = parts.iter().map(|(text, _)| *text).collect();
     marquee::marquee_spans(
         &key,
-        &borrowed,
+        parts,
         max_width,
         marquee_text,
         marquee_started_at,
@@ -559,18 +523,7 @@ fn render_queue_seek_row(
         );
         return;
     }
-    let ratio = if rt_ticks > 0 {
-        (mbv_emby_model::ticks_to_seconds(pos_ticks) / mbv_emby_model::ticks_to_seconds(rt_ticks))
-            .clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let filled = ((ratio * f64::from(bar_w)).round() as usize).min(bar_w as usize);
+    let filled = seek_fill(pos_ticks, rt_ticks, bar_w);
     let rest = (bar_w as usize).saturating_sub(filled);
     ctx.playback.seekbar = Rect {
         x: row.x + 1 + elapsed_w + 1,
@@ -615,7 +568,7 @@ fn inset_row(row: Rect) -> Rect {
     }
 }
 
-/// The queue band's bottom controls row: glyphs left, indicators flush
+/// The queue band's top controls row: glyphs left, indicators flush
 /// right, the whole row on the slate fill edge to edge. The buttons show
 /// whenever the glyphs, buttons and indicators fit — no title competes on
 /// the row. Hit geometry lands on the inset cells, where the glyphs paint.
@@ -629,21 +582,13 @@ fn render_transport_controls_row(
     indicators_w: u16,
 ) {
     if row.height == 0 || row.width == 0 {
-        ctx.playback.play_pause = Rect::default();
-        ctx.playback.stop = Rect::default();
-        ctx.playback.next = Rect::default();
+        ctx.playback.clear();
         return;
     }
-    frame.render_widget(
-        Paragraph::new(Span::raw(" ".repeat(row.width as usize)))
-            .style(Style::default().bg(row_bg)),
-        row,
-    );
+    frame.render_widget(Block::default().style(Style::default().bg(row_bg)), row);
     let inner = inset_row(row);
     if inner.width == 0 {
-        ctx.playback.play_pause = Rect::default();
-        ctx.playback.stop = Rect::default();
-        ctx.playback.next = Rect::default();
+        ctx.playback.clear();
         return;
     }
     let glyph_text = format!("{} ", glyphs.play.0);
@@ -793,17 +738,14 @@ pub fn marquee_spans(
     parts: &[(String, Color)],
     max_width: usize,
 ) -> Vec<Span<'static>> {
-    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
     let borrowed: Vec<(&str, Color)> = parts
         .iter()
         .map(|(text, color)| (text.as_str(), *color))
         .collect();
-    marquee::marquee_spans(
-        &key,
+    marquee_spans_at(
         &borrowed,
         max_width,
         ctx.marquee_text,
         ctx.marquee_started_at,
-        false,
     )
 }
