@@ -70,11 +70,11 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
     // right-column strip's own fill (`PlaybackPanel`), whose recess rects
     // share the value through this context.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
-    // The queue column's band paints title row(s) first, the seekbar with
-    // its flanking times next, and controls + pills on the band's bottom
-    // row; the Library strip keeps the seekbar on top with the single title
-    // row below. Derived from the context's panel surface so neither panel
-    // can point at the other's layout.
+    // The queue column's band paints the controls row first (right below
+    // the visual slot), one blank row, the title row, then the seekbar with
+    // its flanking times; the Library strip keeps the seekbar on top with
+    // the single title row below. Derived from the context's panel surface
+    // so neither panel can point at the other's layout.
     let split = split_title_rows(ctx.panel);
     if split {
         render_queue_panel(frame, &mut ctx, rows, panel_bg);
@@ -147,14 +147,14 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
     }
 }
 
-/// The queue column's transport: the title row, the seekbar with its
-/// flanking times, one blank row, then the controls and status text on the
-/// bottom row. The shared [`transport_rows`] positions still name the rows
-/// top-down; the queue band reinterprets R0..R3 — R0 is the title row, the
-/// seekbar rides R1, R2 stays blank, the controls ride R3 — while the
-/// Library strip keeps the seekbar on R0. Anything short of the four rows
-/// degrades to the rows present (title keeps painting, missing seek and
-/// controls clear their hit geometry).
+/// The queue column's transport: the controls and status text on the top
+/// row (right below the visual slot), one blank row, the title row, then
+/// the seekbar with its flanking times. The shared [`transport_rows`]
+/// positions still name the rows top-down; the queue band reinterprets
+/// R0..R3 — the controls ride R0, R1 stays blank, R2 is the title row, the
+/// seekbar rides R3 — while the Library strip keeps the seekbar on R0.
+/// Anything short of the four rows degrades to the rows present (controls
+/// keep painting, missing rows clear their hit geometry).
 fn render_queue_panel(
     frame: &mut Frame,
     ctx: &mut PlaybackRenderContext<'_>,
@@ -177,10 +177,10 @@ fn render_queue_panel(
         ctx.playback.next = Rect::default();
         ctx.playback.seekbar = Rect::default();
     }
-    let (Some(title_row), Some(seek_row), Some(gap_row), Some(controls_row)) =
+    let (Some(controls_row), Some(gap_row), Some(title_row), Some(seek_row)) =
         (rows.seekbar, rows.title, rows.indicator_row, rows.extra_row)
     else {
-        // Short of a full band: keep whatever title row exists painted and
+        // Short of a full band: keep whatever top row exists painted and
         // clear the rest rather than borrow a neighbour's row.
         clear_hits(ctx);
         if let Some(first) = rows
@@ -193,24 +193,24 @@ fn render_queue_panel(
         }
         return;
     };
-    if let Some((title, color)) = ctx.now_playing_title.clone() {
+    if let Some((title, _)) = ctx.now_playing_title.clone() {
         render_queue_band(
             frame,
             &QueueBand {
+                controls: controls_row,
+                gap: gap_row,
                 title: title_row,
                 seek: seek_row,
-                gap: gap_row,
-                controls: controls_row,
             },
             title.as_str(),
-            color,
             ctx,
         );
     } else {
         clear_hits(ctx);
+        blank(frame, controls_row, panel_bg);
+        blank(frame, gap_row, panel_bg);
         blank(frame, title_row, panel_bg);
         blank(frame, seek_row, panel_bg);
-        blank(frame, controls_row, panel_bg);
     }
 }
 

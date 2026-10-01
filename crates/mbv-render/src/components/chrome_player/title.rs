@@ -227,29 +227,29 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     spans
 }
 
-/// The queue column's band rows in paint order: the title row, the seekbar
-/// flanked by its times, one blank row, then the transport controls and
-/// status text on the bottom row.
+/// The queue column's band rows in paint order: the transport controls and
+/// status text, one blank row, the title row, then the seekbar flanked by
+/// its times.
 pub struct QueueBand {
+    pub controls: Rect,
+    pub gap: Rect,
     pub title: Rect,
     pub seek: Rect,
-    pub gap: Rect,
-    pub controls: Rect,
 }
 
-/// The queue column's band: the title row, then the seekbar with the elapsed
-/// time left and the total time right (one space between each time and the
-/// bar), one blank row, then the controls and status text on the bottom
-/// row. A two-part title shares its row: the context part (the show)
-/// left-aligned and clipped without scrolling, the title part right-aligned
-/// with the marquee window of the remaining space. Hit geometry rides the
+/// The queue column's band: the controls and status text on the top row
+/// (right below the visual slot), one blank row, then the title row, then
+/// the seekbar with the elapsed time left and the total time right (one
+/// space between each time and the bar). A two-part title shares its row:
+/// the context part (the show) left-aligned and clipped without scrolling,
+/// the title part right-aligned with the marquee window of the remaining
+/// space. A single title always paints yellow. Hit geometry rides the
 /// controls row (the glyphs) and the seekbar's bar span — the time labels
 /// never seek. Pure painter over projected state.
 pub fn render_queue_band(
     frame: &mut Frame,
     band: &QueueBand,
     title: &str,
-    title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
 ) {
     if band.title.height == 0
@@ -273,27 +273,10 @@ pub fn render_queue_band(
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
-    // The bottom row's own fill (the slate backdrop role) plus its plain
+    // The top row's own fill (the slate backdrop role) plus its plain
     // indicator text, measured for the buttons-fit rule below.
     let row_bg = palette::SURFACE_BACKDROP;
     let (indicators, indicators_w) = queue_indicator_spans(ctx, row_bg);
-    let has_context = ctx
-        .title_parts
-        .as_ref()
-        .is_some_and(|parts| parts.context.is_some());
-    if has_context {
-        render_queue_combined_title(frame, band.title, title, title_color, ctx, panel_bg);
-    } else {
-        render_queue_title_only(frame, band.title, title, title_color, ctx, panel_bg);
-    }
-    render_queue_seek_row(frame, band.seek, ctx, panel_bg);
-    // The blank row between the seekbar and the controls: panel fill, no
-    // hit geometry.
-    frame.render_widget(
-        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
-            .style(Style::default().bg(panel_bg)),
-        band.gap,
-    );
     render_transport_controls_row(
         ctx,
         frame,
@@ -303,6 +286,23 @@ pub fn render_queue_band(
         indicators,
         indicators_w,
     );
+    // The blank row between the controls and the title: panel fill, no
+    // hit geometry.
+    frame.render_widget(
+        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
+            .style(Style::default().bg(panel_bg)),
+        band.gap,
+    );
+    let has_context = ctx
+        .title_parts
+        .as_ref()
+        .is_some_and(|parts| parts.context.is_some());
+    if has_context {
+        render_queue_combined_title(frame, band.title, title, ctx, panel_bg);
+    } else {
+        render_queue_title_only(frame, band.title, title, ctx, panel_bg);
+    }
+    render_queue_seek_row(frame, band.seek, ctx, panel_bg);
 }
 
 /// The queue band's status indicators as plain text on `row_bg`: no pill
@@ -349,21 +349,20 @@ fn queue_indicator_spans(
 
 /// One queue title row without its time: ` <title> ` with the marquee
 /// window sized to the row minus its two indent cells. Only called when no
-/// context part projects (a two-part title shares the combined row).
+/// context part projects (a two-part title shares the combined row); the
+/// lone title always paints yellow.
 fn render_queue_title_only(
     frame: &mut Frame,
     row: Rect,
     title: &str,
-    title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
     panel_bg: Color,
 ) {
-    let title_parts: Vec<(String, Color)> = match ctx.title_parts.as_ref() {
-        Some(parts) if parts.context.is_some() => {
-            vec![(parts.title.text.clone(), title_part_fg(parts.title.role))]
-        }
-        _ => playback_title_spans(ctx.title_parts.as_ref(), title, title_color),
+    let text = match ctx.title_parts.as_ref() {
+        Some(parts) => parts.title.text.clone(),
+        None => title.to_string(),
     };
+    let title_parts = vec![(text, palette::PLAYBACK_CONTEXT_FG)];
     let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
     spans.extend(marquee_spans(
         ctx,
@@ -394,7 +393,6 @@ fn render_queue_combined_title(
     frame: &mut Frame,
     row: Rect,
     title: &str,
-    title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
     panel_bg: Color,
 ) {
@@ -410,7 +408,7 @@ fn render_queue_combined_title(
             })
         })
     else {
-        render_queue_title_only(frame, row, title, title_color, ctx, panel_bg);
+        render_queue_title_only(frame, row, title, ctx, panel_bg);
         return;
     };
     let content = row.width.saturating_sub(2) as usize;

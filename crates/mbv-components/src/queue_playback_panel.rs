@@ -226,9 +226,10 @@ impl Component for QueuePlaybackPanel {
             transport_area,
         );
         // The painted row budget is always the four base transport rows:
-        // the title row (a two-part title shares it, context left and title
-        // right), the seekbar with its flanking times, one blank row, and
-        // the controls on the bottom row.
+        // the controls with the status text (right below the visual slot),
+        // one blank row, the title row (a two-part title shares it, context
+        // left and title right; a lone title paints yellow), and the seekbar
+        // with its flanking times.
         let player_h = transport_area
             .height
             .min(PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS);
@@ -414,14 +415,13 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's band: the title row, the seekbar flanked by its times, one
-    /// blank row, then the transport controls and status text on the bottom
-    /// row. A two-part title shares the one title row — the context part
-    /// (the show) left-aligned in the yellow context role, the title part
-    /// right-aligned in the green title role, neither carrying a time.
-    /// Single-part rows paint the title alone on that row. (The Library
-    /// strip's combined row keeps its own contract, owned by
-    /// `chrome_player.rs`'s painter test.)
+    /// column's band: the controls and status text on the top row, one blank
+    /// row, the title row, then the seekbar flanked by its times. A two-part
+    /// title shares the one title row — the context part (the show)
+    /// left-aligned in the yellow context role, the title part right-aligned
+    /// in the green title role, neither carrying a time. A single title
+    /// paints yellow. (The Library strip's combined row keeps its own
+    /// contract, owned by `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
@@ -430,92 +430,89 @@ mod tests {
         #[case] context: Option<&str>,
     ) {
         let (
-            (first, first_fgs, _),
-            (second, _, _),
-            (third, _, third_bgs),
-            (fourth, _, fourth_bgs),
+            (first, _, first_bgs),
+            (second, _, second_bgs),
+            (third, third_fgs, _),
+            (fourth, _, _),
             (fifth, _, _),
         ) = painted_band_rows(parts_for(title, context));
-        // The blank row between the seekbar and the controls carries no
+        // The controls row rides the top of the band on the slate fill
+        // edge to edge in either family.
+        assert_controls_row_fill(&first, &first_bgs);
+        // The blank row between the controls and the title carries no
         // text on the panel fill in either family.
-        assert_gap_row_blank(&third, &third_bgs);
-        // The bottom controls row sits on the slate fill edge to edge in
-        // either family.
-        assert_controls_row_fill(&fourth, &fourth_bgs);
-        // Nothing paints below the controls row in either family.
+        assert_gap_row_blank(&second, &second_bgs);
+        // Nothing paints below the seekbar in either family.
         assert!(
             fifth.trim().is_empty(),
-            "nothing paints below the controls row: {fifth:?}"
+            "nothing paints below the seekbar: {fifth:?}"
         );
         if let Some(context) = context {
             // One shared row: the show left-aligned in the context role,
             // the title right-aligned in the title role, no time on it.
             assert_cells_carry(
-                &first,
-                &first_fgs,
+                &third,
+                &third_fgs,
                 context,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the context part",
             );
             assert_cells_carry(
-                &first,
-                &first_fgs,
+                &third,
+                &third_fgs,
                 title,
                 palette::PLAYBACK_TITLE_FG,
                 "the title part",
             );
             assert!(
-                first.starts_with(format!(" {context}").as_str()),
-                "the show hugs the left indent: {first:?}"
+                third.starts_with(format!(" {context}").as_str()),
+                "the show hugs the left indent: {third:?}"
             );
             assert!(
-                first.ends_with(format!("{title} ").as_str()),
-                "the title hugs the right indent: {first:?}"
+                third.ends_with(format!("{title} ").as_str()),
+                "the title hugs the right indent: {third:?}"
             );
             assert!(
-                !first.contains('/'),
-                "no time rides the shared title row: {first:?}"
+                !third.contains('/'),
+                "no time rides the shared title row: {third:?}"
             );
-            // The seekbar rides below the title row with its times; the
-            // transport controls ride the band's bottom row below the gap.
-            assert_seek_row_flanks_times(&second, "the two-part band");
-            assert!(!second.contains(title) && !second.contains(context));
-            assert!(
-                fourth.contains('X'),
-                "the stop glyph paints on the bottom row: {fourth:?}"
-            );
+            // The seekbar rides below the title with its times.
+            assert_seek_row_flanks_times(&fourth, "the two-part band");
             assert!(!fourth.contains(title) && !fourth.contains(context));
             assert!(
-                !fourth.contains("0:00"),
-                "no time on the controls row: {fourth:?}"
+                first.contains('X'),
+                "the stop glyph paints on the top row: {first:?}"
+            );
+            assert!(!first.contains(title) && !first.contains(context));
+            assert!(
+                !first.contains("0:00"),
+                "no time on the controls row: {first:?}"
             );
         } else {
-            // The single-part band: the title alone on the first row, the
-            // seekbar with its times below it, the controls below that,
-            // nothing on the band's last row.
+            // The lone title paints yellow on the title row.
             assert_cells_carry(
-                &first,
-                &first_fgs,
+                &third,
+                &third_fgs,
                 title,
-                palette::PLAYBACK_TITLE_FG,
-                "the title part",
+                palette::PLAYBACK_CONTEXT_FG,
+                "the lone title",
             );
             assert!(
-                !first.contains('/'),
-                "no time rides the title row: {first:?}"
+                !third.contains('/'),
+                "no time rides the title row: {third:?}"
             );
             assert!(
-                !second.contains(title),
-                "the title stays on its row: {second:?}"
+                !fourth.contains(title),
+                "the title stays on its row: {fourth:?}"
             );
-            assert_seek_row_flanks_times(&second, "the single-part band");
+            assert_seek_row_flanks_times(&fourth, "the single-part band");
             assert!(
-                fourth.contains('X'),
-                "the stop glyph paints on the controls row: {fourth:?}"
+                first.contains('X'),
+                "the stop glyph paints on the controls row: {first:?}"
             );
             assert!(
-                !fourth.contains(title) && !fourth.contains("0:00"),
-                "a single-part title stays off the controls row: {fourth:?}"
+                !first.contains(title) && !first.contains("0:00"),
+                "a single-part title stays off the controls row: {first:?}"
             );
         }
     }
@@ -536,7 +533,7 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
             .unwrap();
         let buf = terminal.backend().buffer();
-        let text: String = (0..40).map(|x| buf[(x, 3)].symbol().to_string()).collect();
+        let text: String = (0..40).map(|x| buf[(x, 5)].symbol().to_string()).collect();
         // ` 1:15 <bar> 5:00 `: elapsed left, total right, bar of 28.
         assert!(
             text.starts_with(" 1:15 "),
@@ -546,7 +543,7 @@ mod tests {
         assert_eq!(text.chars().filter(|c| *c == '\u{2593}').count(), 7);
         assert_eq!(text.chars().filter(|c| *c == '\u{2591}').count(), 21);
         // A quarter fill: 7 accent cells, then the track colour.
-        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 3)].fg).collect();
+        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 5)].fg).collect();
         for x in 6u16..13 {
             assert_eq!(
                 fgs[usize::from(x)],
@@ -565,7 +562,7 @@ mod tests {
         let (_, seekbar) = panel.transport_hits();
         assert_eq!(
             (seekbar.x, seekbar.y, seekbar.width),
-            (6, 3, 28),
+            (6, 5, 28),
             "the bar span seeks, the time labels never do"
         );
     }
@@ -604,9 +601,9 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
             .unwrap();
         let buf = terminal.backend().buffer();
-        let text: String = (0..40).map(|x| buf[(x, 5)].symbol().to_string()).collect();
-        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 5)].fg).collect();
-        let bgs: Vec<Color> = (0..40).map(|x| buf[(x, 5)].bg).collect();
+        let text: String = (0..40).map(|x| buf[(x, 2)].symbol().to_string()).collect();
+        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 2)].fg).collect();
+        let bgs: Vec<Color> = (0..40).map(|x| buf[(x, 2)].bg).collect();
         assert!(
             text.contains("FHD FLAC EN "),
             "items single-spaced and uppercased: {text:?}"

@@ -173,8 +173,8 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
 /// tasks 3.5-3.8).
 /// Blank rows inside the queue column's transport band between the seekbar
 /// and the bottom controls row. The queue band is always
-/// `PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS` rows: title, seekbar,
-/// gap, controls.
+/// `PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS` rows: controls, gap,
+/// title, seekbar.
 pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
 
 #[must_use]
@@ -184,9 +184,10 @@ pub fn queue_playback_transport_area(
     card_width: u16,
     card_height: u16,
 ) -> Rect {
-    // The transport band is always four rows: the title row (a two-part
-    // title shares it, context left and title right), the seekbar with its
-    // flanking times, one blank row, and the controls with the status text.
+    // The transport band is always four rows: the controls with the status
+    // text, one blank row, the title row (a two-part title shares it,
+    // context left and title right), and the seekbar with its flanking
+    // times.
     let player_rows = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
     if column_wide {
         let gap = if card_width > 0 {
