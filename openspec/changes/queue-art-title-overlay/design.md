@@ -21,8 +21,9 @@ See proposal.md for motivation. Current state (read from code):
   protocol is separate (`is_halfblock_configured`).
 - `CachedImage` entries sit in an LRU (`cache_size_total`, `crates/mbv-images/src/cache.rs`).
 - The main spec's header requirement predates 55346db33 / 694acfb69 (title moved into the header);
-  the delta folds that in. The "playback panel renders in the queue column" requirement
-  (title band rows) is also behind those commits; it is left as is, not touched here.
+  the delta folds that in. The queue-column layout requirements (the four-row band, no separator
+  row, the queue panel adjoining the playback region) are also behind the shipped code; the
+  delta brings them up to date too, so the delta overlay matches what the code does.
 
 ## Goals / Non-Goals
 
@@ -35,7 +36,7 @@ See proposal.md for motivation. Current state (read from code):
 - Time-varying overlay content; wrapping; marquee; user font config; system-font lookup;
   non-Latin coverage (fallback is the header).
 - Overlay on Library hero, MPRIS art, or any non-queue image.
-- Changing the main spec's stale title-band requirement.
+- Any further change to the queue column's band layout beyond syncing the delta to the shipped code.
 
 ## Decisions
 

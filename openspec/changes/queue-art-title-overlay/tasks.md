@@ -38,9 +38,10 @@
 
 ## 3. Header and spec sync
 
-- [ ] 3.1 Feed the site into `QueuePlaybackPanel` and paint `Now Playing` after the aqua state
-  icon when the site is `Artwork`, the existing title otherwise (`render_header_title` /
-  `HeaderTitle`); the label paints in `PLAYBACK_CONTEXT_FG` (yellow) after the aqua icon. Verify
+- [ ] 3.1 Feed the site into `QueuePlaybackPanel` and paint `Now Playing` after the state
+  icon (aqua play, yellow pause) when the site is `Artwork`, the existing title otherwise
+  (`render_header_title` / `HeaderTitle`); the label paints in `PLAYBACK_CONTEXT_FG` (yellow)
+  after the icon. Verify
   with panel painter tests: Artwork -> icon + `Now Playing` in those colours; Header ->
   existing title rows (extend the existing header tests, do not duplicate); Idle unchanged.
 - [ ] 3.2 Add `CONTEXT.md` terms if new domain words were introduced (title site, overlay); verify
@@ -48,7 +49,7 @@
 - [ ] 3.3 Manual visual pass on Kitty and Sixel (and halfblock for the fallback): tune scrim
   opacity/height and Lexend weight (design Open Question); verify one-part, two-part, long-title,
   and a CJK title (falls back to the header).
-- [ ] 3.4 Sync the delta specs into `openspec/specs/` (the queue-playback-panel header
+- [ ] 3.4 Sync the delta specs into `openspec/specs/` (the queue-playback-panel header and queue-column layout
   requirement and the new `queue-artwork-title-overlay` capability); verify
   `openspec validate queue-art-title-overlay --strict` passes. The new capability's `## Purpose`
   moves into the main spec's Purpose section on sync.

@@ -16,7 +16,7 @@ of scrolled.
   and the title in a scrim row at the bottom.
 - Text uses an embedded Lexend Deca (OFL) face, sized from the terminal's cell pixel size, fitted
   to the row by shrinking to a floor, then ellipsis.
-- The queue header row says `Now Playing` (keeping its aqua play/pause icon) while the overlay is
+- The queue header row says `Now Playing` (keeping its state icon: aqua play, yellow pause) while the overlay is
   live, and keeps carrying the title as it does today in every other state: halfblocks, visualizer,
   placeholder/loading slot, images disabled, slot hidden, or a title the font cannot fully render.
 - The composed artwork is a separate cache entry per track/box, rebuilt on track change and on
@@ -33,7 +33,13 @@ of scrolled.
 ### Modified Capabilities
 - `queue-playback-panel`: the "Queue-visible layouts paint a now-playing header row" requirement
   gains the `Now Playing` state and folds in the header-carries-the-title behaviour that shipped
-  in 55346db33 and 694acfb69 but never reached the main spec.
+  in 55346db33 and 694acfb69 but never reached the main spec (no status word or host while a
+  target plays, aqua play / yellow pause icon, two-part title right-aligned). The delta also
+  brings the queue-column layout requirements up to the shipped band: a fixed four-row transport
+  (controls, blank title row, seekbar with times, gap row), no separator row, and the queue panel
+  adjoining the playback region (the "playback panel renders in the queue column", "queue panel
+  opens directly", "Idle collapse", "pointer input", "hide visual slot", title-row and
+  colour-delineation requirements).
 
 ## Impact
 
