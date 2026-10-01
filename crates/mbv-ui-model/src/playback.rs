@@ -40,6 +40,8 @@ pub enum NowPlayingTitleSite {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueCardProjection {
     pub cache_key: Option<String>,
+    /// Plain artwork used if a projected title-overlay protocol is unavailable.
+    pub plain_cache_key: Option<String>,
     pub images_enabled: bool,
     pub visualizer: bool,
     pub title_site: NowPlayingTitleSite,

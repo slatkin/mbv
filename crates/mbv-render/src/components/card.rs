@@ -78,7 +78,8 @@ type CardImageProtocol = ratatui_image::thread::ThreadProtocol;
 /// over projected state with no `App` access. `image` is the shell-resolved
 /// protocol handle for the slot's key (`None` while not ready); `loading`
 /// reserves the loading rectangle for an in-flight fetch. Returns
-/// `(rows_used, cols_used, image_loading)`.
+/// `(rows_used, cols_used, image_loading, image_painted)`, where `image_painted`
+/// is true only when a ready image protocol was rendered.
 ///
 /// # Panics
 ///
@@ -95,12 +96,12 @@ pub fn render_card_painting(
     image: Option<&mut CardImageProtocol>,
     last_card: (u16, u16),
     terminal_height: u16,
-) -> (u16, u16, bool) {
+) -> (u16, u16, bool, bool) {
     // The visualizer never reaches this painter (the `App` adapter paints it
     // from the shell's sample window); degenerate input reserves geometry.
     if projection.visualizer || !projection.images_enabled {
         let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
-        return (rect.height, rect.width, false);
+        return (rect.height, rect.width, false, false);
     }
     // The bundled placeholder slot caps its height at the same tier cap as
     // the real image (24 rows at full height), like the compact banner's
@@ -146,7 +147,7 @@ pub fn render_card_painting(
             img_rect,
             image.expect("image handle present"),
         );
-        return (height, width, false);
+        return (height, width, false, true);
     }
     // No image loaded yet. If a fetch is in-flight and we have never rendered
     // a card before, reserve the full height cap so the queue panel doesn't
@@ -186,7 +187,7 @@ pub fn render_card_painting(
         // An empty queue with no previous artwork geometry still reserves its
         // fallback rectangle so toggling `v` never moves the queue list.
         let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
-        return (rect.height, rect.width, false);
+        return (rect.height, rect.width, false, false);
     }
-    (reservation.height, placeholder_w, loading)
+    (reservation.height, placeholder_w, loading, false)
 }

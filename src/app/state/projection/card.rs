@@ -60,6 +60,17 @@ fn resolve_title_site(
     }
 }
 
+fn overlay_or_plain_key(plain_key: &str, variant_key: Option<String>) -> String {
+    variant_key.unwrap_or_else(|| plain_key.to_owned())
+}
+
+fn painted_overlay_key(key: Option<&str>, painted: bool) -> Option<&str> {
+    painted
+        .then_some(key)
+        .flatten()
+        .filter(|key| key.contains(":t:"))
+}
+
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
         "MusicAlbum" => MUSIC_ALBUM_IMAGE_TYPES,
@@ -155,7 +166,7 @@ impl App {
         let last_card = self.images.last_card_size();
         let terminal_height = self.terminal_height;
         let image = self.cached_image_protocol_mut(key);
-        let (height, width, loading) = render_card_painting(
+        let (height, width, loading, painted) = render_card_painting(
             f,
             area,
             left_align,
@@ -165,7 +176,36 @@ impl App {
             last_card,
             terminal_height,
         );
+        let fallback_key = projection.plain_cache_key.as_deref().filter(|key| {
+            self.images
+                .image(key)
+                .is_some_and(|entry| entry.img.is_some())
+        });
+        let (height, width, loading) = if painted {
+            (height, width, loading)
+        } else if let Some(fallback_key) = fallback_key {
+            let fallback_loading = self.images.is_loading(fallback_key);
+            let fallback_image = self.cached_image_protocol_mut(fallback_key);
+            projection.cache_key = Some(fallback_key.to_owned());
+            let (height, width, loading, _) = render_card_painting(
+                f,
+                area,
+                left_align,
+                &projection,
+                fallback_loading,
+                fallback_image,
+                last_card,
+                terminal_height,
+            );
+            (height, width, loading)
+        } else {
+            (height, width, loading)
+        };
         self.images.record_card_size(height, width);
+        if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref(), painted) {
+            self.images
+                .record_painted_title_overlay(Some(key.to_owned()));
+        }
         (height, width, loading)
     }
 
@@ -305,6 +345,7 @@ impl App {
     pub(in crate::app) fn refresh_queue_card_image(&mut self) {
         let mut projection = QueueCardProjection {
             cache_key: None,
+            plain_cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
             title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
@@ -323,7 +364,7 @@ impl App {
             } else {
                 self.project_audiobookshelf_cover(playback, &mut projection);
             }
-            projection.title_site = self.queue_title_site(&projection, playback);
+            self.queue_title_site(&mut projection, playback);
             self.queue_card_projection = projection;
             return;
         };
@@ -334,24 +375,24 @@ impl App {
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         self.prefetch_card_images(cursor);
         projection.cache_key = Some(cache_key);
-        projection.title_site = self.queue_title_site(&projection, playback);
+        self.queue_title_site(&mut projection, playback);
         self.queue_card_projection = projection;
     }
 
     fn queue_title_site(
         &mut self,
-        projection: &QueueCardProjection,
+        projection: &mut QueueCardProjection,
         playback: mbv_ui_model::playback::PlaybackState,
-    ) -> mbv_ui_model::playback::NowPlayingTitleSite {
+    ) {
         let (height, width) = self.images.last_card_size();
-        let Some(key) = projection.cache_key.as_deref() else {
-            return NowPlayingTitleSite::Header;
+        let Some(key) = projection.cache_key.clone() else {
+            return;
         };
         let Some(item) = playback
             .active_idx
             .and_then(|index| self.playback_queue().item_at(index))
         else {
-            return NowPlayingTitleSite::Header;
+            return;
         };
         let parts = self.playback_title_parts(item);
         let text = mbv_images::title_overlay::TitleOverlayText {
@@ -387,16 +428,19 @@ impl App {
             || !facts.art.images
             || !facts.covered
         {
-            return NowPlayingTitleSite::Header;
+            return;
         }
         let Some(variant_key) = self.ensure_title_overlay_protocol(
-            key,
+            &key,
             ratatui::layout::Size { width, height },
             &parts,
         ) else {
-            return NowPlayingTitleSite::Header;
+            return;
         };
-        resolve_title_site(facts, &variant_key, self.images.painted_title_overlay_key())
+        projection.plain_cache_key = Some(key.clone());
+        projection.cache_key = Some(overlay_or_plain_key(&key, Some(variant_key.clone())));
+        projection.title_site =
+            resolve_title_site(facts, &variant_key, self.images.painted_title_overlay_key());
     }
 }
 
@@ -404,7 +448,7 @@ impl App {
 mod title_site_tests {
     use super::{
         NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback, TitleSlotFacts,
-        resolve_title_site,
+        overlay_or_plain_key, painted_overlay_key, resolve_title_site,
     };
 
     const KEY: &str = "art:t:8x4:1";
@@ -475,5 +519,22 @@ mod title_site_tests {
             title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title);
         assert_eq!(kitty, halfblock);
         assert!(kitty.starts_with("audiobookshelf:server:cover:item:t:8x4:"));
+    }
+
+    #[test]
+    fn projected_card_key_uses_variant_only_when_eligible() {
+        assert_eq!(overlay_or_plain_key("item:P", None), "item:P");
+        assert_eq!(
+            overlay_or_plain_key("item:P", Some("item:P:t:8x4:1".to_owned())),
+            "item:P:t:8x4:1"
+        );
+    }
+
+    #[test]
+    fn overlay_painted_fact_requires_successful_paint() {
+        const KEY: &str = "item:P:t:8x4:1";
+        assert_eq!(painted_overlay_key(Some(KEY), false), None);
+        assert_eq!(painted_overlay_key(Some("item:P"), true), None);
+        assert_eq!(painted_overlay_key(Some(KEY), true), Some(KEY));
     }
 }

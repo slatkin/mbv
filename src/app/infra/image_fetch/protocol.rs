@@ -610,6 +610,38 @@ mod protocol_tests {
     }
 
     #[test]
+    fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
+        // Regression guard for the shared-key flash documented by
+        // `audiobookshelf_hero_cover_cache_key`: the `{id}:P` bitmap stays plain.
+        let mut app = app_with_base();
+        let plain_key = "item:P";
+        app.images
+            .insert_image(plain_key.to_owned(), cached(Some(image(4, 2))));
+        let plain_before = app.images.image(plain_key).unwrap().img.clone();
+        let parts = mbv_queue::PlaybackTitleParts {
+            title: mbv_queue::PlaybackTitlePart {
+                role: mbv_queue::PlaybackTitlePartRole::Title,
+                text: "a title".to_owned(),
+            },
+            context: None,
+        };
+
+        let variant = app
+            .ensure_title_overlay_protocol(
+                plain_key,
+                ratatui::layout::Size {
+                    width: 8,
+                    height: 4,
+                },
+                &parts,
+            )
+            .expect("measurable plain art builds an overlay variant");
+
+        assert_ne!(variant, plain_key);
+        assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);
+    }
+
+    #[test]
     fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
         let mut absent = app_with_base();
         assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
