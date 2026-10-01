@@ -77,8 +77,10 @@ panel (header text) and the card painter.
 
 *Overlay eligible* (drives what the card paints and composes) iff all of: playback is active per
 `displayed_playback_state().active` (paused counts as active and keeps the overlay; an idle card
-that shows the cursor row's art, or a cast/session title with no active local item, is never
-eligible); images enabled; visualizer off; `visual_slot_shown()` (not idle, not
+that shows the cursor row's art is never eligible; a watched remote session or cast target with no
+local queue slot IS eligible, its card art keyed by the session item and its title taken from the
+session's now-playing name as a one-part title, because the header already carries that same
+title there); images enabled; visualizer off; `visual_slot_shown()` (not idle, not
 `visual_slot_hidden`) with a non-zero card size; `!is_halfblock_configured()`; the title passes
 `covers`; and a composed variant is ready for the current identity+box+title. The card paints the
 overlay variant whenever eligible.

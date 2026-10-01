@@ -122,6 +122,14 @@ the title.
 - **WHEN** the title contains a character the embedded font has no glyph for
 - **THEN** no title is drawn onto the artwork for that track and the header row carries it
 
+#### Scenario: Playing on a remote target
+
+- **WHEN** a movie plays on a watched remote session or cast target with no local queue slot, and
+  the card shows that item's artwork
+- **THEN** the title is drawn onto the artwork as a one-part title from the session's now-playing
+  name
+- **AND** the header row reads `Now Playing` once it has been painted
+
 #### Scenario: Dimmed backdrop does not flip the site
 
 - **WHEN** an overlay dialog that dims its backdrop opens while the artwork carries the title,
