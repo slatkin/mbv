@@ -28,7 +28,7 @@
   `cached_image_protocol_mut`. Verify with a test (hermetic, in the style of
   `arriving_logo_rebuilds_base_only_protocol_once`) that playback ticks build zero protocols, a
   track change builds one, and a suffix flip builds a protocol without recomposing.
-- [ ] 2.3 Make `render_queue_playback_slot` / `card.rs` paint the overlay variant when the overlay
+- [x] 2.3 Make `render_queue_playback_slot` / `card.rs` paint the overlay variant when the overlay
   is eligible (not when the site is `Artwork`, which needs the paint to have happened) and the
   plain entry otherwise; verify the plain `:P` entry bitmap is unchanged after an
   overlay is built (regression guard for the shared-key flash).
