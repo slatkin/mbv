@@ -69,28 +69,6 @@ fn assert_row_blank(text: &str, bgs: &[Color]) {
     );
 }
 
-/// The seekbar row's contract: ` <elapsed> <bar> <total> ` — the
-/// elapsed time left with one space before the bar, the total right
-/// with one space after it, the bar spanning the columns between.
-fn assert_seek_row_flanks_times(text: &str, label: &str) {
-    assert!(
-        text.starts_with(" 0:00 "),
-        "the elapsed time paints left of the seekbar with a space: {label}: {text:?}"
-    );
-    assert!(
-        text.ends_with(" 0:00 "),
-        "the total time paints right of the seekbar with a space: {label}: {text:?}"
-    );
-    assert!(
-        text.contains('\u{2591}') || text.contains('\u{2593}'),
-        "the bar paints between the times: {label}: {text:?}"
-    );
-    assert!(
-        !text.contains('/'),
-        "the seekbar row carries no `pos/dur` cluster: {label}: {text:?}"
-    );
-}
-
 /// The top controls row's contract: the slate fill edge to edge.
 fn assert_controls_row_fill(text: &str, bgs: &[Color]) {
     assert!(
@@ -142,9 +120,8 @@ fn band_keeps_slate_controls_blank_title_row_and_blank_gap_row(
 #[rstest]
 #[case::emby_movie("Movie Name", None)]
 #[case::emby_episode("Pilot", Some("Series"))]
-fn seek_row_flanks_times_and_carries_no_title(#[case] title: &str, #[case] context: Option<&str>) {
+fn seek_row_carries_no_title(#[case] title: &str, #[case] context: Option<&str>) {
     let (_, _, _, (seek, _, _), _) = band_for(title, context);
-    assert_seek_row_flanks_times(&seek, title);
     assert!(
         !seek.contains(title),
         "the title stays off the seek row: {seek:?}"
@@ -382,95 +359,6 @@ fn header_carries_the_title_while_playing_and_idle_status_when_not() {
     );
 }
 
-/// The seek row painted at 75s of 300s: each cell's glyph and fg, and
-/// the retained seekbar hit rect.
-fn painted_quarter_seek_row() -> (Vec<(String, Color)>, Rect) {
-    let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
-    panel.transport.show_controls = true;
-    panel.transport.state.position_ticks = 75 * mbv_emby_model::TICKS_PER_SECOND;
-    panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
-    panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-    terminal
-        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-        .unwrap();
-    let buf = terminal.backend().buffer();
-    let cells = (0..40)
-        .map(|x| (buf[(x, 4)].symbol().to_string(), buf[(x, 4)].fg))
-        .collect();
-    let (_, seekbar) = panel.transport_hits();
-    (cells, seekbar)
-}
-
-fn seek_row_text(cells: &[(String, Color)]) -> String {
-    cells.iter().map(|(symbol, _)| symbol.as_str()).collect()
-}
-
-fn glyph_fgs(cells: &[(String, Color)], glyph: &str) -> Vec<Color> {
-    cells
-        .iter()
-        .filter(|(symbol, _)| symbol == glyph)
-        .map(|(_, fg)| *fg)
-        .collect()
-}
-
-// Regression guards for 7fdb7fee8 (seekbar between the titles and the
-// controls, flanked by its times): at 75s of 300s the seek row paints a
-// 25% fill, and only the bar span seeks.
-#[test]
-fn seek_row_flanks_the_bar_with_elapsed_and_total() {
-    let (cells, _) = painted_quarter_seek_row();
-    let text = seek_row_text(&cells);
-    assert!(
-        text.starts_with(" 1:15 "),
-        "elapsed left of the bar: {text:?}"
-    );
-    assert!(text.ends_with(" 5:00 "), "total right of the bar: {text:?}");
-}
-
-#[test]
-fn seek_row_fills_a_quarter_of_the_bar() {
-    let (cells, _) = painted_quarter_seek_row();
-    let filled = glyph_fgs(&cells, "\u{2593}").len();
-    let unplayed = glyph_fgs(&cells, "\u{2591}").len();
-    assert_eq!(filled * 3, unplayed, "a quarter of the bar is filled");
-}
-
-#[test]
-fn seek_row_paints_the_fill_accent() {
-    let (cells, _) = painted_quarter_seek_row();
-    assert!(
-        glyph_fgs(&cells, "\u{2593}")
-            .iter()
-            .all(|fg| *fg == palette::ACCENT)
-    );
-}
-
-#[test]
-fn seek_row_paints_the_unplayed_span_in_the_track_colour() {
-    let (cells, _) = painted_quarter_seek_row();
-    assert!(
-        glyph_fgs(&cells, "\u{2591}")
-            .iter()
-            .all(|fg| *fg == palette::PROGRESS_TRACK)
-    );
-}
-
-#[test]
-fn seek_hit_rect_covers_only_the_bar_not_the_flanking_times() {
-    let (cells, seekbar) = painted_quarter_seek_row();
-    let is_bar = |(symbol, _): &(String, Color)| symbol == "\u{2593}" || symbol == "\u{2591}";
-    let first = cells.iter().position(is_bar).unwrap();
-    let last = cells.iter().rposition(is_bar).unwrap();
-    assert_eq!(
-        (usize::from(seekbar.x), usize::from(seekbar.right())),
-        (first, last + 1),
-        "the bar span seeks, the time labels never do"
-    );
-}
-
 #[test]
 fn controls_row_paints_indicators_as_spaced_plain_text() {
     // A keyvalue-style cluster (slash separators) plus one chip-style
@@ -548,6 +436,10 @@ fn transport_clicks_resolve_against_retained_geometry() {
     panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.show_controls = true;
+    // 37.5s of 5:00 is 3.5 of the 28-cell bar: the leading half cell is a
+    // partial-cell seek target like any other column.
+    panel.transport.state.position_ticks = 375_000_000;
+    panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
@@ -567,11 +459,21 @@ fn transport_clicks_resolve_against_retained_geometry() {
         panel.on(&click(play_pause.x + 1, play_pause.y)),
         Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
     ));
-    let column = seekbar.x + seekbar.width / 2;
+    let partial_column = seekbar.x + 3;
     assert!(matches!(
-        panel.on(&click(column, seekbar.y)),
-        Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
+        panel.on(&click(partial_column, seekbar.y)),
+        Some(Msg::Playback(PlaybackRequest::SeekTo(f)))
+            if (f - 3.0 / f64::from(seekbar.width)).abs() < 1e-9
     ));
+    // Either flanking time label resolves no seek intent.
+    assert!(
+        panel.on(&click(seekbar.x - 3, seekbar.y)).is_none(),
+        "the elapsed label never seeks"
+    );
+    assert!(
+        panel.on(&click(seekbar.right() + 1, seekbar.y)).is_none(),
+        "the total label never seeks"
+    );
     // Prev and next keep distinct painted rects and resolve to their own
     // intents (the prev control was painted without a hit rect until now).
     panel.transport.availability.previous = true;
