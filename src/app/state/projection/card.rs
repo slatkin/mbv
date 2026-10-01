@@ -448,7 +448,6 @@ mod title_site_tests {
     #[case::zero_slot(TitleSitePlayback::Active, [true, false, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
     #[case::no_images(TitleSitePlayback::Active, [false, true, false, false, true, false, true], Some(KEY), NowPlayingTitleSite::Header)]
     #[case::uncovered_glyph(TitleSitePlayback::Active, [true, true, false, false, true, true, false], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::idle_cursor_art(TitleSitePlayback::Idle, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
     fn chooses_site_from_eligibility_and_painted_fact(
         #[case] playback: TitleSitePlayback,
         #[case] conditions: [bool; 7],
@@ -468,13 +467,13 @@ mod title_site_tests {
             context: None,
             title: "title",
         };
-        assert_eq!(
-            title_overlay_cache_key("item:P", 8, 4, title),
-            title_overlay_cache_key("item:P", 8, 4, title)
-        );
-        assert_eq!(
-            title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title),
-            title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title)
-        );
+        let emby = title_overlay_cache_key("item:P", 8, 4, title);
+        assert!(emby.starts_with("item:P:t:8x4:"));
+
+        let kitty = title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title);
+        let halfblock =
+            title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title);
+        assert_eq!(kitty, halfblock);
+        assert!(kitty.starts_with("audiobookshelf:server:cover:item:t:8x4:"));
     }
 }

@@ -569,7 +569,6 @@ mod protocol_tests {
         let first = app
             .ensure_title_overlay_protocol(BASE_KEY, available, &parts("first"))
             .expect("base protocol has a measurable size");
-        let composed = app.images.image(&first).unwrap().img.clone();
         assert_eq!(build_count(&app), baseline + 1);
 
         assert_eq!(
@@ -586,25 +585,27 @@ mod protocol_tests {
             .ensure_title_overlay_protocol(BASE_KEY, available, &parts("second"))
             .expect("changed title builds a distinct variant");
         assert_ne!(first, changed);
+        assert!(!app.images.is_cached(&first));
         assert_eq!(
             build_count(&app),
             baseline + 2,
             "a track change builds one protocol"
         );
         assert_eq!(app.images.image(BASE_KEY).unwrap().img, base_image);
+        let changed_composed = app.images.image(&changed).unwrap().img.clone();
 
         app.images.image_mut(BASE_KEY).unwrap().img = None;
         app.dim_backdrop_active = true;
         assert_eq!(
-            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("first")),
-            Some(first.clone())
+            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("second")),
+            Some(changed.clone())
         );
         assert_eq!(
             build_count(&app),
             baseline + 3,
             "suffix flip re-encodes without recomposing"
         );
-        assert_eq!(app.images.image(&first).unwrap().img, composed);
+        assert_eq!(app.images.image(&changed).unwrap().img, changed_composed);
         assert_eq!(app.images.image(BASE_KEY).unwrap().img, None);
     }
 

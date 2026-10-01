@@ -173,11 +173,13 @@ impl ImageCache {
     }
 
     pub fn insert_image(&mut self, key: String, entry: CachedImage) {
+        self.remove_derived_variants_for(&key);
         self.card_image_states.insert(key, entry);
     }
 
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
+        self.remove_derived_variants_for(key);
         if self.painted_title_overlay_key.as_deref() == Some(key) {
             self.painted_title_overlay_key = None;
         }
@@ -185,18 +187,45 @@ impl ImageCache {
     }
 
     pub fn insert_derived_image(&mut self, key: String, entry: CachedImage) {
-        self.image_lru.retain(|cached| cached != &key);
-        self.image_lru.push_back(key.clone());
-        while self.image_lru.len() > self.cache_size_total {
-            let Some(evict) = self.image_lru.pop_front() else {
-                break;
-            };
-            if self.painted_title_overlay_key.as_deref() == Some(evict.as_str()) {
-                self.painted_title_overlay_key = None;
-            }
-            self.card_image_states.remove(&evict);
-        }
+        let Some((identity, _)) = key.split_once(":t:") else {
+            self.card_image_states.insert(key, entry);
+            return;
+        };
+        self.remove_derived_variants_for_identity(identity);
         self.card_image_states.insert(key, entry);
+    }
+
+    fn remove_derived_variants_for(&mut self, cache_key: &str) {
+        let identity = if cache_key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
+            cache_key
+                .rsplit_once(':')
+                .map_or(cache_key, |(base, _)| base)
+        } else {
+            cache_key
+        };
+        self.remove_derived_variants_for_identity(identity);
+    }
+
+    fn remove_derived_variants_for_identity(&mut self, identity: &str) {
+        let prefix = format!("{identity}:t:");
+        self.card_image_states
+            .retain(|key, _| !key.starts_with(&prefix));
+        self.image_lru.retain(|key| !key.starts_with(&prefix));
+        if self
+            .painted_title_overlay_key
+            .as_deref()
+            .is_some_and(|key| key.starts_with(&prefix))
+        {
+            self.painted_title_overlay_key = None;
+        }
+    }
+
+    fn evict_image(&mut self, key: &str) {
+        self.remove_derived_variants_for(key);
+        if self.painted_title_overlay_key.as_deref() == Some(key) {
+            self.painted_title_overlay_key = None;
+        }
+        self.card_image_states.remove(key);
     }
 
     pub fn clear_images_and_loading(&mut self) {
@@ -264,6 +293,7 @@ impl ImageCache {
     pub fn complete_fetch(&mut self, key: String, entry: CachedImage) {
         self.card_image_loading.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
+        self.remove_derived_variants_for(&key);
         if entry.img.is_some() {
             self.image_lru.retain(|cached| cached != &key);
             self.image_lru.push_back(key.clone());
@@ -271,10 +301,7 @@ impl ImageCache {
                 let Some(evict) = self.image_lru.pop_front() else {
                     break;
                 };
-                if self.painted_title_overlay_key.as_deref() == Some(evict.as_str()) {
-                    self.painted_title_overlay_key = None;
-                }
-                self.card_image_states.remove(&evict);
+                self.evict_image(&evict);
             }
         }
         self.card_image_states.insert(key, entry);
@@ -351,5 +378,70 @@ impl ImageCache {
 impl std::fmt::Debug for ImageCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImageCache").finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CachedImage, ImageCache};
+    use std::sync::mpsc;
+
+    fn cache(capacity: usize) -> ImageCache {
+        let (card_image_tx, card_image_rx) = mpsc::channel();
+        let (resize_register_tx, _) = mpsc::channel();
+        let (_, resize_response_rx) = mpsc::channel();
+        let mut cache = ImageCache::new(
+            capacity,
+            None,
+            true,
+            card_image_tx,
+            card_image_rx,
+            resize_register_tx,
+            resize_response_rx,
+        );
+        cache.set_cache_capacity_for_test(capacity);
+        cache
+    }
+
+    fn image() -> CachedImage {
+        CachedImage {
+            img: Some(image::DynamicImage::ImageRgba8(
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
+            )),
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        }
+    }
+
+    #[test]
+    fn review_a05a530ba_new_variant_replaces_old_without_displacing_base_images() {
+        let mut cache = cache(2);
+        cache.complete_fetch("base:P".into(), image());
+        cache.complete_fetch("other:P".into(), image());
+
+        cache.insert_derived_image("base:P:t:8x4:old".into(), image());
+        cache.insert_derived_image("base:P:t:8x4:new".into(), image());
+
+        assert!(cache.is_cached("base:P"));
+        assert!(cache.is_cached("other:P"));
+        assert!(!cache.is_cached("base:P:t:8x4:old"));
+        assert!(cache.is_cached("base:P:t:8x4:new"));
+    }
+
+    #[test]
+    fn review_a05a530ba_removing_base_drops_derived_variants() {
+        let mut cache = cache(1);
+        let base_key = "audiobookshelf:server:cover:item:kitty";
+        cache.insert_image(base_key.into(), image());
+        cache.insert_derived_image(
+            "audiobookshelf:server:cover:item:t:8x4:title".into(),
+            image(),
+        );
+
+        cache.remove_image(base_key);
+
+        assert!(!cache.is_cached(base_key));
+        assert!(!cache.is_cached("audiobookshelf:server:cover:item:t:8x4:title"));
     }
 }
