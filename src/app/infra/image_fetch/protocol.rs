@@ -37,7 +37,7 @@ fn compose_title_overlay_bitmap(
     let base = source.resize_exact(
         u32::from(cols) * u32::from(font.width.max(1)),
         u32::from(rows) * u32::from(font.height.max(1)),
-        image::imageops::FilterType::Lanczos3,
+        RENDER_FILTER,
     );
     let colours = title_overlay_colours();
     mbv_images::title_overlay::compose_title_overlay(&base, logo, font, text, colours)
@@ -186,6 +186,16 @@ impl App {
         )
     }
 
+    /// The size `key`'s cached protocol paints within `available`, if it is ready.
+    fn title_protocol_size(
+        &mut self,
+        key: &str,
+        available: ratatui::layout::Size,
+    ) -> Option<ratatui::layout::Size> {
+        self.cached_image_protocol_mut(key)?
+            .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
+    }
+
     /// Compose and encode the title artwork at the size the base card protocol paints.
     pub(in crate::app) fn ensure_title_overlay_protocol(
         &mut self,
@@ -201,20 +211,7 @@ impl App {
             return None;
         };
         let source_dimensions = entry.img.as_ref().map(image::GenericImageView::dimensions);
-        let Some(protocol) = self.cached_image_protocol_mut(cache_key) else {
-            Self::log_title_decision(
-                projection,
-                cache_key,
-                item_kind,
-                "NoBaseProtocolSize",
-                source_dimensions,
-            );
-            return None;
-        };
-        let Some(size) = protocol.size_for(
-            ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
-            available,
-        ) else {
+        let Some(size) = self.title_protocol_size(cache_key, available) else {
             Self::log_title_decision(
                 projection,
                 cache_key,
@@ -255,23 +252,7 @@ impl App {
         {
             return None;
         }
-        let Some(protocol) = self.cached_image_protocol_mut(&key) else {
-            Self::log_title_decision(
-                projection,
-                cache_key,
-                item_kind,
-                "VariantNotReady",
-                source_dimensions,
-            );
-            return None;
-        };
-        if protocol
-            .size_for(
-                ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
-                available,
-            )
-            .is_none()
-        {
+        if self.title_protocol_size(&key, available).is_none() {
             Self::log_title_decision(
                 projection,
                 cache_key,

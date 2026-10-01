@@ -47,8 +47,8 @@ impl Model {
             .filter(|_| state.active)
             .and_then(|idx| self.app.playback_queue().item_at(idx));
         let slotless_title_parts = (state.active && active_item.is_none())
-            .then(|| self.app.slotless_playback_title_parts());
-        let slotless_title_parts = slotless_title_parts.flatten();
+            .then(|| self.app.slotless_playback_title_parts())
+            .flatten();
         let title_parts = active_item
             .map(|item| self.app.playback_title_parts(item))
             .or_else(|| slotless_title_parts.clone());

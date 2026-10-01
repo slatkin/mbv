@@ -11,35 +11,6 @@ use ratatui::layout::Rect;
 
 use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
 
-#[derive(Clone, Copy)]
-struct TitleSiteFacts {
-    playback: TitleSitePlayback,
-    art: TitleArtFacts,
-    slot: TitleSlotFacts,
-    covered: bool,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TitleSitePlayback {
-    Active,
-    Paused,
-    Idle,
-}
-
-#[derive(Clone, Copy)]
-struct TitleArtFacts {
-    protocol: bool,
-    halfblock: bool,
-    images: bool,
-}
-
-#[derive(Clone, Copy)]
-struct TitleSlotFacts {
-    painted_box: bool,
-    visualizer: bool,
-    visual_slot_shown: bool,
-}
-
 impl App {
     fn log_title_paint(
         &mut self,
@@ -90,50 +61,6 @@ impl App {
     }
 }
 
-fn title_site_facts(
-    app: &App,
-    projection: &QueueCardProjection,
-    playback: mbv_ui_model::playback::PlaybackState,
-    covered: bool,
-    height: u16,
-    width: u16,
-) -> TitleSiteFacts {
-    TitleSiteFacts {
-        playback: if playback.paused {
-            TitleSitePlayback::Paused
-        } else {
-            TitleSitePlayback::Active
-        },
-        art: TitleArtFacts {
-            protocol: app.images.protocol_enabled(),
-            halfblock: app.images.is_halfblock_configured(),
-            images: projection.images_enabled,
-        },
-        slot: TitleSlotFacts {
-            painted_box: height > 0 && width > 0,
-            visualizer: projection.visualizer,
-            visual_slot_shown: app.visual_slot_shown(),
-        },
-        covered,
-    }
-}
-
-#[derive(Clone, Copy)]
-enum ActiveTitleSource {
-    Local,
-    Slotless,
-    NoTitle,
-    NoActiveItem,
-}
-
-fn active_title_source_skip_reason(source: ActiveTitleSource) -> Option<&'static str> {
-    match source {
-        ActiveTitleSource::Local | ActiveTitleSource::Slotless => None,
-        ActiveTitleSource::NoTitle => Some("NoTitle"),
-        ActiveTitleSource::NoActiveItem => Some("NoActiveItem"),
-    }
-}
-
 fn title_site_skip_reason(
     app: &App,
     projection: &QueueCardProjection,
@@ -162,18 +89,10 @@ fn title_site_skip_reason(
         Some("HalfblockConfigured")
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
         Some("NoSlot")
-    } else if let Some(reason) = active_title_source_skip_reason(if slotless_active {
-        if slotless_title_present {
-            ActiveTitleSource::Slotless
-        } else {
-            ActiveTitleSource::NoTitle
-        }
-    } else if item.is_some() && playback.active_idx.is_some() {
-        ActiveTitleSource::Local
-    } else {
-        ActiveTitleSource::NoActiveItem
-    }) {
-        Some(reason)
+    } else if slotless_active && !slotless_title_present {
+        Some("NoTitle")
+    } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
+        Some("NoActiveItem")
     } else if base_dimensions.is_none() {
         Some("NoBaseArt")
     } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
@@ -185,12 +104,7 @@ fn title_site_skip_reason(
 
 fn item_kind(item: &QueueItem) -> &str {
     match item {
-        QueueItem::Emby(item) => match item.item_type.as_str() {
-            "Movie" => "Movie",
-            "Episode" => "Episode",
-            "Audio" => "Audio",
-            kind => kind,
-        },
+        QueueItem::Emby(item) => item.item_type.as_str(),
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(_)) => {
             "AudiobookshelfEpisode"
         }
@@ -199,35 +113,16 @@ fn item_kind(item: &QueueItem) -> &str {
     }
 }
 
-fn resolve_title_site(
-    facts: TitleSiteFacts,
-    variant_key: &str,
-    painted_key: Option<&str>,
-) -> NowPlayingTitleSite {
-    let eligible = facts.playback != TitleSitePlayback::Idle
-        && facts.art.protocol
-        && facts.slot.painted_box
-        && !facts.art.halfblock
-        && !facts.slot.visualizer
-        && facts.slot.visual_slot_shown
-        && facts.art.images
-        && facts.covered;
-    if eligible && painted_key == Some(variant_key) {
+fn resolve_title_site(variant_key: &str, painted_key: Option<&str>) -> NowPlayingTitleSite {
+    if painted_key == Some(variant_key) {
         NowPlayingTitleSite::Artwork
     } else {
         NowPlayingTitleSite::Header
     }
 }
 
-fn overlay_or_plain_key(plain_key: &str, variant_key: Option<String>) -> String {
-    variant_key.unwrap_or_else(|| plain_key.to_owned())
-}
-
-fn painted_overlay_key(key: Option<&str>, painted: bool) -> Option<&str> {
-    painted
-        .then_some(key)
-        .flatten()
-        .filter(|key| key.contains(":t:"))
+fn painted_overlay_key(key: Option<&str>) -> Option<&str> {
+    key.filter(|key| key.contains(mbv_images::title_overlay::DERIVED_SEP))
 }
 
 fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
@@ -393,9 +288,8 @@ impl App {
                 .is_some_and(|entry| entry.img.is_some())
         });
         let mut plain_fallback_painted = false;
-        let (height, width, loading) = if painted {
-            (height, width, loading)
-        } else if let Some(fallback_key) = fallback_key {
+        let mut out = (height, width, loading);
+        if !painted && let Some(fallback_key) = fallback_key {
             let fallback_loading = self.images.is_loading(fallback_key);
             let fallback_image = self.cached_image_protocol_mut(fallback_key);
             projection.cache_key = Some(fallback_key.to_owned());
@@ -410,12 +304,11 @@ impl App {
                 terminal_height,
             );
             plain_fallback_painted = fallback_painted;
-            (height, width, loading)
-        } else {
-            (height, width, loading)
-        };
+            out = (height, width, loading);
+        }
+        let (height, width, loading) = out;
         self.images.record_card_size(height, width);
-        if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref(), painted) {
+        if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref()) {
             self.images
                 .record_painted_title_overlay(Some(key.to_owned()));
             self.log_title_paint(&mut projection, key, "overlay_recorded", "OverlayPainted");
@@ -698,19 +591,12 @@ impl App {
                 );
                 logo.cache_key
             });
-        self.queue_title_overlay(
-            projection,
-            playback,
-            &parts,
-            &item_kind,
-            logo_cache_key.as_deref(),
-        );
+        self.queue_title_overlay(projection, &parts, &item_kind, logo_cache_key.as_deref());
     }
 
     fn queue_title_overlay(
         &mut self,
         projection: &mut QueueCardProjection,
-        playback: mbv_ui_model::playback::PlaybackState,
         parts: &mbv_queue::PlaybackTitleParts,
         item_kind: &str,
         logo_cache_key: Option<&str>,
@@ -739,7 +625,6 @@ impl App {
             mbv_images::title_overlay::covers(text.title)
                 && text.context.is_none_or(mbv_images::title_overlay::covers)
         };
-        let facts = title_site_facts(self, projection, playback, title_covers, height, width);
         if !title_covers {
             Self::log_title_decision(
                 projection,
@@ -761,9 +646,9 @@ impl App {
             return;
         };
         projection.plain_cache_key = Some(key.clone());
-        projection.cache_key = Some(overlay_or_plain_key(&key, Some(variant_key.clone())));
+        projection.cache_key = Some(variant_key.clone());
         projection.title_site =
-            resolve_title_site(facts, &variant_key, self.images.painted_title_overlay_key());
+            resolve_title_site(&variant_key, self.images.painted_title_overlay_key());
         Self::log_title_decision(
             projection,
             &key,
