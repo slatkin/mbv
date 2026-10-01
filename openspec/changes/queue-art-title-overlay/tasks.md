@@ -53,5 +53,28 @@
   requirement and the new `queue-artwork-title-overlay` capability); verify
   `openspec validate queue-art-title-overlay --strict` passes. The new capability's `## Purpose`
   moves into the main spec's Purpose section on sync.
-- [ ] 3.5 Archive the change (`/opsx:archive`) once 3.4 is done; verify it no longer appears in
-  `openspec list` and the main specs carry the new requirements.
+## 4. Logo in place of the top row (design D7)
+
+- [ ] 4.1 Manual probe against the real Emby server (no code): confirm a Movie has a Logo image
+  (`/Items/{id}/Images/Logo`) and that an Episode's show answers `/Items/{SeriesId}/Images/Logo`;
+  record any mismatch with D7's owner rule in design.md before 4.3.
+- [ ] 4.2 Extend `compose_title_overlay` (mbv-images) with an optional ready logo image: contain-fit
+  into the top-left box (two cell rows tall, at most half the width, inset by the side padding),
+  no scrim for that row, bottom title row kept for a two-part title, nothing drawn for the top row
+  of a one-part title. Contract owned: the compositor's pixel output. Verify with unit tests: with
+  a logo the top row has no scrim darkening outside the logo's pixels and the logo's pixels appear in
+  the top-left; a two-part title still draws the bottom row; a one-part title with a logo draws no
+  text; without a logo output is unchanged.
+- [ ] 4.3 Shell: resolve the logo owner (Movie: own id + `image_tags.logo`; Episode: `series_id`; others none) in
+  the title-overlay path, include the ready logo key in the variant key (D3/D7), recompose on logo
+  arrival and keep the text variant while absent or failed; the `covers` gate applies to the text
+  rows actually drawn. Verify with hermetic tests in the style of
+  `arriving_logo_rebuilds_base_only_protocol_once`: logo arrival builds one new variant, a failed or
+  absent logo keeps the text variant valid, a track change builds one, and a Music item never
+  takes a logo.
+- [ ] 4.4 Sync the new requirement into `openspec/specs/queue-artwork-title-overlay/spec.md` (keep the main
+  spec's own headings); verify `openspec validate queue-art-title-overlay --strict` passes.
+- [ ] 4.5 Manual visual pass of the logo placement and size (episode, movie, no-logo, light logo on
+  bright art); tune the box.
+- [ ] 4.6 Archive the change (`/opsx:archive`) once 2.4, 3.3 and 4.1-4.5 are done; verify it no
+  longer appears in `openspec list` and the main specs carry the new requirements.

@@ -127,3 +127,34 @@ the title.
 - **WHEN** an overlay dialog that dims its backdrop opens while the artwork carries the title,
   for an Emby or an Audiobookshelf item
 - **THEN** the header row continues to read `Now Playing`
+
+### Requirement: A logo replaces the top text row
+
+While the overlay is live and the playing Emby item has a logo image that has been loaded, the
+logo SHALL be drawn in the upper-left corner of the artwork in place of the top text row and
+its scrim. A movie uses its own logo; an episode uses its show's logo. A two-part title SHALL keep
+its bottom title row; a one-part title SHALL then be drawn as the logo alone. The logo SHALL be
+scaled to fit, preserving its aspect ratio, within a box inset from the artwork's top-left and
+sized relative to the terminal cell, not the artwork. An item with no logo, a logo still loading
+or failed, and items that are not Emby movies or episodes SHALL keep the text row.
+
+#### Scenario: Episode with a show logo
+
+- **WHEN** an episode plays and its show has a loaded logo
+- **THEN** the show logo is drawn in the upper-left corner with no scrim behind it
+- **AND** the episode title is drawn in the bottom row
+
+#### Scenario: Movie with a logo
+
+- **WHEN** a movie with a loaded logo plays
+- **THEN** only the logo is drawn, in the upper-left corner, and no title text is drawn
+
+#### Scenario: Logo arrives after the text overlay
+
+- **WHEN** a logo finishes loading while the text overlay is already painted
+- **THEN** the artwork is recomposed with the logo in place of the top text row
+
+#### Scenario: No logo
+
+- **WHEN** the item has no logo, or the logo fails to load
+- **THEN** the text overlay is unchanged

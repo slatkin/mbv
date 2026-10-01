@@ -106,6 +106,25 @@ paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG`
 same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
 gets a flat translucent scrim at constant alpha across the whole row. Each glyph is painted over a soft translucent dark drop shadow, offset down-right about 1/16 of the glyph height (minimum 1px), for legibility on any artwork.
 
+**D7. A show or movie logo replaces the top row.** When the playing Emby item has a logo image
+that is decoded and ready, the compositor draws that logo in the upper-left corner of the artwork
+instead of the top text row, with no scrim behind it. Logo owner: a Movie uses its own logo
+(`image_tags.logo`, key `{id}:Logo:{tag}` as the Library hero's `movie_logo_source`); an Episode
+uses its show's logo (`series_id`, key `{series_id}:Logo`, no tag - `ParentLogoImageTag` is not
+parsed today and is not needed). Every other item (music, Audiobookshelf, feeds) has no logo and
+keeps the text. The fetch already exists: `card_image_types` requests `Logo` for Movie and the
+default case, and `fetch_emby_image_type` takes the series as owner for a Logo of an episode;
+no new endpoint or `Fields=` is needed. Layout: the logo is contain-fitted into a box at the
+artwork's top-left inset by the side padding, at most two cell rows tall (cell-relative, as D2)
+and at most half the artwork's width. A two-part title keeps its bottom (title) row, so an
+episode shows the show logo above and the episode title below; a one-part title (movie) is the
+logo alone. The `covers` gate applies only to the text rows actually drawn. The logo's ready key
+joins the variant key (D3) so a late-arriving logo recomposes the variant; an absent or failed
+logo keeps the text variant (the same base-only-valid rule as the hero's `applied_logo_key`). The
+title site is unchanged: it is `Artwork` once the variant has painted, and for a one-part title
+the logo then carries the title graphically. *Alternative:* keep the top text row beside the logo
+- rejected, the logo is the show name.
+
 ## Risks / Trade-offs
 
 - **Box not known until painted** -> measure from the base protocol's `size_for`; first frame
@@ -123,3 +142,5 @@ gets a flat translucent scrim at constant alpha across the whole row. Each glyph
 ## Open Questions
 
 - Exact scrim opacity/height: tuned visually during task 3.3; no spec impact.
+- Logo box (two cell rows tall, half the width) and whether light logos need a subtle backing over
+  bright art: tuned visually in task 4.5; no spec impact unless a backing is added.

@@ -14,6 +14,9 @@ of scrolled.
   now-playing title is rasterised into the artwork bitmap: a one-part title in a scrim row at the
   top; a two-part title (artist / song, show / episode) with the context in a scrim row at the top
   and the title in a scrim row at the bottom.
+- When the playing Emby item has a loaded logo (a movie's own, an episode's show logo), the logo is
+  drawn in the upper-left corner in place of the top text row and its scrim; a two-part title keeps
+  its bottom row and a one-part title becomes the logo alone.
 - Text uses an embedded JetBrainsMono Nerd Font Medium (OFL) face, sized from the terminal's cell pixel size, fitted
   to the row by shrinking to a floor, then ellipsis.
 - The queue header row says `Now Playing` (keeping its state icon: aqua play, yellow pause) while the overlay is
