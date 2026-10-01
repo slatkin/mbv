@@ -104,8 +104,7 @@ Task 1.1 confirms the crate and weight before anything else builds on them.
 Colours: a context part paints `PLAYBACK_CONTEXT_FG` (yellow), a title part under a context
 paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow), the
 same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
-gets a flat translucent scrim at constant alpha across the whole row. Text in the top row is
-right-aligned; text in the bottom row remains left-aligned.
+gets a flat translucent scrim at constant alpha across the whole row.
 
 ## Risks / Trade-offs
 
