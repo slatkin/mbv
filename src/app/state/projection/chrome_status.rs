@@ -216,74 +216,32 @@ impl App {
             let cfg = &*config;
             cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
         };
-        if self.queue_dirty {
-            Some(vec![
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
-                ),
-                Span::styled(
-                    if self.use_nerd_fonts {
-                        " \u{f0f42} "
-                    } else {
-                        " UNSAVED "
-                    },
-                    Style::default()
-                        .fg(mbv_theme::TEXT_FOCUS_ACCENT)
-                        .bg(
-                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
-                        )
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
-                ),
-            ])
+        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
+        let (words, glyph, style) = if self.queue_dirty {
+            (
+                " UNSAVED ",
+                "\u{f0f42}",
+                Style::default()
+                    .fg(mbv_theme::TEXT_FOCUS_ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else if autosave_on {
-            Some(vec![
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
-                ),
-                Span::styled(
-                    if self.use_nerd_fonts {
-                        " \u{f18ea} "
-                    } else {
-                        " AUTOSAVE "
-                    },
-                    Style::default()
-                        .fg(mbv_theme::ACCENT)
-                        .bg(
-                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
-                        ),
-                ),
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
-                ),
-            ])
+            (
+                " AUTOSAVE ",
+                "\u{f18ea}",
+                Style::default().fg(mbv_theme::ACCENT),
+            )
         } else {
-            None
-        }
+            return None;
+        };
+        let pad = Span::styled(" ", Style::default().bg(pill_bg));
+        // The nerd-font glyph carries no trailing pad so it sits flush against
+        // the remote pill's icon, which has no leading pad either.
+        Some(if self.use_nerd_fonts {
+            vec![pad, Span::styled(format!(" {glyph}"), style.bg(pill_bg))]
+        } else {
+            vec![pad.clone(), Span::styled(words, style.bg(pill_bg)), pad]
+        })
     }
 
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
