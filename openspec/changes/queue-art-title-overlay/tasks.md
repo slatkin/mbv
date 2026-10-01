@@ -2,10 +2,10 @@
 
 ## 1. Compositor foundation (mbv-images)
 
-- [ ] 1.1 Add `ab_glyph` and an embedded static Lexend Deca weight + OFL text under
+- [x] 1.1 Add `ab_glyph` and an embedded static Lexend Deca weight + OFL text under
   `crates/mbv-images`; verify `cargo check -p mbv-images` passes and the licence file is included
   in the crate's assets.
-- [ ] 1.2 Implement `title_overlay.rs`: `covers(text)` and `compose_title_overlay` (scrim
+- [x] 1.2 Implement `title_overlay.rs`: `covers(text)` and `compose_title_overlay` (scrim
   gradients, one row top / top+bottom, shrink-to-floor then ellipsis, cell-relative size). Contract
   owned: the compositor's pixel output. Verify with unit tests: one-part draws top only and leaves
   the bottom pixels untouched; two-part draws both; long text stays within width and ends with
