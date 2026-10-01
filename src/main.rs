@@ -1,4 +1,5 @@
 use mimalloc::MiMalloc;
+use std::io::IsTerminal;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -20,6 +21,7 @@ fn cap_glibc_arenas() {
 mod app;
 mod config;
 mod local_daemon;
+mod owner_restart;
 mod single_instance;
 
 use crate::app::state::home_latest::{capture_launch_window, current_launch_secs};
@@ -286,21 +288,12 @@ fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
 
 fn stop_running_instance() {
     let lock = single_instance::lock_path();
-    if let Some(pid) = single_instance::read_pid(&lock) {
-        // SAFETY: sending SIGTERM to the PID read from the single-instance lock is intentional.
-        let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-        if ok {
-            println!("mbv: quit signal sent (pid {pid})");
-        } else {
-            eprintln!(
-                "mbv: failed to signal pid {pid}: {}",
-                std::io::Error::last_os_error()
-            );
+    match single_instance::terminate_owner(&lock) {
+        Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
+        Err(error) => {
+            eprintln!("mbv: {error}");
             std::process::exit(1);
         }
-    } else {
-        eprintln!("mbv: no running instance found; if one just started, try again in a moment");
-        std::process::exit(1);
     }
 }
 
@@ -394,6 +387,23 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
         }
     };
     let mut shutdown_deadline = None;
+    let mut restart_requested = false;
+    let mut wait_for_owner_exit = || {
+        let deadline = *shutdown_deadline
+            .get_or_insert_with(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
+        if std::time::Instant::now() >= deadline {
+            eprintln!("mbv: the local owner is still shutting down; use `mbv -q` to stop it.");
+            std::process::exit(1);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        match single_instance::resolve(&socket_path, &lock_path) {
+            Ok(resolution) => resolution,
+            Err(resolve_error) => {
+                eprintln!("mbv: single-instance check failed: {resolve_error}");
+                std::process::exit(1);
+            }
+        }
+    };
 
     loop {
         match resolution {
@@ -415,37 +425,47 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
 
         match attach_owner_process(config) {
             Ok(()) => return,
-            Err(error) if error.is_owner_shutting_down() => {
-                let deadline = *shutdown_deadline.get_or_insert_with(|| {
-                    std::time::Instant::now() + std::time::Duration::from_secs(10)
-                });
-                if std::time::Instant::now() >= deadline {
+            Err(error) => match owner_restart::follow_up(&error, restart_requested) {
+                owner_restart::FollowUp::WaitForOwnerExit => {
+                    resolution = wait_for_owner_exit();
+                }
+                owner_restart::FollowUp::Prompt => {
+                    if !std::io::stdin().is_terminal() {
+                        eprintln!("mbv: {error}");
+                        std::process::exit(1);
+                    }
+                    let mut input = std::io::stdin().lock();
+                    let mut output = std::io::stderr().lock();
+                    match owner_restart::ask(&error, &mut input, &mut output) {
+                        owner_restart::Choice::Quit => {
+                            // `ask` already rendered the mismatch text.
+                            std::process::exit(1);
+                        }
+                        owner_restart::Choice::Restart => {
+                            if let Err(terminate_error) =
+                                single_instance::terminate_owner(&lock_path)
+                            {
+                                eprintln!("mbv: failed to stop Owner process: {terminate_error}");
+                                std::process::exit(1);
+                            }
+                            restart_requested = true;
+                            resolution = wait_for_owner_exit();
+                        }
+                    }
+                }
+                owner_restart::FollowUp::RefuseSecondTerminal => {
+                    eprintln!("mbv: refusing a second terminal: {error}.");
+                    eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
                     eprintln!(
-                        "mbv: the local owner is still shutting down; use `mbv -q` to stop it."
+                        "mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
                     );
                     std::process::exit(1);
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                resolution = match single_instance::resolve(&socket_path, &lock_path) {
-                    Ok(resolution) => resolution,
-                    Err(resolve_error) => {
-                        eprintln!("mbv: single-instance check failed: {resolve_error}");
-                        std::process::exit(1);
-                    }
-                };
-            }
-            Err(error) if error.is_exclusive_owner() => {
-                eprintln!("mbv: refusing a second terminal: {error}.");
-                eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
-                eprintln!(
-                    "mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
-                );
-                std::process::exit(1);
-            }
-            Err(error) => {
-                eprintln!("mbv: failed to attach to Owner process: {error}");
-                std::process::exit(1);
-            }
+                owner_restart::FollowUp::Other => {
+                    eprintln!("mbv: failed to attach to Owner process: {error}");
+                    std::process::exit(1);
+                }
+            },
         }
     }
 }

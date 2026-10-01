@@ -7,7 +7,7 @@ pub struct RemotePlayerError {
     source: Option<Box<dyn Error + Send + Sync>>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 enum RemotePlayerErrorKind {
     Endpoint,
     Protocol,
@@ -17,6 +17,7 @@ enum RemotePlayerErrorKind {
     Control,
     ExclusiveOwner { pid: u32 },
     OwnerShuttingDown,
+    OwnerBuildMismatch { app_version: String },
 }
 
 impl RemotePlayerError {
@@ -56,6 +57,24 @@ impl RemotePlayerError {
         }
     }
 
+    pub(crate) fn owner_build_mismatch(app_version: impl Into<String>) -> Self {
+        Self {
+            kind: RemotePlayerErrorKind::OwnerBuildMismatch {
+                app_version: app_version.into(),
+            },
+            message: String::new(),
+            source: None,
+        }
+    }
+
+    /// Test support: builds the mismatch error for callers outside this crate
+    /// (the `mbv` binary's startup-prompt tests), gated behind the `test`
+    /// feature like the crate's other test seams.
+    #[cfg(any(test, feature = "test"))]
+    pub fn owner_build_mismatch_for_test(app_version: impl Into<String>) -> Self {
+        Self::owner_build_mismatch(app_version)
+    }
+
     fn new(kind: RemotePlayerErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
@@ -77,17 +96,26 @@ impl RemotePlayerError {
 
     #[must_use]
     pub fn is_owner_shutting_down(&self) -> bool {
-        matches!(self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
+        matches!(&self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
+    }
+
+    /// The local Owner's `app_version`, when it differs from this build's.
+    #[must_use]
+    pub fn mismatched_owner_version(&self) -> Option<&str> {
+        match &self.kind {
+            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => Some(app_version),
+            _ => None,
+        }
     }
 
     #[must_use]
     pub fn is_exclusive_owner(&self) -> bool {
-        matches!(self.kind, RemotePlayerErrorKind::ExclusiveOwner { .. })
+        matches!(&self.kind, RemotePlayerErrorKind::ExclusiveOwner { .. })
     }
 
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
-        match self.kind {
+        match &self.kind {
             RemotePlayerErrorKind::Endpoint => "remote-player.endpoint",
             RemotePlayerErrorKind::Protocol => "remote-player.protocol",
             RemotePlayerErrorKind::Connection => "remote-player.connection",
@@ -96,8 +124,22 @@ impl RemotePlayerError {
             RemotePlayerErrorKind::Control => "remote-player.control",
             RemotePlayerErrorKind::ExclusiveOwner { .. } => "remote-player.exclusive_owner",
             RemotePlayerErrorKind::OwnerShuttingDown => "remote-player.owner_shutting_down",
+            RemotePlayerErrorKind::OwnerBuildMismatch { .. } => {
+                "remote-player.owner_build_mismatch"
+            }
         }
     }
+}
+
+/// Canonical user-facing text for a local Owner build mismatch: both
+/// application versions, then how to proceed. The startup prompt and every
+/// path that only prints the error render this one text, so the guidance
+/// cannot drift between them.
+fn owner_build_mismatch_message(owner_app_version: &str) -> String {
+    format!(
+        "Owner process is running version {owner_app_version}, but this terminal is version {}; stop it with `mbv -q`, then relaunch mbv",
+        env!("CARGO_PKG_VERSION")
+    )
 }
 
 impl fmt::Display for RemotePlayerError {
@@ -105,6 +147,9 @@ impl fmt::Display for RemotePlayerError {
         match &self.kind {
             RemotePlayerErrorKind::ExclusiveOwner { pid } => {
                 write!(f, "local owner process {pid} already has a client")
+            }
+            RemotePlayerErrorKind::OwnerBuildMismatch { app_version } => {
+                f.write_str(&owner_build_mismatch_message(app_version))
             }
             _ => f.write_str(&self.message),
         }
