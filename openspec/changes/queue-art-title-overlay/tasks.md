@@ -49,7 +49,7 @@
 - [ ] 3.3 Manual visual pass on Kitty and Sixel (and halfblock for the fallback): tune scrim
   opacity/height and Lexend weight (design Open Question); verify one-part, two-part, long-title,
   and a CJK title (falls back to the header).
-- [ ] 3.4 Sync the delta specs into `openspec/specs/` (the queue-playback-panel header and queue-column layout
+- [x] 3.4 Sync the delta specs into `openspec/specs/` (the queue-playback-panel header and queue-column layout
   requirement and the new `queue-artwork-title-overlay` capability); verify
   `openspec validate queue-art-title-overlay --strict` passes. The new capability's `## Purpose`
   moves into the main spec's Purpose section on sync.
