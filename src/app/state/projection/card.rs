@@ -144,6 +144,7 @@ fn title_site_skip_reason(
     height: u16,
     width: u16,
     base_dimensions: Option<(u32, u32)>,
+    column_resizing: bool,
 ) -> Option<&'static str> {
     if !playback.active {
         Some("NotActive")
@@ -151,6 +152,12 @@ fn title_site_skip_reason(
         Some("Visualizer")
     } else if !projection.images_enabled {
         Some("ImagesOff")
+    } else if column_resizing {
+        // User-reported regression: a queue-column resize drag builds a new
+        // Lanczos3 overlay variant for every fitted width on the tick thread.
+        // While the drag is active the card paints plain base art; the drag's
+        // final width composes the overlay once the `DragEnd` clears the gate.
+        Some("ColumnResizing")
     } else if app.images.is_halfblock_configured() {
         Some("HalfblockConfigured")
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
@@ -561,7 +568,7 @@ impl App {
 
     /// The queue projection issues every fetch for the now-playing item and
     /// projects the slot the painter consumes. Active-first, then viewed selection.
-    pub(in crate::app) fn refresh_queue_card_image(&mut self) {
+    pub(in crate::app) fn refresh_queue_card_image(&mut self, column_resizing: bool) {
         let mut projection = QueueCardProjection {
             cache_key: None,
             plain_cache_key: None,
@@ -572,7 +579,11 @@ impl App {
             last_title_paint: self.queue_card_projection.last_title_paint.clone(),
         };
         if projection.visualizer || !projection.images_enabled {
-            self.queue_title_site(&mut projection, self.displayed_playback_state());
+            self.queue_title_site(
+                &mut projection,
+                self.displayed_playback_state(),
+                column_resizing,
+            );
             self.queue_card_projection = projection;
             return;
         }
@@ -586,7 +597,7 @@ impl App {
             } else {
                 self.project_audiobookshelf_cover(playback, &mut projection);
             }
-            self.queue_title_site(&mut projection, playback);
+            self.queue_title_site(&mut projection, playback, column_resizing);
             self.queue_card_projection = projection;
             return;
         };
@@ -597,7 +608,7 @@ impl App {
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         self.prefetch_card_images(cursor);
         projection.cache_key = Some(cache_key);
-        self.queue_title_site(&mut projection, playback);
+        self.queue_title_site(&mut projection, playback, column_resizing);
         self.queue_card_projection = projection;
     }
 
@@ -605,6 +616,7 @@ impl App {
         &mut self,
         projection: &mut QueueCardProjection,
         playback: mbv_ui_model::playback::PlaybackState,
+        column_resizing: bool,
     ) {
         let (height, width) = self.images.last_card_size();
         let slotless_active =
@@ -653,6 +665,7 @@ impl App {
             height,
             width,
             base_dimensions,
+            column_resizing,
         );
         if let Some(reason) = reason {
             Self::log_title_decision(projection, &identity, &item_kind, reason, base_dimensions);

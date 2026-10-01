@@ -11,7 +11,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 /// The one-column Queue-side root boundary. Its gesture state is deliberately
-/// private: the shell only receives resolved semantic widths.
+/// private: the shell only receives resolved semantic widths and whether a
+/// resize drag is in progress ([`Self::is_resizing`]).
 #[derive(Debug)]
 pub struct QueueBoundaryComponent {
     area: Rect,
@@ -58,6 +59,15 @@ impl QueueBoundaryComponent {
 
     fn inside(&self, at: Position) -> bool {
         self.enabled && self.area.contains(at)
+    }
+
+    /// Whether a column-resize drag is in progress: a `Drag` moved the width
+    /// and the matching `DragEnd` has not arrived. The shell reads this to
+    /// skip per-drag-tick work (a title overlay variant composes once the drag
+    /// ends); the raw gesture stays private.
+    #[must_use]
+    pub fn is_resizing(&self) -> bool {
+        self.changed
     }
 
     fn resolve(&self, at: Position) -> u16 {
