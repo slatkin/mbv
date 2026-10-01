@@ -2,13 +2,18 @@ use super::{
     ActiveTitleSource, NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback,
     TitleSlotFacts, active_title_source_skip_reason, card_cache_key, card_cache_key_for_id,
     card_image_types, overlay_or_plain_key, painted_overlay_key, resolve_title_site,
+    slotless_card_image_types,
 };
 
 const KEY: &str = "art:t:8x4:1";
 
 #[rstest::rstest]
 #[case::movie("Movie", "item:QB", &["Backdrop", "Primary"])]
-#[case::episode("Episode", "item:QB", &["Backdrop", "Primary"])]
+#[case::episode(
+    "Episode",
+    "item:QB",
+    mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
+)]
 #[case::audio("Audio", "item:P", &["Primary"])]
 #[case::music_album(
     "MusicAlbum",
@@ -36,6 +41,64 @@ fn slotless_card_key_uses_landscape_only_for_known_video_types(
     #[case] expected: &str,
 ) {
     assert_eq!(card_cache_key_for_id("item", item_type), expected);
+}
+
+// Regression for the P1 review on feat/queue-art-title-overlay: the landscape
+// card chain hardcoded `["Backdrop", "Primary"]` for every kind, so a
+// Thumb-only home video requested nothing available and painted the
+// placeholder. `fetch_emby_image` is a first-success fallthrough, so the chain
+// must reach a declared `Thumb`.
+#[test]
+fn thumb_only_landscape_video_card_chain_requests_thumb_first() {
+    let mut item = mbv_emby_model::test_support::make_item("Home Video", "Video");
+    item.id = "item".into();
+    item.image_tags.thumb = "thumb-tag".into();
+    assert_eq!(
+        card_image_types(&item),
+        &["Thumb", "Backdrop", "Primary", "Logo"]
+    );
+}
+
+#[test]
+fn landscape_episode_card_chain_requests_series_thumb_first() {
+    let mut item = mbv_emby_model::test_support::make_item("Pilot", "Episode");
+    item.id = "item".into();
+    item.image_tags.series_thumb = "series-thumb-tag".into();
+    assert_eq!(
+        card_image_types(&item),
+        mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
+    );
+}
+
+#[test]
+fn landscape_movie_card_chain_stays_backdrop_first() {
+    let mut item = mbv_emby_model::test_support::make_item("Feature", "Movie");
+    item.id = "item".into();
+    item.image_tags.backdrops = vec!["backdrop-tag".into()];
+    assert_eq!(card_image_types(&item), &["Backdrop", "Primary"]);
+}
+
+#[test]
+fn poster_movie_card_chain_keeps_the_logo_last_resort() {
+    let mut item = mbv_emby_model::test_support::make_item("Feature", "Movie");
+    item.id = "item".into();
+    item.image_tags.primary = "primary-tag".into();
+    assert_eq!(card_image_types(&item), &["Backdrop", "Primary", "Logo"]);
+}
+
+#[rstest::rstest]
+#[case::movie(Some("Movie"), &["Backdrop", "Primary"])]
+#[case::episode(
+    Some("Episode"),
+    mbv_render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES
+)]
+#[case::audio(Some("Audio"), &["Primary"])]
+#[case::unknown(None, &["Primary"])]
+fn slotless_chain_matches_the_local_landscape_episode_chain(
+    #[case] item_type: Option<&str>,
+    #[case] expected: &[&str],
+) {
+    assert_eq!(slotless_card_image_types(item_type), expected);
 }
 
 fn facts(
