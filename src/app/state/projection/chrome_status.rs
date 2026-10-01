@@ -192,7 +192,7 @@ impl App {
             ),
             Span::styled(
                 if self.use_nerd_fonts {
-                    "\u{f03a}"
+                    "\u{f0411}"
                 } else {
                     "\u{1F5AD}"
                 },
