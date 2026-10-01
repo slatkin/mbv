@@ -92,7 +92,7 @@ twice for a frame at most, never zero times). The painted fact and the variant k
 suffix-independent (item identity, D3), and the dim-backdrop `halfblock` suffix is not an input,
 so opening a dialog cannot flip the site for Emby or Audiobookshelf items.
 
-**D5. Font and rasteriser.** Embed one static JetBrainsMono Nerd Font Medium face (OFL; licence text
+**D5. Font and rasteriser.** Embed one static JetBrainsMono Nerd Font SemiBold face (OFL; licence text
 shipped beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
 The monospaced face covers Latin and more scripts than Lexend Deca, but not CJK; the header
 fallback remains for uncovered glyphs. The compositor exposes `covers(text) -> bool`
@@ -104,9 +104,10 @@ CJK guarantee); variable TTF (needs variation support - use a static instance in
 `compose_title_overlay(base: &DynamicImage, cell: FontSize, parts: &TitleOverlayText, colours)
 -> DynamicImage`, plus `covers`. It takes resolved RGB colours (the theme roles are `Color::Rgb`), no `App`.
 Colours: a context part paints `PLAYBACK_CONTEXT_FG` (yellow), a title part under a context
-paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow), the
-same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
-gets a flat translucent scrim at constant alpha across the whole row. Each glyph is painted over a soft translucent dark drop shadow, offset down-right about 1/16 of the glyph height (minimum 1px), for legibility on any artwork.
+paints `TEXT_EMPHASIS` (cream), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow).
+Placement is top row for the context-or-lone title, bottom row for a two-part title; each row's
+text is horizontally centred within the side padding and gets a flat translucent scrim at constant
+alpha across the whole row. The logo remains top-left.  Each glyph is painted over a soft translucent dark drop shadow, offset down-right about 1/16 of the glyph height (minimum 1px), for legibility on any artwork.
 
 **D7. A show or movie logo replaces the top row.** When the playing Emby item has a logo image
 that is decoded and ready, the compositor draws that logo in the upper-left corner of the artwork
@@ -136,10 +137,15 @@ the logo then carries the title graphically. *Alternative:* keep the top text ro
   hero already pays on box change; measure in task 2.4, move to the resize worker only if it
   hitches. Not speculative-patched beforehand.
 - **Missing glyphs for non-Latin titles** -> header fallback; the user sees no tofu.
-- **Resize / split-drag churn** -> each new box recomposes; debounced by the existing box-keyed
-  entry check, old variants LRU out.
+- **Resize / split-drag churn** -> while a queue-column resize drag is active, no overlay variant
+  is built and plain base art paints; one overlay composition occurs after the drag ends. This
+  avoids composing intermediate widths; old variants age out through the existing LRU.
 - **Memory** -> at most a few composed bitmaps live; the LRU bounds them. Must not regress the
   headless footprint (a headless owner never composes: it has no card).
+
+**D8. Defer overlay composition during queue-column resize drag.** While the resize drag is active,
+paint plain base artwork and do not build an overlay variant. Compose the current variant once after
+the drag ends, rather than doing work for transient widths.
 
 ## Open Questions
 
