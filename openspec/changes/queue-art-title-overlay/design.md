@@ -53,7 +53,7 @@ paints about 1:1.
 text blurs and its size would track the source resolution.
 
 **D2. Text size is cell-relative, not image-relative.** Nominal row height = one cell row
-(`font.height`); glyph size ~70% of it; floor ~60% of nominal; below the floor, ellipsis.
+(`font.height`); glyph size ~80% of it; floor ~60% of nominal; below the floor, ellipsis.
 Image size only changes how many characters fit. *Alternative:* percentage of image width (the
 logo's model) - rejected, text would be huge on large art and illegible on small art.
 Fallback `FontSize` (10x20, used when no picker is active) makes size approximate, but the

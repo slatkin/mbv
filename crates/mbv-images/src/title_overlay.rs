@@ -12,7 +12,7 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| {
 });
 
 const SCRIM_ALPHA: f32 = 0.78;
-const GLYPH_SCALE: f32 = 0.70;
+const GLYPH_SCALE: f32 = 0.80;
 const MIN_GLYPH_SCALE: f32 = 0.60;
 const SIDE_PADDING_PERCENT: u32 = 3;
 
