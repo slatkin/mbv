@@ -610,8 +610,10 @@ mod tests {
         let mut model = Model::new(app);
 
         model.sync_queue();
+        // `make_items` builds Movies, whose card now reserves the landscape
+        // key (`{id}:QB`), not the portrait `{id}:P` (commit 55c37ea71).
         assert!(
-            model.app.images.is_loading("id0:P"),
+            model.app.images.is_loading("id0:QB"),
             "the now-playing key must be reserved by the projection push"
         );
         let fetch_work = model.app.images.fetch_work_snapshot();
@@ -623,7 +625,7 @@ mod tests {
         // A new now-playing key reserves exactly one new key.
         model.app.player.status.lock().unwrap().current_idx = 1;
         model.sync_queue();
-        assert!(model.app.images.is_loading("id1:P"));
+        assert!(model.app.images.is_loading("id1:QB"));
     }
 
     #[test]
@@ -641,12 +643,13 @@ mod tests {
 
         model.sync_queue();
         assert_eq!(model.app.images.card_image_fetch_calls(), 0);
-        assert!(!model.app.images.is_loading("id0:P"));
+        // `make_items` builds Movies → the landscape card key (commit 55c37ea71).
+        assert!(!model.app.images.is_loading("id0:QB"));
 
         model.app.visual_slot_hidden = false;
         model.sync_queue();
         assert!(model.app.images.card_image_fetch_calls() > 0);
-        assert!(model.app.images.is_loading("id0:P"));
+        assert!(model.app.images.is_loading("id0:QB"));
     }
 
     #[test]
