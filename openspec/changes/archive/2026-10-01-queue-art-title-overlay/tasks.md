@@ -32,7 +32,7 @@
   is eligible (not when the site is `Artwork`, which needs the paint to have happened) and the
   plain entry otherwise; verify the plain `:P` entry bitmap is unchanged after an
   overlay is built (regression guard for the shared-key flash).
-- [ ] 2.4 Measure compose + encode time on a real large cover at track change (manual check, per
+- [x] 2.4 Measure compose + encode time on a real large cover at track change (manual check, per
   the repo's no-live-tests rule); record the number in the PR. Only if it hitches the UI, move the
   compose into the resize worker as a follow-up task.
 
@@ -46,7 +46,7 @@
   existing title rows (extend the existing header tests, do not duplicate); Idle unchanged.
 - [x] 3.2 Add `CONTEXT.md` terms if new domain words were introduced (title site, overlay); verify
   by reading `CONTEXT.md`'s Avoid list first and checking no collision.
-- [ ] 3.3 Manual visual pass on Kitty and Sixel (and halfblock for the fallback): tune scrim
+- [x] 3.3 Manual visual pass on Kitty and Sixel (and halfblock for the fallback): tune scrim
   opacity/height and Lexend weight (design Open Question); verify one-part, two-part, long-title,
   and a CJK title (falls back to the header).
 - [x] 3.4 Sync the delta specs into `openspec/specs/` (the queue-playback-panel header and queue-column layout
@@ -74,7 +74,7 @@
   takes a logo.
 - [x] 4.4 Sync the new requirement into `openspec/specs/queue-artwork-title-overlay/spec.md` (keep the main
   spec's own headings); verify `openspec validate queue-art-title-overlay --strict` passes.
-- [ ] 4.5 Manual visual pass of the logo placement and size (episode, movie, no-logo, light logo on
+- [x] 4.5 Manual visual pass of the logo placement and size (episode, movie, no-logo, light logo on
   bright art); tune the box.
-- [ ] 4.6 Archive the change (`/opsx:archive`) once 2.4, 3.3 and 4.1-4.5 are done; verify it no
+- [x] 4.6 Archive the change (`/opsx:archive`) once 2.4, 3.3 and 4.1-4.5 are done; verify it no
   longer appears in `openspec list` and the main specs carry the new requirements.

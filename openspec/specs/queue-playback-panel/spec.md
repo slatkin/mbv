@@ -105,7 +105,8 @@ and SHALL NOT follow the queue scope being viewed.
 #### Scenario: Idle
 
 - **WHEN** a queue-visible layout is painted while no transport is active
-- **THEN** the header row SHALL read `IDLE` on the left and the resolved target on the right
+- **THEN** the header row SHALL read `IDLE` on the left and the resolved target as `[host]` on the
+  right
 
 #### Scenario: Active watched remote playback
 
@@ -154,8 +155,8 @@ appear only when the glyph, the controls, the elapsed time, the pill and the tit
 
 ### Requirement: The queue panel opens directly with its rows
 
-The recessed queue panel inside the queue column SHALL NOT paint a title band: no `Queue` title,
-no block separator line, and no spacer row above the first queue row. The panel SHALL adjoin the
+The recessed queue panel inside the queue column SHALL NOT paint a title band: no `Queue` title, no
+block separator line, and no spacer row above the first queue row. The panel SHALL adjoin the
 playback region above it with no separator or inset row between them: while playback is active the
 first queue row starts on the row directly below the transport band's blank gap row, and while idle
 directly below the header row. The panel's list SHALL keep no inner top inset and no inner bottom
@@ -195,11 +196,11 @@ never seek).
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list
-below the panel. When the terminal is 100 columns or more the visual slot and the panel SHALL render
+directly below the panel. When the terminal is 100 columns or more the visual slot and the panel SHALL render
 side by side in the same row, the visual slot left-aligned in the left column and the panel in the
 right, separated by the existing 2-cell gap; the panel's width SHALL be the remaining column width
-and its height SHALL equal the visual slot's height (never fewer than the band's four rows), with its content top-aligned and the panel
-background filling the rows below it.
+and its height SHALL equal the visual slot's height (never fewer than the band's four rows), with its
+content top-aligned and the panel background filling the rows below it.
 
 #### Scenario: Panel renders in the queue column in the two-panel layout
 
@@ -207,11 +208,28 @@ background filling the rows below it.
 - **THEN** the playback panel SHALL render inside the queue column and the Library playback panel
   SHALL NOT render
 
+#### Scenario: The band is four rows regardless of the title
+
+- **WHEN** the queue column paints the transport for a one-part title and for a two-part title
+- **THEN** both bands SHALL span four rows: controls, blank title row, seekbar, blank gap row
+- **AND** neither band SHALL show the title or a `pos / dur` time on its title row
+
+#### Scenario: Controls row carries the controls and plain-text indicators
+
+- **WHEN** the queue column paints the transport with status indicators projected
+- **THEN** the top row SHALL show the transport controls left and the indicators right as plain text
+  with no pill
+
+#### Scenario: Seekbar row flanks the bar with its times
+
+- **WHEN** the queue column paints the transport with a known runtime
+- **THEN** the seekbar row SHALL read the elapsed time, the bar, then the total time
+
 #### Scenario: Narrow terminal stacks vertically
 
 - **WHEN** the layout is queue-only at a width below 100 columns and playback is active
 - **THEN** the visual slot SHALL render at full column width, the panel directly below it, and the
-  queue list below the panel
+  queue list directly below the panel
 
 #### Scenario: Wide terminal renders two columns
 
@@ -265,8 +283,9 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 - **WHEN** the queue column is visible and the connected remote Session reports a now-playing
   item, whether or not the local queue holds it
 - **THEN** the visual slot and the panel SHALL render, the slot SHALL show the artwork of the
-  item the Session names, the header row's title and the seekbar row's times SHALL describe the Session's observed
-  playback, and its transport SHALL dispatch the Session's supported remote commands
+  item the Session names, the header row's title and the seekbar row's times SHALL describe the
+  Session's observed playback, and its transport SHALL dispatch the Session's supported remote
+  commands
 
 #### Scenario: Connected but idle does not keep the panel
 
@@ -304,7 +323,9 @@ takes them.
 
 The playback panel's transport glyphs and seekbar SHALL resolve pointer input in every layout where
 the panel renders, using the geometry of the panel that was actually painted in the current frame:
-the queue column panel in queue-visible layouts and the right-column strip otherwise. Every
+the queue column panel in queue-visible layouts and the right-column strip otherwise. In the queue
+column's band the transport glyphs resolve on the controls row and the seekbar on the seekbar row's
+bar span; the blank title row, the blank gap row, and the time labels resolve nothing. Every
 transport glyph it paints, the previous control included, SHALL retain the geometry of its own glyph,
 so a click resolves that control's intent and no two controls share one region. A transport control
 whose action is unavailable SHALL paint in its unavailable role and SHALL NOT resolve an intent. A
@@ -320,6 +341,14 @@ panel that is not painted SHALL resolve nothing.
 
 - **WHEN** the layout shows both columns and the playback panel is painted in the queue column
 - **THEN** a click on its transport glyphs SHALL emit the corresponding transport intent
+
+#### Scenario: Queue band resolves only its glyphs and bar
+
+- **WHEN** the queue column's band is painted
+- **THEN** a click on a glyph in the controls row SHALL emit that control's intent and a click on the
+  seekbar row's bar SHALL seek
+- **AND** a click on the blank title row, the blank gap row, or either time label SHALL NOT emit a
+  playback intent
 
 #### Scenario: Strip accepts clicks in library-only
 
@@ -339,10 +368,11 @@ panel that is not painted SHALL resolve nothing.
 
 ### Requirement: The playback panel title row names the media type
 
-The transport title row of the Queue playback panel and of the Library playback panel — the same
-content both panels render — SHALL name what is playing, not just the item's own title. The row
-SHALL be composed of up to two parts: the item's **title part**, and the **context part** naming
-the container the item came from, when the item has one.
+The now-playing title of the Queue playback panel (carried on its header row) and the transport title
+row of the Library playback panel — the same content both panels render — SHALL name what is playing,
+not just the item's own title. "The title row" in the scenarios below means whichever of the two
+carries the title. The title SHALL be composed of up to two parts: the item's **title part**, and the
+**context part** naming the container the item came from, when the item has one.
 
 | Media | Title part | Context part |
 |---|---|---|
@@ -418,21 +448,24 @@ viewed queue does not hold, the row SHALL continue to render that target's own t
 
 - **WHEN** the layout changes between a queue-visible layout and a library-only layout while the
   same item plays
-- **THEN** the two panels SHALL render the same title parts for that item, including the
-  queue column's split title band
+- **THEN** the two panels SHALL render the same title parts for that item, the queue column on its
+  header row and the Library strip on its title row
 
 ### Requirement: Title and context parts are delineated by colour
 
 When a title row carries both parts, the parts SHALL be separated by exactly one space and SHALL
-NOT be joined by a separator glyph — no hyphen, dash, pipe, bullet or any other delimiter. The
-distinction between the two parts SHALL be carried by colour alone: the title part SHALL paint in
+NOT be joined by a separator glyph — no hyphen, dash, pipe, bullet or any other delimiter. (The
+queue header row's two-part title is the exception to the one-space rule only in that the title part
+is right-aligned, so the parts may be separated by more space; it still carries no delimiter glyph.)
+The distinction between the two parts SHALL be carried by colour alone: the title part SHALL paint in
 the playback panel's aqua title role and the context part in its yellow context role. A
-single-part title SHALL paint wholly in the title role.
+single-part title SHALL paint wholly in the title role in the Library playback panel's title row, and
+wholly in the context role (yellow) in the Queue playback panel's header row.
 
 These roles SHALL be the playback panel's own semantic roles, not the shared focus-accent or
 brand roles, so that changing the focus accent or a brand colour cannot move the now-playing
-title. The roles SHALL apply wherever the row paints, including while the title is marqueed for
-overflow and in the queue column's split title band.
+title. The roles SHALL apply wherever the title paints, including while it is marqueed for
+overflow and on the queue header row.
 
 Because the parts are distinguished by colour rather than by a delimiter, the row's plain-text
 forms used outside the panel — the strings carried by toasts, the media-progress interface and
@@ -447,12 +480,17 @@ log lines — SHALL NOT change, and SHALL keep their existing separator form.
 #### Scenario: No delimiter glyph between the parts
 
 - **WHEN** the title row renders an item with both parts
-- **THEN** the characters between the two parts SHALL be a single space and nothing else
+- **THEN** no hyphen, dash, pipe, bullet, or other delimiter glyph SHALL appear between the two parts
 
 #### Scenario: A single-part title paints in the title role
 
-- **WHEN** the title row renders an item with no context part
+- **WHEN** the Library playback panel's title row renders an item with no context part
 - **THEN** the whole title paints in the aqua title role
+
+#### Scenario: A single-part title paints yellow in the queue header
+
+- **WHEN** the queue header row renders an item with no context part
+- **THEN** the whole title paints in the yellow context role
 
 #### Scenario: The roles survive the overflow marquee
 
@@ -468,23 +506,23 @@ While hidden, the visual slot SHALL NOT be rendered and SHALL reserve zero rows 
 header row and the playback panel's transport SHALL remain rendered whenever they would be without
 this action. Below 100 columns the transport SHALL begin on the row directly below the header row.
 At 100 columns or more the transport SHALL span the full width of the slot region, and the band
-above the Queue panel SHALL be the transport's own height. The Queue panel SHALL take every row the
-slot released. The action SHALL toggle the hidden state in every playback state (idle included) and
-every panel mode; the state SHALL take effect wherever the QueueColumn is rendered. The hidden state
-SHALL persist across launches; a first launch with no saved state SHALL show the slot. Idle
-collapse is unchanged: while idle the slot reserves zero rows whether or not it is hidden.
+above the Queue panel SHALL be the transport's own height (its four rows). The Queue panel SHALL take
+every row the slot released. The action SHALL toggle the hidden state in every playback state (idle
+included) and every panel mode; the state SHALL take effect wherever the QueueColumn is rendered. The
+hidden state SHALL persist across launches; a first launch with no saved state SHALL show the slot.
+Idle collapse is unchanged: while idle the slot reserves zero rows whether or not it is hidden.
 
 #### Scenario: Hiding the slot below 100 columns
 
 - **WHEN** playback is active, the QueueColumn is narrower than 100 columns, and the user presses `h`
 - **THEN** the visual slot SHALL NOT render, the transport SHALL begin directly below the header row,
-  and the Queue panel SHALL begin below the transport and its separator row
+  and the Queue panel SHALL begin directly below the transport's four rows
 
 #### Scenario: Hiding the slot at 100 columns or more
 
 - **WHEN** playback is active, the QueueColumn is 100 columns or wider, and the user presses `h`
 - **THEN** the visual slot SHALL NOT render, the transport SHALL span the slot region's full width,
-  and the Queue panel SHALL begin below the transport's own rows and the separator row
+  and the Queue panel SHALL begin directly below the transport's own four rows
 
 #### Scenario: Showing the slot again
 
