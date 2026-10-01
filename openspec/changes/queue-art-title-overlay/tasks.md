@@ -23,9 +23,11 @@
   dim-backdrop suffix flip leaves the site unchanged for both an Emby and an Audiobookshelf key.
 - [ ] 2.2 Add `ensure_title_overlay_protocol` next to `ensure_hero_cover_protocol`: measure the
   box from the base protocol, build the composed variant as its own cache entry
-  `{base}:t:{cols}x{rows}:{hash}`, rebuild only on key/box/title/protocol change. Verify with a
-  test (hermetic, in the style of `arriving_logo_rebuilds_base_only_protocol_once`) that playback
-  ticks build zero protocols and a track change builds one.
+  `{item-identity}:t:{cols}x{rows}:{hash}` (design D3: the card cache key with any protocol suffix
+  stripped), recompose only on identity/box/title change; a suffix change only re-encodes through
+  `cached_image_protocol_mut`. Verify with a test (hermetic, in the style of
+  `arriving_logo_rebuilds_base_only_protocol_once`) that playback ticks build zero protocols, a
+  track change builds one, and a suffix flip builds a protocol without recomposing.
 - [ ] 2.3 Make `render_queue_playback_slot` / `card.rs` paint the overlay variant when the overlay
   is eligible (not when the site is `Artwork`, which needs the paint to have happened) and the
   plain entry otherwise; verify the plain `:P` entry bitmap is unchanged after an
