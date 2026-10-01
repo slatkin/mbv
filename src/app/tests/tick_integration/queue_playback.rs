@@ -24,6 +24,24 @@ fn click(column: u16, row: u16) -> tuirealm::event::Event<mbv_ui_msg::UserEvent>
     })
 }
 
+/// The seekbar fill signature: the strip's thin `▔`, or the queue band
+/// Gauge's whole `█` cells and fractional eighths `▉`–`▏` (ratatui unicode
+/// Gauge; the band's former whole-cell `▓` shades are gone since #862).
+fn is_seek_fill(symbol: &str) -> bool {
+    matches!(
+        symbol,
+        "\u{2594}"
+            | "\u{2588}"
+            | "\u{2589}"
+            | "\u{258A}"
+            | "\u{258B}"
+            | "\u{258C}"
+            | "\u{258D}"
+            | "\u{258E}"
+            | "\u{258F}"
+    )
+}
+
 /// An app with active playback and a non-empty queue, in the given panel
 /// mode (mini view uses the ephemeral queue focus).
 fn active_app(panel_mode: PanelMode) -> crate::app::App {
@@ -415,17 +433,16 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         };
 
         // Every transport-signature cell in the frame — the seekbar's filled
-        // track, a `▓` in the queue band or `▔` in the strip, in the ACCENT
-        // foreground — lies inside the owning panel's placement, and the
-        // transport painted at all: exactly one transport per frame.
+        // track, the queue band Gauge's `█` whole cells and `▉`–`▏`
+        // fractional eighths, or the strip's `▔`, in the ACCENT foreground —
+        // lies inside the owning panel's placement, and the transport painted
+        // at all: exactly one transport per frame.
         let buf = terminal.backend().buffer();
         let mut painted = 0;
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if (cell.symbol() == "\u{2594}" || cell.symbol() == "\u{2593}")
-                    && cell.style().fg == Some(mbv_theme::ACCENT)
-                {
+                if (is_seek_fill(cell.symbol())) && cell.style().fg == Some(mbv_theme::ACCENT) {
                     painted += 1;
                     assert!(
                         owner.contains((x, y).into()),
