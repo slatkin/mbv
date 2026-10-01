@@ -1,4 +1,4 @@
-# Spec Delta
+# queue-artwork-title-overlay Specification
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Draws the now-playing title onto the queue column's artwork when the terminal sh
 so the header row can drop to a plain label, and defines the one rule that decides whether the
 artwork or the header row carries the title.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: The title is drawn onto live queue artwork
 
