@@ -65,7 +65,7 @@
   a logo the top row has no scrim darkening outside the logo's pixels and the logo's pixels appear in
   the top-left; a two-part title still draws the bottom row; a one-part title with a logo draws no
   text; without a logo output is unchanged.
-- [ ] 4.3 Shell: resolve the logo owner (Movie: own id + `image_tags.logo`; Episode: `series_id`; others none) in
+- [x] 4.3 Shell: resolve the logo owner (Movie: own id + `image_tags.logo`; Episode: `series_id`; others none) in
   the title-overlay path, include the ready logo key in the variant key (D3/D7), recompose on logo
   arrival and keep the text variant while absent or failed; the `covers` gate applies to the text
   rows actually drawn. Verify with hermetic tests in the style of
