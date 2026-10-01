@@ -1,4 +1,5 @@
 use super::super::PlaybackRenderContext;
+use super::super::seek_ratio;
 use super::header::clip_to_width;
 use super::palette;
 use super::transport::width_u16;
@@ -188,7 +189,7 @@ fn render_queue_seek_row(
     // keeps the shared `PROGRESS_TRACK` grey.
     frame.render_widget(
         Gauge::default()
-            .ratio(queue_seek_ratio(pos_ticks, rt_ticks))
+            .ratio(seek_ratio(pos_ticks, rt_ticks))
             .use_unicode(true)
             .label("")
             .gauge_style(
@@ -198,19 +199,6 @@ fn render_queue_seek_row(
             ),
         ctx.playback.seekbar,
     );
-}
-
-/// The Queue seekbar's fill fraction from the raw ticks, clamped to `[0, 1]`
-/// with a non-positive runtime yielding zero. Never truncated to whole
-/// seconds or cells; the eighth-cell precision is Gauge's.
-fn queue_seek_ratio(position_ticks: i64, runtime_ticks: i64) -> f64 {
-    if runtime_ticks > 0 {
-        (mbv_emby_model::ticks_to_seconds(position_ticks)
-            / mbv_emby_model::ticks_to_seconds(runtime_ticks))
-        .clamp(0.0, 1.0)
-    } else {
-        0.0
-    }
 }
 
 #[cfg(test)]

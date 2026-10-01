@@ -193,6 +193,17 @@ fn render_queue_panel(
     blank_row(frame, blank_title_row, panel_bg);
 }
 
+/// Played fraction of `runtime` ticks at `position`, clamped to `[0, 1]`; a
+/// non-positive runtime yields zero.
+fn seek_ratio(position: i64, runtime: i64) -> f64 {
+    if runtime > 0 {
+        (mbv_emby_model::ticks_to_seconds(position) / mbv_emby_model::ticks_to_seconds(runtime))
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 /// Played cells of a `width`-cell seekbar at `position` of `runtime` ticks.
 #[expect(
     clippy::cast_possible_truncation,
@@ -200,13 +211,7 @@ fn render_queue_panel(
     reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
 )]
 fn seek_fill(position: i64, runtime: i64, width: u16) -> usize {
-    let ratio = if runtime > 0 {
-        (mbv_emby_model::ticks_to_seconds(position) / mbv_emby_model::ticks_to_seconds(runtime))
-            .clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    ((ratio * f64::from(width)).round() as usize).min(usize::from(width))
+    ((seek_ratio(position, runtime) * f64::from(width)).round() as usize).min(usize::from(width))
 }
 
 fn render_seekbar(
