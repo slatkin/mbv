@@ -1,6 +1,7 @@
 pub mod cache;
 mod protocol;
 pub mod resize;
+pub mod title_overlay;
 pub const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 pub const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 pub static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =

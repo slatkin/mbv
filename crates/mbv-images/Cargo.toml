@@ -17,6 +17,8 @@ test = []
 workspace = true
 
 [dependencies]
+ab_glyph = "0.2"
+num-traits = "0.2"
 ratatui.workspace = true
 ratatui-image.workspace = true
 image.workspace = true
