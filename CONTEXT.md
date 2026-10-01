@@ -652,6 +652,20 @@ now-playing title while a target plays, else the playback status/target; it
 remains while idle, when the visual slot and transport collapse.
 _Avoid_: now-playing panel
 
+**Now-playing title site**:
+The one shell-projected location that carries the active item's title: `Header`
+while the header row carries it, or `Artwork` only after the queue artwork's
+composed title has actually been painted. The header says `Now Playing` while
+`Artwork` is the site; uncertainty keeps the site at `Header`.
+_Avoid_: title location, title host, overlay site
+
+**Queue artwork title overlay**:
+The static title and optional context composed onto the queue card's artwork
+for the active item. It is distinct from the plain cached artwork and does not
+include time-varying playback information. It carries the title only after its
+composed artwork has painted, as indicated by the Now-playing title site.
+_Avoid_: overlay (bare), artwork label, logo
+
 **Selector row**:
 The Library panel slot for one browse pill bar, such as a letter range, group,
 bucket, section, or the Feeds watched-filter pills followed by feed groups.

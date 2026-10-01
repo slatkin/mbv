@@ -6,6 +6,7 @@ use super::seek_fill;
 use super::title_part_fg;
 use crate::arrangements::playback_transport::{TransportMeasure, transport_buttons_fit};
 use mbv_queue::PlaybackTitleParts;
+use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::ui_util::fmt_duration_short;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -332,6 +333,7 @@ pub struct HeaderTitle<'a> {
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
     pub icon: (&'static str, Color),
+    pub title_site: NowPlayingTitleSite,
 }
 
 /// The header row's now-playing title (moved up from the band's title row):
@@ -342,6 +344,20 @@ pub struct HeaderTitle<'a> {
 /// status/host header row.
 pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
     let panel_bg = palette::surface_colors(header.panel, false).fill;
+    if header.title_site == NowPlayingTitleSite::Artwork {
+        let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
+        spans.push(Span::styled(
+            "Now Playing",
+            Style::default()
+                .fg(palette::PLAYBACK_CONTEXT_FG)
+                .bg(panel_bg),
+        ));
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+            row,
+        );
+        return;
+    }
     match header
         .parts
         .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))

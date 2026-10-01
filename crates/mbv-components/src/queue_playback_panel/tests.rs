@@ -205,6 +205,43 @@ fn two_part_header_hugs_both_indents_and_carries_no_time() {
     );
 }
 
+#[rstest]
+#[case::playing(false, ">", palette::ACCENT)]
+#[case::paused(true, "||", palette::TEXT_FOCUS_ACCENT)]
+fn artwork_title_site_replaces_title_with_yellow_now_playing_label(
+    #[case] paused: bool,
+    #[case] icon: &str,
+    #[case] icon_fg: Color,
+) {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    panel.transport.title_parts = Some(parts_for("Pilot", Some("Series")));
+    panel.transport.title_site = mbv_ui_model::playback::NowPlayingTitleSite::Artwork;
+    panel.transport.state.paused = paused;
+    panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    let buf = terminal.backend().buffer();
+    let text: String = (0..40).map(|x| buf[(x, 1)].symbol().to_string()).collect();
+    let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 1)].fg).collect();
+    assert!(
+        text.starts_with(&format!("   {icon} Now Playing")),
+        "{text:?}"
+    );
+    assert_eq!(fgs[3], icon_fg, "state icon colour: {text:?}");
+    assert_cells_carry(
+        &text,
+        &fgs,
+        "Now Playing",
+        palette::PLAYBACK_CONTEXT_FG,
+        "the artwork-site label",
+    );
+    assert!(!text.contains("Pilot") && !text.contains("Series"));
+}
+
 #[test]
 fn single_title_header_paints_the_context_role_behind_the_play_icon() {
     let ((header, fgs, _), ..) = band_for("Movie Name", None);

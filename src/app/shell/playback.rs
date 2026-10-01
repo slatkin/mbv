@@ -68,6 +68,7 @@ impl Model {
             panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
             now_playing_title,
             title_parts,
+            title_site: self.app.queue_card_projection.title_site,
             status_indicators: self.app.build_status_indicator_spans(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
