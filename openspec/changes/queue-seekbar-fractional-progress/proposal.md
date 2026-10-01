@@ -6,7 +6,7 @@ The Queue seekbar rounds playback progress to whole terminal cells, leaving a sh
 
 ## What Changes
 
-- Render the Queue playback panel's active seekbar with solid accent blocks and a partial leading block in eighth-cell increments, over a muted track.
+- Render the Queue playback panel's active seekbar with solid accent blocks and a partial leading block in eighth-cell increments, over a solid `#272e33` track.
 - Preserve the bar's existing width, row, elapsed/total labels, spacing, and pointer target.
 - Apply the same Queue painter behavior wherever the Queue transport is rendered, independent of media kind or playback target.
 - Keep the Library playback panel's thin seekbar and whole-cell rounding unchanged.

@@ -6,7 +6,7 @@
 
 When the Queue playback panel paints an active seekbar, it SHALL represent playback position
 with solid full-height accent blocks and a left-filled fractional leading block, over a solid
-muted track. Each terminal cell SHALL support eight horizontal fill increments. The rendered
+`#272e33` track. Each terminal cell SHALL support eight horizontal fill increments. The rendered
 fill SHALL be the clamped position/runtime fraction of the available bar width, rounded to
 the nearest eighth of a cell, with half increments rounded upward. It SHALL NOT impose a
 minimum visible fill on positive positions below that rounding threshold.
@@ -66,7 +66,8 @@ The fractional Queue seekbar SHALL keep the existing elapsed time, bar, and tota
 one space between each time and the bar, and one column of outer indent on each side. Its
 height and available width SHALL remain unchanged. Elapsed and total labels SHALL retain
 their existing formatting and metadata colour; the fill SHALL retain the accent role and
-the muted track SHALL retain the progress-track role.
+the unplayed track SHALL use the Queue playback panel's slate backdrop colour (`#272e33`),
+without changing the shared theme values or the Library `PROGRESS_TRACK` role.
 
 The bar span alone SHALL remain the pointer target. A partial cell SHALL be part of that
 same target and SHALL resolve the same terminal-column-based seek fraction as before;

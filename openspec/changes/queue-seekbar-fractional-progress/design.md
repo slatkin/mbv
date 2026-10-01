@@ -51,11 +51,11 @@ scope and cannot use the same full-height characters without a visual change.
 
 ### 2. Paint a solid muted track, not a mismatched shaded partial cell
 
-Use `ACCENT` as the Gauge foreground and `PROGRESS_TRACK` as its background. This gives a
-solid muted rail underneath full blocks and underneath the unfilled portion of the edge
-cell. The time labels and surrounding spaces keep their current metadata foreground and
-panel background. This is the concrete styling default for the agreed solid-fill/muted-track
-presentation; no palette values or theme roles change.
+Use `ACCENT` as the Gauge foreground and `SURFACE_BACKDROP` (`#272e33`) as its background.
+This gives a solid slate rail underneath full blocks and underneath the unfilled portion of
+the edge cell. The time labels and surrounding spaces keep their current metadata foreground
+and panel background. The shared theme values and Library `PROGRESS_TRACK` role remain
+unchanged.
 
 Keep the existing label measurement and bar rectangle. Paint the full time row with a
 space placeholder occupying the bar span, then render the Gauge into that span. This
