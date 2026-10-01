@@ -299,7 +299,7 @@ fn overlay_app() -> App {
         status.active = true;
         status.current_idx = 0;
         status.queue_len = 1;
-    }
+    };
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);
     app.images.configure_protocol(None, true);
