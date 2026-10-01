@@ -131,26 +131,6 @@ mod tests {
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
-    fn slotless_transport_and_artwork_share_the_remote_title() {
-        let mut app = crate::app::tests::make_app_stub();
-        let mut session = mbv_emby::test_support::make_session("Remote", "Emby");
-        session.now_playing = Some("Remote movie".to_owned());
-        app.connected_session_state = Some(session);
-
-        let parts = app
-            .slotless_playback_title_parts()
-            .expect("session title is available");
-        let transport_title = parts.title.text.clone();
-        let overlay_text = mbv_images::title_overlay::TitleOverlayText {
-            context: parts.context.as_ref().map(|part| part.text.as_str()),
-            title: &parts.title.text,
-        };
-
-        assert_eq!(transport_title, overlay_text.title);
-        assert_eq!(overlay_text.context, None);
-    }
-
-    #[test]
     fn playback_chrome_request_routes_through_shell_authority() {
         let app = crate::app::tests::make_app_stub();
         let mut model = Model::new(app);

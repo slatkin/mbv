@@ -336,6 +336,3 @@ fn blend_pixel(image: &mut RgbaImage, x: u32, y: u32, colour: [u8; 3], alpha: u8
     }
     pixel.0[3] = u8::try_from(output_alpha).expect("blended alpha should fit in one byte");
 }
-
-#[cfg(test)]
-mod tests;

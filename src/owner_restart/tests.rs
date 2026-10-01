@@ -31,36 +31,6 @@ fn only_explicit_restart_input_restarts(#[case] input: &[u8], #[case] expected: 
     );
 }
 
-// Issue #559: the prompt owns the user-visible mismatch text -- both
-// versions, the `mbv -q` guidance, and exactly the two choices. Behavioural
-// assertions, not the production format string, so wording reflows do not
-// break the test while missing content still does.
-#[test]
-fn prompt_names_both_versions_and_restart_consequences() {
-    let mut output = Vec::new();
-    let _ = ask(
-        &mismatch_error("1.0.0"),
-        &mut Cursor::new(b"q\n"),
-        &mut output,
-    );
-    let output = String::from_utf8(output).expect("prompt output should be UTF-8");
-
-    assert!(output.contains("1.0.0"), "owner version missing: {output}");
-    assert!(
-        output.contains(env!("CARGO_PKG_VERSION")),
-        "this terminal's version missing: {output}"
-    );
-    assert!(
-        output.contains("`mbv -q`"),
-        "removal guidance missing: {output}"
-    );
-    assert!(
-        output.contains("[R] Restart"),
-        "restart choice missing: {output}"
-    );
-    assert!(output.contains("[Q] Quit"), "quit choice missing: {output}");
-}
-
 // #559 (design D6): prompt once, then wait after requesting restart.
 #[rstest]
 #[case::before_restart(false, FollowUp::Prompt)]

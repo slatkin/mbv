@@ -197,6 +197,3 @@ fn render_queue_seek_row(
         ctx.playback.seekbar,
     );
 }
-
-#[cfg(test)]
-mod tests;

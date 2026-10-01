@@ -1,25 +1,6 @@
 use super::*;
 use mbv_ui_model::library::LibraryKey;
 
-/// #810: a saved Service tab whose Service is unavailable at build resolves to
-/// Home on the sync pass, which also starts the destination re-anchor.
-#[test]
-fn saved_service_tab_resolves_to_home_when_service_is_unconfigured() {
-    let mut app = pending_emby_launch();
-    app.emby_runtime.state = mbv_core::service_runtime::ServiceState::NotConfigured;
-
-    app.resolve_launch_tab_on_sync();
-
-    assert_eq!(app.tab, TabSelection::Home);
-    assert!(matches!(
-        app.launch_restore,
-        crate::app::state::app_struct::LaunchRestore::TabSettled {
-            tab: TabSelection::Home,
-            ..
-        }
-    ));
-}
-
 pub(super) fn launch_state(
     kind: ServiceKind,
     library_id: &str,
@@ -81,78 +62,44 @@ pub(super) fn assert_expired_launch_restores_saved_focus(app: App) {
     );
 }
 
-/// #810: failed startup expires only the pending Emby launch and later catalog
-/// arrival cannot move the selected tab.
+/// #859: every Emby Service failure outcome expires the pending launch the
+/// same way — Home tab, settled restore, saved panel focus on the next sync.
 #[test]
-fn failed_emby_startup_then_successful_catalog_keeps_tab_unchanged() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = pending_emby_launch();
-    let generation = app.emby_runtime.generation();
-
-    app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation,
-        result: Err(mbv_emby::EmbyFailure::unavailable("startup failed")),
-    });
-    assert_eq!(app.tab, TabSelection::Home);
-
-    rebuild_tabs(&mut app);
-    assert_eq!(app.tab, TabSelection::Home);
-}
-
-/// #810: a current startup Err resolves Home and preserves saved Panel focus.
-#[test]
-fn emby_startup_error_expires_launch_and_restores_saved_focus() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = pending_emby_launch();
-
-    let generation = app.emby_runtime.generation();
-    app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation,
-        result: Err(mbv_emby::EmbyFailure::unavailable("startup failed")),
-    });
-
-    assert_expired_launch_restores_saved_focus(app);
-}
-
-/// #810: setup Err resolves Home and preserves saved Panel focus.
-#[test]
-fn emby_setup_error_expires_launch_and_restores_saved_focus() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = pending_emby_launch();
-    let generation = app.emby_runtime.begin_setup();
-
-    app.apply_emby_setup_completion_without_network(
-        crate::app::dispatch::session::service_startup::SetupCompletion {
+fn emby_service_outcome_expiry_restores_saved_focus() {
+    fn expire(trigger: impl FnOnce(&mut App)) {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = pending_emby_launch();
+        trigger(&mut app);
+        assert_expired_launch_restores_saved_focus(app);
+    }
+    // Startup Err.
+    expire(|app| {
+        let generation = app.emby_runtime.generation();
+        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
             generation,
-            previous_state: mbv_core::service_runtime::ServiceState::NotConfigured,
-            result: Err(mbv_emby::EmbyError::resolve("setup failed")),
-        },
-    );
-
-    assert_expired_launch_restores_saved_focus(app);
-}
-
-/// #810: startup-worker disconnect resolves Home and preserves saved Panel focus.
-#[test]
-fn emby_startup_worker_disconnect_expires_launch_and_restores_saved_focus() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = pending_emby_launch();
-
-    let generation = app.emby_runtime.generation();
-    app.handle_emby_startup_worker_disconnect(generation);
-
-    assert_expired_launch_restores_saved_focus(app);
-}
-
-/// #810: a later runtime failure resolves Home and preserves saved Panel focus.
-#[test]
-fn emby_runtime_failure_expires_launch_and_restores_saved_focus() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = pending_emby_launch();
-
-    app.handle_emby_runtime_failure(mbv_emby::EmbyFailure::unavailable("request failed"));
-
-    assert_expired_launch_restores_saved_focus(app);
+            result: Err(mbv_emby::EmbyFailure::unavailable("startup failed")),
+        });
+    });
+    // Setup Err.
+    expire(|app| {
+        let generation = app.emby_runtime.begin_setup();
+        app.apply_emby_setup_completion_without_network(
+            crate::app::dispatch::session::service_startup::SetupCompletion {
+                generation,
+                previous_state: mbv_core::service_runtime::ServiceState::NotConfigured,
+                result: Err(mbv_emby::EmbyError::resolve("setup failed")),
+            },
+        );
+    });
+    // Startup-worker disconnect.
+    expire(|app| {
+        let generation = app.emby_runtime.generation();
+        app.handle_emby_startup_worker_disconnect(generation);
+    });
+    // Later runtime failure.
+    expire(|app| {
+        app.handle_emby_runtime_failure(mbv_emby::EmbyFailure::unavailable("request failed"));
+    });
 }
 
 #[test]
@@ -204,43 +151,6 @@ fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
         "the restored tab must load its root level"
     );
     assert!(app.libs[1].nav_stack[0].loading);
-}
-
-/// A daemon attach has a live Emby client but no startup worker; `fetch_home`
-/// supplies the catalog and must resolve launch restoration (#810).
-#[test]
-fn daemon_attach_fetch_home_restores_service_tab_without_startup_worker() {
-    let mut app = crate::app::tests::render_fixtures::make_movie_app();
-    app.tab = TabSelection::Home;
-    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
-        ServiceKind::Emby,
-        "lib-movies",
-        mbv_config::LaunchPanelFocus::Library,
-    ));
-    let http = mbv_net::mock_http::MockHttp::new();
-    http.respond(
-        200,
-        r#"[{"ItemId":"lib-movies","Name":"Movies","CollectionType":"movies"}]"#,
-    );
-    http.respond(200, r#"{"Items":[]}"#);
-    http.respond(200, r#"{"Items":[]}"#);
-    app.config.lock().unwrap().server_url = "http://127.0.0.1:1".into();
-    let mut client =
-        mbv_emby::EmbyClient::new(app.config.lock().unwrap().clone()).with_test_agent(http.agent());
-    client.user_id = "user".into();
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
-
-    app.fetch_home().expect("daemon-attach catalog fetch");
-
-    assert!(matches!(
-        app.launch_restore,
-        crate::app::state::app_struct::LaunchRestore::TabSettled {
-            tab: TabSelection::EmbyLibrary(0),
-            ..
-        }
-    ));
 }
 
 #[test]

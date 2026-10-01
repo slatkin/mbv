@@ -392,8 +392,11 @@ mod tests {
         }
     }
 
+    /// Review a05a530ba: derived overlay variants share the cache budget
+    /// with base images — inserting a new variant replaces the old one
+    /// without displacing bases, and removing a base drops its variants.
     #[test]
-    fn review_a05a530ba_new_variant_replaces_old_without_displacing_base_images() {
+    fn review_a05a530ba_derived_variants_replace_and_die_with_their_base() {
         let mut cache = cache(2);
         cache.complete_fetch("base:P".into(), image());
         cache.complete_fetch("other:P".into(), image());
@@ -405,22 +408,12 @@ mod tests {
         assert!(cache.is_cached("other:P"));
         assert!(!cache.is_cached("base:P:t:8x4:old"));
         assert!(cache.is_cached("base:P:t:8x4:new"));
-    }
 
-    #[test]
-    fn review_a05a530ba_removing_base_drops_derived_variants() {
-        let mut cache = cache(1);
-        let base_key = "audiobookshelf:server:cover:item:kitty";
-        cache.insert_image(base_key.into(), image());
-        cache.insert_derived_image(
-            "audiobookshelf:server:cover:item:t:8x4:title".into(),
-            image(),
-        );
+        cache.remove_image("base:P");
 
-        cache.remove_image(base_key);
-
-        assert!(!cache.is_cached(base_key));
-        assert!(!cache.is_cached("audiobookshelf:server:cover:item:t:8x4:title"));
+        assert!(!cache.is_cached("base:P"));
+        assert!(!cache.is_cached("base:P:t:8x4:new"));
+        assert!(cache.is_cached("other:P"));
     }
 
     #[test]
@@ -453,31 +446,5 @@ mod tests {
             cache.reserve_card_image_fetch(landscape, 2),
             FetchReservation::Start(_)
         ));
-    }
-
-    #[test]
-    fn queue_landscape_overlay_key_is_stable_and_base_changes_remove_it() {
-        use crate::title_overlay::{TitleOverlayText, title_overlay_cache_key};
-
-        let base_key = crate::emby_queue_landscape_cache_key("item");
-        let text = TitleOverlayText {
-            context: Some("context"),
-            title: "title",
-        };
-        let variant_key = title_overlay_cache_key(&base_key, 8, 4, text, None);
-        assert_eq!(
-            variant_key,
-            title_overlay_cache_key(&base_key, 8, 4, text, None)
-        );
-
-        let mut cache = cache(2);
-        cache.insert_image(base_key.clone(), image());
-        cache.insert_derived_image(variant_key.clone(), image());
-        cache.insert_image(base_key.clone(), image());
-        assert!(!cache.is_cached(&variant_key));
-
-        cache.insert_derived_image(variant_key.clone(), image());
-        cache.remove_image(&base_key);
-        assert!(!cache.is_cached(&variant_key));
     }
 }

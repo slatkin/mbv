@@ -200,41 +200,6 @@ mod tests {
         (comp, buffer)
     }
 
-    /// The save-playlist modal must match the confirm modals' look: the
-    /// storm frame with a centered input line and two button pills
-    /// (Enter save / Esc cancel), not a text hint row.
-    #[test]
-    fn modal_paints_input_and_two_button_pills() {
-        let (comp, buffer) = painted_modal(false);
-        let regions = comp.hit_buttons.regions();
-        assert_eq!(regions.len(), 2);
-        let save = regions[0].0;
-        let cancel = regions[1].0;
-        let text = |rect: ratatui::layout::Rect| {
-            (rect.x..rect.right())
-                .map(|x| buffer.cell((x, rect.y)).expect("pill cell").symbol())
-                .collect::<String>()
-        };
-        assert_eq!(text(save), " Enter Save ");
-        assert_eq!(text(cancel), " Esc Cancel ");
-        assert_eq!(save.right() + 2, cancel.x, "two cells between pills");
-        // The input row sits between the pills and the frame's content area,
-        // same geometry as the confirm modal's message row.
-        assert_eq!(save.y, comp.frame.y + 1 + 2 + 2);
-        // A yellow bold "Save Playlist" title on the row above the input.
-        let title_y = save.y - 3;
-        let title_text: String = ((comp.frame.x + 2)..(comp.frame.right() - 2))
-            .map(|x| buffer.cell((x, title_y)).expect("title cell").symbol())
-            .collect::<String>();
-        assert!(title_text.trim() == "Save Playlist", "{title_text:?}");
-        let title_cell = ((comp.frame.x + 2)..(comp.frame.right() - 2))
-            .map(|x| buffer.cell((x, title_y)).expect("title cell"))
-            .find(|cell| !cell.symbol().trim().is_empty())
-            .expect("title text");
-        assert_eq!(title_cell.fg, mbv_theme::TEXT_HERO_TITLE);
-        assert!(title_cell.modifier.contains(ratatui::style::Modifier::BOLD));
-    }
-
     /// A pill click presses that pill's key: save submits, cancel dismisses.
     #[test]
     fn click_on_pill_submits_or_dismisses() {

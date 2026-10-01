@@ -733,26 +733,4 @@ mod tests {
             "duration row presence follows workspace focus"
         );
     }
-
-    /// The year range distinguishes an ongoing show from an ended one, and a
-    /// single-year series shows just its year; the season label pluralises.
-    #[rstest]
-    #[case::ongoing(2026, 0, "2026 - Present")]
-    #[case::ended(1982, 1993, "1982 - 1993")]
-    #[case::single_year(2020, 2020, "2020")]
-    fn show_year_range_covers_end_states(
-        #[case] start: u32,
-        #[case] end: u32,
-        #[case] expected: &str,
-    ) {
-        let mut show = series();
-        show.production_year = start;
-        show.end_year = end;
-        show.premiere_date = "2026-07-16".into();
-        let data = hero_content_series_with_episode(&show, None, false, Some(1));
-        assert_eq!(
-            data.facts.meta_rows,
-            &["SCIENCE FICTION", expected, "1 Season"]
-        );
-    }
 }

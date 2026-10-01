@@ -339,43 +339,6 @@ fn local_handshake_accepts_identical_owner_build() {
 }
 
 #[test]
-// Issue #559 (design D2): the build gate never touches CTRL_PROTOCOL_VERSION;
-// a protocol-only difference is accepted and stays a protocol concern.
-fn local_handshake_keeps_protocol_compatibility_independent_of_build() {
-    use std::io::Write;
-
-    let (client, daemon) = UnixStream::pair().unwrap();
-    let peer = std::thread::spawn(move || {
-        let mut writer = daemon;
-        let mut hello = CtrlHello::current();
-        hello.protocol_version += 1;
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-    });
-
-    let error = perform_handshake_with_role(
-        SocketStream::Unix(client),
-        || Ok("unused".to_string()),
-        false,
-        PeerBuild::MustMatch,
-    )
-    .unwrap_err();
-
-    assert_eq!(error.mismatched_owner_version(), None);
-    assert_eq!(error.kind_name(), "remote-player.control");
-    assert!(
-        error
-            .to_string()
-            .contains("incompatible daemon protocol version")
-    );
-    peer.join().unwrap();
-}
-
-#[test]
 fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;

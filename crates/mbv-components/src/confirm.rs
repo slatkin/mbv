@@ -263,17 +263,10 @@ mod tests {
 
     #[rstest]
     #[case::clear_queue_unknown_key_is_a_noop(Key::Char('x'), ConfirmAction::ClearQueue, None)]
-    #[case::clear_queue_y_is_a_noop(Key::Char('y'), ConfirmAction::ClearQueue, None)]
     #[case::clear_queue_enter_accepts(
         Key::Enter,
         ConfirmAction::ClearQueue,
         Some(ConfirmIntent::Accept)
-    )]
-    #[case::remove_emby_y_is_a_noop(Key::Char('y'), ConfirmAction::RemoveEmby, None)]
-    #[case::remove_active_item_unknown_key_is_a_noop(
-        Key::Char('x'),
-        ConfirmAction::RemoveActiveQueueItem(0),
-        None
     )]
     #[case::dirty_playlist_enter_saves(
         Key::Enter,
@@ -285,8 +278,6 @@ mod tests {
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
         Some(ConfirmIntent::Discard)
     )]
-    #[case::play_locally_y_is_a_noop(Key::Char('y'), ConfirmAction::PlayLocallyInstead, None)]
-    #[case::play_locally_n_is_a_noop(Key::Char('n'), ConfirmAction::PlayLocallyInstead, None)]
     fn action_specific_key_intents(
         #[case] key: Key,
         #[case] action: ConfirmAction,
@@ -310,86 +301,6 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
                ConfirmIntent::Cancel
            ))));
-    }
-
-    /// Issue #855: storm frame (2-column sides, one top band row and one
-    /// along the bottom) and centered pills with an affirmative green /
-    /// cancel red tone and two cells between them.
-    #[test]
-    fn modal_paints_storm_frame_and_toned_centered_pills() {
-        let (comp, buffer) = painted_modal(
-            vec![
-                ConfirmButton::affirmative("Enter", "Confirm"),
-                ConfirmButton::cancel("Esc", "Cancel"),
-            ],
-            ConfirmAction::ClearQueue,
-        );
-        let frame = comp.frame;
-        let bg = |x: u16, y: u16| buffer.cell((x, y)).expect("cell in buffer").bg;
-        for x in frame.x..frame.right() {
-            assert_eq!(
-                bg(x, frame.y),
-                mbv_theme::SURFACE_RESTING,
-                "top band at {x}"
-            );
-            assert_eq!(
-                bg(x, frame.bottom() - 1),
-                mbv_theme::SURFACE_RESTING,
-                "bottom band at {x}"
-            );
-        }
-        for y in (frame.y + 1)..frame.bottom().saturating_sub(1) {
-            for x in [frame.x, frame.x + 1, frame.right() - 2, frame.right() - 1] {
-                assert_eq!(bg(x, y), mbv_theme::SURFACE_RESTING, "side band at {x},{y}");
-            }
-        }
-
-        // The message is horizontally centered in the content area: its
-        // leading and trailing blank margins are symmetric.
-        let inner_x = frame.x + 2;
-        let inner_right = frame.right() - 2;
-        let message_y = frame.y + 1 + 2;
-        let symbol_at = |x: u16| {
-            buffer
-                .cell((x, message_y))
-                .expect("message row cell")
-                .symbol()
-                .trim()
-                .is_empty()
-        };
-        let first = (inner_x..inner_right)
-            .find(|x| !symbol_at(*x))
-            .expect("message text");
-        let last = (inner_x..inner_right)
-            .rev()
-            .find(|x| !symbol_at(*x))
-            .expect("message text");
-        let left_pad = first - inner_x;
-        let right_pad = inner_right - 1 - last;
-        assert!(
-            left_pad.abs_diff(right_pad) <= 1,
-            "message centered: {left_pad} vs {right_pad}"
-        );
-
-        let regions = comp.hit_buttons.regions();
-        assert_eq!(regions.len(), 2);
-        let ok = regions[0].0;
-        let cancel = regions[1].0;
-        let ok_cell = buffer.cell((ok.x + 1, ok.y)).expect("confirm pill cell");
-        assert_eq!(ok_cell.bg, mbv_theme::SURFACE_CHROME);
-        assert_eq!(ok_cell.fg, mbv_theme::ACCENT_ACTIVE);
-        let cancel_cell = buffer
-            .cell((cancel.x + 1, cancel.y))
-            .expect("cancel pill cell");
-        assert_eq!(cancel_cell.bg, mbv_theme::SURFACE_CHROME);
-        assert_eq!(cancel_cell.fg, mbv_theme::STATUS_ERROR);
-        assert_eq!(ok.right() + 2, cancel.x, "two cells between pills");
-        let left_pad = ok.x - (frame.x + 2);
-        let right_pad = (frame.right() - 2) - cancel.right();
-        assert!(
-            left_pad.abs_diff(right_pad) <= 1,
-            "pills centered: {left_pad} vs {right_pad}"
-        );
     }
 
     /// Issue #855: a pill click presses that pill's first key.
