@@ -14,6 +14,29 @@ fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
     }
 }
 
+fn compose_title_overlay_bitmap(
+    source: &image::DynamicImage,
+    font: ratatui_image::FontSize,
+    cols: u16,
+    rows: u16,
+    text: mbv_images::title_overlay::TitleOverlayText<'_>,
+) -> image::DynamicImage {
+    let base = source.resize_exact(
+        u32::from(cols) * u32::from(font.width.max(1)),
+        u32::from(rows) * u32::from(font.height.max(1)),
+        image::imageops::FilterType::Lanczos3,
+    );
+    let colours = mbv_images::title_overlay::TitleOverlayColours {
+        context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
+        title: color_rgb(if text.context.is_some() {
+            mbv_theme::PLAYBACK_TITLE_FG
+        } else {
+            mbv_theme::PLAYBACK_CONTEXT_FG
+        }),
+    };
+    mbv_images::title_overlay::compose_title_overlay(&base, font, text, colours)
+}
+
 impl App {
     /// Pre-warm nearby movie poster images for the migrated browser owner.
     /// The caller supplies the projected item window and the owner's
@@ -163,15 +186,38 @@ impl App {
         cache_key: &str,
         available: ratatui::layout::Size,
         parts: &mbv_queue::PlaybackTitleParts,
+        projection: &mut mbv_ui_model::playback::QueueCardProjection,
+        item_kind: &str,
     ) -> Option<String> {
-        let (cols, rows) = {
-            let protocol = self.cached_image_protocol_mut(cache_key)?;
-            let size = protocol.size_for(
-                ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
-                available,
-            )?;
-            (size.width, size.height)
+        let Some(entry) = self.images.image(cache_key) else {
+            Self::log_title_decision(projection, cache_key, item_kind, "NoBaseEntry", None);
+            return None;
         };
+        let source_dimensions = entry.img.as_ref().map(image::GenericImageView::dimensions);
+        let Some(protocol) = self.cached_image_protocol_mut(cache_key) else {
+            Self::log_title_decision(
+                projection,
+                cache_key,
+                item_kind,
+                "NoBaseProtocolSize",
+                source_dimensions,
+            );
+            return None;
+        };
+        let Some(size) = protocol.size_for(
+            ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
+            available,
+        ) else {
+            Self::log_title_decision(
+                projection,
+                cache_key,
+                item_kind,
+                "NoBaseProtocolSize",
+                source_dimensions,
+            );
+            return None;
+        };
+        let (cols, rows) = (size.width, size.height);
         let context = parts.context.as_ref().map(|part| part.text.as_str());
         let overlay_text = mbv_images::title_overlay::TitleOverlayText {
             context,
@@ -180,39 +226,68 @@ impl App {
         let key =
             mbv_images::title_overlay::title_overlay_cache_key(cache_key, cols, rows, overlay_text);
         if !self.images.is_cached(&key) {
-            let source = self
+            let Some(source) = self
                 .images
                 .image(cache_key)
-                .and_then(|entry| entry.img.as_ref())?;
-            let font = self.image_font_size();
-            let base = source.resize_exact(
-                u32::from(cols) * u32::from(font.width.max(1)),
-                u32::from(rows) * u32::from(font.height.max(1)),
-                image::imageops::FilterType::Lanczos3,
-            );
-            let colours = mbv_images::title_overlay::TitleOverlayColours {
-                context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
-                title: color_rgb(if context.is_some() {
-                    mbv_theme::PLAYBACK_TITLE_FG
-                } else {
-                    mbv_theme::PLAYBACK_CONTEXT_FG
-                }),
+                .and_then(|entry| entry.img.as_ref())
+            else {
+                Self::log_title_decision(
+                    projection,
+                    cache_key,
+                    item_kind,
+                    "BaseImageMissing",
+                    None,
+                );
+                return None;
             };
-            let composed = mbv_images::title_overlay::compose_title_overlay(
-                &base,
-                font,
+            let source_dimensions = (source.width(), source.height());
+            let composed = compose_title_overlay_bitmap(
+                source,
+                self.image_font_size(),
+                cols,
+                rows,
                 overlay_text,
-                colours,
             );
             let suffix = self.current_protocol_suffix();
             let entry = self.images.build_cached_image(&key, Some(composed), suffix);
             self.images.insert_derived_image(key.clone(), entry);
+            tracing::debug!(
+                name: "queue.title_overlay.built",
+                target: "queue_art",
+                key = %key,
+                base_width = source_dimensions.0,
+                base_height = source_dimensions.1,
+                box_cols = cols,
+                box_rows = rows,
+                "built queue title overlay"
+            );
         }
-        let protocol = self.cached_image_protocol_mut(&key)?;
-        protocol.size_for(
-            ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
-            available,
-        )?;
+        let Some(protocol) = self.cached_image_protocol_mut(&key) else {
+            Self::log_title_decision(
+                projection,
+                cache_key,
+                item_kind,
+                "VariantNotReady",
+                source_dimensions,
+            );
+            return None;
+        };
+        if protocol
+            .size_for(
+                ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
+                available,
+            )
+            .is_none()
+        {
+            Self::log_title_decision(
+                projection,
+                cache_key,
+                item_kind,
+                "VariantNotReady",
+                source_dimensions,
+            );
+            return None;
+        }
         Some(key)
     }
 
@@ -521,6 +596,16 @@ mod protocol_tests {
         app.images.image_protocol_builds()
     }
 
+    fn ensure_title_overlay_protocol(
+        app: &mut App,
+        cache_key: &str,
+        available: ratatui::layout::Size,
+        parts: &mbv_queue::PlaybackTitleParts,
+    ) -> Option<String> {
+        let mut projection = mbv_ui_model::playback::QueueCardProjection::default();
+        app.ensure_title_overlay_protocol(cache_key, available, parts, &mut projection, "Movie")
+    }
+
     #[test]
     fn arriving_logo_rebuilds_base_only_protocol_once() {
         let mut app = app_with_base();
@@ -566,13 +651,12 @@ mod protocol_tests {
         };
 
         let base_image = app.images.image(BASE_KEY).unwrap().img.clone();
-        let first = app
-            .ensure_title_overlay_protocol(BASE_KEY, available, &parts("first"))
+        let first = ensure_title_overlay_protocol(&mut app, BASE_KEY, available, &parts("first"))
             .expect("base protocol has a measurable size");
         assert_eq!(build_count(&app), baseline + 1);
 
         assert_eq!(
-            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("first")),
+            ensure_title_overlay_protocol(&mut app, BASE_KEY, available, &parts("first")),
             Some(first.clone())
         );
         assert_eq!(
@@ -581,9 +665,9 @@ mod protocol_tests {
             "playback ticks reuse both protocols"
         );
 
-        let changed = app
-            .ensure_title_overlay_protocol(BASE_KEY, available, &parts("second"))
-            .expect("changed title builds a distinct variant");
+        let changed =
+            ensure_title_overlay_protocol(&mut app, BASE_KEY, available, &parts("second"))
+                .expect("changed title builds a distinct variant");
         assert_ne!(first, changed);
         assert!(!app.images.is_cached(&first));
         assert_eq!(
@@ -597,7 +681,7 @@ mod protocol_tests {
         app.images.image_mut(BASE_KEY).unwrap().img = None;
         app.dim_backdrop_active = true;
         assert_eq!(
-            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("second")),
+            ensure_title_overlay_protocol(&mut app, BASE_KEY, available, &parts("second")),
             Some(changed.clone())
         );
         assert_eq!(
@@ -626,16 +710,16 @@ mod protocol_tests {
             context: None,
         };
 
-        let variant = app
-            .ensure_title_overlay_protocol(
-                plain_key,
-                ratatui::layout::Size {
-                    width: 8,
-                    height: 4,
-                },
-                &parts,
-            )
-            .expect("measurable plain art builds an overlay variant");
+        let variant = ensure_title_overlay_protocol(
+            &mut app,
+            plain_key,
+            ratatui::layout::Size {
+                width: 8,
+                height: 4,
+            },
+            &parts,
+        )
+        .expect("measurable plain art builds an overlay variant");
 
         assert_ne!(variant, plain_key);
         assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);

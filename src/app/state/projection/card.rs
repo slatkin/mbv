@@ -40,6 +40,130 @@ struct TitleSlotFacts {
     visual_slot_shown: bool,
 }
 
+impl App {
+    fn log_title_paint(
+        &mut self,
+        projection: &mut QueueCardProjection,
+        identity: &str,
+        outcome: &'static str,
+        reason: &'static str,
+    ) {
+        let paint = (identity.to_owned(), outcome);
+        if projection.last_title_paint.as_ref() == Some(&paint) {
+            return;
+        }
+        projection.last_title_paint = Some(paint.clone());
+        self.queue_card_projection.last_title_paint = Some(paint);
+        tracing::debug!(
+            name: "queue.title_overlay.paint",
+            target: "queue_art",
+            item = identity,
+            outcome,
+            reason,
+            "queue title overlay paint"
+        );
+    }
+
+    pub(in crate::app) fn log_title_decision(
+        projection: &mut QueueCardProjection,
+        identity: &str,
+        item_kind: &str,
+        reason: &'static str,
+        base_dimensions: Option<(u32, u32)>,
+    ) {
+        let decision = (identity.to_owned(), reason);
+        if projection.last_title_decision.as_ref() == Some(&decision) {
+            return;
+        }
+        projection.last_title_decision = Some(decision);
+        let (base_width, base_height) = base_dimensions.unwrap_or_default();
+        tracing::debug!(
+            name: "queue.title_overlay.decision",
+            target: "queue_art",
+            item = identity,
+            item_kind,
+            reason,
+            base_width,
+            base_height,
+            "queue title site decision"
+        );
+    }
+}
+
+fn title_site_facts(
+    app: &App,
+    projection: &QueueCardProjection,
+    playback: mbv_ui_model::playback::PlaybackState,
+    covered: bool,
+    height: u16,
+    width: u16,
+) -> TitleSiteFacts {
+    TitleSiteFacts {
+        playback: if playback.paused {
+            TitleSitePlayback::Paused
+        } else {
+            TitleSitePlayback::Active
+        },
+        art: TitleArtFacts {
+            protocol: app.images.protocol_enabled(),
+            halfblock: app.images.is_halfblock_configured(),
+            images: projection.images_enabled,
+        },
+        slot: TitleSlotFacts {
+            painted_box: height > 0 && width > 0,
+            visualizer: projection.visualizer,
+            visual_slot_shown: app.visual_slot_shown(),
+        },
+        covered,
+    }
+}
+
+fn title_site_skip_reason(
+    app: &App,
+    projection: &QueueCardProjection,
+    playback: mbv_ui_model::playback::PlaybackState,
+    item: Option<&QueueItem>,
+    height: u16,
+    width: u16,
+    base_dimensions: Option<(u32, u32)>,
+) -> Option<&'static str> {
+    if !playback.active {
+        Some("NotActive")
+    } else if projection.visualizer {
+        Some("Visualizer")
+    } else if !projection.images_enabled {
+        Some("ImagesOff")
+    } else if app.images.is_halfblock_configured() {
+        Some("HalfblockConfigured")
+    } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
+        Some("NoSlot")
+    } else if item.is_none() || playback.active_idx.is_none() {
+        Some("NoActiveItem")
+    } else if base_dimensions.is_none() {
+        Some("NoBaseArt")
+    } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
+        Some("NoBaseProtocolSize")
+    } else {
+        None
+    }
+}
+
+fn item_kind(item: &QueueItem) -> &str {
+    match item {
+        QueueItem::Emby(item) => match item.item_type.as_str() {
+            "Movie" => "Movie",
+            "Episode" => "Episode",
+            "Audio" => "Audio",
+            kind => kind,
+        },
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(_)) => {
+            "AudiobookshelfEpisode"
+        }
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => "AudiobookshelfBook",
+        QueueItem::Feed(_) => "Feed",
+    }
+}
+
 fn resolve_title_site(
     facts: TitleSiteFacts,
     variant_key: &str,
@@ -181,13 +305,14 @@ impl App {
                 .image(key)
                 .is_some_and(|entry| entry.img.is_some())
         });
+        let mut plain_fallback_painted = false;
         let (height, width, loading) = if painted {
             (height, width, loading)
         } else if let Some(fallback_key) = fallback_key {
             let fallback_loading = self.images.is_loading(fallback_key);
             let fallback_image = self.cached_image_protocol_mut(fallback_key);
             projection.cache_key = Some(fallback_key.to_owned());
-            let (height, width, loading, _) = render_card_painting(
+            let (height, width, loading, fallback_painted) = render_card_painting(
                 f,
                 area,
                 left_align,
@@ -197,6 +322,7 @@ impl App {
                 last_card,
                 terminal_height,
             );
+            plain_fallback_painted = fallback_painted;
             (height, width, loading)
         } else {
             (height, width, loading)
@@ -205,6 +331,14 @@ impl App {
         if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref(), painted) {
             self.images
                 .record_painted_title_overlay(Some(key.to_owned()));
+            self.log_title_paint(&mut projection, key, "overlay_recorded", "OverlayPainted");
+        } else if plain_fallback_painted {
+            let key = artwork_key.as_deref().unwrap_or("<none>");
+            let reason = projection
+                .last_title_decision
+                .as_ref()
+                .map_or("OverlayNotReady", |(_, reason)| *reason);
+            self.log_title_paint(&mut projection, key, "plain_fallback", reason);
         }
         (height, width, loading)
     }
@@ -349,8 +483,11 @@ impl App {
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
             title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
+            last_title_decision: self.queue_card_projection.last_title_decision.clone(),
+            last_title_paint: self.queue_card_projection.last_title_paint.clone(),
         };
         if projection.visualizer || !projection.images_enabled {
+            self.queue_title_site(&mut projection, self.displayed_playback_state());
             self.queue_card_projection = projection;
             return;
         }
@@ -385,13 +522,51 @@ impl App {
         playback: mbv_ui_model::playback::PlaybackState,
     ) {
         let (height, width) = self.images.last_card_size();
-        let Some(key) = projection.cache_key.clone() else {
-            return;
-        };
-        let Some(item) = playback
+        let item = playback
             .active_idx
             .and_then(|index| self.playback_queue().item_at(index))
-        else {
+            .or_else(|| {
+                let queue = self.displayed_queue();
+                queue.item_at(queue.cursor())
+            });
+        let item_kind =
+            item.map_or_else(|| "Unknown".to_owned(), |item| item_kind(item).to_owned());
+        let identity = projection
+            .cache_key
+            .as_deref()
+            .unwrap_or("<none>")
+            .to_owned();
+        let base_dimensions = projection
+            .cache_key
+            .as_deref()
+            .and_then(|key| self.images.image(key))
+            .and_then(|entry| entry.img.as_ref())
+            .map(image::GenericImageView::dimensions);
+        let reason = title_site_skip_reason(
+            self,
+            projection,
+            playback,
+            item,
+            height,
+            width,
+            base_dimensions,
+        );
+        if let Some(reason) = reason {
+            Self::log_title_decision(projection, &identity, &item_kind, reason, base_dimensions);
+            return;
+        }
+        let Some(item) = item else {
+            Self::log_title_decision(
+                projection,
+                &identity,
+                &item_kind,
+                "NoActiveItem",
+                base_dimensions,
+            );
+            return;
+        };
+        let Some(key) = projection.cache_key.clone() else {
+            Self::log_title_decision(projection, &identity, &item_kind, "NoSlot", base_dimensions);
             return;
         };
         let parts = self.playback_title_parts(item);
@@ -401,39 +576,23 @@ impl App {
         };
         let title_covers = mbv_images::title_overlay::covers(text.title)
             && text.context.is_none_or(mbv_images::title_overlay::covers);
-        let facts = TitleSiteFacts {
-            playback: match (playback.active, playback.paused) {
-                (true, true) => TitleSitePlayback::Paused,
-                (true, false) => TitleSitePlayback::Active,
-                (false, _) => TitleSitePlayback::Idle,
-            },
-            art: TitleArtFacts {
-                protocol: self.images.protocol_enabled(),
-                halfblock: self.images.is_halfblock_configured(),
-                images: projection.images_enabled,
-            },
-            slot: TitleSlotFacts {
-                painted_box: height > 0 && width > 0,
-                visualizer: projection.visualizer,
-                visual_slot_shown: self.visual_slot_shown(),
-            },
-            covered: title_covers,
-        };
-        if facts.playback == TitleSitePlayback::Idle
-            || !facts.art.protocol
-            || !facts.slot.painted_box
-            || facts.art.halfblock
-            || facts.slot.visualizer
-            || !facts.slot.visual_slot_shown
-            || !facts.art.images
-            || !facts.covered
-        {
+        let facts = title_site_facts(self, projection, playback, title_covers, height, width);
+        if !title_covers {
+            Self::log_title_decision(
+                projection,
+                &key,
+                &item_kind,
+                "UncoveredGlyph",
+                base_dimensions,
+            );
             return;
         }
         let Some(variant_key) = self.ensure_title_overlay_protocol(
             &key,
             ratatui::layout::Size { width, height },
             &parts,
+            projection,
+            &item_kind,
         ) else {
             return;
         };
@@ -441,6 +600,17 @@ impl App {
         projection.cache_key = Some(overlay_or_plain_key(&key, Some(variant_key.clone())));
         projection.title_site =
             resolve_title_site(facts, &variant_key, self.images.painted_title_overlay_key());
+        Self::log_title_decision(
+            projection,
+            &key,
+            &item_kind,
+            if projection.title_site == NowPlayingTitleSite::Artwork {
+                "Artwork"
+            } else {
+                "NotYetPainted"
+            },
+            base_dimensions,
+        );
     }
 }
 
