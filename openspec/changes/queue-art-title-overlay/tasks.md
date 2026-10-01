@@ -55,7 +55,7 @@
   moves into the main spec's Purpose section on sync.
 ## 4. Logo in place of the top row (design D7)
 
-- [ ] 4.1 Manual probe against the real Emby server (no code): confirm a Movie has a Logo image
+- [x] 4.1 Manual probe against the real Emby server (no code): confirm a Movie has a Logo image
   (`/Items/{id}/Images/Logo`) and that an Episode's show answers `/Items/{SeriesId}/Images/Logo`;
   record any mismatch with D7's owner rule in design.md before 4.3.
 - [x] 4.2 Extend `compose_title_overlay` (mbv-images) with an optional ready logo image: contain-fit
