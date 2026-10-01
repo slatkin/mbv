@@ -19,7 +19,8 @@ single line over its own flat translucent scrim, and SHALL NOT wrap. The
 overlay SHALL use the same title and context text the header row would carry. A context part SHALL
 paint in the playback panel's context role (yellow), a title part beneath a context part in its
 title role (aqua), and a one-part title in the context role (yellow), matching the header. Paused
-playback keeps the overlay.
+playback keeps the overlay. Overlay text SHALL be painted over a thin dark outline so it remains
+legible on light or busy artwork.
 
 #### Scenario: One-part title
 

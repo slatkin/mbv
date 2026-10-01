@@ -90,7 +90,7 @@ twice for a frame at most, never zero times). The painted fact and the variant k
 suffix-independent (item identity, D3), and the dim-backdrop `halfblock` suffix is not an input,
 so opening a dialog cannot flip the site for Emby or Audiobookshelf items.
 
-**D5. Font and rasteriser.** Embed one static Lexend Deca weight (OFL; licence text shipped
+**D5. Font and rasteriser.** Embed one static Lexend Deca SemiBold weight (OFL; licence text shipped
 beside it) via `include_bytes!` and rasterise with `ab_glyph` (pure Rust, no system deps).
 Coverage is Latin / Latin-Ext / Vietnamese; the compositor exposes `covers(text) -> bool`
 (`glyph_id != 0` for every char) and the site rule treats `false` as `Header`.
@@ -104,7 +104,8 @@ Task 1.1 confirms the crate and weight before anything else builds on them.
 Colours: a context part paints `PLAYBACK_CONTEXT_FG` (yellow), a title part under a context
 paints `PLAYBACK_TITLE_FG` (aqua), and a lone title paints `PLAYBACK_CONTEXT_FG` (yellow), the
 same as the header's lone title. Placement is top row for the context-or-lone title, bottom row for a two-part title; each row
-gets a flat translucent scrim at constant alpha across the whole row.
+gets a flat translucent scrim at constant alpha across the whole row. Each glyph is painted over
+a thin dark outline (about 1/16 of the glyph height, minimum 1px) for legibility on any artwork.
 
 ## Risks / Trade-offs
 
@@ -122,5 +123,4 @@ gets a flat translucent scrim at constant alpha across the whole row.
 
 ## Open Questions
 
-- Exact scrim opacity/height and Lexend weight (Medium vs SemiBold): tuned visually during
-  task 3.3; no spec impact.
+- Exact scrim opacity/height: tuned visually during task 3.3; no spec impact.

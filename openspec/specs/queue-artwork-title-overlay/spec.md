@@ -1,4 +1,4 @@
-# queue-artwork-title-overlay Specification
+# Spec Delta
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Draws the now-playing title onto the queue column's artwork when the terminal sh
 so the header row can drop to a plain label, and defines the one rule that decides whether the
 artwork or the header row carries the title.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: The title is drawn onto live queue artwork
 
@@ -19,7 +19,8 @@ single line over its own flat translucent scrim, and SHALL NOT wrap. The
 overlay SHALL use the same title and context text the header row would carry. A context part SHALL
 paint in the playback panel's context role (yellow), a title part beneath a context part in its
 title role (aqua), and a one-part title in the context role (yellow), matching the header. Paused
-playback keeps the overlay.
+playback keeps the overlay. Overlay text SHALL be painted over a thin dark outline so it remains
+legible on light or busy artwork.
 
 #### Scenario: One-part title
 
