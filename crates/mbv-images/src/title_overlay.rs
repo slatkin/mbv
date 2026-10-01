@@ -7,8 +7,10 @@ use num_traits::ToPrimitive;
 use ratatui_image::FontSize;
 
 static FONT: LazyLock<FontArc> = LazyLock::new(|| {
-    FontArc::try_from_slice(include_bytes!("../assets/JetBrainsMonoNerdFont-Medium.ttf"))
-        .expect("the embedded JetBrains Mono Nerd Font Medium should be valid")
+    FontArc::try_from_slice(include_bytes!(
+        "../assets/JetBrainsMonoNerdFont-SemiBold.ttf"
+    ))
+    .expect("the embedded JetBrains Mono Nerd Font SemiBold should be valid")
 });
 
 const SCRIM_ALPHA: f32 = 0.50;
