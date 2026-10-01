@@ -1,5 +1,6 @@
 use super::{CachedImage, ImageFetchReq};
 use crate::resize::{ResizeRegisterTx, ResizeResponseRx};
+use crate::title_overlay::DERIVED_SEP;
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 
@@ -180,14 +181,12 @@ impl ImageCache {
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
         self.remove_derived_variants_for(key);
-        if self.painted_title_overlay_key.as_deref() == Some(key) {
-            self.painted_title_overlay_key = None;
-        }
+        self.clear_painted_if(|painted| painted == key);
         self.card_image_states.remove(key)
     }
 
     pub fn insert_derived_image(&mut self, key: String, entry: CachedImage) {
-        let Some((identity, _)) = key.split_once(":t:") else {
+        let Some((identity, _)) = key.split_once(DERIVED_SEP) else {
             self.card_image_states.insert(key, entry);
             return;
         };
@@ -196,36 +195,21 @@ impl ImageCache {
     }
 
     fn remove_derived_variants_for(&mut self, cache_key: &str) {
-        let identity = if cache_key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
-            cache_key
-                .rsplit_once(':')
-                .map_or(cache_key, |(base, _)| base)
-        } else {
-            cache_key
-        };
-        self.remove_derived_variants_for_identity(identity);
+        self.remove_derived_variants_for_identity(crate::cache_identity(cache_key));
     }
 
     fn remove_derived_variants_for_identity(&mut self, identity: &str) {
-        let prefix = format!("{identity}:t:");
+        let prefix = format!("{identity}{DERIVED_SEP}");
         self.card_image_states
             .retain(|key, _| !key.starts_with(&prefix));
         self.image_lru.retain(|key| !key.starts_with(&prefix));
-        if self
-            .painted_title_overlay_key
-            .as_deref()
-            .is_some_and(|key| key.starts_with(&prefix))
-        {
-            self.painted_title_overlay_key = None;
-        }
+        self.clear_painted_if(|painted| painted.starts_with(&prefix));
     }
 
-    fn evict_image(&mut self, key: &str) {
-        self.remove_derived_variants_for(key);
-        if self.painted_title_overlay_key.as_deref() == Some(key) {
+    fn clear_painted_if(&mut self, pred: impl Fn(&str) -> bool) {
+        if self.painted_title_overlay_key.as_deref().is_some_and(pred) {
             self.painted_title_overlay_key = None;
         }
-        self.card_image_states.remove(key);
     }
 
     pub fn clear_images_and_loading(&mut self) {
@@ -238,13 +222,7 @@ impl ImageCache {
         let prefix = crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX;
         self.card_image_states
             .retain(|key, _| !key.starts_with(prefix));
-        if self
-            .painted_title_overlay_key
-            .as_deref()
-            .is_some_and(|key| key.starts_with(prefix))
-        {
-            self.painted_title_overlay_key = None;
-        }
+        self.clear_painted_if(|painted| painted.starts_with(prefix));
         self.card_image_loading
             .retain(|key| !key.starts_with(prefix));
         self.image_lru.retain(|key| !key.starts_with(prefix));
@@ -301,7 +279,7 @@ impl ImageCache {
                 let Some(evict) = self.image_lru.pop_front() else {
                     break;
                 };
-                self.evict_image(&evict);
+                self.remove_image(&evict);
             }
         }
         self.card_image_states.insert(key, entry);

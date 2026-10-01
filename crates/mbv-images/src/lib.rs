@@ -16,6 +16,16 @@ pub fn mem_key(cache_key: &str, suffix: &str) -> String {
 /// or clear Audiobookshelf entries from the image caches.
 pub const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
 
+/// A cache key without its Audiobookshelf protocol suffix; other keys are
+/// already identities.
+pub(crate) fn cache_identity(key: &str) -> &str {
+    if key.starts_with(AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
+        key.rsplit_once(':').map_or(key, |(base, _)| base)
+    } else {
+        key
+    }
+}
+
 /// Cache key for an Audiobookshelf cover under `server`, keyed by the
 /// library item's `id` and the active protocol `suffix`.
 #[must_use]

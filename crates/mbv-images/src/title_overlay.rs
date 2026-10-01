@@ -13,6 +13,9 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| {
     .expect("the embedded JetBrains Mono Nerd Font SemiBold should be valid")
 });
 
+/// Separates a base cache identity from its derived-variant suffix.
+pub const DERIVED_SEP: &str = ":t:";
+
 const SCRIM_ALPHA: f32 = 0.50;
 const SHADOW_ALPHA: f32 = 0.55;
 const GLYPH_SCALE: f32 = 0.90;
@@ -46,18 +49,12 @@ pub fn title_overlay_cache_key(
     text: TitleOverlayText<'_>,
     logo_key: Option<&str>,
 ) -> String {
-    let identity = if cache_key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
-        cache_key
-            .rsplit_once(':')
-            .map_or(cache_key, |(base, _)| base)
-    } else {
-        cache_key
-    };
+    let identity = crate::cache_identity(cache_key);
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.context.hash(&mut hasher);
     text.title.hash(&mut hasher);
     logo_key.hash(&mut hasher);
-    format!("{identity}:t:{cols}x{rows}:{:x}", hasher.finish())
+    format!("{identity}{DERIVED_SEP}{cols}x{rows}:{:x}", hasher.finish())
 }
 
 /// Whether the embedded font contains every character in `text`.
@@ -92,18 +89,17 @@ pub fn compose_title_overlay(
     }
 
     let context = text.context.filter(|context| !context.trim().is_empty());
-    let has_context = context.is_some();
     let row_height = u32::from(cell.height).min(image.height());
 
     if let Some(logo) = logo {
         // The top text row is not drawn, so only the bottom title row is gated.
-        if has_context && !covers(text.title) {
+        if context.is_some() && !covers(text.title) {
             return DynamicImage::ImageRgba8(image);
         }
         paint_logo(&mut image, logo, cell.height);
     } else {
         let top_text = context.unwrap_or(text.title);
-        if !covers(top_text) || (has_context && !covers(text.title)) {
+        if !covers(top_text) || (context.is_some() && !covers(text.title)) {
             return DynamicImage::ImageRgba8(image);
         }
         paint_row(
@@ -116,7 +112,7 @@ pub fn compose_title_overlay(
         );
     }
 
-    if has_context {
+    if context.is_some() {
         let bottom_y = image.height().saturating_sub(row_height);
         paint_row(
             &mut image,
@@ -141,7 +137,7 @@ fn paint_logo(image: &mut RgbaImage, logo: &DynamicImage, cell_height: u16) {
     let box_height = (u32::from(cell_height) * 2)
         .min(height.saturating_sub(padding * 2))
         .max(1);
-    let fitted = logo.resize(box_width, box_height, image::imageops::FilterType::Lanczos3);
+    let fitted = logo.resize(box_width, box_height, crate::RENDER_FILTER);
     let (logo_width, logo_height) = fitted.dimensions();
     if logo_width == 0 || logo_height == 0 {
         return;
@@ -202,20 +198,20 @@ fn paint_row(
                 .max(1.0)
                 .to_i32()
                 .expect("glyph shadow offset should fit in a signed pixel coordinate");
+            let origin_x = bounds
+                .min
+                .x
+                .floor()
+                .to_i32()
+                .expect("glyph pixel origin should fit in a signed pixel coordinate");
+            let origin_y = bounds
+                .min
+                .y
+                .floor()
+                .to_i32()
+                .expect("glyph pixel origin should fit in a signed pixel coordinate");
             let mut coverage_pixels = Vec::new();
             outlined.draw(|glyph_x, glyph_y, coverage| {
-                let origin_x = bounds
-                    .min
-                    .x
-                    .floor()
-                    .to_i32()
-                    .expect("glyph pixel origin should fit in a signed pixel coordinate");
-                let origin_y = bounds
-                    .min
-                    .y
-                    .floor()
-                    .to_i32()
-                    .expect("glyph pixel origin should fit in a signed pixel coordinate");
                 let glyph_x = i32::try_from(glyph_x)
                     .expect("glyph width should fit in a signed pixel coordinate");
                 let glyph_y = i32::try_from(glyph_y)
@@ -285,15 +281,11 @@ fn paint_glyph(
 }
 
 fn fit_text(text: &str, max_width: f64, nominal: f32, floor: f32) -> (f32, Vec<char>) {
-    let fitted: Vec<_> = text.chars().collect();
-    if text_width(&fitted, nominal) <= max_width {
-        return (nominal, fitted);
-    }
+    let chars: Vec<char> = text.chars().collect();
     let mut scale = nominal;
     loop {
-        let fitted: Vec<_> = text.chars().collect();
-        if text_width(&fitted, scale) <= max_width {
-            return (scale, fitted);
+        if text_width(&chars, scale) <= max_width {
+            return (scale, chars);
         }
         if scale <= floor {
             break;
@@ -307,12 +299,13 @@ fn fit_text(text: &str, max_width: f64, nominal: f32, floor: f32) -> (f32, Vec<c
     if ellipsis_width > max_width {
         return (floor, fitted);
     }
-    for character in text.chars() {
-        let candidate_width =
-            text_width(&fitted, floor) + text_width(&[character], floor) + ellipsis_width;
-        if candidate_width > max_width {
+    let mut width = 0.0;
+    for character in chars {
+        let character_width = text_width(&[character], floor);
+        if width + character_width + ellipsis_width > max_width {
             break;
         }
+        width += character_width;
         fitted.push(character);
     }
     fitted.push(ellipsis);
