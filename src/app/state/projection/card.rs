@@ -118,11 +118,29 @@ fn title_site_facts(
     }
 }
 
+#[derive(Clone, Copy)]
+enum ActiveTitleSource {
+    Local,
+    Slotless,
+    NoTitle,
+    NoActiveItem,
+}
+
+fn active_title_source_skip_reason(source: ActiveTitleSource) -> Option<&'static str> {
+    match source {
+        ActiveTitleSource::Local | ActiveTitleSource::Slotless => None,
+        ActiveTitleSource::NoTitle => Some("NoTitle"),
+        ActiveTitleSource::NoActiveItem => Some("NoActiveItem"),
+    }
+}
+
 fn title_site_skip_reason(
     app: &App,
     projection: &QueueCardProjection,
     playback: mbv_ui_model::playback::PlaybackState,
     item: Option<&QueueItem>,
+    slotless_active: bool,
+    slotless_title_present: bool,
     height: u16,
     width: u16,
     base_dimensions: Option<(u32, u32)>,
@@ -137,8 +155,18 @@ fn title_site_skip_reason(
         Some("HalfblockConfigured")
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
         Some("NoSlot")
-    } else if item.is_none() || playback.active_idx.is_none() {
-        Some("NoActiveItem")
+    } else if let Some(reason) = active_title_source_skip_reason(if slotless_active {
+        if slotless_title_present {
+            ActiveTitleSource::Slotless
+        } else {
+            ActiveTitleSource::NoTitle
+        }
+    } else if item.is_some() && playback.active_idx.is_some() {
+        ActiveTitleSource::Local
+    } else {
+        ActiveTitleSource::NoActiveItem
+    }) {
+        Some(reason)
     } else if base_dimensions.is_none() {
         Some("NoBaseArt")
     } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
@@ -522,15 +550,31 @@ impl App {
         playback: mbv_ui_model::playback::PlaybackState,
     ) {
         let (height, width) = self.images.last_card_size();
-        let item = playback
-            .active_idx
-            .and_then(|index| self.playback_queue().item_at(index))
+        let slotless_active =
+            playback.active && playback.active_idx.is_none() && projection.cache_key.is_some();
+        let item = if slotless_active {
+            None
+        } else {
+            playback
+                .active_idx
+                .and_then(|index| self.playback_queue().item_at(index))
+                .or_else(|| {
+                    let queue = self.displayed_queue();
+                    queue.item_at(queue.cursor())
+                })
+        };
+        let parts = item
+            .map(|item| self.playback_title_parts(item))
             .or_else(|| {
-                let queue = self.displayed_queue();
-                queue.item_at(queue.cursor())
+                slotless_active
+                    .then(|| self.slotless_playback_title_parts())
+                    .flatten()
             });
-        let item_kind =
-            item.map_or_else(|| "Unknown".to_owned(), |item| item_kind(item).to_owned());
+        let item_kind = if slotless_active {
+            "Remote".to_owned()
+        } else {
+            item.map_or_else(|| "Unknown".to_owned(), |item| item_kind(item).to_owned())
+        };
         let identity = projection
             .cache_key
             .as_deref()
@@ -547,6 +591,8 @@ impl App {
             projection,
             playback,
             item,
+            slotless_active,
+            parts.is_some(),
             height,
             width,
             base_dimensions,
@@ -555,21 +601,36 @@ impl App {
             Self::log_title_decision(projection, &identity, &item_kind, reason, base_dimensions);
             return;
         }
-        let Some(item) = item else {
+        let Some(parts) = parts else {
             Self::log_title_decision(
                 projection,
                 &identity,
                 &item_kind,
-                "NoActiveItem",
+                "NoTitle",
                 base_dimensions,
             );
             return;
         };
+        self.queue_title_overlay(projection, playback, &parts, &item_kind);
+    }
+
+    fn queue_title_overlay(
+        &mut self,
+        projection: &mut QueueCardProjection,
+        playback: mbv_ui_model::playback::PlaybackState,
+        parts: &mbv_queue::PlaybackTitleParts,
+        item_kind: &str,
+    ) {
+        let (height, width) = self.images.last_card_size();
         let Some(key) = projection.cache_key.clone() else {
-            Self::log_title_decision(projection, &identity, &item_kind, "NoSlot", base_dimensions);
+            Self::log_title_decision(projection, "<none>", item_kind, "NoSlot", None);
             return;
         };
-        let parts = self.playback_title_parts(item);
+        let base_dimensions = self
+            .images
+            .image(&key)
+            .and_then(|entry| entry.img.as_ref())
+            .map(image::GenericImageView::dimensions);
         let text = mbv_images::title_overlay::TitleOverlayText {
             context: parts.context.as_ref().map(|part| part.text.as_str()),
             title: &parts.title.text,
@@ -581,7 +642,7 @@ impl App {
             Self::log_title_decision(
                 projection,
                 &key,
-                &item_kind,
+                item_kind,
                 "UncoveredGlyph",
                 base_dimensions,
             );
@@ -590,9 +651,9 @@ impl App {
         let Some(variant_key) = self.ensure_title_overlay_protocol(
             &key,
             ratatui::layout::Size { width, height },
-            &parts,
+            parts,
             projection,
-            &item_kind,
+            item_kind,
         ) else {
             return;
         };
@@ -603,7 +664,7 @@ impl App {
         Self::log_title_decision(
             projection,
             &key,
-            &item_kind,
+            item_kind,
             if projection.title_site == NowPlayingTitleSite::Artwork {
                 "Artwork"
             } else {
@@ -615,96 +676,4 @@ impl App {
 }
 
 #[cfg(test)]
-mod title_site_tests {
-    use super::{
-        NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback, TitleSlotFacts,
-        overlay_or_plain_key, painted_overlay_key, resolve_title_site,
-    };
-
-    const KEY: &str = "art:t:8x4:1";
-
-    fn facts(
-        playback: TitleSitePlayback,
-        [
-            protocol,
-            box_ready,
-            halfblock,
-            visualizer,
-            slot_shown,
-            images,
-            covered,
-        ]: [bool; 7],
-    ) -> TitleSiteFacts {
-        TitleSiteFacts {
-            playback,
-            art: TitleArtFacts {
-                protocol,
-                halfblock,
-                images,
-            },
-            slot: TitleSlotFacts {
-                painted_box: box_ready,
-                visualizer,
-                visual_slot_shown: slot_shown,
-            },
-            covered,
-        }
-    }
-
-    #[rstest::rstest]
-    #[case::active_and_painted(TitleSitePlayback::Active, [true, true, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Artwork)]
-    #[case::paused(TitleSitePlayback::Paused, [true, true, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Artwork)]
-    #[case::not_yet_painted(TitleSitePlayback::Active, [true, true, false, false, true, true, true], None, NowPlayingTitleSite::Header)]
-    #[case::halfblock(TitleSitePlayback::Active, [true, true, true, false, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::visualizer(TitleSitePlayback::Active, [true, true, false, true, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::idle_slot(TitleSitePlayback::Idle, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::hidden_slot(TitleSitePlayback::Active, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::zero_slot(TitleSitePlayback::Active, [true, false, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::no_images(TitleSitePlayback::Active, [false, true, false, false, true, false, true], Some(KEY), NowPlayingTitleSite::Header)]
-    #[case::uncovered_glyph(TitleSitePlayback::Active, [true, true, false, false, true, true, false], Some(KEY), NowPlayingTitleSite::Header)]
-    fn chooses_site_from_eligibility_and_painted_fact(
-        #[case] playback: TitleSitePlayback,
-        #[case] conditions: [bool; 7],
-        #[case] painted_key: Option<&str>,
-        #[case] expected: NowPlayingTitleSite,
-    ) {
-        assert_eq!(
-            resolve_title_site(facts(playback, conditions), KEY, painted_key),
-            expected
-        );
-    }
-
-    #[test]
-    fn dim_backdrop_suffix_does_not_change_emby_or_audiobookshelf_identity() {
-        use mbv_images::title_overlay::{TitleOverlayText, title_overlay_cache_key};
-        let title = TitleOverlayText {
-            context: None,
-            title: "title",
-        };
-        let emby = title_overlay_cache_key("item:P", 8, 4, title);
-        assert!(emby.starts_with("item:P:t:8x4:"));
-
-        let kitty = title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title);
-        let halfblock =
-            title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title);
-        assert_eq!(kitty, halfblock);
-        assert!(kitty.starts_with("audiobookshelf:server:cover:item:t:8x4:"));
-    }
-
-    #[test]
-    fn projected_card_key_uses_variant_only_when_eligible() {
-        assert_eq!(overlay_or_plain_key("item:P", None), "item:P");
-        assert_eq!(
-            overlay_or_plain_key("item:P", Some("item:P:t:8x4:1".to_owned())),
-            "item:P:t:8x4:1"
-        );
-    }
-
-    #[test]
-    fn overlay_painted_fact_requires_successful_paint() {
-        const KEY: &str = "item:P:t:8x4:1";
-        assert_eq!(painted_overlay_key(Some(KEY), false), None);
-        assert_eq!(painted_overlay_key(Some("item:P"), true), None);
-        assert_eq!(painted_overlay_key(Some(KEY), true), Some(KEY));
-    }
-}
+mod title_site_tests;
