@@ -7,6 +7,13 @@ use mbv_theme as palette;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 
+fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
+    match color {
+        ratatui::style::Color::Rgb(r, g, b) => [r, g, b],
+        _ => unreachable!("playback overlay roles are RGB colours"),
+    }
+}
+
 impl App {
     /// Pre-warm nearby movie poster images for the migrated browser owner.
     /// The caller supplies the projected item window and the owner's
@@ -148,6 +155,65 @@ impl App {
             u32::from(box_w) * u32::from(font.width.max(1)),
             u32::from(box_h) * u32::from(font.height.max(1)),
         )
+    }
+
+    /// Compose and encode the title artwork at the size the base card protocol paints.
+    pub(in crate::app) fn ensure_title_overlay_protocol(
+        &mut self,
+        cache_key: &str,
+        available: ratatui::layout::Size,
+        parts: &mbv_queue::PlaybackTitleParts,
+    ) -> Option<String> {
+        let (cols, rows) = {
+            let protocol = self.cached_image_protocol_mut(cache_key)?;
+            let size = protocol.size_for(
+                ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
+                available,
+            )?;
+            (size.width, size.height)
+        };
+        let context = parts.context.as_ref().map(|part| part.text.as_str());
+        let overlay_text = mbv_images::title_overlay::TitleOverlayText {
+            context,
+            title: &parts.title.text,
+        };
+        let key =
+            mbv_images::title_overlay::title_overlay_cache_key(cache_key, cols, rows, overlay_text);
+        if !self.images.is_cached(&key) {
+            let source = self
+                .images
+                .image(cache_key)
+                .and_then(|entry| entry.img.as_ref())?;
+            let font = self.image_font_size();
+            let base = source.resize_exact(
+                u32::from(cols) * u32::from(font.width.max(1)),
+                u32::from(rows) * u32::from(font.height.max(1)),
+                image::imageops::FilterType::Lanczos3,
+            );
+            let colours = mbv_images::title_overlay::TitleOverlayColours {
+                context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
+                title: color_rgb(if context.is_some() {
+                    mbv_theme::PLAYBACK_TITLE_FG
+                } else {
+                    mbv_theme::PLAYBACK_CONTEXT_FG
+                }),
+            };
+            let composed = mbv_images::title_overlay::compose_title_overlay(
+                &base,
+                font,
+                overlay_text,
+                colours,
+            );
+            let suffix = self.current_protocol_suffix();
+            let entry = self.images.build_cached_image(&key, Some(composed), suffix);
+            self.images.insert_derived_image(key.clone(), entry);
+        }
+        let protocol = self.cached_image_protocol_mut(&key)?;
+        protocol.size_for(
+            ratatui_image::Resize::Scale(Some(mbv_images::RENDER_FILTER)),
+            available,
+        )?;
+        Some(key)
     }
 
     /// Ensure the hero cover-fit protocol for `cache_key` matches
@@ -475,6 +541,71 @@ mod protocol_tests {
 
         assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&app), 2);
+    }
+
+    #[test]
+    fn title_overlay_builds_only_for_track_or_suffix_changes() {
+        let mut app = app_with_base();
+        app.dim_backdrop_active = true;
+        app.cached_image_protocol_mut(BASE_KEY)
+            .expect("base protocol is available under the dimmed suffix");
+        app.dim_backdrop_active = false;
+        app.cached_image_protocol_mut(BASE_KEY)
+            .expect("base protocol is available under the configured suffix");
+        let baseline = build_count(&app);
+        let parts = |title: &str| mbv_queue::PlaybackTitleParts {
+            title: mbv_queue::PlaybackTitlePart {
+                role: mbv_queue::PlaybackTitlePartRole::Title,
+                text: title.to_owned(),
+            },
+            context: None,
+        };
+        let available = ratatui::layout::Size {
+            width: 8,
+            height: 4,
+        };
+
+        let base_image = app.images.image(BASE_KEY).unwrap().img.clone();
+        let first = app
+            .ensure_title_overlay_protocol(BASE_KEY, available, &parts("first"))
+            .expect("base protocol has a measurable size");
+        let composed = app.images.image(&first).unwrap().img.clone();
+        assert_eq!(build_count(&app), baseline + 1);
+
+        assert_eq!(
+            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("first")),
+            Some(first.clone())
+        );
+        assert_eq!(
+            build_count(&app),
+            baseline + 1,
+            "playback ticks reuse both protocols"
+        );
+
+        let changed = app
+            .ensure_title_overlay_protocol(BASE_KEY, available, &parts("second"))
+            .expect("changed title builds a distinct variant");
+        assert_ne!(first, changed);
+        assert_eq!(
+            build_count(&app),
+            baseline + 2,
+            "a track change builds one protocol"
+        );
+        assert_eq!(app.images.image(BASE_KEY).unwrap().img, base_image);
+
+        app.images.image_mut(BASE_KEY).unwrap().img = None;
+        app.dim_backdrop_active = true;
+        assert_eq!(
+            app.ensure_title_overlay_protocol(BASE_KEY, available, &parts("first")),
+            Some(first.clone())
+        );
+        assert_eq!(
+            build_count(&app),
+            baseline + 3,
+            "suffix flip re-encodes without recomposing"
+        );
+        assert_eq!(app.images.image(&first).unwrap().img, composed);
+        assert_eq!(app.images.image(BASE_KEY).unwrap().img, None);
     }
 
     #[test]

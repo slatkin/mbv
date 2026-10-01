@@ -9,7 +9,56 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
-use mbv_ui_model::playback::QueueCardProjection;
+use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
+
+#[derive(Clone, Copy)]
+struct TitleSiteFacts {
+    playback: TitleSitePlayback,
+    art: TitleArtFacts,
+    slot: TitleSlotFacts,
+    covered: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TitleSitePlayback {
+    Active,
+    Paused,
+    Idle,
+}
+
+#[derive(Clone, Copy)]
+struct TitleArtFacts {
+    protocol: bool,
+    halfblock: bool,
+    images: bool,
+}
+
+#[derive(Clone, Copy)]
+struct TitleSlotFacts {
+    painted_box: bool,
+    visualizer: bool,
+    visual_slot_shown: bool,
+}
+
+fn resolve_title_site(
+    facts: TitleSiteFacts,
+    variant_key: &str,
+    painted_key: Option<&str>,
+) -> NowPlayingTitleSite {
+    let eligible = facts.playback != TitleSitePlayback::Idle
+        && facts.art.protocol
+        && facts.slot.painted_box
+        && !facts.art.halfblock
+        && !facts.slot.visualizer
+        && facts.slot.visual_slot_shown
+        && facts.art.images
+        && facts.covered;
+    if eligible && painted_key == Some(variant_key) {
+        NowPlayingTitleSite::Artwork
+    } else {
+        NowPlayingTitleSite::Header
+    }
+}
 
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
@@ -258,6 +307,7 @@ impl App {
             cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
+            title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
         };
         if projection.visualizer || !projection.images_enabled {
             self.queue_card_projection = projection;
@@ -273,6 +323,7 @@ impl App {
             } else {
                 self.project_audiobookshelf_cover(playback, &mut projection);
             }
+            projection.title_site = self.queue_title_site(&projection, playback);
             self.queue_card_projection = projection;
             return;
         };
@@ -283,6 +334,147 @@ impl App {
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         self.prefetch_card_images(cursor);
         projection.cache_key = Some(cache_key);
+        projection.title_site = self.queue_title_site(&projection, playback);
         self.queue_card_projection = projection;
+    }
+
+    fn queue_title_site(
+        &mut self,
+        projection: &QueueCardProjection,
+        playback: mbv_ui_model::playback::PlaybackState,
+    ) -> mbv_ui_model::playback::NowPlayingTitleSite {
+        let (height, width) = self.images.last_card_size();
+        let Some(key) = projection.cache_key.as_deref() else {
+            return NowPlayingTitleSite::Header;
+        };
+        let Some(item) = playback
+            .active_idx
+            .and_then(|index| self.playback_queue().item_at(index))
+        else {
+            return NowPlayingTitleSite::Header;
+        };
+        let parts = self.playback_title_parts(item);
+        let text = mbv_images::title_overlay::TitleOverlayText {
+            context: parts.context.as_ref().map(|part| part.text.as_str()),
+            title: &parts.title.text,
+        };
+        let title_covers = mbv_images::title_overlay::covers(text.title)
+            && text.context.is_none_or(mbv_images::title_overlay::covers);
+        let facts = TitleSiteFacts {
+            playback: match (playback.active, playback.paused) {
+                (true, true) => TitleSitePlayback::Paused,
+                (true, false) => TitleSitePlayback::Active,
+                (false, _) => TitleSitePlayback::Idle,
+            },
+            art: TitleArtFacts {
+                protocol: self.images.protocol_enabled(),
+                halfblock: self.images.is_halfblock_configured(),
+                images: projection.images_enabled,
+            },
+            slot: TitleSlotFacts {
+                painted_box: height > 0 && width > 0,
+                visualizer: projection.visualizer,
+                visual_slot_shown: self.visual_slot_shown(),
+            },
+            covered: title_covers,
+        };
+        if facts.playback == TitleSitePlayback::Idle
+            || !facts.art.protocol
+            || !facts.slot.painted_box
+            || facts.art.halfblock
+            || facts.slot.visualizer
+            || !facts.slot.visual_slot_shown
+            || !facts.art.images
+            || !facts.covered
+        {
+            return NowPlayingTitleSite::Header;
+        }
+        let Some(variant_key) = self.ensure_title_overlay_protocol(
+            key,
+            ratatui::layout::Size { width, height },
+            &parts,
+        ) else {
+            return NowPlayingTitleSite::Header;
+        };
+        resolve_title_site(facts, &variant_key, self.images.painted_title_overlay_key())
+    }
+}
+
+#[cfg(test)]
+mod title_site_tests {
+    use super::{
+        NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback, TitleSlotFacts,
+        resolve_title_site,
+    };
+
+    const KEY: &str = "art:t:8x4:1";
+
+    fn facts(
+        playback: TitleSitePlayback,
+        [
+            protocol,
+            box_ready,
+            halfblock,
+            visualizer,
+            slot_shown,
+            images,
+            covered,
+        ]: [bool; 7],
+    ) -> TitleSiteFacts {
+        TitleSiteFacts {
+            playback,
+            art: TitleArtFacts {
+                protocol,
+                halfblock,
+                images,
+            },
+            slot: TitleSlotFacts {
+                painted_box: box_ready,
+                visualizer,
+                visual_slot_shown: slot_shown,
+            },
+            covered,
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::active_and_painted(TitleSitePlayback::Active, [true, true, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Artwork)]
+    #[case::paused(TitleSitePlayback::Paused, [true, true, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Artwork)]
+    #[case::not_yet_painted(TitleSitePlayback::Active, [true, true, false, false, true, true, true], None, NowPlayingTitleSite::Header)]
+    #[case::halfblock(TitleSitePlayback::Active, [true, true, true, false, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::visualizer(TitleSitePlayback::Active, [true, true, false, true, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::idle_slot(TitleSitePlayback::Idle, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::hidden_slot(TitleSitePlayback::Active, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::zero_slot(TitleSitePlayback::Active, [true, false, false, false, true, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::no_images(TitleSitePlayback::Active, [false, true, false, false, true, false, true], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::uncovered_glyph(TitleSitePlayback::Active, [true, true, false, false, true, true, false], Some(KEY), NowPlayingTitleSite::Header)]
+    #[case::idle_cursor_art(TitleSitePlayback::Idle, [true, true, false, false, false, true, true], Some(KEY), NowPlayingTitleSite::Header)]
+    fn chooses_site_from_eligibility_and_painted_fact(
+        #[case] playback: TitleSitePlayback,
+        #[case] conditions: [bool; 7],
+        #[case] painted_key: Option<&str>,
+        #[case] expected: NowPlayingTitleSite,
+    ) {
+        assert_eq!(
+            resolve_title_site(facts(playback, conditions), KEY, painted_key),
+            expected
+        );
+    }
+
+    #[test]
+    fn dim_backdrop_suffix_does_not_change_emby_or_audiobookshelf_identity() {
+        use mbv_images::title_overlay::{TitleOverlayText, title_overlay_cache_key};
+        let title = TitleOverlayText {
+            context: None,
+            title: "title",
+        };
+        assert_eq!(
+            title_overlay_cache_key("item:P", 8, 4, title),
+            title_overlay_cache_key("item:P", 8, 4, title)
+        );
+        assert_eq!(
+            title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title),
+            title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title)
+        );
     }
 }

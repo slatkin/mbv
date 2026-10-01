@@ -10,6 +10,7 @@ pub struct ImageCache {
     card_image_loading: std::collections::HashSet<String>,
     last_card_height: u16,
     last_card_width: u16,
+    painted_title_overlay_key: Option<String>,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
@@ -59,6 +60,7 @@ impl ImageCache {
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
             last_card_width: 0,
+            painted_title_overlay_key: None,
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             card_image_tx,
@@ -128,6 +130,15 @@ impl ImageCache {
         self.last_card_width = width;
     }
 
+    pub fn record_painted_title_overlay(&mut self, key: Option<String>) {
+        self.painted_title_overlay_key = key;
+    }
+
+    #[must_use]
+    pub fn painted_title_overlay_key(&self) -> Option<&str> {
+        self.painted_title_overlay_key.as_deref()
+    }
+
     #[must_use]
     pub fn has_loading_images(&self) -> bool {
         !self.card_image_loading.is_empty()
@@ -167,18 +178,44 @@ impl ImageCache {
 
     pub fn remove_image(&mut self, key: &str) -> Option<CachedImage> {
         self.image_lru.retain(|cached| cached != key);
+        if self.painted_title_overlay_key.as_deref() == Some(key) {
+            self.painted_title_overlay_key = None;
+        }
         self.card_image_states.remove(key)
+    }
+
+    pub fn insert_derived_image(&mut self, key: String, entry: CachedImage) {
+        self.image_lru.retain(|cached| cached != &key);
+        self.image_lru.push_back(key.clone());
+        while self.image_lru.len() > self.cache_size_total {
+            let Some(evict) = self.image_lru.pop_front() else {
+                break;
+            };
+            if self.painted_title_overlay_key.as_deref() == Some(evict.as_str()) {
+                self.painted_title_overlay_key = None;
+            }
+            self.card_image_states.remove(&evict);
+        }
+        self.card_image_states.insert(key, entry);
     }
 
     pub fn clear_images_and_loading(&mut self) {
         self.card_image_states.clear();
         self.card_image_loading.clear();
+        self.painted_title_overlay_key = None;
     }
 
     pub fn clear_audiobookshelf_images(&mut self) {
         let prefix = crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX;
         self.card_image_states
             .retain(|key, _| !key.starts_with(prefix));
+        if self
+            .painted_title_overlay_key
+            .as_deref()
+            .is_some_and(|key| key.starts_with(prefix))
+        {
+            self.painted_title_overlay_key = None;
+        }
         self.card_image_loading
             .retain(|key| !key.starts_with(prefix));
         self.image_lru.retain(|key| !key.starts_with(prefix));
@@ -234,6 +271,9 @@ impl ImageCache {
                 let Some(evict) = self.image_lru.pop_front() else {
                     break;
                 };
+                if self.painted_title_overlay_key.as_deref() == Some(evict.as_str()) {
+                    self.painted_title_overlay_key = None;
+                }
                 self.card_image_states.remove(&evict);
             }
         }

@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 
 use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
@@ -27,6 +28,27 @@ pub struct TitleOverlayText<'a> {
 pub struct TitleOverlayColours {
     pub context: [u8; 3],
     pub title: [u8; 3],
+}
+
+/// Cache identity for an overlay, independent of an Audiobookshelf protocol suffix.
+#[must_use]
+pub fn title_overlay_cache_key(
+    cache_key: &str,
+    cols: u16,
+    rows: u16,
+    text: TitleOverlayText<'_>,
+) -> String {
+    let identity = if cache_key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
+        cache_key
+            .rsplit_once(':')
+            .map_or(cache_key, |(base, _)| base)
+    } else {
+        cache_key
+    };
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.context.hash(&mut hasher);
+    text.title.hash(&mut hasher);
+    format!("{identity}:t:{cols}x{rows}:{:x}", hasher.finish())
 }
 
 /// Whether the embedded font contains every character in `text`.
