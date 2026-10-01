@@ -30,7 +30,8 @@ use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_TRANSPORT_GAP_RO
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
-    PlaybackRenderContext, render_header_title, render_playback_header, render_player_panel,
+    HeaderTitle, PlaybackRenderContext, playback_state_icon, render_header_title,
+    render_playback_header, render_player_panel,
 };
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -223,11 +224,17 @@ impl Component for QueuePlaybackPanel {
             render_header_title(
                 frame,
                 header,
-                title.as_str(),
-                self.transport.title_parts.as_ref(),
-                &mut self.marquee_text,
-                &mut self.marquee_started_at,
-                TRANSPORT_SURFACE,
+                &mut HeaderTitle {
+                    title: title.as_str(),
+                    parts: self.transport.title_parts.as_ref(),
+                    marquee_text: &mut self.marquee_text,
+                    marquee_started_at: &mut self.marquee_started_at,
+                    panel: TRANSPORT_SURFACE,
+                    icon: playback_state_icon(
+                        self.transport.use_nerd_fonts,
+                        self.transport.state.paused,
+                    ),
+                },
             );
         } else {
             render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
@@ -497,8 +504,8 @@ mod tests {
                 "the title part",
             );
             assert!(
-                header.starts_with(format!("   {context}").as_str()),
-                "the show hugs the left indent (two inset cells plus one): {header:?}"
+                header.starts_with(format!("   > {context}").as_str()),
+                "the aqua play icon leads and the show hugs the left indent: {header:?}"
             );
             assert!(
                 header.ends_with(format!("{title}   ").as_str()),
@@ -521,17 +528,22 @@ mod tests {
                 "no time on the controls row: {first:?}"
             );
         } else {
-            // The lone title paints yellow on the header row.
+            // The lone title paints yellow on the header row behind the
+            // play icon.
+            assert!(
+                header.starts_with(format!("   > {title}").as_str()),
+                "the play icon leads the lone title: {header:?}"
+            );
+            assert!(
+                !header.contains('/'),
+                "no time rides the header row: {header:?}"
+            );
             assert_cells_carry(
                 &header,
                 &header_fgs,
                 title,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the lone title",
-            );
-            assert!(
-                !header.contains('/'),
-                "no time rides the header row: {header:?}"
             );
             assert!(
                 !third.contains(title),
@@ -551,33 +563,52 @@ mod tests {
 
     #[test]
     fn header_carries_the_title_while_playing_and_idle_status_when_not() {
-        // While a target plays the header row paints the now-playing title
-        // (no status word, no host); idle keeps `IDLE [host]`.
-        let painted = |status: NowPlayingStatus| {
+        // While a target plays the header row paints the aqua play icon and
+        // the now-playing title (no status word, no host); paused swaps the
+        // icon; idle keeps `IDLE [host]`.
+        let painted = |status: NowPlayingStatus, paused: bool| {
             let mut panel = QueuePlaybackPanel::new();
             panel.set_header(status, "music-box".into(), false);
             panel.transport.now_playing_title =
                 Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+            panel.transport.state.paused = paused;
             panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
             let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
             terminal
                 .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
                 .unwrap();
             let buf = terminal.backend().buffer();
-            (0..40)
+            let text = (0..40)
                 .map(|x| buf[(x, 1)].symbol().to_string())
-                .collect::<String>()
+                .collect::<String>();
+            let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 1)].fg).collect();
+            (text, fgs)
         };
-        let playing = painted(NowPlayingStatus::Playing);
+        let (playing, fgs) = painted(NowPlayingStatus::Playing, false);
         assert!(
-            playing.contains("Example"),
-            "the title rides the header while playing: {playing:?}"
+            playing.starts_with("   > Example"),
+            "the aqua play icon leads the title while playing: {playing:?}"
         );
         assert!(
             !playing.contains("PLAYING") && !playing.contains("music-box"),
             "no status word or host beside the title: {playing:?}"
         );
-        let idle = painted(NowPlayingStatus::Idle);
+        assert_eq!(
+            fgs[3],
+            palette::ACCENT,
+            "the play icon paints aqua: {playing:?}"
+        );
+        let (paused, fgs) = painted(NowPlayingStatus::Paused, true);
+        assert!(
+            paused.starts_with("   || Example"),
+            "the pause icon replaces the play icon while paused: {paused:?}"
+        );
+        assert_eq!(
+            fgs[3],
+            palette::ACCENT,
+            "the pause icon paints aqua too: {paused:?}"
+        );
+        let (idle, _) = painted(NowPlayingStatus::Idle, false);
         assert!(
             idle.contains("IDLE") && idle.contains("music-box"),
             "idle keeps the status/host header: {idle:?}"

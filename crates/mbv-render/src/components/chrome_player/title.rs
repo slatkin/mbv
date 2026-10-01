@@ -325,43 +325,44 @@ fn queue_indicator_spans(
     (spans, width)
 }
 
-/// The header row's now-playing title (moved up from the band's title row):
-/// a two-part title shares the row — the context part (the show)
-/// left-aligned and clipped without scrolling, the title part right-aligned
-/// with the marquee window of the remaining space — and a lone title paints
-/// yellow with the full marquee window. Painted only while a target plays;
-/// idle keeps the status/host header row.
-pub fn render_header_title(
-    frame: &mut Frame,
-    row: Rect,
-    title: &str,
-    parts: Option<&PlaybackTitleParts>,
-    marquee_text: &mut String,
-    marquee_started_at: &mut std::time::Instant,
-    panel: palette::Surface,
-) {
-    let panel_bg = palette::surface_colors(panel, false).fill;
-    let has_context = parts.is_some_and(|parts| parts.context.is_some());
-    if has_context {
-        render_queue_combined_title(
-            frame,
-            row,
-            title,
-            parts,
-            marquee_text,
-            marquee_started_at,
-            panel_bg,
-        );
+/// The header row's state icon: the play glyph while playing, the pause
+/// glyph while paused (same nerd-font/fallback pairs as the transport
+/// controls).
+#[must_use]
+pub fn playback_state_icon(use_nerd_fonts: bool, paused: bool) -> &'static str {
+    if paused {
+        if use_nerd_fonts { "\u{f04c}" } else { "||" }
     } else {
-        render_queue_title_only(
-            frame,
-            row,
-            title,
-            parts,
-            marquee_text,
-            marquee_started_at,
-            panel_bg,
-        );
+        play_icon(use_nerd_fonts)
+    }
+}
+
+/// The header row's now-playing title facts: everything the header painter
+/// needs besides the frame and the row. The panel owns the marquee state
+/// and the icon (`playback_state_icon`).
+#[derive(Debug)]
+pub struct HeaderTitle<'a> {
+    pub title: &'a str,
+    pub parts: Option<&'a PlaybackTitleParts>,
+    pub marquee_text: &'a mut String,
+    pub marquee_started_at: &'a mut std::time::Instant,
+    pub panel: palette::Surface,
+    pub icon: &'static str,
+}
+
+/// The header row's now-playing title (moved up from the band's title row):
+/// the aqua state icon first, one space, then a two-part title — the
+/// context part (the show) left-aligned and clipped without scrolling, the
+/// title part with the marquee window of the remaining space — or a lone
+/// yellow title. Painted only while a target plays; idle keeps the
+/// status/host header row.
+pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
+    let panel_bg = palette::surface_colors(header.panel, false).fill;
+    let has_context = header.parts.is_some_and(|parts| parts.context.is_some());
+    if has_context {
+        render_queue_combined_title(frame, row, header, panel_bg);
+    } else {
+        render_queue_title_only(frame, row, header, panel_bg);
     }
 }
 
@@ -372,23 +373,28 @@ pub fn render_header_title(
 fn render_queue_title_only(
     frame: &mut Frame,
     row: Rect,
-    title: &str,
-    parts: Option<&PlaybackTitleParts>,
-    marquee_text: &mut String,
-    marquee_started_at: &mut std::time::Instant,
+    header: &mut HeaderTitle<'_>,
     panel_bg: Color,
 ) {
-    let text = match parts {
+    let text = match header.parts {
         Some(parts) => parts.title.text.clone(),
-        None => title.to_string(),
+        None => header.title.to_string(),
     };
     let title_parts = vec![(text, palette::PLAYBACK_CONTEXT_FG)];
-    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+    let icon_w = width_u16(header.icon.width());
+    let mut spans = vec![
+        Span::styled(" ", Style::default().bg(panel_bg)),
+        Span::styled(
+            header.icon.to_string(),
+            Style::default().fg(palette::ACCENT).bg(panel_bg),
+        ),
+        Span::styled(" ", Style::default().bg(panel_bg)),
+    ];
     spans.extend(marquee_spans_at(
         &title_parts,
-        row.width.saturating_sub(2) as usize,
-        marquee_text,
-        marquee_started_at,
+        (row.width.saturating_sub(2 + icon_w + 1)) as usize,
+        header.marquee_text,
+        header.marquee_started_at,
     ));
     let row_w: u16 = spans
         .iter()
@@ -413,13 +419,10 @@ fn render_queue_title_only(
 fn render_queue_combined_title(
     frame: &mut Frame,
     row: Rect,
-    title: &str,
-    parts: Option<&PlaybackTitleParts>,
-    marquee_text: &mut String,
-    marquee_started_at: &mut std::time::Instant,
+    header: &mut HeaderTitle<'_>,
     panel_bg: Color,
 ) {
-    let Some((show_text, show_fg, title_text, title_fg)) = parts.and_then(|parts| {
+    let Some((show_text, show_fg, title_text, title_fg)) = header.parts.and_then(|parts| {
         parts.context.as_ref().map(|context| {
             (
                 context.text.clone(),
@@ -429,46 +432,45 @@ fn render_queue_combined_title(
             )
         })
     }) else {
-        render_queue_title_only(
-            frame,
-            row,
-            title,
-            parts,
-            marquee_text,
-            marquee_started_at,
-            panel_bg,
-        );
+        render_queue_title_only(frame, row, header, panel_bg);
         return;
     };
+    let icon = header.icon;
+    let icon_w = usize::from(width_u16(icon.width()));
     let content = row.width.saturating_sub(2) as usize;
     let mut show = show_text.as_str();
-    let show_max = content.saturating_sub(2);
+    let show_max = content.saturating_sub(icon_w + 1 + 2);
     while show.width() > show_max {
         show = &show[..show.len() - show.chars().last().map_or(1, char::len_utf8)];
     }
     let sw = width_u16(show.width());
-    let title_win = content.saturating_sub(sw as usize + 1);
-    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    spans.push(Span::styled(
-        show.to_string(),
-        Style::default().fg(show_fg).bg(panel_bg),
-    ));
+    let title_win = content.saturating_sub(icon_w + 1 + usize::from(sw) + 1);
+    let mut spans = vec![
+        Span::styled(" ", Style::default().bg(panel_bg)),
+        Span::styled(
+            icon.to_string(),
+            Style::default().fg(palette::ACCENT).bg(panel_bg),
+        ),
+        Span::styled(" ", Style::default().bg(panel_bg)),
+        Span::styled(show.to_string(), Style::default().fg(show_fg).bg(panel_bg)),
+    ];
     spans.extend(marquee_spans_at(
         &[(title_text, title_fg)],
         title_win,
-        marquee_text,
-        marquee_started_at,
+        header.marquee_text,
+        header.marquee_started_at,
     ));
     let mid_w: u16 = spans
         .iter()
         .map(|span| width_u16(span.content.width()))
         .sum();
     // Right-anchor the title: every spare cell lands in the middle gap;
-    // the trailing indent is kept outside the gap math.
+    // the trailing indent is kept outside the gap math. The gap lands
+    // after the icon + show prefix (four spans in).
     let gap = (row.width as usize).saturating_sub(mid_w as usize + 1);
     if gap > 0 {
         spans.insert(
-            2,
+            4,
             Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
         );
     }

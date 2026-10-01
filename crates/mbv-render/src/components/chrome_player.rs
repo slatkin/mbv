@@ -9,8 +9,9 @@ use ratatui::widgets::Paragraph;
 
 mod title;
 
-pub use title::render_header_title;
+pub use title::playback_state_icon;
 pub use title::render_title_row;
+pub use title::{HeaderTitle, render_header_title};
 use title::{QueueBand, marquee_spans, render_queue_band};
 
 #[derive(Clone, Default, Debug)]
