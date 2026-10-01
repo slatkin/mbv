@@ -1,8 +1,8 @@
 use super::{
     ActiveTitleSource, NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback,
     TitleSlotFacts, active_title_source_skip_reason, card_cache_key, card_cache_key_for_id,
-    card_image_types, overlay_or_plain_key, painted_overlay_key, resolve_title_site,
-    slotless_card_image_types,
+    card_image_types, overlay_logo_source, overlay_or_plain_key, painted_overlay_key,
+    resolve_title_site, slotless_card_image_types,
 };
 
 const KEY: &str = "art:t:8x4:1";
@@ -94,6 +94,35 @@ fn slotless_chain_reserves_landscape_for_movies_only(
     #[case] expected: &[&str],
 ) {
     assert_eq!(slotless_card_image_types(item_type), expected);
+}
+
+#[rstest::rstest]
+#[case::movie_with_logo("Movie", "logo-tag", "", Some(("item:Logo:logo-tag", "item", "")))]
+#[case::movie_without_logo("Movie", "", "", None)]
+#[case::episode_with_series("Episode", "", "series", Some(("series:Logo", "item", "series")))]
+#[case::episode_without_series("Episode", "", "", None)]
+#[case::audio("Audio", "", "", None)]
+#[case::music_album("MusicAlbum", "", "", None)]
+#[case::video("Video", "", "", None)]
+fn overlay_logo_owner_is_movie_or_episode_series_only(
+    #[case] item_type: &str,
+    #[case] logo_tag: &str,
+    #[case] series_id: &str,
+    #[case] expected: Option<(&str, &str, &str)>,
+) {
+    let mut item = mbv_emby_model::test_support::make_item("Item", item_type);
+    item.id = "item".into();
+    item.image_tags.logo = logo_tag.into();
+    item.series_id = series_id.into();
+    let owner = overlay_logo_source(&item);
+    assert_eq!(
+        owner.as_ref().map(|logo| (
+            logo.cache_key.as_str(),
+            logo.item_id.as_str(),
+            logo.series_id.as_str()
+        )),
+        expected
+    );
 }
 
 fn facts(
@@ -213,12 +242,18 @@ fn dim_backdrop_suffix_does_not_change_emby_or_audiobookshelf_identity() {
         context: None,
         title: "title",
     };
-    let emby = title_overlay_cache_key("item:P", 8, 4, title);
+    let emby = title_overlay_cache_key("item:P", 8, 4, title, None);
     assert!(emby.starts_with("item:P:t:8x4:"));
 
-    let kitty = title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title);
-    let halfblock =
-        title_overlay_cache_key("audiobookshelf:server:cover:item:halfblock", 8, 4, title);
+    let kitty =
+        title_overlay_cache_key("audiobookshelf:server:cover:item:kitty", 8, 4, title, None);
+    let halfblock = title_overlay_cache_key(
+        "audiobookshelf:server:cover:item:halfblock",
+        8,
+        4,
+        title,
+        None,
+    );
     assert_eq!(kitty, halfblock);
     assert!(kitty.starts_with("audiobookshelf:server:cover:item:t:8x4:"));
 }

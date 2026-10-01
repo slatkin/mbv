@@ -237,6 +237,33 @@ fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
     }
 }
 
+/// The logo owner for the title overlay (design D7): a Movie draws its own
+/// Logo, keyed like the Library hero's `movie_logo_source`; an Episode draws
+/// its show's Logo. The cache key is independent of any protocol suffix, and
+/// the fetch owner keeps the Movie's Logo on the item and the Episode's on the
+/// series. Every other item has no logo and keeps the text row.
+struct OverlayLogoSource {
+    cache_key: String,
+    item_id: String,
+    series_id: String,
+}
+
+fn overlay_logo_source(item: &EmbyItem) -> Option<OverlayLogoSource> {
+    match item.item_type.as_str() {
+        "Movie" if !item.image_tags.logo.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{}:Logo:{}", item.id, item.image_tags.logo),
+            item_id: item.id.clone(),
+            series_id: String::new(),
+        }),
+        "Episode" if !item.series_id.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{}:Logo", item.series_id),
+            item_id: item.id.clone(),
+            series_id: item.series_id.clone(),
+        }),
+        _ => None,
+    }
+}
+
 /// The artwork cache key for a queue card. The landscape `{id}:QB` key is
 /// Movie-only: the artwork policy also classifies an Episode as Landscape
 /// through its series tags, but an episode's card shows the episode's own
@@ -641,7 +668,30 @@ impl App {
             );
             return;
         };
-        self.queue_title_overlay(projection, playback, &parts, &item_kind);
+        // The logo owner is resolved before the overlay builds so its fetch
+        // starts as early as the overlay path itself (design D7); a pending
+        // or failed fetch simply leaves `ready_logo_key` empty below.
+        let logo_cache_key = item
+            .and_then(|item| match item {
+                QueueItem::Emby(emby) => overlay_logo_source(emby),
+                _ => None,
+            })
+            .map(|logo| {
+                self.fetch_card_image(
+                    logo.cache_key.clone(),
+                    logo.item_id,
+                    logo.series_id,
+                    &["Logo"],
+                );
+                logo.cache_key
+            });
+        self.queue_title_overlay(
+            projection,
+            playback,
+            &parts,
+            &item_kind,
+            logo_cache_key.as_deref(),
+        );
     }
 
     fn queue_title_overlay(
@@ -650,6 +700,7 @@ impl App {
         playback: mbv_ui_model::playback::PlaybackState,
         parts: &mbv_queue::PlaybackTitleParts,
         item_kind: &str,
+        logo_cache_key: Option<&str>,
     ) {
         let (height, width) = self.images.last_card_size();
         let Some(key) = projection.cache_key.clone() else {
@@ -665,8 +716,16 @@ impl App {
             context: parts.context.as_ref().map(|part| part.text.as_str()),
             title: &parts.title.text,
         };
-        let title_covers = mbv_images::title_overlay::covers(text.title)
-            && text.context.is_none_or(mbv_images::title_overlay::covers);
+        // The `covers` gate applies to the text rows actually drawn (design
+        // D7): a ready logo replaces the top row, and a one-part title then
+        // draws no text at all.
+        let draws_logo = self.images.ready_logo_key(logo_cache_key).is_some();
+        let title_covers = if draws_logo {
+            text.context.is_none() || mbv_images::title_overlay::covers(text.title)
+        } else {
+            mbv_images::title_overlay::covers(text.title)
+                && text.context.is_none_or(mbv_images::title_overlay::covers)
+        };
         let facts = title_site_facts(self, projection, playback, title_covers, height, width);
         if !title_covers {
             Self::log_title_decision(
@@ -682,6 +741,7 @@ impl App {
             &key,
             ratatui::layout::Size { width, height },
             parts,
+            logo_cache_key,
             projection,
             item_kind,
         ) else {

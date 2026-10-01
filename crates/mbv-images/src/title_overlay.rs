@@ -32,12 +32,17 @@ pub struct TitleOverlayColours {
 }
 
 /// Cache identity for an overlay, independent of an Audiobookshelf protocol suffix.
+///
+/// `logo_key` is the ready logo's cache identity (design D7): a late-arriving
+/// logo produces a different variant, so the overlay recomposes with it. An
+/// absent or failed logo leaves it `None`, keeping the text variant valid.
 #[must_use]
 pub fn title_overlay_cache_key(
     cache_key: &str,
     cols: u16,
     rows: u16,
     text: TitleOverlayText<'_>,
+    logo_key: Option<&str>,
 ) -> String {
     let identity = if cache_key.starts_with(crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX) {
         cache_key
@@ -49,6 +54,7 @@ pub fn title_overlay_cache_key(
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.context.hash(&mut hasher);
     text.title.hash(&mut hasher);
+    logo_key.hash(&mut hasher);
     format!("{identity}:t:{cols}x{rows}:{:x}", hasher.finish())
 }
 

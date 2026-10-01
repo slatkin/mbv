@@ -486,8 +486,11 @@ mod tests {
             context: Some("context"),
             title: "title",
         };
-        let variant_key = title_overlay_cache_key(&base_key, 8, 4, text);
-        assert_eq!(variant_key, title_overlay_cache_key(&base_key, 8, 4, text));
+        let variant_key = title_overlay_cache_key(&base_key, 8, 4, text, None);
+        assert_eq!(
+            variant_key,
+            title_overlay_cache_key(&base_key, 8, 4, text, None)
+        );
 
         let mut cache = cache(2);
         cache.insert_image(base_key.clone(), image());
