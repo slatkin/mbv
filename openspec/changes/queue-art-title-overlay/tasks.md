@@ -72,7 +72,7 @@
   `arriving_logo_rebuilds_base_only_protocol_once`: logo arrival builds one new variant, a failed or
   absent logo keeps the text variant valid, a track change builds one, and a Music item never
   takes a logo.
-- [ ] 4.4 Sync the new requirement into `openspec/specs/queue-artwork-title-overlay/spec.md` (keep the main
+- [x] 4.4 Sync the new requirement into `openspec/specs/queue-artwork-title-overlay/spec.md` (keep the main
   spec's own headings); verify `openspec validate queue-art-title-overlay --strict` passes.
 - [ ] 4.5 Manual visual pass of the logo placement and size (episode, movie, no-logo, light logo on
   bright art); tune the box.
