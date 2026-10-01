@@ -12,7 +12,8 @@ pub use components::artwork_placeholder::render_artwork_placeholder;
 pub use components::audiobookshelf_book::book_rows;
 
 pub use components::chrome_player::{
-    PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_player_panel,
+    PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_header_title,
+    render_player_panel,
 };
 pub use components::chrome_status_bar::{
     StatusBarModel, StatusBarRegions, VisualModeIndicator, render_status_bar,

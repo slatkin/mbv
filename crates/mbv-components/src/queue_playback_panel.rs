@@ -29,7 +29,9 @@ use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_TRANSPORT_GAP_ROWS};
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
-use mbv_render::{PlaybackRenderContext, render_playback_header, render_player_panel};
+use mbv_render::{
+    PlaybackRenderContext, render_header_title, render_playback_header, render_player_panel,
+};
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::UserEvent;
@@ -210,7 +212,26 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
+        // While a target plays, the header row carries the now-playing
+        // title (moved up from the band's former title row — two-part
+        // titles keep their context-left/title-right split, a lone title
+        // paints yellow); idle keeps the status/host row, `IDLE [host]`.
+        let title = self.transport.now_playing_title.clone();
+        if self.status == NowPlayingStatus::Idle {
+            render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
+        } else if let Some((title, _)) = title {
+            render_header_title(
+                frame,
+                header,
+                title.as_str(),
+                self.transport.title_parts.as_ref(),
+                &mut self.marquee_text,
+                &mut self.marquee_started_at,
+                TRANSPORT_SURFACE,
+            );
+        } else {
+            render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
+        }
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.
@@ -227,9 +248,8 @@ impl Component for QueuePlaybackPanel {
         );
         // The painted row budget is always the four base transport rows:
         // the controls with the status text (right below the visual slot),
-        // the title row (a two-part title shares it, context left and title
-        // right; a lone title paints yellow), the seekbar with its flanking
-        // times, and one blank row.
+        // the title row kept blank (the title lives on the header row), the
+        // seekbar with its flanking times, and one blank row.
         let player_h = transport_area
             .height
             .min(PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS);
@@ -326,13 +346,11 @@ mod tests {
         }
     }
 
-    /// Paint the panel and return the band's rows (y 2..y 6), each as
-    /// (text, fgs, bgs). The band is always four rows: the controls on
-    /// y 2, the title on y 3 (a context part shares it, left-aligned, with
-    /// the title right-aligned; a lone title paints yellow), the seekbar
-    /// flanked by its times on y 4, one blank row on y 5, y 6 blank. The
-    /// painter paints the typed parts only over an attached target's plain
-    /// title; the parts replace it when present.
+    /// Paint the panel and return the header row plus the band's rows
+    /// (y 1..y 5), each as (text, fgs, bgs). The header row (y 1) carries
+    /// the now-playing title while a target plays. The band is always four
+    /// rows: the controls on y 2, the former title row kept blank on y 3,
+    /// the seekbar flanked by its times on y 4, one blank row on y 5.
     fn painted_band_rows(
         parts: PlaybackTitleParts,
     ) -> (PaintedRow, PaintedRow, PaintedRow, PaintedRow, PaintedRow) {
@@ -341,7 +359,7 @@ mod tests {
         panel.transport.show_controls = true;
         panel.transport.now_playing_title = Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.title_parts = Some(parts);
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 5)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -354,7 +372,22 @@ mod tests {
                 (0..40).map(|x| buf[(x, y)].bg).collect(),
             )
         };
-        (row(2), row(3), row(4), row(5), row(6))
+        (row(1), row(2), row(3), row(4), row(5))
+    }
+
+    /// The former title band row's contract: blank, panel fill edge to
+    /// edge.
+    fn assert_title_row_blank(text: &str, bgs: &[Color]) {
+        assert!(
+            text.trim().is_empty(),
+            "the former title row paints blank: {text:?}"
+        );
+        let panel_bg =
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
+        assert!(
+            bgs.iter().all(|bg| *bg == panel_bg),
+            "the former title row keeps the panel fill: {text:?}"
+        );
     }
 
     /// The seekbar row's contract: ` <elapsed> <bar> <total> ` — the
@@ -415,12 +448,13 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's band: the controls and status text on the top row, the title
-    /// row, then the seekbar flanked by its times. A two-part title shares
-    /// the one title row — the context part (the show) left-aligned in the
-    /// yellow context role, the title part right-aligned in the green title
-    /// role, neither carrying a time. A single title paints yellow. (The
-    /// Library strip's combined row keeps its own contract, owned by
+    /// column's header row: the now-playing title rides the header while a
+    /// target plays. A two-part title shares the row — the context part
+    /// (the show) left-aligned in the yellow context role, the title part
+    /// right-aligned in the green title role, neither carrying a time. A
+    /// single title paints yellow. The band keeps the controls on top, the
+    /// former title row blank, the seekbar, and the gap row. (The Library
+    /// strip's combined row keeps its own contract, owned by
     /// `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
@@ -430,54 +464,51 @@ mod tests {
         #[case] context: Option<&str>,
     ) {
         let (
+            (header, header_fgs, _),
             (first, _, first_bgs),
-            (second, second_fgs, _),
+            (title_row, _, title_row_bgs),
             (third, _, _),
             (fourth, _, fourth_bgs),
-            (fifth, _, _),
         ) = painted_band_rows(parts_for(title, context));
         // The controls row rides the top of the band on the slate fill
         // edge to edge in either family.
         assert_controls_row_fill(&first, &first_bgs);
-        // The blank row below the seekbar carries no text on the panel
+        // The former title row paints blank on the panel fill.
+        assert_title_row_blank(&title_row, &title_row_bgs);
+        // The gap row below the seekbar carries no text on the panel
         // fill in either family.
         assert_gap_row_blank(&fourth, &fourth_bgs);
-        // Nothing paints below the gap row in either family.
-        assert!(
-            fifth.trim().is_empty(),
-            "nothing paints below the gap row: {fifth:?}"
-        );
         if let Some(context) = context {
-            // One shared row below the controls: the show left-aligned in
-            // the context role, the title right-aligned in the title role,
-            // no time on it.
+            // One shared header row: the show left-aligned in the context
+            // role, the title right-aligned in the title role, no time on
+            // it.
             assert_cells_carry(
-                &second,
-                &second_fgs,
+                &header,
+                &header_fgs,
                 context,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the context part",
             );
             assert_cells_carry(
-                &second,
-                &second_fgs,
+                &header,
+                &header_fgs,
                 title,
                 palette::PLAYBACK_TITLE_FG,
                 "the title part",
             );
             assert!(
-                second.starts_with(format!(" {context}").as_str()),
-                "the show hugs the left indent: {second:?}"
+                header.starts_with(format!("   {context}").as_str()),
+                "the show hugs the left indent (two inset cells plus one): {header:?}"
             );
             assert!(
-                second.ends_with(format!("{title} ").as_str()),
-                "the title hugs the right indent: {second:?}"
+                header.ends_with(format!("{title}   ").as_str()),
+                "the title hugs the right indent (one plus two inset cells): {header:?}"
             );
             assert!(
-                !second.contains('/'),
-                "no time rides the shared title row: {second:?}"
+                !header.contains('/'),
+                "no time rides the shared header row: {header:?}"
             );
-            // The seekbar rides below the title with its times.
+            // The seekbar rides below the blank title row with its times.
             assert_seek_row_flanks_times(&third, "the two-part band");
             assert!(!third.contains(title) && !third.contains(context));
             assert!(
@@ -490,18 +521,17 @@ mod tests {
                 "no time on the controls row: {first:?}"
             );
         } else {
-            // The lone title paints yellow on the title row below the
-            // controls.
+            // The lone title paints yellow on the header row.
             assert_cells_carry(
-                &second,
-                &second_fgs,
+                &header,
+                &header_fgs,
                 title,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the lone title",
             );
             assert!(
-                !second.contains('/'),
-                "no time rides the title row: {second:?}"
+                !header.contains('/'),
+                "no time rides the header row: {header:?}"
             );
             assert!(
                 !third.contains(title),
@@ -517,6 +547,41 @@ mod tests {
                 "a single-part title stays off the controls row: {first:?}"
             );
         }
+    }
+
+    #[test]
+    fn header_carries_the_title_while_playing_and_idle_status_when_not() {
+        // While a target plays the header row paints the now-playing title
+        // (no status word, no host); idle keeps `IDLE [host]`.
+        let painted = |status: NowPlayingStatus| {
+            let mut panel = QueuePlaybackPanel::new();
+            panel.set_header(status, "music-box".into(), false);
+            panel.transport.now_playing_title =
+                Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+            panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
+            let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+            terminal
+                .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            (0..40)
+                .map(|x| buf[(x, 1)].symbol().to_string())
+                .collect::<String>()
+        };
+        let playing = painted(NowPlayingStatus::Playing);
+        assert!(
+            playing.contains("Example"),
+            "the title rides the header while playing: {playing:?}"
+        );
+        assert!(
+            !playing.contains("PLAYING") && !playing.contains("music-box"),
+            "no status word or host beside the title: {playing:?}"
+        );
+        let idle = painted(NowPlayingStatus::Idle);
+        assert!(
+            idle.contains("IDLE") && idle.contains("music-box"),
+            "idle keeps the status/host header: {idle:?}"
+        );
     }
 
     #[test]

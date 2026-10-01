@@ -9,6 +9,7 @@ use ratatui::widgets::Paragraph;
 
 mod title;
 
+pub use title::render_header_title;
 pub use title::render_title_row;
 use title::{QueueBand, marquee_spans, render_queue_band};
 
@@ -148,13 +149,14 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
 }
 
 /// The queue column's transport: the controls and status text on the top
-/// row (right below the visual slot), the title row, the seekbar with its
-/// flanking times, then one blank row. The shared [`transport_rows`]
-/// positions still name the rows top-down; the queue band reinterprets
-/// R0..R3 — the controls ride R0, R1 is the title row, the seekbar rides
-/// R2, R3 stays blank — while the Library strip keeps the seekbar on R0.
-/// Anything short of the four rows degrades to the rows present (controls
-/// keep painting, missing rows clear their hit geometry).
+/// row (right below the visual slot), the former title row kept blank, the
+/// seekbar with its flanking times, then one blank row. The shared
+/// [`transport_rows`] positions still name the rows top-down; the queue band
+/// reinterprets R0..R3 — the controls ride R0, R1 stays blank (the title
+/// lives on the header row), the seekbar rides R2, R3 stays blank — while
+/// the Library strip keeps the seekbar on R0. Anything short of the four
+/// rows degrades to the rows present (controls keep painting, missing rows
+/// clear their hit geometry).
 fn render_queue_panel(
     frame: &mut Frame,
     ctx: &mut PlaybackRenderContext<'_>,
@@ -193,16 +195,14 @@ fn render_queue_panel(
         }
         return;
     };
-    if let Some((title, _)) = ctx.now_playing_title.clone() {
+    if ctx.now_playing_title.is_some() {
         render_queue_band(
             frame,
             &QueueBand {
                 controls: controls_row,
-                title: title_row,
                 seek: seek_row,
                 gap: gap_row,
             },
-            title.as_str(),
             ctx,
         );
     } else {
@@ -212,6 +212,9 @@ fn render_queue_panel(
         blank(frame, seek_row, panel_bg);
         blank(frame, gap_row, panel_bg);
     }
+    // The former title row stays as a blank band row (the title lives on
+    // the header row now).
+    blank(frame, title_row, panel_bg);
 }
 
 fn render_seekbar(

@@ -232,7 +232,6 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
 /// blank row.
 pub struct QueueBand {
     pub controls: Rect,
-    pub title: Rect,
     pub seek: Rect,
     pub gap: Rect,
 }
@@ -240,22 +239,13 @@ pub struct QueueBand {
 /// The queue column's band: the controls and status text on the top row
 /// (right below the visual slot), then the title row, then the seekbar with
 /// the elapsed time left and the total time right (one space between each
-/// time and the bar). A two-part title shares its row:
-/// the context part (the show) left-aligned and clipped without scrolling,
-/// the title part right-aligned with the marquee window of the remaining
-/// space. A single title always paints yellow. Hit geometry rides the
-/// controls row (the glyphs) and the seekbar's bar span — the time labels
-/// never seek. Pure painter over projected state.
-pub fn render_queue_band(
-    frame: &mut Frame,
-    band: &QueueBand,
-    title: &str,
-    ctx: &mut PlaybackRenderContext<'_>,
-) {
+/// time and the bar). The band's former title row now paints blank: the
+/// title lives on the header row (`render_header_title`). Hit geometry
+/// rides the controls row (the glyphs) and the seekbar's bar span — the
+/// time labels never seek. Pure painter over projected state.
+pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut PlaybackRenderContext<'_>) {
     if band.controls.height == 0
         || band.controls.width == 0
-        || band.title.height == 0
-        || band.title.width == 0
         || band.seek.height == 0
         || band.seek.width == 0
         || band.gap.height == 0
@@ -268,8 +258,6 @@ pub fn render_queue_band(
         ctx.playback.seekbar = Rect::default();
         return;
     }
-    // A two-part title shares the one title row; anything else paints the
-    // title alone.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
@@ -286,15 +274,6 @@ pub fn render_queue_band(
         indicators,
         indicators_w,
     );
-    let has_context = ctx
-        .title_parts
-        .as_ref()
-        .is_some_and(|parts| parts.context.is_some());
-    if has_context {
-        render_queue_combined_title(frame, band.title, title, ctx, panel_bg);
-    } else {
-        render_queue_title_only(frame, band.title, title, ctx, panel_bg);
-    }
     render_queue_seek_row(frame, band.seek, ctx, panel_bg);
     // The blank row below the seekbar: panel fill, no hit geometry.
     frame.render_widget(
@@ -346,14 +325,46 @@ fn queue_indicator_spans(
     (spans, width)
 }
 
-/// The queue band's status indicators as plain text on `row_bg`: no pill
-/// wrap, so each projected span keeps its own foreground with the row fill
-/// behind it, separator spans (`⧸`, `│`, `[`, `]`) are dropped, and the
-/// surviving items join with one space. A chip-style span (dark text on its
-/// own fill) recovers its fill as the text colour so it stays readable on
-/// the row. Uppercased like the strip's cluster; one trailing space when
-/// non-empty so the value never touches the row edge. Returns the spans
-/// and their width.
+/// The header row's now-playing title (moved up from the band's title row):
+/// a two-part title shares the row — the context part (the show)
+/// left-aligned and clipped without scrolling, the title part right-aligned
+/// with the marquee window of the remaining space — and a lone title paints
+/// yellow with the full marquee window. Painted only while a target plays;
+/// idle keeps the status/host header row.
+pub fn render_header_title(
+    frame: &mut Frame,
+    row: Rect,
+    title: &str,
+    parts: Option<&PlaybackTitleParts>,
+    marquee_text: &mut String,
+    marquee_started_at: &mut std::time::Instant,
+    panel: palette::Surface,
+) {
+    let panel_bg = palette::surface_colors(panel, false).fill;
+    let has_context = parts.is_some_and(|parts| parts.context.is_some());
+    if has_context {
+        render_queue_combined_title(
+            frame,
+            row,
+            title,
+            parts,
+            marquee_text,
+            marquee_started_at,
+            panel_bg,
+        );
+    } else {
+        render_queue_title_only(
+            frame,
+            row,
+            title,
+            parts,
+            marquee_text,
+            marquee_started_at,
+            panel_bg,
+        );
+    }
+}
+
 /// One queue title row without its time: ` <title> ` with the marquee
 /// window sized to the row minus its two indent cells. Only called when no
 /// context part projects (a two-part title shares the combined row); the
@@ -362,19 +373,22 @@ fn render_queue_title_only(
     frame: &mut Frame,
     row: Rect,
     title: &str,
-    ctx: &mut PlaybackRenderContext<'_>,
+    parts: Option<&PlaybackTitleParts>,
+    marquee_text: &mut String,
+    marquee_started_at: &mut std::time::Instant,
     panel_bg: Color,
 ) {
-    let text = match ctx.title_parts.as_ref() {
+    let text = match parts {
         Some(parts) => parts.title.text.clone(),
         None => title.to_string(),
     };
     let title_parts = vec![(text, palette::PLAYBACK_CONTEXT_FG)];
     let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    spans.extend(marquee_spans(
-        ctx,
+    spans.extend(marquee_spans_at(
         &title_parts,
         row.width.saturating_sub(2) as usize,
+        marquee_text,
+        marquee_started_at,
     ));
     let row_w: u16 = spans
         .iter()
@@ -400,22 +414,30 @@ fn render_queue_combined_title(
     frame: &mut Frame,
     row: Rect,
     title: &str,
-    ctx: &mut PlaybackRenderContext<'_>,
+    parts: Option<&PlaybackTitleParts>,
+    marquee_text: &mut String,
+    marquee_started_at: &mut std::time::Instant,
     panel_bg: Color,
 ) {
-    let Some((show_text, show_fg, title_text, title_fg)) =
-        ctx.title_parts.as_ref().and_then(|parts| {
-            parts.context.as_ref().map(|context| {
-                (
-                    context.text.clone(),
-                    title_part_fg(context.role),
-                    parts.title.text.clone(),
-                    title_part_fg(parts.title.role),
-                )
-            })
+    let Some((show_text, show_fg, title_text, title_fg)) = parts.and_then(|parts| {
+        parts.context.as_ref().map(|context| {
+            (
+                context.text.clone(),
+                title_part_fg(context.role),
+                parts.title.text.clone(),
+                title_part_fg(parts.title.role),
+            )
         })
-    else {
-        render_queue_title_only(frame, row, title, ctx, panel_bg);
+    }) else {
+        render_queue_title_only(
+            frame,
+            row,
+            title,
+            parts,
+            marquee_text,
+            marquee_started_at,
+            panel_bg,
+        );
         return;
     };
     let content = row.width.saturating_sub(2) as usize;
@@ -431,7 +453,12 @@ fn render_queue_combined_title(
         show.to_string(),
         Style::default().fg(show_fg).bg(panel_bg),
     ));
-    spans.extend(marquee_spans(ctx, &[(title_text, title_fg)], title_win));
+    spans.extend(marquee_spans_at(
+        &[(title_text, title_fg)],
+        title_win,
+        marquee_text,
+        marquee_started_at,
+    ));
     let mid_w: u16 = spans
         .iter()
         .map(|span| width_u16(span.content.width()))
@@ -450,6 +477,29 @@ fn render_queue_combined_title(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
         row,
     );
+}
+
+/// Marquee spans for one part set without a full render context: the header
+/// painter's entry into the shared marquee machinery.
+fn marquee_spans_at(
+    parts: &[(String, Color)],
+    max_width: usize,
+    marquee_text: &mut String,
+    marquee_started_at: &mut std::time::Instant,
+) -> Vec<Span<'static>> {
+    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    let borrowed: Vec<(&str, Color)> = parts
+        .iter()
+        .map(|(text, color)| (text.as_str(), *color))
+        .collect();
+    marquee::marquee_spans(
+        &key,
+        &borrowed,
+        max_width,
+        marquee_text,
+        marquee_started_at,
+        false,
+    )
 }
 
 /// The queue seekbar row: ` <elapsed> <bar> <total> ` — one outer indent
