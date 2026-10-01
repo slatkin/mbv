@@ -34,9 +34,7 @@ pub fn render_queue_status(
     let pill = remote_pill.map(|content| {
         Span::styled(
             content.to_string(),
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .bg(palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill),
+            Style::default().fg(palette::TEXT_FOCUS_ACCENT),
         )
     });
     let pill_w = pill
