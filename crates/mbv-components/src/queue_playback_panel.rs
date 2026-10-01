@@ -26,7 +26,7 @@ use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
 use mbv_render::PlaybackStripAreas;
-use mbv_render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_TRANSPORT_GAP_ROWS};
+use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{PlaybackRenderContext, render_playback_header, render_player_panel};
@@ -217,22 +217,20 @@ impl Component for QueuePlaybackPanel {
         let Some(transport_area) = self.transport_area else {
             return;
         };
-        // The transport band fills its whole rect before the four transport
+        // The transport band fills its whole rect before the three transport
         // rows paint over it: the side-by-side slot's leftover rows (a slot
-        // taller than the four transport rows) stay on the chrome band.
+        // taller than the three transport rows) stay on the chrome band.
         frame.render_widget(
             Block::default()
                 .style(Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false).fill)),
             transport_area,
         );
-        // The painted row budget is always the four base transport rows:
+        // The painted row budget is always the three base transport rows:
         // the controls with the status text (right below the visual slot),
-        // one blank row, the title row (a two-part title shares it, context
-        // left and title right; a lone title paints yellow), and the seekbar
-        // with its flanking times.
-        let player_h = transport_area
-            .height
-            .min(PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS);
+        // the title row (a two-part title shares it, context left and title
+        // right; a lone title paints yellow), and the seekbar with its
+        // flanking times.
+        let player_h = transport_area.height.min(PLAYER_BOX_HEIGHT);
         let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,
@@ -326,22 +324,22 @@ mod tests {
         }
     }
 
-    /// Paint the panel and return the band's rows (y 2..y 6), each as
-    /// (text, fgs, bgs). The band is always four rows: the title on y 2 (a
-    /// context part shares it, left-aligned, with the title right-aligned),
-    /// the seekbar flanked by its times on y 3, one blank row on y 4, the
-    /// transport controls on the bottom row y 5, y 6 blank. The painter
-    /// paints the typed parts only over an attached target's plain title;
-    /// the parts replace it when present.
+    /// Paint the panel and return the band's rows (y 2..y 5), each as
+    /// (text, fgs, bgs). The band is always three rows: the controls on
+    /// y 2, the title on y 3 (a context part shares it, left-aligned, with
+    /// the title right-aligned; a lone title paints yellow), the seekbar
+    /// flanked by its times on y 4, y 5 blank. The painter paints the typed
+    /// parts only over an attached target's plain title; the parts replace
+    /// it when present.
     fn painted_band_rows(
         parts: PlaybackTitleParts,
-    ) -> (PaintedRow, PaintedRow, PaintedRow, PaintedRow, PaintedRow) {
+    ) -> (PaintedRow, PaintedRow, PaintedRow, PaintedRow) {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.show_controls = true;
         panel.transport.now_playing_title = Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.title_parts = Some(parts);
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 5)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -354,7 +352,7 @@ mod tests {
                 (0..40).map(|x| buf[(x, y)].bg).collect(),
             )
         };
-        (row(2), row(3), row(4), row(5), row(6))
+        (row(2), row(3), row(4), row(5))
     }
 
     /// The seekbar row's contract: ` <elapsed> <bar> <total> ` — the
@@ -379,21 +377,7 @@ mod tests {
         );
     }
 
-    /// The gap row's contract: no text, panel fill edge to edge.
-    fn assert_gap_row_blank(text: &str, bgs: &[Color]) {
-        assert!(
-            text.trim().is_empty(),
-            "the gap row carries no text: {text:?}"
-        );
-        let panel_bg =
-            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
-        assert!(
-            bgs.iter().all(|bg| *bg == panel_bg),
-            "the gap row keeps the panel fill: {text:?}"
-        );
-    }
-
-    /// The bottom controls row's contract: the slate fill edge to edge.
+    /// The top controls row's contract: the slate fill edge to edge.
     fn assert_controls_row_fill(text: &str, bgs: &[Color]) {
         assert!(
             bgs.iter().all(|bg| *bg == palette::SURFACE_BACKDROP),
@@ -415,13 +399,13 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's band: the controls and status text on the top row, one blank
-    /// row, the title row, then the seekbar flanked by its times. A two-part
-    /// title shares the one title row — the context part (the show)
-    /// left-aligned in the yellow context role, the title part right-aligned
-    /// in the green title role, neither carrying a time. A single title
-    /// paints yellow. (The Library strip's combined row keeps its own
-    /// contract, owned by `chrome_player.rs`'s painter test.)
+    /// column's band: the controls and status text on the top row, the title
+    /// row, then the seekbar flanked by its times. A two-part title shares
+    /// the one title row — the context part (the show) left-aligned in the
+    /// yellow context role, the title part right-aligned in the green title
+    /// role, neither carrying a time. A single title paints yellow. (The
+    /// Library strip's combined row keeps its own contract, owned by
+    /// `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
@@ -429,56 +413,49 @@ mod tests {
         #[case] title: &str,
         #[case] context: Option<&str>,
     ) {
-        let (
-            (first, _, first_bgs),
-            (second, _, second_bgs),
-            (third, third_fgs, _),
-            (fourth, _, _),
-            (fifth, _, _),
-        ) = painted_band_rows(parts_for(title, context));
+        let ((first, _, first_bgs), (second, second_fgs, _), (third, _, _), (fourth, _, _)) =
+            painted_band_rows(parts_for(title, context));
         // The controls row rides the top of the band on the slate fill
         // edge to edge in either family.
         assert_controls_row_fill(&first, &first_bgs);
-        // The blank row between the controls and the title carries no
-        // text on the panel fill in either family.
-        assert_gap_row_blank(&second, &second_bgs);
         // Nothing paints below the seekbar in either family.
         assert!(
-            fifth.trim().is_empty(),
-            "nothing paints below the seekbar: {fifth:?}"
+            fourth.trim().is_empty(),
+            "nothing paints below the seekbar: {fourth:?}"
         );
         if let Some(context) = context {
-            // One shared row: the show left-aligned in the context role,
-            // the title right-aligned in the title role, no time on it.
+            // One shared row below the controls: the show left-aligned in
+            // the context role, the title right-aligned in the title role,
+            // no time on it.
             assert_cells_carry(
-                &third,
-                &third_fgs,
+                &second,
+                &second_fgs,
                 context,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the context part",
             );
             assert_cells_carry(
-                &third,
-                &third_fgs,
+                &second,
+                &second_fgs,
                 title,
                 palette::PLAYBACK_TITLE_FG,
                 "the title part",
             );
             assert!(
-                third.starts_with(format!(" {context}").as_str()),
-                "the show hugs the left indent: {third:?}"
+                second.starts_with(format!(" {context}").as_str()),
+                "the show hugs the left indent: {second:?}"
             );
             assert!(
-                third.ends_with(format!("{title} ").as_str()),
-                "the title hugs the right indent: {third:?}"
+                second.ends_with(format!("{title} ").as_str()),
+                "the title hugs the right indent: {second:?}"
             );
             assert!(
-                !third.contains('/'),
-                "no time rides the shared title row: {third:?}"
+                !second.contains('/'),
+                "no time rides the shared title row: {second:?}"
             );
             // The seekbar rides below the title with its times.
-            assert_seek_row_flanks_times(&fourth, "the two-part band");
-            assert!(!fourth.contains(title) && !fourth.contains(context));
+            assert_seek_row_flanks_times(&third, "the two-part band");
+            assert!(!third.contains(title) && !third.contains(context));
             assert!(
                 first.contains('X'),
                 "the stop glyph paints on the top row: {first:?}"
@@ -489,23 +466,24 @@ mod tests {
                 "no time on the controls row: {first:?}"
             );
         } else {
-            // The lone title paints yellow on the title row.
+            // The lone title paints yellow on the title row below the
+            // controls.
             assert_cells_carry(
-                &third,
-                &third_fgs,
+                &second,
+                &second_fgs,
                 title,
                 palette::PLAYBACK_CONTEXT_FG,
                 "the lone title",
             );
             assert!(
-                !third.contains('/'),
-                "no time rides the title row: {third:?}"
+                !second.contains('/'),
+                "no time rides the title row: {second:?}"
             );
             assert!(
-                !fourth.contains(title),
-                "the title stays on its row: {fourth:?}"
+                !third.contains(title),
+                "the title stays on its row: {third:?}"
             );
-            assert_seek_row_flanks_times(&fourth, "the single-part band");
+            assert_seek_row_flanks_times(&third, "the single-part band");
             assert!(
                 first.contains('X'),
                 "the stop glyph paints on the controls row: {first:?}"
@@ -533,7 +511,7 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
             .unwrap();
         let buf = terminal.backend().buffer();
-        let text: String = (0..40).map(|x| buf[(x, 5)].symbol().to_string()).collect();
+        let text: String = (0..40).map(|x| buf[(x, 4)].symbol().to_string()).collect();
         // ` 1:15 <bar> 5:00 `: elapsed left, total right, bar of 28.
         assert!(
             text.starts_with(" 1:15 "),
@@ -543,7 +521,7 @@ mod tests {
         assert_eq!(text.chars().filter(|c| *c == '\u{2593}').count(), 7);
         assert_eq!(text.chars().filter(|c| *c == '\u{2591}').count(), 21);
         // A quarter fill: 7 accent cells, then the track colour.
-        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 5)].fg).collect();
+        let fgs: Vec<Color> = (0..40).map(|x| buf[(x, 4)].fg).collect();
         for x in 6u16..13 {
             assert_eq!(
                 fgs[usize::from(x)],
@@ -562,7 +540,7 @@ mod tests {
         let (_, seekbar) = panel.transport_hits();
         assert_eq!(
             (seekbar.x, seekbar.y, seekbar.width),
-            (6, 5, 28),
+            (6, 4, 28),
             "the bar span seeks, the time labels never do"
         );
     }
@@ -595,7 +573,7 @@ mod tests {
             Span::styled(" ⧸ ", Style::default().fg(palette::TEXT_MUTED)),
             Span::styled("en", Style::default().fg(palette::TEXT_SECONDARY)),
         ]);
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 5)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))

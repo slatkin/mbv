@@ -171,12 +171,6 @@ pub fn queue_playback_column_wide(left_area_width: u16) -> bool {
 /// Queue playback panel's paint step both call, so the breakpoint, the gap,
 /// and the side-by-side/stacked split cannot drift between them (review of
 /// tasks 3.5-3.8).
-/// Blank rows inside the queue column's transport band between the seekbar
-/// and the bottom controls row. The queue band is always
-/// `PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS` rows: controls, gap,
-/// title, seekbar.
-pub const QUEUE_TRANSPORT_GAP_ROWS: u16 = 1;
-
 #[must_use]
 pub fn queue_playback_transport_area(
     slot_region: Rect,
@@ -184,11 +178,11 @@ pub fn queue_playback_transport_area(
     card_width: u16,
     card_height: u16,
 ) -> Rect {
-    // The transport band is always four rows: the controls with the status
-    // text, one blank row, the title row (a two-part title shares it,
-    // context left and title right), and the seekbar with its flanking
-    // times.
-    let player_rows = PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS;
+    // The transport band is always three rows: the controls with the status
+    // text, the title row (a two-part title shares it, context left and
+    // title right; a lone title paints yellow), and the seekbar with its
+    // flanking times.
+    let player_rows = PLAYER_BOX_HEIGHT;
     if column_wide {
         let gap = if card_width > 0 {
             SLOT_TRANSPORT_GAP
@@ -213,8 +207,8 @@ pub fn queue_playback_transport_area(
 
 /// Rows the queue column spends on the visual slot and the transport, above
 /// the Queue panel (the header row is a separate, always-spent input). Stacked
-/// below 100 columns: slot rows plus the transport's four rows (title,
-/// seekbar, gap, controls); 100+ side by side: the taller of the two governs. Idle collapses both to
+/// below 100 columns: slot rows plus the transport's three rows (controls,
+/// title, seekbar); 100+ side by side: the taller of the two governs. Idle collapses both to
 /// zero rows (task 3.6); paused counts as active. Shared by the root
 /// placements and the Queue playback panel's draw-path paint.
 #[must_use]
@@ -321,13 +315,12 @@ fn queue_column_geometry(
 ) -> (Rect, Rect, Rect) {
     // Root panel placements (D1, task 1.3): the queue column splits into the
     // Queue playback panel's region (header row plus the visual
-    // slot/transport rows and the separator row between the slot/transport
-    // band and the Queue panel) and the Queue panel below it; while idle only
-    // the header row is reserved, the panel's recessed inset being the single
-    // space row. Both placements come from the shared `queue_panel_geometry`
-    // (task 3.2: the header row is one input alongside the visual-slot and
-    // transport heights, single source), so they tile the queue column's
-    // content exactly.
+    // slot/transport rows) and the Queue panel directly below it; while idle
+    // only the header row is reserved, the panel's recessed inset being the
+    // single space row. Both placements come from the shared
+    // `queue_panel_geometry` (task 3.2: the header row is one input alongside
+    // the visual-slot and transport heights, single source), so they tile
+    // the queue column's content exactly.
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
         input.card_height,

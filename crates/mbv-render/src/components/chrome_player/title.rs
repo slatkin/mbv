@@ -228,19 +228,17 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
 }
 
 /// The queue column's band rows in paint order: the transport controls and
-/// status text, one blank row, the title row, then the seekbar flanked by
-/// its times.
+/// status text, the title row, then the seekbar flanked by its times.
 pub struct QueueBand {
     pub controls: Rect,
-    pub gap: Rect,
     pub title: Rect,
     pub seek: Rect,
 }
 
 /// The queue column's band: the controls and status text on the top row
-/// (right below the visual slot), one blank row, then the title row, then
-/// the seekbar with the elapsed time left and the total time right (one
-/// space between each time and the bar). A two-part title shares its row:
+/// (right below the visual slot), then the title row, then the seekbar with
+/// the elapsed time left and the total time right (one space between each
+/// time and the bar). A two-part title shares its row:
 /// the context part (the show) left-aligned and clipped without scrolling,
 /// the title part right-aligned with the marquee window of the remaining
 /// space. A single title always paints yellow. Hit geometry rides the
@@ -256,8 +254,6 @@ pub fn render_queue_band(
         || band.title.width == 0
         || band.seek.height == 0
         || band.seek.width == 0
-        || band.gap.height == 0
-        || band.gap.width == 0
         || band.controls.height == 0
         || band.controls.width == 0
     {
@@ -285,13 +281,6 @@ pub fn render_queue_band(
         &glyphs,
         indicators,
         indicators_w,
-    );
-    // The blank row between the controls and the title: panel fill, no
-    // hit geometry.
-    frame.render_widget(
-        Paragraph::new(Span::raw(" ".repeat(band.gap.width as usize)))
-            .style(Style::default().bg(panel_bg)),
-        band.gap,
     );
     let has_context = ctx
         .title_parts
@@ -347,6 +336,14 @@ fn queue_indicator_spans(
     (spans, width)
 }
 
+/// The queue band's status indicators as plain text on `row_bg`: no pill
+/// wrap, so each projected span keeps its own foreground with the row fill
+/// behind it, separator spans (`⧸`, `│`, `[`, `]`) are dropped, and the
+/// surviving items join with one space. A chip-style span (dark text on its
+/// own fill) recovers its fill as the text colour so it stays readable on
+/// the row. Uppercased like the strip's cluster; one trailing space when
+/// non-empty so the value never touches the row edge. Returns the spans
+/// and their width.
 /// One queue title row without its time: ` <title> ` with the marquee
 /// window sized to the row minus its two indent cells. Only called when no
 /// context part projects (a two-part title shares the combined row); the

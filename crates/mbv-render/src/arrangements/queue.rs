@@ -29,9 +29,8 @@ pub struct QueuePanelInputs {
     pub left_content: Rect,
     /// Rows the Queue playback panel's header row always spends above the
     /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). While idle the header row is the only space above the
-    /// Queue panel besides the panel's own recessed inset; the separator row
-    /// is reserved only alongside the visual-slot and transport heights.
+    /// task 3.2). The panel starts directly below the playback rows; its own
+    /// recessed inset is the single space row under them.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -87,19 +86,12 @@ pub fn queue_panel_subareas(panel_box: Rect) -> Rect {
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
     // The header row (always present, idle included) plus the visual-slot and
-    // transport rows sit above the panel, separated from it by one gap row.
-    // The gap belongs to the slot/transport band: while idle nothing renders
-    // between the header and the panel, and the panel's recessed top inset is
-    // the single space row below the header.
+    // transport rows sit directly above the panel: no separator row between
+    // the playback region and the queue list.
     let playback_rows = input.header_height + input.card_height;
-    let gap = u16::from(input.card_height > 0);
     let panel_area = Rect {
-        y: input.left_content.y + playback_rows + gap,
-        height: input
-            .left_content
-            .height
-            .saturating_sub(playback_rows)
-            .saturating_sub(gap),
+        y: input.left_content.y + playback_rows,
+        height: input.left_content.height.saturating_sub(playback_rows),
         ..input.left_content
     };
     let (content_area, footer_row) = (
