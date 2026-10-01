@@ -1,7 +1,5 @@
 use ratatui::layout::Rect;
 
-use crate::components::widgets::queue_panel_inset;
-
 /// Rows the `QueueColumn` footer band spends below the recessed queue-list
 /// box: one gap row, the one-row status bar, one gap row. The status bar
 /// sits outside the recessed panel, as wide as the `QueueColumn` header.
@@ -29,8 +27,8 @@ pub struct QueuePanelInputs {
     pub left_content: Rect,
     /// Rows the Queue playback panel's header row always spends above the
     /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The panel starts directly below the playback rows; its own
-    /// recessed inset is the single space row under them.
+    /// task 3.2). The panel starts directly below the playback rows and
+    /// borders the transport band's bottom gap row.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -51,16 +49,18 @@ pub fn queue_footer_row(placement: Rect) -> Option<Rect> {
 }
 
 /// The recessed queue-list box inside the placement: the column's canonical
-/// inset, ended just above the gap row that precedes the footer. The footer
-/// band's rows keep the `QueueColumn` surface; the row below the footer is the
-/// placement's own bottom padding.
+/// side insets, starting directly below the playback band (the two panels
+/// border one another) and ending at the footer row (no gap row above the
+/// status bar). When no footer fits, the box runs to the placement's bottom.
 #[must_use]
 pub fn queue_list_box(placement: Rect) -> Rect {
-    let mut box_area = queue_panel_inset(placement);
+    let mut box_area = Rect {
+        x: placement.x + 2,
+        width: placement.width.saturating_sub(4),
+        ..placement
+    };
     if let Some(footer) = queue_footer_row(placement) {
-        // The box's last row is the one above the footer's gap row: the
-        // recessed panel keeps its own bottom padding row there.
-        box_area.height = (footer.y - 1).saturating_sub(box_area.y);
+        box_area.height = footer.y.saturating_sub(box_area.y);
     }
     box_area
 }
