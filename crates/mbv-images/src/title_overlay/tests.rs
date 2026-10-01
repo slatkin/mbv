@@ -44,6 +44,7 @@ fn one_part_paints_top_row_and_preserves_bottom_pixels() {
     );
 
     assert_ne!(image.get_pixel(0, 0), base.get_pixel(0, 0));
+    assert_eq!(image.get_pixel(239, 0), image.get_pixel(239, 19));
     assert_eq!(image.get_pixel(120, 60), base.get_pixel(120, 60));
     assert_eq!(image.get_pixel(0, 119), base.get_pixel(0, 119));
     assert!(bounds_for(&image, 0).is_some());

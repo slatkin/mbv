@@ -11,8 +11,7 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| {
         .expect("the embedded Lexend Deca font should be valid")
 });
 
-const SCRIM_ALPHA: f32 = 0.90;
-const SCRIM_SOLID_FRACTION: f32 = 0.60;
+const SCRIM_ALPHA: f32 = 0.50;
 const GLYPH_SCALE: f32 = 0.90;
 const MIN_GLYPH_SCALE: f32 = 0.60;
 const SIDE_PADDING_PERCENT: u32 = 3;
@@ -129,17 +128,11 @@ fn paint_row(
         + ((f32::from(cell_height) - glyph_height) / 2.0)
         + ascent;
 
+    let alpha = (SCRIM_ALPHA * 255.0)
+        .round()
+        .to_u8()
+        .expect("scrim alpha should fit in one byte");
     for y in row_y..row_y.saturating_add(row_height).min(height) {
-        let progress = (y - row_y)
-            .to_f32()
-            .expect("scrim row offset should fit in floating point")
-            / f32::from(cell_height).max(1.0);
-        let from_outer_edge = if row_y == 0 { progress } else { 1.0 - progress };
-        let fade = ((1.0 - from_outer_edge) / (1.0 - SCRIM_SOLID_FRACTION)).clamp(0.0, 1.0);
-        let alpha = (SCRIM_ALPHA * fade * 255.0)
-            .round()
-            .to_u8()
-            .expect("clamped scrim alpha should fit in one byte");
         for x in 0..width {
             blend_pixel(image, x, y, [0, 0, 0], alpha);
         }
