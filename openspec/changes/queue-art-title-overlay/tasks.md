@@ -14,14 +14,14 @@
 
 ## 2. Cache and projection (shell)
 
-- [ ] 2.1 Add `NowPlayingTitleSite` to `mbv-ui-model` and the shell's single computation of it
+- [x] 2.1 Add `NowPlayingTitleSite` to `mbv-ui-model` and the shell's single computation of it
   (design D4) as two steps - overlay eligible, and site = eligible + painted-fact recorded beside
   `record_card_size` - keyed by the suffix-independent item identity. Verify with a table-driven
   unit test (`#[case]` only where outcomes differ): active+protocol+painted -> Artwork; paused ->
   Artwork; eligible but not yet painted, halfblock, visualizer, `visual_slot_shown()` false (idle /
   hidden / zero slot), no images, uncovered glyph, idle card on cursor art -> Header; a
   dim-backdrop suffix flip leaves the site unchanged for both an Emby and an Audiobookshelf key.
-- [ ] 2.2 Add `ensure_title_overlay_protocol` next to `ensure_hero_cover_protocol`: measure the
+- [x] 2.2 Add `ensure_title_overlay_protocol` next to `ensure_hero_cover_protocol`: measure the
   box from the base protocol, build the composed variant as its own cache entry
   `{item-identity}:t:{cols}x{rows}:{hash}` (design D3: the card cache key with any protocol suffix
   stripped), recompose only on identity/box/title change; a suffix change only re-encodes through
