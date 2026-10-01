@@ -18,7 +18,7 @@ pub const DERIVED_SEP: &str = ":t:";
 
 const SCRIM_ALPHA: f32 = 0.50;
 const SHADOW_ALPHA: f32 = 0.55;
-const GLYPH_SCALE: f32 = 0.96;
+const GLYPH_SCALE: f32 = 1.0;
 const MIN_GLYPH_SCALE: f32 = 0.60;
 const SIDE_PADDING_PERCENT: u32 = 3;
 
