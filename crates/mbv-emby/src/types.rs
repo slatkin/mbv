@@ -77,6 +77,8 @@ pub struct SessionInfo {
     pub playable_media_types: Vec<String>,
     pub now_playing: Option<String>,
     pub now_playing_item_id: Option<String>,
+    pub now_playing_item_type: Option<String>,
+    pub now_playing_series_id: Option<String>,
     pub position_s: i64,
     pub runtime_s: i64,
     pub position_ticks: i64,

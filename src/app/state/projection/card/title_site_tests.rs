@@ -1,10 +1,42 @@
 use super::{
     ActiveTitleSource, NowPlayingTitleSite, TitleArtFacts, TitleSiteFacts, TitleSitePlayback,
-    TitleSlotFacts, active_title_source_skip_reason, overlay_or_plain_key, painted_overlay_key,
-    resolve_title_site,
+    TitleSlotFacts, active_title_source_skip_reason, card_cache_key, card_cache_key_for_id,
+    card_image_types, overlay_or_plain_key, painted_overlay_key, resolve_title_site,
 };
 
 const KEY: &str = "art:t:8x4:1";
+
+#[rstest::rstest]
+#[case::movie("Movie", "item:QB", &["Backdrop", "Primary"])]
+#[case::episode("Episode", "item:QB", &["Backdrop", "Primary"])]
+#[case::audio("Audio", "item:P", &["Primary"])]
+#[case::music_album(
+    "MusicAlbum",
+    "item:P",
+    mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES
+)]
+fn queue_card_key_follows_hero_shape_and_preserves_music_keys(
+    #[case] item_type: &str,
+    #[case] expected: &str,
+    #[case] expected_image_types: &[&str],
+) {
+    let mut item = mbv_emby_model::test_support::make_item("Item", item_type);
+    item.id = "item".into();
+    assert_eq!(card_cache_key(&item), expected);
+    assert_eq!(card_image_types(&item), expected_image_types);
+}
+
+#[rstest::rstest]
+#[case::movie(Some("Movie"), "item:QB")]
+#[case::episode(Some("Episode"), "item:QB")]
+#[case::audio(Some("Audio"), "item:P")]
+#[case::unknown(None, "item:P")]
+fn slotless_card_key_uses_landscape_only_for_known_video_types(
+    #[case] item_type: Option<&str>,
+    #[case] expected: &str,
+) {
+    assert_eq!(card_cache_key_for_id("item", item_type), expected);
+}
 
 fn facts(
     playback: TitleSitePlayback,

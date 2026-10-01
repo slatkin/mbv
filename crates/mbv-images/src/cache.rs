@@ -444,4 +444,59 @@ mod tests {
         assert!(!cache.is_cached(base_key));
         assert!(!cache.is_cached("audiobookshelf:server:cover:item:t:8x4:title"));
     }
+
+    #[test]
+    fn reported_movie_primary_reservation_does_not_block_queue_backdrop_fetch() {
+        // Regression: a Primary-only reservation under {id}:P must not pin the queue card's landscape bytes.
+        use crate::ImageSource;
+        use crate::cache::FetchReservation;
+
+        let mut cache = cache(2);
+        let primary = super::ImageFetchReq {
+            cache_key: "item:P".into(),
+            item_id: "item".into(),
+            series_id: String::new(),
+            types: vec!["Primary".into()],
+            source: ImageSource::Emby,
+        };
+        let landscape = super::ImageFetchReq {
+            cache_key: "item:QB".into(),
+            item_id: "item".into(),
+            series_id: String::new(),
+            types: vec!["Backdrop".into(), "Primary".into()],
+            source: ImageSource::Emby,
+        };
+
+        assert!(matches!(
+            cache.reserve_card_image_fetch(primary, 2),
+            FetchReservation::Start(_)
+        ));
+        assert!(matches!(
+            cache.reserve_card_image_fetch(landscape, 2),
+            FetchReservation::Start(_)
+        ));
+    }
+
+    #[test]
+    fn queue_landscape_overlay_key_is_stable_and_base_changes_remove_it() {
+        use crate::title_overlay::{TitleOverlayText, title_overlay_cache_key};
+
+        let base_key = crate::emby_queue_landscape_cache_key("item");
+        let text = TitleOverlayText {
+            context: Some("context"),
+            title: "title",
+        };
+        let variant_key = title_overlay_cache_key(&base_key, 8, 4, text);
+        assert_eq!(variant_key, title_overlay_cache_key(&base_key, 8, 4, text));
+
+        let mut cache = cache(2);
+        cache.insert_image(base_key.clone(), image());
+        cache.insert_derived_image(variant_key.clone(), image());
+        cache.insert_image(base_key.clone(), image());
+        assert!(!cache.is_cached(&variant_key));
+
+        cache.insert_derived_image(variant_key.clone(), image());
+        cache.remove_image(&base_key);
+        assert!(!cache.is_cached(&variant_key));
+    }
 }

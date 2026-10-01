@@ -223,30 +223,40 @@ fn painted_overlay_key(key: Option<&str>, painted: bool) -> Option<&str> {
         .filter(|key| key.contains(":t:"))
 }
 
-fn card_image_types(item_type: &str) -> &'static [&'static str] {
-    match item_type {
+fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
+    match item.item_type.as_str() {
         "MusicAlbum" => MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
+        _ if emby_card_is_landscape(item) => &["Backdrop", "Primary"],
         "Movie" => &["Backdrop", "Primary", "Logo"],
-        // `Thumb` before the poster chain: home videos (and other non-Movie
-        // video items) often carry only a landscape `Thumb`.
+        // Non-landscape items keep their existing poster-first fallback chain.
         _ => &["Primary", "Thumb", "Backdrop", "Logo"],
     }
 }
 
+fn emby_card_is_landscape(item: &EmbyItem) -> bool {
+    mbv_components::library_panel::hero::emby_artwork_policy(item).shape
+        == mbv_components::library_panel::ArtworkShape::Landscape
+}
+
 fn card_cache_key(item: &EmbyItem) -> String {
-    let album_id = if item.item_type == "Audio" {
-        item.album_id.as_str()
+    if item.item_type == "Audio" {
+        mbv_images::emby_card_cache_key(&item.id, &item.album_id)
+    } else if emby_card_is_landscape(item) {
+        mbv_images::emby_queue_landscape_cache_key(&item.id)
     } else {
-        ""
-    };
-    mbv_images::emby_card_cache_key(&item.id, album_id)
+        mbv_images::emby_card_cache_key(&item.id, "")
+    }
 }
 
 /// The artwork cache key for an Emby item id held without an `EmbyItem` (a
 /// watched remote Session's now-playing item).
-fn card_cache_key_for_id(item_id: &str) -> String {
-    mbv_images::emby_card_cache_key(item_id, "")
+fn card_cache_key_for_id(item_id: &str, item_type: Option<&str>) -> String {
+    if matches!(item_type, Some("Movie" | "Episode")) {
+        mbv_images::emby_queue_landscape_cache_key(item_id)
+    } else {
+        mbv_images::emby_card_cache_key(item_id, "")
+    }
 }
 
 impl App {
@@ -398,18 +408,26 @@ impl App {
         })
     }
 
-    /// A watched remote Session names an item outside the local queue. Its own
-    /// Primary image is used (an episode's still lives there), never the selected row.
+    /// A watched remote Session names an item outside the local queue, never the selected row.
     fn project_slotless_session(&mut self, projection: &mut QueueCardProjection) -> bool {
-        let Some(item_id) = self
-            .connected_session_state
-            .as_ref()
-            .and_then(|session| session.now_playing_item_id.clone())
+        let Some((item_id, item_type, series_id)) =
+            self.connected_session_state.as_ref().and_then(|session| {
+                Some((
+                    session.now_playing_item_id.clone()?,
+                    session.now_playing_item_type.as_deref(),
+                    session.now_playing_series_id.clone().unwrap_or_default(),
+                ))
+            })
         else {
             return true;
         };
-        let cache_key = card_cache_key_for_id(&item_id);
-        self.fetch_card_image(cache_key.clone(), item_id, String::new(), &["Primary"]);
+        let cache_key = card_cache_key_for_id(&item_id, item_type);
+        let image_types: &[&str] = if matches!(item_type, Some("Movie" | "Episode")) {
+            &["Backdrop", "Primary"]
+        } else {
+            &["Primary"]
+        };
+        self.fetch_card_image(cache_key.clone(), item_id, series_id, image_types);
         projection.cache_key = Some(cache_key);
         true
     }
@@ -483,7 +501,8 @@ impl App {
         let n = queue_ref.total_queue_len();
         let start = cursor.saturating_sub(PREFETCH_BEHIND).min(n);
         let end = (cursor + PREFETCH_AHEAD + 1).min(n);
-        let prefetch: Vec<(String, String, String, String)> = queue_ref.slots()[start..end]
+        let prefetch: Vec<(String, String, String, &'static [&'static str])> = queue_ref.slots()
+            [start..end]
             .iter()
             .enumerate()
             .filter(|(i, _)| start + i != cursor)
@@ -493,12 +512,12 @@ impl App {
                     card_cache_key(item),
                     item.id.clone(),
                     item.series_id.clone(),
-                    item.item_type.clone(),
+                    card_image_types(item),
                 )
             })
             .collect();
-        for (key, id, series_id, item_type) in prefetch {
-            self.fetch_list_card_image_when_idle(key, id, series_id, card_image_types(&item_type));
+        for (key, id, series_id, image_types) in prefetch {
+            self.fetch_list_card_image_when_idle(key, id, series_id, image_types);
         }
     }
 
@@ -534,7 +553,7 @@ impl App {
             return;
         };
 
-        let img_types = card_image_types(&item.item_type);
+        let img_types = card_image_types(&item);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
         let cache_key = card_cache_key(&item);
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);

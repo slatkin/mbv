@@ -103,6 +103,8 @@ mod tests {
             playable_media_types: Vec::new(),
             now_playing: None,
             now_playing_item_id: None,
+            now_playing_item_type: None,
+            now_playing_series_id: None,
             position_s: 0,
             runtime_s: 0,
             position_ticks: 0,

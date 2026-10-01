@@ -70,6 +70,13 @@ pub fn emby_card_cache_key(item_id: &str, album_id: &str) -> String {
     }
 }
 
+/// Cache key for landscape Emby queue-card artwork, isolated from Primary art
+/// shared by MPRIS and other consumers.
+#[must_use]
+pub fn emby_queue_landscape_cache_key(item_id: &str) -> String {
+    format!("{item_id}:QB")
+}
+
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.

@@ -26,7 +26,10 @@ fn mock_client(url: &str) -> (EmbyClient, MockHttp) {
     (client_with_url(url).with_test_agent(agent), http)
 }
 
-fn session_response(playable_media_types: Option<serde_json::Value>) -> String {
+fn session_response(
+    playable_media_types: Option<serde_json::Value>,
+    now_playing_item_type: Option<&str>,
+) -> String {
     let mut session = json!({
         "Id": "session-id",
         "DeviceId": "other-device",
@@ -38,6 +41,13 @@ fn session_response(playable_media_types: Option<serde_json::Value>) -> String {
     if let Some(playable_media_types) = playable_media_types {
         session["PlayableMediaTypes"] = playable_media_types;
     }
+    if let Some(item_type) = now_playing_item_type {
+        let mut now_playing_item = json!({"Id": "item-id", "Name": "Item", "Type": item_type});
+        if item_type == "Episode" {
+            now_playing_item["SeriesId"] = json!("series-id");
+        }
+        session["NowPlayingItem"] = now_playing_item;
+    }
     json!([session]).to_string()
 }
 
@@ -46,7 +56,7 @@ fn parse_session_playable_media_types(
 ) -> Vec<String> {
     let (mut client, http) = mock_client(TEST_URL);
     client.device_id = "this-device".into();
-    let body = session_response(playable_media_types);
+    let body = session_response(playable_media_types, None);
     http.respond(200, &body);
     client
         .get_sessions_unfiltered()
@@ -71,6 +81,29 @@ fn sessions_parse_playable_media_types(
         parse_session_playable_media_types(playable_media_types),
         expected
     );
+}
+
+fn parse_session_now_playing_item(item_type: &str) -> crate::SessionInfo {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.device_id = "this-device".into();
+    http.respond(200, &session_response(None, Some(item_type)));
+    client
+        .get_sessions_unfiltered()
+        .unwrap()
+        .pop()
+        .expect("mock session must be retained")
+}
+
+#[rstest]
+#[case::movie("Movie", None)]
+#[case::episode("Episode", Some("series-id"))]
+fn sessions_retain_now_playing_item_artwork_identity(
+    #[case] item_type: &str,
+    #[case] expected_series_id: Option<&str>,
+) {
+    let session = parse_session_now_playing_item(item_type);
+    assert_eq!(session.now_playing_item_type.as_deref(), Some(item_type));
+    assert_eq!(session.now_playing_series_id.as_deref(), expected_series_id);
 }
 
 #[test]
