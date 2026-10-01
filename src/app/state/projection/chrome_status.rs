@@ -235,10 +235,11 @@ impl App {
             return None;
         };
         let pad = Span::styled(" ", Style::default().bg(pill_bg));
-        // The nerd-font glyph carries no trailing pad so it sits flush against
-        // the remote pill's icon, which has no leading pad either.
+        // The nerd-font glyph's one trailing space is the whole gap to the
+        // remote pill's icon, which has no leading pad; a glyph with no space
+        // after it paints cramped.
         Some(if self.use_nerd_fonts {
-            vec![pad, Span::styled(format!(" {glyph}"), style.bg(pill_bg))]
+            vec![pad, Span::styled(format!(" {glyph} "), style.bg(pill_bg))]
         } else {
             vec![pad.clone(), Span::styled(words, style.bg(pill_bg)), pad]
         })

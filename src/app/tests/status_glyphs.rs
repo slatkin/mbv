@@ -53,14 +53,14 @@ fn app_with_autosaving_playlist(use_nerd_fonts: bool) -> App {
 }
 
 #[rstest]
-#[case::nerd_fonts(true, " \u{f0f42}")]
+#[case::nerd_fonts(true, " \u{f0f42} ")]
 #[case::plain(false, " UNSAVED ")]
 fn unsaved_pill_label_follows_the_nerd_font_flag(#[case] nerd: bool, #[case] expected: &str) {
     assert_eq!(pill_label(&app_with_dirty_queue(nerd)), expected);
 }
 
 #[rstest]
-#[case::nerd_fonts(true, " \u{f18ea}")]
+#[case::nerd_fonts(true, " \u{f18ea} ")]
 #[case::plain(false, " AUTOSAVE ")]
 fn autosave_pill_label_follows_the_nerd_font_flag(#[case] nerd: bool, #[case] expected: &str) {
     assert_eq!(pill_label(&app_with_autosaving_playlist(nerd)), expected);
