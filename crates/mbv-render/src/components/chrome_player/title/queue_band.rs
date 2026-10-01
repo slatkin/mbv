@@ -1,5 +1,5 @@
 use super::super::PlaybackRenderContext;
-use super::super::seek_fill;
+use super::super::seek_ratio;
 use super::header::clip_to_width;
 use super::palette;
 use super::transport::width_u16;
@@ -9,7 +9,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Gauge, Paragraph};
 use unicode_width::UnicodeWidthStr;
 /// The queue column's painted band rows (the blank title row between the
 /// controls and the seekbar is painted by the caller).
@@ -153,14 +153,15 @@ fn render_queue_seek_row(
         );
         return;
     }
-    let filled = seek_fill(pos_ticks, rt_ticks, bar_w);
-    let rest = (bar_w as usize).saturating_sub(filled);
     ctx.playback.seekbar = Rect {
         x: row.x + 1 + elapsed_w + 1,
         y: row.y,
         width: bar_w,
         height: 1,
     };
+    // The whole row is repainted each pass, with the bar span precleared to
+    // the panel fill: Gauge does not clear every old symbol in its unfilled
+    // area, so a backward seek or resize would otherwise leave stale fill.
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" ", Style::default().bg(panel_bg)),
@@ -169,14 +170,7 @@ fn render_queue_seek_row(
                 Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
-            Span::styled(
-                "\u{2593}".repeat(filled),
-                Style::default().fg(palette::ACCENT),
-            ),
-            Span::styled(
-                "\u{2591}".repeat(rest),
-                Style::default().fg(palette::PROGRESS_TRACK),
-            ),
+            Span::styled(" ".repeat(bar_w as usize), Style::default().bg(panel_bg)),
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(
                 dur_str,
@@ -187,4 +181,22 @@ fn render_queue_seek_row(
         .style(Style::default().bg(panel_bg)),
         row,
     );
+    // The active track's unplayed background is the band's own backdrop
+    // slate (#272e33), matching the controls row above it; the Library strip
+    // keeps the shared `PROGRESS_TRACK` grey.
+    frame.render_widget(
+        Gauge::default()
+            .ratio(seek_ratio(pos_ticks, rt_ticks))
+            .use_unicode(true)
+            .label("")
+            .gauge_style(
+                Style::default()
+                    .fg(palette::ACCENT)
+                    .bg(palette::SURFACE_BACKDROP),
+            ),
+        ctx.playback.seekbar,
+    );
 }
+
+#[cfg(test)]
+mod tests;
