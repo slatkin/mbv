@@ -15,22 +15,18 @@ fn black_image(width: u32, height: u32) -> DynamicImage {
     DynamicImage::ImageRgb8(RgbImage::from_pixel(width, height, Rgb([80, 90, 100])))
 }
 
-fn has_dark_outline_adjacent_to_red_ink(image: &DynamicImage) -> bool {
-    let rgb = image.to_rgb8();
-    rgb.enumerate_pixels().any(|(x, y, pixel)| {
-        let dark = pixel.0[0] < 40 && pixel.0[1] < 45 && pixel.0[2] < 50;
-        dark && [
-            (x.checked_sub(1), Some(y)),
-            (x.checked_add(1), Some(y)),
-            (Some(x), y.checked_sub(1)),
-            (Some(x), y.checked_add(1)),
-        ]
-        .into_iter()
-        .filter_map(|(x, y)| Some((x?, y?)))
-        .any(|(x, y)| {
-            rgb.get_pixel_checked(x, y)
-                .is_some_and(|adjacent| adjacent.0[0] > 80 && adjacent.0[1] < 80)
-        })
+fn has_darker_than_scrim_pixel(
+    image: &DynamicImage,
+    bounds: (u32, u32, u32, u32),
+    down_right: bool,
+) -> bool {
+    image.to_rgb8().enumerate_pixels().any(|(x, y, pixel)| {
+        let beyond_ink = if down_right {
+            x > bounds.2 || y > bounds.3
+        } else {
+            x < bounds.0 && y < bounds.1
+        };
+        beyond_ink && pixel.0[0] < 40 && pixel.0[1] < 45 && pixel.0[2] < 50
     })
 }
 
@@ -50,7 +46,7 @@ fn bounds_for(image: &DynamicImage, channel: usize) -> Option<(u32, u32, u32, u3
 }
 
 #[test]
-fn one_part_paints_top_row_and_preserves_bottom_pixels() {
+fn one_part_paints_top_row_with_down_right_shadow_and_preserves_bottom_pixels() {
     let base = black_image(240, 120);
     let image = compose_title_overlay(
         &base,
@@ -63,10 +59,15 @@ fn one_part_paints_top_row_and_preserves_bottom_pixels() {
     );
 
     assert_ne!(image.get_pixel(0, 0), base.get_pixel(0, 0));
-    assert!(has_dark_outline_adjacent_to_red_ink(&image));
+    let ink = bounds_for(&image, 0).expect("title glyphs should be painted");
+    assert!(has_darker_than_scrim_pixel(&image, ink, true));
+    assert!(!has_darker_than_scrim_pixel(&image, ink, false));
     assert_eq!(image.get_pixel(239, 0), image.get_pixel(239, 19));
     assert_eq!(image.get_pixel(120, 60), base.get_pixel(120, 60));
-    assert_eq!(image.get_pixel(0, 119), base.get_pixel(0, 119));
+    assert_eq!(
+        image.crop_imm(0, 100, 240, 20).to_rgb8(),
+        base.crop_imm(0, 100, 240, 20).to_rgb8()
+    );
     assert!(bounds_for(&image, 0).is_some());
     assert_eq!(bounds_for(&image, 2), None);
 }

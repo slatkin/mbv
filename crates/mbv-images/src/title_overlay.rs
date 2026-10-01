@@ -12,6 +12,7 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| {
 });
 
 const SCRIM_ALPHA: f32 = 0.50;
+const SHADOW_ALPHA: f32 = 0.55;
 const GLYPH_SCALE: f32 = 0.90;
 const MIN_GLYPH_SCALE: f32 = 0.60;
 const SIDE_PADDING_PERCENT: u32 = 3;
@@ -147,11 +148,11 @@ fn paint_row(
         let glyph = glyph_id.with_scale_and_position(scale, point(x, baseline));
         if let Some(outlined) = FONT.outline_glyph(glyph) {
             let bounds = outlined.px_bounds();
-            let outline_radius = (glyph_height / 16.0)
+            let shadow_offset = (glyph_height / 16.0)
                 .round()
                 .max(1.0)
                 .to_i32()
-                .expect("glyph outline radius should fit in a signed pixel coordinate");
+                .expect("glyph shadow offset should fit in a signed pixel coordinate");
             let mut coverage_pixels = Vec::new();
             outlined.draw(|glyph_x, glyph_y, coverage| {
                 let origin_x = bounds
@@ -185,7 +186,15 @@ fn paint_row(
                 }
                 coverage_pixels.push((pixel_x, pixel_y, alpha));
             });
-            paint_glyph(image, &coverage_pixels, outline_radius, colour, right_limit);
+            paint_glyph(
+                image,
+                &coverage_pixels,
+                shadow_offset,
+                colour,
+                right_limit,
+                row_y,
+                row_height,
+            );
         }
         x += advance;
     }
@@ -197,27 +206,23 @@ fn paint_glyph(
     radius: i32,
     colour: [u8; 3],
     right_limit: u32,
+    row_y: u32,
+    row_height: u32,
 ) {
     let (width, height) = image.dimensions();
-    for &(pixel_x, pixel_y, alpha) in coverage_pixels {
-        for (offset_x, offset_y) in [
-            (-radius, 0),
-            (radius, 0),
-            (0, -radius),
-            (0, radius),
-            (-radius, -radius),
-            (radius, -radius),
-            (-radius, radius),
-            (radius, radius),
-        ] {
-            let outline = pixel_x
-                .checked_add(offset_x)
-                .zip(pixel_y.checked_add(offset_y))
-                .and_then(|(x, y)| Some((u32::try_from(x).ok()?, u32::try_from(y).ok()?)))
-                .filter(|(x, y)| *x < width && *y < height);
-            if let Some((x, y)) = outline {
-                blend_pixel(image, x, y, [0, 0, 0], alpha);
-            }
+    let row_bottom = row_y.saturating_add(row_height).min(height);
+    for &(pixel_x, pixel_y, coverage) in coverage_pixels {
+        let shadow_alpha = (f32::from(coverage) * SHADOW_ALPHA)
+            .round()
+            .to_u8()
+            .expect("shadow coverage should fit in one byte");
+        let shadow = pixel_x
+            .checked_add(radius)
+            .zip(pixel_y.checked_add(radius))
+            .and_then(|(x, y)| Some((u32::try_from(x).ok()?, u32::try_from(y).ok()?)))
+            .filter(|(x, y)| *x < width && *x < right_limit && *y >= row_y && *y < row_bottom);
+        if let Some((x, y)) = shadow {
+            blend_pixel(image, x, y, [0, 0, 0], shadow_alpha);
         }
     }
     for &(x, y, alpha) in coverage_pixels {
