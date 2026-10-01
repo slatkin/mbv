@@ -183,6 +183,9 @@ fn render_queue_seek_row(
         .style(Style::default().bg(panel_bg)),
         row,
     );
+    // The active track's unplayed background is the band's own backdrop
+    // slate (#272e33), matching the controls row above it; the Library strip
+    // keeps the shared `PROGRESS_TRACK` grey.
     frame.render_widget(
         Gauge::default()
             .ratio(queue_seek_ratio(pos_ticks, rt_ticks))
@@ -191,7 +194,7 @@ fn render_queue_seek_row(
             .gauge_style(
                 Style::default()
                     .fg(palette::ACCENT)
-                    .bg(palette::PROGRESS_TRACK),
+                    .bg(palette::SURFACE_BACKDROP),
             ),
         ctx.playback.seekbar,
     );

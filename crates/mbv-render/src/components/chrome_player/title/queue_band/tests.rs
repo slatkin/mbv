@@ -113,12 +113,14 @@ fn is_accent_filled(cell: &(String, Color, Color)) -> bool {
     (*fg == palette::ACCENT && symbol != " ") || *bg == palette::ACCENT
 }
 
-/// The columns carrying the Queue bar's muted track background.
+/// The columns carrying the Queue bar's unplayed track background: the
+/// backdrop slate (#272e33), not the shared `PROGRESS_TRACK` grey the
+/// Library strip keeps.
 fn track_columns(cells: &[(String, Color, Color)]) -> Vec<usize> {
     cells
         .iter()
         .enumerate()
-        .filter(|(_, (_, _, bg))| *bg == palette::PROGRESS_TRACK)
+        .filter(|(_, (_, _, bg))| *bg == palette::SURFACE_BACKDROP)
         .map(|(x, _)| x)
         .collect()
 }
@@ -308,6 +310,14 @@ fn library_strip_keeps_its_thin_whole_cell_bar() {
         .filter(|(symbol, fg, _)| symbol == UPPER_LINE && *fg == palette::ACCENT)
         .count();
     assert_eq!(accent, 10, "0.24 of 40 whole cells rounds up to 10");
+    let unfilled = cells
+        .iter()
+        .filter(|(symbol, fg, _)| symbol == UPPER_LINE && *fg == palette::PROGRESS_TRACK)
+        .count();
+    assert_eq!(
+        unfilled, 30,
+        "the Library bar keeps the shared progress-track grey"
+    );
     assert!(
         !text.contains(FULL) && !text.contains(ONE_EIGHTH),
         "no Queue fractional blocks on the Library bar: {text:?}"
