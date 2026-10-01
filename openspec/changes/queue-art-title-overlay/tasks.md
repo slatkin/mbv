@@ -38,13 +38,13 @@
 
 ## 3. Header and spec sync
 
-- [ ] 3.1 Feed the site into `QueuePlaybackPanel` and paint `Now Playing` after the state
+- [x] 3.1 Feed the site into `QueuePlaybackPanel` and paint `Now Playing` after the state
   icon (aqua play, yellow pause) when the site is `Artwork`, the existing title otherwise
   (`render_header_title` / `HeaderTitle`); the label paints in `PLAYBACK_CONTEXT_FG` (yellow)
   after the icon. Verify
   with panel painter tests: Artwork -> icon + `Now Playing` in those colours; Header ->
   existing title rows (extend the existing header tests, do not duplicate); Idle unchanged.
-- [ ] 3.2 Add `CONTEXT.md` terms if new domain words were introduced (title site, overlay); verify
+- [x] 3.2 Add `CONTEXT.md` terms if new domain words were introduced (title site, overlay); verify
   by reading `CONTEXT.md`'s Avoid list first and checking no collision.
 - [ ] 3.3 Manual visual pass on Kitty and Sixel (and halfblock for the fallback): tune scrim
   opacity/height and Lexend weight (design Open Question); verify one-part, two-part, long-title,
