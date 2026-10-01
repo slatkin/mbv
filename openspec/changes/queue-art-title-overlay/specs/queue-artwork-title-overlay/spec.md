@@ -11,13 +11,15 @@ artwork or the header row carries the title.
 ### Requirement: The title is drawn onto live queue artwork
 
 While the queue column's visual slot shows real artwork through the configured Kitty, Sixel or
-iTerm2 image protocol and a target is playing, the now-playing title SHALL be drawn onto the
+iTerm2 image protocol and local or watched playback is active (paused included), the now-playing title SHALL be drawn onto the
 artwork itself, over a scrim. A title with no context part SHALL be drawn as one row at the top
 of the artwork. A title with a context part (artist and song, show and episode) SHALL be drawn
 as two rows: the context part at the top and the title part at the bottom. Each row SHALL be a
 single line over its own scrim that fades into the unmodified artwork, and SHALL NOT wrap. The
-overlay SHALL use the same title and context text the header row would carry, in the playback
-panel's title and context colour roles.
+overlay SHALL use the same title and context text the header row would carry. A context part SHALL
+paint in the playback panel's context role (yellow), a title part beneath a context part in its
+title role (aqua), and a one-part title in the context role (yellow), matching the header. Paused
+playback keeps the overlay.
 
 #### Scenario: One-part title
 
@@ -88,7 +90,7 @@ artwork entry other consumers (MPRIS art, Library surfaces) read.
 The title SHALL be carried by exactly one site at a time. The artwork SHALL carry it only while
 the overlay for the current title has been painted through a non-halfblock configured protocol.
 In every other state — halfblock protocol, visualizer shown, placeholder or loading slot,
-images disabled, visual slot hidden, no ready overlay yet, or a title containing a character
+images disabled, visual slot hidden (idle, hidden by the user, or no slot area), no ready overlay yet, or a title containing a character
 the embedded font cannot render — the header row SHALL carry it. Any uncertainty SHALL resolve
 to the header carrying the title, so the title is never absent from both sites.
 
@@ -110,6 +112,11 @@ the title.
 - **WHEN** the configured image protocol is halfblocks
 - **THEN** no title is drawn onto the artwork and the header row carries it
 
+#### Scenario: Idle card art never carries a title
+
+- **WHEN** no item is actively playing and the card shows the cursor row's artwork
+- **THEN** no title is drawn onto that artwork
+
 #### Scenario: Unsupported glyph
 
 - **WHEN** the title contains a character the embedded font has no glyph for
@@ -117,5 +124,6 @@ the title.
 
 #### Scenario: Dimmed backdrop does not flip the site
 
-- **WHEN** an overlay dialog that dims its backdrop opens while the artwork carries the title
+- **WHEN** an overlay dialog that dims its backdrop opens while the artwork carries the title,
+  for an Emby or an Audiobookshelf item
 - **THEN** the header row continues to read `Now Playing`

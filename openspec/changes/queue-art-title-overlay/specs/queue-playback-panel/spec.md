@@ -22,7 +22,8 @@ paused), one space, and then either the now-playing title or the label `Now Play
 carry the title — a two-part title as the context part left-aligned and the title part with the
 overflow marquee on the remaining width, a one-part title as a single yellow title — unless the
 queue artwork carries the title under the `queue-artwork-title-overlay` capability, in which case
-it SHALL read `Now Playing`. No throbber, progress percent, or time SHALL paint in the header.
+it SHALL read `Now Playing`, the label in the context role (yellow, as a one-part title paints in
+the header) after the aqua icon. No throbber, progress percent, or time SHALL paint in the header.
 
 The header SHALL follow the effective playback target — cast, then connected session, then local —
 and SHALL NOT follow the queue scope being viewed.
