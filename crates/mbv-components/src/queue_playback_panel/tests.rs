@@ -245,7 +245,7 @@ fn artwork_title_site_paints_the_mbv_brand_row() {
         palette::TEXT_EMPHASIS,
         "the opening bracket",
     );
-    assert_cells_carry(&text, &fgs, "mbv", palette::TEXT_FOCUS_ACCENT, "the brand");
+    assert_cells_carry(&text, &fgs, "mbv", palette::TEXT_METADATA, "the brand");
     assert_cells_carry(
         &text,
         &fgs,
@@ -253,13 +253,7 @@ fn artwork_title_site_paints_the_mbv_brand_row() {
         palette::TEXT_EMPHASIS,
         "the closing bracket",
     );
-    assert_cells_carry(
-        &text,
-        &fgs,
-        "PLAYING",
-        palette::TEXT_METADATA,
-        "the status word",
-    );
+    assert_cells_carry(&text, &fgs, "PLAYING", palette::ACCENT, "the status word");
     assert_cells_carry(&text, &fgs, ":", palette::TEXT_EMPHASIS, "the colon");
     assert_cells_carry(
         &text,
@@ -268,10 +262,15 @@ fn artwork_title_site_paints_the_mbv_brand_row() {
         palette::TEXT_EMPHASIS,
         "the local host",
     );
+    let playing = text.find("PLAYING").unwrap();
+    assert!(
+        mods[playing].contains(Modifier::BOLD),
+        "the status word paints bold: {text:?}"
+    );
     let brand = text.find("mbv").unwrap();
     assert!(
-        mods[brand].contains(Modifier::BOLD),
-        "the brand paints bold: {text:?}"
+        !mods[brand].contains(Modifier::BOLD),
+        "the brand paints unbold: {text:?}"
     );
 }
 

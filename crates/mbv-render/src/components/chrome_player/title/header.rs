@@ -82,7 +82,7 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
 /// The artwork title site's header row: ` [mbv]` left-anchored and
 /// `PLAYING:<host>` right-anchored, one trailing space outside the right
 /// edge. The icon is dropped (the word carries the state), the brackets and
-/// the colon are cream, `mbv` is yellow and bold, `PLAYING` is foam, and the
+/// the colon are cream, `mbv` is foam, `PLAYING` is aqua and bold, and the
 /// host is cream when local / `PLAYBACK_HOST_REMOTE_FG` when remote.
 fn artwork_brand_spans(
     header: &HeaderTitle<'_>,
@@ -95,16 +95,16 @@ fn artwork_brand_spans(
         Span::styled("[", cream),
         Span::styled(
             "mbv",
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .bg(panel_bg)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(palette::TEXT_METADATA).bg(panel_bg),
         ),
         Span::styled("]", cream),
     ];
     let mut right = vec![Span::styled(
         "PLAYING",
-        Style::default().fg(palette::TEXT_METADATA).bg(panel_bg),
+        Style::default()
+            .fg(palette::ACCENT)
+            .bg(panel_bg)
+            .add_modifier(Modifier::BOLD),
     )];
     if !header.host.is_empty() {
         let host_fg = if header.host_is_remote {
