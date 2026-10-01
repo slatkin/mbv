@@ -172,7 +172,7 @@ impl App {
         };
         let glyph_style = Style::default()
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(ratatui::style::Color::White);
+            .fg(mbv_theme::TEXT_METADATA);
         let label_style = Style::default()
             .fg(if on {
                 mbv_theme::TEXT_FOCUS_ACCENT
