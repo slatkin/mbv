@@ -10,8 +10,19 @@ impl App {
         // With nerd fonts the icon leads the pill; the autosave glyph's trailing
         // space is the single gap between them.
         let lead = if self.use_nerd_fonts { "" } else { " " };
-        let remote_pill = (remote_state != RemoteSlotState::Off)
-            .then(|| format!("{lead}{} {} ", icon, label.trim()));
+        // The host name names the remote being controlled, so only a connected
+        // slot shows it; the local-daemon (disconnected) pill is the icon alone.
+        let connected = matches!(
+            remote_state,
+            RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+        );
+        let remote_pill = (remote_state != RemoteSlotState::Off).then(|| {
+            if connected {
+                format!("{lead}{icon} {} ", label.trim())
+            } else {
+                format!("{lead}{icon} ")
+            }
+        });
         mbv_render::components::queue::QueueTitleModel { remote_pill }
     }
 }

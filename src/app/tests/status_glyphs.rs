@@ -65,3 +65,28 @@ fn unsaved_pill_label_follows_the_nerd_font_flag(#[case] nerd: bool, #[case] exp
 fn autosave_pill_label_follows_the_nerd_font_flag(#[case] nerd: bool, #[case] expected: &str) {
     assert_eq!(pill_label(&app_with_autosaving_playlist(nerd)), expected);
 }
+
+#[test]
+fn queue_footer_pill_shows_no_host_name_while_disconnected() {
+    let mut app = make_app_stub();
+    app.use_nerd_fonts = true;
+
+    assert_eq!(
+        app.queue_title_model().remote_pill.as_deref(),
+        Some("\u{f0118} ")
+    );
+}
+
+#[test]
+fn queue_footer_pill_shows_the_host_name_while_connected() {
+    let mut app = make_app_stub();
+    app.use_nerd_fonts = true;
+    app.connected_session_id = Some("session-1".into());
+    app.connected_session_state = Some(make_session("remote-host", "mbv"));
+
+    assert!(
+        app.queue_title_model()
+            .remote_pill
+            .is_some_and(|pill| pill.starts_with("\u{f0119} ") && pill.contains("remote-host"))
+    );
+}
