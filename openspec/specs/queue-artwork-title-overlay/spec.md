@@ -15,7 +15,7 @@ iTerm2 image protocol and local or watched playback is active (paused included),
 artwork itself, over a scrim. A title with no context part SHALL be drawn as one row at the top
 of the artwork. A title with a context part (artist and song, show and episode) SHALL be drawn
 as two rows: the context part at the top and the title part at the bottom. Each row SHALL be a
-single line over its own scrim that fades into the unmodified artwork, and SHALL NOT wrap. The
+single line over its own flat translucent scrim, and SHALL NOT wrap. The
 overlay SHALL use the same title and context text the header row would carry. A context part SHALL
 paint in the playback panel's context role (yellow), a title part beneath a context part in its
 title role (aqua), and a one-part title in the context role (yellow), matching the header. Paused
