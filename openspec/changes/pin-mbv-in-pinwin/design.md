@@ -7,7 +7,9 @@
   daemon endpoint (`--connect-daemon` or config `daemon_client_endpoint`) runs a remote-client
   TUI (`run_remote_app`); otherwise `run_local_instance` makes this launch a Client, spawning the
   Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
-  child's stdio). The tray lives in the Owner and is unchanged by this change.
+  child's stdio). The tray lives in the Owner (`mbv-desktop`, ksni) and starts only when
+  stay-alive is on (`mbv-daemon` `run.rs` `start_tray`); this change adds the panel size
+  controls to it (D9).
 - **Terminal access.** mbv and ratatui-image never open `/dev/tty`. crossterm 0.29 reads input and
   sets raw mode on stdin when stdin is a tty (`tty_fd()`), but `window_size()` and the kitty
   keyboard probe open `/dev/tty` first and fall back to stdout only when that open fails. Resize
@@ -39,8 +41,11 @@
   removed, not bridged.
 
 **Non-Goals:**
-- No tray, ctrl or Owner changes. The Owner's tray stays as it is, and `mbvd` is unaffected.
-- No pinwin command line, environment variables, socket protocol or standalone options window.
+- `mbvd` is unaffected; the Owner gains only the pinned declaration, the panel step relay and the
+  tray's `Panel` submenu (D9).
+- No pinwin command line, environment variables, socket protocol, own tray or GTK options
+  window, and no pinwin code change for the tray controls.
+- No panel settings in the TUI: panel size is GUI business, changed from the tray (D9).
 - No panel, and no working desktop launcher, on sessions without layer-shell (GNOME, X11).
 - No config setting that turns pinning on.
 
@@ -113,8 +118,8 @@
   fallback if the task 1.1 probe shows the no-takeover route fails (a dependency that needs a real
   controlling terminal); it would change only what the launching shell does (it would return at
   once).
-- Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from F2 would
-  need an IPC channel back to the panel, which is the socket this design removes.
+- Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from the tray
+  would need a second IPC channel into the panel process, which is the socket this design removes.
 - Alternative: pinwin as a separate executable. Rejected by the product definition and by D4.
 - **Probe result (task 1.1, 2026-10-02).** The route above works; the fork alternative is not
   needed. Probed from foot, from ghostty, and from a no-controlling-terminal `setsid` launch
@@ -135,7 +140,7 @@
 - `mbv-core`, `mbv-daemon`, `mbv-config`, `mbvd` and every other crate MUST NOT depend on
   `mbv-pinwin`, directly or transitively.
 - There is one build: one `cargo build --release`, one tarball binary and one `.deb`, all carrying
-  pinning. `--pin` is a runtime flag. The F2 Panel page is always present.
+  pinning. `--pin` is a runtime flag.
 - The mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime dependency
   (Debian: `libgtk-4-1`, `libgtk4-layer-shell0`; Arch: `gtk4`, `gtk4-layer-shell`), and building
   needs Zig plus the GTK4 / gtk4-layer-shell development packages. The CI `.deb` assertion that
@@ -175,16 +180,8 @@
   which is a start failure (D5). It never
   calls pinwin: `mbv-config` sits under `mbvd` (D4), and geometry checks need live monitor
   metrics.
-- F2: a `Panel` destination (like `Services`/`Keys`) on the main page holds six rows. `Side` is a
-  `Text` row cycling `left`/`right`. `Cols` and the four
-  gutters are a new stepper row kind: the keys that cycle a `Text` row's value step the number
-  down and up by 1, with Shift by 10; `Cols` stops at 1 and 65535, gutters at the i32 bounds. No
-  free-text entry.
-- Each step while pinned calls `pinwin_apply_layout` with the full new layout. `PINWIN_OK` saves
-  the value; a rejection leaves both the panel and `config.toml` unchanged, keeps the previous
-  value on the row, and shows the reason in a Warning toast (the existing F2 feedback path).
-  When not pinned, each step is saved without geometry validation; the stepper bounds already
-  keep the values in range.
+- The TUI has no panel settings page: panel size is GUI business and is changed from the tray
+  (D9) or by editing `config.toml`. The F2 Panel page built by task 4.3 is removed (task 8.4).
 - The keyboard mode is fixed to `on-demand` (the previous default), and `COLS`/`GUTTER`/
   `PINWIN_DEBUG`/`--no-tray` have no equivalent.
 - Naming: the layer-shell surface is the *pinned panel*, recorded in `CONTEXT.md` beside the
@@ -192,15 +189,44 @@
   distinct.
 
 **D7. Reverts.** The first version's packaging split, launcher module, ctrl capability, daemon
-tray hook changes, `Pin options...` item and ADR 0004 amendment are removed in dedicated tasks
-rather than left dormant. The launcher revert restores `contrib/mbv.desktop` to its pre-change
-form; task 4.4 then sets it to `Exec=mbv --pin`, `Terminal=false`.
+tray hook changes, `Pin options...` item and ADR 0004 amendment were removed in dedicated tasks
+(section 2). The launcher revert restores `contrib/mbv.desktop` to its pre-change form; task 4.4
+then sets it to `Exec=mbv --pin`, `Terminal=false`. The pinned declaration, lazy tray start and
+ADR 0004 amendment come back for the tray size controls, without a socket (D9); the packaging
+split, `mbv --desktop` launcher, `PINWIN_SOCKET` wiring and `Pin options...` item stay removed.
 
 **D8. Tests.** The layout core's contracts are Zig unit tests under `zig build check` upstream
-(owned by `add-library-abi`). This change adds one Rust contract test: `[panel]` values out of
-range fall back to their defaults and a valid section round-trips through save. The `--pin`
-decision, the F2 stepper (it reuses the `Text` row's keys and save path), panel rendering and the
-pty hand-over are covered by the task 6.2 manual check.
+(owned by `add-library-abi`). This change adds Rust contract tests: `[panel]` values out of range
+fall back to their defaults and a valid section round-trips through save (4.2); a panel step
+clamps to the `[panel]` ranges (8.1); the Owner relays a tray step only to declared pinned
+clients and forgets a client on disconnect (8.2). The `--pin` decision, the tray menu, panel
+rendering and the pty hand-over are covered by the task 6.2 manual check.
+
+**D9. Panel size controls in the tray.** pinwin's options window and own tray stay deleted; the
+library's existing `pinwin_apply_layout` is the only panel call. The tray runs in the Owner, the
+panel in the pinned client process, so the step crosses ctrl:
+1. *Vocabulary.* `mbv-ctrl` gains a `PanelStep` enum: `Side(Left|Right)`, `Cols(i32)` and
+   `Gutter(Top|Bottom|Left|Right, i32)`; the deltas the tray sends are ±1 and ±10. `mbv-config`
+   gains the step arithmetic (`PanelConfig` + step -> new `PanelConfig`, clamped to the D6 ranges),
+   replacing `mbv-ui-model`'s `changed_panel_config`.
+2. *Declaration.* The local Owner advertises a `pinned-panel` capability. A pinned client
+   (`pin::is_pinned()`) that sees it sends `CtrlCmd::DeclarePinned` (no payload; the first
+   version's `5690ab521`/`83e476b7a` without the socket path). The Owner records the client and
+   forgets it on disconnect. `mbvd` does not advertise the capability, so a pinned remote client
+   (`--connect-daemon`) gets no tray controls.
+3. *Tray lifecycle.* The daemon pushes "a pinned client is connected" (yes/no) to the tray after
+   every declaration and client removal. With stay-alive off, the first declaration starts the
+   tray (the first version's `ca03159c4`); `show_systray_icon = false` still suppresses it. ADR
+   0004 records the lazy start (amendment as in `a36fef682`, reworded for the size controls).
+4. *Menu.* While the flag is yes, `mbv-desktop`'s tray shows a `Panel` submenu: `Left`, `Right`,
+   then `Columns`, `Top`, `Bottom`, `Left gutter`, `Right gutter`, each with `−10`, `−1`, `+1`,
+   `+10`. The tray does not show current values (the Owner does not track the client's layout).
+   Other tray items are unchanged.
+5. *Action.* A menu item sends the `PanelStep` to the daemon over the tray's existing command
+   channel; the daemon sends `CtrlEvent::PanelStep` to every declared pinned client. The client
+   applies it to its current `[panel]` value, calls `pinwin_apply_layout`, and saves to
+   `config.toml` on `PINWIN_OK`. A rejection is logged and changes nothing (no toast: the user is
+   in the tray, not the TUI).
 
 ## Risks / Trade-offs
 

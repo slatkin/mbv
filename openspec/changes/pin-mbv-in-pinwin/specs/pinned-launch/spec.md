@@ -3,8 +3,8 @@
 ## Purpose
 
 Defines mbv's pinned panel: `mbv --pin` runs mbv's TUI docked in a GTK layer-shell panel, the
-desktop entry launches it that way, and the panel layout is editable in the settings screen. The
-panel is part of mbv, not a separate program.
+desktop entry launches it that way, and the panel's size and side are changed from mbv's system
+tray. The panel is part of mbv, not a separate program.
 
 ## ADDED Requirements
 
@@ -60,22 +60,44 @@ notification.
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
 `cols` (integer 1 through 65535, default 40) and `gutter_top`, `gutter_bottom`, `gutter_left`,
 `gutter_right` (integers in pixels, may be negative, default 0). An out-of-range or malformed value
-SHALL fall back to its default with a logged warning, without changing the other keys. The F2 settings
-screen SHALL provide a Panel page with one row per value: `Side` cycles between left and right, and
-the numeric rows step down and up by 1, or by 10 with Shift, within their ranges. Layout semantics
-(docking, reservation, negative gutters, validation) are those of the `pinwin-panel` capability.
+SHALL fall back to its default with a logged warning, without changing the other keys. The TUI
+SHALL NOT present these values; they are changed only from the tray (below) or by editing
+`config.toml`. Layout semantics (docking, reservation, negative gutters, validation) are those of
+the `pinwin-panel` capability.
 
-#### Scenario: Live change while pinned
-- **WHEN** mbv runs in the panel and the user steps the width in F2's Panel page
-- **THEN** the panel resizes without restarting mbv, and the value is saved
+#### Scenario: Invalid saved value
+- **WHEN** `config.toml` has `cols = 0` in `[panel]`
+- **THEN** mbv logs a warning and uses 40 columns, keeping the other `[panel]` values
 
-#### Scenario: Change while not pinned
-- **WHEN** mbv runs in a terminal and the user changes a Panel row
-- **THEN** the value is saved and used the next time `mbv --pin` starts
+#### Scenario: No panel settings in the TUI
+- **WHEN** the user opens the F2 settings screen
+- **THEN** it has no Panel page
 
-#### Scenario: Rejected layout while pinned
-- **WHEN** mbv runs in the panel and a step would leave the panel's output with no width
-- **THEN** a warning toast names the reason, the row keeps its previous value, and neither the panel nor `config.toml` changes
+### Requirement: Panel size controls in the tray
+While at least one pinned mbv is connected to the Owner, the Owner's system tray SHALL show a
+`Panel` submenu with: `Left` and `Right` (docking side); `Columns`
+−10, −1, +1, +10; and for each of `Top`, `Bottom`, `Left gutter` and `Right gutter`, −10, −1, +1,
++10. Choosing an item SHALL change that value on every pinned mbv's panel live, within the
+`[panel]` ranges, and save it to `config.toml`. A change the panel rejects (it does not fit the
+output) SHALL leave the panel and `config.toml` unchanged and be logged. The submenu SHALL NOT
+appear while no pinned mbv is connected. If stay-alive is off, the tray SHALL start when a pinned
+mbv connects. The tray's other items SHALL behave as before.
+
+#### Scenario: Resize from the tray
+- **WHEN** a pinned mbv is running and the user chooses `Columns` +10 in the tray's `Panel` submenu
+- **THEN** the panel widens by 10 columns without restarting mbv, and the new width is saved
+
+#### Scenario: Rejected change
+- **WHEN** a tray step would leave the panel's output with no width
+- **THEN** the panel and `config.toml` stay as they were
+
+#### Scenario: No pinned mbv
+- **WHEN** only unpinned mbv clients are connected
+- **THEN** the tray has no `Panel` submenu
+
+#### Scenario: Pinned mbv without stay-alive
+- **WHEN** stay-alive is off and a pinned mbv connects
+- **THEN** the tray starts and offers the `Panel` submenu
 
 ### Requirement: GTK stays out of the daemon crates
 GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.

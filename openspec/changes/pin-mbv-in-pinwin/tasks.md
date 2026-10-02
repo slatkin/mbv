@@ -58,9 +58,9 @@ start), and is tagged `library-abi`.
   - `mbv --pin` from inside tmux: posters render in the panel (terminal environment normalised).
   - A `[panel]` layout that leaves no output width, then the desktop entry: notification, exit 1.
   - `mbv --pin --connect-daemon <endpoint>` against a running `mbvd`: remote client in the panel.
-  - Step width, side and a gutter in F2's Panel page while pinned: the panel updates live and survives a relaunch; a step that leaves no output width shows a warning toast and changes nothing.
+  - Tray `Panel` submenu while pinned: step columns, side and a gutter; the panel updates live and survives a relaunch; a step that leaves no output width changes nothing. With stay-alive off, the tray appears once the pinned mbv connects; with only an unpinned mbv, there is no `Panel` submenu. F2 has no Panel page.
   - `mbv --pin` with `WAYLAND_DISPLAY` unset in a terminal: one warning line, terminal launch works. The desktop entry under a session without layer-shell (or with `WAYLAND_DISPLAY` removed from the keybind's environment): a notification and exit 1.
-  - Stay-alive on or off: the Owner's tray behaves as it did before this change.
+  - Stay-alive on or off: the Owner's tray items other than `Panel` behave as they did before this change.
 - [ ] 6.3 Archive this change and sync the `pinned-launch` delta into `openspec/specs/` (the pinwin specs are already synced by the 3.1 re-import; this covers only `pinned-launch`). Verify: `openspec validate --specs` passes and `openspec/changes/` no longer lists `pin-mbv-in-pinwin`.
 
 ## 7. Remove the pinning feature gate (user ruling 2026-10-02)
@@ -85,3 +85,13 @@ no cargo feature. These rows remove the gate the earlier rows built behind, and 
   `makepkg --printsrcinfo` lists one package per PKGBUILD.
 - [x] 7.3 Contract: docs describe no feature-off build. Remove "build with pinning" wording from
   `README.md` and `CONTEXT.md`. Verify: `rg -n "pinning feature|built without pinning|--features pinning" README.md CONTEXT.md` finds nothing.
+
+## 8. Panel size controls in the tray (user ruling 2026-10-02, design D9)
+
+Panel size is GUI business: it is changed from mbv's system tray, never from the TUI. No pinwin
+code change; the library's `pinwin_apply_layout` is the only panel call.
+
+- [ ] 8.1 Contract: the panel step vocabulary and arithmetic (D9.1). `mbv-ctrl`: `PanelStep` (`Side(Left|Right)`, `Cols(i32)`, `Gutter(Top|Bottom|Left|Right, i32)`), the `pinned-panel` capability, `CtrlCmd::DeclarePinned` (no payload) and `CtrlEvent::PanelStep`. `mbv-config`: a `PanelConfig` step function clamped to the D6 ranges, with one contract test (a `Cols` step below 1 stops at 1). Verify: `cargo nextest run -p mbv-ctrl -p mbv-config`.
+- [ ] 8.2 Contract: the Owner relays tray steps to declared pinned clients only (D9.2, D9.5). `mbv-daemon`: advertise `pinned-panel` from the local Owner only (`mbvd` does not), record `DeclarePinned` clients, forget them on disconnect, push the pinned yes/no to the tray after each change, and send `CtrlEvent::PanelStep` to every declared client when the tray sends a step. Contract test: a step reaches a declared client and not an undeclared one; after the declared client disconnects the pushed flag is no. Verify: `cargo nextest run -p mbv-daemon`.
+- [ ] 8.3 Contract: the tray shows the `Panel` submenu while a pinned client is connected and starts lazily for one (D9.3, D9.4). `mbv-desktop` tray: the submenu (`Left`, `Right`, then `Columns`, `Top`, `Bottom`, `Left gutter`, `Right gutter`, each `−10 −1 +1 +10`) shown only while the pushed flag is yes; items send `PanelStep` over the tray's command channel. `mbv-daemon` `start_tray` + `src/local_daemon.rs`: with stay-alive off, the first declaration starts the tray (`show_systray_icon = false` still suppresses it). Amend ADR 0004 for the lazy start (as `a36fef682`, reworded for the size controls). Verify: `cargo nextest run -p mbv-daemon -p mbv-desktop -p mbv`.
+- [ ] 8.4 Contract: the pinned client declares itself and applies steps; the TUI has no panel settings (D6, D9.2, D9.5). `src/`: a pinned client (`pin::is_pinned()`) sends `DeclarePinned` when the Owner advertises `pinned-panel`; on `CtrlEvent::PanelStep` it applies the 8.1 step to its `[panel]` value, calls `pin::apply_layout`, saves on success and logs a rejection. Remove the F2 Panel page added in `eee78d3c6`/`23646fc11` (the `Panel` destination, stepper row kind, panel `SettingKey`s, `changed_panel_config`, the panel intents and dispatch) while keeping the `mbv-config` `[panel]` keys, parse, save and `dist/config.toml`. Update `README.md` and `CONTEXT.md` where they point at F2 for panel layout. Verify: `rg -n "SettingKey::Panel|changed_panel_config|handle_panel_setting" src crates` finds nothing; `cargo nextest run -p mbv -p mbv-ui-model -p mbv-components -p mbv-ui-msg`; `cargo clippy --workspace --all-targets -- -D warnings`.
