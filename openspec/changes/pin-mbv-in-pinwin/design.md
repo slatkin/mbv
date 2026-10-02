@@ -3,10 +3,8 @@
 ## Context
 
 - **Launch.** `main()` runs `pre_config_startup()` (`-h`, `-V`, `-q` and `--__local-daemon` exit
-  or divert there), `applog::init`, `load_config`, then `run_configured_startup`: an explicit
-  daemon endpoint (`--connect-daemon` or config `daemon_client_endpoint`) runs a remote-client
-  TUI (`run_remote_app`); otherwise `run_local_instance` makes this launch a Client, spawning the
-  Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
+  or divert there), `applog::init`, `load_config`, then `run_configured_startup`:
+  `run_local_instance` makes this launch a Client, spawning the Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
   child's stdio). The tray lives in the Owner (`mbv-desktop`, ksni) and starts only when
   stay-alive is on (`mbv-daemon` `run.rs` `start_tray`); this change adds the panel size
   controls to it (D9).
@@ -147,12 +145,11 @@
   its `Depends` name no GTK package is replaced by one that it names them (section 7.2).
 
 **D5. When the panel is used, and what happens when it cannot start.**
-- Only `--pin` asks for the panel. It combines with `--log-level` and with remote-client launches
-  (`--connect-daemon`, config `daemon_client_endpoint`): pinning decides where the TUI draws, not
-  who owns the Player. `-h`, `-V`, `-q` and `--__local-daemon` exit or divert before `--pin` is
-  considered.
-- The decision is made after `load_config` and before any terminal setup, including the
-  remote-client "Connecting to daemon" line.
+- Only `--pin` asks for the panel. It combines with `--log-level`: pinning decides where the TUI
+  draws, not who owns the Player. Users reach mbvd or another device from F3 inside a running
+  pinned mbv (CONTEXT.md *mbvd*); the code's explicit-endpoint launch path is not a pinning case.
+  `-h`, `-V`, `-q` and `--__local-daemon` exit or divert before `--pin` is considered.
+- The decision is made after `load_config` and before any terminal setup.
 - Start failure (`WAYLAND_DISPLAY` unset, any non-`PINWIN_OK` from `pinwin_start`, or a D3
   hand-over failure) is logged with the reason, then:
   - stdin is a tty: print one line `mbv: cannot open the pinned panel: <reason>; running in this
@@ -212,8 +209,7 @@ panel in the pinned client process, so the step crosses ctrl:
 2. *Declaration.* The local Owner advertises a `pinned-panel` capability. A pinned client
    (`pin::is_pinned()`) that sees it sends `CtrlCmd::DeclarePinned` (no payload; the first
    version's `5690ab521`/`83e476b7a` without the socket path). The Owner records the client and
-   forgets it on disconnect. `mbvd` does not advertise the capability, so a pinned remote client
-   (`--connect-daemon`) gets no tray controls.
+   forgets it on disconnect.
 3. *Tray lifecycle.* The daemon pushes "a pinned client is connected" (yes/no) to the tray after
    every declaration and client removal. With stay-alive off, the first declaration starts the
    tray (the first version's `ca03159c4`); `show_systray_icon = false` still suppresses it. ADR

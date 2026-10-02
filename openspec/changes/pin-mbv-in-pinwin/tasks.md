@@ -57,7 +57,6 @@ start), and is tagged `library-abi`.
   - `mbv --pin` in a terminal: panel opens, the terminal waits, the prompt returns when mbv quits.
   - `mbv --pin` from inside tmux: posters render in the panel (terminal environment normalised).
   - A `[panel]` layout that leaves no output width, then the desktop entry: notification, exit 1.
-  - `mbv --pin --connect-daemon <endpoint>` against a running `mbvd`: remote client in the panel.
   - Tray `Panel` submenu while pinned: step columns, side and a gutter; the panel updates live and survives a relaunch; a step that leaves no output width changes nothing. With stay-alive off, the tray appears once the pinned mbv connects; with only an unpinned mbv, there is no `Panel` submenu. F2 has no Panel page.
   - `mbv --pin` with `WAYLAND_DISPLAY` unset in a terminal: one warning line, terminal launch works. The desktop entry under a session without layer-shell (or with `WAYLAND_DISPLAY` removed from the keybind's environment): a notification and exit 1.
   - Stay-alive on or off: the Owner's tray items other than `Panel` behave as they did before this change.

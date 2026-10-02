@@ -177,10 +177,11 @@ _Avoid_: Stay-alive process
 **mbvd**:
 The separately packaged headless server daemon, run as a system service (a
 systemd unit, typically on a headless server with no desktop session), with its
-own configuration, state, and socket. It is only ever a Player owner reached at
-a Player endpoint: it has no Tray, no pinned panel, and no other desktop or
-Client functionality, and what it lacks never limits what a **Local process**
-offers. A different product surface from the
+own configuration, state, and socket. Users reach it from an mbv that is
+already running, through the F3 Sessions sidebar, the same way they control an
+Emby Session's device (Direct remote control); it is never how mbv starts. It
+has no Tray, no pinned panel, and no other desktop or Client functionality, and
+what it lacks never limits what a **Local process** offers. A different product surface from the
 Packaged Player owner, never started by a terminal UI. On `main` it is still Emby-gated: it
 constructs `EmbyClient` unconditionally, requires cached credentials to start,
 and uses legacy Emby-token ctrl authentication. Service-independent startup
@@ -199,9 +200,8 @@ _Avoid_: thin client, terminal client, viewer, attachment
 
 **Local process**:
 Any mbv process on the user's own machine: a Client, or the Owner process.
-There is always at least one, whatever Player endpoint is in use; a Client
-attached to a remote owner or an mbvd is still a Local process. Desktop
-features — the Tray, the pinned panel — belong to Local processes and never to
+Controlling mbvd or another device from F3 happens inside an already-running
+Local process; its Owner process and Tray keep running. Desktop features — the Tray, the pinned panel — belong to Local processes and never to
 mbvd.
 _Avoid_: client side (of mbvd), frontend, desktop daemon
 
@@ -214,7 +214,8 @@ _Avoid_: systray, status icon, indicator, mbvd tray
 **Player endpoint**:
 The address used to reach a Player owner's control socket. Local is this
 machine's Owner process. A network address points at a remote owner
-(another machine's Player owner, or an mbvd). mbvd is a daemon. The
+(another machine's Player owner, or an mbvd), reached from the F3 Sessions
+sidebar or a Library route of a running mbv. mbvd is a daemon. The
 Owner process is not, on this machine or any other.
 _Avoid_: daemon endpoint, connection string, remote address, socket path
 
@@ -602,7 +603,7 @@ _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, do
 **Pinned launch**:
 A launch that runs mbv's TUI in the **Pinned panel** in the same process instead
 of the current terminal, selected only by the `--pin` flag. It chooses where the
-TUI draws, not who owns the Player, so it combines with remote-client launches.
+TUI draws, not who owns the Player.
 No config setting starts one. When the panel cannot start, mbv reports the
 reason and either falls back to the current terminal or exits non-zero.
 _Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)

@@ -12,7 +12,7 @@ tray. The panel is part of mbv, not a separate program.
 mbv SHALL accept `--pin`, which runs the TUI in the pinned panel in the same process, with no other
 program started by the user and no re-launch of mbv. Without `--pin`, mbv SHALL start in the
 current terminal exactly as before; no config setting starts the panel. `--pin` SHALL combine with
-`--log-level` and with remote-client launches (`--connect-daemon` or `daemon_client_endpoint`).
+`--log-level`.
 `-h`, `-V`, `-q` and `--__local-daemon` SHALL behave as before and never start a panel. The panel
 SHALL close when mbv exits. Each pinned launch SHALL open its own panel.
 
