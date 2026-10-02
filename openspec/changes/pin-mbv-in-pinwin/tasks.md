@@ -22,10 +22,10 @@ groups are not in global newest-first order: the launcher commits (2.3) postdate
 commits (2.2), and `951ca97a7` and `4bc2fdb6e` both touch `src/main.rs` — expect a textual
 conflict there; resolve it keeping both reverts' intent.
 
-- [ ] 2.1 Revert the tray work: `89d27cf82`, `a36fef682`, `e37f6770a`, `ca03159c4` (the ADR 0004 amendment is `a36fef682`). Verify: `cargo nextest run -p mbv-daemon -p mbv-desktop` passes. (The diff-against-baseline check for these paths runs at 2.2: `83e476b7a` also touched `crates/mbv-daemon` and is reverted there.)
-- [ ] 2.2 Revert the ctrl capability and declaration: `83e476b7a`, `951ca97a7`, `89d58bf51`, `5690ab521`. Verify: `cargo nextest run -p mbv-ctrl -p mbv-daemon -p mbv-remote-player -p mbv` passes, `rg -n "DeclarePinned|pinned.panel|PINWIN_SOCKET" crates src` finds nothing, and `git diff 8fb44d79c -- crates/mbv-daemon crates/mbv-desktop docs/adr/0004-tray-observer-and-non-takeover-commands.md Cargo.lock` is empty.
-- [ ] 2.3 Revert the launcher: `79a49de20`, `4bc2fdb6e`. Verify: `git diff 8fb44d79c -- contrib/mbv.desktop` is empty, `rg -n "\-\-desktop|desktop_launch" src README.md contrib` finds nothing, and `cargo nextest run -p mbv` passes.
-- [ ] 2.4 Revert the packaging split: `91d68daf4`. Verify: `makepkg --printsrcinfo` lists the single `mbv` package for both PKGBUILDs and `.github/workflows/aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the files' lines.
+- [x] 2.1 Revert the tray work: `89d27cf82`, `a36fef682`, `e37f6770a`, `ca03159c4` (the ADR 0004 amendment is `a36fef682`). Verify: `cargo nextest run -p mbv-daemon -p mbv-desktop` passes. (The diff-against-baseline check for these paths runs at 2.2: `83e476b7a` also touched `crates/mbv-daemon` and is reverted there.)
+- [x] 2.2 Revert the ctrl capability and declaration: `83e476b7a`, `951ca97a7`, `89d58bf51`, `5690ab521`. Verify: `cargo nextest run -p mbv-ctrl -p mbv-daemon -p mbv-remote-player -p mbv` passes, `rg -n "DeclarePinned|pinned.panel|PINWIN_SOCKET" crates src` finds nothing, and `git diff 8fb44d79c -- crates/mbv-daemon crates/mbv-desktop docs/adr/0004-tray-observer-and-non-takeover-commands.md Cargo.lock` is empty.
+- [x] 2.3 Revert the launcher: `79a49de20`, `4bc2fdb6e`. Verify: `git diff 8fb44d79c -- contrib/mbv.desktop` is empty, `rg -n "\-\-desktop|desktop_launch" src README.md contrib` finds nothing, and `cargo nextest run -p mbv` passes.
+- [x] 2.4 Revert the packaging split: `91d68daf4`. Verify: `makepkg --printsrcinfo` lists the single `mbv` package for both PKGBUILDs and `.github/workflows/aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the files' lines.
 
 ## 3. Import the pinwin library
 
