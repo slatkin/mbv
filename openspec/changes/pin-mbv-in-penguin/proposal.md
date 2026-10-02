@@ -1,5 +1,7 @@
 # Proposal
 
+Issue: #864 (pinwin: slatkin/pinwin#2)
+
 ## Why
 
 Running mbv pinned in penguin today means two launcher entries' worth of setup and two tray icons

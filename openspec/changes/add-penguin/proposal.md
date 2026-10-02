@@ -1,5 +1,7 @@
 # Proposal
 
+Issue: #863 (pinwin: slatkin/pinwin#1)
+
 ## Why
 
 penguin is a standalone Wayland layer-shell panel terminal that pins a command (typically mbv)
