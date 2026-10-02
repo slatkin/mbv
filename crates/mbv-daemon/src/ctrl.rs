@@ -1,5 +1,6 @@
 //! Ctrl transport registry shared by the daemon event-loop modules.
 
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -28,6 +29,9 @@ pub(crate) enum AuthorityHolder {
 #[derive(Default)]
 pub(crate) struct CtrlClients {
     next_id: CtrlClientId,
+    /// Sequence for accepted `DeclarePinned` declarations; never reused, so
+    /// `latest_pinned` can rank declarations across connections.
+    next_pinned_seq: u64,
     connection: Vec<CtrlClient>,
     held_client: bool,
     merged_tx: Option<mpsc::Sender<crate::DaemonEvent>>,
@@ -52,6 +56,9 @@ struct CtrlClient {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
     admin_only: bool,
+    /// Pinwin panel control socket declared by this connection, with the
+    /// declaration's sequence. Dropped with the client on disconnect.
+    pinned: Option<(u64, PathBuf)>,
 }
 
 pub(crate) type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -148,6 +155,7 @@ impl CtrlClients {
             audiobookshelf,
             supports_owner_queue_load,
             admin_only,
+            pinned: None,
         });
         if !admin_only && self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
@@ -160,6 +168,34 @@ impl CtrlClients {
         if self.connection.is_empty() && self.authority == AuthorityHolder::Ctrl {
             self.authority = AuthorityHolder::None;
         }
+    }
+
+    /// Record the pinwin panel socket declared by `id`. Only a local Unix
+    /// client is recorded; an unknown id or a non-local transport records
+    /// nothing. Each accepted declaration takes a new, higher sequence so
+    /// `latest_pinned` ranks the most recent declaration across clients.
+    /// A repeated declaration on the same connection replaces the earlier
+    /// path.
+    pub(crate) fn set_pinned(&mut self, id: CtrlClientId, path: PathBuf) {
+        let Some(index) = self.connection.iter().position(|client| client.id == id) else {
+            return;
+        };
+        if self.connection[index].transport != CtrlTransport::Local {
+            return;
+        }
+        let seq = self.next_pinned_seq;
+        self.next_pinned_seq += 1;
+        self.connection[index].pinned = Some((seq, path));
+    }
+
+    /// The most recently declared pinwin panel socket among connected local
+    /// clients, or `None` when no pinned client is attached.
+    pub(crate) fn latest_pinned(&self) -> Option<PathBuf> {
+        self.connection
+            .iter()
+            .filter_map(|client| client.pinned.as_ref())
+            .max_by_key(|entry| entry.0)
+            .map(|(_, path)| path.clone())
     }
 
     pub(crate) fn has_client(&self, id: CtrlClientId) -> bool {
