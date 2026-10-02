@@ -8,15 +8,23 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
-    // GTK4, gtk4-layer-shell and Pango come from the system. src/glue.c and
-    // its siblings (src/glue_internal.h is their shared state, design D4) are
-    // the only files that include their headers; the @cImport in src/main.zig
-    // only sees ghostty/vt.h and pinwin.h.
-    lib_mod.linkSystemLibrary("gtk4", .{});
-    lib_mod.linkSystemLibrary("gtk4-layer-shell-0", .{});
-    lib_mod.linkSystemLibrary("pangocairo", .{});
+    // GTK4, gtk4-layer-shell and Pango come from the system and are linked
+    // by the consumer (design D2). A static library must not call
+    // linkSystemLibrary: Zig archives the resolved system libraries as members
+    // of libpinwin.a, and Rust's lld rejects an archive member that is not
+    // ET_REL. src/glue.c and its siblings (src/glue_internal.h is their shared
+    // state, design D4) still need the pkg-config headers; the @cImport in
+    // src/main.zig only sees ghostty/vt.h and pinwin.h.
+    const gtk_cflags = std.mem.trim(u8, b.run(&.{
+        "pkg-config", "--cflags", "gtk4", "gtk4-layer-shell-0", "pangocairo",
+    }), " \n\r\t");
+    var c_flags: std.ArrayList([]const u8) = .empty;
+    c_flags.appendSlice(b.allocator, &.{ "-std=gnu11", "-Wall" }) catch @panic("OOM");
+    var c_flag_it = std.mem.tokenizeScalar(u8, gtk_cflags, ' ');
+    while (c_flag_it.next()) |flag| c_flags.append(b.allocator, flag) catch @panic("OOM");
 
     // Zig static-library artifacts do not merge linked static archives, so
     // libpinwin.a does NOT bundle libghostty-vt (design D7): the pinned
@@ -49,7 +57,7 @@ pub fn build(b: *std.Build) void {
     lib_mod.addIncludePath(b.path("src"));
     lib_mod.addCSourceFiles(.{
         .files = &.{ "src/glue.c", "src/render.c", "src/images.c", "src/pty.c", "src/input.c", "src/fontconfig.c", "src/options.c", "src/pinwin_api.c" },
-        .flags = &.{ "-std=gnu11", "-Wall" },
+        .flags = c_flags.items,
     });
 
     const lib = b.addLibrary(.{
