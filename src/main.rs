@@ -1,5 +1,7 @@
 use mimalloc::MiMalloc;
+use std::ffi::OsString;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -474,6 +476,9 @@ fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::Re
     let client = cached_emby_client(config);
     let (remote, player_rx) =
         remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;
+    if let Some(socket) = pinned_socket(std::env::var_os("PINWIN_SOCKET")) {
+        let _ = remote.declare_pinned(socket);
+    }
     run_remote_app(
         client,
         remote,
@@ -482,6 +487,13 @@ fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::Re
         config.clone(),
     );
     Ok(())
+}
+
+/// The pinwin control socket path from `PINWIN_SOCKET`, when it is a
+/// non-empty absolute path.
+fn pinned_socket(value: Option<OsString>) -> Option<PathBuf> {
+    let path = PathBuf::from(value?);
+    (!path.as_os_str().is_empty() && path.is_absolute()).then_some(path)
 }
 
 fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
@@ -533,6 +545,22 @@ mod tests {
     #[test]
     fn log_level_arg_is_absent_without_flag() {
         assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
+    }
+
+    /// Contract: a pinwin panel socket is only trusted from `PINWIN_SOCKET`
+    /// when it is a non-empty absolute path, so a relative inherited value
+    /// never reaches the Owner as a pin target.
+    #[rstest::rstest]
+    #[case(
+        "/run/user/1000/pinwin/4242.sock",
+        Some(PathBuf::from("/run/user/1000/pinwin/4242.sock"))
+    )]
+    #[case("pinwin/4242.sock", None)]
+    fn pinned_socket_accepts_absolute_and_rejects_relative(
+        #[case] raw: &str,
+        #[case] expected: Option<PathBuf>,
+    ) {
+        assert_eq!(pinned_socket(Some(OsString::from(raw))), expected);
     }
 
     #[test]
