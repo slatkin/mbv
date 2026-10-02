@@ -1,9 +1,10 @@
-//! Build `pinwin/` with Zig and link the panel into this crate.
+//! Build the pinned pinwin Zig dependency and link the panel into this crate.
 //!
 //! Zig installs its artifacts under `OUT_DIR`, never into the source tree
 //! (`--prefix`/`--cache-dir`); only Zig's own `zig-pkg/` dependency extraction
-//! stays beside `pinwin/`, as it does for `zig build` run by hand. Link order
-//! matters: the static archive of `pinwin` precedes `ghostty-vt` (which it
+//! stays beside this crate's `build.zig`, as it does for `zig build` run by hand.
+//! Link order
+//! matters: the static archive of `pinwin` precedes `ghostty-vt-static` (which it
 //! references) and the GTK libraries, and `gtk4-layer-shell` is linked before
 //! the other GTK libraries because it only shims `libwayland-client` when the
 //! dynamic linker loads it first.
@@ -16,28 +17,24 @@ fn main() {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("cargo always sets CARGO_MANIFEST_DIR"),
     );
-    let pinwin_dir = manifest_dir.join("../../pinwin");
     let out_dir =
         PathBuf::from(env::var("OUT_DIR").expect("cargo always sets OUT_DIR for a build script"));
 
-    for path in [
-        pinwin_dir.join("src"),
-        pinwin_dir.join("build.zig"),
-        pinwin_dir.join("build.zig.zon"),
-    ] {
+    for name in ["build.zig", "build.zig.zon"] {
+        let path = manifest_dir.join(name);
         println!("cargo:rerun-if-changed={}", path.display());
     }
 
     let prefix = out_dir.join("pinwin");
-    build_pinwin(&pinwin_dir, &prefix, &out_dir.join("zig-cache"));
+    build_pinwin(&manifest_dir, &prefix, &out_dir.join("zig-cache"));
 
     let lib_dir = prefix.join("lib");
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     // Static archives first, in dependency order: pinwin references
     // ghostty-vt, ghostty-vt references the two vendored SIMD archives. Zig
-    // installs all four beside each other (upstream build.zig).
-    for lib in ["pinwin", "ghostty-vt", "simdutf", "highway"] {
+    // installs all four beside each other (this crate's build.zig).
+    for lib in ["pinwin", "ghostty-vt-static", "simdutf", "highway"] {
         println!("cargo:rustc-link-lib=static={lib}");
     }
 
@@ -49,9 +46,9 @@ fn main() {
     }
 }
 
-fn build_pinwin(pinwin_dir: &Path, prefix: &Path, cache_dir: &Path) {
+fn build_pinwin(zig_dir: &Path, prefix: &Path, cache_dir: &Path) {
     let status = Command::new("zig")
-        .current_dir(pinwin_dir)
+        .current_dir(zig_dir)
         .arg("build")
         .arg("-Doptimize=ReleaseSafe")
         .arg("--prefix")
@@ -59,9 +56,9 @@ fn build_pinwin(pinwin_dir: &Path, prefix: &Path, cache_dir: &Path) {
         .arg("--cache-dir")
         .arg(cache_dir)
         .status()
-        .expect("failed to run `zig build` for the vendored pinwin library");
+        .expect("failed to run `zig build` for the pinwin library");
     assert!(
         status.success(),
-        "`zig build` for the vendored pinwin library failed: {status}"
+        "`zig build` for the pinwin library failed: {status}"
     );
 }

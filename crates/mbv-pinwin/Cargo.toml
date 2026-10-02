@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Safe Rust wrapper over the vendored pinwin panel C ABI."
+description = "Safe Rust wrapper over the pinned pinwin panel C ABI."
 readme = "../../README.md"
 
 [lints]
