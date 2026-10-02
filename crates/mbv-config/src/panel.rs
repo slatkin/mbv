@@ -40,8 +40,6 @@ impl PanelSide {
 
 /// The pinned panel's width in terminal columns: `1..=65535` (design D6).
 pub const PANEL_COLS_MIN: u16 = 1;
-/// See [`PANEL_COLS_MIN`].
-pub const PANEL_COLS_MAX: u16 = u16::MAX;
 /// The `[panel] cols` default (design D6).
 pub const DEFAULT_PANEL_COLS: u16 = 40;
 

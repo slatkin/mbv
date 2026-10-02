@@ -1,8 +1,7 @@
 use super::{
     AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
-    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MAX,
-    PANEL_COLS_MIN, PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen,
-    is_valid_audio_device,
+    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MIN,
+    PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen, is_valid_audio_device,
 };
 
 pub fn load_config() -> Result<Config, ConfigError> {
@@ -393,7 +392,7 @@ fn panel_cols(panel: &toml::Value, default: u16) -> u16 {
         Some(value) => value
             .as_integer()
             .and_then(|v| u16::try_from(v).ok())
-            .filter(|v| (PANEL_COLS_MIN..=PANEL_COLS_MAX).contains(v))
+            .filter(|v| *v >= PANEL_COLS_MIN)
             .unwrap_or_else(|| panel_fallback("cols", value, default)),
     }
 }

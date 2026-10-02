@@ -525,7 +525,7 @@ pub fn changed_panel_config(
     panel: mbv_config::PanelConfig,
     delta: i32,
 ) -> Option<mbv_config::PanelConfig> {
-    use mbv_config::{PANEL_COLS_MAX, PANEL_COLS_MIN, PanelSide};
+    use mbv_config::{PANEL_COLS_MIN, PanelSide};
 
     let mut next = panel;
     match key {
@@ -535,34 +535,27 @@ pub fn changed_panel_config(
                 PanelSide::Right => PanelSide::Left,
             };
         }
+        // `unwrap_or(u16::MAX)` is the upper clamp: a step past `u16::MAX`
+        // fails `try_from` and saturates at the top of the range.
         SettingKey::PanelCols => {
-            next.cols = u16::try_from(stepped(
-                i32::from(panel.cols),
-                delta,
-                i32::from(PANEL_COLS_MIN),
-                i32::from(PANEL_COLS_MAX),
-            ))
-            .unwrap_or(PANEL_COLS_MIN);
+            next.cols = u16::try_from(
+                i32::from(panel.cols)
+                    .saturating_add(delta)
+                    .max(i32::from(PANEL_COLS_MIN)),
+            )
+            .unwrap_or(u16::MAX);
         }
-        SettingKey::PanelGutterTop => {
-            next.gutter_top = stepped(panel.gutter_top, delta, i32::MIN, i32::MAX);
-        }
+        SettingKey::PanelGutterTop => next.gutter_top = panel.gutter_top.saturating_add(delta),
         SettingKey::PanelGutterBottom => {
-            next.gutter_bottom = stepped(panel.gutter_bottom, delta, i32::MIN, i32::MAX);
+            next.gutter_bottom = panel.gutter_bottom.saturating_add(delta);
         }
         SettingKey::PanelGutterLeft => {
-            next.gutter_left = stepped(panel.gutter_left, delta, i32::MIN, i32::MAX);
+            next.gutter_left = panel.gutter_left.saturating_add(delta);
         }
         SettingKey::PanelGutterRight => {
-            next.gutter_right = stepped(panel.gutter_right, delta, i32::MIN, i32::MAX);
+            next.gutter_right = panel.gutter_right.saturating_add(delta);
         }
         _ => return None,
     }
     Some(next)
-}
-
-/// `value + delta` clamped to `[min, max]`; saturates at the `i32` bounds so a
-/// step at either bound cannot overflow.
-fn stepped(value: i32, delta: i32, min: i32, max: i32) -> i32 {
-    value.saturating_add(delta).clamp(min, max)
 }
