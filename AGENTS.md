@@ -31,6 +31,8 @@ host. Stay-alive controls whether that process outlives its Clients; packaged
 * Coding standards: `docs/standards/README.md` (Microsoft Pragmatic Rust Guidelines,
   pinned locally, one file per rule). Scan its checklist, then `qmd query` a rule for
   full text; never read every rule.
+* Be wary of test inflation. Do not try to evaluate every execution path, for every
+  addition. Small additions do not need many tests, if any.
 
 ## Repository map
 
