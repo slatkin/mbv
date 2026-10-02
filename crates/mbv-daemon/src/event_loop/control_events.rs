@@ -26,6 +26,11 @@ impl DaemonLoop {
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             return EventOutcome::CONTINUE;
         }
+        // A pinned declaration from a local client is what starts the tray
+        // lazily when stay-alive is off; a non-local declaration is ignored
+        // by the dispatcher and must not start anything.
+        let accepted_pinned_declaration = matches!(&cmd, CtrlCmd::DeclarePinned { .. })
+            && self.ctrl_clients.lock().unwrap().is_local_client(client_id);
         if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
             let transport = self.ctrl_clients.lock().unwrap().transport(client_id);
             let allowed = owner_admin_transport_allowed(self.role, kind, transport);
@@ -100,6 +105,9 @@ impl DaemonLoop {
                 op: std::cell::Cell::new(None),
             },
         );
+        if accepted_pinned_declaration {
+            self.refresh_tray_pin_target(true);
+        }
         if persist_after_command && self.owner.pending_idle_load.is_none() {
             return EventOutcome::DIRTY;
         }
@@ -221,7 +229,23 @@ impl DaemonLoop {
     pub(super) fn handle_ctrl_disconnected(&mut self, client_id: CtrlClientId) -> EventOutcome {
         self.ctrl_clients.lock().unwrap().remove(client_id);
         self.owner.intents.invalidate_connection(client_id);
+        // The pin target follows attached declarations: a removal may clear
+        // it or fall back to an earlier pinned client. This must not start a
+        // tray that no declaration ever asked for.
+        self.refresh_tray_pin_target(false);
         EventOutcome::CONTINUE
+    }
+
+    /// Push the registry's current pin target to the tray. `may_start` is
+    /// true only for a client's pin declaration, which is the lazy start
+    /// (at most once per daemon).
+    fn refresh_tray_pin_target(&mut self, may_start: bool) {
+        let target = self.ctrl_clients.lock().unwrap().latest_pinned();
+        if may_start {
+            self.tray.on_declaration(target);
+        } else {
+            self.tray.set_pin_target(target);
+        }
     }
 
     /// `DaemonEvent::Shutdown`: persist the Stay-alive queue, announce the

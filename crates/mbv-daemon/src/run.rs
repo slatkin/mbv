@@ -2,8 +2,8 @@ use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broa
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
-    SharedQueueState, broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file,
-    project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
+    SharedQueueState, TraySlot, broadcast_queue_state, install_daemon_audiobookshelf_context,
+    pid_file, project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
 };
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
@@ -144,7 +144,7 @@ struct DaemonStarted {
     merged_rx: mpsc::Receiver<DaemonEvent>,
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
-    _tray: Option<Box<dyn Send>>,
+    tray: TraySlot,
 }
 
 fn spawn_queue_persistence_worker(
@@ -188,16 +188,16 @@ fn prewarm_player(player: &Player, config: &mbv_config::Config) {
     );
 }
 
-fn start_tray(
+pub(crate) fn start_tray(
     owner_settings: &crate::OwnerSettingsReader,
-    on_tray_ready: impl FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>,
+    on_tray_ready: crate::OnTrayReady,
     shutdown_signal_tx: mpsc::SyncSender<()>,
-) -> Option<Box<dyn Send>> {
+) -> TraySlot {
+    let mut tray = TraySlot::new(on_tray_ready, shutdown_signal_tx);
     if owner_settings().stay_alive {
-        on_tray_ready(shutdown_signal_tx)
-    } else {
-        None
+        tray.start();
     }
+    tray
 }
 
 fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
@@ -316,7 +316,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         merged_rx,
         ws_send_tx,
         owner_settings,
-        _tray: tray,
+        tray,
     }
 }
 
@@ -546,7 +546,7 @@ pub fn run_with_options(
         merged_rx,
         ws_send_tx,
         owner_settings,
-        _tray,
+        tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
@@ -599,6 +599,7 @@ pub fn run_with_options(
         last_capabilities: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
         queue_persist_tx: Some(queue_persist_tx),
+        tray,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }
