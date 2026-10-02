@@ -60,8 +60,7 @@ start), and is tagged `library-abi`.
   - `mbv --pin --connect-daemon <endpoint>` against a running `mbvd`: remote client in the panel.
   - Step width, side and a gutter in F2's Panel page while pinned: the panel updates live and survives a relaunch; a step that leaves no output width shows a warning toast and changes nothing.
   - `mbv --pin` with `WAYLAND_DISPLAY` unset in a terminal: one warning line, terminal launch works. The desktop entry under a session without layer-shell (or with `WAYLAND_DISPLAY` removed from the keybind's environment): a notification and exit 1.
-  - Stay-alive on or off: the Owner's tray behaves as before, plus `Panel options...` while pinned (section 8).
-  - Tray `Panel options...` while pinned opens the F2 Panel page in the panel; absent when no pinned client.
+  - Stay-alive on or off: the Owner's tray behaves as it did before this change.
 - [ ] 6.3 Archive this change and sync the `pinned-launch` delta into `openspec/specs/` (the pinwin specs are already synced by the 3.1 re-import; this covers only `pinned-launch`). Verify: `openspec validate --specs` passes and `openspec/changes/` no longer lists `pin-mbv-in-pinwin`.
 
 ## 7. Remove the pinning feature gate (user ruling 2026-10-02)
@@ -86,26 +85,3 @@ no cargo feature. These rows remove the gate the earlier rows built behind, and 
   `makepkg --printsrcinfo` lists one package per PKGBUILD.
 - [x] 7.3 Contract: docs describe no feature-off build. Remove "build with pinning" wording from
   `README.md` and `CONTEXT.md`. Verify: `rg -n "pinning feature|built without pinning|--features pinning" README.md CONTEXT.md` finds nothing.
-
-## 8. Tray access to the panel options (user ruling 2026-10-02)
-
-Re-applies the section 2 tray/ctrl reverts, adapted to the in-process panel (design D9). The
-first version's commits are the reference (`git show <sha>`): ctrl `5690ab521`, `89d58bf51`,
-`83e476b7a`, `951ca97a7`; tray `ca03159c4`, `e37f6770a`, `89d27cf82`; ADR 0004 `a36fef682`.
-
-- [ ] 8.1 Contract: a pinned client declares itself to the Owner over ctrl. Re-add the
-  `pinned-panel` capability and `DeclarePinned` command to `mbv-ctrl` (no socket path), the Owner
-  records declarations (`mbv-daemon`), and `src/main.rs` plus the remote-player connect path declare
-  when pinned. Verify: `cargo nextest run -p mbv-ctrl -p mbv-daemon -p mbv-remote-player -p mbv`;
-  one handshake/declaration contract test in the existing ctrl and daemon test files.
-- [ ] 8.2 Contract: the tray starts lazily for a pinned client and offers `Panel options...`
-  only while one is connected. `mbv-daemon` starts the tray for a pinned client without stay-alive;
-  `mbv-desktop` adds the item. Verify: `cargo nextest run -p mbv-daemon -p mbv-desktop`.
-- [ ] 8.3 Contract: choosing `Panel options...` makes every pinned client open the F2 Panel page and
-  bring its panel forward: a ctrl request from the Owner, handled in the client's shell/dispatch
-  (typed `Msg`, no raw events), opening the Settings screen on the Panel destination. Verify:
-  `cargo nextest run -p mbv`; the end-to-end behaviour is in the 6.2 manual check.
-- [ ] 8.4 ADR 0004 amendment: record that the tray also starts for a pinned client without
-  stay-alive, with `Panel options...` (`git show a36fef682`). Verify: `openspec validate --specs`.
-- [ ] 8.5 Verify the whole section: `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo fmt --all -- --check`, `make check-code-file-lines`.
