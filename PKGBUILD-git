@@ -1,5 +1,6 @@
 # Maintainer: slatkin@gmail.com
-pkgname=mbv-git
+pkgbase=mbv-git
+pkgname=(mbv-git pinwin-git)
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Terminal client for Emby media server (git)"
@@ -7,29 +8,32 @@ arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl')
-makedepends=('rust' 'cargo' 'nasm' 'git')
+makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'gtk4' 'gtk4-layer-shell' 'libdbusmenu-glib')
 provides=('mbv')
 conflicts=('mbv')
-source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
+source=("${pkgbase}::git+https://github.com/slatkin/mbv.git")
 sha256sums=('SKIP')
 
 pkgver() {
-    cd "${pkgname}"
+    cd "${pkgbase}"
     git describe --tags --long | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {
-    cd "${pkgname}"
+    cd "${pkgbase}"
     cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
 }
 
 build() {
-    cd "${pkgname}"
+    cd "${pkgbase}"
     cargo build --frozen --release
+    cd pinwin
+    zig build -Doptimize=ReleaseSafe
 }
 
-package() {
-    cd "${pkgname}"
+package_mbv-git() {
+    optdepends=('pinwin: open pinned from the launcher' 'xdg-terminal-exec: open in a terminal from the launcher')
+    cd "${pkgbase}"
     install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
     install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
     install -Dm644 "contrib/mbv.desktop" "${pkgdir}/usr/share/applications/mbv.desktop"
@@ -43,4 +47,14 @@ package() {
     install -Dm644 "dist/config.toml" "${pkgdir}/usr/share/mbv/config.toml"
     install -Dm644 "contrib/mbvd.service" "${pkgdir}/usr/lib/systemd/system/mbvd.service"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/mbv/LICENSE"
+}
+
+package_pinwin-git() {
+    pkgdesc="Layer-shell panel that runs a command pinned beside tiled windows (git)"
+    depends=('gtk4' 'gtk4-layer-shell' 'libdbusmenu-glib' 'pango')
+    provides=('pinwin')
+    conflicts=('pinwin')
+    cd "${pkgbase}"
+    install -Dm755 "pinwin/zig-out/bin/pinwin" "${pkgdir}/usr/bin/pinwin"
+    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
