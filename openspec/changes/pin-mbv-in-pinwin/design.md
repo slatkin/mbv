@@ -83,7 +83,12 @@
   3. on success, if the process has a controlling terminal, detaches from it with `TIOCNOTTY`
      (ignoring `SIGHUP` across the call: when mbv is the session leader, as when a terminal
      emulator runs it directly, `TIOCNOTTY` hangs up its own foreground group);
-  4. `dup2`s the slave onto 0/1/2.
+  4. `dup2`s the slave onto fds 0 and 1 only. fd 2 is redirected to the application log (the
+     same `mbv.log` the app logger appends to), falling back to `/dev/null`: after the hand-over,
+     native library output to stderr (GTK/GLib/layer-shell/Vulkan warnings; manual check 6.2 saw
+     a GDK `vkAcquireNextImageKHR` `VK_ERROR_OUT_OF_DATE_KHR` message drawn over the TUI) must
+     not draw over the panel. Fatal post-hand-over errors go through the log and notification
+     (D5) instead.
 - **Terminal environment.** The TUI inherits the launching terminal's environment, and
   ratatui-image reads `TERM`/`TERM_PROGRAM` to detect tmux and the iTerm2 protocol, so a `--pin`
   from inside tmux or WezTerm would pick the wrong image path on the panel. mbv sets
