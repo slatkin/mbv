@@ -112,6 +112,17 @@
 - Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from F2 would
   need an IPC channel back to the panel, which is the socket this design removes.
 - Alternative: pinwin as a separate executable. Rejected by the product definition and by D4.
+- **Probe result (task 1.1, 2026-10-02).** The route above works; the fork alternative is not
+  needed. Probed from foot, from ghostty, and from a no-controlling-terminal `setsid` launch
+  (both pty stdio and `/dev/null` stdio): `/dev/tty` open fails `ENXIO` after `TIOCNOTTY`;
+  crossterm 0.29's `window_size` falls back to stdout, the slave, and returns the slave's size
+  (ctty 82x69, slave 80x24, got 80x24); an in-process `raise(SIGWINCH)` after `TIOCSWINSZ`
+  delivered `Event::Resize` in every run; and with the real ghostty-vt on the master, DA1, the
+  kitty keyboard query (`supports_keyboard_enhancement` true), the mouse modes (DECRPM 1006/1002
+  set) and the kitty graphics query all round-trip through the slave. `local_daemon::spawn_detached`
+  (null stdio, `setsid`) and libmpv2 (`Mpv` defaults equal `--no-terminal`; mbv sets no terminal
+  option) do not touch the launching terminal, and mbv never opens `/dev/tty` itself. Not probed,
+  left to manual check 6.2: real keypress, click and drag-resize into the visible panel.
 
 **D4. Cargo feature gate and the crate graph.**
 - A new leaf crate `crates/mbv-pinwin` owns `build.rs` (runs `zig build` for the vendored
