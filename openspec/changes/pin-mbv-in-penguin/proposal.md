@@ -1,6 +1,6 @@
 # Proposal
 
-Issue: #864 (pinwin: slatkin/pinwin#2)
+Issue: #864
 
 ## Why
 
