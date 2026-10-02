@@ -34,8 +34,7 @@
 - Pinning is a feature of mbv: `mbv --pin` and the desktop entry; no separate program, package,
   launcher or config for the user.
 - Plain `mbv` behaves exactly as today in every terminal, over ssh and in tmux.
-- GTK never enters `mbv-core`, `mbv-daemon` or `mbvd`; the TUI binary gets it only behind a cargo
-  feature.
+- GTK never enters `mbv-core`, `mbv-daemon` or `mbvd`; the TUI binary gets it.
 - pinwin is first-party code, so surfaces that existed only because it was a separate program are
   removed, not bridged.
 
@@ -78,7 +77,7 @@
 - mbv treats any non-`PINWIN_OK` from `pinwin_start` as a start failure (D5).
 
 **D3. One process: pty pair, stdio hand-over, no controlling-terminal takeover.**
-- With `--pin` and the feature built (D5), before any terminal setup mbv:
+- With `--pin` (D5), before any terminal setup mbv:
   1. opens a pty pair;
   2. calls `pinwin_start` on the master;
   3. on success, if the process has a controlling terminal, detaches from it with `TIOCNOTTY`
@@ -124,18 +123,18 @@
   option) do not touch the launching terminal, and mbv never opens `/dev/tty` itself. Not probed,
   left to manual check 6.2: real keypress, click and drag-resize into the visible panel.
 
-**D4. Cargo feature gate and the crate graph.**
+**D4. One build, the crate graph and packaging.**
 - A new leaf crate `crates/mbv-pinwin` owns `build.rs` (runs `zig build` for the vendored
   `pinwin/`, links both archives from D2 plus GTK4, gtk4-layer-shell and pango/cairo) and the safe
-  Rust wrapper over the C ABI. The root `mbv` crate depends on it behind the cargo feature
-  `pinning`.
+  Rust wrapper over the C ABI. The root `mbv` crate depends on it unconditionally.
 - `mbv-core`, `mbv-daemon`, `mbv-config`, `mbvd` and every other crate MUST NOT depend on
   `mbv-pinwin`, directly or transitively.
-- Builds: the tarball and the PKGBUILDs ship a binary built with `pinning`; the mbv `.deb` ships a
-  binary built without it, and no desktop entry. CI builds the pinned binary into a separate
-  target directory so the two never share `target/release/mbv`.
-- With the feature off, `--pin` prints `mbv: built without pinning support` and exits 2; the F2
-  Panel page is absent; `[panel]` in `config.toml` is read and preserved.
+- There is one build: one `cargo build --release`, one tarball binary and one `.deb`, all carrying
+  pinning. `--pin` is a runtime flag. The F2 Panel page is always present.
+- The mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime dependency
+  (Debian: `libgtk-4-1`, `libgtk4-layer-shell0`; Arch: `gtk4`, `gtk4-layer-shell`), and building
+  needs Zig plus the GTK4 / gtk4-layer-shell development packages. The CI `.deb` assertion that
+  its `Depends` name no GTK package is replaced by one that it names them (section 7.2).
 
 **D5. When the panel is used, and what happens when it cannot start.**
 - Only `--pin` asks for the panel. It combines with `--log-level` and with remote-client launches
@@ -157,7 +156,7 @@
   hand-over that are not fatal (for example "Connecting to daemon…") appear on the panel.
 - Each pinned launch opens its own panel; a second `mbv --pin` while one runs opens a second
   Client in a second panel, as a second terminal window does today. Intended.
-- `should_pin` is a pure function over the parsed flag and the feature; the environment and
+- `should_pin` is a pure function over the parsed flag; the environment and
   `pinwin_start` result enter as the start-failure path above, not as decision inputs.
 
 **D6. Panel layout settings.**
@@ -171,8 +170,8 @@
   which is a start failure (D5). It never
   calls pinwin: `mbv-config` sits under `mbvd` (D4), and geometry checks need live monitor
   metrics.
-- F2: a `Panel` destination (like `Services`/`Keys`) on the main page holds six rows, shown only
-  when the feature is built. `Side` is a `Text` row cycling `left`/`right`. `Cols` and the four
+- F2: a `Panel` destination (like `Services`/`Keys`) on the main page holds six rows. `Side` is a
+  `Text` row cycling `left`/`right`. `Cols` and the four
   gutters are a new stepper row kind: the keys that cycle a `Text` row's value step the number
   down and up by 1, with Shift by 10; `Cols` stops at 1 and 65535, gutters at the i32 bounds. No
   free-text entry.
@@ -203,9 +202,10 @@ pty hand-over are covered by the task 6.2 manual check.
 - **Upstream dependency:** blocked on `slatkin/pinwin` `add-library-abi` landing at the
   `library-abi` tag with the D2 additions (task 3.1). Sections 2, 4.2 and 4.3 do not depend
   on it; 4.1's linking and 4.4's start-up need the imported library.
-- **Build cost:** with the feature on, `cargo build` needs Zig 0.16 and GTK4 / gtk4-layer-shell dev
-  libraries and fetches libghostty-vt (pinned by hash). Accepted behind the feature; CI builds
-  both ways. Zig 0.16 in the pinned Arch CI image is checked in task 5.1.
+- **Build cost:** `cargo build` needs Zig 0.16 and GTK4 / gtk4-layer-shell dev
+  libraries and fetches libghostty-vt (pinned by hash). CI builds one way, with pinning; every
+  package now carries the GTK runtime dependency (D4). Zig 0.16 in the pinned Arch CI image is
+  checked in task 7.2.
 - **TUI on a pty it did not start with:** terminal queries, image protocol and mouse modes go
   through pinwin's terminal. pinwin already supports what mbv uses (kitty graphics, mouse, kitty
   keyboard), and task 1.1 proves the hand-over end to end before the rest is built.

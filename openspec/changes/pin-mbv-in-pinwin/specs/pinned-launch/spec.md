@@ -14,8 +14,7 @@ program started by the user and no re-launch of mbv. Without `--pin`, mbv SHALL 
 current terminal exactly as before; no config setting starts the panel. `--pin` SHALL combine with
 `--log-level` and with remote-client launches (`--connect-daemon` or `daemon_client_endpoint`).
 `-h`, `-V`, `-q` and `--__local-daemon` SHALL behave as before and never start a panel. The panel
-SHALL close when mbv exits. Each pinned launch SHALL open its own panel. A build without pinning SHALL reject `--pin` with an error message and
-a non-zero exit.
+SHALL close when mbv exits. Each pinned launch SHALL open its own panel.
 
 #### Scenario: Pinned launch from the desktop
 - **WHEN** the user starts mbv from its desktop entry on a Wayland session with layer-shell
@@ -51,18 +50,17 @@ notification.
 - **THEN** a notification says the panel could not open, and mbv exits with status 1
 
 ### Requirement: Desktop entry
-`contrib/mbv.desktop` SHALL launch `mbv --pin` with `Terminal=false`. The `.deb`, whose binary is
-built without pinning, SHALL NOT install a desktop entry.
+`contrib/mbv.desktop` SHALL launch `mbv --pin` with `Terminal=false`.
 
 #### Scenario: Launcher entry
-- **WHEN** the tarball or an Arch package is installed
+- **WHEN** the tarball, the `.deb` or an Arch package is installed
 - **THEN** the mbv desktop entry runs `mbv --pin` without opening a terminal window
 
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
 `cols` (integer 1 through 65535, default 40) and `gutter_top`, `gutter_bottom`, `gutter_left`,
 `gutter_right` (integers in pixels, may be negative, default 0). An out-of-range or malformed value
-SHALL fall back to its default with a logged warning, without changing the other keys. In builds with pinning, the F2 settings
+SHALL fall back to its default with a logged warning, without changing the other keys. The F2 settings
 screen SHALL provide a Panel page with one row per value: `Side` cycles between left and right, and
 the numeric rows step down and up by 1, or by 10 with Shift, within their ranges. Layout semantics
 (docking, reservation, negative gutters, validation) are those of the `pinwin-panel` capability.
@@ -80,15 +78,10 @@ the numeric rows step down and up by 1, or by 10 with Shift, within their ranges
 - **THEN** a warning toast names the reason, the row keeps its previous value, and neither the panel nor `config.toml` changes
 
 ### Requirement: GTK stays out of the daemon crates
-GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary and only
-when the `pinning` cargo feature is enabled. `mbv-core`, `mbv-config`, `mbv-daemon` and `mbvd` SHALL
-NOT depend on them, directly or transitively. mbv built without the feature SHALL NOT require Zig
-or any GUI toolkit to build or run.
+GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.
+`mbv-core`, `mbv-config`, `mbv-daemon` and `mbvd` SHALL NOT depend on them, directly or
+transitively.
 
-#### Scenario: Daemon and .deb builds
-- **WHEN** `mbvd` or the mbv `.deb` is built
-- **THEN** no GTK, gtk4-layer-shell or Zig dependency is involved, and the `.deb`'s Depends name no GTK package
-
-#### Scenario: Feature off
-- **WHEN** mbv is built without the `pinning` feature
-- **THEN** it builds and runs without Zig or GTK, shows no Panel page, and rejects `--pin`
+#### Scenario: Daemon build
+- **WHEN** `mbvd` is built
+- **THEN** no GTK, gtk4-layer-shell or Zig dependency is involved

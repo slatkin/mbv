@@ -18,8 +18,8 @@ config and control socket. That is not the product.
   columns and four gutters, saved in `config.toml` and applied live while pinned.
 - **Desktop entry**: `contrib/mbv.desktop` becomes `Exec=mbv --pin`, `Terminal=false`. Sessions
   without layer-shell (GNOME, X11) are not supported from the launcher: the panel fails to start,
-  mbv logs it, sends a desktop notification and exits non-zero. The `.deb`, whose binary has no
-  pinning, ships no desktop entry.
+  mbv logs it, sends a desktop notification and exits non-zero. Every package ships the same
+  binary and the same desktop entry.
 - **pinwin becomes a library, upstream-first**: the reshape of the `pinwin/` tree (Zig + C) into a
   static library with a C ABI is specified, reviewed and implemented in `slatkin/pinwin` (change
   `add-library-abi`). This change imports the resulting revision over `pinwin/` and links it into
@@ -32,9 +32,10 @@ config and control socket. That is not the product.
   no socket. Typed in a terminal, `mbv --pin` behaves like a GUI app started from a shell: the
   panel opens and the shell waits until mbv exits; if the panel cannot start, mbv warns and runs
   in that terminal.
-- **Cargo feature gate**: pinning sits behind a cargo feature of the `mbv` TUI crate. `mbv-core`,
-  `mbv-daemon` and `mbvd` MUST NOT depend on it, directly or transitively; `mbvd` and the `.deb`
-  carry no GTK.
+- **One build, runtime flag**: `mbv` always links the pinwin library; `crates/mbv-pinwin` is an
+  ordinary dependency of the root crate, still a leaf not depended on by `mbv-core`, `mbv-config`,
+  `mbv-daemon` or `mbvd`. `--pin` is a runtime flag and the F2 Panel page is always present. There
+  is one build, one tarball binary and one `.deb`.
 - **Reverted from the first version**: the `pinwin` package split and `optdepends`, the
   `mbv --desktop` launcher, the ctrl `DeclarePinned`/`pinned-panel` capability, the lazily started
   tray and the `Pin options...` tray item, and the ADR 0004 amendment.
@@ -66,8 +67,9 @@ config and control socket. That is not the product.
   root `Cargo.toml` (`.deb` assets).
 - Removes the `PKGBUILD`/`PKGBUILD-git` split, the `build.yml` pinwin steps beyond the library
   build, `src/desktop_launch.rs`, and the ctrl, daemon and tray code added by the first version.
-- With the feature on, building needs Zig and the GTK4 / gtk4-layer-shell development libraries;
-  the TUI binary links them. With it off, nothing changes except that `--pin` is rejected.
+- Building needs Zig and the GTK4 / gtk4-layer-shell development libraries; the TUI binary links
+  them, and the mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime
+  dependency.
 - Depends on `slatkin/pinwin` change `add-library-abi` landing at the `library-abi` tag, including
   the SIGWINCH-on-resize addition design D3 requires of it. Nothing else outside this repo:
   slatkin/pinwin#1 only supplied the code that is imported.
