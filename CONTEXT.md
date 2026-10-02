@@ -597,8 +597,7 @@ _Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout stat
 
 **`--pin`**:
 The launch flag that requests a **Pinned launch**. It starts no separate
-program, opens one panel per launch, and closes that panel when mbv exits. A
-build without pinning rejects it with an error and a non-zero exit.
+program, opens one panel per launch, and closes that panel when mbv exits.
 _Avoid_: `--desktop`, pin setting, pinning option
 
 **Panel gutter**:

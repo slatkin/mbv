@@ -181,11 +181,12 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0"
+depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libgtk-4-1, libgtk4-layer-shell0"
 section = "video"
 priority = "optional"
 assets = [
     ["target/release/mbv", "usr/bin/mbv", "755"],
+    ["contrib/mbv.desktop", "usr/share/applications/mbv.desktop", "644"],
     ["assets/icon.svg", "usr/share/icons/hicolor/scalable/apps/mbv.svg", "644"],
     ["scripts/mbv.lua", "usr/share/mbv/scripts/mbv.lua", "644"],
     ["scripts/mbv_state.lua", "usr/share/mbv/scripts/mbv_state.lua", "644"],

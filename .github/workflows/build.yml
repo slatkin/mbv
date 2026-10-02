@@ -76,7 +76,6 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin/cargo-deb
             target
-            target-pinned
           # Key covers: pinned builder image + rustc toolchain (build
           # environment), the dependency lockfile, and all workspace manifests.
           # The base-devel-... literal must match the `container:` image above.
@@ -117,17 +116,11 @@ jobs:
         # 0/15 fail at 4 tests even at `ulimit -n 384`. Costs ~2s.
         run: cargo nextest run --release --test-threads=4 && cargo build --release
 
-      # The tarball and the Arch packages ship the pinned TUI binary; the .deb
-      # ships the unpinned binary in target/release/mbv. The separate target
-      # directory keeps the two from overwriting each other (design D4).
-      - name: Build pinned mbv
-        run: cargo build -p mbv --release --features pinning --target-dir target-pinned
-
       - name: Bundle release tarball
         run: |
           DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
-          cp target-pinned/release/mbv "${DIST}/"
+          cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
@@ -150,10 +143,8 @@ jobs:
           MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )pipewire(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
-          if dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )(gtk4|gtk4-layer-shell|libgtk-4-1|libgtk4-layer-shell0)(,| \(|$)'; then
-            echo "mbv must not depend on GTK runtime packages"
-            exit 1
-          fi
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk-4-1(,| \(|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk4-layer-shell0(,| \(|$)'
           if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"
             exit 1
