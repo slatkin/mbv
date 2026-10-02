@@ -36,9 +36,17 @@ config and control socket. That is not the product.
   ordinary dependency of the root crate, still a leaf not depended on by `mbv-core`, `mbv-config`,
   `mbv-daemon` or `mbvd`. `--pin` is a runtime flag and the F2 Panel page is always present. There
   is one build, one tarball binary and one `.deb`.
-- **Reverted from the first version**: the `pinwin` package split and `optdepends`, the
-  `mbv --desktop` launcher, the ctrl `DeclarePinned`/`pinned-panel` capability, the lazily started
-  tray and the `Pin options...` tray item, and the ADR 0004 amendment.
+- **Tray access to the panel options** (user ruling 2026-10-02: the earlier rewrite wrongly
+  dropped this): the Owner's tray in `mbv-desktop` offers `Panel options...` for a pinned client,
+  as the first version did (`e37f6770a`). The tray starts lazily for a pinned client even without
+  stay-alive (`ca03159c4`), a pinned client declares itself to the Owner over ctrl (the first
+  version's `pinned-panel` capability and `DeclarePinned`, now without a socket path), and the
+  ADR 0004 amendment (`a36fef682`) comes back. Choosing the item sends the pinned client a ctrl
+  request; the client opens the F2 Panel page. pinwin's own tray and GTK options window stay
+  gone (the panel is in the client process; the F2 page is the options UI).
+- **Reverted from the first version and staying reverted**: the `pinwin` package split and
+  `optdepends`, the `mbv --desktop` launcher, and the control socket / `PINWIN_SOCKET` wiring.
+  (Section 2 reverted the tray, ctrl and ADR 0004 work too; section 8 re-applies it adapted.)
 - Repo hygiene stays: `pinwin/AGENTS.md`, the root `AGENTS.md` map line and `*.zig` under
   `check-code-file-lines`.
 - Naming: the layer-shell surface is recorded in `CONTEXT.md` as the *pinned panel*, kept
@@ -55,8 +63,10 @@ config and control socket. That is not the product.
   re-imported from the library-form pinwin revision (design D1), not edited here. Upstream's
   `add-library-abi` rewrites `pinwin-panel` for the library form and retires
   `pinwin-tray-options` and `pinwin-control`; the re-import lands the same result here.
-- `ctrl-protocol` and `local-daemon-tray`: no change. Their deltas from the first version are
-  dropped.
+- `ctrl-protocol` and `local-daemon-tray`: gain the pinned-panel declaration, the Owner-to-client
+  open-Panel-page request and the lazily started tray for a pinned client. The observable
+  behaviour is specified in `pinned-launch`; design D9 describes the ctrl and tray mechanics.
+  Separate delta files for these two capabilities are not authored (see D9).
 
 ## Impact
 
@@ -66,7 +76,9 @@ config and control socket. That is not the product.
   terminal init), `contrib/mbv.desktop`, `dist/config.toml`, `CONTEXT.md` (pinned-panel terms),
   root `Cargo.toml` (`.deb` assets).
 - Removes the `PKGBUILD`/`PKGBUILD-git` split, the `build.yml` pinwin steps beyond the library
-  build, `src/desktop_launch.rs`, and the ctrl, daemon and tray code added by the first version.
+  build and `src/desktop_launch.rs`. The ctrl, daemon and tray code of the first version was
+  removed by section 2 and is re-applied, adapted to the in-process panel, by section 8
+  (`mbv-ctrl`, `mbv-daemon`, `mbv-desktop`, `mbv-remote-player`, `src/`, ADR 0004).
 - Building needs Zig and the GTK4 / gtk4-layer-shell development libraries; the TUI binary links
   them, and the mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime
   dependency.

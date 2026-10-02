@@ -7,7 +7,8 @@
   daemon endpoint (`--connect-daemon` or config `daemon_client_endpoint`) runs a remote-client
   TUI (`run_remote_app`); otherwise `run_local_instance` makes this launch a Client, spawning the
   Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
-  child's stdio). The tray lives in the Owner and is unchanged by this change.
+  child's stdio). The tray lives in the Owner (`mbv-desktop`); this change adds a
+  `Panel options...` item to it for a pinned client (D9).
 - **Terminal access.** mbv and ratatui-image never open `/dev/tty`. crossterm 0.29 reads input and
   sets raw mode on stdin when stdin is a tty (`tty_fd()`), but `window_size()` and the kitty
   keyboard probe open `/dev/tty` first and fall back to stdout only when that open fails. Resize
@@ -39,8 +40,9 @@
   removed, not bridged.
 
 **Non-Goals:**
-- No tray, ctrl or Owner changes. The Owner's tray stays as it is, and `mbvd` is unaffected.
-- No pinwin command line, environment variables, socket protocol or standalone options window.
+- `mbvd` is unaffected; the Owner gains only the pinned-client tray item and its ctrl plumbing (D9).
+- No pinwin command line, environment variables, control socket, own tray or own GTK options
+  window: the panel's options UI is the F2 Panel page, reached from the Owner's tray (D9).
 - No panel, and no working desktop launcher, on sessions without layer-shell (GNOME, X11).
 - No config setting that turns pinning on.
 
@@ -192,9 +194,31 @@
   distinct.
 
 **D7. Reverts.** The first version's packaging split, launcher module, ctrl capability, daemon
-tray hook changes, `Pin options...` item and ADR 0004 amendment are removed in dedicated tasks
-rather than left dormant. The launcher revert restores `contrib/mbv.desktop` to its pre-change
-form; task 4.4 then sets it to `Exec=mbv --pin`, `Terminal=false`.
+tray hook changes, `Pin options...` item and ADR 0004 amendment were removed in dedicated tasks
+(section 2) rather than left dormant. The launcher revert restores `contrib/mbv.desktop` to its
+pre-change form; task 4.4 then sets it to `Exec=mbv --pin`, `Terminal=false`. The ctrl, tray and
+ADR 0004 reverts turned out to remove wanted behaviour; section 8 re-applies them adapted (D9).
+The packaging split, `mbv --desktop` launcher and `PINWIN_SOCKET` wiring stay removed.
+
+**D9. Tray access to the panel options.** The first version's behaviour comes back, adapted to
+the in-process panel. The Owner's tray (`mbv-desktop`, ksni) shows a `Panel options...` item
+while at least one pinned client is connected.
+1. *Declaration.* A pinned client sends the Owner a ctrl command declaring that it is pinned (the
+   first version's `pinned-panel` capability and `DeclarePinned`, `5690ab521`, `83e476b7a`,
+   `951ca97a7`, `89d58bf51`), with no socket path: the panel is in the client process. The
+   remote-player connect path declares the same way when the Owner supports the capability.
+2. *Tray lifecycle.* The Owner starts the tray lazily for a pinned client even when stay-alive is
+   off (`ca03159c4`), and the ADR 0004 amendment (`a36fef682`) records it. Stay-alive on or off,
+   the tray's existing items behave as before.
+3. *Action.* Selecting `Panel options...` makes the Owner send the declared pinned client a ctrl
+   request. The client opens the F2 settings screen on its Panel page, and brings its panel
+   forward. The F2 page (D6) is the options UI: live apply, saved on success, rejection toast.
+   With several pinned clients, the request goes to every pinned client.
+4. *Not restored.* pinwin's own tray, the control socket and the staged GTK options window
+   (`Options...` with Apply/Close) are not restored; the library has no tray or window.
+This design does not author separate `ctrl-protocol` / `local-daemon-tray` spec deltas: the
+user-visible behaviour is in `pinned-launch`, and the ctrl vocabulary lives with `mbv-ctrl`.
+Authoring those deltas is left to `/opsx:continue` if wanted.
 
 **D8. Tests.** The layout core's contracts are Zig unit tests under `zig build check` upstream
 (owned by `add-library-abi`). This change adds one Rust contract test: `[panel]` values out of

@@ -77,6 +77,25 @@ the numeric rows step down and up by 1, or by 10 with Shift, within their ranges
 - **WHEN** mbv runs in the panel and a step would leave the panel's output with no width
 - **THEN** a warning toast names the reason, the row keeps its previous value, and neither the panel nor `config.toml` changes
 
+### Requirement: Tray access to the panel options
+While at least one pinned client is connected, the Owner's tray SHALL show a `Panel options...`
+item, starting the tray if stay-alive would not have. Choosing it SHALL make every pinned client
+open the F2 settings screen on its Panel page and bring its panel forward. A client that is not
+pinned SHALL NOT cause the item to appear, and stay-alive on or off SHALL NOT change the tray's
+other items.
+
+#### Scenario: Open panel options from the tray
+- **WHEN** a pinned mbv is running and the user chooses `Panel options...` in the tray
+- **THEN** that mbv's panel shows the F2 Panel page
+
+#### Scenario: No pinned client
+- **WHEN** only unpinned clients are connected
+- **THEN** the tray has no `Panel options...` item
+
+#### Scenario: Pinned client without stay-alive
+- **WHEN** stay-alive is off and a pinned client connects
+- **THEN** the tray starts and offers `Panel options...`
+
 ### Requirement: GTK stays out of the daemon crates
 GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.
 `mbv-core`, `mbv-config`, `mbv-daemon` and `mbvd` SHALL NOT depend on them, directly or
