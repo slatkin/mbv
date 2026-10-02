@@ -51,16 +51,15 @@ start), and is tagged `library-abi`.
 ## 6. Integration check
 
 - [x] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
-- [ ] 6.2 Manual check under niri:
+- [x] 6.2 Manual check under niri:
   - `mbv` in foot, ghostty and kitty: opens in that terminal as before; `mbv` over ssh with `WAYLAND_DISPLAY` set in a tmux session: opens in the terminal.
   - Desktop entry: opens docked in the panel with no terminal window; posters, mouse, kitty keyboard and resize work; quitting removes the panel.
   - `mbv --pin` in a terminal: panel opens, the terminal waits, the prompt returns when mbv quits.
   - `mbv --pin` from inside tmux: posters render in the panel (terminal environment normalised).
   - A `[panel]` layout that leaves no output width, then the desktop entry: notification, exit 1.
-  - Tray `Resize` while pinned: change columns, side and a gutter, `Apply`: the panel updates live and survives a relaunch; close without `Apply`: nothing changes; a layout that leaves no output width: the form shows the reason and nothing changes. With stay-alive off, the tray appears once the pinned mbv starts; with only unpinned mbvs, `Resize` is greyed out; while the form is open, `Resize` is greyed out. F2 has no Panel page.
-  - A second `mbv --pin` while pinned: from the desktop entry nothing happens; from a terminal one line and exit 1. A plain `mbv` alongside the pinned one still starts.
+  - Step width, side and a gutter in F2's Panel page while pinned: the panel updates live and survives a relaunch; a step that leaves no output width shows a warning toast and changes nothing.
   - `mbv --pin` with `WAYLAND_DISPLAY` unset in a terminal: one warning line, terminal launch works. The desktop entry under a session without layer-shell (or with `WAYLAND_DISPLAY` removed from the keybind's environment): a notification and exit 1.
-  - Stay-alive on or off: the Owner's tray items other than `Resize` behave as they did before this change.
+  - Stay-alive on or off: the Owner's tray behaves as it did before this change.
 - [ ] 6.3 Archive this change and sync the `pinned-launch` delta into `openspec/specs/` (the pinwin specs are already synced by the 3.1 re-import; this covers only `pinned-launch`). Verify: `openspec validate --specs` passes and `openspec/changes/` no longer lists `pin-mbv-in-pinwin`.
 
 ## 7. Remove the pinning feature gate (user ruling 2026-10-02)
@@ -85,17 +84,3 @@ no cargo feature. These rows remove the gate the earlier rows built behind, and 
   `makepkg --printsrcinfo` lists one package per PKGBUILD.
 - [x] 7.3 Contract: docs describe no feature-off build. Remove "build with pinning" wording from
   `README.md` and `CONTEXT.md`. Verify: `rg -n "pinning feature|built without pinning|--features pinning" README.md CONTEXT.md` finds nothing.
-
-## 8. Panel options in the tray, one pinned mbv (user ruling 2026-10-02, design D5, D9)
-
-Panel size is GUI business: it is changed from a form opened from mbv's system tray, never from
-the TUI. No pinwin code change; `pinwin_apply_layout` is the only panel call.
-
-BLOCKED: rows 8.1 and 8.5 assume a Rust `gtk4` form in mbv, which the user ruled out (design D9.4). Do not dispatch them until D9.4 is resolved and they are rewritten. 8.2-8.4 and 8.6 stand.
-
-- [ ] 8.1 Probe (obsolete, see D9.4): from a scratch binary outside the repo or a throwaway branch, start the pinwin library, post a closure to GLib's default main context, mark GTK initialised for gtk-rs on that thread and show a `gtk4` + `gtk4-layer-shell` window with a button. Record the result under D9 in `design.md` ("Probe result"); if it fails, stop and report. Verify: `design.md` D9 has a "Probe result" paragraph.
-- [ ] 8.2 Contract: one pinned mbv at a time (D5). `src/pin.rs` / `src/main.rs`: take the `mbv-pin.lock` flock before `pinwin_start`; on a held lock, tty stdin prints `mbv: a pinned mbv is already running` and exits 1, otherwise exit 0 silently. Verify: `cargo nextest run -p mbv`.
-- [ ] 8.3 Contract: the Owner sends the open-form request only to the declared pinned mbv (D9.1-D9.3). `mbv-ctrl`: `pinned-panel` capability, `CtrlCmd::DeclarePinned`, `CtrlEvent::OpenPanelForm`. `mbv-daemon`: advertise the capability from the local Owner, record and forget the declaration, push the pinned flag and the form-open flag (reported by the pinned mbv) to the tray, start the tray on declaration when Stay-alive is off (respecting `show_systray_icon`), and relay the tray's request. Contract test: the request reaches the declared client and not an undeclared one; after it disconnects the pushed flag is no. Amend ADR 0004. Verify: `cargo nextest run -p mbv-ctrl -p mbv-daemon`.
-- [ ] 8.4 Contract: the tray always shows `Resize`, greyed out while no pinned mbv runs or the form is open, and sends the request when chosen (D9.3). `mbv-desktop` tray and `src/local_daemon.rs`. Verify: `cargo nextest run -p mbv-desktop -p mbv`.
-- [ ] 8.5 Contract: the form (D9.4, D9.5). `src/`: the pinned mbv sends `DeclarePinned` when the Owner advertises `pinned-panel`; on `OpenPanelForm` it shows the form and reports form open/closed to the Owner on pinwin's GTK thread using the 8.1 technique; `Apply` goes through `pin::apply_layout` off the GTK thread, saves on success, shows a rejection in the form; close discards. Add `gtk4`/`gtk4-layer-shell` to the root crate only (`cargo tree -p mbvd -i gtk4` reports it absent). Verify: `cargo nextest run -p mbv`; `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] 8.6 Contract: the TUI has no panel settings (D6). Remove the F2 Panel page added in `eee78d3c6`/`23646fc11` (the `Panel` destination, stepper row kind, panel `SettingKey`s, `changed_panel_config`, panel intents and dispatch), keeping the `mbv-config` `[panel]` keys, parse, save and `dist/config.toml`. Update `README.md` and `CONTEXT.md` where they point at F2 for panel layout. Verify: `rg -n "SettingKey::Panel|changed_panel_config|handle_panel_setting" src crates` finds nothing; `cargo nextest run -p mbv -p mbv-ui-model -p mbv-components -p mbv-ui-msg`.

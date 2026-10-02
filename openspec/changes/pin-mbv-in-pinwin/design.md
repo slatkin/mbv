@@ -5,9 +5,7 @@
 - **Launch.** `main()` runs `pre_config_startup()` (`-h`, `-V`, `-q` and `--__local-daemon` exit
   or divert there), `applog::init`, `load_config`, then `run_configured_startup`:
   `run_local_instance` makes this launch a Client, spawning the Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
-  child's stdio). The tray lives in the Owner (`mbv-desktop`, ksni) and starts only when
-  stay-alive is on (`mbv-daemon` `run.rs` `start_tray`); this change adds the
-  `Resize` item to it (D9).
+  child's stdio). The tray lives in the Owner and is unchanged by this change.
 - **Terminal access.** mbv and ratatui-image never open `/dev/tty`. crossterm 0.29 reads input and
   sets raw mode on stdin when stdin is a tty (`tty_fd()`), but `window_size()` and the kitty
   keyboard probe open `/dev/tty` first and fall back to stdout only when that open fails. Resize
@@ -39,11 +37,8 @@
   removed, not bridged.
 
 **Non-Goals:**
-- The Owner gains only the pinned declaration, the open-form relay and the tray's
-  `Resize` item (D9).
-- No pinwin command line, environment variables, socket protocol, own tray or GTK options
-  window, and no pinwin code change for the tray controls.
-- No panel settings in the TUI: panel size is GUI business, changed in a form opened from the tray (D9).
+- No tray, ctrl or Owner changes. The Owner's tray stays as it is, and `mbvd` is unaffected.
+- No pinwin command line, environment variables, socket protocol or standalone options window.
 - No panel, and no working desktop launcher, on sessions without layer-shell (GNOME, X11).
 - No config setting that turns pinning on.
 
@@ -116,8 +111,8 @@
   fallback if the task 1.1 probe shows the no-takeover route fails (a dependency that needs a real
   controlling terminal); it would change only what the launching shell does (it would return at
   once).
-- Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from the tray
-  would need a second IPC channel into the panel process, which is the socket this design removes.
+- Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from F2 would
+  need an IPC channel back to the panel, which is the socket this design removes.
 - Alternative: pinwin as a separate executable. Rejected by the product definition and by D4.
 - **Probe result (task 1.1, 2026-10-02).** The route above works; the fork alternative is not
   needed. Probed from foot, from ghostty, and from a no-controlling-terminal `setsid` launch
@@ -138,7 +133,7 @@
 - `mbv-core`, `mbv-daemon`, `mbv-config`, `mbvd` and every other crate MUST NOT depend on
   `mbv-pinwin`, directly or transitively.
 - There is one build: one `cargo build --release`, one tarball binary and one `.deb`, all carrying
-  pinning. `--pin` is a runtime flag.
+  pinning. `--pin` is a runtime flag. The F2 Panel page is always present.
 - The mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime dependency
   (Debian: `libgtk-4-1`, `libgtk4-layer-shell0`; Arch: `gtk4`, `gtk4-layer-shell`), and building
   needs Zig plus the GTK4 / gtk4-layer-shell development packages. The CI `.deb` assertion that
@@ -161,12 +156,8 @@
   connect failure) would print to the panel and vanish with it, so they go through the same
   report as a start failure: logged, and sent as a notification. Messages printed after the
   hand-over that are not fatal (for example "Connecting to daemon…") appear on the panel.
-- One pinned mbv at a time (user ruling 2026-10-02). A pinned launch takes an advisory `flock` on
-  `$XDG_RUNTIME_DIR/mbv-pin.lock` before `pinwin_start` and holds it for its life (the kernel
-  releases it on any exit, as with ADR 0006's lock). If the lock is held, the launch does not
-  start a panel: with stdin a tty it prints `mbv: a pinned mbv is already running` and exits 1;
-  otherwise (desktop entry) it exits 0 with no notification. Unpinned launches never take this
-  lock.
+- Each pinned launch opens its own panel; a second `mbv --pin` while one runs opens a second
+  Client in a second panel, as a second terminal window does today. Intended.
 - `should_pin` is a pure function over the parsed flag; the environment and
   `pinwin_start` result enter as the start-failure path above, not as decision inputs.
 
@@ -181,8 +172,16 @@
   which is a start failure (D5). It never
   calls pinwin: `mbv-config` sits under `mbvd` (D4), and geometry checks need live monitor
   metrics.
-- The TUI has no panel settings page: panel size is GUI business and is changed from the tray
-  (D9) or by editing `config.toml`. The F2 Panel page built by task 4.3 is removed (task 8.6).
+- F2: a `Panel` destination (like `Services`/`Keys`) on the main page holds six rows. `Side` is a
+  `Text` row cycling `left`/`right`. `Cols` and the four
+  gutters are a new stepper row kind: the keys that cycle a `Text` row's value step the number
+  down and up by 1, with Shift by 10; `Cols` stops at 1 and 65535, gutters at the i32 bounds. No
+  free-text entry.
+- Each step while pinned calls `pinwin_apply_layout` with the full new layout. `PINWIN_OK` saves
+  the value; a rejection leaves both the panel and `config.toml` unchanged, keeps the previous
+  value on the row, and shows the reason in a Warning toast (the existing F2 feedback path).
+  When not pinned, each step is saved without geometry validation; the stepper bounds already
+  keep the values in range.
 - The keyboard mode is fixed to `on-demand` (the previous default), and `COLS`/`GUTTER`/
   `PINWIN_DEBUG`/`--no-tray` have no equivalent.
 - Naming: the layer-shell surface is the *pinned panel*, recorded in `CONTEXT.md` beside the
@@ -190,45 +189,15 @@
   distinct.
 
 **D7. Reverts.** The first version's packaging split, launcher module, ctrl capability, daemon
-tray hook changes, `Pin options...` item and ADR 0004 amendment were removed in dedicated tasks
-(section 2). The launcher revert restores `contrib/mbv.desktop` to its pre-change form; task 4.4
-then sets it to `Exec=mbv --pin`, `Terminal=false`. The pinned declaration, lazy tray start and
-ADR 0004 amendment come back for the tray's `Resize` item, without a socket (D9); the packaging
-split, `mbv --desktop` launcher, `PINWIN_SOCKET` wiring and `Pin options...` item stay removed.
+tray hook changes, `Pin options...` item and ADR 0004 amendment are removed in dedicated tasks
+rather than left dormant. The launcher revert restores `contrib/mbv.desktop` to its pre-change
+form; task 4.4 then sets it to `Exec=mbv --pin`, `Terminal=false`.
 
 **D8. Tests.** The layout core's contracts are Zig unit tests under `zig build check` upstream
-(owned by `add-library-abi`). This change adds Rust contract tests: `[panel]` values out of range
-fall back to their defaults and a valid section round-trips through save (4.2); the Owner sends
-the open-form request only to the declared pinned client and forgets it on disconnect (8.3). The
-`--pin` decision, the single-instance refusal, the tray item, the form, panel rendering and the
+(owned by `add-library-abi`). This change adds one Rust contract test: `[panel]` values out of
+range fall back to their defaults and a valid section round-trips through save. The `--pin`
+decision, the F2 stepper (it reuses the `Text` row's keys and save path), panel rendering and the
 pty hand-over are covered by the task 6.2 manual check.
-
-**D9. Panel options in the tray.** pinwin's options window and own tray stay deleted; the
-library's existing `pinwin_apply_layout` is the only panel call. The tray item lives in the
-Owner process; the form lives in the pinned mbv, next to the panel it changes.
-1. *Declaration.* The local Owner advertises a `pinned-panel` capability. The pinned mbv
-   (`pin::is_pinned()`) sends `CtrlCmd::DeclarePinned` (no payload; the first version's
-   `5690ab521`/`83e476b7a` without the socket path) when it attaches. The Owner records it and
-   forgets it on disconnect. D5 guarantees at most one.
-2. *Tray lifecycle.* The daemon pushes "a pinned mbv is connected" (yes/no) to the tray after
-   every declaration and disconnect. With Stay-alive off, the declaration starts the tray (the
-   first version's `ca03159c4`), with all its usual items; `show_systray_icon = false` still
-   suppresses it. ADR 0004 records this (amendment as in `a36fef682`, reworded).
-3. *Tray item.* `mbv-desktop`'s tray always shows `Resize`, greyed out while the flag is no or
-   the form is open; its other items are unchanged. Choosing it sends the daemon a request over the tray's existing command
-   channel, and the daemon sends `CtrlEvent::OpenPanelForm` to the pinned mbv.
-4. *Form: UNRESOLVED (user, 2026-10-02).* What draws the form is not decided. Ruled out by the
-   user: GTK in mbv's own code (no `gtk4`/`gtk4-layer-shell` crates, in the pinned mbv or the
-   Owner); pinwin implementing its own settings UI; a staged form built from tray menu entries
-   (bad UX); a TUI or console popup form; a panel page in F2. Last open proposal awaiting answer:
-   pinwin draws a form fed by mbv's `[panel]` values (`pinwin_show_layout_form(layout)`), applies
-   on Apply via its own `pinwin_apply_layout`, reports the result, mbv saves; pinwin keeps no
-   config. Not accepted.
-5. *Decided behaviour, whatever draws it.* The form shows the current side, columns and four
-   gutters; edits apply only on `Apply` (panel moves, `[panel]` saved); closing without `Apply`
-   discards; a rejection shows in the form and keeps the edits. While the form is open the tray's
-   `Resize` is greyed out (the pinned mbv reports form open/closed to the Owner). Unconfirmed:
-   whether the form stays open after a successful `Apply`; where it appears on screen.
 
 ## Risks / Trade-offs
 

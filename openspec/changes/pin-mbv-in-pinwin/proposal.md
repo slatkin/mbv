@@ -14,17 +14,8 @@ config and control socket. That is not the product.
 ## What Changes
 
 - **Flag**: `mbv --pin` runs the TUI in the pinned panel. There is no config setting that turns
-  pinning on; only the flag does. The panel layout (side, columns, four gutters) is saved in
-  `config.toml`'s `[panel]` section.
-- **Panel options in the tray** (user ruling 2026-10-02): panel size is GUI business, not the
-  terminal app's. While a pinned mbv runs, mbv's system tray has an `Resize` item that
-  opens a small dropdown form with the current side, columns and four gutters. Edits apply only
-  on Apply (the panel moves and the values are saved); closing without Apply discards them; a
-  rejected layout is reported in the form. The TUI has no panel settings page. pinwin's own tray
-  and GTK options window stay gone; no pinwin code change.
-- **One pinned mbv at a time**: a second `mbv --pin` while one is pinned does nothing from the
-  desktop entry and prints one line and exits 1 from a terminal. Any number of unpinned mbv
-  terminals may still run.
+  pinning on; only the flag does. A `Panel` settings page in F2 holds the panel layout: side,
+  columns and four gutters, saved in `config.toml` and applied live while pinned.
 - **Desktop entry**: `contrib/mbv.desktop` becomes `Exec=mbv --pin`, `Terminal=false`. Sessions
   without layer-shell (GNOME, X11) are not supported from the launcher: the panel fails to start,
   mbv logs it, sends a desktop notification and exits non-zero. Every package ships the same
@@ -43,12 +34,11 @@ config and control socket. That is not the product.
   in that terminal.
 - **One build, runtime flag**: `mbv` always links the pinwin library; `crates/mbv-pinwin` is an
   ordinary dependency of the root crate, still a leaf not depended on by `mbv-core`, `mbv-config`,
-  `mbv-daemon` or `mbvd`. `--pin` is a runtime flag. There is one build, one tarball binary and
-  one `.deb`.
-- **Reverted from the first version and staying reverted**: the `pinwin` package split and
-  `optdepends`, the `mbv --desktop` launcher, the `Pin options...` item and the control socket /
-  `PINWIN_SOCKET` wiring. The pinned declaration, the lazily started tray and the ADR 0004
-  amendment (reverted in section 2) come back adapted for the tray's `Resize` item (design D9).
+  `mbv-daemon` or `mbvd`. `--pin` is a runtime flag and the F2 Panel page is always present. There
+  is one build, one tarball binary and one `.deb`.
+- **Reverted from the first version**: the `pinwin` package split and `optdepends`, the
+  `mbv --desktop` launcher, the ctrl `DeclarePinned`/`pinned-panel` capability, the lazily started
+  tray and the `Pin options...` tray item, and the ADR 0004 amendment.
 - Repo hygiene stays: `pinwin/AGENTS.md`, the root `AGENTS.md` map line and `*.zig` under
   `check-code-file-lines`.
 - Naming: the layer-shell surface is recorded in `CONTEXT.md` as the *pinned panel*, kept
@@ -65,23 +55,18 @@ config and control socket. That is not the product.
   re-imported from the library-form pinwin revision (design D1), not edited here. Upstream's
   `add-library-abi` rewrites `pinwin-panel` for the library form and retires
   `pinwin-tray-options` and `pinwin-control`; the re-import lands the same result here.
-- `ctrl-protocol` and `local-daemon-tray`: gain the pinned declaration, the request that opens the
-  panel form in the pinned mbv, and the tray's `Resize` item. The observable behaviour is specified in `pinned-launch`;
-  design D9 has the mechanics.
+- `ctrl-protocol` and `local-daemon-tray`: no change. Their deltas from the first version are
+  dropped.
 
 ## Impact
 
 - `pinwin/` (re-import of the library-form revision; the reshape itself is upstream work), new
-  leaf crate `crates/mbv-pinwin` (build.rs, FFI), `mbv-config` (`[panel]` keys), `mbv-ctrl`,
-  `mbv-daemon`, `mbv-desktop`, `src/local_daemon.rs` and ADR 0004 (tray item, D9), the panel form
-  (`gtk4`/`gtk4-layer-shell` crates, D9), the pinned single-instance lock (D5),
-  `mbv-ui-model`/`mbv-components` and `src/app/dispatch/settings.rs` (F2 Panel page removed),
-  `src/main.rs` (`--pin` and start-up before
+  leaf crate `crates/mbv-pinwin` (build.rs, FFI), `mbv-config` (`[panel]` keys), `mbv-ui-model`
+  and `src/app/dispatch/settings.rs` (F2 Panel page), `src/main.rs` (`--pin` and start-up before
   terminal init), `contrib/mbv.desktop`, `dist/config.toml`, `CONTEXT.md` (pinned-panel terms),
   root `Cargo.toml` (`.deb` assets).
 - Removes the `PKGBUILD`/`PKGBUILD-git` split, the `build.yml` pinwin steps beyond the library
-  build, `src/desktop_launch.rs`, and the first version's socket-based ctrl, daemon and tray
-  code (the declaration and lazy tray return without a socket, D9).
+  build, `src/desktop_launch.rs`, and the ctrl, daemon and tray code added by the first version.
 - Building needs Zig and the GTK4 / gtk4-layer-shell development libraries; the TUI binary links
   them, and the mbv `.deb`, tarball and PKGBUILDs carry the GTK4 / gtk4-layer-shell runtime
   dependency.
