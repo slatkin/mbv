@@ -55,9 +55,7 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed \
-            rust clang nasm mpv pipewire openssl dpkg github-cli git openssh \
-            zig gtk4 gtk4-layer-shell libdbusmenu-glib
+          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh
 
       - uses: actions/checkout@v7
 
@@ -118,19 +116,12 @@ jobs:
         # 0/15 fail at 4 tests even at `ulimit -n 384`. Costs ~2s.
         run: cargo nextest run --release --test-threads=4 && cargo build --release
 
-      # pinwin is a standalone Zig program: not a Cargo workspace member and
-      # never linked by mbv, so it is built and checked on its own here.
-      - name: Build pinwin
-        working-directory: pinwin
-        run: zig build -Doptimize=ReleaseSafe && zig build check
-
       - name: Bundle release tarball
         run: |
           DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
           cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
-          cp pinwin/zig-out/bin/pinwin "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"

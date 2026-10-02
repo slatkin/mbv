@@ -1,6 +1,5 @@
 # Maintainer: slatkin@gmail.com
-pkgbase=mbv-git
-pkgname=(mbv-git pinwin-git)
+pkgname=mbv-git
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Terminal client for Emby media server (git)"
@@ -8,32 +7,29 @@ arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl')
-makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'gtk4' 'gtk4-layer-shell' 'libdbusmenu-glib')
+makedepends=('rust' 'cargo' 'nasm' 'git')
 provides=('mbv')
 conflicts=('mbv')
-source=("${pkgbase}::git+https://github.com/slatkin/mbv.git")
+source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
 sha256sums=('SKIP')
 
 pkgver() {
-    cd "${pkgbase}"
+    cd "${pkgname}"
     git describe --tags --long | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {
-    cd "${pkgbase}"
+    cd "${pkgname}"
     cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
 }
 
 build() {
-    cd "${pkgbase}"
+    cd "${pkgname}"
     cargo build --frozen --release
-    cd pinwin
-    zig build -Doptimize=ReleaseSafe
 }
 
-package_mbv-git() {
-    optdepends=('pinwin: open pinned from the launcher' 'xdg-terminal-exec: open in a terminal from the launcher')
-    cd "${pkgbase}"
+package() {
+    cd "${pkgname}"
     install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
     install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
     install -Dm644 "contrib/mbv.desktop" "${pkgdir}/usr/share/applications/mbv.desktop"
@@ -47,14 +43,4 @@ package_mbv-git() {
     install -Dm644 "dist/config.toml" "${pkgdir}/usr/share/mbv/config.toml"
     install -Dm644 "contrib/mbvd.service" "${pkgdir}/usr/lib/systemd/system/mbvd.service"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/mbv/LICENSE"
-}
-
-package_pinwin-git() {
-    pkgdesc="Layer-shell panel that runs a command pinned beside tiled windows (git)"
-    depends=('gtk4' 'gtk4-layer-shell' 'libdbusmenu-glib' 'pango')
-    provides=('pinwin')
-    conflicts=('pinwin')
-    cd "${pkgbase}"
-    install -Dm755 "pinwin/zig-out/bin/pinwin" "${pkgdir}/usr/bin/pinwin"
-    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
