@@ -4,17 +4,22 @@ Issue: #864
 
 ## Why
 
-mbv is an app with pinning support. A user turns on "Pin app as UI panel" in F2 (or `config.toml`),
-and the next time mbv launches, its TUI is docked to a screen edge in a GTK layer-shell panel. There
-is no second program for the user to install, launch or configure: pinwin is mbv's own code and
-becomes part of mbv. The first version of this change kept pinwin as an external program with its
-own launcher, package, tray, config and control socket. That is not the product.
+mbv is an app with pinning support. `mbv --pin` starts mbv with its TUI docked to a screen edge in
+a GTK layer-shell panel, and the desktop entry launches it that way. There is no second program
+for the user to install, launch or configure: pinwin is mbv's own code and becomes part of mbv.
+Plain `mbv` in a terminal (including over ssh or in tmux) always runs in that terminal. The first
+version of this change kept pinwin as an external program with its own launcher, package, tray,
+config and control socket. That is not the product.
 
 ## What Changes
 
-- **Setting**: `pin_as_panel` (default off) in `config.toml`, with an F2 toggle. It takes effect on
-  the next launch. A `Panel` settings page holds the panel layout: side, columns and four gutters.
-  Layout changes apply live while pinned.
+- **Flag**: `mbv --pin` runs the TUI in the pinned panel. There is no config setting that turns
+  pinning on; only the flag does. A `Panel` settings page in F2 holds the panel layout: side,
+  columns and four gutters, saved in `config.toml` and applied live while pinned.
+- **Desktop entry**: `contrib/mbv.desktop` becomes `Exec=mbv --pin`, `Terminal=false`. Sessions
+  without layer-shell (GNOME, X11) are not supported from the launcher: the panel fails to start,
+  mbv logs it, sends a desktop notification and exits non-zero. The `.deb`, whose binary has no
+  pinning, ships no desktop entry.
 - **pinwin becomes a library, upstream-first**: the reshape of the `pinwin/` tree (Zig + C) into a
   static library with a C ABI is specified, reviewed and implemented in `slatkin/pinwin` (change
   `add-library-abi`). This change imports the resulting revision over `pinwin/` and links it into
@@ -22,16 +27,17 @@ own launcher, package, tray, config and control socket. That is not the product.
   argv, `--no-tray`, control socket (`PINWIN_SOCKET`), own tray, own GTK options window and own
   config file; the library attaches to a pty that mbv supplies and exposes start, apply-layout and
   stop calls.
-- **In-process panel**: with pinning on, mbv opens a pty pair, runs the panel on a GTK thread
-  against the master, and runs the TUI unchanged on the slave. One process; no re-exec, no socket.
-  mbv without pinning, off Wayland, or when panel start-up fails behaves as today.
+- **In-process panel**: with `--pin`, mbv opens a pty pair, runs the panel on a GTK thread
+  against the master, and runs the TUI unchanged on the slave. One process; no fork, no re-exec,
+  no socket. Typed in a terminal, `mbv --pin` behaves like a GUI app started from a shell: the
+  panel opens and the shell waits until mbv exits; if the panel cannot start, mbv warns and runs
+  in that terminal.
 - **Cargo feature gate**: pinning sits behind a cargo feature of the `mbv` TUI crate. `mbv-core`,
   `mbv-daemon` and `mbvd` MUST NOT depend on it, directly or transitively; `mbvd` and the `.deb`
   carry no GTK.
 - **Reverted from the first version**: the `pinwin` package split and `optdepends`, the
   `mbv --desktop` launcher, the ctrl `DeclarePinned`/`pinned-panel` capability, the lazily started
-  tray and the `Pin options...` tray item, and the ADR 0004 amendment. `contrib/mbv.desktop`
-  returns to a plain `Exec=mbv`.
+  tray and the `Pin options...` tray item, and the ADR 0004 amendment.
 - Repo hygiene stays: `pinwin/AGENTS.md`, the root `AGENTS.md` map line and `*.zig` under
   `check-code-file-lines`.
 - Naming: the layer-shell surface is recorded in `CONTEXT.md` as the *pinned panel*, kept
@@ -40,8 +46,8 @@ own launcher, package, tray, config and control socket. That is not the product.
 ## Capabilities
 
 ### New Capabilities
-- `pinned-launch`: the pin setting, the Panel layout settings, in-process panel start-up, and
-  fallback to the plain TUI.
+- `pinned-launch`: the `--pin` flag, the desktop entry, the Panel layout settings, in-process
+  panel start-up, and the start-failure behaviour.
 
 ### Modified Capabilities
 - `pinwin-panel`, `pinwin-tray-options`, `pinwin-control`: the copies in `openspec/specs/` are
@@ -54,13 +60,14 @@ own launcher, package, tray, config and control socket. That is not the product.
 ## Impact
 
 - `pinwin/` (re-import of the library-form revision; the reshape itself is upstream work), new
-  leaf crate `crates/mbv-pinwin` (build.rs, FFI), `mbv-config`
-  (keys), `mbv-ui-model` and `src/app/dispatch/settings.rs` (F2 rows), `src/main.rs` (pin start-up
-  before terminal init), `dist/config.toml`, `CONTEXT.md` (pinned-panel terms).
+  leaf crate `crates/mbv-pinwin` (build.rs, FFI), `mbv-config` (`[panel]` keys), `mbv-ui-model`
+  and `src/app/dispatch/settings.rs` (F2 Panel page), `src/main.rs` (`--pin` and start-up before
+  terminal init), `contrib/mbv.desktop`, `dist/config.toml`, `CONTEXT.md` (pinned-panel terms),
+  root `Cargo.toml` (`.deb` assets).
 - Removes the `PKGBUILD`/`PKGBUILD-git` split, the `build.yml` pinwin steps beyond the library
   build, `src/desktop_launch.rs`, and the ctrl, daemon and tray code added by the first version.
 - With the feature on, building needs Zig and the GTK4 / gtk4-layer-shell development libraries;
-  the TUI binary links them. With it off, nothing changes.
-- Depends on `slatkin/pinwin` change `add-library-abi` landing at a pinned revision (its own
-  planning review and implementation round). Nothing else outside this repo: slatkin/pinwin#1
-  only supplied the code that is imported.
+  the TUI binary links them. With it off, nothing changes except that `--pin` is rejected.
+- Depends on `slatkin/pinwin` change `add-library-abi` landing at the `library-abi` tag, including
+  the SIGWINCH-on-resize addition design D3 requires of it. Nothing else outside this repo:
+  slatkin/pinwin#1 only supplied the code that is imported.
