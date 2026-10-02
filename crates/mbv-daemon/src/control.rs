@@ -415,26 +415,6 @@ fn dispatch_ctrl_command(
             let _ = ctx.merged_tx.send(DaemonEvent::Shutdown);
         }
         CtrlCmd::ApplyServiceSetup { .. } => {}
-        CtrlCmd::DeclarePinned { socket } => {
-            let mut clients = ctx.ctrl_clients.lock().unwrap();
-            if clients.is_local_client(ctx.client_id) {
-                clients.set_pinned(ctx.client_id, socket);
-                tracing::info!(
-                    name: "daemon.pinned_declaration.recorded",
-                    target: "daemon",
-                    client = %ctx.client_id,
-                    pinned = ?clients.latest_pinned(),
-                    "pinned declaration recorded"
-                );
-            } else {
-                tracing::info!(
-                    name: "daemon.pinned_declaration.ignored",
-                    target: "daemon",
-                    client = %ctx.client_id,
-                    "pinned declaration ignored: not a local ctrl connection"
-                );
-            }
-        }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
             slots,

@@ -1,45 +1,4 @@
 use super::*;
-use std::path::PathBuf;
-
-/// Contract: the pin target follows attached local declarations — a
-/// declaration on a TCP connection is never recorded.
-#[test]
-fn tcp_pinned_declaration_records_nothing() {
-    let mut clients = CtrlClients::default();
-    let (tx, _rx) = mpsc::channel();
-    let id = clients.connect(
-        tx,
-        CtrlTransport::Tcp,
-        mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
-        true,
-    );
-
-    clients.set_pinned(id, PathBuf::from("/run/user/1000/pinwin/1.sock"));
-
-    assert_eq!(clients.latest_pinned(), None);
-}
-
-/// Contract: the pin target follows attached local declarations — removing
-/// the latest pinned client falls back to the earlier pinned one.
-#[test]
-fn pinned_target_falls_back_to_earlier_client_after_removal() {
-    let mut clients = CtrlClients::default();
-    let (first, _first_rx) = connect_client(&mut clients);
-    let (second, _second_rx) = connect_client(&mut clients);
-    clients.set_pinned(first, PathBuf::from("/run/user/1000/pinwin/1.sock"));
-    clients.set_pinned(second, PathBuf::from("/run/user/1000/pinwin/2.sock"));
-    assert_eq!(
-        clients.latest_pinned(),
-        Some(PathBuf::from("/run/user/1000/pinwin/2.sock"))
-    );
-
-    clients.remove(second);
-
-    assert_eq!(
-        clients.latest_pinned(),
-        Some(PathBuf::from("/run/user/1000/pinwin/1.sock"))
-    );
-}
 
 #[test]
 fn shutdown_notification_is_flushed_before_writers_are_released() {

@@ -76,9 +76,6 @@ pub const CTRL_CAP_SERVICE_SETUP_ADMIN: &str = "service-setup-admin";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
-/// Client runs inside a pinwin panel and can declare the panel's control
-/// socket. Additive — no protocol-version bump.
-pub const CTRL_CAP_PINNED_PANEL: &str = "pinned-panel";
 
 pub type PlaybackRequestId = u64;
 pub type QueueLoadRequestId = u64;

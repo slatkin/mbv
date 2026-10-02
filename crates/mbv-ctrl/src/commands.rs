@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 use crate::player::PlayerCommand;
 use crate::{
@@ -30,13 +29,6 @@ pub enum CtrlCmd {
     ApplyServiceSetup {
         kind: ServiceKind,
         revision: u64,
-    },
-
-    /// Client declares that it runs inside a pinwin panel, carrying that
-    /// panel's control socket path. Accepted only from an authenticated local
-    /// Unix ctrl connection; no reply.
-    DeclarePinned {
-        socket: PathBuf,
     },
 
     // ── Unified queue commands (require `unified-queue` capability) ─────
@@ -179,7 +171,6 @@ impl CtrlCmd {
             | CtrlCmd::PlaybackIntent(_)
             | CtrlCmd::RequestShutdown
             | CtrlCmd::ApplyServiceSetup { .. }
-            | CtrlCmd::DeclarePinned { .. }
             | CtrlCmd::UnifiedQueueReplace { .. }
             | CtrlCmd::UnifiedQueueAppend { .. }
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }
@@ -216,7 +207,6 @@ impl CtrlCmd {
             | CtrlCmd::PlaybackIntent(_)
             | CtrlCmd::RequestShutdown
             | CtrlCmd::ApplyServiceSetup { .. }
-            | CtrlCmd::DeclarePinned { .. }
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
             | CtrlCmd::UnifiedAdoptQueue { .. } => false,
         }
