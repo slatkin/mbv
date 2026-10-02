@@ -149,7 +149,10 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
         "activation seams must not change playback state"
     );
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
-    assert!(!app.audiobookshelf_browse[0].shows.is_empty());
+    assert_ne!(
+        app.audiobookshelf_browse[0].shows,
+        [] as [mbv_audiobookshelf::AudiobookshelfShow; 0]
+    );
 }
 
 /// An absent or stale Audiobookshelf index is a silent no-op for both seams.

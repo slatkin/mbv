@@ -232,7 +232,7 @@ mod tests {
 
         match app.channels.lib_rx.try_recv() {
             Ok(LibEvent::ModelContent(ModelContentEvent::HomeContentRefreshed(content))) => {
-                assert!(content.continue_items.is_empty());
+                assert_eq!(content.continue_items, [] as [mbv_emby_model::EmbyItem; 0]);
             }
             Ok(_) => panic!("a successful home fetch must emit HomeContentRefreshed"),
             Err(e) => panic!("expected a HomeContentRefreshed event, got none: {e}"),

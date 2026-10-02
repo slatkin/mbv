@@ -97,10 +97,10 @@ fn feed_session_properties(
         }
         1 => {
             assert_eq!(session.last_valid_pos, 0);
-            assert!(session.series_id.as_str().is_empty());
+            assert_eq!(session.series_id.as_str(), "");
         }
         2 => assert_eq!(session.origin, PlaybackOrigin::Standalone),
-        3 => assert!(session.ext_sub_urls.is_empty()),
+        3 => assert_eq!(session.ext_sub_urls, [] as [std::string::String; 0]),
         4 => assert!(
             !session.reporter.has_session(),
             "feed reporter must have no Emby session"
@@ -272,7 +272,7 @@ fn feed_append_displaced_emby_reported_before_ids_clear_and_drain() {
     let (mut session, _status) = make_queue_session_for_pos_tests(1);
     assert!(session.reporter.has_session());
     let original_id = session.reporter.ids.lock().unwrap().0.clone();
-    assert!(!original_id.as_str().is_empty());
+    assert_ne!(original_id.as_str(), "");
 
     // Simulate cmd_load_feed active path
     session

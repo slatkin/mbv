@@ -140,7 +140,7 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
         focused.as_ref(),
         &RouterOutcome::Swallow,
     );
-    assert!(swallowed.is_empty());
+    assert_eq!(swallowed, [] as [mbv_ui_msg::Msg; 0]);
 }
 
 #[test]

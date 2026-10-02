@@ -141,7 +141,7 @@ mod tests {
         list.toggle_selection(&2);
         assert_eq!(list.multi_selection(), &[2]);
         list.toggle_selection(&2);
-        assert!(list.multi_selection().is_empty());
+        assert_eq!(list.multi_selection(), [] as [u8; 0]);
     }
 
     #[test]
@@ -285,7 +285,7 @@ mod tests {
         list.select_target(&3);
         list.toggle_selection(&4);
         list.clear_selection();
-        assert!(list.multi_selection().is_empty());
+        assert_eq!(list.multi_selection(), [] as [u8; 0]);
         assert!(!list.is_visual_mode());
     }
 }

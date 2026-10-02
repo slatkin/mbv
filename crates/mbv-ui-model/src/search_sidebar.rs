@@ -232,7 +232,7 @@ mod tests {
 
         assert!(sidebar.loading, "stale response must not touch loading");
         assert_eq!(sidebar.cursor, 5);
-        assert!(sidebar.results.is_empty());
+        assert_eq!(sidebar.results, [] as [mbv_emby_model::EmbyItem; 0]);
 
         sidebar.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")]));
 

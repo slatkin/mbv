@@ -88,7 +88,7 @@ fn entries_without_any_source_are_skipped() {
         FeedKind::Video,
         "https://example.test/feed",
     );
-    assert!(entries.is_empty());
+    assert_eq!(entries, [] as [mbv_queue::FeedEntry; 0]);
 }
 
 #[test]

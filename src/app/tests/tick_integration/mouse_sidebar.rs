@@ -35,7 +35,10 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
     app.playlists_cursor = 0;
     assert!(app.playlists_open.is_none());
-    assert!(app.playlists_open_items.is_empty());
+    assert_eq!(
+        app.playlists_open_items,
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Function(4)));
     let outcome = harness.step();

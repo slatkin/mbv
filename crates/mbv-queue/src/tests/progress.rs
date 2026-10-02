@@ -64,7 +64,7 @@ fn refresh_applies_one_fetched_item_to_duplicate_queue_slots() {
 
     let result = queue.merge_refresh(vec![item_with_progress("same", 5, false)]);
 
-    assert!(result.pruned_slots.is_empty());
+    assert_eq!(result.pruned_slots, [] as [QueueSlotId; 0]);
     assert!(queue.slot(duplicate).is_some());
     assert_eq!(
         queue
@@ -87,7 +87,7 @@ fn refresh_matches_duplicate_fetched_items_in_queue_order() {
         item_with_progress("same", 9, false),
     ]);
 
-    assert!(result.pruned_slots.is_empty());
+    assert_eq!(result.pruned_slots, [] as [QueueSlotId; 0]);
     assert_eq!(
         queue.slot(first).unwrap().item.playback_position_ticks(),
         5 * TICKS_PER_SECOND

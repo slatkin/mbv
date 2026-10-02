@@ -208,7 +208,7 @@ fn refresh_preserves_inactive_audiobookshelf_book_slot() {
 
     let result = queue.merge_refresh(vec![item_with_progress("emby-1", 7, false)]);
 
-    assert!(result.pruned_slots.is_empty());
+    assert_eq!(result.pruned_slots, [] as [QueueSlotId; 0]);
     assert_eq!(slot_ids(&queue), ids);
     assert!(matches!(
         queue.slot(episode_slot).unwrap().item,

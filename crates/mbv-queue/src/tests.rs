@@ -416,7 +416,7 @@ fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
 
     let before_refresh = queue.revision();
     let result = queue.merge_refresh(vec![item_with_progress("a", 1, false), item("b")]);
-    assert!(result.pruned_slots.is_empty());
+    assert_eq!(result.pruned_slots, [] as [QueueSlotId; 0]);
     assert_eq!(queue.revision(), before_refresh);
 
     queue.clear_active_slot();
@@ -466,7 +466,7 @@ fn feed_slot_participates_in_queue_ordering_and_survives_refresh() {
     // Feed slots have no server-side counterpart; a refresh must leave
     // them in place rather than pruning them.
     let result = queue.merge_refresh(vec![item("a"), item("b")]);
-    assert!(result.pruned_slots.is_empty());
+    assert_eq!(result.pruned_slots, [] as [QueueSlotId; 0]);
     assert!(queue.slot(feed_slot).is_some());
     assert!(matches!(
         queue.slot(feed_slot).unwrap().item,

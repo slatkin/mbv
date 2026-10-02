@@ -532,7 +532,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let messages = fold_keyboard_messages(raw_messages, pre_fold_focus.as_ref(), &router);
     assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(router, RouterOutcome::Swallow));
-    assert!(messages.is_empty());
+    assert_eq!(messages, [] as [mbv_ui_msg::Msg; 0]);
 }
 
 /// Only Enter and Esc answer a confirmation: any other key is a no-op that

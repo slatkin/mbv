@@ -407,7 +407,7 @@ fn device_name_falls_back_to_mbv() {
     // We can't suppress /etc/hostname, but we can verify the fallback string
     // is the sentinel "mbv" when nothing else is available.
     let name = device_name();
-    assert!(!name.is_empty());
+    assert_ne!(name, "");
     // Must not contain raw newlines regardless of source.
     assert!(!name.contains('\n'));
 }

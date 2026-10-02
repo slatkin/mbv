@@ -122,7 +122,7 @@ mod tests {
         .unwrap();
         drop(tx);
         let receivers = collect_receivers(&rx, Duration::from_millis(50));
-        assert!(receivers.is_empty());
+        assert_eq!(receivers, [] as [CastReceiver; 0]);
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
         let receivers = browse_cast_receivers_with(Duration::from_millis(10), || {
             Err(CastError::receiver_not_found())
         });
-        assert!(receivers.is_empty());
+        assert_eq!(receivers, [] as [CastReceiver; 0]);
     }
 
     #[test]

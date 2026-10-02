@@ -18,14 +18,14 @@ fn ui_root_router_command_opens_help() {
         model.router_outcome(&messages),
         RouterOutcome::Command(Command::OpenHelp)
     );
-    assert!(
+    assert_eq!(
         arbitrate_key(
             messages,
             Some(&ComponentId::UiRoot),
             &RouterOutcome::Command(Command::OpenHelp)
         )
-        .0
-        .is_empty()
+        .0,
+        [] as [mbv_ui_msg::Msg; 0]
     );
     assert!(!model.dispatch_router_command(&Command::OpenHelp));
     assert!(

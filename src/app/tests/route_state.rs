@@ -57,7 +57,10 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
-    assert!(app.remote_view.as_ref().unwrap().emby_items().is_empty());
+    assert_eq!(
+        app.remote_view.as_ref().unwrap().emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
     assert_eq!(app.local_view.emby_items().len(), 2);
 }
 
@@ -102,7 +105,10 @@ fn library_route_connect_shows_the_peer_queue_even_when_empty() {
 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
-    assert!(app.remote_view.as_ref().unwrap().emby_items().is_empty());
+    assert_eq!(
+        app.remote_view.as_ref().unwrap().emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
 }
 
 #[test]

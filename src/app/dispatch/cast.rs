@@ -529,7 +529,10 @@ mod tests {
 
         app.attach_cast("device-1".to_string());
 
-        assert!(app.visualizer_window.samples.is_empty());
+        assert_eq!(
+            app.visualizer_window.samples,
+            [] as [mbv_visualizer::StereoSample; 0]
+        );
     }
 
     #[test]

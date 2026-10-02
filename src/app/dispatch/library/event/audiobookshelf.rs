@@ -351,7 +351,10 @@ mod tests {
 
         books_fetched_does_not_apply(&mut app, library_id, stale_generation);
 
-        assert!(app.audiobookshelf_book_browse[0].books.is_empty());
+        assert_eq!(
+            app.audiobookshelf_book_browse[0].books,
+            [] as [mbv_audiobookshelf::AudiobookshelfBook; 0]
+        );
     }
 
     fn detail_result(

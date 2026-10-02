@@ -99,7 +99,10 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
     let app = make_built_app();
 
     assert!(app.tab.is_home());
-    assert!(app.local_view.emby_items().is_empty());
+    assert_eq!(
+        app.local_view.emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
 }
 
 #[test]

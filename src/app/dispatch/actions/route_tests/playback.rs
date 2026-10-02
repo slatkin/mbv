@@ -60,7 +60,10 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
     app.play_item(item.clone());
 
     assert!(app.queue_deferrals.has_local_play());
-    assert!(app.local_view.emby_items().is_empty());
+    assert_eq!(
+        app.local_view.emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
     command_rx.try_recv().unwrap_err();
 }
 
@@ -213,7 +216,10 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     assert!(!app.queue_deferrals.has_local_play());
     assert!(!app.queue_deferrals.is_save_deferred());
     assert!(app.pending_overlay.is_none());
-    assert!(app.local_view.emby_items().is_empty());
+    assert_eq!(
+        app.local_view.emby_items(),
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
     // The appended entry appears in the view only through the owner's
     // answer (row 5.3); this legacy stub owner sends no snapshot, so the
     // optimistic remote-tab content is not asserted here.

@@ -25,7 +25,10 @@ fn parse_music_levels_album_only() {
 #[test]
 fn parse_music_levels_missing_defaults_empty() {
     let toml = "[server]\nurl = \"http://host\"";
-    assert!(parse_config(toml).unwrap().music_levels.is_empty());
+    assert_eq!(
+        parse_config(toml).unwrap().music_levels,
+        [] as [std::string::String; 0]
+    );
 }
 
 // always_play_next and start_on_queue live in [queue].

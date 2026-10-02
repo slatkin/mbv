@@ -383,7 +383,7 @@ fn watched_filter_empty_result() {
         vec![entry("First", false)],
     );
     down(&mut owner, Key::Char('w'));
-    assert!(visible_titles(&owner).is_empty());
+    assert_eq!(visible_titles(&owner), [] as [String; 0]);
 }
 
 #[test]

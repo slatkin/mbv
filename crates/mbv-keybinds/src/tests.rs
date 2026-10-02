@@ -126,9 +126,9 @@ fn every_declared_action_is_rebindable_and_exclusions_stay_out() {
             "action `{}` must be rebindable",
             action.id
         );
-        assert!(!action.default_chords.is_empty());
-        assert!(!action.id.is_empty());
-        assert!(!action.policy.is_empty());
+        assert_ne!(action.default_chords, [] as [&str; 0]);
+        assert_ne!(action.id, "");
+        assert_ne!(action.policy, "");
     }
     for name in EXCLUDED_POLICY_NAMES {
         assert!(

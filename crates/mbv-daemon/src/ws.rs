@@ -358,7 +358,7 @@ mod tests {
         let clients = Arc::new(Mutex::new(CtrlClients::default()));
         let ids: Vec<String> = items.iter().map(|(id, _, _)| (*id).to_string()).collect();
 
-        assert!(!ids.is_empty());
+        assert_ne!(ids, [] as [std::string::String; 0]);
         handle_ws_play(
             WsEvent::Play {
                 item_ids: ids,

@@ -253,7 +253,7 @@ fn selector_move_updates_only_private_hover_identity_and_returns_no_message() {
         None
     );
     assert_eq!(panel.test_hovered_selector(), Some(1));
-    assert!(log.borrow().events.is_empty());
+    assert_eq!(log.borrow().events, [] as [LibrarySlotEvent; 0]);
 
     assert_eq!(
         panel.on(&mouse_event(
@@ -264,7 +264,7 @@ fn selector_move_updates_only_private_hover_identity_and_returns_no_message() {
         None
     );
     assert_eq!(panel.test_hovered_selector(), None);
-    assert!(log.borrow().events.is_empty());
+    assert_eq!(log.borrow().events, [] as [LibrarySlotEvent; 0]);
 }
 
 #[test]

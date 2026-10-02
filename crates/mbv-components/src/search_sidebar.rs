@@ -468,6 +468,6 @@ mod tests {
             Ok::<_, mbv_ui_model::UiModelError>(vec![make_item("Stale", "Movie")]),
         );
         assert_eq!(comp.sidebar.cursor, 5);
-        assert!(comp.sidebar.results.is_empty());
+        assert_eq!(comp.sidebar.results, [] as [mbv_emby_model::EmbyItem; 0]);
     }
 }

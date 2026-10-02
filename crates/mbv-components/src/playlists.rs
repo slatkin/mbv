@@ -447,6 +447,6 @@ mod tests {
             Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)))
         );
         assert!(component.open.is_none());
-        assert!(component.open_items.is_empty());
+        assert_eq!(component.open_items, [] as [mbv_emby_model::EmbyItem; 0]);
     }
 }

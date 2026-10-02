@@ -62,9 +62,9 @@ fn parse_item_metadata_lists() {
 #[test]
 fn parse_item_metadata_lists_absent_default_empty() {
     let item = parse_item(&json!({"Type": "Movie"}));
-    assert!(item.genres.is_empty());
-    assert!(item.people.is_empty());
-    assert!(item.external_urls.is_empty());
+    assert_eq!(item.genres, [] as [std::string::String; 0]);
+    assert_eq!(item.people, [] as [mbv_emby_model::EmbyPerson; 0]);
+    assert_eq!(item.external_urls, [] as [mbv_emby_model::EmbyLink; 0]);
 }
 
 #[rstest]
@@ -113,9 +113,12 @@ fn parse_item_image_tags_absent_members_default_empty() {
     assert_eq!(item.image_tags.thumb, "");
     assert_eq!(item.image_tags.primary, "primary-tag");
     assert_eq!(item.image_tags.logo, "");
-    assert!(item.image_tags.backdrops.is_empty());
+    assert_eq!(item.image_tags.backdrops, [] as [std::string::String; 0]);
     assert_eq!(item.image_tags.series_thumb, "");
-    assert!(item.image_tags.series_backdrops.is_empty());
+    assert_eq!(
+        item.image_tags.series_backdrops,
+        [] as [std::string::String; 0]
+    );
 }
 
 #[test]
@@ -137,7 +140,7 @@ fn parse_item_episode_series_image_tags() {
     let item = parse_item(&raw);
     assert_eq!(item.image_tags.series_thumb, "series-thumb");
     assert_eq!(item.image_tags.series_backdrops, vec!["series-backdrop"]);
-    assert!(item.image_tags.thumb.is_empty());
+    assert_eq!(item.image_tags.thumb, "");
 }
 
 #[test]
@@ -222,10 +225,9 @@ fn parse_item_artist_items_retained_when_present() {
 
 #[test]
 fn parse_item_artist_items_absent_default_empty() {
-    assert!(
-        parse_item(&json!({"Type": "MusicAlbum"}))
-            .artist_items
-            .is_empty()
+    assert_eq!(
+        parse_item(&json!({"Type": "MusicAlbum"})).artist_items,
+        [] as [mbv_emby_model::EmbyArtistRef; 0]
     );
 }
 

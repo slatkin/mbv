@@ -119,7 +119,10 @@ fn show_page_fixture_maps_through_the_client() {
 fn expanded_show_without_downloaded_episodes_maps_to_no_rows() {
     let client = mock_client(&wire_fixture("item-expanded-no-episodes.json"));
     let episodes = client.podcast_detail("secret", "show-3").unwrap();
-    assert!(episodes.is_empty());
+    assert_eq!(
+        episodes,
+        [] as [catalog::AudiobookshelfDownloadedEpisode; 0]
+    );
 }
 
 #[test]

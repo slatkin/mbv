@@ -181,7 +181,10 @@ fn tv_first_capture_resolves_latest_and_replaces_large_library_rows() {
         app.libs[0].tv_content_mode,
         Some(mbv_queue::TvContentMode::Latest)
     );
-    assert!(app.libs[0].nav_stack[0].items.is_empty());
+    assert_eq!(
+        app.libs[0].nav_stack[0].items,
+        [] as [mbv_emby_model::EmbyItem; 0]
+    );
     assert_eq!(
         app.libs[0].nav_stack[0].item_types.as_deref(),
         Some("Episode")

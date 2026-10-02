@@ -51,7 +51,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     assert_eq!(level.parent_id, "lib-movies");
     assert_eq!(level.title, "Movies");
     assert!(level.loading);
-    assert!(level.items.is_empty());
+    assert_eq!(level.items, [] as [mbv_emby_model::EmbyItem; 0]);
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
     assert_eq!(app.libs[0].library_total, Some(673));
     assert_eq!(
