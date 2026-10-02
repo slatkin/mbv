@@ -46,7 +46,7 @@ init_repo "$repo" || fail 'unable to initialize classifier repository'
 mkdir -p "$repo"/{src,scripts,docs,.github,openspec,dist,assets,fonts,contrib,.githooks,target,build,generated}
 write_lines "$repo/src/large.rs" 801 || fail 'unable to create source fixture'
 write_lines "$repo/scripts/other.py" 802 || fail 'unable to create second source fixture'
-for extension in lua sh js ts tsx c h cpp hpp; do
+for extension in lua sh js ts tsx c h cpp hpp zig; do
     write_lines "$repo/src/large.$extension" 801 || fail "unable to create .$extension fixture"
 done
 write_lines "$repo/Makefile" 801 || fail 'unable to create Makefile fixture'
@@ -82,7 +82,7 @@ fi
 [[ "$classifier_output" == *'scripts/other.py has 802 lines'* ]] ||
     fail 'classifier missed the second ordinary violation'
 for governed in src/large.lua src/large.sh src/large.js src/large.ts src/large.tsx \
-    src/large.c src/large.h src/large.cpp src/large.hpp Makefile PKGBUILD PKGBUILD-git \
+    src/large.c src/large.h src/large.cpp src/large.hpp src/large.zig Makefile PKGBUILD PKGBUILD-git \
     .githooks/check; do
     [[ "$classifier_output" == *"$governed has 801 lines"* ]] ||
         fail "classifier missed $governed"

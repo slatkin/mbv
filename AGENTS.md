@@ -70,6 +70,7 @@ host. Stay-alive controls whether that process outlives its Clients; packaged
 * `crates/mbv-images/` — image cache, loading/processing, terminal image protocol support.
 * `crates/mbv-ui-model/` — plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/` — typed messages crossing the interactive-component boundary.
+* `pinwin/` — Zig/GTK4 layer-shell panel that pins mbv beside tiled windows; own build, see `pinwin/AGENTS.md` (check: `zig build check`).
 
 ## Interactive architecture
 
