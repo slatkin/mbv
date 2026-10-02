@@ -114,8 +114,9 @@ _Avoid_: foreground mode, standalone, normal mode, Bare mode
 
 **Stay-alive**:
 The lifetime policy that decides whether the Owner process outlives its Clients.
-When enabled, it remains after the last Client closes; when disabled, it shuts
-down with its last Client.
+When enabled, the Owner process is a background process that remains after the
+last Client closes. When disabled, there is no background process or service:
+the Owner process is part of the running mbv app and ends with it.
 _Avoid_: daemon mode, background mode, alive mode, persistent mode
 
 **Audio-only owner**:
@@ -165,11 +166,12 @@ _Avoid_: script source (bare), active script, script lookup
 ## Processes
 
 **Owner process**:
-The per-user local process that is the Player owner for every terminal UI
-launched on this machine. Every such UI is a Client; the Owner process remains
-the local playback authority across route switches. Stay-alive determines
-whether it survives after its last Client closes.
-_Avoid_: local daemon, home daemon, daemon, session, background process, background service, relay, backend, server
+The part of the mbv app that is the Player owner for every terminal UI launched
+on this machine. Every such UI is a Client; the Owner process remains the local
+playback authority across route switches. With Stay-alive disabled it is part of
+the running app, not a background process or service; only with Stay-alive
+enabled is it a background process, surviving its last Client.
+_Avoid_: local daemon, home daemon, daemon, session, background service, relay, backend, server
 
 **Stay-alive process**:
 _Avoid_: Stay-alive process
