@@ -1,8 +1,8 @@
 use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
-    CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_QUEUE_STATE,
-    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PINNED_PANEL,
+    CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
                 CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
+                CTRL_CAP_PINNED_PANEL.to_string(),
             ],
             control_token: None,
         }
@@ -146,6 +147,13 @@ impl CtrlHello {
     }
 
     #[must_use]
+    pub fn supports_pinned_panel(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_PINNED_PANEL)
+    }
+
+    #[must_use]
     pub fn supports_service_setup_admin(&self) -> bool {
         self.capabilities
             .iter()
@@ -200,6 +208,7 @@ pub struct CtrlCompatibility {
     pub audiobookshelf: CtrlAudiobookshelfCapabilities,
     pub supports_owner_queue_load: bool,
     pub supports_answered_queue_ops: bool,
+    pub supports_pinned_panel: bool,
 }
 
 impl CtrlCompatibility {
@@ -220,6 +229,7 @@ impl CtrlCompatibility {
                 },
                 supports_owner_queue_load: false,
                 supports_answered_queue_ops: false,
+                supports_pinned_panel: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

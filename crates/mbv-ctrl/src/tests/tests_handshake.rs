@@ -4,6 +4,7 @@ use super::super::*;
 fn current_hello_validates() {
     CtrlHello::current().validate_peer().unwrap();
     assert_eq!(CtrlHello::current().protocol_version, CTRL_PROTOCOL_VERSION);
+    assert!(CtrlHello::current().supports_pinned_panel());
 }
 
 #[test]
