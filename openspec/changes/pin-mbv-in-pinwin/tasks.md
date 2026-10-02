@@ -50,7 +50,7 @@ start), and is tagged `library-abi`.
 
 ## 6. Integration check
 
-- [ ] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and again with `--features pinning` on the `mbv` package, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
+- [x] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and again with `--features pinning` on the `mbv` package, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
 - [ ] 6.2 Manual check under niri:
   - `mbv` in foot, ghostty and kitty: opens in that terminal as before; `mbv` over ssh with `WAYLAND_DISPLAY` set in a tmux session: opens in the terminal.
   - Desktop entry: opens docked in the panel with no terminal window; posters, mouse, kitty keyboard and resize work; quitting removes the panel.
