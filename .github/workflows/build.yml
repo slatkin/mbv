@@ -55,7 +55,7 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh
+          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh zig gtk4 gtk4-layer-shell
 
       - uses: actions/checkout@v7
 
@@ -143,6 +143,8 @@ jobs:
           MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )pipewire(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk-4-1(,| \(|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk4-layer-shell0(,| \(|$)'
           if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"
             exit 1

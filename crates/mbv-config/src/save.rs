@@ -38,6 +38,7 @@ pub(super) fn save_config_settings_at(
     write_mbvd_section(table, cfg);
     write_playback_section(table, cfg);
     write_keys_section(table, cfg);
+    write_panel_section(table, cfg);
 
     let s = toml::to_string(&doc)
         .map_err(|e| ConfigError::save(format!("serialize {}: {e}", path.display())))?;
@@ -418,6 +419,36 @@ fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     } else {
         table.insert("keys".to_string(), toml::Value::Table(keys_table));
     }
+}
+
+// `[panel]` (change `pin-mbv-in-pinwin`, design D6): written in full like
+// `[session]`/`[display]`, so a default layout is explicit in the file.
+fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let panel = section(table, "panel");
+    panel.insert(
+        "side".to_string(),
+        toml::Value::String(cfg.panel.side.as_str().to_string()),
+    );
+    panel.insert(
+        "cols".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.cols)),
+    );
+    panel.insert(
+        "gutter_top".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.gutter_top)),
+    );
+    panel.insert(
+        "gutter_bottom".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.gutter_bottom)),
+    );
+    panel.insert(
+        "gutter_left".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.gutter_left)),
+    );
+    panel.insert(
+        "gutter_right".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.gutter_right)),
+    );
 }
 
 pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), ConfigError> {

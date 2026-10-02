@@ -1,9 +1,12 @@
 use super::Model;
+use crate::config::{Config, UiConfig};
 use mbv_components::{SettingsComponent, SettingsSnapshot};
 use mbv_keybinds::{KEY_SECTIONS, KEYBIND_ACTIONS, KeybindAction};
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use mbv_ui_model::settings;
-use mbv_ui_model::settings::{SERVICE_ENTRIES, SETTING_SECTIONS, SettingsDestination};
+use mbv_ui_model::settings::{
+    SERVICE_ENTRIES, SETTING_SECTIONS, SettingKey, SettingValueKind, SettingsDestination,
+};
 use mbv_ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
@@ -48,31 +51,11 @@ impl Model {
     fn settings_snapshot(&self) -> SettingsSnapshot {
         let cfg = self.app.config.lock().unwrap().clone();
         let ui = self.app.ui_config_snapshot();
-        let mut rows = Vec::new();
-        let mut cursor = 0;
-        for (section, keys) in &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1] {
-            rows.push(SettingsRow {
-                label: (*section).into(),
-                value: String::new(),
-                section: true,
-                cursor: None,
-            });
-            for &key in *keys {
-                rows.push(SettingsRow {
-                    label: settings::setting_label(key).into(),
-                    value: settings::setting_value(key, &cfg, &ui),
-                    section: false,
-                    cursor: Some(cursor),
-                });
-                cursor += 1;
-            }
-        }
-        rows.push(SettingsRow {
-            label: settings::setting_label(mbv_ui_model::settings::SettingKey::LogOut).into(),
-            value: String::new(),
-            section: false,
-            cursor: Some(cursor),
-        });
+        let rows = if self.app.settings_destination == SettingsDestination::Panel {
+            Self::panel_settings_rows(&cfg, &ui)
+        } else {
+            Self::main_settings_rows(&cfg, &ui)
+        };
 
         let keys = self.keys_snapshot();
         let services = SERVICE_ENTRIES
@@ -139,6 +122,56 @@ impl Model {
         }
     }
 
+    /// The Panel destination's six value rows, in paint and cursor order
+    /// (design D6, change `pin-mbv-in-pinwin`).
+    fn panel_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
+        settings::PANEL_SETTING_KEYS
+            .iter()
+            .enumerate()
+            .map(|(cursor, &key)| SettingsRow {
+                label: settings::setting_label(key).into(),
+                value: settings::setting_value(key, cfg, ui),
+                section: false,
+                cursor: Some(cursor),
+                kind: settings::setting_kind(key),
+            })
+            .collect()
+    }
+
+    /// The settings main page's flat row list: section headers plus one row
+    /// per config key.
+    fn main_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
+        let mut rows = Vec::new();
+        let mut cursor = 0;
+        for (section, keys) in &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1] {
+            rows.push(SettingsRow {
+                label: (*section).into(),
+                value: String::new(),
+                section: true,
+                cursor: None,
+                kind: SettingValueKind::Key,
+            });
+            for &key in *keys {
+                rows.push(SettingsRow {
+                    label: settings::setting_label(key).into(),
+                    value: settings::setting_value(key, cfg, ui),
+                    section: false,
+                    cursor: Some(cursor),
+                    kind: settings::setting_kind(key),
+                });
+                cursor += 1;
+            }
+        }
+        rows.push(SettingsRow {
+            label: settings::setting_label(SettingKey::LogOut).into(),
+            value: String::new(),
+            section: false,
+            cursor: Some(cursor),
+            kind: settings::setting_kind(SettingKey::LogOut),
+        });
+        rows
+    }
+
     /// The Keys destination's read-only content (design D7), derived from
     /// the registry and the loaded `Keybinds`: group-header rows for every
     /// populated `KeySection` in shared-vocabulary order, then one row per
@@ -163,6 +196,7 @@ impl Model {
                 value: String::new(),
                 section: true,
                 cursor: None,
+                kind: SettingValueKind::Key,
             });
             for action in actions {
                 let mut value = self
@@ -180,6 +214,7 @@ impl Model {
                     value,
                     section: false,
                     cursor: Some(cursor),
+                    kind: SettingValueKind::Text,
                 });
                 cursor += 1;
             }
@@ -270,7 +305,9 @@ impl Model {
             SettingsIntent::Back => {
                 if matches!(
                     self.app.settings_destination,
-                    SettingsDestination::Services | SettingsDestination::Keys
+                    SettingsDestination::Services
+                        | SettingsDestination::Keys
+                        | SettingsDestination::Panel
                 ) {
                     self.app.settings_destination = SettingsDestination::Main;
                 } else {
@@ -291,10 +328,24 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                self.app
-                    .handle_settings_activate(mbv_ui_model::settings::settings_cursor_to_key(
-                        cursor,
-                    ));
+                if self.app.settings_destination == SettingsDestination::Panel {
+                    // An activate steps a Panel row by one (`Side` cycles).
+                    self.app.apply_panel_setting(
+                        mbv_ui_model::settings::panel_cursor_to_key(cursor),
+                        1,
+                    );
+                } else {
+                    self.app.handle_settings_activate(
+                        mbv_ui_model::settings::settings_cursor_to_key(cursor),
+                    );
+                }
+                false
+            }
+            SettingsIntent::Step { cursor, delta } => {
+                self.app.apply_panel_setting(
+                    mbv_ui_model::settings::panel_cursor_to_key(cursor),
+                    delta,
+                );
                 false
             }
         }

@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
@@ -10,7 +10,7 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use mbv_render::{SettingsRenderGeometry, SettingsRenderModel, render_settings_content};
-use mbv_ui_model::settings::SettingsDestination;
+use mbv_ui_model::settings::{SettingValueKind, SettingsDestination};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{
     LeafKeyResult, Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent,
@@ -339,10 +339,35 @@ impl SettingsComponent {
                 self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
                 None
             }
-            Key::Left | Key::Right | Key::Char(' ') | Key::Enter => Some(Msg::Shell(Box::new(
-                ShellRequest::SettingsIntent(SettingsIntent::Activate(self.cursor)),
-            ))),
+            Key::Left | Key::Right | Key::Char(' ') | Key::Enter => {
+                let intent = self.activation_intent(key);
+                Some(Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
+            }
             _ => None,
+        }
+    }
+
+    /// The intent for a value key on the main or Panel list (design D6,
+    /// change `pin-mbv-in-pinwin`): a Panel stepper row steps — Left down,
+    /// Right/Space/Enter up, Shift ×10 — while every other row activates.
+    fn activation_intent(&self, key: &KeyEvent) -> SettingsIntent {
+        let is_stepper = self.destination == SettingsDestination::Panel
+            && self
+                .rows
+                .get(self.cursor)
+                .is_some_and(|row| row.kind == SettingValueKind::Stepper);
+        if !is_stepper {
+            return SettingsIntent::Activate(self.cursor);
+        }
+        let direction = if key.code == Key::Left { -1 } else { 1 };
+        let magnitude = if key.modifiers.contains(KeyModifiers::SHIFT) {
+            10
+        } else {
+            1
+        };
+        SettingsIntent::Step {
+            cursor: self.cursor,
+            delta: direction * magnitude,
         }
     }
 

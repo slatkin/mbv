@@ -114,8 +114,9 @@ _Avoid_: foreground mode, standalone, normal mode, Bare mode
 
 **Stay-alive**:
 The lifetime policy that decides whether the Owner process outlives its Clients.
-When enabled, it remains after the last Client closes; when disabled, it shuts
-down with its last Client.
+When enabled, the Owner process is a background process that remains after the
+last Client closes. When disabled, there is no background process or service:
+the Owner process is part of the running mbv app and ends with it.
 _Avoid_: daemon mode, background mode, alive mode, persistent mode
 
 **Audio-only owner**:
@@ -165,18 +166,24 @@ _Avoid_: script source (bare), active script, script lookup
 ## Processes
 
 **Owner process**:
-The per-user local process that is the Player owner for every terminal UI
-launched on this machine. Every such UI is a Client; the Owner process remains
-the local playback authority across route switches. Stay-alive determines
-whether it survives after its last Client closes.
-_Avoid_: local daemon, home daemon, daemon, session, background process, background service, relay, backend, server
+The part of the mbv app that is the Player owner for every terminal UI launched
+on this machine. Every such UI is a Client; the Owner process remains the local
+playback authority across route switches. With Stay-alive disabled it is part of
+the running app, not a background process or service; only with Stay-alive
+enabled is it a background process, surviving its last Client.
+_Avoid_: local daemon, home daemon, daemon, session, background service, relay, backend, server
 
 **Stay-alive process**:
 _Avoid_: Stay-alive process
 
 **mbvd**:
-The separately packaged daemon, run as a system service, with its own
-configuration, state, and socket. A different product surface from the
+The separately packaged headless server daemon, run as a system service (a
+systemd unit, typically on a headless server with no desktop session), with its
+own configuration, state, and socket. Users reach it from an mbv that is
+already running, through the F3 Sessions sidebar, the same way they control an
+Emby Session's device (Direct remote control); it is never how mbv starts. It
+has no Tray, no pinned panel, and no other desktop or Client functionality, and
+what it lacks never limits what a **Local process** offers. A different product surface from the
 Packaged Player owner, never started by a terminal UI. On `main` it is still Emby-gated: it
 constructs `EmbyClient` unconditionally, requires cached credentials to start,
 and uses legacy Emby-token ctrl authentication. Service-independent startup
@@ -193,16 +200,24 @@ identity. Any number may attach when Stay-alive is enabled; with it disabled,
 admission is exclusive.
 _Avoid_: thin client, terminal client, viewer, attachment
 
+**Local process**:
+Any mbv process on the user's own machine: a Client, or the Owner process.
+Controlling mbvd or another device from F3 happens inside an already-running
+Local process; its Owner process and Tray keep running. Desktop features — the Tray, the pinned panel — belong to Local processes and never to
+mbvd.
+_Avoid_: client side (of mbvd), frontend, desktop daemon
+
 **Tray**:
-The desktop status icon belonging to the Player owner, giving playback controls
-and a stop action while no Client is on screen. For the local Owner process, it
-is present only when Stay-alive is enabled.
-_Avoid_: systray, status icon, indicator
+The desktop status icon shown by a **Local process**, giving playback controls
+and a stop action while no Client is on screen. Never mbvd's: mbvd is headless.
+For the local Owner process, it is present only when Stay-alive is enabled.
+_Avoid_: systray, status icon, indicator, mbvd tray
 
 **Player endpoint**:
 The address used to reach a Player owner's control socket. Local is this
 machine's Owner process. A network address points at a remote owner
-(another machine's Player owner, or an mbvd). mbvd is a daemon. The
+(another machine's Player owner, or an mbvd), reached from the F3 Sessions
+sidebar or a Library route of a running mbv. mbvd is a daemon. The
 Owner process is not, on this machine or any other.
 _Avoid_: daemon endpoint, connection string, remote address, socket path
 
@@ -579,6 +594,35 @@ The app-wide layout state, one of Mini, Narrow, or Wide:
 - **Wide**: both panels visible; a hero-bearing Library panel uses Wide hero
   when the shared width and minimum-height conditions are met.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
+
+**Pinned panel**:
+The GTK layer-shell window pinwin shows beside tiled windows, holding mbv's TUI
+drawn to a pty the panel owns. It is a desktop window created only by a
+**pinned launch**, not one of the in-TUI **Panel** regions (Tab, Library, Queue,
+and the rest); a plain terminal launch draws the same TUI with no pinned panel.
+_Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
+
+**Pinned launch**:
+A launch that runs mbv's TUI in the **Pinned panel** in the same process instead
+of the current terminal, selected only by the `--pin` flag. It chooses where the
+TUI draws, not who owns the Player.
+No config setting starts one. When the panel cannot start, mbv reports the
+reason and either falls back to the current terminal or exits non-zero.
+_Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)
+
+**`--pin`**:
+The launch flag that requests a **Pinned launch**. It starts no separate
+program, opens one panel per launch, and closes that panel when mbv exits.
+_Avoid_: `--desktop`, pin setting, pinning option
+
+**Panel gutter**:
+One of the four `[panel]` margins — `gutter_top`, `gutter_bottom`,
+`gutter_left`, `gutter_right` — in pixels and possibly negative, offsetting the
+**Pinned panel** from the screen edges. Edited in the F2 Panel page or
+`config.toml`; while pinned, a layout the panel rejects leaves both the panel
+and the saved value unchanged. Distinct from the in-TUI Library layout gutters
+and the Selected-row bar's gutter treatment.
+_Avoid_: gutter (bare), margin, padding, inset, spacing
 
 **Zebra stripe**:
 The alternating-row secondary background on Wide media lists. Grouping Heading rows and Spacer rows

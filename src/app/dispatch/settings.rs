@@ -1,4 +1,5 @@
 use super::super::super::App;
+use super::notify::ToastSeverity;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::SettingKey;
@@ -37,6 +38,36 @@ impl App {
         }
     }
 
+    /// Apply and persist one Panel value change (design D6, change
+    /// `pin-mbv-in-pinwin`): an activate steps by one (`Side` cycles and
+    /// ignores the delta), a step applies the component's signed delta (±1, or
+    /// ±10 with Shift). The running panel validates the candidate layout
+    /// first, and only an accepted layout is saved. A rejection keeps the
+    /// previous value and shows its reason as a Warning toast.
+    pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+        let candidate = {
+            let panel = self.config.lock().unwrap().panel;
+            mbv_ui_model::settings::changed_panel_config(key, panel, delta)
+        };
+        let Some(candidate) = candidate else {
+            return;
+        };
+        // While pinned, the running panel validates the candidate layout and
+        // only an accepted one is saved (design D6); a launch without a panel
+        // saves without geometry validation.
+        let applied = match &self.pinned_panel {
+            Some(panel) => crate::pin::apply_layout(panel, &candidate),
+            None => Ok(()),
+        };
+        match applied {
+            Ok(()) => {
+                self.config.lock().unwrap().panel = candidate;
+                self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+            }
+            Err(reason) => self.flash(reason, ToastSeverity::Warning),
+        }
+    }
+
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {
         match key {
             SettingKey::Services => {
@@ -44,6 +75,9 @@ impl App {
             }
             SettingKey::Keys => {
                 self.open_keys_settings();
+            }
+            SettingKey::Panel => {
+                self.open_panel_settings();
             }
             SettingKey::HiddenLibraries => {
                 self.pending_overlay = Some(OverlayRequest::OpenMultiselect(

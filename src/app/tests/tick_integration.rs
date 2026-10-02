@@ -603,13 +603,18 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     assert_eq!(harness.model().application.focus(), Some(&settings_id));
 
     // Locate the MouseSupport row ordinal instead of hardcoding Down presses:
-    // the flat row order is SETTING_SECTIONS order, and rows shift whenever a
-    // section is added (the Keys entry moved this row once already).
-    let mouse_support_downs = mbv_ui_model::settings::SETTING_SECTIONS
+    // the flat row order is the shell's visible SETTING_SECTIONS order.
+    // The production cursor map is the single source of truth for that order.
+    let row_count: usize = mbv_ui_model::settings::SETTING_SECTIONS
         .iter()
-        .flat_map(|(_, keys)| keys.iter())
-        .position(|key| *key == mbv_ui_model::settings::SettingKey::MouseSupport)
-        .expect("MouseSupport row exists in SETTING_SECTIONS");
+        .map(|(_, keys)| keys.len())
+        .sum();
+    let mouse_support_downs = (0..row_count)
+        .find(|&cursor| {
+            mbv_ui_model::settings::settings_cursor_to_key(cursor)
+                == mbv_ui_model::settings::SettingKey::MouseSupport
+        })
+        .expect("MouseSupport row exists in the visible settings rows");
     for _ in 0..mouse_support_downs {
         harness.inject(key(Key::Down));
         let outcome = harness.step();

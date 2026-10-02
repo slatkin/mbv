@@ -1,0 +1,17 @@
+[package]
+name = "mbv-pinwin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Safe Rust wrapper over the vendored pinwin panel C ABI."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+pkg-config = "0.3"

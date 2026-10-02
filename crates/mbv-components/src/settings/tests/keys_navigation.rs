@@ -11,12 +11,14 @@ fn keys_destination_is_read_only_and_back_resets_the_cursor() {
             value: "F1".into(),
             section: false,
             cursor: Some(0),
+            kind: SettingValueKind::Text,
         },
         SettingsRow {
             label: "b_second".into(),
             value: "F2".into(),
             section: false,
             cursor: Some(1),
+            kind: SettingValueKind::Text,
         },
     ];
     let mut component = SettingsComponent::new();
@@ -63,24 +65,28 @@ fn main_arrow_moves_scroll_the_cursor_into_view() {
         value: String::new(),
         section: true,
         cursor: None,
+        kind: SettingValueKind::Key,
     }];
     rows.extend((0..20).map(|i| SettingsRow {
         label: format!("action_{i}"),
         value: "on".into(),
         section: false,
         cursor: Some(i),
+        kind: SettingValueKind::Text,
     }));
     rows.push(SettingsRow {
         label: "Group B".into(),
         value: String::new(),
         section: true,
         cursor: None,
+        kind: SettingValueKind::Key,
     });
     rows.extend((20..40).map(|i| SettingsRow {
         label: format!("action_{i}"),
         value: "on".into(),
         section: false,
         cursor: Some(i),
+        kind: SettingValueKind::Text,
     }));
     let mut component = SettingsComponent::new();
     component.set_content(SettingsSnapshot {

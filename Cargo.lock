@@ -1735,6 +1735,7 @@ dependencies = [
  "mbv-images",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-pinwin",
  "mbv-player",
  "mbv-queue",
  "mbv-remote-player",
@@ -1982,6 +1983,13 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ureq",
+]
+
+[[package]]
+name = "mbv-pinwin"
+version = "0.21.8"
+dependencies = [
+ "pkg-config",
 ]
 
 [[package]]
