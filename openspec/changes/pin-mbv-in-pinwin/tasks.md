@@ -31,8 +31,8 @@ repo. Record its commit SHA for 1.1.
 
 ## 5. Launcher
 
-- [ ] 5.1 Add `src/desktop_launch.rs`: a pure `desktop_command(on_path)` (`pinwin --no-tray mbv`, then `xdg-terminal-exec mbv`, else `None`), a std-only `PATH` lookup, and `exec`. Add a `#[case]` table with three cases (pinwin present; only xdg-terminal-exec; neither). Recognise `--desktop` in `pre_config_startup`, and handle it in `main` after `applog::init` and before `load_config`; on `None`, log the reason and exit 1. Add `--desktop` to `-h` output. Verify: `cargo nextest run -p mbv` and `mbv -h` lists `--desktop`.
-- [ ] 5.2 `contrib/mbv.desktop`: `Exec=mbv --desktop`, `Terminal=false`. Document the launcher (pinwin when installed, terminal otherwise, Wayland layer-shell only) in `README.md`. Verify: `desktop-file-validate contrib/mbv.desktop` passes.
+- [x] 5.1 Add `src/desktop_launch.rs`: a pure `desktop_command(on_path)` (`pinwin --no-tray mbv`, then `xdg-terminal-exec mbv`, else `None`), a std-only `PATH` lookup, and `exec`. Add a `#[case]` table with three cases (pinwin present; only xdg-terminal-exec; neither). Recognise `--desktop` in `pre_config_startup`, and handle it in `main` after `applog::init` and before `load_config`; on `None`, log the reason and exit 1. Add `--desktop` to `-h` output. Verify: `cargo nextest run -p mbv` and `mbv -h` lists `--desktop`.
+- [x] 5.2 `contrib/mbv.desktop`: `Exec=mbv --desktop`, `Terminal=false`. Document the launcher (pinwin when installed, terminal otherwise, Wayland layer-shell only) in `README.md`. Verify: `desktop-file-validate contrib/mbv.desktop` passes.
 
 ## 6. Integration check
 
