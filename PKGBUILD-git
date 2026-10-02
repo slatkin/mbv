@@ -6,8 +6,8 @@ pkgdesc="Terminal client for Emby media server (git)"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-depends=('mpv' 'openssl')
-makedepends=('rust' 'cargo' 'nasm' 'git')
+depends=('mpv' 'openssl' 'gtk4' 'gtk4-layer-shell')
+makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'gtk4' 'gtk4-layer-shell')
 provides=('mbv')
 conflicts=('mbv')
 source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
@@ -25,7 +25,7 @@ prepare() {
 
 build() {
     cd "${pkgname}"
-    cargo build --frozen --release
+    cargo build --frozen --release --features pinning
 }
 
 package() {

@@ -55,7 +55,9 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh
+          pacman_retry pacman -S --noconfirm --needed \
+            rust clang nasm mpv pipewire openssl dpkg github-cli git openssh \
+            zig gtk4 gtk4-layer-shell
 
       - uses: actions/checkout@v7
 
@@ -116,11 +118,19 @@ jobs:
         # 0/15 fail at 4 tests even at `ulimit -n 384`. Costs ~2s.
         run: cargo nextest run --release --test-threads=4 && cargo build --release
 
+      # The tarball and the Arch packages ship the pinned TUI binary; the .deb
+      # ships the unpinned binary in target/release/mbv. The separate target
+      # directory keeps the two from overwriting each other (design D4).
+      - name: Build pinned mbv
+        run: >-
+          cargo build -p mbv --release --features pinning
+          --target-dir target-pinned
+
       - name: Bundle release tarball
         run: |
           DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
-          cp target/release/mbv "${DIST}/"
+          cp target-pinned/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp scripts/mbv_*.lua "${DIST}/"
@@ -138,12 +148,20 @@ jobs:
         run: |
           test -x ~/.cargo/bin/cargo-deb || cargo install cargo-deb --locked
           cargo deb --no-build --deb-version "${PKGVER}"
-          cargo deb --no-build --manifest-path crates/mbvd/Cargo.toml --deb-version "${PKGVER}"
+          cargo deb --no-build --manifest-path crates/mbvd/Cargo.toml \
+            --deb-version "${PKGVER}"
           MBV_DEB=$(ls target/debian/mbv_*.deb | head -1)
           MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )pipewire(,|$)'
-          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
-          if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
+          dpkg-deb --field "${MBV_DEB}" Depends \
+            | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
+          if dpkg-deb --field "${MBV_DEB}" Depends \
+            | grep -Eq '(^|, )(gtk4|gtk4-layer-shell)(,|$)'; then
+            echo "mbv must not depend on GTK runtime packages"
+            exit 1
+          fi
+          if dpkg-deb --field "${MBVD_DEB}" Depends \
+            | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"
             exit 1
           fi
@@ -151,7 +169,9 @@ jobs:
           echo "MBVD_DEB=${MBVD_DEB}" >> "$GITHUB_ENV"
 
       - name: Upload release asset
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -164,7 +184,9 @@ jobs:
           gh release edit "v${PKGVER}" --draft=false
 
       - name: Commit PKGBUILD with sha256 to main
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          github.event_name == 'workflow_dispatch'
         # Non-fatal: retries below handle the common non-fast-forward race (main
         # advanced since checkout on a detached HEAD), but if every retry still
         # loses the race this must not abort the job before the AUR publish
@@ -195,7 +217,8 @@ jobs:
             if git push origin HEAD:main; then
               exit 0
             fi
-            echo "push rejected (attempt ${attempt}), rebasing onto latest main" >&2
+            echo "push rejected (attempt ${attempt})," \
+              "rebasing onto latest main" >&2
             git fetch origin main
             git rebase origin/main || { git rebase --abort; exit 1; }
           done
@@ -205,7 +228,9 @@ jobs:
         # Fire-and-forget: AUR publishing runs in its own workflow (aur.yml)
         # from the published release, so an AUR failure can never fail this
         # build, and publishing can be retried by dispatching aur.yml manually.
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          github.event_name == 'workflow_dispatch'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
