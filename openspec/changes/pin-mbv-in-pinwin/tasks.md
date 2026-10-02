@@ -68,14 +68,14 @@ start), and is tagged `library-abi`.
 Pinning is enabled by `--pin` or not; there is no "built with/without pinning support" concept and
 no cargo feature. These rows remove the gate the earlier rows built behind, and supersede 5.1.
 
-- [ ] 7.1 Contract: `mbv` always links the pinwin library. Make the root `Cargo.toml` /
+- [x] 7.1 Contract: `mbv` always links the pinwin library. Make the root `Cargo.toml` /
   `crates/mbv-pinwin` dependency unconditional; remove every `cfg(feature = "pinning")` and
   `cfg!(feature = "pinning")` in `src/` and `crates/`, the feature-off `pin::apply_layout` stub,
   the `mbv: built without pinning support` path and the `show_panel` parameter plumbing; the F2
   Panel page is always on. Verify: `rg -n 'feature *= *"pinning"|pinning' Cargo.toml src crates`
   finds no feature references; `cargo nextest run -p mbv -p mbv-ui-model -p mbv-components`;
   `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] 7.2 Contract: one build and one packaging path. `build.yml`: a single
+- [x] 7.2 Contract: one build and one packaging path. `build.yml`: a single
   `cargo build --release`, drop `--target-dir target-pinned` and its cache entry, replace the
   `.deb` no-GTK guard with an assertion that `Depends` names the GTK packages, give the mbv `.deb`
   `Depends`/cargo-deb metadata the Debian GTK packages (`libgtk-4-1`, `libgtk4-layer-shell0`), and
@@ -83,5 +83,5 @@ no cargo feature. These rows remove the gate the earlier rows built behind, and 
   `makedepends`/`depends` gain `zig gtk4 gtk4-layer-shell` and the GTK runtime libraries, and the
   build uses no `--features pinning`. `aur.yml` unaffected. Verify: `actionlint`;
   `makepkg --printsrcinfo` lists one package per PKGBUILD.
-- [ ] 7.3 Contract: docs describe no feature-off build. Remove "build with pinning" wording from
+- [x] 7.3 Contract: docs describe no feature-off build. Remove "build with pinning" wording from
   `README.md` and `CONTEXT.md`. Verify: `rg -n "pinning feature|built without pinning|--features pinning" README.md CONTEXT.md` finds nothing.
