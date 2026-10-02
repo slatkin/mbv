@@ -297,13 +297,8 @@ fn pre_config_startup() -> Option<StartupArgs> {
         std::process::exit(1);
     }
 
-    // `--pin` asks for the pinned panel; a build without the feature rejects
-    // it here, before any start-up side effect (design D4/D5).
+    // `--pin` asks for the pinned panel; it is a runtime flag (design D5).
     let pin_requested = has_flag(&args, "--pin");
-    if pin_requested && !cfg!(feature = "pinning") {
-        eprintln!("mbv: built without pinning support");
-        std::process::exit(2);
-    }
 
     Some(StartupArgs {
         log_level,
@@ -358,7 +353,7 @@ fn main() {
     // terminal setup or output, including the remote-client connection line
     // (design D3/D5). `report_start_failure` has already exited when there is
     // no terminal to fall back to.
-    let pinned_panel = if pin::should_pin(startup.pin_requested, cfg!(feature = "pinning")) {
+    let pinned_panel = if pin::should_pin(startup.pin_requested) {
         match pin::start(&config.panel) {
             Ok(panel) => Some(panel),
             Err(error) => {

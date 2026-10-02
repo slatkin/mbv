@@ -603,17 +603,15 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     assert_eq!(harness.model().application.focus(), Some(&settings_id));
 
     // Locate the MouseSupport row ordinal instead of hardcoding Down presses:
-    // the flat row order is the shell's visible SETTING_SECTIONS order, which
-    // drops the navigation-only Panel row when the `pinning` feature is off.
+    // the flat row order is the shell's visible SETTING_SECTIONS order.
     // The production cursor map is the single source of truth for that order.
-    let show_panel = cfg!(feature = "pinning");
     let row_count: usize = mbv_ui_model::settings::SETTING_SECTIONS
         .iter()
         .map(|(_, keys)| keys.len())
         .sum();
     let mouse_support_downs = (0..row_count)
         .find(|&cursor| {
-            mbv_ui_model::settings::settings_cursor_to_key(cursor, show_panel)
+            mbv_ui_model::settings::settings_cursor_to_key(cursor)
                 == mbv_ui_model::settings::SettingKey::MouseSupport
         })
         .expect("MouseSupport row exists in the visible settings rows");

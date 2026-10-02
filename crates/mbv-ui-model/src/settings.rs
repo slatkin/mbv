@@ -104,8 +104,7 @@ pub static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     // Navigation-only entry (opens the read-only Keys destination); not a
     // config section, so `KeySection` has no `Keys` variant.
     ("Keys", &[SettingKey::Keys]),
-    // Navigation-only entry for the pinned-panel page; shown only when the
-    // shell reports the `pinning` feature built (design D6).
+    // Navigation-only entry for the pinned-panel page (design D6).
     ("Panel", &[SettingKey::Panel]),
     (
         "Playback",
@@ -493,17 +492,11 @@ pub const PANEL_SETTING_KEYS: [SettingKey; 6] = [
     SettingKey::PanelGutterRight,
 ];
 
-/// Main-page cursor ordinal to `SettingKey`. `show_panel` is the shell's
-/// `cfg!(feature = "pinning")`: `mbv-ui-model` has no cargo feature of its
-/// own (design D4/D6), so it drops the navigation-only Panel row when the
-/// shell did not paint it.
+/// Main-page cursor ordinal to `SettingKey`.
 #[must_use]
-pub fn settings_cursor_to_key(cursor: usize, show_panel: bool) -> SettingKey {
+pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
     let mut idx = 0;
     for &(_, keys) in SETTING_SECTIONS {
-        if !show_panel && keys.contains(&SettingKey::Panel) {
-            continue;
-        }
         for &key in keys {
             if idx == cursor {
                 return key;

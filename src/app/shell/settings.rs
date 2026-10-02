@@ -51,14 +51,10 @@ impl Model {
     fn settings_snapshot(&self) -> SettingsSnapshot {
         let cfg = self.app.config.lock().unwrap().clone();
         let ui = self.app.ui_config_snapshot();
-        // The Panel destination and its navigation row exist only when the
-        // root crate is built with the `pinning` feature (design D4/D6);
-        // `mbv-ui-model` carries no cargo feature, so the shell passes it in.
-        let show_panel = cfg!(feature = "pinning");
         let rows = if self.app.settings_destination == SettingsDestination::Panel {
             Self::panel_settings_rows(&cfg, &ui)
         } else {
-            Self::main_settings_rows(&cfg, &ui, show_panel)
+            Self::main_settings_rows(&cfg, &ui)
         };
 
         let keys = self.keys_snapshot();
@@ -143,15 +139,11 @@ impl Model {
     }
 
     /// The settings main page's flat row list: section headers plus one row
-    /// per config key, with the navigation-only Panel row present only when
-    /// the shell reports the `pinning` feature built (design D4/D6).
-    fn main_settings_rows(cfg: &Config, ui: &UiConfig, show_panel: bool) -> Vec<SettingsRow> {
+    /// per config key.
+    fn main_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         let mut rows = Vec::new();
         let mut cursor = 0;
         for (section, keys) in &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1] {
-            if !show_panel && keys.contains(&SettingKey::Panel) {
-                continue;
-            }
             rows.push(SettingsRow {
                 label: (*section).into(),
                 value: String::new(),
@@ -342,10 +334,7 @@ impl Model {
                     );
                 } else {
                     self.app.handle_settings_activate(
-                        mbv_ui_model::settings::settings_cursor_to_key(
-                            cursor,
-                            cfg!(feature = "pinning"),
-                        ),
+                        mbv_ui_model::settings::settings_cursor_to_key(cursor),
                     );
                 }
                 false

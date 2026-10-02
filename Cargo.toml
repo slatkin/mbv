@@ -115,14 +115,8 @@ workspace = true
 name = "mbv"
 path = "src/main.rs"
 
-[features]
-# Pinning is a feature of the mbv TUI: it pulls in the GTK/layer-shell panel
-# wrapper, whose build script needs Zig and the GTK4 dev libraries. Off by
-# default so a plain build and the .deb stay GTK-free (design D4).
-pinning = ["dep:mbv-pinwin"]
-
 [dependencies]
-mbv-pinwin = { path = "crates/mbv-pinwin", optional = true }
+mbv-pinwin = { path = "crates/mbv-pinwin" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }

@@ -7,70 +7,41 @@
 
 use std::fmt;
 use std::io::IsTerminal;
-#[cfg(feature = "pinning")]
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
 
-/// The running panel handle the shell owns. The type hides the cargo feature
-/// from the shell: with `pinning` it is the real `mbv_pinwin::Panel`, and
-/// without it no value is ever constructed.
-#[cfg(feature = "pinning")]
+/// The running panel handle the shell owns.
 pub(crate) type PinnedPanel = mbv_pinwin::Panel<'static>;
 
-#[cfg(not(feature = "pinning"))]
-#[derive(Debug)]
-pub(crate) struct PinnedPanel;
-
 /// Apply a full `[panel]` layout to the live panel (design D6).
-#[cfg(feature = "pinning")]
 pub(crate) fn apply_layout(panel: &PinnedPanel, config: &PanelConfig) -> Result<(), String> {
     panel
         .apply_layout(layout_from_config(config))
         .map_err(|error| error.to_string())
 }
 
-/// A pinning-less build never holds a panel; the seam stays callable so the
-/// shell carries no feature conditionals.
-#[cfg(not(feature = "pinning"))]
-pub(crate) fn apply_layout(_panel: &PinnedPanel, _config: &PanelConfig) -> Result<(), String> {
-    Err("this build has no pinning support".to_string())
-}
-
 /// Why a pinned launch did not reach the stdio hand-over (design D5).
 #[derive(Debug)]
 pub(crate) enum PinStartError {
     /// `WAYLAND_DISPLAY` is unset or empty.
-    #[cfg(feature = "pinning")]
     NoWaylandDisplay,
     /// The pty pair could not be opened.
-    #[cfg(feature = "pinning")]
     Pty(std::io::Error),
     /// `pinwin` refused to start the panel.
-    #[cfg(feature = "pinning")]
     Panel(mbv_pinwin::PinwinError),
     /// The stdio hand-over failed after the panel started.
-    #[cfg(feature = "pinning")]
     HandOver(std::io::Error),
-    /// This build has no pinning support.
-    #[cfg(not(feature = "pinning"))]
-    Unsupported,
 }
 
 impl fmt::Display for PinStartError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            #[cfg(feature = "pinning")]
             Self::NoWaylandDisplay => f.write_str("WAYLAND_DISPLAY is unset"),
-            #[cfg(feature = "pinning")]
             Self::Pty(error) => write!(f, "could not open a pty pair: {error}"),
-            #[cfg(feature = "pinning")]
             Self::Panel(error) => write!(f, "{error}"),
-            #[cfg(feature = "pinning")]
             Self::HandOver(error) => write!(f, "terminal hand-over failed: {error}"),
-            #[cfg(not(feature = "pinning"))]
-            Self::Unsupported => f.write_str("this build has no pinning support"),
         }
     }
 }
@@ -78,14 +49,9 @@ impl fmt::Display for PinStartError {
 impl std::error::Error for PinStartError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            #[cfg(feature = "pinning")]
             Self::Pty(error) | Self::HandOver(error) => Some(error),
-            #[cfg(feature = "pinning")]
             Self::Panel(error) => Some(error),
-            #[cfg(feature = "pinning")]
             Self::NoWaylandDisplay => None,
-            #[cfg(not(feature = "pinning"))]
-            Self::Unsupported => None,
         }
     }
 }
@@ -100,18 +66,17 @@ pub(crate) fn is_pinned() -> bool {
     HANDED_OVER.load(Ordering::Relaxed)
 }
 
-/// The start decision is pure over the parsed flag and the built feature
-/// (design D5); the environment and the `pinwin_start` result enter as start
-/// failures, never as decision inputs.
+/// The start decision is pure over the parsed flag (design D5); the
+/// environment and the `pinwin_start` result enter as start failures, never
+/// as decision inputs.
 #[must_use]
-pub(crate) fn should_pin(pin_requested: bool, feature_enabled: bool) -> bool {
-    pin_requested && feature_enabled
+pub(crate) fn should_pin(pin_requested: bool) -> bool {
+    pin_requested
 }
 
 /// Start the pinned panel and hand this process's stdio to its pty (design
 /// D3). The terminal environment is restored if anything fails before the
 /// hand-over completes.
-#[cfg(feature = "pinning")]
 pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     if std::env::var_os("WAYLAND_DISPLAY").is_none_or(|value| value.is_empty()) {
         return Err(PinStartError::NoWaylandDisplay);
@@ -126,16 +91,8 @@ pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> 
     }
 }
 
-/// Without the feature `--pin` is rejected before this is reached; the stub
-/// only keeps the caller free of feature conditionals.
-#[cfg(not(feature = "pinning"))]
-pub(crate) fn start(_config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
-    Err(PinStartError::Unsupported)
-}
-
 /// The pty pair, the panel, and the stdio hand-over. A failure after
 /// `pinwin_start` succeeded drops the panel, which stops it (design D3).
-#[cfg(feature = "pinning")]
 fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     use std::os::fd::AsFd;
 
@@ -163,7 +120,6 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     Ok(panel)
 }
 
-#[cfg(feature = "pinning")]
 fn layout_from_config(config: &PanelConfig) -> mbv_pinwin::Layout {
     mbv_pinwin::Layout {
         side: match config.side {
@@ -180,7 +136,6 @@ fn layout_from_config(config: &PanelConfig) -> mbv_pinwin::Layout {
     }
 }
 
-#[cfg(feature = "pinning")]
 fn open_pty() -> Result<(std::os::fd::OwnedFd, std::os::fd::OwnedFd), PinStartError> {
     let mut master = -1;
     let mut slave = -1;
@@ -207,7 +162,6 @@ fn open_pty() -> Result<(std::os::fd::OwnedFd, std::os::fd::OwnedFd), PinStartEr
     }
 }
 
-#[cfg(feature = "pinning")]
 fn detach_controlling_terminal() -> Result<(), PinStartError> {
     // A process has a controlling terminal iff `/dev/tty` opens; only then is
     // there anything to detach from. Detaching through that fd also handles a
@@ -237,7 +191,6 @@ fn detach_controlling_terminal() -> Result<(), PinStartError> {
     Ok(())
 }
 
-#[cfg(feature = "pinning")]
 fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
     for target in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
         // SAFETY: `dup2` duplicates the live slave fd onto a standard fd.
@@ -250,17 +203,13 @@ fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
 
 /// The terminal environment a pinned launch runs with, saved so a failed start
 /// can restore it (design D3).
-#[cfg(feature = "pinning")]
 struct PanelEnv {
     saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
 }
 
-#[cfg(feature = "pinning")]
 const PANEL_ENV_SET: [(&str, &str); 2] = [("TERM", "xterm-256color"), ("COLORTERM", "truecolor")];
-#[cfg(feature = "pinning")]
 const PANEL_ENV_REMOVED: [&str; 2] = ["TERM_PROGRAM", "TERM_PROGRAM_VERSION"];
 
-#[cfg(feature = "pinning")]
 impl PanelEnv {
     fn apply() -> Self {
         let mut saved = Vec::with_capacity(PANEL_ENV_SET.len() + PANEL_ENV_REMOVED.len());
