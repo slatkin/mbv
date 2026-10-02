@@ -81,7 +81,7 @@ unused_result_ok = "warn"
 literal_string_with_formatting_args = "allow"
 # Transitive dependency version skew (thiserror, getrandom, zbus family, etc.) —
 # no source fix exists; converges as upstreams update (issue #804).
-multiple-crate-versions = { level = "allow" }
+multiple_crate_versions = { level = "allow" }
 # No rustdoc is published and the flagged fns are only reachable by same-repo
 # path-dependency siblings, so hand-written `# Errors` sections would be filler
 # (resolve-clippy-doc-lints / issue #816).
