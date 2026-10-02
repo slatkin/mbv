@@ -12,9 +12,9 @@ repo. Record its commit SHA for 1.1.
 
 ## 2. Packaging and CI
 
-- [ ] 2.1 `build.yml`: add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to the pacman install, run `zig build -Doptimize=ReleaseSafe && zig build check` in `pinwin/`, and copy `pinwin/zig-out/bin/pinwin` into the release tarball. Verify by reading the workflow diff: the tarball step lists `pinwin`, and no Rust step changed.
-- [ ] 2.2 `PKGBUILD`: convert to `pkgbase=mbv`, `pkgname=(mbv pinwin)`, `package_mbv()` (today's contents plus `optdepends` for `pinwin` and `xdg-terminal-exec`) and `package_pinwin()` (`/usr/bin/pinwin`, license; `depends=(gtk4 gtk4-layer-shell libdbusmenu-glib pango)`). Verify: `makepkg --printsrcinfo` lists both packages, and `mbv`'s `depends` is unchanged.
-- [ ] 2.3 `PKGBUILD-git`: same split; add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to `makedepends`; build pinwin with `zig build -Doptimize=ReleaseSafe` in `build()`. Verify: `makepkg --printsrcinfo` lists both packages, and `aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the file's lines.
+- [x] 2.1 `build.yml`: add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to the pacman install, run `zig build -Doptimize=ReleaseSafe && zig build check` in `pinwin/`, and copy `pinwin/zig-out/bin/pinwin` into the release tarball. Verify by reading the workflow diff: the tarball step lists `pinwin`, and no Rust step changed.
+- [x] 2.2 `PKGBUILD`: convert to `pkgbase=mbv`, `pkgname=(mbv pinwin)`, `package_mbv()` (today's contents plus `optdepends` for `pinwin` and `xdg-terminal-exec`) and `package_pinwin()` (`/usr/bin/pinwin`, license; `depends=(gtk4 gtk4-layer-shell libdbusmenu-glib pango)`). Verify: `makepkg --printsrcinfo` lists both packages, and `mbv`'s `depends` is unchanged.
+- [x] 2.3 `PKGBUILD-git`: same split; add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to `makedepends`; build pinwin with `zig build -Doptimize=ReleaseSafe` in `build()`. Verify: `makepkg --printsrcinfo` lists both packages, and `aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the file's lines.
 
 ## 3. Ctrl declaration
 
