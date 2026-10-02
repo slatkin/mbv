@@ -67,6 +67,14 @@ pub enum SettingsIntent {
     OpenPlaylists,
     Quit,
     Activate(usize),
+    /// One step of a stepper settings row (design D6, change
+    /// `pin-mbv-in-pinwin`): `cursor` addresses the row in the active
+    /// destination, and `delta` is the signed, already-scaled change (Shift
+    /// steps by 10). The shell clamps to the row's range and persists.
+    Step {
+        cursor: usize,
+        delta: i32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

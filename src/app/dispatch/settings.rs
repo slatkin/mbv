@@ -1,4 +1,5 @@
 use super::super::super::App;
+use super::notify::ToastSeverity;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::SettingKey;
@@ -37,6 +38,47 @@ impl App {
         }
     }
 
+    /// Change one Panel-destination row (design D6, change
+    /// `pin-mbv-in-pinwin`): `Side` cycles, every numeric row steps by one.
+    pub(crate) fn handle_panel_setting_activate(&mut self, key: SettingKey) {
+        if key == SettingKey::PanelSide {
+            self.apply_panel_setting(key, 0);
+        } else {
+            self.apply_panel_setting(key, 1);
+        }
+    }
+
+    /// Step one Panel-destination row by `delta` (the component scales Shift
+    /// steps to ±10).
+    pub(crate) fn handle_panel_setting_step(&mut self, key: SettingKey, delta: i32) {
+        self.apply_panel_setting(key, delta);
+    }
+
+    /// Apply and persist one Panel value change: the running panel validates
+    /// the candidate layout first, and only an accepted layout is saved. A
+    /// rejection keeps the previous value and shows its reason as a Warning
+    /// toast (design D6).
+    fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+        let candidate = {
+            let panel = self.config.lock().unwrap().panel;
+            mbv_ui_model::settings::changed_panel_config(key, panel, delta)
+        };
+        let Some(candidate) = candidate else {
+            return;
+        };
+        // Row 4.4 of `pin-mbv-in-pinwin` replaces this with the live
+        // `pinwin_apply_layout` call. Until a panel handle exists on `App`
+        // there is no panel to validate against, so every step saves.
+        let applied: Result<(), String> = Ok(());
+        match applied {
+            Ok(()) => {
+                self.config.lock().unwrap().panel = candidate;
+                self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+            }
+            Err(reason) => self.flash(reason, ToastSeverity::Warning),
+        }
+    }
+
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {
         match key {
             SettingKey::Services => {
@@ -44,6 +86,9 @@ impl App {
             }
             SettingKey::Keys => {
                 self.open_keys_settings();
+            }
+            SettingKey::Panel => {
+                self.open_panel_settings();
             }
             SettingKey::HiddenLibraries => {
                 self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
