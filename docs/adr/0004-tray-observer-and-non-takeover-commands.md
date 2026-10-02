@@ -74,3 +74,18 @@ Neither matches the intended local desktop-integration behavior.
 - Future CLI work such as #108 remains in the normal command/takeover model;
   this ADR does not give `mbvc` or other automation a free observer/non-driver
   status.
+
+## Amendment (pinned tray, 2026-10-02)
+
+The tray is no longer started only by stay-alive. A local daemon with stay-alive
+off now also starts the tray the first time a pinned Client declares itself
+(at most once per daemon); that tray goes away when the daemon exits with its
+Client. The daemon starts it lazily through the same `on_tray_ready` hook, so
+the ownership and non-takeover semantics above are unchanged.
+
+While at least one attached Client has declared itself pinned, the tray menu
+gains a `Pin options...` item; selecting it sends the `options` request to that
+Client's pinwin socket, which opens the panel's options window. The item is
+hidden again once no attached Client is pinned. A socket failure is logged and
+does not affect playback or the tray. See the `local-daemon-tray` and
+`pinwin-tray-options` specs.
