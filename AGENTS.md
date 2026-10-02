@@ -3,7 +3,11 @@
 Rust terminal media client for Emby, Audiobookshelf, Feeds. Embeds mpv; every
 local TUI is a Client of the per-user Owner process, the sole local Player-owner
 host. Stay-alive controls whether that process outlives its Clients; packaged
-`mbvd` remains a separate Player owner.
+`mbvd` remains a separate Player owner. `mbvd` is a headless server daemon (a
+systemd unit, no desktop session): it never has a tray, pinned panel or any
+Client functionality, and connecting to it still leaves a Local process on the
+user's machine that owns those (`CONTEXT.md`: *mbvd*, *Local process*). Never
+reason about desktop features through `mbvd`.
 
 ## Start here
 

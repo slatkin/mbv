@@ -175,8 +175,12 @@ _Avoid_: local daemon, home daemon, daemon, session, background process, backgro
 _Avoid_: Stay-alive process
 
 **mbvd**:
-The separately packaged daemon, run as a system service, with its own
-configuration, state, and socket. A different product surface from the
+The separately packaged headless server daemon, run as a system service (a
+systemd unit, typically on a headless server with no desktop session), with its
+own configuration, state, and socket. It is only ever a Player owner reached at
+a Player endpoint: it has no Tray, no pinned panel, and no other desktop or
+Client functionality, and what it lacks never limits what a **Local process**
+offers. A different product surface from the
 Packaged Player owner, never started by a terminal UI. On `main` it is still Emby-gated: it
 constructs `EmbyClient` unconditionally, requires cached credentials to start,
 and uses legacy Emby-token ctrl authentication. Service-independent startup
@@ -193,11 +197,19 @@ identity. Any number may attach when Stay-alive is enabled; with it disabled,
 admission is exclusive.
 _Avoid_: thin client, terminal client, viewer, attachment
 
+**Local process**:
+Any mbv process on the user's own machine: a Client, or the Owner process.
+There is always at least one, whatever Player endpoint is in use; a Client
+attached to a remote owner or an mbvd is still a Local process. Desktop
+features — the Tray, the pinned panel — belong to Local processes and never to
+mbvd.
+_Avoid_: client side (of mbvd), frontend, desktop daemon
+
 **Tray**:
-The desktop status icon belonging to the Player owner, giving playback controls
-and a stop action while no Client is on screen. For the local Owner process, it
-is present only when Stay-alive is enabled.
-_Avoid_: systray, status icon, indicator
+The desktop status icon shown by a **Local process**, giving playback controls
+and a stop action while no Client is on screen. Never mbvd's: mbvd is headless.
+For the local Owner process, it is present only when Stay-alive is enabled.
+_Avoid_: systray, status icon, indicator, mbvd tray
 
 **Player endpoint**:
 The address used to reach a Player owner's control socket. Local is this
