@@ -55,7 +55,14 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh zig gtk4 gtk4-layer-shell
+          # `rustup` instead of `rust`: the Arch `rust` package is rebuilt for
+          # every upstream point release and package revision, and each bump
+          # invalidates the cargo cache below (~17 min full rebuild). The
+          # toolchain comes from the pinned rust-toolchain.toml instead, so it
+          # changes only when that pin is bumped deliberately. clang stays a
+          # system package (native build-script tooling, not a cache-keyed
+          # compiler).
+          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig gtk4 gtk4-layer-shell
 
       - uses: actions/checkout@v7
 
@@ -75,11 +82,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/cargo-deb
+            ~/.rustup/toolchains
             target
-          # Key covers: pinned builder image + rustc toolchain (build
+          # Key covers: pinned builder image + pinned rustc toolchain (build
           # environment), the dependency lockfile, and all workspace manifests.
-          # The base-devel-... literal must match the `container:` image above.
-          key: ${{ runner.os }}-cargo-${{ env.RUSTC_VER }}-base-devel-20260818.0.575430-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          # The base-devel-... literal must match the `container:` image above;
+          # bump it with rust-toolchain.toml.
+          key: ${{ runner.os }}-cargo-${{ env.RUSTC_VER }}-base-devel-20260818.0.575430-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
