@@ -128,6 +128,7 @@ fn read_server_hello(
     compatibility.supports_control_auth = info.supports_control_auth();
     compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
+    compatibility.supports_pinned_panel = info.supports_pinned_panel();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }

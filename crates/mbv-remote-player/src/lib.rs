@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
@@ -323,6 +324,17 @@ impl RemotePlayer {
     pub fn stop(&self) {
         let _ = self
             .send_playback_intent(self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop));
+    }
+
+    /// Declare that this Client runs inside a pinwin panel, carrying the
+    /// panel's control socket. Sends nothing when the peer did not advertise
+    /// `pinned-panel`; returns whether the command reached the ctrl writer.
+    #[must_use]
+    pub fn declare_pinned(&self, socket: PathBuf) -> bool {
+        if !self.ctrl_compatibility.supports_pinned_panel {
+            return false;
+        }
+        self.send_ctrl_cmd(CtrlCmd::DeclarePinned { socket })
     }
 
     /// Actively tears down the control-socket connection (#233): shuts
