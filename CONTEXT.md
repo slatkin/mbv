@@ -580,6 +580,36 @@ The app-wide layout state, one of Mini, Narrow, or Wide:
   when the shared width and minimum-height conditions are met.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
+**Pinned panel**:
+The GTK layer-shell window pinwin shows beside tiled windows, holding mbv's TUI
+drawn to a pty the panel owns. It is a desktop window created only by a
+**pinned launch**, not one of the in-TUI **Panel** regions (Tab, Library, Queue,
+and the rest); a plain terminal launch draws the same TUI with no pinned panel.
+_Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
+
+**Pinned launch**:
+A launch that runs mbv's TUI in the **Pinned panel** in the same process instead
+of the current terminal, selected only by the `--pin` flag. It chooses where the
+TUI draws, not who owns the Player, so it combines with remote-client launches.
+No config setting starts one. When the panel cannot start, mbv reports the
+reason and either falls back to the current terminal or exits non-zero.
+_Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)
+
+**`--pin`**:
+The launch flag that requests a **Pinned launch**. It starts no separate
+program, opens one panel per launch, and closes that panel when mbv exits. A
+build without pinning rejects it with an error and a non-zero exit.
+_Avoid_: `--desktop`, pin setting, pinning option
+
+**Panel gutter**:
+One of the four `[panel]` margins — `gutter_top`, `gutter_bottom`,
+`gutter_left`, `gutter_right` — in pixels and possibly negative, offsetting the
+**Pinned panel** from the screen edges. Edited in the F2 Panel page or
+`config.toml`; while pinned, a layout the panel rejects leaves both the panel
+and the saved value unchanged. Distinct from the in-TUI Library layout gutters
+and the Selected-row bar's gutter treatment.
+_Avoid_: gutter (bare), margin, padding, inset, spacing
+
 **Zebra stripe**:
 The alternating-row secondary background on Wide media lists. Grouping Heading rows and Spacer rows
 keep the surface fill outside the sequence, and each group's member rows alternate from the secondary
