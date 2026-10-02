@@ -406,15 +406,14 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
 }
 
 fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
-    let value = match key {
-        SettingKey::PanelCols => cfg.panel.cols.to_string(),
-        SettingKey::PanelGutterTop => cfg.panel.gutter_top.to_string(),
-        SettingKey::PanelGutterBottom => cfg.panel.gutter_bottom.to_string(),
-        SettingKey::PanelGutterLeft => cfg.panel.gutter_left.to_string(),
-        SettingKey::PanelGutterRight => cfg.panel.gutter_right.to_string(),
-        _ => return None,
-    };
-    Some(value)
+    match key {
+        SettingKey::PanelCols => Some(cfg.panel.cols.to_string()),
+        SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
+        SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
+        SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
+        SettingKey::PanelGutterRight => Some(cfg.panel.gutter_right.to_string()),
+        _ => None,
+    }
 }
 
 fn setting_collection_value(key: SettingKey, cfg: &Config) -> Option<String> {
@@ -562,9 +561,8 @@ pub fn changed_panel_config(
     Some(next)
 }
 
-/// `value + delta` clamped to `[min, max]`, computed in `i64` so a step at
-/// either `i32` bound cannot overflow.
+/// `value + delta` clamped to `[min, max]`; saturates at the `i32` bounds so a
+/// step at either bound cannot overflow.
 fn stepped(value: i32, delta: i32, min: i32, max: i32) -> i32 {
-    let sum = i64::from(value) + i64::from(delta);
-    i32::try_from(sum.clamp(i64::from(min), i64::from(max))).unwrap_or(min)
+    value.saturating_add(delta).clamp(min, max)
 }

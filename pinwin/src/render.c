@@ -555,7 +555,6 @@ static void draw_cursor(cairo_t* cr, const PinwinCursor* cursor, const char* tex
 
 void on_draw(GtkDrawingArea* area, cairo_t* cr, int width, int height,
              gpointer user_data) {
-    uint8_t bg[3], fg[3];
     PinwinCell cell;
     PinwinCursor cursor;
     char cursor_text[32];
@@ -567,7 +566,6 @@ void on_draw(GtkDrawingArea* area, cairo_t* cr, int width, int height,
 
     if (g_layout_latch) resolve_layout_monitor();
 
-    pinwin_colors(bg, fg);
     set_rgb(cr, g_theme_bg[0], g_theme_bg[1], g_theme_bg[2]);
     cairo_rectangle(cr, 0, 0, width, height);
     cairo_fill(cr);

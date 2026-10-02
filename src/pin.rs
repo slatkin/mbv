@@ -66,14 +66,6 @@ pub(crate) fn is_pinned() -> bool {
     HANDED_OVER.load(Ordering::Relaxed)
 }
 
-/// The start decision is pure over the parsed flag (design D5); the
-/// environment and the `pinwin_start` result enter as start failures, never
-/// as decision inputs.
-#[must_use]
-pub(crate) fn should_pin(pin_requested: bool) -> bool {
-    pin_requested
-}
-
 /// Start the pinned panel and hand this process's stdio to its pty (design
 /// D3). The terminal environment is restored if anything fails before the
 /// hand-over completes.

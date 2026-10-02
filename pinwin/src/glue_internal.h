@@ -62,8 +62,7 @@ extern int g_layout_latch; /* first-draw monitor resolution pending */
 
 /* ---- fontconfig.c: Ghostty config and theme colours --------------------- */
 
-void theme_colours(char* theme_name, size_t theme_name_len, uint8_t* bg,
-                   uint8_t* fg);
+void theme_colours(uint8_t* bg, uint8_t* fg);
 void font_config_load(char** family, double* size);
 
 /* ---- render.c: cell metrics, text, sprite and nerd-font drawing --------- */

@@ -46,7 +46,7 @@ impl<'fd> Panel<'fd> {
     /// Apply a full new layout to the running panel.
     ///
     /// On success the panel moves and resizes with its terminal state
-    /// preserved. On `is_invalid` the applied layout is unchanged.
+    /// preserved. On `PINWIN_ERR_INVALID` the applied layout is unchanged.
     pub fn apply_layout(&self, layout: Layout) -> Result<(), PinwinError> {
         let abi = layout.to_abi();
         // SAFETY: `abi` is a live, fully initialized `PinwinLayout`, and the C

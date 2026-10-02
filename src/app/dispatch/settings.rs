@@ -38,27 +38,13 @@ impl App {
         }
     }
 
-    /// Change one Panel-destination row (design D6, change
-    /// `pin-mbv-in-pinwin`): `Side` cycles, every numeric row steps by one.
-    pub(crate) fn handle_panel_setting_activate(&mut self, key: SettingKey) {
-        if key == SettingKey::PanelSide {
-            self.apply_panel_setting(key, 0);
-        } else {
-            self.apply_panel_setting(key, 1);
-        }
-    }
-
-    /// Step one Panel-destination row by `delta` (the component scales Shift
-    /// steps to ±10).
-    pub(crate) fn handle_panel_setting_step(&mut self, key: SettingKey, delta: i32) {
-        self.apply_panel_setting(key, delta);
-    }
-
-    /// Apply and persist one Panel value change: the running panel validates
-    /// the candidate layout first, and only an accepted layout is saved. A
-    /// rejection keeps the previous value and shows its reason as a Warning
-    /// toast (design D6).
-    fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+    /// Apply and persist one Panel value change (design D6, change
+    /// `pin-mbv-in-pinwin`): an activate steps by one (`Side` cycles and
+    /// ignores the delta), a step applies the component's signed delta (±1, or
+    /// ±10 with Shift). The running panel validates the candidate layout
+    /// first, and only an accepted layout is saved. A rejection keeps the
+    /// previous value and shows its reason as a Warning toast.
+    pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         let candidate = {
             let panel = self.config.lock().unwrap().panel;
             mbv_ui_model::settings::changed_panel_config(key, panel, delta)

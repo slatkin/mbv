@@ -102,13 +102,7 @@ fn sendMouse(action: c.GhosttyMouseAction, x: f64, y: f64, button: i32, mods: u3
     if (main.term == null) return;
 
     c.ghostty_mouse_encoder_setopt_from_terminal(main.mouse_encoder, main.term);
-    var size = std.mem.zeroes(c.GhosttyMouseEncoderSize);
-    size.size = @sizeOf(c.GhosttyMouseEncoderSize);
-    size.screen_width = @as(u32, main.grid_cols) * main.cell_w;
-    size.screen_height = @as(u32, main.grid_rows) * main.cell_h;
-    size.cell_width = main.cell_w;
-    size.cell_height = main.cell_h;
-    c.ghostty_mouse_encoder_setopt(main.mouse_encoder, c.GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
+    main.setMouseEncoderSize();
     var pressed = any_button_pressed;
     c.ghostty_mouse_encoder_setopt(main.mouse_encoder, c.GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, &pressed);
 

@@ -23,6 +23,23 @@
 
 static void attach_pty(void);
 
+/* Apply a winsize to a live pty fd and raise SIGWINCH so the host's crossterm
+ * loop learns of the resize (mbv's pin-mbv-in-pinwin, required upstream
+ * addition 1). Disposition is process-wide, so the raise reaches the host's
+ * handler from any thread; a host without a handler ignores the signal
+ * (default disposition). A failed ioctl leaves the winsize untouched and
+ * raises nothing. */
+static void set_winsize(int fd, int32_t cols, int32_t rows, int32_t xpixel,
+                        int32_t ypixel) {
+    struct winsize ws;
+    memset(&ws, 0, sizeof(ws));
+    ws.ws_col = (unsigned short)cols;
+    ws.ws_row = (unsigned short)rows;
+    ws.ws_xpixel = (unsigned short)xpixel;
+    ws.ws_ypixel = (unsigned short)ypixel;
+    if (ioctl(fd, TIOCSWINSZ, &ws) >= 0) raise(SIGWINCH);
+}
+
 int apply_size(void) {
     int height = gtk_widget_get_height(g_area);
     if (g_cell_h > 0 && height > 0) {
@@ -93,32 +110,19 @@ void glue_pty_write(const uint8_t* data, size_t len) {
 }
 
 void glue_pty_resize(int32_t cols, int32_t rows, int32_t xpixel, int32_t ypixel) {
-    struct winsize ws;
     g_pty_cols = cols;
     g_pty_rows = rows;
     g_pty_xpixel = xpixel;
     g_pty_ypixel = ypixel;
     if (g_pty_fd < 0) return;
-    memset(&ws, 0, sizeof(ws));
-    ws.ws_col = (unsigned short)cols;
-    ws.ws_row = (unsigned short)rows;
-    ws.ws_xpixel = (unsigned short)xpixel;
-    ws.ws_ypixel = (unsigned short)ypixel;
-    /* The host's crossterm loop learns of resizes from SIGWINCH (mbv's
-     * pin-mbv-in-pinwin, required upstream addition 1): raise it after every
-     * successful winsize update. Disposition is process-wide, so the raise
-     * reaches the host's handler from any thread; a host without a handler
-     * ignores the signal (default disposition). A failed ioctl leaves the
-     * winsize untouched and raises nothing. */
-    if (ioctl(g_pty_fd, TIOCSWINSZ, &ws) >= 0) raise(SIGWINCH);
+    set_winsize(g_pty_fd, cols, rows, xpixel, ypixel);
 }
 
 /* Take the host-supplied master fd: non-blocking, the initial winsize (grid
- * plus pixel size, as glue_pty_resize builds it) and the read source. The host
+ * plus pixel size, as set_winsize applies it) and the read source. The host
  * owns the child side, so there is nothing else to set up (design D6). A fd
  * that cannot be used only degrades to no terminal; it never exits (design D3). */
 static void attach_pty(void) {
-    struct winsize ws;
     int fd = g_pty_fd;
     int flags;
 
@@ -129,16 +133,13 @@ static void attach_pty(void) {
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) return;
 
-    memset(&ws, 0, sizeof(ws));
-    ws.ws_col = (unsigned short)(g_rows > 0 ? g_cols : g_pty_cols);
-    ws.ws_row = (unsigned short)(g_rows > 0 ? g_rows : g_pty_rows);
-    ws.ws_xpixel = (unsigned short)(g_cols * g_cell_w);
-    ws.ws_ypixel = (unsigned short)(ws.ws_row * g_cell_h);
-    g_pty_cols = ws.ws_col;
-    g_pty_rows = ws.ws_row;
-    g_pty_xpixel = ws.ws_xpixel;
-    g_pty_ypixel = ws.ws_ypixel;
-    if (ioctl(fd, TIOCSWINSZ, &ws) >= 0) raise(SIGWINCH);
+    /* Rows follow the allocated height when the grid is up; before that the
+     * last resize request stands (design D4). */
+    g_pty_cols = g_rows > 0 ? g_cols : g_pty_cols;
+    g_pty_rows = g_rows > 0 ? g_rows : g_pty_rows;
+    g_pty_xpixel = g_cols * g_cell_w;
+    g_pty_ypixel = g_pty_rows * g_cell_h;
+    set_winsize(fd, g_pty_cols, g_pty_rows, g_pty_xpixel, g_pty_ypixel);
 
     g_pty_source = g_unix_fd_add(fd, G_IO_IN | G_IO_HUP | G_IO_ERR,
                                  on_pty_readable, NULL);

@@ -166,6 +166,19 @@ fn sizeReport(_: c.GhosttyTerminal, _: ?*anyopaque, out: *c.GhosttySizeReportSiz
     return true;
 }
 
+/// Publish the grid and cell metrics to the mouse encoder: the SGR-pixel
+/// mouse modes report positions in these units. Called when the grid changes
+/// and defensively per mouse event.
+pub fn setMouseEncoderSize() void {
+    var size = std.mem.zeroes(c.GhosttyMouseEncoderSize);
+    size.size = @sizeOf(c.GhosttyMouseEncoderSize);
+    size.screen_width = @as(u32, grid_cols) * cell_w;
+    size.screen_height = @as(u32, grid_rows) * cell_h;
+    size.cell_width = cell_w;
+    size.cell_height = cell_h;
+    c.ghostty_mouse_encoder_setopt(mouse_encoder, c.GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
+}
+
 fn deviceAttributes(_: c.GhosttyTerminal, _: ?*anyopaque, out: *c.GhosttyDeviceAttributes) callconv(.c) bool {
     out.primary.conformance_level = 62; // level 2, like Ghostty
     out.primary.features[0] = 22; // ansi color
@@ -231,14 +244,7 @@ export fn pinwin_size(cols: i32, rows: i32, cw: i32, ch: i32) c_int {
         return 1;
     };
     _ = c.ghostty_terminal_resize(term, grid_cols, grid_rows, cell_w, cell_h);
-
-    var size = std.mem.zeroes(c.GhosttyMouseEncoderSize);
-    size.size = @sizeOf(c.GhosttyMouseEncoderSize);
-    size.screen_width = @as(u32, grid_cols) * cell_w;
-    size.screen_height = @as(u32, grid_rows) * cell_h;
-    size.cell_width = cell_w;
-    size.cell_height = cell_h;
-    c.ghostty_mouse_encoder_setopt(mouse_encoder, c.GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
+    setMouseEncoderSize();
     return 0;
 }
 

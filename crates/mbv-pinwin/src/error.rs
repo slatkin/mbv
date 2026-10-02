@@ -31,49 +31,6 @@ impl PinwinError {
         };
         Self(kind)
     }
-
-    /// `PINWIN_ERR_INVALID`: the panel refused the layout and changed nothing.
-    #[must_use]
-    pub const fn is_invalid(&self) -> bool {
-        matches!(self.0, PinwinErrorKind::Invalid)
-    }
-
-    /// `PINWIN_ERR_ALREADY_RUNNING`: a panel is already running.
-    #[must_use]
-    pub const fn is_already_running(&self) -> bool {
-        matches!(self.0, PinwinErrorKind::AlreadyRunning)
-    }
-
-    /// `PINWIN_ERR_NOT_RUNNING`: no live panel to act on.
-    #[must_use]
-    pub const fn is_not_running(&self) -> bool {
-        matches!(self.0, PinwinErrorKind::NotRunning)
-    }
-
-    /// `PINWIN_ERR_NO_DISPLAY`: no GTK display or no layer-shell.
-    #[must_use]
-    pub const fn is_no_display(&self) -> bool {
-        matches!(self.0, PinwinErrorKind::NoDisplay)
-    }
-
-    /// `PINWIN_ERR_INTERNAL`: an unexpected failure inside the library.
-    #[must_use]
-    pub const fn is_internal(&self) -> bool {
-        matches!(self.0, PinwinErrorKind::Internal)
-    }
-
-    /// Stable dotted name of the failure kind (the log `error.type` value).
-    #[must_use]
-    pub const fn kind_name(&self) -> &'static str {
-        match self.0 {
-            PinwinErrorKind::Invalid => "pinwin.invalid",
-            PinwinErrorKind::AlreadyRunning => "pinwin.already_running",
-            PinwinErrorKind::NotRunning => "pinwin.not_running",
-            PinwinErrorKind::NoDisplay => "pinwin.no_display",
-            PinwinErrorKind::Internal => "pinwin.internal",
-            PinwinErrorKind::Unknown(_) => "pinwin.unknown",
-        }
-    }
 }
 
 impl fmt::Display for PinwinError {

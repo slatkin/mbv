@@ -245,10 +245,7 @@ static void on_activate(GtkApplication* app, gpointer user_data) {
 }
 
 int glue_init(const PinwinLayout* layout, int32_t keyboard_mode) {
-    char theme_name[128];
-
-    theme_colours(theme_name, sizeof(theme_name), g_theme_bg, g_theme_fg);
-    (void)theme_name;
+    theme_colours(g_theme_bg, g_theme_fg);
     g_layout = *layout;
     g_cols = layout->cols;
     g_keyboard_mode = keyboard_mode;
