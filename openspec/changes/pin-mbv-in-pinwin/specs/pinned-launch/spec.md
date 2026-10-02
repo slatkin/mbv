@@ -14,7 +14,7 @@ program started by the user and no re-launch of mbv. Without `--pin`, mbv SHALL 
 current terminal exactly as before; no config setting starts the panel. `--pin` SHALL combine with
 `--log-level`.
 `-h`, `-V`, `-q` and `--__local-daemon` SHALL behave as before and never start a panel. The panel
-SHALL close when mbv exits. Each pinned launch SHALL open its own panel.
+SHALL close when mbv exits.
 
 #### Scenario: Pinned launch from the desktop
 - **WHEN** the user starts mbv from its desktop entry on a Wayland session with layer-shell
@@ -73,31 +73,48 @@ the `pinwin-panel` capability.
 - **WHEN** the user opens the F2 settings screen
 - **THEN** it has no Panel page
 
-### Requirement: Panel size controls in the tray
-While at least one pinned mbv is connected to the Owner, the Owner's system tray SHALL show a
-`Panel` submenu with: `Left` and `Right` (docking side); `Columns`
-−10, −1, +1, +10; and for each of `Top`, `Bottom`, `Left gutter` and `Right gutter`, −10, −1, +1,
-+10. Choosing an item SHALL change that value on every pinned mbv's panel live, within the
-`[panel]` ranges, and save it to `config.toml`. A change the panel rejects (it does not fit the
-output) SHALL leave the panel and `config.toml` unchanged and be logged. The submenu SHALL NOT
-appear while no pinned mbv is connected. If stay-alive is off, the tray SHALL start when a pinned
-mbv connects. The tray's other items SHALL behave as before.
+### Requirement: One pinned mbv at a time
+At most one pinned mbv SHALL run per user. A `--pin` launch while one is pinned SHALL NOT open a
+panel: if stdin is a terminal, mbv SHALL print `mbv: a pinned mbv is already running` and exit with
+status 1; otherwise it SHALL exit with status 0 and no notification. Unpinned mbv launches SHALL
+NOT be limited by this.
+
+#### Scenario: Second pinned launch from the desktop
+- **WHEN** a pinned mbv is running and the user starts the desktop entry again
+- **THEN** nothing visible happens and the existing panel is unchanged
+
+#### Scenario: Second pinned launch from a terminal
+- **WHEN** a pinned mbv is running and the user types `mbv --pin`
+- **THEN** one line says a pinned mbv is already running, and mbv exits with status 1
+
+### Requirement: Panel options in the tray
+While a pinned mbv runs, mbv's system tray SHALL show an `Adjust panel...` item, starting the
+tray if Stay-alive is off. Choosing it SHALL open a small form showing the current side, columns
+and four gutters. Edits SHALL take effect only on `Apply`, which SHALL change the panel live and
+save the values to `config.toml`. Closing the form without `Apply` SHALL discard the edits. A
+layout the panel rejects SHALL be reported in the form, leaving the panel, `config.toml` and the
+edits unchanged. The item SHALL NOT appear while no pinned mbv runs. The tray's other items SHALL
+behave as before.
 
 #### Scenario: Resize from the tray
-- **WHEN** a pinned mbv is running and the user chooses `Columns` +10 in the tray's `Panel` submenu
-- **THEN** the panel widens by 10 columns without restarting mbv, and the new width is saved
+- **WHEN** a pinned mbv is running and the user opens `Adjust panel...`, sets `Columns` to 60 and presses `Apply`
+- **THEN** the panel becomes 60 columns wide without restarting mbv, and 60 is saved
 
-#### Scenario: Rejected change
-- **WHEN** a tray step would leave the panel's output with no width
-- **THEN** the panel and `config.toml` stay as they were
+#### Scenario: Close without Apply
+- **WHEN** the user edits a value and closes the form without `Apply`
+- **THEN** the panel and `config.toml` are unchanged, and reopening the form shows the saved values
+
+#### Scenario: Rejected layout
+- **WHEN** the user applies a layout that leaves the panel's output no width
+- **THEN** the form shows the reason and keeps the edits, and the panel and `config.toml` are unchanged
 
 #### Scenario: No pinned mbv
-- **WHEN** only unpinned mbv clients are connected
-- **THEN** the tray has no `Panel` submenu
+- **WHEN** only unpinned mbv terminals are running
+- **THEN** the tray has no `Adjust panel...` item
 
-#### Scenario: Pinned mbv without stay-alive
-- **WHEN** stay-alive is off and a pinned mbv connects
-- **THEN** the tray starts and offers the `Panel` submenu
+#### Scenario: Pinned mbv without Stay-alive
+- **WHEN** Stay-alive is off and a pinned mbv starts
+- **THEN** the tray appears with its usual items and `Adjust panel...`
 
 ### Requirement: GTK stays out of the daemon crates
 GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.
