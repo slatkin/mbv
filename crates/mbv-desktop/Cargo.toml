@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 mbv-ctrl = { path = "../mbv-ctrl" }
+mbv-daemon = { path = "../mbv-daemon" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-images = { path = "../mbv-images" }
 tracing.workspace = true
