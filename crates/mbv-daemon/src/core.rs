@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::ctrl::{ClientRegistry, CtrlClientId, CtrlSender, serialize_ctrl_event};
-use crate::tray::OnTrayReady;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
@@ -590,6 +589,7 @@ pub struct DaemonPlayerHandle {
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;
+type OnTrayReady = Box<dyn FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
 
 pub struct DaemonRuntimeHooks {
     pub on_player_ready: OnPlayerReady,

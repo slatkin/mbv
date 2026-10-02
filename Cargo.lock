@@ -1895,7 +1895,6 @@ version = "0.21.8"
 dependencies = [
  "ksni",
  "mbv-ctrl",
- "mbv-daemon",
  "mbv-emby-model",
  "mbv-images",
  "tokio",

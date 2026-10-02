@@ -75,9 +75,6 @@ pub(crate) struct DaemonLoop {
     /// of writing real state files.
     pub(super) store: OwnerQueueStore,
     pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
-    /// Tray lifecycle: started here when stay-alive is on, lazily on the
-    /// first accepted pinned declaration otherwise.
-    pub(super) tray: super::TraySlot,
 }
 
 impl DaemonLoop {

@@ -31,14 +31,11 @@ pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;
 #[cfg(test)]
 pub(crate) use run::playback_run_identity_is_current;
-mod tray;
 pub use run::run_with_options;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
 };
-pub use tray::TrayPort;
-pub(crate) use tray::{OnTrayReady, TraySlot};
 mod event_loop;
 pub(crate) use event_loop::{DaemonLoop, LoopFlow};
 mod audiobookshelf;

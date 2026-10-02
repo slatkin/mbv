@@ -9,8 +9,6 @@ use std::rc::Rc;
 use std::time::Instant;
 use tracing_subscriber::prelude::*;
 
-mod tray;
-
 type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
 
 /// Cloneable projection of a persisted snapshot (`StayAliveQueueState` is not
@@ -96,7 +94,6 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
-    let (shutdown_signal_tx, _shutdown_signal_rx) = mpsc::sync_channel(1);
     let settings = Arc::new(Mutex::new(OwnerSettings {
         stay_alive: false,
         consume_videos: false,
@@ -124,7 +121,6 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
             Ok(())
         }),
         queue_persist_tx: None,
-        tray: crate::tray::TraySlot::new(Box::new(|_| None), shutdown_signal_tx),
     };
     TestLoop {
         event_loop,

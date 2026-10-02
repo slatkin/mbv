@@ -1,19 +1,10 @@
 use ksni::blocking::TrayMethods;
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
 use mbv_ctrl::{Direction, TransportCommand};
-use mbv_daemon::TrayPort;
-use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray_icon.bin");
-
-/// How long the tray waits on the pinwin panel socket before giving up, so a
-/// hung or dead panel cannot stall the tray thread (design D5).
-const PIN_REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Whether the now-playing rows (`Playing` / `<Title>`) should be shown.
 ///
@@ -40,10 +31,6 @@ struct MbvTray {
     status: Arc<Mutex<PlayerStatus>>,
     /// Owner transport channel; relative steps are resolved by the daemon owner.
     transport_tx: Sender<TransportCommand>,
-    /// Pinwin panel socket of the most recently declared pinned Client, or
-    /// `None` when no pinned Client is attached. Pushed by the daemon; the
-    /// `Pin options...` item exists only while this is `Some`.
-    pin_target: Option<PathBuf>,
 }
 
 impl MbvTray {
@@ -150,23 +137,6 @@ impl ksni::Tray for MbvTray {
             );
         }
 
-        if self.pin_target.is_some() {
-            items.push(MenuItem::Separator);
-            items.push(
-                StandardItem {
-                    label: "Pin options...".into(),
-                    icon_name: "preferences-system".into(),
-                    activate: Box::new(|tray: &mut Self| {
-                        if let Some(target) = &tray.pin_target {
-                            request_pin_options(target);
-                        }
-                    }),
-                    ..Default::default()
-                }
-                .into(),
-            );
-        }
-
         items.push(MenuItem::Separator);
         items.push(
             StandardItem {
@@ -201,15 +171,14 @@ pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,
     transport_tx: Sender<TransportCommand>,
-) -> Option<Box<dyn TrayPort>> {
+) -> Option<Box<dyn Send>> {
     MbvTray {
         shutdown_tx,
         status,
         transport_tx,
-        pin_target: None,
     }
     .spawn()
-    .map(|handle| Box::new(TrayHandle(handle)) as Box<dyn TrayPort>)
+    .map(|tray| Box::new(tray) as Box<dyn Send>)
     .map_err(|e| {
         tracing::warn!(
             name: "tray.availability.failed",
@@ -221,53 +190,9 @@ pub fn spawn(
     .ok()
 }
 
-/// `TrayPort` over the spawned ksni handle: a pushed pin target becomes the
-/// tray's owned `pin_target`, which refreshes the menu (design D4).
-struct TrayHandle(ksni::blocking::Handle<MbvTray>);
-
-impl TrayPort for TrayHandle {
-    fn set_pin_target(&self, socket: Option<PathBuf>) {
-        let _ = self
-            .0
-            .update(move |tray: &mut MbvTray| tray.pin_target = socket);
-    }
-}
-
-/// Ask the pinwin panel that declared `target` to open its options window.
-///
-/// Runs on ksni's thread (never the daemon loop) with tight timeouts, and
-/// only logs the outcome: a panel that is gone must not affect playback or
-/// the tray (design D5).
-fn request_pin_options(target: &Path) {
-    let response = UnixStream::connect(target).and_then(|mut stream| {
-        stream.set_read_timeout(Some(PIN_REQUEST_TIMEOUT))?;
-        stream.set_write_timeout(Some(PIN_REQUEST_TIMEOUT))?;
-        stream.write_all(b"options\n")?;
-        let mut response = String::new();
-        BufReader::new(stream).read_line(&mut response)?;
-        Ok(response)
-    });
-    match response {
-        Ok(line) if line.trim() == "ok" => {}
-        Ok(line) => tracing::warn!(
-            name: "tray.pin_options.rejected",
-            target: "tray",
-            response = %line.trim(),
-            "pin options request rejected"
-        ),
-        Err(error) => tracing::warn!(
-            name: "tray.pin_options.failed",
-            target: "tray",
-            error = %error,
-            "pin options request failed"
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ksni::Tray as _;
 
     fn status(active: bool, paused: bool, title: &str) -> PlayerStatus {
         PlayerStatus {
@@ -297,7 +222,6 @@ mod tests {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
             transport_tx,
-            pin_target: None,
         };
         (tray, cmd_rx)
     }
@@ -325,36 +249,5 @@ mod tests {
             rx.try_recv(),
             Ok(TransportCommand::Step(Direction::Next))
         ));
-    }
-
-    fn menu_labels(tray: &MbvTray) -> Vec<String> {
-        tray.menu()
-            .into_iter()
-            .filter_map(|item| match item {
-                ksni::menu::MenuItem::Standard(item) => Some(item.label),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Contract: the `Pin options...` item exists only while the daemon has
-    /// pushed a pin target, so it disappears when the last pinned Client
-    /// detaches (local-daemon-tray spec, "Pinned Client leaves").
-    #[test]
-    fn pin_options_item_shown_only_with_a_pin_target() {
-        let (mut tray, _rx) = spy_tray(status(false, false, ""));
-        assert!(
-            !menu_labels(&tray)
-                .iter()
-                .any(|label| label == "Pin options...")
-        );
-
-        tray.pin_target = Some(PathBuf::from("/run/user/1000/pinwin/1.sock"));
-
-        assert!(
-            menu_labels(&tray)
-                .iter()
-                .any(|label| label == "Pin options...")
-        );
     }
 }
