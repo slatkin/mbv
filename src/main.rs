@@ -20,7 +20,6 @@ fn cap_glibc_arenas() {
 
 mod app;
 mod config;
-mod desktop_launch;
 mod local_daemon;
 mod owner_restart;
 mod single_instance;
@@ -227,18 +226,16 @@ fn print_usage() {
     println!("      --connect-daemon <endpoint>");
     println!("                             Attach as a client to a running mbvd daemon at");
     println!("                             <endpoint> instead of owning a local Player.");
-    println!("      --desktop              Launch pinned in pinwin, or in the terminal.");
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
 }
 
-fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>, bool)> {
+fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let desktop = has_flag(&args, "--desktop");
 
     if has_flag(&args, "-h") || has_flag(&args, "--help") {
         print_usage();
@@ -286,7 +283,7 @@ fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>, bool
         std::process::exit(1);
     }
 
-    Some((log_level, cli_daemon_endpoint, desktop))
+    Some((log_level, cli_daemon_endpoint))
 }
 
 fn stop_running_instance() {
@@ -301,7 +298,7 @@ fn stop_running_instance() {
 }
 
 fn main() {
-    let Some((log_level, cli_daemon_endpoint, desktop)) = pre_config_startup() else {
+    let Some((log_level, cli_daemon_endpoint)) = pre_config_startup() else {
         return;
     };
 
@@ -310,20 +307,6 @@ fn main() {
         Some(state_dir().join("mbv.log")),
         log_level.as_ref().unwrap_or(&applog::LogSpec::default()),
     );
-
-    // `--desktop` replaces this process before config: the launched `mbv`
-    // loads config, takes the lock and starts an Owner as usual.
-    if desktop {
-        let Some(argv) = desktop_launch::desktop_command(desktop_launch::executable_on_path) else {
-            tracing::error!(
-                name: "startup.desktop.no_launcher",
-                target: "startup",
-                "neither pinwin nor xdg-terminal-exec is on PATH"
-            );
-            std::process::exit(1);
-        };
-        desktop_launch::exec(argv);
-    }
 
     if let Err(e) = config::migrate_legacy_emby_token() {
         eprintln!("mbv: Emby setup migration failed: {e}");
