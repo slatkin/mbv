@@ -192,11 +192,35 @@ fn detach_controlling_terminal() -> Result<(), PinStartError> {
 }
 
 fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
-    for target in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
+    for target in [libc::STDIN_FILENO, libc::STDOUT_FILENO] {
         // SAFETY: `dup2` duplicates the live slave fd onto a standard fd.
         if unsafe { libc::dup2(slave.as_raw_fd(), target) } < 0 {
             return Err(PinStartError::HandOver(std::io::Error::last_os_error()));
         }
+    }
+    redirect_stderr()
+}
+
+/// Point fd 2 at the application log (opened for append), falling back to
+/// `/dev/null`: after the hand-over, native libraries (GTK/GLib/layer-shell)
+/// writing to stderr must not draw over the panel. mbv reports fatal
+/// post-hand-over errors via the log and a notification (design D5), so the
+/// TUI does not need fd 2.
+fn redirect_stderr() -> Result<(), PinStartError> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crate::crash_log_path())
+        .or_else(|_| std::fs::OpenOptions::new().write(true).open("/dev/null"))
+        .map_err(PinStartError::HandOver)?;
+    // SAFETY: `dup2` duplicates the fd owned by `file` onto stderr.
+    if unsafe { libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO) } < 0 {
+        return Err(PinStartError::HandOver(std::io::Error::last_os_error()));
+    }
+    // If fd 2 was closed, the open above may have taken fd 2 itself; never
+    // close the target it now aliases.
+    if file.as_raw_fd() == libc::STDERR_FILENO {
+        std::mem::forget(file);
     }
     Ok(())
 }
