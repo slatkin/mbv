@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe_mod = b.createModule(.{
+    const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -14,57 +14,116 @@ pub fn build(b: *std.Build) void {
     // its siblings (src/glue_internal.h is their shared state, design D4) are
     // the only files that include their headers; the @cImport in src/main.zig
     // only sees ghostty/vt.h and pinwin.h.
-    exe_mod.linkSystemLibrary("gtk4", .{});
-    exe_mod.linkSystemLibrary("gtk4-layer-shell-0", .{});
-    exe_mod.linkSystemLibrary("pangocairo", .{});
-    exe_mod.linkSystemLibrary("gio-2.0", .{}); // tray publication (design D2)
-    exe_mod.linkSystemLibrary("dbusmenu-glib-0.4", .{}); // host-rendered menu
-    exe_mod.linkSystemLibrary("util", .{}); // forkpty; also pulls in libc
+    lib_mod.linkSystemLibrary("gtk4", .{});
+    lib_mod.linkSystemLibrary("gtk4-layer-shell-0", .{});
+    lib_mod.linkSystemLibrary("pangocairo", .{});
 
-    // Static linkage keeps the installed executable independent of Zig's
-    // build-cache runpath (and of any older system libghostty-vt).
-    if (b.lazyDependency("ghostty", .{})) |dep| {
-        exe_mod.linkLibrary(dep.artifact("ghostty-vt-static"));
-        exe_mod.addIncludePath(dep.path("include"));
+    // Zig static-library artifacts do not merge linked static archives, so
+    // libpinwin.a does NOT bundle libghostty-vt (design D7): the pinned
+    // ghostty archive is installed next to it under the name consumers link.
+    // As a dependency ghostty installs the plain vt archive, not the fat one
+    // its standalone build makes, so its vendored SIMD archives are installed
+    // alongside too: a plain-cc consumer needs all four on the link line.
+    const ghostty = b.lazyDependency("ghostty", .{});
+    if (ghostty) |dep| {
+        const ghostty_lib = dep.artifact("ghostty-vt-static");
+        lib_mod.linkLibrary(ghostty_lib);
+        lib_mod.addIncludePath(dep.path("include"));
+        b.getInstallStep().dependOn(&b.addInstallLibFile(
+            ghostty_lib.getEmittedBin(),
+            "libghostty-vt.a",
+        ).step);
+        if (dep.builder.lazyDependency("simdutf", .{ .target = target, .optimize = optimize, .no_libcxx = true })) |simdutf| {
+            b.getInstallStep().dependOn(&b.addInstallLibFile(
+                simdutf.artifact("simdutf").getEmittedBin(),
+                "libsimdutf.a",
+            ).step);
+        }
+        if (dep.builder.lazyDependency("highway", .{ .target = target, .optimize = optimize })) |highway| {
+            b.getInstallStep().dependOn(&b.addInstallLibFile(
+                highway.artifact("highway").getEmittedBin(),
+                "libhighway.a",
+            ).step);
+        }
     }
-    exe_mod.addIncludePath(b.path("src"));
-    exe_mod.addCSourceFiles(.{
-        .files = &.{ "src/glue.c", "src/render.c", "src/images.c", "src/pty.c", "src/input.c", "src/fontconfig.c", "src/control.c", "src/options.c", "src/tray.c" },
+    lib_mod.addIncludePath(b.path("src"));
+    lib_mod.addCSourceFiles(.{
+        .files = &.{ "src/glue.c", "src/render.c", "src/images.c", "src/pty.c", "src/input.c", "src/fontconfig.c", "src/options.c", "src/pinwin_api.c" },
         .flags = &.{ "-std=gnu11", "-Wall" },
     });
 
-    const exe = b.addExecutable(.{
+    const lib = b.addLibrary(.{
         .name = "pinwin",
-        .root_module = exe_mod,
+        .linkage = .static,
+        .root_module = lib_mod,
     });
-    b.installArtifact(exe);
+    b.installArtifact(lib);
 
-    const run_step = b.step("run", "Run pinwin");
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
-    run_step.dependOn(&run_cmd.step);
+    // Dev-only demo (design OQ-a): drives the C ABI over a pty pair it creates
+    // itself, built by `zig build demo` only and never installed, so the
+    // default `zig build` still produces only the library.
+    const demo_step = b.step("demo", "Build the dev-only pinwin demo executable");
+    const demo_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    });
+    demo_mod.addIncludePath(b.path("src"));
+    demo_mod.addCSourceFiles(.{
+        .files = &.{"demo/main.c"},
+        .flags = &.{ "-std=gnu11", "-Wall" },
+    });
+    // A program may link the panel and may fork: forkpty(3) lives in libutil,
+    // and this dev-only step is the only place that links it.
+    demo_mod.linkLibrary(lib);
+    demo_mod.linkSystemLibrary("gtk4", .{});
+    demo_mod.linkSystemLibrary("gtk4-layer-shell-0", .{});
+    demo_mod.linkSystemLibrary("pangocairo", .{});
+    demo_mod.linkSystemLibrary("util", .{});
+    if (ghostty) |dep| {
+        demo_mod.linkLibrary(dep.artifact("ghostty-vt-static"));
+        demo_mod.addIncludePath(dep.path("include"));
+    }
+    const demo = b.addExecutable(.{
+        .name = "pinwin-demo",
+        .root_module = demo_mod,
+    });
+    demo_step.dependOn(&b.addInstallArtifact(demo, .{}).step);
 
-    // The lightweight layout-core check (tools/check_options.c): compiled
-    // against the same system libraries and run (design D5).
+    // Layout-core unit tests (design D8). The test root links the GTK-free
+    // src/options.c directly and runs as `zig build check`.
+    const check_step = b.step("check", "Run the layout-core Zig unit tests");
     const check_mod = b.createModule(.{
+        .root_source_file = b.path("src/options_test.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
     check_mod.addIncludePath(b.path("src"));
     check_mod.addCSourceFiles(.{
-        .files = &.{ "src/options.c", "src/control.c", "src/tray.c", "tools/check_options.c" },
-        .flags = &.{ "-std=gnu11", "-Wall", "-Wextra" },
+        .files = &.{"src/options.c"},
+        .flags = &.{ "-std=gnu11", "-Wall" },
     });
-    check_mod.linkSystemLibrary("gtk4", .{});
-    check_mod.linkSystemLibrary("gio-2.0", .{});
-    check_mod.linkSystemLibrary("dbusmenu-glib-0.4", .{});
-    const check_exe = b.addExecutable(.{
-        .name = "check_options",
-        .root_module = check_mod,
+    const check_tests = b.addTest(.{ .root_module = check_mod });
+    check_step.dependOn(&b.addRunArtifact(check_tests).step);
+
+    // ABI contract test (design D8): drives pinwin_apply_layout through the
+    // real library but never pinwin_start, so no GTK thread is started and no
+    // display is needed. The link shape is the demo's (design OQ-a).
+    const api_check_mod = b.createModule(.{
+        .root_source_file = b.path("src/pinwin_api_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
     });
-    const run_check = b.addRunArtifact(check_exe);
-    const check_step = b.step("check", "Build and run the layout-core check");
-    check_step.dependOn(&run_check.step);
+    api_check_mod.addIncludePath(b.path("src"));
+    api_check_mod.linkLibrary(lib);
+    api_check_mod.linkSystemLibrary("gtk4", .{});
+    api_check_mod.linkSystemLibrary("gtk4-layer-shell-0", .{});
+    api_check_mod.linkSystemLibrary("pangocairo", .{});
+    if (ghostty) |dep| {
+        api_check_mod.linkLibrary(dep.artifact("ghostty-vt-static"));
+        api_check_mod.addIncludePath(dep.path("include"));
+    }
+    const api_check_tests = b.addTest(.{ .root_module = api_check_mod });
+    check_step.dependOn(&b.addRunArtifact(api_check_tests).step);
 }

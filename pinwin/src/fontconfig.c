@@ -1,11 +1,10 @@
 /*
  * fontconfig.c - where pinwin reads the user's terminal preferences: the
- * Ghostty config (a plain "key = value" file), the theme colours behind it
- * and the terminfo check the spawned command depends on (design D4).
+ * Ghostty config (a plain "key = value" file) and the theme colours behind it
+ * (design D4).
  *
- * Only font_config_load, theme_colours and terminfo_exists are shared; the
- * rest of the former glue.c lives in the other glue files, with shared state
- * in glue_internal.h.
+ * Only font_config_load and theme_colours are shared; the rest of the former
+ * glue.c lives in the other glue files, with shared state in glue_internal.h.
  */
 
 #include "glue_internal.h"
@@ -13,51 +12,12 @@
 #include <glib.h>
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-
-int terminfo_exists(const char* name) {
-    static const char* dirs[] = {"/usr/share/terminfo", "/etc/terminfo",
-                                 "/usr/lib/terminfo", "/lib/terminfo"};
-    const char* single = getenv("TERMINFO");
-    const char* list = getenv("TERMINFO_DIRS");
-    char path[512];
-    size_t i;
-
-    if (single && *single) {
-        snprintf(path, sizeof(path), "%s/%c/%s", single, name[0], name);
-        if (access(path, R_OK) == 0) return 1;
-    }
-    if (list && *list) {
-        const char* p = list;
-        while (*p) {
-            const char* colon = strchr(p, ':');
-            size_t len = colon ? (size_t)(colon - p) : strlen(p);
-            if (len == 0) {
-                snprintf(path, sizeof(path), "/usr/share/terminfo/%c/%s", name[0], name);
-            } else if (len < sizeof(path)) {
-                snprintf(path, sizeof(path), "%.*s/%c/%s", (int)len, p, name[0], name);
-            } else {
-                path[0] = '\0';
-            }
-            if (path[0] && access(path, R_OK) == 0) return 1;
-            if (!colon) break;
-            p = colon + 1;
-        }
-    }
-    for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
-        snprintf(path, sizeof(path), "%s/%c/%s", dirs[i], name[0], name);
-        if (access(path, R_OK) == 0) return 1;
-    }
-    return 0;
-}
 
 /* The panel follows the Ghostty config (a plain "key = value" file) so that it
  * uses the font the user actually configured for their terminal, with
- * PINWIN_FONT / PINWIN_FONT_SIZE as overrides and "monospace 11" as the
- * fallback. Only the first font-family is used, matching Ghostty's rule that
- * the first family with a glyph wins. */
+ * "monospace 11" as the fallback. Only the first font-family is used, matching
+ * Ghostty's rule that the first family with a glyph wins. */
 /* The terminal's default background and foreground: the panel paints the whole
  * widget with the background (the VT's own default is black, which shows up as
  * a black strip under the last row) and uses the foreground for cells that
@@ -131,7 +91,6 @@ void theme_colours(char* theme_name, size_t theme_name_len,
 void font_config_load(char** family, double* size) {
     char* path;
     char* data = NULL;
-    const char* env;
 
     *family = NULL;
     *size = 11.0;
@@ -174,15 +133,4 @@ void font_config_load(char** family, double* size) {
         g_free(data);
     }
     g_free(path);
-
-    env = getenv("PINWIN_FONT");
-    if (env && *env) {
-        g_free(*family);
-        *family = g_strdup(env);
-    }
-    env = getenv("PINWIN_FONT_SIZE");
-    if (env && *env) {
-        double parsed = g_ascii_strtod(env, NULL);
-        if (parsed > 0) *size = parsed;
-    }
 }

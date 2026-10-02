@@ -60,10 +60,6 @@ const std = @import("std");
 
 const c = @import("c.zig").c;
 
-const DEFAULT_COLS: u32 = 40;
-const DEFAULT_GUTTER: u32 = 0;
-const DEFAULT_KEYBOARD = "on-demand";
-
 /// Ghostty's own default for `image-storage-limit`, and what mbv's posters fit in.
 const KITTY_STORAGE_LIMIT: u64 = 320 * 1024 * 1024;
 
@@ -81,13 +77,31 @@ pub var mouse_encoder: c.GhosttyMouseEncoder = null;
 pub var mouse_event: c.GhosttyMouseEvent = null;
 pub var placement_iter: c.GhosttyKittyGraphicsPlacementIterator = null;
 
-pub var grid_cols: u16 = DEFAULT_COLS;
+pub var grid_cols: u16 = 40;
 pub var grid_rows: u16 = 24;
 pub var cell_w: u32 = 1;
 pub var cell_h: u32 = 1;
 
-/// PINWIN_DEBUG=1 routes libghostty-vt's own log through stderr.
 pub var debug_enabled = false;
+
+/// Latched once `ensureTerminal` fails partway. The handles it created cannot
+/// be trusted from then on (the early `term != null` return would skip the
+/// missing ones), so every later size push reports failure instead of
+/// dereferencing null state (design D3).
+var init_failed = false;
+
+/// PTY bytes that arrived before the terminal existed. The host forks its
+/// child before `pinwin_start`, so a child's startup queries (DA1, XTVERSION,
+/// OSC 10/11, kitty `?u`, terminfo) routinely land before the first draw
+/// creates the terminal; dropping them makes programs like fish wait ~10s for
+/// query replies and then warn. Buffer here and replay through the vt in
+/// `ensureTerminal`. Only ever touched from the GTK thread (same as
+/// `pinwin_size`), so no locking.
+var early_pty_data: std.ArrayListUnmanaged(u8) = .empty;
+/// Replay cap: startup traffic is a handful of queries and a first paint, far
+/// below this; a child that floods the pty before the terminal exists loses
+/// the overflow.
+const early_pty_cap: usize = 1 << 20;
 
 // The frame and input halves are driven from C through pinwin.h; importing
 // them here pulls their exported functions into the build.
@@ -96,98 +110,13 @@ comptime {
     _ = @import("input.zig");
 }
 
-pub fn main(init: std.process.Init.Minimal) void {
-    const cols = envSetting(init.environ, "COLS", DEFAULT_COLS, true);
-    const gutter = envSetting(init.environ, "GUTTER", DEFAULT_GUTTER, false);
-    const keyboard = keyboardMode(init.environ);
-
-    const command = commandArgv(init.environ, init.args) catch |err| {
-        std.debug.print("pinwin: {s}\n", .{@errorName(err)});
-        std.process.exit(1);
-    };
-
-    debug_enabled = std.process.Environ.getPosix(init.environ, "PINWIN_DEBUG") != null;
-
-    // Process-global, and must be installed before the terminal exists.
-    _ = c.ghostty_sys_set(c.GHOSTTY_SYS_OPT_DECODE_PNG, @ptrCast(&decodePng));
-    if (debug_enabled) _ = c.ghostty_sys_set(c.GHOSTTY_SYS_OPT_LOG, @ptrCast(&c.ghostty_sys_log_stderr));
-
-    if (c.glue_init(@intCast(cols), @intCast(gutter), keyboard, @intFromBool(command.no_tray)) == 0) std.process.exit(1);
-    c.glue_start(@ptrCast(command.argv.ptr));
-}
-
-/// `COLS` and `GUTTER`, per design D9: an error names the variable and exits 2
-/// before any surface exists.
-fn envSetting(environ: std.process.Environ, name: []const u8, default: u32, must_be_positive: bool) u32 {
-    const raw = std.process.Environ.getPosix(environ, name) orelse return default;
-    const value = std.fmt.parseInt(u32, raw, 10) catch {
-        std.debug.print("pinwin: {s}: expected a non-negative integer, got '{s}'\n", .{ name, raw });
-        std.process.exit(2);
-    };
-    if (must_be_positive and value == 0) {
-        std.debug.print("pinwin: {s}: must be greater than 0\n", .{name});
-        std.process.exit(2);
-    }
-    return value;
-}
-
-/// `PINWIN_KEYBOARD`: layer-shell keyboard interactivity. `on-demand` (the
-/// default) means the panel only gets the keyboard after a click; `exclusive`
-/// takes it as soon as the panel opens; `none` never takes it.
-fn keyboardMode(environ: std.process.Environ) i32 {
-    const raw = std.process.Environ.getPosix(environ, "PINWIN_KEYBOARD") orelse return c.PINWIN_KEYBOARD_ON_DEMAND;
-    if (std.mem.eql(u8, raw, "on-demand")) return c.PINWIN_KEYBOARD_ON_DEMAND;
-    if (std.mem.eql(u8, raw, "exclusive")) return c.PINWIN_KEYBOARD_EXCLUSIVE;
-    if (std.mem.eql(u8, raw, "none")) return c.PINWIN_KEYBOARD_NONE;
-    std.debug.print("pinwin: PINWIN_KEYBOARD: expected on-demand, exclusive or none, got '{s}'\n", .{raw});
-    std.process.exit(2);
-}
-
-/// The command to run in the panel, NUL-terminated for execvp, plus whether
-/// the user passed `--no-tray` (design D2): pinwin's own options precede the
-/// command and `--` ends them; an unknown leading `--...` argument is an
-/// error naming it. With no command, `$SHELL` runs (or `/bin/sh` when `SHELL`
-/// is unset or empty).
-const Command = struct { argv: [:null]?[*:0]const u8, no_tray: bool };
-
-fn commandArgv(environ: std.process.Environ, args: std.process.Args) !Command {
-    var list: std.ArrayList(?[*:0]const u8) = .empty;
-    var iterator = std.process.Args.iterate(args);
-    _ = iterator.skip(); // argv[0], pinwin itself
-    var no_tray = false;
-    var options_done = false;
-    while (iterator.next()) |arg| {
-        if (!options_done) {
-            if (std.mem.eql(u8, arg, "--no-tray")) {
-                no_tray = true;
-                continue;
-            }
-            if (std.mem.eql(u8, arg, "--")) {
-                options_done = true;
-                continue;
-            }
-            if (std.mem.startsWith(u8, arg, "--")) {
-                std.debug.print("pinwin: unknown option '{s}'\n", .{arg});
-                std.process.exit(2);
-            }
-            // The first non-option argument starts the command; everything
-            // after it, option-looking or not, belongs to the command.
-            options_done = true;
-        }
-        try list.append(allocator, arg.ptr);
-    }
-    if (list.items.len == 0) {
-        const shell = std.process.Environ.getPosix(environ, "SHELL") orelse "/bin/sh";
-        try list.append(allocator, if (shell.len > 0) shell.ptr else "/bin/sh");
-    }
-    try list.append(allocator, null);
-    return .{ .argv = list.items[0 .. list.items.len - 1 :null], .no_tray = no_tray };
-}
-
 // ---- terminal -------------------------------------------------------------
 
 fn ensureTerminal() !void {
     if (term != null) return;
+
+    // Process-global, and must be installed before the terminal exists.
+    _ = c.ghostty_sys_set(c.GHOSTTY_SYS_OPT_DECODE_PNG, @ptrCast(&decodePng));
 
     if (c.ghostty_terminal_new(null, &term, grid_cols, grid_rows) != c.GHOSTTY_SUCCESS)
         return error.TerminalNewFailed;
@@ -215,6 +144,14 @@ fn ensureTerminal() !void {
         return error.MouseEncoderNewFailed;
     if (c.ghostty_mouse_event_new(null, &mouse_event) != c.GHOSTTY_SUCCESS)
         return error.MouseEventNewFailed;
+
+    // Replay what arrived before the terminal existed, now that queries can
+    // be answered and output rendered.
+    if (early_pty_data.items.len > 0) {
+        c.ghostty_terminal_vt_write(term, @ptrCast(early_pty_data.items.ptr), early_pty_data.items.len);
+        early_pty_data.clearRetainingCapacity();
+        c.glue_queue_draw();
+    }
 }
 
 fn writePty(_: c.GhosttyTerminal, _: ?*anyopaque, data: [*c]const u8, len: usize) callconv(.c) void {
@@ -267,16 +204,31 @@ fn decodePng(
     return true;
 }
 
-/// Called by the glue when the grid changes.
-export fn pinwin_size(cols: i32, rows: i32, cw: i32, ch: i32) void {
+/// Called by the glue when the grid changes. Returns 0 on success; nonzero
+/// means the terminal could not be allocated, in which case the previous grid
+/// stays in effect and the caller degrades (design D3: the library never exits).
+export fn pinwin_size(cols: i32, rows: i32, cw: i32, ch: i32) c_int {
+    // A failed init is sticky: never re-enter ensureTerminal, whose partial
+    // handles would make a "successful" second call deref null state.
+    if (init_failed) return 1;
+
+    const prev_cols = grid_cols;
+    const prev_rows = grid_rows;
+    const prev_cw = cell_w;
+    const prev_ch = cell_h;
+
     grid_cols = @intCast(@max(cols, 1));
     grid_rows = @intCast(@max(rows, 1));
     cell_w = @intCast(@max(cw, 1));
     cell_h = @intCast(@max(ch, 1));
 
-    ensureTerminal() catch |err| {
-        std.debug.print("pinwin: {s}\n", .{@errorName(err)});
-        std.process.exit(1);
+    ensureTerminal() catch {
+        init_failed = true;
+        grid_cols = prev_cols;
+        grid_rows = prev_rows;
+        cell_w = prev_cw;
+        cell_h = prev_ch;
+        return 1;
     };
     _ = c.ghostty_terminal_resize(term, grid_cols, grid_rows, cell_w, cell_h);
 
@@ -287,11 +239,20 @@ export fn pinwin_size(cols: i32, rows: i32, cw: i32, ch: i32) void {
     size.cell_width = cell_w;
     size.cell_height = cell_h;
     c.ghostty_mouse_encoder_setopt(mouse_encoder, c.GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
+    return 0;
 }
 
 /// Called by the glue with bytes read from the PTY.
 export fn pinwin_pty_data(data: [*c]const u8, len: usize) void {
-    if (term == null) return;
+    if (term == null) {
+        // The terminal is not up yet: buffer for replay in ensureTerminal.
+        // A sticky init failure means there will never be a terminal; drop.
+        if (init_failed) return;
+        const room = early_pty_cap -| early_pty_data.items.len;
+        if (len <= room)
+            early_pty_data.appendSlice(allocator, data[0..len]) catch {};
+        return;
+    }
     c.ghostty_terminal_vt_write(term, data, len);
     c.glue_queue_draw();
 }

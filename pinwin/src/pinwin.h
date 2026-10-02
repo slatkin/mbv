@@ -117,17 +117,10 @@ typedef struct {
 
 /* ---- implemented in glue.c, called from Zig ---------------------------- */
 
-/* gtk_init + application setup. Returns 0 on failure. `keyboard_mode` is one
- * of the PINWIN_KEYBOARD_* values. `no_tray` (from --no-tray) suppresses the
- * tray entry entirely (add-pinwin-control). */
-int glue_init(int32_t cols, int32_t gutter, int32_t keyboard_mode, int no_tray);
 /* Window metrics, valid once glue_init returned 1. */
 int32_t glue_cell_width(void);
 int32_t glue_cell_height(void);
-/* Create the surface, spawn argv in a PTY and run the main loop. */
-void glue_start(char* const argv[]);
 void glue_queue_draw(void);
-void glue_exit(int32_t status);
 
 void glue_pty_write(const uint8_t* data, size_t len);
 void glue_pty_resize(int32_t cols, int32_t rows, int32_t xpixel, int32_t ypixel);
@@ -145,8 +138,10 @@ int glue_decode_png(const uint8_t* data, size_t len, uint8_t** out_pixels,
 
 /* ---- implemented in main.zig, called from C ---------------------------- */
 
-/* Grid size changed: keep the terminal, the ioctl and the encoders in sync. */
-void pinwin_size(int32_t cols, int32_t rows, int32_t cell_w, int32_t cell_h);
+/* Grid size changed: keep the terminal, the ioctl and the encoders in sync.
+ * Returns 0 on success; nonzero means the terminal could not be allocated, so
+ * the previous grid stays in effect (the library never exits — design D3). */
+int pinwin_size(int32_t cols, int32_t rows, int32_t cell_w, int32_t cell_h);
 /* Bytes read from the PTY. */
 void pinwin_pty_data(const uint8_t* data, size_t len);
 void pinwin_key(int32_t action, int32_t keyval, int32_t keycode, uint32_t mods,
