@@ -66,10 +66,13 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
-        // Row 4.4 of `pin-mbv-in-pinwin` replaces this with the live
-        // `pinwin_apply_layout` call. Until a panel handle exists on `App`
-        // there is no panel to validate against, so every step saves.
-        let applied: Result<(), String> = Ok(());
+        // While pinned, the running panel validates the candidate layout and
+        // only an accepted one is saved (design D6); a launch without a panel
+        // saves without geometry validation.
+        let applied = match &self.pinned_panel {
+            Some(panel) => crate::pin::apply_layout(panel, &candidate),
+            None => Ok(()),
+        };
         match applied {
             Ok(()) => {
                 self.config.lock().unwrap().panel = candidate;

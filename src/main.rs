@@ -22,9 +22,11 @@ mod app;
 mod config;
 mod local_daemon;
 mod owner_restart;
+mod pin;
 mod single_instance;
 
 use crate::app::state::home_latest::{capture_launch_window, current_launch_secs};
+use crate::pin::PinnedPanel;
 use app::{App, Model};
 use config::load_config;
 use mbv_core::applog;
@@ -33,10 +35,12 @@ use mbv_emby::EmbyClient;
 use mbv_remote_player as remote_player;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
-/// with the launch window available to the model.
-fn run_tui(mut app: App) {
+/// with the launch window available to the model. `pinned_panel` is the live
+/// panel handle when this is a `--pin` launch (design D3).
+fn run_tui(mut app: App, pinned_panel: Option<PinnedPanel>) {
     let launch_window = capture_launch_window(current_launch_secs());
     app.init_image_pickers();
+    app.set_pinned_panel(pinned_panel);
     if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);
@@ -63,9 +67,10 @@ fn run_remote_app(
     player_rx: std::sync::mpsc::Receiver<PlayerEvent>,
     endpoint: &remote_player::DaemonEndpoint,
     config: config::Config,
+    pinned_panel: Option<PinnedPanel>,
 ) {
     let app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
-    run_tui(app);
+    run_tui(app, pinned_panel);
 }
 
 fn parse_log_level_arg(
@@ -226,11 +231,20 @@ fn print_usage() {
     println!("      --connect-daemon <endpoint>");
     println!("                             Attach as a client to a running mbvd daemon at");
     println!("                             <endpoint> instead of owning a local Player.");
+    println!("      --pin                  Run the TUI docked in a Wayland layer-shell");
+    println!("                             panel instead of this terminal.");
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
 }
 
-fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
+/// The parsed start-up arguments `main` needs after `pre_config_startup`.
+struct StartupArgs {
+    log_level: Option<applog::LogSpec>,
+    cli_daemon_endpoint: Option<String>,
+    pin_requested: bool,
+}
+
+fn pre_config_startup() -> Option<StartupArgs> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
@@ -283,7 +297,19 @@ fn pre_config_startup() -> Option<(Option<applog::LogSpec>, Option<String>)> {
         std::process::exit(1);
     }
 
-    Some((log_level, cli_daemon_endpoint))
+    // `--pin` asks for the pinned panel; a build without the feature rejects
+    // it here, before any start-up side effect (design D4/D5).
+    let pin_requested = has_flag(&args, "--pin");
+    if pin_requested && !cfg!(feature = "pinning") {
+        eprintln!("mbv: built without pinning support");
+        std::process::exit(2);
+    }
+
+    Some(StartupArgs {
+        log_level,
+        cli_daemon_endpoint,
+        pin_requested,
+    })
 }
 
 fn stop_running_instance() {
@@ -298,14 +324,17 @@ fn stop_running_instance() {
 }
 
 fn main() {
-    let Some((log_level, cli_daemon_endpoint)) = pre_config_startup() else {
+    let Some(startup) = pre_config_startup() else {
         return;
     };
 
     applog::init(
         config::is_system_instance(),
         Some(state_dir().join("mbv.log")),
-        log_level.as_ref().unwrap_or(&applog::LogSpec::default()),
+        startup
+            .log_level
+            .as_ref()
+            .unwrap_or(&applog::LogSpec::default()),
     );
 
     if let Err(e) = config::migrate_legacy_emby_token() {
@@ -324,13 +353,36 @@ fn main() {
         summary = %config_diagnostic_summary(&config),
         "configuration loaded"
     );
-    run_configured_startup(log_level.as_ref(), cli_daemon_endpoint, &config);
+
+    // Decide and start the pinned panel after `load_config` and before any
+    // terminal setup or output, including the remote-client connection line
+    // (design D3/D5). `report_start_failure` has already exited when there is
+    // no terminal to fall back to.
+    let pinned_panel = if pin::should_pin(startup.pin_requested, cfg!(feature = "pinning")) {
+        match pin::start(&config.panel) {
+            Ok(panel) => Some(panel),
+            Err(error) => {
+                pin::report_start_failure(&error);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    run_configured_startup(
+        startup.log_level.as_ref(),
+        startup.cli_daemon_endpoint,
+        &config,
+        pinned_panel,
+    );
 }
 
 fn run_configured_startup(
     log_level: Option<&applog::LogSpec>,
     cli_daemon_endpoint: Option<String>,
     config: &config::Config,
+    pinned_panel: Option<PinnedPanel>,
 ) {
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
@@ -339,8 +391,7 @@ fn run_configured_startup(
         })
         .map(|endpoint| {
             remote_player::DaemonEndpoint::parse(&endpoint).unwrap_or_else(|e| {
-                eprintln!("mbv: invalid daemon endpoint {endpoint:?}: {e}");
-                std::process::exit(1);
+                pin::fatal(format!("mbv: invalid daemon endpoint {endpoint:?}: {e}"));
             })
         });
 
@@ -361,30 +412,41 @@ fn run_configured_startup(
         match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
             Ok((remote, player_rx)) => {
                 tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
-                run_remote_app(client, remote, player_rx, &endpoint, config.clone());
+                run_remote_app(
+                    client,
+                    remote,
+                    player_rx,
+                    &endpoint,
+                    config.clone(),
+                    pinned_panel,
+                );
                 return;
             }
             Err(e) => {
-                eprintln!("mbv: failed to connect to daemon endpoint {endpoint}: {e}");
-                std::process::exit(1);
+                pin::fatal(format!(
+                    "mbv: failed to connect to daemon endpoint {endpoint}: {e}"
+                ));
             }
         }
     }
 
-    run_local_instance(config, log_level);
+    run_local_instance(config, log_level, pinned_panel);
 }
 
-fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpec>) {
+fn run_local_instance(
+    config: &config::Config,
+    log_level: Option<&applog::LogSpec>,
+    pinned_panel: Option<PinnedPanel>,
+) {
     // Every local launch is a Client; a fresh launch transfers the lock to
-    // the owner process before attaching.
+    // the owner process before attaching. The panel handle is consumed only
+    // when the TUI finally runs, so retries keep the panel alive.
+    let mut pinned_panel = pinned_panel;
     let lock_path = single_instance::lock_path();
     let socket_path = single_instance::socket_path();
     let mut resolution = match single_instance::resolve(&socket_path, &lock_path) {
         Ok(resolution) => resolution,
-        Err(error) => {
-            eprintln!("mbv: single-instance check failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => pin::fatal(format!("mbv: single-instance check failed: {error}")),
     };
     let mut shutdown_deadline = None;
     let mut restart_requested = false;
@@ -392,15 +454,15 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
         let deadline = *shutdown_deadline
             .get_or_insert_with(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
         if std::time::Instant::now() >= deadline {
-            eprintln!("mbv: the local owner is still shutting down; use `mbv -q` to stop it.");
-            std::process::exit(1);
+            pin::fatal("mbv: the local owner is still shutting down; use `mbv -q` to stop it.");
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
         match single_instance::resolve(&socket_path, &lock_path) {
             Ok(resolution) => resolution,
             Err(resolve_error) => {
-                eprintln!("mbv: single-instance check failed: {resolve_error}");
-                std::process::exit(1);
+                pin::fatal(format!(
+                    "mbv: single-instance check failed: {resolve_error}"
+                ));
             }
         }
     };
@@ -413,8 +475,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 if let Err(error) =
                     local_daemon::spawn_detached(&socket_path.to_string_lossy(), log_level.cloned())
                 {
-                    eprintln!("mbv: failed to start Owner process: {error}");
-                    std::process::exit(1);
+                    pin::fatal(format!("mbv: failed to start Owner process: {error}"));
                 }
             }
             single_instance::Resolution::Attach => {
@@ -423,7 +484,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
             single_instance::Resolution::Refuse => refuse_local_owner(&lock_path),
         }
 
-        match attach_owner_process(config) {
+        match attach_owner_process(config, &mut pinned_panel) {
             Ok(()) => return,
             Err(error) => match owner_restart::follow_up(&error, restart_requested) {
                 owner_restart::FollowUp::WaitForOwnerExit => {
@@ -431,8 +492,7 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                 }
                 owner_restart::FollowUp::Prompt => {
                     if !std::io::stdin().is_terminal() {
-                        eprintln!("mbv: {error}");
-                        std::process::exit(1);
+                        pin::fatal(format!("mbv: {error}"));
                     }
                     let mut input = std::io::stdin().lock();
                     let mut output = std::io::stderr().lock();
@@ -454,23 +514,24 @@ fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpe
                     }
                 }
                 owner_restart::FollowUp::RefuseSecondTerminal => {
-                    eprintln!("mbv: refusing a second terminal: {error}.");
-                    eprintln!("mbv: only one terminal may use playback while stay-alive is off.");
-                    eprintln!(
-                        "mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
-                    );
-                    std::process::exit(1);
+                    pin::fatal(format!(
+                        "mbv: refusing a second terminal: {error}.\n\
+                         mbv: only one terminal may use playback while stay-alive is off.\n\
+                         mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
+                    ));
                 }
                 owner_restart::FollowUp::Other => {
-                    eprintln!("mbv: failed to attach to Owner process: {error}");
-                    std::process::exit(1);
+                    pin::fatal(format!("mbv: failed to attach to Owner process: {error}"));
                 }
             },
         }
     }
 }
 
-fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::RemotePlayerError> {
+fn attach_owner_process(
+    config: &config::Config,
+    pinned_panel: &mut Option<PinnedPanel>,
+) -> Result<(), remote_player::RemotePlayerError> {
     let client = cached_emby_client(config);
     let (remote, player_rx) =
         remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;
@@ -480,24 +541,26 @@ fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::Re
         player_rx,
         &remote_player::DaemonEndpoint::Local,
         config.clone(),
+        pinned_panel.take(),
     );
     Ok(())
 }
 
 fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
-    eprintln!("mbv: the local owner process is not accepting connections.");
-    match single_instance::read_pid(lock_path) {
-        Some(pid) => eprintln!(
+    let pid = match single_instance::read_pid(lock_path) {
+        Some(pid) => format!(
             "mbv: owner process PID is {pid} (per {}).",
             lock_path.display()
         ),
-        None => eprintln!(
+        None => format!(
             "mbv: could not determine the owner process PID from {}.",
             lock_path.display()
         ),
-    }
-    eprintln!("mbv: use `mbv -q` to stop the owner, then try again.");
-    std::process::exit(1);
+    };
+    pin::fatal(format!(
+        "mbv: the local owner process is not accepting connections.\n{pid}\n\
+         mbv: use `mbv -q` to stop the owner, then try again."
+    ));
 }
 
 #[cfg(test)]

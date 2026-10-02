@@ -432,11 +432,20 @@ pub struct App {
     /// position. This prevents ordinary output restarts (buffering,
     /// startup) from becoming state writes.
     pub(in crate::app) feed_seek_pending_slot: Option<mbv_queue::QueueSlotId>,
+    /// The running pinned panel, when this launch was `--pin` (change
+    /// `pin-mbv-in-pinwin`, design D3). Dropping the handle stops the panel
+    /// before process exit.
+    pub(in crate::app) pinned_panel: Option<crate::pin::PinnedPanel>,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
 
 impl App {
+    /// Adopt the pinned panel handle for this launch (design D3).
+    pub(crate) fn set_pinned_panel(&mut self, panel: Option<crate::pin::PinnedPanel>) {
+        self.pinned_panel = panel;
+    }
+
     pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
         let normalized = mbv_render::arrangements::queue::normalize_queue_column_width(
             self.queue_column_width,

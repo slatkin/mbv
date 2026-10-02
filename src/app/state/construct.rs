@@ -117,6 +117,7 @@ impl App {
             layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
+            pinned_panel: None,
 
             pending_overlay: None,
             pending_exit_message: None,
