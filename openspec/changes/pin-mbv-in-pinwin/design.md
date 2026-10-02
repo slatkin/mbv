@@ -2,151 +2,128 @@
 
 ## Context
 
-- **Launch.** `main()` runs `pre_config_startup()` (CLI flags), then `applog::init`, then
-  `load_config`, then `run_local_instance`. Every local launch is a Client: a fresh launch
-  spawns the Owner process (`local_daemon::spawn_detached`, `mbv --__local-daemon`) and attaches
-  over the local Unix ctrl socket (`attach_owner_process`, `DaemonEndpoint::Local`). With
-  stay-alive off, the Owner serves one Client and exits with it.
-- **Tray.** `mbv-daemon/src/run.rs::start_tray` calls the `on_tray_ready` hook once at startup,
-  and only when `owner_settings().stay_alive`. The hook in `src/local_daemon.rs` returns `None`
-  when `show_systray_icon` is off. Otherwise it takes the player handle and calls
-  `mbv_desktop::tray::spawn`, which returns an opaque `Box<dyn Send>`. The tray (ksni) reads
-  `Arc<Mutex<PlayerStatus>>` and sends `TransportCommand`s, and it is deliberately not a ctrl client.
-- **Ctrl.** `CtrlHello::current()` lists capabilities, and the client copies the ones it uses
-  into `CtrlCompatibility` (`mbv-remote-player/src/connect.rs`). The daemon's `ClientRegistry`
-  (`mbv-daemon/src/ctrl.rs`) holds one `CtrlClient` per connection with its `transport`.
-  `is_local_client` already gates `RequestShutdown`.
-- **pinwin.** After slatkin/pinwin#1, pinwin takes `--no-tray`, exports `PINWIN_SOCKET`, and
-  answers `options\n` with `ok\n` (see that change's `pinwin-control` spec).
-- **Packaging and CI.** `PKGBUILD` repackages the release tarball, and `aur.yml` rewrites only
-  `pkgver`/`sha256sums`. CI runs in a pinned `archlinux:base-devel` container; Arch `extra` has
-  `zig 0.16.0`, `gtk4`, `gtk4-layer-shell` and `libdbusmenu-glib`.
-  `scripts/check-code-file-lines.sh` governs `*.c`/`*.h` but not `*.zig`.
+- **Launch.** `main()` runs `pre_config_startup()`, `applog::init`, `load_config`, then
+  `run_local_instance`. Every local launch is a Client; a fresh launch spawns the Owner process
+  (`local_daemon::spawn_detached`, `mbv --__local-daemon`) and attaches over the local ctrl socket.
+  The tray lives in the Owner and is unchanged by this change.
+- **Config and F2.** A bool setting is a field on `Config` (`mbv-config`), parsed in `parse.rs`,
+  saved in `save.rs`, listed as a `SettingKey` (`mbv-ui-model/src/settings.rs`), toggled in
+  `src/app/dispatch/settings.rs` and documented in `dist/config.toml`. `show_systray_icon` is the
+  worked example.
+- **pinwin today** (imported in the first unit of this change, `slatkin/pinwin@eaefd7f`): a Zig
+  `main()` over libghostty-vt (a statically linked Zig dependency) plus C glue on GTK4,
+  gtk4-layer-shell, pango and gio. Terminal state is module-level. `glue_start()` runs the GTK loop
+  and `pty.c` runs `forkpty` for one command. It also has a control socket, its own tray, a GTK
+  options window, a GKeyFile config and `COLS`/`GUTTER` env vars. Its pure layout core
+  (`options.c`: side, columns, four gutters, strict parsing, checked geometry validation) has no
+  GTK dependency.
+- **Crate graph.** `mbvd` depends only on `mbv-core` and `mbv-daemon`; `mbv-desktop` is a leaf
+  pulled in by the root `mbv` crate only.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- One launcher entry and one tray icon, with no GUI dependency in the `mbv` package.
-- The tray's pin item reaches the right panel even with several pinned Clients (stay-alive).
+- Pinning is a feature of mbv: an F2 / `config.toml` setting, no separate program, package,
+  launcher or config for the user.
+- GTK never enters `mbv-core`, `mbv-daemon` or `mbvd`; the TUI binary gets it only behind a cargo
+  feature.
+- pinwin is first-party code, so surfaces that existed only because it was a separate program are
+  removed, not bridged.
 
 **Non-Goals:**
-- No mbv settings for the panel. Width, side and gutters stay in pinwin's options window and
-  config.
-- No new pinwin requests beyond `options`, and no pinwin code changes. Those belong to
-  slatkin/pinwin#1.
-- No tray in `mbvd`, and no pinned declaration toward `mbvd` or any TCP endpoint.
-- No live tear-down of a tray once started (see D4).
+- No tray, ctrl or Owner changes. The Owner's tray stays as it is, and `mbvd` is unaffected.
+- No pinwin command line, environment variables, socket protocol or standalone options window.
+- No panel on non-Wayland or non-layer-shell sessions: they get the plain TUI.
 
 ## Decisions
 
-**D1. Import is a copy at a named pinwin commit.**
-- After slatkin/pinwin#1 is archived in pinwin, copy the tracked contents of `pinwin/pinwin/` into
-  `pinwin/` here, and the three main specs (`pinwin-panel`, `pinwin-tray-options`,
-  `pinwin-control`) into `openspec/specs/`.
-- While copying, drop "Install from the checkout" (`make install` in the pinwin repo; replaced by
-  this change's packaging requirement) and "Coexists with pinwin" (the script stays in the pinwin
-  repo).
-- The commit message names the source commit (`slatkin/pinwin@<sha>`). The specs are copied
-  rather than authored as deltas because they are already-accepted behaviour moving repos, not a
-  behaviour change.
-- Alternative: `git subtree add`. Rejected, because pinwin's handful of commits would mix an
-  unrelated root history into mbv's log.
+**D1. The imported pinwin specs are edited in place.**
+- `openspec/specs/pinwin-{panel,tray-options,control}` arrived as already-accepted behaviour (first
+  version's D1) and are still edited directly, not through deltas. `pinwin-panel` is rewritten for
+  the library form. `pinwin-tray-options` and `pinwin-control` are deleted, and their layout and
+  validation rules fold into `pinwin-panel`.
 
-**D2. `mbv --desktop` is resolved before config.**
-- `pre_config_startup` recognises `--desktop`. `main` handles it right after `applog::init`, so
-  the failure reason reaches `mbv.log`, and before `load_config`.
-- A new small module `src/desktop_launch.rs` holds:
-  - a pure `fn desktop_command(on_path: impl Fn(&str) -> bool) -> Option<[&str; N]>`, which
-    returns `pinwin --no-tray mbv`, then `xdg-terminal-exec mbv`, then `None`;
-  - the `PATH` scan (std only);
-  - `CommandExt::exec`.
-- `contrib/mbv.desktop` becomes `Exec=mbv --desktop`, `Terminal=false`.
-- Alternatives considered:
-  - `Exec=sh -c '...'`: rejected as bespoke scripting, and untestable.
-  - Shipping the desktop entry from the `pinwin` package: rejected, because it creates two
-    entries or a file conflict.
-  - Keeping `Terminal=true` and re-execing into pinwin: rejected, because a terminal window would
-    flash open.
+**D2. pinwin is a static library with a C ABI.**
+- `pinwin/build.zig` builds `libpinwin.a` (libghostty-vt included) instead of an executable, and
+  keeps a unit-test step (`zig build check`). `src/main.zig`'s `main()` and env/argv parsing are
+  removed.
+- The ABI (`pinwin/src/pinwin_api.h`) is small and owned data only:
+  - `pinwin_start(const PinwinStartup*) -> int`: startup struct = pty master fd, layout
+    (`PinwinLayout`), keyboard mode. Returns a result code and never calls `exit`. Spawns the GTK
+    thread.
+  - `pinwin_apply_layout(const PinwinLayout*) -> int`: validates with the existing layout core and
+    posts to the GTK loop; result code to the caller.
+  - `pinwin_stop(void)`: closes the panel and joins the thread.
+- `tray.c`, `control.c` and their libraries (gio tray publication,
+  dbusmenu-glib) are deleted.
 
-**D3. The pinned declaration is an additive ctrl capability.**
-- New capability constant `pinned-panel`, added to `CtrlHello::current()`, plus
-  `supports_pinned_panel()`, copied into `CtrlCompatibility`.
-- New `CtrlCmd::DeclarePinned { socket: PathBuf }` with no reply.
-- Client: `attach_owner_process` (the only Local-endpoint attach) reads `PINWIN_SOCKET` through a
-  pure `pinned_socket(Option<OsString>) -> Option<PathBuf>` (non-empty, absolute). If the result is
-  `Some` and the Owner supports `pinned-panel`, it calls a new
-  `RemotePlayer::declare_pinned(path)` once, right after connecting. `--connect-daemon` paths never
-  call it.
-- Daemon: `CtrlClient` gains `pinned: Option<(u64 /* declaration seq */, PathBuf)>`. The command
-  is handled like `RequestShutdown`'s local-only gate: from a non-local client it is logged and
-  ignored. `ClientRegistry::latest_pinned()` returns the path with the highest sequence among
-  connected clients, and `remove` drops it with the client.
-- Its `OwnerGate` follows the existing classification for Local-only commands.
-- Alternative: the Owner reads `PINWIN_SOCKET` from its own environment. Rejected: the Owner may
-  have been started outside the panel and may outlive it, so the environment is stale or wrong.
+**D3. In-process panel on a pty pair.**
+- When pinning applies (D5), before any terminal setup mbv opens a pty pair, `pinwin_start`s the
+  panel on the master, and makes the slave the process's controlling terminal and stdio
+  (`setsid`, `TIOCSCTTY`, `dup2` to 0/1/2). The TUI then runs exactly as in a terminal, with
+  terminal size changes arriving as `SIGWINCH` from the pty.
+- `pty.c` no longer forks: it reads and writes the supplied master fd and applies the window size
+  to it. The panel closes when the master sees hangup or `pinwin_stop` is called; mbv exits when
+  the TUI exits, so the panel disappears with it.
+- Alternative: re-exec mbv as the panel's pty child. Rejected: live layout changes from F2 would
+  then need an IPC channel from the TUI child to the panel in the parent, which is exactly the
+  socket this design removes.
+- Alternative: pinwin as a separate executable. Rejected by the product definition (no
+  user-visible pinwin) and by the crate-graph constraint of D4.
+- Risk: the Owner spawn and any child processes must not inherit the pty as their controlling
+  terminal. `spawn_detached` already detaches; task 1.1 probes this against the real system.
 
-**D4. The tray starts lazily, at most once, and receives its pin target by push.**
-- `start_tray` keeps the hook instead of dropping it when stay-alive is off. The first accepted
-  `DeclarePinned` invokes it. Since a stay-alive-off Owner lives exactly as long as its single
-  Client, a tray started this way never needs tearing down, so no live removal path exists.
-- The hook's return type changes from `Option<Box<dyn Send>>` to `Option<Box<dyn TrayPort>>`, a
-  small trait in `mbv-daemon`:
+**D4. Cargo feature gate and the crate graph.**
+- A new leaf crate `crates/mbv-pinwin` owns `build.rs` (runs `zig build`, links `libpinwin.a`,
+  GTK4, gtk4-layer-shell, pango/cairo, libghostty-vt's static archive) and the safe Rust wrapper
+  over the C ABI. The root `mbv` crate depends on it behind the cargo feature `pinning`.
+- `mbv-core`, `mbv-daemon`, `mbvd` and every other crate MUST NOT depend on `mbv-pinwin`, directly
+  or transitively. Release builds for the desktop packages enable `pinning`; the `.deb` and
+  `mbvd` do not.
+- With the feature off, the F2 rows are absent and `pin_as_panel` in `config.toml` is read and
+  preserved but ignored.
 
-  ```rust
-  pub trait TrayPort: Send {
-      fn set_pin_target(&self, socket: Option<PathBuf>);
-  }
-  ```
+**D5. When the panel is used.**
+- Pinning applies only on the interactive TUI launch path, decided after `load_config` and before
+  terminal initialisation, when all of these hold: the `pinning` feature is built in,
+  `pin_as_panel` is true, `WAYLAND_DISPLAY` is set, and `pinwin_start` succeeds.
+- Otherwise the TUI starts in the current terminal as today. A `pinwin_start` failure (no
+  layer-shell, GTK init error) is logged and falls back; it is never fatal and prints nothing on
+  the terminal. The flags `-h`, `-V`, `-q`, `--__local-daemon` and `--connect-daemon` never
+  pin.
 
-  `mbv-desktop` implements it with ksni's `Handle::update`, writing an owned
-  `pin_target: Option<PathBuf>` field on `MbvTray`, which also refreshes the menu.
-- The daemon calls `set_pin_target(registry.latest_pinned())` after every accepted declaration
-  and every client removal, and right after a lazy start.
-- The tray never reads the registry and stays off ctrl.
-- `show_systray_icon = false` still wins: the hook returns `None`, and pinning does not force an
-  icon.
-- Alternative: a shared `Arc<Mutex<Option<PathBuf>>>` read by `menu()`. Rejected, in line with the
-  repo's preference for owned data over new shared state; it also wouldn't refresh the menu on
-  change.
+**D6. Settings.**
+- `[display]` gains `pin_as_panel = false`. A new `[panel]` section holds `side` (`"left"` /
+  `"right"`), `cols` (1..=65535, default 40) and `gutter_top`, `gutter_bottom`, `gutter_left`,
+  `gutter_right` (integers in pixels, may be negative, default 0). Invalid values are rejected by
+  the pinwin layout core and fall back to defaults with a logged warning.
+- F2: the main page gets a `PinAsPanel` row (toggle, "takes effect on next launch"); a `Panel`
+  destination (like `Services`/`Keys`) holds the six layout rows. Both are shown only when the
+  feature is built and `WAYLAND_DISPLAY` is set.
+- Editing a layout row while pinned calls `pinwin_apply_layout` with the full new layout; a
+  rejected layout is shown as an inline error and not saved. Outside the panel the values are only
+  saved.
+- The keyboard mode is fixed to `on-demand` (the previous default), and `COLS`/`GUTTER`/
+  `PINWIN_DEBUG`/`--no-tray` have no equivalent.
 
-**D5. The tray item does blocking I/O on the tray thread, with tight timeouts.**
-- `Pin options...` connects a `UnixStream` to the target, sets 1-second read and write timeouts,
-  writes `options\n` and reads one line.
-- Anything but `ok` is logged under target `tray` and otherwise ignored.
-- This runs on ksni's own thread, not on the daemon loop.
+**D7. Reverts.** The first version's packaging split, launcher module, ctrl capability, daemon
+tray hook changes, `Pin options...` item and ADR 0004 amendment are removed in dedicated tasks
+rather than left dormant; `contrib/mbv.desktop` returns to `Exec=mbv`.
 
-**D6. Packaging and CI.**
-- `PKGBUILD` becomes `pkgbase=mbv`, `pkgname=(mbv pinwin)`.
-  - `package_mbv` keeps today's contents and adds
-    `optdepends=('pinwin: open pinned from the launcher' 'xdg-terminal-exec: open in a terminal from the launcher')`.
-  - `package_pinwin` installs `/usr/bin/pinwin` and the license, with
-    `depends=(gtk4 gtk4-layer-shell libdbusmenu-glib pango)`.
-- `PKGBUILD-git` does the same, adds `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to
-  `makedepends`, and builds with `zig build -Doptimize=ReleaseSafe` in `pinwin/`.
-- `build.yml` installs those packages from the pinned image, runs `zig build
-  -Doptimize=ReleaseSafe` and `zig build check` in `pinwin/`, and copies `pinwin` into the
-  tarball.
-- `aur.yml` is unchanged, because it only rewrites version and checksum. The `.deb` is unchanged.
-- `scripts/check-code-file-lines.sh` adds `*.zig` to the governed extensions, and its self-test
-  gets the matching case.
+**D8. Tests.** The layout core's contracts (strict parsing, checked geometry, validation) become
+Zig unit tests under `zig build check`, replacing `tools/check_options.c`. The Rust side tests
+config parse/save of the new keys and the F2 dispatch. Panel rendering and the pty hand-over are
+manual checks.
 
 ## Risks / Trade-offs
 
-- **Launcher on GNOME Wayland (no layer-shell) with pinwin installed:** pinwin exits and nothing
-  opens. Accepted, since mbv's launcher targets layer-shell compositors and this is the Wayland-only
-  decision. It is written down in the README.
-- **A stale pin target if a ctrl connection dies without a clean close:** the existing registry
-  removal on read error already covers it. D5's timeouts bound a dead socket.
-- **The release CI fetches libghostty-vt from the network:** the commit is pinned by hash in
-  `build.zig.zon`. A disappeared commit is fixed by re-pinning.
-- **Two Rust crates gain small surface (`mbv-ctrl` command plus capability, `mbv-daemon` trait):**
-  the change is additive, with no protocol version bump.
-
-## Migration Plan
-
-1. Land slatkin/pinwin#1 in pinwin and archive it.
-2. Import (D1) together with packaging and CI (D6). At this point the launcher is unchanged.
-3. Ctrl, daemon and tray (D3–D5), then the launcher (D2) last, so the desktop entry only switches
-   once pinning works end to end.
-4. Rollback: revert the launcher commit to restore `Terminal=true`. The other parts are inert
-   without it.
+- **Build cost:** with the feature on, `cargo build` needs Zig 0.16 and GTK4 / gtk4-layer-shell dev
+  libraries and fetches libghostty-vt (pinned by hash). Accepted behind the feature; CI builds
+  both ways.
+- **TUI on a pty it did not start with:** terminal queries, image protocol and mouse modes now go
+  through pinwin's terminal. pinwin already supports what mbv uses (kitty graphics, mouse, kitty
+  keyboard), and task 1.1 proves it end to end before the rest is built.
+- **Launching from a terminal with pinning on:** the panel opens, and the launching terminal stays
+  attached to the foreground mbv process until it exits. Accepted; disabling the setting from F2
+  inside the panel restores the old behaviour.
+- **GNOME Wayland (no layer-shell):** start fails, falls back to the plain TUI, logged only.

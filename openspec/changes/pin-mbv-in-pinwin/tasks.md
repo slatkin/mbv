@@ -1,44 +1,53 @@
 # Tasks
 
-Prerequisite: slatkin/pinwin#1 (`add-pinwin-control`) has landed and been archived in the pinwin
-repo. Record its commit SHA for 1.1.
+Rewritten around the in-app model (proposal, design D1–D8). Section 0 is done work that is kept;
+section 2 removes done work that the rewrite supersedes.
 
-## 1. Import pinwin
+## 0. Carried over (done in the first version)
 
-- [x] 1.1 Copy the tracked files of `~/Dev/pinwin/pinwin/` (from `git -C ~/Dev/pinwin ls-files pinwin/`) into `pinwin/` here, excluding `zig-out/`, `zig-pkg/` and `.zig-cache/`. Add their ignores to `pinwin/.gitignore`. Verify: `cd pinwin && zig build && zig build check` prints `check_options: all passed`, and `cargo check --workspace` is unaffected.
-- [x] 1.2 Copy `~/Dev/pinwin/openspec/specs/{pinwin-panel,pinwin-tray-options,pinwin-control}/spec.md` into `openspec/specs/`, deleting the "Install from the checkout" and "Coexists with pinwin" requirements from `pinwin-panel` (design D1). Verify: `openspec validate --specs --strict` passes for the three specs.
-- [x] 1.3 Add `pinwin/AGENTS.md` (Zig/C conventions, `zig build` / `zig build check`, manual checks under niri, no Rust rules apply) and one line for `pinwin/` in the root `AGENTS.md` repository map. Verify that both files name `zig build check` as the check command.
-- [x] 1.4 Add `*.zig` to the governed extensions in `scripts/check-code-file-lines.sh` and add the matching case to `scripts/check-code-file-lines-test.sh`. Verify: `make test-check-code-file-lines` and `make check-code-file-lines` pass. Commit 1.1–1.4 as one import commit whose message names `slatkin/pinwin@<sha>`.
+- [x] 0.1 Import `~/Dev/pinwin/pinwin/` into `pinwin/` and the three pinwin specs into `openspec/specs/` (commit e20c10e6a, `slatkin/pinwin@eaefd7f`).
+- [x] 0.2 `*.zig` governed by `check-code-file-lines` (e20c10e6a).
+- [x] 0.3 `pinwin/AGENTS.md` and the root `AGENTS.md` map line (e20c10e6a); reworded for the library in 5.2.
 
-## 2. Packaging and CI
+## 1. Probe
 
-- [x] 2.1 `build.yml`: add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to the pacman install, run `zig build -Doptimize=ReleaseSafe && zig build check` in `pinwin/`, and copy `pinwin/zig-out/bin/pinwin` into the release tarball. Verify by reading the workflow diff: the tarball step lists `pinwin`, and no Rust step changed.
-- [x] 2.2 `PKGBUILD`: convert to `pkgbase=mbv`, `pkgname=(mbv pinwin)`, `package_mbv()` (today's contents plus `optdepends` for `pinwin` and `xdg-terminal-exec`) and `package_pinwin()` (`/usr/bin/pinwin`, license; `depends=(gtk4 gtk4-layer-shell libdbusmenu-glib pango)`). Verify: `makepkg --printsrcinfo` lists both packages, and `mbv`'s `depends` is unchanged.
-- [x] 2.3 `PKGBUILD-git`: same split; add `zig gtk4 gtk4-layer-shell libdbusmenu-glib` to `makedepends`; build pinwin with `zig build -Doptimize=ReleaseSafe` in `build()`. Verify: `makepkg --printsrcinfo` lists both packages, and `aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the file's lines.
+- [ ] 1.1 Read how the TUI takes its terminal (crossterm/ratatui setup, any `/dev/tty`, stdin or stdout assumptions, image-protocol and mouse detection, embedded mpv output) and how `local_daemon::spawn_detached` and mpv/child processes inherit the controlling terminal. Record findings and any needed adjustment under D3 in `design.md` ("Probe result"). Verify: `design.md` D3 names the exact terminal-open site and states whether `setsid` + `TIOCSCTTY` + `dup2` onto 0/1/2 before it is sufficient.
 
-## 3. Ctrl declaration
+## 2. Remove the first version's external-program wiring
 
-- [x] 3.1 `crates/mbv-ctrl`: add the `pinned-panel` capability constant to `CtrlHello::current()`, `supports_pinned_panel()`, the matching `CtrlCompatibility` field, and `CtrlCmd::DeclarePinned { socket: PathBuf }`, with its `requires_owner` classification as for other Local-only commands. Extend `tests_handshake.rs::current_hello_validates` to assert the capability is advertised. Verify: `cargo nextest run -p mbv-ctrl`.
-- [x] 3.2 `crates/mbv-remote-player`: copy `supports_pinned_panel` into compatibility in `connect.rs`, and add `RemotePlayer::declare_pinned(&self, socket: PathBuf)`, which sends the command only when supported. Verify: `cargo check -p mbv-remote-player`.
-- [x] 3.3 `src/`: add a pure `pinned_socket(Option<OsString>) -> Option<PathBuf>` (non-empty absolute path only), with a two-case `#[case]` test (absolute → `Some`, relative → `None`). Call it in `attach_owner_process` and `declare_pinned` once after connecting. No other attach path calls it. Verify: `cargo nextest run -p mbv` for the new test.
-- [x] 3.4 `crates/mbv-daemon`: `CtrlClient` gains `pinned: Option<(u64, PathBuf)>`; `ClientRegistry` gains `set_pinned(id, path)` (local clients only, monotonically increasing sequence) and `latest_pinned()`; `remove` drops it with the client. Handle `DeclarePinned` in `control.rs`: log and ignore from non-local clients. Tests (contract: the pin target follows attached local declarations): one test that a TCP declaration records nothing, one test that `latest_pinned()` falls back to the earlier pinned client after the latest one is removed. Verify: `cargo nextest run -p mbv-daemon`.
+Use `git revert --no-edit`, one revert commit per group, newest first, so history is preserved.
 
-## 4. Tray
+- [ ] 2.1 Revert the tray work: `89d27cf82`, `e37f6770a`, `ca03159c4` and the ADR 0004 amendment `a36fef682`. Verify: `git diff 8fb44d79c -- crates/mbv-daemon crates/mbv-desktop docs/adr/0004-tray-observer-and-non-takeover-commands.md Cargo.lock` is empty apart from changes made after 8fb44d79c elsewhere, and `cargo nextest run -p mbv-daemon -p mbv-desktop` passes.
+- [ ] 2.2 Revert the ctrl capability and declaration: `83e476b7a`, `951ca97a7`, `89d58bf51`, `5690ab521`. Verify: `cargo nextest run -p mbv-ctrl -p mbv-daemon -p mbv-remote-player -p mbv` passes and `rg -n "DeclarePinned|pinned.panel|PINWIN_SOCKET" crates src` finds nothing.
+- [ ] 2.3 Revert the launcher: `79a49de20`, `4bc2fdb6e`. Verify: `desktop-file-validate contrib/mbv.desktop` passes, `rg -n "\-\-desktop|desktop_launch" src README.md contrib` finds nothing, and `cargo nextest run -p mbv` passes.
+- [ ] 2.4 Revert the packaging split: `91d68daf4`. Verify: `makepkg --printsrcinfo` lists the single `mbv` package for both PKGBUILDs and `aur.yml`'s `pkgver`/`sha256sums` rewrite still matches the file's lines.
 
-- [x] 4.1 `crates/mbv-daemon`: add `pub trait TrayPort: Send { fn set_pin_target(&self, Option<PathBuf>); }` and change the `on_tray_ready` hook to return `Option<Box<dyn TrayPort>>`. Make `start_tray` keep the hook when stay-alive is off, invoke it on the first accepted `DeclarePinned` (at most once per daemon), and push `latest_pinned()` to the port after each accepted declaration, each client removal and right after a lazy start. `mbvd`'s no-op hook keeps compiling. Test (contract: tray starts lazily once when pinned without stay-alive): with stay-alive off, two declarations invoke a spy hook exactly once. Verify: `cargo nextest run -p mbv-daemon` and `cargo check -p mbvd`.
-- [x] 4.2 `crates/mbv-desktop/src/tray.rs`: add an owned `pin_target: Option<PathBuf>` to `MbvTray`; implement `TrayPort` on the spawned handle via `Handle::update`; add a `Pin options...` menu item shown only while `pin_target` is `Some`, whose activation connects to the socket with 1-second read/write timeouts, sends `options\n`, reads one line and logs anything but `ok` under target `tray`. Extend the existing menu test so it asserts the item appears only with a target. Update `src/local_daemon.rs`'s hook to the new return type. Verify: `cargo nextest run -p mbv-desktop -p mbv`.
-- [x] 4.3 Update `docs/` or `README.md` where the tray is described: the tray now also appears for pinned mbv without stay-alive, and it has the `Pin options...` item. Verify: `rg -n "tray" README.md docs/` shows no statement that the tray needs stay-alive.
+## 3. pinwin as a library
 
-## 5. Launcher
+- [ ] 3.1 Layout-core tests: write Zig unit tests (fresh, against `options.h`, no ported harness) under `zig build check` for the contracts: strict column parsing (1..=65535), strict gutter parsing (optional `-`, digits only), checked side geometry, and layout validation (overflow, negative reservation, no row, no width). Delete `tools/check_options.c`. Verify: `cd pinwin && zig build check` passes.
+- [ ] 3.2 Remove what exists only because pinwin was a program: `control.c/h`, `tray.c/h`, the GTK options window and GKeyFile config in `options.c` (keep the pure layout core), `main()`, the `COLS`/`GUTTER`/`PINWIN_DEBUG` env parsing, command argv and `--no-tray`, and the gio / dbusmenu-glib link lines in `build.zig`. Verify: `cd pinwin && zig build check` passes and `rg -n "PINWIN_SOCKET|no_tray|dbusmenu|COLS" pinwin/src pinwin/build.zig` finds nothing.
+- [ ] 3.3 Add `pinwin/src/pinwin_api.h` and its implementation (design D2): `pinwin_start(const PinwinStartup*)` (pty master fd, layout, keyboard mode; returns a result code, never `exit`; starts the GTK thread), `pinwin_apply_layout(const PinwinLayout*)` (validates with the layout core, posts to the GTK loop), `pinwin_stop()`. `pty.c` reads/writes the supplied master fd and applies window size to it instead of `forkpty`. `build.zig` builds `libpinwin.a` (libghostty-vt included) instead of an executable. Contract test (Zig, in `zig build check`): `pinwin_apply_layout` rejects an invalid layout with a distinct result code before touching GTK. Verify: `cd pinwin && zig build -Doptimize=ReleaseSafe && zig build check` passes and `zig-out/lib/libpinwin.a` exists.
+- [ ] 3.4 Specs in `openspec/specs/` (design D1): rewrite `pinwin-panel` for the library form (no command/env/install requirements; docking, reservation, gutters, keyboard focus, terminal features, font, size reports, exit and layer-shell requirements kept; layout and validation rules from `pinwin-tray-options` folded in) and delete `pinwin-tray-options` and `pinwin-control`. Verify: `openspec validate --specs --strict` passes.
 
-- [x] 5.1 Add `src/desktop_launch.rs`: a pure `desktop_command(on_path)` (`pinwin --no-tray mbv`, then `xdg-terminal-exec mbv`, else `None`), a std-only `PATH` lookup, and `exec`. Add a `#[case]` table with three cases (pinwin present; only xdg-terminal-exec; neither). Recognise `--desktop` in `pre_config_startup`, and handle it in `main` after `applog::init` and before `load_config`; on `None`, log the reason and exit 1. Add `--desktop` to `-h` output. Verify: `cargo nextest run -p mbv` and `mbv -h` lists `--desktop`.
-- [x] 5.2 `contrib/mbv.desktop`: `Exec=mbv --desktop`, `Terminal=false`. Document the launcher (pinwin when installed, terminal otherwise, Wayland layer-shell only) in `README.md`. Verify: `desktop-file-validate contrib/mbv.desktop` passes.
+## 4. mbv wiring
+
+- [ ] 4.1 New leaf crate `crates/mbv-pinwin`: `build.rs` runs `zig build` for `pinwin/` and links `libpinwin.a`, GTK4, gtk4-layer-shell and pango/cairo; a safe wrapper over the C ABI (owned types, result enum, no raw pointers in the public API). The root `mbv` crate depends on it behind the cargo feature `pinning`. Verify: `cargo check -p mbv`, `cargo check -p mbv --features pinning`, and `cargo tree -p mbvd -i mbv-pinwin` and `cargo tree -p mbv-core -i mbv-pinwin` both report that the package is not in the graph.
+- [ ] 4.2 `crates/mbv-config`: add `pin_as_panel` (`[display]`, default false) and the `[panel]` keys (`side`, `cols`, `gutter_top/bottom/left/right`) with parse, save and `dist/config.toml` documentation. Contract test: invalid `[panel]` values fall back to their defaults and a valid file round-trips through save. Verify: `cargo nextest run -p mbv-config`.
+- [ ] 4.3 F2: a `PinAsPanel` row (toggle, note "takes effect on next launch") on the main page and a `Panel` destination with the six layout rows, in `mbv-ui-model/src/settings.rs` and `src/app/dispatch/settings.rs`, shown only when the `pinning` feature is built and `WAYLAND_DISPLAY` is set. A rejected layout shows an inline error and is not saved. Contract test: toggling the row flips and saves the config value; rows are absent when gated off. Verify: `cargo nextest run -p mbv-ui-model -p mbv`.
+- [ ] 4.4 Start-up in `src/main.rs` (design D3, D5): a pure `should_pin(...)` decision (flags, feature, setting, `WAYLAND_DISPLAY`) with a `#[case]` table, then, before terminal initialisation, the pty pair, controlling-terminal and stdio hand-over and `pinwin_start`; on failure log and continue in the terminal. Editing a Panel row while pinned calls `pinwin_apply_layout`. Verify: `cargo nextest run -p mbv` and `cargo check -p mbv --features pinning`.
+
+## 5. Packaging, CI, docs
+
+- [ ] 5.1 `build.yml`: build the desktop release binary with `--features pinning` after installing `zig gtk4 gtk4-layer-shell` in the pinned image, and keep a build without the feature; the tarball gains no new file. `PKGBUILD` and `PKGBUILD-git`: single package; `makedepends` gain `zig gtk4 gtk4-layer-shell`, `depends` gain the GTK4 runtime libraries, and the build uses `--features pinning`. The `.deb` and `mbvd` build are unchanged. Verify by reading the diffs: no pinwin package, no pinwin executable, and `makepkg --printsrcinfo` lists one package for each PKGBUILD.
+- [ ] 5.2 Docs: document the setting and the `[panel]` keys in `README.md`; reword `pinwin/AGENTS.md` and the root `AGENTS.md` line for the library (no executable, `zig build check`). Verify: `rg -n "pinwin" README.md AGENTS.md pinwin/AGENTS.md` shows no mention of a user-run `pinwin` command.
 
 ## 6. Integration check
 
-- [x] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
-- [ ] 6.2 Manual check under niri with pinwin installed:
-  - From the launcher, with stay-alive **off**: mbv opens pinned; exactly one tray icon (mbv's) appears; `Pin options...` opens the panel's options window; quitting mbv removes the panel and the tray.
-  - From the launcher, with stay-alive **on**: the tray persists after quitting mbv, and `Pin options...` is gone once no pinned Client is attached.
-  - With `show_systray_icon = false`: no tray appears.
-  - With pinwin uninstalled: the launcher opens mbv in the terminal through `xdg-terminal-exec`.
+- [ ] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and again with `--features pinning` on the `mbv` package, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
+- [ ] 6.2 Manual check under niri:
+  - Setting off: mbv opens in the terminal as before.
+  - Enable "Pin app as UI panel" in F2, quit, relaunch: mbv opens docked in the panel; posters, mouse and resize work; quitting removes the panel.
+  - Change width, side and a gutter in F2's Panel page while pinned: the panel updates live and survives a relaunch.
+  - Stay-alive on or off: the Owner's tray behaves as it did before this change.
+  - A session without layer-shell, or `WAYLAND_DISPLAY` unset: no pinning rows in F2 and the terminal launch works.
+  - `mbvd` and the `.deb` build without Zig or GTK.
