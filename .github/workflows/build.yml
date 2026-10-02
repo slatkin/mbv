@@ -76,6 +76,7 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin/cargo-deb
             target
+            target-pinned
           # Key covers: pinned builder image + rustc toolchain (build
           # environment), the dependency lockfile, and all workspace manifests.
           # The base-devel-... literal must match the `container:` image above.
