@@ -46,7 +46,7 @@ start), and is tagged `library-abi`.
 ## 5. Packaging, CI, docs
 
 - [ ] 5.1 `build.yml`: install `zig gtk4 gtk4-layer-shell` in the pinned image (confirm the image's Zig is 0.16 or newer; if not, fetch the pinned Zig release instead), build the pinned `mbv` with `--features pinning` into a separate target directory (`--target-dir target-pinned`) for the tarball, and keep the existing unpinned `cargo build --release` for `mbvd` and the `.deb`. Remove the `contrib/mbv.desktop` entry from the root `Cargo.toml` `[package.metadata.deb]` assets. After `cargo deb`, assert the mbv `.deb` Depends name no `gtk4` or `gtk4-layer-shell` package, alongside the existing pipewire checks. `PKGBUILD` and `PKGBUILD-git`: single package; `makedepends` gain `zig gtk4 gtk4-layer-shell`, `depends` gain the GTK4 and gtk4-layer-shell runtime libraries, and the build uses `--features pinning`. Verify: the CI job passes on a branch push, and `makepkg --printsrcinfo` lists one package for each PKGBUILD.
-- [ ] 5.2 Docs: document `--pin`, the desktop entry's behaviour (including that GNOME/X11 are unsupported) and the `[panel]` keys in `README.md` (the `pinwin/AGENTS.md` and root `AGENTS.md` rewording happens with the import in 3.1). Verify: `rg -n "pinwin" README.md` shows no mention of a user-run `pinwin` command.
+- [x] 5.2 Docs: document `--pin`, the desktop entry's behaviour (including that GNOME/X11 are unsupported) and the `[panel]` keys in `README.md` (the `pinwin/AGENTS.md` and root `AGENTS.md` rewording happens with the import in 3.1). Verify: `rg -n "pinwin" README.md` shows no mention of a user-run `pinwin` command.
 
 ## 6. Integration check
 
