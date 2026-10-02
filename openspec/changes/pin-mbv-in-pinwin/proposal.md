@@ -17,7 +17,7 @@ config and control socket. That is not the product.
   pinning on; only the flag does. The panel layout (side, columns, four gutters) is saved in
   `config.toml`'s `[panel]` section.
 - **Panel options in the tray** (user ruling 2026-10-02): panel size is GUI business, not the
-  terminal app's. While a pinned mbv runs, mbv's system tray has an `Adjust panel...` item that
+  terminal app's. While a pinned mbv runs, mbv's system tray has an `Resize` item that
   opens a small dropdown form with the current side, columns and four gutters. Edits apply only
   on Apply (the panel moves and the values are saved); closing without Apply discards them; a
   rejected layout is reported in the form. The TUI has no panel settings page. pinwin's own tray
@@ -48,7 +48,7 @@ config and control socket. That is not the product.
 - **Reverted from the first version and staying reverted**: the `pinwin` package split and
   `optdepends`, the `mbv --desktop` launcher, the `Pin options...` item and the control socket /
   `PINWIN_SOCKET` wiring. The pinned declaration, the lazily started tray and the ADR 0004
-  amendment (reverted in section 2) come back adapted for the tray's `Adjust panel...` item (design D9).
+  amendment (reverted in section 2) come back adapted for the tray's `Resize` item (design D9).
 - Repo hygiene stays: `pinwin/AGENTS.md`, the root `AGENTS.md` map line and `*.zig` under
   `check-code-file-lines`.
 - Naming: the layer-shell surface is recorded in `CONTEXT.md` as the *pinned panel*, kept
@@ -66,7 +66,7 @@ config and control socket. That is not the product.
   `add-library-abi` rewrites `pinwin-panel` for the library form and retires
   `pinwin-tray-options` and `pinwin-control`; the re-import lands the same result here.
 - `ctrl-protocol` and `local-daemon-tray`: gain the pinned declaration, the request that opens the
-  panel form in the pinned mbv, and the tray's `Adjust panel...` item. The observable behaviour is specified in `pinned-launch`;
+  panel form in the pinned mbv, and the tray's `Resize` item. The observable behaviour is specified in `pinned-launch`;
   design D9 has the mechanics.
 
 ## Impact

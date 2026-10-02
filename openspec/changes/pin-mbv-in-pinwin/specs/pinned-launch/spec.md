@@ -88,16 +88,16 @@ NOT be limited by this.
 - **THEN** one line says a pinned mbv is already running, and mbv exits with status 1
 
 ### Requirement: Panel options in the tray
-While a pinned mbv runs, mbv's system tray SHALL show an `Adjust panel...` item, starting the
-tray if Stay-alive is off. Choosing it SHALL open a small form showing the current side, columns
-and four gutters. Edits SHALL take effect only on `Apply`, which SHALL change the panel live and
-save the values to `config.toml`. Closing the form without `Apply` SHALL discard the edits. A
-layout the panel rejects SHALL be reported in the form, leaving the panel, `config.toml` and the
-edits unchanged. The item SHALL NOT appear while no pinned mbv runs. The tray's other items SHALL
+mbv's system tray SHALL always show a `Resize` item, greyed out while no pinned mbv runs or while
+the form is open; a pinned mbv starts the tray if Stay-alive is off. Choosing it SHALL open a small
+form showing the current side, columns and four gutters. Edits SHALL take effect only on `Apply`,
+which SHALL change the panel live and save the values to `config.toml`. Closing the form without
+`Apply` SHALL discard the edits. A layout the panel rejects SHALL be reported in the form, leaving the panel, `config.toml` and the
+edits unchanged. The tray's other items SHALL
 behave as before.
 
 #### Scenario: Resize from the tray
-- **WHEN** a pinned mbv is running and the user opens `Adjust panel...`, sets `Columns` to 60 and presses `Apply`
+- **WHEN** a pinned mbv is running and the user opens `Resize`, sets `Columns` to 60 and presses `Apply`
 - **THEN** the panel becomes 60 columns wide without restarting mbv, and 60 is saved
 
 #### Scenario: Close without Apply
@@ -110,11 +110,11 @@ behave as before.
 
 #### Scenario: No pinned mbv
 - **WHEN** only unpinned mbv terminals are running
-- **THEN** the tray has no `Adjust panel...` item
+- **THEN** the tray's `Resize` item is greyed out
 
 #### Scenario: Pinned mbv without Stay-alive
 - **WHEN** Stay-alive is off and a pinned mbv starts
-- **THEN** the tray appears with its usual items and `Adjust panel...`
+- **THEN** the tray appears with its usual items and `Resize`
 
 ### Requirement: GTK stays out of the daemon crates
 GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.

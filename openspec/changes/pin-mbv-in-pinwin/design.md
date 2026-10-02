@@ -7,7 +7,7 @@
   `run_local_instance` makes this launch a Client, spawning the Owner process when needed (`local_daemon::spawn_detached`, which `setsid`s and nulls/pipes the
   child's stdio). The tray lives in the Owner (`mbv-desktop`, ksni) and starts only when
   stay-alive is on (`mbv-daemon` `run.rs` `start_tray`); this change adds the
-  `Adjust panel...` item to it (D9).
+  `Resize` item to it (D9).
 - **Terminal access.** mbv and ratatui-image never open `/dev/tty`. crossterm 0.29 reads input and
   sets raw mode on stdin when stdin is a tty (`tty_fd()`), but `window_size()` and the kitty
   keyboard probe open `/dev/tty` first and fall back to stdout only when that open fails. Resize
@@ -40,7 +40,7 @@
 
 **Non-Goals:**
 - The Owner gains only the pinned declaration, the open-form relay and the tray's
-  `Adjust panel...` item (D9).
+  `Resize` item (D9).
 - No pinwin command line, environment variables, socket protocol, own tray or GTK options
   window, and no pinwin code change for the tray controls.
 - No panel settings in the TUI: panel size is GUI business, changed in a form opened from the tray (D9).
@@ -193,7 +193,7 @@
 tray hook changes, `Pin options...` item and ADR 0004 amendment were removed in dedicated tasks
 (section 2). The launcher revert restores `contrib/mbv.desktop` to its pre-change form; task 4.4
 then sets it to `Exec=mbv --pin`, `Terminal=false`. The pinned declaration, lazy tray start and
-ADR 0004 amendment come back for the tray's `Adjust panel...` item, without a socket (D9); the packaging
+ADR 0004 amendment come back for the tray's `Resize` item, without a socket (D9); the packaging
 split, `mbv --desktop` launcher, `PINWIN_SOCKET` wiring and `Pin options...` item stay removed.
 
 **D8. Tests.** The layout core's contracts are Zig unit tests under `zig build check` upstream
@@ -214,25 +214,21 @@ Owner process; the form lives in the pinned mbv, next to the panel it changes.
    every declaration and disconnect. With Stay-alive off, the declaration starts the tray (the
    first version's `ca03159c4`), with all its usual items; `show_systray_icon = false` still
    suppresses it. ADR 0004 records this (amendment as in `a36fef682`, reworded).
-3. *Tray item.* While the flag is yes, `mbv-desktop`'s tray shows `Adjust panel...`; its other
-   items are unchanged. Choosing it sends the daemon a request over the tray's existing command
+3. *Tray item.* `mbv-desktop`'s tray always shows `Resize`, greyed out while the flag is no or
+   the form is open; its other items are unchanged. Choosing it sends the daemon a request over the tray's existing command
    channel, and the daemon sends `CtrlEvent::OpenPanelForm` to the pinned mbv.
-4. *Form.* The pinned mbv shows a small GTK layer-shell form, written in Rust with the `gtk4` and
-   `gtk4-layer-shell` crates and run on pinwin's GTK thread (pinwin uses GLib's default main
-   context, `pinwin_api.c`, so mbv posts to it with `glib::MainContext::default().invoke`; GTK
-   allows one GTK thread per process). Fields: `Side` (Left/Right), `Columns` (1..=65535) and
-   `Top`, `Bottom`, `Left`, `Right` gutters (i32), initialised from the current `[panel]` value,
-   then `Apply` and a close control (Esc also closes). Opening it while open presents the existing
-   form with its edits.
-5. *Apply.* `Apply` builds the full layout and the mbv side calls `pin::apply_layout` (never from
-   the GTK thread, per the pinwin threading contract). `PINWIN_OK` saves `[panel]` to
-   `config.toml` and the form stays open. A rejection shows the reason in a line beside `Apply`,
-   leaves the panel and `config.toml` unchanged and keeps the edits. Closing without `Apply`
-   discards the edits.
-6. *Open question.* Where the form appears on screen is not yet decided.
-7. *Probe first.* gtk-rs checks that GTK was initialised on its thread; here C initialised it, so
-   the Rust side must mark it (`gtk::set_initialized`, unsafe) on pinwin's thread. Task 8.1
-   proves this before the form is built.
+4. *Form: UNRESOLVED (user, 2026-10-02).* What draws the form is not decided. Ruled out by the
+   user: GTK in mbv's own code (no `gtk4`/`gtk4-layer-shell` crates, in the pinned mbv or the
+   Owner); pinwin implementing its own settings UI; a staged form built from tray menu entries
+   (bad UX); a TUI or console popup form; a panel page in F2. Last open proposal awaiting answer:
+   pinwin draws a form fed by mbv's `[panel]` values (`pinwin_show_layout_form(layout)`), applies
+   on Apply via its own `pinwin_apply_layout`, reports the result, mbv saves; pinwin keeps no
+   config. Not accepted.
+5. *Decided behaviour, whatever draws it.* The form shows the current side, columns and four
+   gutters; edits apply only on `Apply` (panel moves, `[panel]` saved); closing without `Apply`
+   discards; a rejection shows in the form and keeps the edits. While the form is open the tray's
+   `Resize` is greyed out (the pinned mbv reports form open/closed to the Owner). Unconfirmed:
+   whether the form stays open after a successful `Apply`; where it appears on screen.
 
 ## Risks / Trade-offs
 
