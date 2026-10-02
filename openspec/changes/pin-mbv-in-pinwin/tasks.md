@@ -29,9 +29,10 @@ conflict there; resolve it keeping both reverts' intent.
 
 ## 3. Import the pinwin library
 
-Blocked until `slatkin/pinwin` change `add-library-abi` has landed at a pinned revision.
+Blocked until `slatkin/pinwin` change `add-library-abi` has landed and is tagged
+`library-abi`.
 
-- [ ] 3.1 Import the library-form pinwin revision over `pinwin/` (the tree 0.1 imported is the program form): sources and `build.zig`/`build.zig.zon` at the upstream revision — no `tray.c`/`control.c`, no control socket, no executable entry. Re-sync `openspec/specs/pinwin-panel` from upstream and delete `openspec/specs/pinwin-tray-options` and `openspec/specs/pinwin-control`. Reword `pinwin/AGENTS.md` (no executable, `zig build check`) and the root `AGENTS.md` map line. Verify: `cd pinwin && zig build check` passes, `zig build -Doptimize=ReleaseSafe` produces the static library, `rg -n "PINWIN_SOCKET|no_tray|dbusmenu|COLS|GUTTER" pinwin/src pinwin/build.zig` finds nothing, and `openspec validate --specs` passes.
+- [ ] 3.1 Import the library-form pinwin revision (the `library-abi` tag) over `pinwin/` (the tree 0.1 imported is the program form): sources and `build.zig`/`build.zig.zon` at the upstream revision — no `tray.c`/`control.c`, no control socket, no installed executable entry (a dev-only `pinwin-demo` may exist under `zig build demo`; it is never shipped). Re-sync `openspec/specs/pinwin-panel` from upstream and delete `openspec/specs/pinwin-tray-options` and `openspec/specs/pinwin-control`. Reword `pinwin/AGENTS.md` (no installed executable, `zig build check`) and the root `AGENTS.md` map line. Verify: `cd pinwin && zig build check` passes, `zig build -Doptimize=ReleaseSafe` produces the static library, `rg -n "PINWIN_SOCKET|no_tray|dbusmenu|COLS|GUTTER" pinwin/src pinwin/build.zig` finds nothing, and `openspec validate --specs` passes.
 
 ## 4. mbv wiring
 
