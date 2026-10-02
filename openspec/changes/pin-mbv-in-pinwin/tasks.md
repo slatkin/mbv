@@ -36,7 +36,7 @@ repo. Record its commit SHA for 1.1.
 
 ## 6. Integration check
 
-- [ ] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
+- [x] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `make check-code-file-lines`, and verify they all pass.
 - [ ] 6.2 Manual check under niri with pinwin installed:
   - From the launcher, with stay-alive **off**: mbv opens pinned; exactly one tray icon (mbv's) appears; `Pin options...` opens the panel's options window; quitting mbv removes the panel and the tray.
   - From the launcher, with stay-alive **on**: the tray persists after quitting mbv, and `Pin options...` is gone once no pinned Client is attached.
