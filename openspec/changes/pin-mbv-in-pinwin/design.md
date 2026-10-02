@@ -10,8 +10,9 @@
   saved in `save.rs`, listed as a `SettingKey` (`mbv-ui-model/src/settings.rs`), toggled in
   `src/app/dispatch/settings.rs` and documented in `dist/config.toml`. `show_systray_icon` is the
   worked example.
-- **pinwin today** (imported in the first unit of this change, `slatkin/pinwin@eaefd7f`): a Zig
-  `main()` over libghostty-vt (a statically linked Zig dependency) plus C glue on GTK4,
+- **pinwin today** (imported at `slatkin/pinwin@eaefd7f`, the program form; the library form is
+  developed upstream in change `add-library-abi`): a Zig `main()` over libghostty-vt (a statically
+  linked Zig dependency) plus C glue on GTK4,
   gtk4-layer-shell, pango and gio. Terminal state is module-level. `glue_start()` runs the GTK loop
   and `pty.c` runs `forkpty` for one command. It also has a control socket, its own tray, a GTK
   options window, a GKeyFile config and `COLS`/`GUTTER` env vars. Its pure layout core
@@ -37,25 +38,26 @@
 
 ## Decisions
 
-**D1. The imported pinwin specs are edited in place.**
-- `openspec/specs/pinwin-{panel,tray-options,control}` arrived as already-accepted behaviour (first
-  version's D1) and are still edited directly, not through deltas. `pinwin-panel` is rewritten for
-  the library form. `pinwin-tray-options` and `pinwin-control` are deleted, and their layout and
-  validation rules fold into `pinwin-panel`.
+**D1. The pinwin specs are re-imported, not authored here.**
+- The library reshape and its spec edits are specified in `slatkin/pinwin` change `add-library-abi`
+  (its own planning review round). When it lands, task 3.1 re-imports the rewritten `pinwin-panel`
+  over `openspec/specs/pinwin-panel/` and deletes `openspec/specs/pinwin-tray-options/` and
+  `pinwin-control/`, which upstream retires. This change never edits pinwin specs directly; the
+  copies in `openspec/specs/` track the imported revision.
 
-**D2. pinwin is a static library with a C ABI.**
-- `pinwin/build.zig` builds `libpinwin.a` (libghostty-vt included) instead of an executable, and
-  keeps a unit-test step (`zig build check`). `src/main.zig`'s `main()` and env/argv parsing are
-  removed.
-- The ABI (`pinwin/src/pinwin_api.h`) is small and owned data only:
-  - `pinwin_start(const PinwinStartup*) -> int`: startup struct = pty master fd, layout
-    (`PinwinLayout`), keyboard mode. Returns a result code and never calls `exit`. Spawns the GTK
-    thread.
-  - `pinwin_apply_layout(const PinwinLayout*) -> int`: validates with the existing layout core and
-    posts to the GTK loop; result code to the caller.
+**D2. pinwin is a static library with a C ABI, owned upstream.**
+- The reshape (build.zig producing `libpinwin.a`, the removed program surfaces, the new
+  `pinwin_api.h`, the pty rewrite, the layout-core tests, the exit-path audit) is designed and
+  implemented in `slatkin/pinwin` change `add-library-abi`. Read that change for the full design;
+  this change depends on its ABI contract:
+  - `pinwin_start(const PinwinStartup*) -> int`: pty master fd, a full `PinwinLayout` (side, cols,
+    four gutters), keyboard mode. Synchronous result code; spawns the GTK thread.
+  - `pinwin_apply_layout(const PinwinLayout*) -> int`: validates with the layout core and posts to
+    the GTK loop; synchronous result code to the caller.
   - `pinwin_stop(void)`: closes the panel and joins the thread.
-- `tray.c`, `control.c` and their libraries (gio tray publication,
-  dbusmenu-glib) are deleted.
+  - The library never calls `exit()`. This is a hard contract: a library exit would kill the whole
+    mbv process, including the paths mbv never sees (`pinwin_size`'s allocation failure, panel
+    teardown). The upstream change owns the audit.
 
 **D3. In-process panel on a pty pair.**
 - When pinning applies (D5), before any terminal setup mbv opens a pty pair, `pinwin_start`s the
@@ -74,9 +76,11 @@
   terminal. `spawn_detached` already detaches; task 1.1 probes this against the real system.
 
 **D4. Cargo feature gate and the crate graph.**
-- A new leaf crate `crates/mbv-pinwin` owns `build.rs` (runs `zig build`, links `libpinwin.a`,
-  GTK4, gtk4-layer-shell, pango/cairo, libghostty-vt's static archive) and the safe Rust wrapper
-  over the C ABI. The root `mbv` crate depends on it behind the cargo feature `pinning`.
+- A new leaf crate `crates/mbv-pinwin` owns `build.rs` (runs `zig build` for the vendored
+  `pinwin/`, links `libpinwin.a` plus GTK4, gtk4-layer-shell and pango/cairo, and whatever else
+  the upstream build produces alongside it — the upstream design states whether libghostty-vt's
+  archive is bundled in `libpinwin.a` or linked separately) and the safe Rust wrapper over the C
+  ABI. The root `mbv` crate depends on it behind the cargo feature `pinning`.
 - `mbv-core`, `mbv-daemon`, `mbvd` and every other crate MUST NOT depend on `mbv-pinwin`, directly
   or transitively. Release builds for the desktop packages enable `pinning`; the `.deb` and
   `mbvd` do not.
@@ -105,18 +109,25 @@
   saved.
 - The keyboard mode is fixed to `on-demand` (the previous default), and `COLS`/`GUTTER`/
   `PINWIN_DEBUG`/`--no-tray` have no equivalent.
+- Naming: the layer-shell surface is the *pinned panel*, recorded in `CONTEXT.md` beside the
+  in-TUI panel vocabulary (Library panel, playback panel) so the two senses of "panel" stay
+  distinct; `Pin app as UI panel` is the F2 wording.
 
 **D7. Reverts.** The first version's packaging split, launcher module, ctrl capability, daemon
 tray hook changes, `Pin options...` item and ADR 0004 amendment are removed in dedicated tasks
 rather than left dormant; `contrib/mbv.desktop` returns to `Exec=mbv`.
 
 **D8. Tests.** The layout core's contracts (strict parsing, checked geometry, validation) become
-Zig unit tests under `zig build check`, replacing `tools/check_options.c`. The Rust side tests
-config parse/save of the new keys and the F2 dispatch. Panel rendering and the pty hand-over are
+Zig unit tests under `zig build check` upstream, replacing `tools/check_options.c` (owned by
+`add-library-abi`). This change's tests are the Rust side: config parse/save of the new keys, the
+F2 dispatch and the `should_pin` decision. Panel rendering and the pty hand-over are
 manual checks.
 
 ## Risks / Trade-offs
 
+- **Upstream dependency:** this change is blocked on `slatkin/pinwin` `add-library-abi` landing at
+  a pinned revision (task 3.1). Sections 2, 4.2 and 5 do not depend on it and can proceed; 4.1's
+  linking and 4.4's startup need the imported library.
 - **Build cost:** with the feature on, `cargo build` needs Zig 0.16 and GTK4 / gtk4-layer-shell dev
   libraries and fetches libghostty-vt (pinned by hash). Accepted behind the feature; CI builds
   both ways.
