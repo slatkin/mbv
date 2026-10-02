@@ -5,10 +5,10 @@ repo. Record its commit SHA for 1.1.
 
 ## 1. Import pinwin
 
-- [ ] 1.1 Copy the tracked files of `~/Dev/pinwin/pinwin/` (from `git -C ~/Dev/pinwin ls-files pinwin/`) into `pinwin/` here, excluding `zig-out/`, `zig-pkg/` and `.zig-cache/`. Add their ignores to `pinwin/.gitignore`. Verify: `cd pinwin && zig build && zig build check` prints `check_options: all passed`, and `cargo check --workspace` is unaffected.
-- [ ] 1.2 Copy `~/Dev/pinwin/openspec/specs/{pinwin-panel,pinwin-tray-options,pinwin-control}/spec.md` into `openspec/specs/`, deleting the "Install from the checkout" and "Coexists with pinwin" requirements from `pinwin-panel` (design D1). Verify: `openspec validate --specs --strict` passes for the three specs.
-- [ ] 1.3 Add `pinwin/AGENTS.md` (Zig/C conventions, `zig build` / `zig build check`, manual checks under niri, no Rust rules apply) and one line for `pinwin/` in the root `AGENTS.md` repository map. Verify that both files name `zig build check` as the check command.
-- [ ] 1.4 Add `*.zig` to the governed extensions in `scripts/check-code-file-lines.sh` and add the matching case to `scripts/check-code-file-lines-test.sh`. Verify: `make test-check-code-file-lines` and `make check-code-file-lines` pass. Commit 1.1–1.4 as one import commit whose message names `slatkin/pinwin@<sha>`.
+- [x] 1.1 Copy the tracked files of `~/Dev/pinwin/pinwin/` (from `git -C ~/Dev/pinwin ls-files pinwin/`) into `pinwin/` here, excluding `zig-out/`, `zig-pkg/` and `.zig-cache/`. Add their ignores to `pinwin/.gitignore`. Verify: `cd pinwin && zig build && zig build check` prints `check_options: all passed`, and `cargo check --workspace` is unaffected.
+- [x] 1.2 Copy `~/Dev/pinwin/openspec/specs/{pinwin-panel,pinwin-tray-options,pinwin-control}/spec.md` into `openspec/specs/`, deleting the "Install from the checkout" and "Coexists with pinwin" requirements from `pinwin-panel` (design D1). Verify: `openspec validate --specs --strict` passes for the three specs.
+- [x] 1.3 Add `pinwin/AGENTS.md` (Zig/C conventions, `zig build` / `zig build check`, manual checks under niri, no Rust rules apply) and one line for `pinwin/` in the root `AGENTS.md` repository map. Verify that both files name `zig build check` as the check command.
+- [x] 1.4 Add `*.zig` to the governed extensions in `scripts/check-code-file-lines.sh` and add the matching case to `scripts/check-code-file-lines-test.sh`. Verify: `make test-check-code-file-lines` and `make check-code-file-lines` pass. Commit 1.1–1.4 as one import commit whose message names `slatkin/pinwin@<sha>`.
 
 ## 2. Packaging and CI
 
