@@ -2,7 +2,7 @@
 
 ## 1. Projection: the header-visibility classification
 
-- [ ] 1.1 Add the header-visibility flag to the projection types (`QueueCardProjection` or its
+- [x] 1.1 Add the header-visibility flag to the projection types (`QueueCardProjection` or its
   sibling in `mbv-ui-model`), and classify the title-site inputs in
   `src/app/state/projection/card.rs` per design D1: unreachable (images disabled, visualizer
   active, halfblock configured, protocol disabled, visual slot hidden, title glyphs the overlay
@@ -14,7 +14,7 @@
   `title_site_tests` with the contract "the flag reads the decomposed class, not the painted
   overlay": a not-yet-painted overlay on a capable setup keeps the flag false; images off /
   visualizer / halfblock / slot hidden / protocol disabled / uncovered glyphs flip it true.
-- [ ] 1.2 Make the classification run every sync pass: `sync_queue`
+- [x] 1.2 Make the classification run every sync pass: `sync_queue`
   (`src/app/shell/queue.rs`) currently gates `refresh_queue_card_image` on
   `visual_slot_shown()`, so with the slot hidden the projection goes stale. Split the refresh so
   the classification runs ungated on live App state while the fetch and overlay-compose work
