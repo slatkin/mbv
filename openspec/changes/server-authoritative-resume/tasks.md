@@ -115,7 +115,7 @@
 - [x] 6.1 Run `cargo fmt`, then
   `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo nextest run --workspace`. Verify that all are clean.
-- [ ] 6.2 Manual check, done by the user: play an Emby video past 1%, quit the
+- [x] 6.2 Manual check, done by the user: play an Emby video past 1%, quit the
   Owner (`pkill mbv` or the tray Quit), relaunch, and play the restored slot.
   It should resume at the quit position. Then advance the same item on another
   client and play it again here; it should resume at the other client's
