@@ -2044,6 +2044,7 @@ dependencies = [
 name = "mbv-render"
 version = "0.22.2"
 dependencies = [
+ "image",
  "mbv-config",
  "mbv-core",
  "mbv-emby-model",

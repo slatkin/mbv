@@ -132,6 +132,54 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     assert!(model.app.is_right_panel_wide());
 }
 
+/// Regression (pinned-panel expand/collapse): a terminal resize must keep
+/// cached card images and arm the image settle window. The former clear
+/// flashed the queue art to its placeholder and re-encoded/re-transmitted it
+/// right after the pinned panel's animated apply resized the pty, which
+/// flooded the panel's pty reader until its watchdog snapped the animation.
+#[test]
+fn terminal_resize_keeps_cached_card_images_and_arms_the_settle_window() {
+    let mut model = Model::new(make_app_stub());
+    model.app.terminal_width = 60;
+    model.app.terminal_height = 24;
+    model.app.images.insert_image(
+        "queue-art".to_owned(),
+        mbv_images::CachedImage {
+            img: Some(image::DynamicImage::ImageRgba8(image::RgbaImage::new(1, 1))),
+            protocols: std::collections::HashMap::default(),
+            cover_box: None,
+            applied_logo_key: None,
+        },
+    );
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    apply_terminal_observer(
+        &mut model,
+        &TerminalObserverEvent::Resize {
+            width: 150,
+            height: 24,
+        },
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    model.sync_terminal_resize();
+    assert!(
+        model.app.images_settling(),
+        "a resize arms the settle window"
+    );
+    assert!(
+        model.app.images.image("queue-art").is_some(),
+        "a resize keeps the cached card image"
+    );
+    // The window expires on its own; the field is the expiry the paint path
+    // queries.
+    model.app.images_settle_until = None;
+    assert!(!model.app.images_settling());
+    assert_eq!(model.app.terminal_width, 150);
+    assert_eq!(model.app.terminal_height, 24);
+    assert!(model.app.is_right_panel_wide());
+}
+
 fn music_album(id: &str) -> EmbyItem {
     let mut item = make_item(id, "Folder");
     item.id = id.into();

@@ -7,6 +7,16 @@ use std::time::{Duration, Instant};
 pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 const MAX_IMAGE_FETCHES: usize = 6;
 
+/// How long image paints hold the pre-resize placement after a handled
+/// terminal resize. The pinned panel's animated width apply (`pinwin`'s
+/// `PINWIN_ANIM_DEFAULT_MS`) resizes the pty to the target width at the
+/// tween's start, and its watchdog snaps the animation if the panel's pty
+/// reader (which shares the GTK main loop with the tween's frame-clock
+/// ticks) is busy for the duration plus 100 ms. The margin covers that
+/// watchdog and one worker-encode round trip.
+const IMAGE_SETTLE_WINDOW: Duration =
+    Duration::from_millis(mbv_pinwin::Panel::ANIM_DEFAULT_MS as u64 + 150);
+
 fn wide_landscape_hero_eligible(
     artwork: &mbv_components::library_panel::HeroArtwork,
     panel_area: ratatui::layout::Rect,
@@ -169,6 +179,22 @@ impl App {
 }
 
 impl App {
+    /// Arm the image settle window after a handled terminal size change:
+    /// until it expires, image paints hold the pre-resize placement and no
+    /// protocol rebuilds, so a pinned panel width change neither blanks the
+    /// art nor re-transmits its payload while the width animates.
+    pub(in crate::app) fn arm_image_settle_window(&mut self) {
+        self.images_settle_until = Some(Instant::now() + IMAGE_SETTLE_WINDOW);
+    }
+
+    /// Whether image paints are still holding the pre-resize placement
+    /// (`arm_image_settle_window`); the window expires on its own, so callers
+    /// just query it.
+    pub(in crate::app) fn images_settling(&self) -> bool {
+        self.images_settle_until
+            .is_some_and(|deadline| Instant::now() < deadline)
+    }
+
     /// Triggers the Audiobookshelf cover fetch for `library_item_id` and
     /// returns its image cache key, or `None` with no server configured.
     /// This is the hero projection's own entry (task 5.10): the key is

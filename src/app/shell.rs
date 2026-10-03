@@ -374,7 +374,11 @@ fn apply_terminal_observer(
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
             model.app.force_clear = true;
-            model.app.images.clear_images_and_loading();
+            // Cached card images are kept across a resize: the sync pass arms
+            // the image settle window, which holds their painted placement
+            // until the width is stable (a clear + refetch here flashed the
+            // queue art and re-transmitted it mid-animation on a pinned
+            // panel width change).
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;

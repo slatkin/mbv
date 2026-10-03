@@ -187,3 +187,30 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
     assert_ne!(variant, plain_key);
     assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);
 }
+
+/// The settle window after a terminal resize holds the hero's cover-fit
+/// protocol: a box change must not rebuild (and re-transmit) the artwork
+/// mid-change (the pinned panel's animated width apply resizes the pty at
+/// the tween's start); the rebuild happens on the first projection after the
+/// width is stable.
+#[test]
+fn hero_cover_rebuild_waits_for_the_settle_window() {
+    let mut app = app_with_base();
+    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (4, 2), None));
+    assert_eq!(app.images.image(BASE_KEY).unwrap().cover_box, Some((4, 2)));
+    let baseline = build_count(&app);
+
+    app.arm_image_settle_window();
+    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (8, 4), None));
+    assert_eq!(
+        app.images.image(BASE_KEY).unwrap().cover_box,
+        Some((4, 2)),
+        "the settle window holds the built box"
+    );
+    assert_eq!(build_count(&app), baseline, "no rebuild mid-settle");
+
+    app.images_settle_until = None;
+    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (8, 4), None));
+    assert_eq!(app.images.image(BASE_KEY).unwrap().cover_box, Some((8, 4)));
+    assert_eq!(build_count(&app), baseline + 1);
+}

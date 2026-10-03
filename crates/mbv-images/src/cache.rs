@@ -11,6 +11,8 @@ pub struct ImageCache {
     card_image_loading: std::collections::HashSet<String>,
     last_card_height: u16,
     last_card_width: u16,
+    last_hero_paint_height: u16,
+    last_hero_paint_width: u16,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
@@ -60,6 +62,8 @@ impl ImageCache {
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
             last_card_width: 0,
+            last_hero_paint_height: 0,
+            last_hero_paint_width: 0,
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             card_image_tx,
@@ -127,6 +131,19 @@ impl ImageCache {
     pub fn record_card_size(&mut self, height: u16, width: u16) {
         self.last_card_height = height;
         self.last_card_width = width;
+    }
+
+    /// The hero image paint's last encoded area (cells): the checkpoint the
+    /// settle window holds after a terminal resize, mirroring
+    /// `last_card_size` for the queue card.
+    #[must_use]
+    pub fn hero_paint_size(&self) -> (u16, u16) {
+        (self.last_hero_paint_height, self.last_hero_paint_width)
+    }
+
+    pub fn record_hero_paint_size(&mut self, height: u16, width: u16) {
+        self.last_hero_paint_height = height;
+        self.last_hero_paint_width = width;
     }
 
     #[must_use]
