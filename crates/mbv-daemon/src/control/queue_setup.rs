@@ -7,6 +7,7 @@ use super::{
 use crate::AudiobookshelfOwnerContext;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -165,7 +166,7 @@ pub(crate) fn start_queue_enrichment(
     let Some(audiobookshelf) = audiobookshelf else {
         return;
     };
-    let episode_keys: Vec<(String, String)> = queue
+    let episode_keys: HashSet<(String, String)> = queue
         .slots()
         .iter()
         .filter_map(|slot| {
@@ -174,7 +175,7 @@ pub(crate) fn start_queue_enrichment(
                 .map(|episode| (episode.library_item_id.clone(), episode.episode_id.clone()))
         })
         .collect();
-    let book_ids: Vec<String> = queue
+    let book_ids: HashSet<String> = queue
         .slots()
         .iter()
         .filter_map(|slot| {

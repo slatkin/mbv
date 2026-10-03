@@ -5,7 +5,7 @@ use super::{AudiobookshelfOwnerContext, ClientRegistry};
 use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
 use mbv_player::Player;
 use mbv_queue::PlaybackQueue;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
@@ -71,8 +71,8 @@ pub(super) fn install_daemon_audiobookshelf_context(
 /// is logged and ignored, the same as an Emby enrichment failure.
 pub(crate) fn spawn_audiobookshelf_progress_refresh(
     runtime: &AudiobookshelfOwnerContext,
-    episode_keys: Vec<(String, String)>,
-    book_ids: Vec<String>,
+    episode_keys: HashSet<(String, String)>,
+    book_ids: HashSet<String>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     let setup = runtime.setup.clone();
@@ -149,27 +149,21 @@ pub(crate) fn apply_audiobookshelf_progress_refresh(
         .iter()
         .filter(|slot| Some(slot.slot_id) != active_id)
         .filter_map(|slot| {
-            if let Some(episode) = slot.item.as_audiobookshelf() {
+            let (seconds, finished) = if let Some(episode) = slot.item.as_audiobookshelf() {
                 progress
                     .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
-                    .map(|fetched| {
-                        (
-                            slot.slot_id,
-                            mbv_emby_model::seconds_to_ticks(fetched.current_time_seconds),
-                            fetched.is_finished,
-                        )
-                    })
+                    .map(|fetched| (fetched.current_time_seconds, fetched.is_finished))?
             } else {
-                slot.item.as_audiobookshelf_book().and_then(|book| {
-                    book_progress.get(&book.library_item_id).map(|fetched| {
-                        (
-                            slot.slot_id,
-                            mbv_emby_model::seconds_to_ticks(fetched.current_time_seconds),
-                            fetched.is_finished,
-                        )
-                    })
-                })
-            }
+                let book = slot.item.as_audiobookshelf_book()?;
+                book_progress
+                    .get(&book.library_item_id)
+                    .map(|fetched| (fetched.current_time_seconds, fetched.is_finished))?
+            };
+            Some((
+                slot.slot_id,
+                mbv_emby_model::seconds_to_ticks(seconds),
+                finished,
+            ))
         })
         .collect();
     let before = queue.revision();
