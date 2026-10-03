@@ -30,7 +30,7 @@
   Verify with `cargo nextest run -p mbv-player`. Fix existing jump tests that
   assumed the owner-supplied ticks for Emby, using a scripted fetch; don't add
   new ones.
-- [ ] 1.4 Update `docs/invariants/06-queue-progress-application-sites.md`:
+- [x] 1.4 Update `docs/invariants/06-queue-progress-application-sites.md`:
   for Emby, the re-visit seek now uses the server position fetched at jump
   time, and the canonical-queue position is used only for feeds. Verify by
   reading the doc against the 1.3 diff.
