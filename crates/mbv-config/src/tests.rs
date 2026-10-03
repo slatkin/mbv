@@ -10,3 +10,5 @@ mod emby_admin;
 mod launch_state;
 mod paths_migration;
 mod script_source;
+#[cfg(test)]
+mod ui_state_reset;

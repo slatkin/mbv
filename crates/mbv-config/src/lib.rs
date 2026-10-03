@@ -38,6 +38,7 @@ pub use paths::{
 #[cfg(test)]
 pub(crate) use paths::{checkout_fonts_dir, checkout_scripts_entry};
 mod state;
+mod ui_state_reset;
 pub use state::{
     LastRemoteConnection, StayAliveQueueState, clear_queue_state, legacy_queue_for_owner_if_absent,
     load_home_latest_launch, load_last_remote_connection, load_library_position_state,
@@ -48,6 +49,7 @@ pub use state::{
 };
 #[cfg(test)]
 pub(crate) use state::{load_last_remote_connection_at, save_last_remote_connection_at};
+pub use ui_state_reset::clear_saved_ui_presentation_state;
 mod credentials;
 pub(crate) use credentials::save_service_secret_at;
 pub use credentials::{
