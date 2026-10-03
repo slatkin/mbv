@@ -152,6 +152,21 @@ impl BookContent {
         self.focused = focused;
     }
 
+    /// Reset the book destination's local presentation without replacing its
+    /// loaded catalog or detail (design D3): the first surname bucket, the
+    /// first selectable book, no chapter-pane focus, and no multi-selection or
+    /// prior viewport on either list. `initialized` is retained, so a later
+    /// refresh push preserves this selection instead of adopting a pre-reset
+    /// one (#745).
+    pub fn reset_presentation(&mut self) {
+        self.chapter_focused = false;
+        self.selected_bucket = 0;
+        self.set_book_rows();
+        self.carrier.reset_presentation();
+        self.sync_book_from_owner();
+        self.chapter_list.reset_presentation();
+    }
+
     #[cfg(any(test, feature = "test"))]
     pub fn selected_book_id(&self) -> Option<&str> {
         self.carrier.selected_target().map(String::as_str)

@@ -420,6 +420,19 @@ impl PodcastContent {
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }
+
+    /// Reset the podcast destination's local presentation without replacing
+    /// its loaded catalog, episode cache or Latest shelf (design D3): the
+    /// default `All` state pill, the active view's first episode, no
+    /// multi-selection or prior viewport, and the hero overview back at its
+    /// top. `initialized` is retained, so a later refresh push preserves this
+    /// selection instead of adopting a pre-reset one (#745).
+    pub fn reset_presentation(&mut self) {
+        self.pill = PillSelection::State(AudiobookshelfEpisodeFilter::All);
+        self.rebuild_rows();
+        self.episodes.reset_presentation();
+        self.sync_hero_scroll();
+    }
     #[cfg(any(test, feature = "test"))]
     pub fn set_now_secs(&mut self, now_secs: u64) {
         self.now_secs = Some(now_secs);

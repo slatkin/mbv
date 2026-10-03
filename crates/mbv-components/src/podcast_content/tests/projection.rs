@@ -162,6 +162,41 @@ fn a_refresh_that_drops_the_show_pill_resets_to_all() {
     assert_eq!(owner.content().selector.unwrap().active, Some(1));
 }
 
+/// #745: reset returns the podcast owner to its default state pill and first
+/// episode, clearing marks and the prior viewport, and a refresh that lands
+/// afterwards preserves that selection instead of re-adopting the pre-reset
+/// pill or episode.
+#[test]
+fn reset_presentation_returns_to_all_and_survives_a_later_refresh() {
+    let mut owner = owner();
+    let first = owner.selected_episode_target();
+    owner.on_slot_event(LibrarySlotEvent::SelectorPicked(5));
+    assert_eq!(owner.pill(), &PillSelection::Show("beta".into()));
+    assert_eq!(item_rows(&owner), [("beta-one", "beta-one")]);
+    let selected = owner.selected_episode_target().expect("beta episode");
+    owner.episodes.set_scroll(2);
+    owner.episodes.toggle_selection(&selected);
+
+    owner.reset_presentation();
+
+    assert_eq!(
+        owner.pill(),
+        &PillSelection::State(AudiobookshelfEpisodeFilter::All)
+    );
+    assert_eq!(owner.selected_episode_target(), first);
+    assert_eq!(owner.episodes.scroll(), 0);
+    assert_eq!(owner.episodes.multi_selection().len(), 0);
+    assert_eq!(owner.content().selector.unwrap().active, Some(1));
+
+    // A refresh completing after the reset preserves the reset selection.
+    owner.set_content(&fixture_state(), false);
+    assert_eq!(
+        owner.pill(),
+        &PillSelection::State(AudiobookshelfEpisodeFilter::All)
+    );
+    assert_eq!(owner.selected_episode_target(), first);
+}
+
 #[test]
 fn episode_rows_are_split_rows_with_played_and_resume_status() {
     let owner = owner();

@@ -169,3 +169,39 @@ fn reanchor_launch_state_falls_back_to_first_bucket_and_book() {
     assert_eq!(owner.selected_bucket, 0);
     assert_eq!(owner.selected_book_id(), Some("book-a"));
 }
+
+/// #745: reset returns the book owner to its first surname bucket and first
+/// book, clears chapter focus and both lists, and a refresh that lands
+/// afterwards preserves that selection instead of re-adopting the pre-reset
+/// bucket or book.
+#[test]
+fn reset_presentation_returns_to_first_bucket_and_survives_a_later_refresh() {
+    let books = || {
+        state_with_books(vec![
+            book("book-a", "Adams"),
+            book("book-d", "Dover"),
+            book("book-z", "Zed"),
+        ])
+    };
+    let mut owner = BookContent::new();
+    owner.set_content(&books(), false);
+    owner.select_bucket(2);
+    owner.chapter_focused = true;
+    owner.carrier.set_scroll(2);
+    owner.carrier.toggle_selection(&"book-z".to_string());
+    assert_eq!(owner.selected_bucket, 2);
+    assert_eq!(owner.selected_book_id(), Some("book-z"));
+
+    owner.reset_presentation();
+
+    assert_eq!(owner.selected_bucket, 0);
+    assert_eq!(owner.selected_book_id(), Some("book-a"));
+    assert!(!owner.chapter_focused);
+    assert_eq!(owner.carrier.scroll(), 0);
+    assert_eq!(owner.carrier.multi_selection().len(), 0);
+
+    // A refresh completing after the reset preserves the reset selection.
+    owner.set_content(&books(), false);
+    assert_eq!(owner.selected_bucket, 0);
+    assert_eq!(owner.selected_book_id(), Some("book-a"));
+}
