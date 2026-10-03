@@ -48,7 +48,7 @@ pub fn i64_to_f64_saturating(value: i64) -> f64 {
 
 /// Inclusive lower-bound percentage of known runtime at which a saved
 /// position qualifies for resume. Exactly this percent qualifies.
-pub const RESUME_THRESHOLD_PERCENT: i64 = 6;
+pub const RESUME_THRESHOLD_PERCENT: i64 = 1;
 
 /// Shared resume-eligibility predicate used by both Emby items and feed
 /// entries. A positive saved position with unknown runtime (`runtime_ticks
