@@ -43,6 +43,9 @@ pub(crate) struct PinwinStartup {
 
 unsafe extern "C" {
     pub(crate) fn pinwin_start(startup: *const PinwinStartup) -> i32;
-    pub(crate) fn pinwin_apply_layout(layout: *const PinwinLayout) -> i32;
+    pub(crate) fn pinwin_apply_layout_animated(
+        layout: *const PinwinLayout,
+        duration_ms: u32,
+    ) -> i32;
     pub(crate) fn pinwin_stop();
 }

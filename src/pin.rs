@@ -43,7 +43,10 @@ pub(crate) fn apply_layout(
     width: PinnedWidth,
 ) -> Result<(), String> {
     panel
-        .apply_layout(layout_from_config(config, width))
+        .apply_layout_animated(
+            layout_from_config(config, width),
+            mbv_pinwin::Panel::ANIM_DEFAULT_MS,
+        )
         .map_err(|error| error.to_string())
 }
 
