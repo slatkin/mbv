@@ -39,7 +39,7 @@ show_systray_icon = true
 # logical pixels and may be negative.
 side          = "left"
 cols          = 40
-cols_expanded = 80
+cols_expanded = 120
 gutter_top    = 0
 gutter_bottom = 0
 gutter_left   = 0

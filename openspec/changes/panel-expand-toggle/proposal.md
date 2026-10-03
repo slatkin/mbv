@@ -8,7 +8,7 @@ at a time. A single key that flips between two saved widths makes both usable.
 
 ## What Changes
 
-- New `[panel] cols_expanded` setting (same range as `cols`, default 80), with an `Expanded cols`
+- New `[panel] cols_expanded` setting (same range as `cols`, default 120), with an `Expanded cols`
   row on the F2 Panel page.
 - New configurable keybind action `pinned_width_toggle` (default `Ctrl+e`, Global section) that
   flips the running pinned panel between `cols` (collapsed) and `cols_expanded` (expanded).
