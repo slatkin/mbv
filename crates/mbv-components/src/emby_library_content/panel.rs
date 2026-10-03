@@ -24,6 +24,11 @@ impl InlineSearchHost for EmbyLibraryContent {
     }
 }
 impl LibraryContentOwner for EmbyLibraryContent {
+    /// Forwards to the inherent content-preserving reset (design D3).
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn clear_selection(&mut self) {
         self.carrier.clear_owner_selection();
     }

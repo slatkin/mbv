@@ -182,6 +182,27 @@ impl LibraryPanel {
         self.owners.retain(live);
     }
 
+    /// Reset every retained content owner's local presentation plus this
+    /// panel's own overlay, transient gesture and retained-frame state
+    /// (design D3). Owners are never dropped or recreated, so fetched content
+    /// and inactive destinations keep their catalogs while their
+    /// cursor/scroll/marks/filter/expansion return to defaults. The panel
+    /// clears only geometry it painted: a stale frame can no longer resolve
+    /// pointer input after the reset.
+    pub fn reset_presentation(&mut self) {
+        self.owners.reset_presentation();
+        self.dismiss_hero_overlay();
+        self.mini_view_hero_auto_open = false;
+        self.reset_split_gesture();
+        self.gestures = MouseGestureState::new();
+        self.hovered_selector = None;
+        self.hovered_link = None;
+        self.deferred_msg = None;
+        self.focused_summary = None;
+        self.pill_windows = SkeletonPillWindows::default();
+        self.reset_frame();
+    }
+
     /// Point the panel at the active library's owner (the shell drives this
     /// from its tab resolution each sync pass).
     pub fn set_active(&mut self, key: Option<LibraryKey>) {

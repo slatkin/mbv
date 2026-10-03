@@ -10,6 +10,11 @@ use mbv_render::components::tv_wide::HeroImageState;
 use tuirealm::event::{Key, KeyEvent};
 
 impl LibraryContentOwner for PodcastContent {
+    /// Forwards to the inherent content-preserving reset (design D3).
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
         let target = match state.selector.as_ref() {
             Some(SelectorIdentity::Audiobookshelf {

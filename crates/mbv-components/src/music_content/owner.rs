@@ -51,6 +51,11 @@ impl InlineSearchHost for MusicContent {
 /// cursor/scroll/selection locally. Shell pushes replace only the content
 /// snapshot and never mirror those interaction values.
 impl LibraryContentOwner for MusicContent {
+    /// Forwards to the inherent content-preserving reset (design D3).
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn clear_selection(&mut self) {
         // The destination switch clears the shared owner's ordered marks so
         // no stale selection mark survives into a new destination.

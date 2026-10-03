@@ -483,6 +483,11 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
+    /// Forwards to the inherent content-preserving reset (design D3).
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
         if !self.state.loading_pages.is_empty() && self.state.books.is_empty() {
             return false;

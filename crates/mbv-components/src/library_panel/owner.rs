@@ -188,6 +188,13 @@ pub trait LibraryContentOwner {
     /// destination identity. Overlay activation never calls this.
     fn clear_selection(&mut self) {}
 
+    /// Reset this owner's local presentation to its defaults without
+    /// discarding its fetched content (design D3): the panel calls this on
+    /// every retained owner — active or inactive — when the global UI reset
+    /// runs. Implementations are concrete and owner-local; there is no reset
+    /// registry and no shell mirror of the reset state.
+    fn reset_presentation(&mut self);
+
     /// Read-only focused-list projection for the Status bar. The owner never
     /// exposes membership; the panel caches only this summary.
     fn selection_summary(&self) -> Option<SelectionSummary> {
@@ -309,6 +316,15 @@ impl LibraryOwners {
     /// design D2): an owner is retained while its library is in the catalog.
     pub fn retain(&mut self, live: &[LibraryKey]) {
         self.owners.retain(|key, _| live.contains(key));
+    }
+
+    /// Reset every retained owner's local presentation (design D3): this map
+    /// is the one place that sees all owners, active and inactive alike, so
+    /// the reset reaches destinations that are not currently painted.
+    pub fn reset_presentation(&mut self) {
+        for owner in self.owners.values_mut() {
+            owner.reset_presentation();
+        }
     }
 
     /// The owner currently painted and event-bound, or `None`.
