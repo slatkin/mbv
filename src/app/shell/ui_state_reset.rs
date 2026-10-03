@@ -145,10 +145,19 @@ impl App {
     /// Return every Emby library's shell-owned browse stack to its root and
     /// its root level to default filter/sort/scope fields, retaining fetched
     /// content (no cache invalidation, no refetch). Deep levels are dropped
-    /// because the destination's default context is its root.
+    /// because the destination's default context is its root. Every retained
+    /// Audiobookshelf podcast state also returns to the default state-pill
+    /// fan-out scope (design D5).
     pub(in crate::app) fn reset_browse_root_defaults(&mut self) {
         for idx in 0..self.libs.len() {
             self.reset_library_browse_root(idx);
+        }
+        // The owner's reset pill is `State(All)`; align the shell-owned lazy
+        // fan-out scope so a later refresh does not re-request only the stale
+        // show pill (#745, design D5: state pill => `committed_show_pill`
+        // `None`).
+        for state in &mut self.audiobookshelf_browse {
+            state.committed_show_pill = None;
         }
     }
 
