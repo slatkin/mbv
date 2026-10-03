@@ -1,5 +1,7 @@
 use crate::app::App;
-use mbv_render::arrangements::chrome::{ChromeGeometryInput, chrome_geometry};
+use mbv_render::arrangements::chrome::{
+    ChromeGeometryInput, QUEUE_PLAYBACK_HEADER_ROWS, chrome_geometry,
+};
 use mbv_render::arrangements::queue::{QueuePanelGeometry, queue_footer_row, queue_list_box};
 use mbv_render::layout::{AppLayout, FrameChromeGeometry};
 use ratatui::Frame;
@@ -27,7 +29,23 @@ impl App {
             terminal_width: self.terminal_width,
             card_height: self.layout.card.height,
             playback_active: self.effective_playback_state().active,
+            header_rows: self.queue_header_rows(),
         })
+    }
+
+    /// Rows the Queue playback panel's header band reserves for this frame
+    /// (design D2): the full band while idle (the idle rule governs, not the
+    /// title rule) or while the artwork cannot carry the now-playing title
+    /// (the projected `header_visible` classification), zero while the
+    /// artwork does. The arrangements stay policy-free; this is the single
+    /// policy site both `ChromeGeometryInput` construction sites share.
+    pub(in crate::app) fn queue_header_rows(&self) -> u16 {
+        let playback_active = self.effective_playback_state().active;
+        if !playback_active || self.queue_card_projection.header_visible {
+            QUEUE_PLAYBACK_HEADER_ROWS
+        } else {
+            0
+        }
     }
 
     pub(in crate::app) fn queue_panel_placement(&self) -> QueuePanelGeometry {

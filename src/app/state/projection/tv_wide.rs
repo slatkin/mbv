@@ -28,6 +28,7 @@ impl App {
                 terminal_width: self.terminal_width,
                 card_height: self.layout.card.height,
                 playback_active: self.effective_playback_state().active,
+                header_rows: self.queue_header_rows(),
             },
         );
         if !chrome.right_visible {

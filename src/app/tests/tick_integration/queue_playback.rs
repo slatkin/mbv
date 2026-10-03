@@ -199,6 +199,10 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         let checkpoint = harness.model().app.images.last_card_size();
 
         harness.model_mut().app.visual_slot_hidden = true;
+        // Geometry now reads the projected header visibility (design D2), so
+        // refresh the classification before computing the frame; hiding the
+        // slot is an unreachable fallback, so the header stays.
+        harness.model_mut().sync_queue();
         harness.model_mut().sync_queue_card_geometry();
         assert_eq!(
             (

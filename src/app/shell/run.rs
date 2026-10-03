@@ -35,6 +35,11 @@ impl Model {
         self.sync_queue_boundary();
         self.sync_tab_panel();
         self.sync_status_bar_panel();
+        // The geometry pass reads the card projection refreshed by
+        // `sync_queue` above -- including `header_visible`, which decides the
+        // conditional queue header rows (design D2/D1). That ordering is
+        // load-bearing: `sync_queue` must stay above these two or the header
+        // visibility lags a frame.
         self.sync_queue_card_geometry();
         self.sync_queue_playback_panel();
         // The Music workspace re-projects every sync pass: navigation

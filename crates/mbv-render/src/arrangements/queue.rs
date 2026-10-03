@@ -25,10 +25,10 @@ pub struct QueuePanelGeometry {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct QueuePanelInputs {
     pub left_content: Rect,
-    /// Rows the Queue playback panel's header row always spends above the
-    /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The panel starts directly below the playback rows and
-    /// borders the transport band's bottom gap row.
+    /// Rows the Queue playback panel's header band reserves above the Queue
+    /// panel: the shell's conditional header height (zero while the artwork
+    /// carries the title; design D2). The panel starts directly below the
+    /// playback rows and borders the transport band's bottom gap row.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -68,7 +68,7 @@ pub fn queue_list_box(placement: Rect) -> Rect {
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
-    // The header row (always present, idle included) plus the visual-slot and
+    // The header rows (when the header is visible) plus the visual-slot and
     // transport rows sit directly above the panel: no separator row between
     // the playback region and the queue list.
     let playback_rows = input.header_height + input.card_height;

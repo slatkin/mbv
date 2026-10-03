@@ -12,12 +12,12 @@ const TAB_BAR_BOX_HEIGHT: u16 = 3;
 /// blank trailing row).
 pub const PLAYER_BOX_HEIGHT: u16 = 3;
 
-/// Rows the Queue playback panel always spends on its header in every
-/// queue-visible layout, idle included (design D10; the painted row lands
-/// with task 3.2). The root placement reserves it now so the Queue panel's
-/// placement already starts below the Queue playback panel's header. Two
-/// rows: the header text row plus the `queue_panel_inset` row of column
-/// padding above it, which recesses the header from the column's top edge.
+/// Rows the Queue playback panel's header band spends above the Queue panel
+/// in queue-visible layouts when the header is visible: the header text row
+/// plus the `queue_panel_inset` row of column padding above it, which
+/// recesses the header from the column's top edge. Whether the header is
+/// visible is the shell's decision (`App::queue_header_rows`, design D2);
+/// the arrangement only reserves the input it is handed.
 pub const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
 /// Rows the right column reserves at the bottom for the floating status
@@ -65,6 +65,14 @@ pub struct ChromeGeometryInput {
     /// transport to zero rows (task 3.6): the connected-idle exception is
     /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
+    /// Rows the Queue playback panel's header band reserves above the Queue
+    /// panel. The header is visible while the artwork cannot carry the
+    /// now-playing title (idle or an unreachable fallback), so the shell
+    /// derives this from the projected header-visibility classification and
+    /// forwards it here (design D2). Zero while the artwork carries (or will
+    /// carry) the title: the playback region drops the header and the Queue
+    /// panel reclaims the rows.
+    pub header_rows: u16,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -335,7 +343,7 @@ fn queue_column_geometry(
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,
-        header_height: QUEUE_PLAYBACK_HEADER_ROWS,
+        header_height: input.header_rows,
         card_height: playback_rows,
     });
     let queue_playback_area = Rect {
@@ -434,3 +442,6 @@ pub fn chrome_geometry(input: ChromeGeometryInput) -> FrameChromeGeometry {
         root,
     }
 }
+
+#[cfg(test)]
+mod tests;
