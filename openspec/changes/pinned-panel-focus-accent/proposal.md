@@ -3,14 +3,14 @@
 ## Why
 
 niri draws no focus ring on layer-shell surfaces, so the pinned panel gives no sign that it holds
-the keyboard. pinwin `ef778e4` adds a focus accent: a strip on the panel's workspace-facing edge,
+the keyboard. pinwin `ef778e4` (validation tests and spec fold in `dc46c61`) adds a focus accent: a strip on the panel's workspace-facing edge,
 drawn while the panel has keyboard focus. That commit also grows the `PinwinStartup` ABI struct.
 mbv mirrors `PinwinStartup` in Rust, so moving the pin to `ef778e4` without changing the mirror is
 undefined behaviour. mbv has to adopt the accent and let the user configure it.
 
 ## What Changes
 
-- Bump the pinwin pin from `664e195` to `ef778e4`. Mirror `PinwinAccent` in
+- Bump the pinwin pin from `664e195` to `dc46c61`. Mirror `PinwinAccent` in
   `crates/mbv-pinwin/src/ffi.rs` and add it to `PinwinStartup` after `keyboard_mode`.
   `Panel::start` takes a typed accent: `Option<Accent>`, where `None` means off.
 - New `[panel]` keys `accent` (bool, default `true`), `accent_color` (`"#RRGGBB"` or `"RRGGBB"`,
@@ -33,8 +33,8 @@ undefined behaviour. mbv has to adopt the accent and let the user configure it.
 
 ### Modified Capabilities
 
-- `pinwin-panel`: new requirement `Focus accent` (the library behaviour mbv relies on, including
-  startup validation).
+- `pinwin-panel`: `Keyboard focus by clicking` gains the focus accent and its scenarios, mirroring
+  pinwin's archived `add-focus-accent`.
 - `pinned-launch`: `Panel layout settings` gains the three accent keys and F2 rows. New
   requirement `Focus accent applies at launch`.
 

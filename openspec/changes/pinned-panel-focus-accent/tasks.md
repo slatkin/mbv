@@ -1,8 +1,8 @@
-Prerequisite: `panel-expand-toggle` is merged to `main`, so the pinwin pin is at `664e195`.
+Prerequisites: `panel-expand-toggle` is merged to `main` (pinwin pin at `664e195`), and pinwin `dc46c61` is pushed to `origin/main` (`zig fetch` resolves the GitHub URL).
 
 ## 1. pinwin pin and FFI
 
-- [ ] 1.1 In `crates/mbv-pinwin`, run `zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#ef778e4649baa5dcc4249915ef6659975aca59fe"`. In `ffi.rs`, add `#[repr(C)] PinwinAccent { enabled: i32, r: u8, g: u8, b: u8, width: i32 }` and the field `accent: PinwinAccent` after `keyboard_mode` in `PinwinStartup`. Add `const _: () = assert!(size_of::<PinwinStartup>() == 44);` (design D2).
+- [ ] 1.1 In `crates/mbv-pinwin`, run `zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#dc46c6104139e91d60f4a740a6e965069d103888"`. In `ffi.rs`, add `#[repr(C)] PinwinAccent { enabled: i32, r: u8, g: u8, b: u8, width: i32 }` and the field `accent: PinwinAccent` after `keyboard_mode` in `PinwinStartup`. Add `const _: () = assert!(size_of::<PinwinStartup>() == 44);` (design D2).
 - [ ] 1.2 In `crates/mbv-pinwin`, add public `Rgb { r, g, b }` and `Accent { color: Rgb, width: NonZeroU16 }` beside `Layout` (`layout.rs`), with a `to_abi(Option<Accent>) -> ffi::PinwinAccent` that maps `None` to `{enabled 0, width 1}` (design D1). `Panel::start` takes a fourth parameter `accent: Option<Accent>`. Fix the call in `src/pin.rs::start_panel` by passing `None` for now (2.2 wires config). Verify `cargo check -p mbv-pinwin -p mbv`.
 
 ## 2. Config
