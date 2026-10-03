@@ -1,5 +1,6 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
+use crate::pin::PinnedWidth;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::SettingKey;
@@ -54,13 +55,25 @@ impl App {
         };
         // While pinned, the running panel validates the candidate layout and
         // only an accepted one is saved (design D6); a launch without a panel
-        // saves without geometry validation.
+        // saves without geometry validation. The row's own width is the one
+        // applied, so an F2 edit never snaps the panel to the other width
+        // (change `panel-expand-toggle`, design D4); any other row applies at
+        // the current width.
+        let width = match key {
+            SettingKey::PanelCols => PinnedWidth::Collapsed,
+            SettingKey::PanelColsExpanded => PinnedWidth::Expanded,
+            _ => self.pinned_width,
+        };
         let applied = match &self.pinned_panel {
-            Some(panel) => crate::pin::apply_layout(panel, &candidate),
+            Some(panel) => crate::pin::apply_layout(panel, &candidate, width),
             None => Ok(()),
         };
         match applied {
             Ok(()) => {
+                // An unpinned launch never changes `pinned_width` (design D4).
+                if self.pinned_panel.is_some() {
+                    self.pinned_width = width;
+                }
                 self.config.lock().unwrap().panel = candidate;
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
             }

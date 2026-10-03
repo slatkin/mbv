@@ -15,10 +15,37 @@ use mbv_config::PanelConfig;
 /// The running panel handle the shell owns.
 pub(crate) type PinnedPanel = mbv_pinwin::Panel<'static>;
 
-/// Apply a full `[panel]` layout to the live panel (design D6).
-pub(crate) fn apply_layout(panel: &PinnedPanel, config: &PanelConfig) -> Result<(), String> {
+/// Which of the two saved `[panel]` widths the live panel shows (change
+/// `panel-expand-toggle`, design D1). Runtime state only: the width is never
+/// saved and every pinned launch starts `Collapsed`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum PinnedWidth {
+    /// `[panel] cols`, the width every pinned launch starts at.
+    #[default]
+    Collapsed,
+    /// `[panel] cols_expanded`.
+    Expanded,
+}
+
+impl PinnedWidth {
+    /// The other width, for the toggle action (design D3).
+    #[must_use]
+    pub(crate) fn toggled(self) -> Self {
+        match self {
+            Self::Collapsed => Self::Expanded,
+            Self::Expanded => Self::Collapsed,
+        }
+    }
+}
+
+/// Apply a full `[panel]` layout at `width` to the live panel (design D6).
+pub(crate) fn apply_layout(
+    panel: &PinnedPanel,
+    config: &PanelConfig,
+    width: PinnedWidth,
+) -> Result<(), String> {
     panel
-        .apply_layout(layout_from_config(config))
+        .apply_layout(layout_from_config(config, width))
         .map_err(|error| error.to_string())
 }
 
@@ -95,7 +122,8 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
     let panel = mbv_pinwin::Panel::start(
         master.as_fd(),
-        layout_from_config(config),
+        // Every pinned launch starts at the collapsed width (design D4).
+        layout_from_config(config, PinnedWidth::Collapsed),
         mbv_pinwin::KeyboardMode::OnDemand,
     )
     .map_err(PinStartError::Panel)?;
@@ -112,13 +140,18 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     Ok(panel)
 }
 
-fn layout_from_config(config: &PanelConfig) -> mbv_pinwin::Layout {
+/// The pinwin layout for `config` at `width` (design D2): `side` and the
+/// gutters are shared by both widths, only the columns differ.
+fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> mbv_pinwin::Layout {
     mbv_pinwin::Layout {
         side: match config.side {
             mbv_config::PanelSide::Left => mbv_pinwin::Side::Left,
             mbv_config::PanelSide::Right => mbv_pinwin::Side::Right,
         },
-        cols: config.cols,
+        cols: match width {
+            PinnedWidth::Collapsed => config.cols,
+            PinnedWidth::Expanded => config.cols_expanded,
+        },
         gutters: mbv_pinwin::Gutters {
             top: config.gutter_top,
             bottom: config.gutter_bottom,
@@ -351,7 +384,9 @@ fn notify(message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{StartFailureAction, failure_action};
+    use super::{PinnedWidth, StartFailureAction, failure_action, layout_from_config};
+    use mbv_config::PanelConfig;
+    use rstest::rstest;
 
     /// Design D5: a failed pinned start falls back to the terminal only when
     /// there is one; otherwise it notifies and exits 1.
@@ -359,5 +394,26 @@ mod tests {
     fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
         assert_eq!(failure_action(true), StartFailureAction::WarnInTerminal);
         assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
+    }
+
+    /// Change `panel-expand-toggle`, design D2/D4: the layout's columns are
+    /// the active width's saved value, and `Expanded` stays as saved even
+    /// when it is narrower than `cols`.
+    #[rstest]
+    #[case::collapsed(PinnedWidth::Collapsed, 40, 80, 40)]
+    #[case::expanded(PinnedWidth::Expanded, 40, 80, 80)]
+    #[case::expanded_narrower_than_collapsed(PinnedWidth::Expanded, 40, 12, 12)]
+    fn layout_from_config_uses_the_active_width(
+        #[case] width: PinnedWidth,
+        #[case] cols: u16,
+        #[case] cols_expanded: u16,
+        #[case] expected_cols: u16,
+    ) {
+        let config = PanelConfig {
+            cols,
+            cols_expanded,
+            ..PanelConfig::default()
+        };
+        assert_eq!(layout_from_config(&config, width).cols, expected_cols);
     }
 }
