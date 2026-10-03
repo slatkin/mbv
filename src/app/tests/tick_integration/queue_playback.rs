@@ -492,13 +492,14 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
         "the collapsed panel retains no hit geometry"
     );
 
-    // The rows the slot/transport would have occupied — here the panel's
-    // collapsed region above the queue panel — resolve no playback intent.
+    // The idle panel reserves only the header band above the queue panel
+    // (the slot/transport rows collapse while idle, design D2); its painted
+    // header row resolves no playback intent.
     let chrome = harness
         .model()
         .app
         .compute_chrome_geometry(Rect::new(0, 0, 80, 40));
-    let collapsed_row = chrome.left_content.y + 1;
+    let collapsed_row = chrome.left_content.y;
     harness.inject(click(chrome.left_content.x + 5, collapsed_row));
     let outcome = harness.step();
     assert!(
