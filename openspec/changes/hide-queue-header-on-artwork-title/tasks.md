@@ -63,7 +63,7 @@
 
 ## 4. Behavior seams: track change and fallback flips
 
-- [ ] 4.1 Pin the no-flash rule end to end: on playback start and on track change with
+- [x] 4.1 Pin the no-flash rule end to end: on playback start and on track change with
   overlay-capable art, the header stays hidden from the first frame (no transient header while
   the overlay composes); toggling the visualizer or images off re-shows it; hiding the visual
   slot re-shows it; returning to artwork hides it again. Update
