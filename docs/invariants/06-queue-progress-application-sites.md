@@ -16,6 +16,15 @@ loaded it; an immediate seek after `playlist-pos` is rejected because no file
 is loaded yet. The Playback run's one-shot first-restart handling is the
 loaded-entry point for this seek.
 
+The seek target is not the canonical queue's stored position for every kind.
+For an Emby video slot, `cmd_jump_to` (`run/commands/queue.rs`) refreshes that
+item from Emby at jump time (`refresh_emby_resume`) and arms the jump with the
+refreshed `resume_ticks_for_item`, so the re-visit seeks to the server's
+current position rather than the owner's loaded value. The canonical-queue
+position is used for the seek only for Feed entries; Audiobookshelf slots
+take their position from the item's open session and are skipped by
+`override_jump_resume`.
+
 Progress positions are interpreted by the shared `ProgressObservation`, and
 relative navigation targets are resolved by `PlayerOwnerState::relative_step_target`.
 There remains a narrow race: a jump dispatched before the owner applies that
