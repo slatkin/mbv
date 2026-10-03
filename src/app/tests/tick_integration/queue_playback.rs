@@ -245,14 +245,14 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
 }
 
 /// The hidden-header rule's geometry: while playback is active and the title
-/// site is `Artwork` (the kitty/sixel overlay variant painted the title), the
-/// two header rows collapse into the slot region — the queue playback
-/// placement shrinks by `QUEUE_PLAYBACK_HEADER_ROWS` and the queue panel
-/// starts that much higher. With the title still on the header (`Header`,
-/// e.g. images off or the overlay not yet painted), the rows remain: the
-/// header is the title's only home then.
+/// site is `Artwork` (the kitty/sixel overlay owns the title), the header
+/// text row collapses into the slot region — the queue playback placement
+/// shrinks by one row and the queue panel starts that much higher, while the
+/// recess row stays as the blank row above the image. With the title still
+/// on the header (`Header`, e.g. images off or no art to carry it), the full
+/// two-row band remains: the header is the title's only home then.
 #[rstest::rstest]
-#[case::title_on_artwork_collapses(NowPlayingTitleSite::Artwork, 0)]
+#[case::title_on_artwork_collapses(NowPlayingTitleSite::Artwork, QUEUE_PLAYBACK_HEADER_ROWS - 1)]
 #[case::title_on_header_remains(NowPlayingTitleSite::Header, QUEUE_PLAYBACK_HEADER_ROWS)]
 fn header_rows_collapse_only_while_the_title_lives_on_the_artwork(
     #[case] title_site: NowPlayingTitleSite,

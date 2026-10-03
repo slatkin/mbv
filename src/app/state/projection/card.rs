@@ -75,7 +75,6 @@ fn title_site_skip_reason(
     slotless_title_present: bool,
     height: u16,
     width: u16,
-    base_dimensions: Option<(u32, u32)>,
     column_resizing: bool,
 ) -> Option<&'static str> {
     if !playback.active {
@@ -98,7 +97,15 @@ fn title_site_skip_reason(
         Some("NoTitle")
     } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
         Some("NoActiveItem")
-    } else if base_dimensions.is_none() {
+    } else if projection.cache_key.as_deref().is_some_and(|key| {
+        app.images
+            .image(key)
+            .is_some_and(|entry| entry.img.is_none())
+    }) {
+        // The fetch resolved empty: no art will ever exist to carry the
+        // title, so the header stays its home. A pending fetch (entry still
+        // absent) falls through — eligibility is decided before the art
+        // arrives.
         Some("NoBaseArt")
     } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
         Some("NoBaseProtocolSize")
@@ -116,18 +123,6 @@ fn item_kind(item: &QueueItem) -> &str {
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => "AudiobookshelfBook",
         QueueItem::Feed(_) => "Feed",
     }
-}
-
-fn resolve_title_site(variant_key: &str, painted_key: Option<&str>) -> NowPlayingTitleSite {
-    if painted_key == Some(variant_key) {
-        NowPlayingTitleSite::Artwork
-    } else {
-        NowPlayingTitleSite::Header
-    }
-}
-
-fn painted_overlay_key(key: Option<&str>) -> Option<&str> {
-    key.filter(|key| key.contains(mbv_images::title_overlay::DERIVED_SEP))
 }
 
 fn card_image_types(item: &EmbyItem) -> &'static [&'static str] {
@@ -323,9 +318,11 @@ impl App {
         if !self.dim_halfblock_forced() {
             self.images.record_card_size(height, width);
         }
-        if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref()) {
-            self.images
-                .record_painted_title_overlay(Some(key.to_owned()));
+        if painted
+            && let Some(key) = artwork_key
+                .as_deref()
+                .filter(|key| key.contains(mbv_images::title_overlay::DERIVED_SEP))
+        {
             self.title_log_gate
                 .log_paint(key, "overlay_recorded", "OverlayPainted");
         } else if plain_fallback_painted {
@@ -571,7 +568,6 @@ impl App {
             parts.is_some(),
             height,
             width,
-            base_dimensions,
             column_resizing,
         );
         if let Some(reason) = reason {
@@ -641,29 +637,26 @@ impl App {
                 .log_decision(&key, item_kind, "UncoveredGlyph", base_dimensions);
             return;
         }
-        let Some(variant_key) = self.ensure_title_overlay_protocol(
+        // The site is decided here, in the sync pass, before the panel first
+        // displays: the header hides from the first frame of eligible
+        // playback instead of flashing the title for the art-fetch/encode
+        // window and collapsing once the overlay paints (invariant 16's
+        // 2026-10-03 revision). A variant that is not encoded yet (art still
+        // fetching, encode in flight) paints plain art for those frames —
+        // the accepted gap the header no longer papers over.
+        projection.title_site = NowPlayingTitleSite::Artwork;
+        if let Some(variant_key) = self.ensure_title_overlay_protocol(
             &key,
             ratatui::layout::Size { width, height },
             parts,
             logo_cache_key,
             item_kind,
-        ) else {
-            return;
-        };
-        projection.plain_cache_key = Some(key.clone());
-        projection.cache_key = Some(variant_key.clone());
-        projection.title_site =
-            resolve_title_site(&variant_key, self.images.painted_title_overlay_key());
-        self.title_log_gate.log_decision(
-            &key,
-            item_kind,
-            if projection.title_site == NowPlayingTitleSite::Artwork {
-                "Artwork"
-            } else {
-                "NotYetPainted"
-            },
-            base_dimensions,
-        );
+        ) {
+            projection.plain_cache_key = Some(key.clone());
+            projection.cache_key = Some(variant_key);
+        }
+        self.title_log_gate
+            .log_decision(&key, item_kind, "Artwork", base_dimensions);
     }
 }
 

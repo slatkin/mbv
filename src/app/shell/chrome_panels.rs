@@ -17,7 +17,7 @@ use mbv_components::{
     LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
 use mbv_render::arrangements::chrome::{
-    QUEUE_PLAYBACK_HEADER_ROWS, RootFrame, queue_playback_column_wide,
+    RootFrame, queue_playback_column_wide, queue_playback_header_rows,
     queue_playback_header_visible, queue_playback_transport_area, status_bar_row,
 };
 use mbv_render::components::card::queue_card_reserved_rect;
@@ -53,10 +53,22 @@ impl Model {
             self.app.layout.card = CardGeometry::default();
             return;
         }
+        // The slot region below the header band, resolved from the same
+        // placement and header-rows rule the sync/paint passes use — the
+        // hidden header's reclaimed text row enlarges the reservation here
+        // too, so the art fits the rows the slot actually offers.
+        let Some(placement) = chrome.root.queue_playback else {
+            self.app.layout.card = CardGeometry::default();
+            return;
+        };
+        let header_rows = queue_playback_header_rows(queue_playback_header_visible(
+            self.app.now_playing_status(),
+            self.app.queue_card_projection.title_site,
+        ));
         let slot_region = Rect {
-            y: chrome.left_content.y + 1,
-            height: chrome.left_content.height.saturating_sub(1),
-            ..chrome.left_content
+            y: placement.y + header_rows,
+            height: placement.height.saturating_sub(header_rows),
+            ..queue_panel_inset(placement)
         };
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
@@ -282,13 +294,12 @@ impl Model {
             None
         } else {
             // The hidden-header rule: while the title lives on the artwork
-            // the two header rows collapse into the slot region, so the
-            // slot/transport sit at the placement's top.
-            let header_rows = if queue_playback_header_visible(status, transport.title_site) {
-                QUEUE_PLAYBACK_HEADER_ROWS
-            } else {
-                0
-            };
+            // the header text row collapses into the slot region (the
+            // recess row stays), so the slot/transport sit one row higher.
+            let header_rows = queue_playback_header_rows(queue_playback_header_visible(
+                status,
+                transport.title_site,
+            ));
             placement.map(|placement| {
                 let inset = queue_panel_inset(placement);
                 let slot_region = Rect {
@@ -339,17 +350,14 @@ impl Model {
         // The slot region starts on the row below the placement's header band
         // (the header's recessed padding row plus the painted header row) and
         // keeps the queue panel's shared horizontal inner padding — unless the
-        // header is hidden (the title lives on the artwork), when the two
-        // header rows collapse into the slot region and it starts at the top.
+        // header is hidden (the title lives on the artwork), when the header
+        // text row collapses into the slot region and the recess row stays as
+        // the blank row above the image.
         let inset = queue_panel_inset(placement);
-        let header_rows = if queue_playback_header_visible(
+        let header_rows = queue_playback_header_rows(queue_playback_header_visible(
             self.app.now_playing_status(),
             self.app.queue_card_projection.title_site,
-        ) {
-            QUEUE_PLAYBACK_HEADER_ROWS
-        } else {
-            0
-        };
+        ));
         let slot_region = Rect {
             y: placement.y + header_rows,
             height: placement.height.saturating_sub(header_rows),

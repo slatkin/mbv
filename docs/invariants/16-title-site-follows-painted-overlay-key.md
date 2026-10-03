@@ -1,46 +1,54 @@
-# Invariant 16 — The title site stays Header until the overlay variant has actually painted
+# Invariant 16 — The title site is decided before the panel first displays
 
 ## The invariant
 
-The queue card's title site (`NowPlayingTitleSite`) is `Artwork` only when the
-shell has recorded that the *composed overlay variant* for the current
-identity, box and title was painted. Eligibility (the overlay could be built)
-is not enough, and neither is a paint of the plain artwork: the recorded
-painted key must equal the current variant key. Every other state resolves to
-`Header`, so the title is never absent from both the header row and the
-artwork.
+The queue card's title site (`NowPlayingTitleSite`) is `Artwork` exactly when
+the sync-pass eligibility gates say the artwork will carry the now-playing
+title: playback active, images on with a kitty/sixel-family protocol, the
+visual slot shown, an active item with title parts, and a title whose glyphs
+cover the overlay rows. The decision is made in the projection sync — before
+the header ever paints for this playback — never from a paint-time fact. A
+base-art fetch still in flight counts as eligible (the art will arrive); only
+a fetch that resolved empty (no art will ever exist) keeps the site `Header`.
+
+The painted-overlay key is not a site input. The card painter alone uses the
+variant/plain cache keys to choose which bitmap paints; until the overlay
+variant is encoded the slot paints plain art, so the title may be absent from
+both sites for those frames. That gap is accepted by decision (2026-10-03):
+the header must not flash the title for the fetch/encode window and collapse
+afterwards, so the header yields the title's home to the artwork up front.
 
 ## Why it matters
 
-Nothing in the types stops `title_site` being set from eligibility, or the
-painted key being recorded from whichever bitmap painted last. Either mistake
-compiles and drops the header title for frames where the artwork still shows
-plain art (variant not yet encoded, fallback to `plain_cache_key`, resize,
-track change), leaving the title on neither site. The plain entry and the
-overlay variant live under different keys (`{id}:P`/`{id}:QB` versus
-`{identity}:t:{cols}x{rows}:{hash}`); confusing them is a race between the
-fallback paint and the overlay paint.
+Deciding the site from whether the overlay *already painted* made the header's
+fate lag the panel's first display: playback start showed the title in the
+header, then dropped it once the overlay encoded — a one-time flash on every
+start. Deciding it from eligibility instead pins the header's fate before its
+first paint, while keeping the variant/plain key distinction where it belongs:
+in the painter's bitmap choice, not in site ownership.
 
 ## How the code maintains it today
 
-- `resolve_title_site` in `src/app/state/projection/card.rs` compares the
-  variant key with `painted_title_overlay_key()`; the projection starts from
-  `Header`.
-- `render_queue_playback_slot` records the painted key only when the variant
-  itself painted (`painted_overlay_key` requires the derived-key separator), so
-  a plain-fallback paint never records a key and the site stays `Header`.
-- Tests: `chooses_site_from_painted_fact` and `overlay_painted_fact_requires_overlay_key`
-  in `src/app/state/projection/card/title_site_tests.rs`;
-  `building_title_overlay_leaves_shared_plain_card_bitmap_unchanged` in
-  `src/app/infra/image_fetch/protocol/protocol_tests.rs` (the variant never
-  mutates the plain entry, so the two keys cannot alias).
-- The painted fact lags one frame by design: the header may show the title
-  twice for a frame, never zero times.
+- `title_site_skip_reason` in `src/app/state/projection/card.rs` gates on
+  sync-known facts only; a pending base-art fetch (cache entry absent) falls
+  through, a resolved-empty fetch (`NoBaseArt`) does not.
+- `queue_title_overlay` sets `projection.title_site = Artwork` right after the
+  `covers` gate passes — before `ensure_title_overlay_protocol` may or may not
+  produce the variant this sync.
+- The header/geometry consumers (`queue_playback_header_visible` in
+  `crates/mbv-render/src/arrangements/chrome.rs`, the panel's paint gate) read
+  only this projected fact.
+- Tests: `header_rows_collapse_only_while_the_title_lives_on_the_artwork`
+  (geometry) and `header_row_paints_the_title_only_while_it_is_the_title_site`
+  (panel paint gate); `building_title_overlay_leaves_shared_plain_card_bitmap_unchanged`
+  in `src/app/infra/image_fetch/protocol/protocol_tests.rs` (the variant never
+  mutates the plain entry, so the painter's plain fallback cannot alias the
+  overlay variant).
 
 ## Where it currently fails
 
-No known violation. The painted key is a single shell-held value, so a path
-that paints a different variant (a new draw site for the card, a second
-surface sharing the key) must record or clear it itself; eviction of the
-painted variant clears it (`crates/mbv-images/src/cache.rs`). Nothing
-enforces that a new paint path does so.
+Known accepted gap: between playback start and the overlay variant's first
+paint, the title is on neither site (the art shows plain or is still loading).
+A fetch that resolves empty keeps the header as the title's home, so the gap
+is bounded by the fetch/encode window, never unbounded — unless a variant
+never becomes encodable while eligibility holds (no known path).

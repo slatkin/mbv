@@ -14,15 +14,13 @@ const TAB_BAR_BOX_HEIGHT: u16 = 3;
 /// blank trailing row).
 pub const PLAYER_BOX_HEIGHT: u16 = 3;
 
-/// Rows the Queue playback panel spends on its header while the header
-/// paints (design D10; the painted row lands with task 3.2). The root
-/// placement reserves it so the Queue panel's placement already starts
-/// below the Queue playback panel's header. Two rows: the header text row
-/// plus the `queue_panel_inset` row of column padding above it, which
-/// recesses the header from the column's top edge. The header hides while
-/// playback is active and the title lives on the artwork
-/// (`queue_playback_header_visible`); its rows then collapse into the
-/// visual slot instead of staying reserved.
+/// Rows the Queue playback panel's header band spends while the header
+/// paints (design D10): the header text row plus the `queue_panel_inset`
+/// row of column padding above it, which recesses the header from the
+/// column's top edge. While the header is hidden — playback active and the
+/// title painted on the artwork (`queue_playback_header_visible`) — only
+/// the text row collapses: the recess row stays as the blank row above the
+/// image (`queue_playback_header_rows`).
 pub const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
 /// Whether the queue playback panel's header row paints this frame. The
@@ -39,6 +37,18 @@ pub fn queue_playback_header_visible(
     title_site: NowPlayingTitleSite,
 ) -> bool {
     !(status != NowPlayingStatus::Idle && title_site == NowPlayingTitleSite::Artwork)
+}
+
+/// Rows the header band reserves for one `queue_playback_header_visible`
+/// verdict: the full band while the header paints, the recess row alone
+/// while it is hidden (the blank row above the image stays).
+#[must_use]
+pub fn queue_playback_header_rows(header_visible: bool) -> u16 {
+    if header_visible {
+        QUEUE_PLAYBACK_HEADER_ROWS
+    } else {
+        QUEUE_PLAYBACK_HEADER_ROWS - 1
+    }
 }
 
 /// Rows the right column reserves at the bottom for the floating status
@@ -355,11 +365,7 @@ fn queue_column_geometry(
     // `queue_panel_geometry` (task 3.2: the header row is one input alongside
     // the visual-slot and transport heights, single source), so they tile
     // the queue column's content exactly.
-    let header_height = if input.header_visible {
-        QUEUE_PLAYBACK_HEADER_ROWS
-    } else {
-        0
-    };
+    let header_rows = queue_playback_header_rows(input.header_visible);
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
         input.card_height,
@@ -367,7 +373,7 @@ fn queue_column_geometry(
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,
-        header_height,
+        header_height: header_rows,
         card_height: playback_rows,
     });
     let queue_playback_area = Rect {
