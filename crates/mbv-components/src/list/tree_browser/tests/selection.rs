@@ -326,3 +326,62 @@ fn pointer_operations_use_the_latest_completed_frame() {
 
     assert!(browser.resolve_current_point(Position::new(2, 1)).is_none());
 }
+
+/// #745: a content-preserving tree reset keeps the reconciled nodes but drops
+/// marks, filtering, expansion and retained paint geometry, and returns the
+/// selection and viewport to their normal initial state.
+#[test]
+fn reset_presentation_keeps_nodes_and_clears_filter_expansion_and_marks() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            named_node(Target::Root, None, "Root", "root", TreeMarkPolicy::Direct),
+            named_node(
+                Target::Branch,
+                Some(Target::Root),
+                "Branch",
+                "branch",
+                TreeMarkPolicy::Direct,
+            ),
+            named_node(
+                Target::Leaf,
+                Some(Target::Branch),
+                "Leaf",
+                "leaf",
+                TreeMarkPolicy::Direct,
+            ),
+            named_node(
+                Target::Other,
+                None,
+                "Other",
+                "other",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Branch,
+    ));
+    browser.apply(super::super::TreeOperation::Select(Target::Leaf));
+    paint(&mut browser);
+    browser.apply(super::super::TreeOperation::PointerToggleMark(
+        Position::new(2, 0),
+    ));
+    browser.apply(super::super::TreeOperation::EditFilter("leaf".into()));
+    assert!(browser.filter_active());
+    assert_eq!(browser.marked_targets(), &[Target::Branch]);
+
+    browser.reset_presentation();
+
+    assert!(browser.node(&Target::Leaf).is_some(), "nodes are retained");
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert!(!browser.is_expanded(&Target::Root));
+    assert!(!browser.is_expanded(&Target::Branch));
+    assert!(!browser.filter_active());
+    assert_eq!(browser.marked_targets().len(), 0);
+    assert_eq!(browser.viewport_offset, 0);
+    assert!(!browser.has_completed_paint());
+}

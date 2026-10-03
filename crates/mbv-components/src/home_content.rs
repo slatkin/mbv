@@ -69,6 +69,13 @@ impl HomeContent {
         self.project_continue_rows();
     }
 
+    /// Reset Home's local presentation without replacing its Continue
+    /// Watching rows: the shared list returns to its first row and top, and
+    /// any transient multi-selection is dropped (design D3).
+    pub fn reset_presentation(&mut self) {
+        self.carrier.reset_presentation();
+    }
+
     #[must_use]
     pub fn cursor(&self) -> usize {
         self.carrier.cursor()
@@ -339,6 +346,11 @@ fn is_selection_click(input: MediaListSurfaceInput) -> bool {
 }
 
 impl LibraryContentOwner for HomeContent {
+    /// Forwards to the inherent content-preserving reset (design D3).
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn clear_selection(&mut self) {
         self.carrier.clear_owner_selection();
     }

@@ -67,6 +67,50 @@ impl App {
         }
     }
 
+    /// #745: drop a root-level `Loaded` whose fetch key no longer matches the
+    /// current root (a UI-state reset discarded its browse intent). If the
+    /// dropped completion was an unfiltered root's only in-flight load,
+    /// re-issue it under the reset fields so the default root still completes;
+    /// a filtered root's own refresh owns its reload. Returns `true` when the
+    /// completion was rejected.
+    fn drop_stale_root_completion(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+        level: &BrowseLevel,
+    ) -> bool {
+        let stale = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first().filter(|_| lib.nav_stack.len() == 1))
+            .is_some_and(|root| {
+                root.parent_id == parent_id
+                    && mbv_ui_model::browse::LevelFetchKey::from_level(root)
+                        != mbv_ui_model::browse::LevelFetchKey::from_level(level)
+            });
+        if !stale {
+            return false;
+        }
+        if self.libs[lib_idx].nav_stack[0].loading
+            && self.libs[lib_idx].nav_stack[0].letter_filter.is_none()
+        {
+            let root = &self.libs[lib_idx].nav_stack[0];
+            let (parent_id, title) = (root.parent_id.clone(), root.title.clone());
+            let (item_types, unplayed_only) = (root.item_types.clone(), root.unplayed_only);
+            let (sort_by, sort_order) = (root.sort_by.clone(), root.sort_order.clone());
+            self.spawn_browse(
+                lib_idx,
+                parent_id,
+                title,
+                item_types,
+                unplayed_only,
+                sort_by,
+                sort_order,
+            );
+        }
+        true
+    }
+
     pub(super) fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
         crate::app::dispatch::library::browse::retain_grouped_music_level_items(
             level,
@@ -80,6 +124,13 @@ impl App {
         parent_id: &str,
         mut level: BrowseLevel,
     ) {
+        // #745: a root-level load issued before a UI-state reset carries the
+        // fetch fields the reset discarded. The root's parent id survives the
+        // reset, so `handle_loaded_level`'s parent match cannot reject it;
+        // compare the full fetch key and drop the stale completion instead.
+        if self.drop_stale_root_completion(lib_idx, parent_id, &level) {
+            return;
+        }
         // Filtering belongs at the event boundary so every level-row producer
         // (including refresh and restore) applies the same server-row
         // accounting invariant.

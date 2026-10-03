@@ -133,6 +133,20 @@ pub fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<SurnameBucket>
     buckets
 }
 
+/// The staged replacement catalog for one in-flight book refresh: the
+/// book-shaped sibling of `ShowCatalogReplacement`. Pages collect here while
+/// the published `books` list keeps serving the UI; only a completed
+/// traversal publishes, and a failure discards the batch.
+#[derive(Debug, Clone, Default)]
+pub struct BookCatalogReplacement {
+    /// The catalog request serial this batch was started under.
+    pub request: u64,
+    pub books: Vec<AudiobookshelfBook>,
+    pub total: usize,
+    pub next_page: usize,
+    pub loading_pages: HashSet<usize>,
+}
+
 /// Book-shaped browse state: the author-surname-grouped book list, the
 /// selected book's chapter/audio-file detail, and book progress keyed by
 /// `library_item_id` only. Parallel to `AudiobookshelfBrowseState`; which one
@@ -152,13 +166,28 @@ pub struct AudiobookshelfBookBrowseState {
     pub selected_id: Option<String>,
     pub error: Option<String>,
     pub detail_cache: HashMap<String, (Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>)>,
-    /// Book ids with a detail request in flight.
-    pub detail_loading_ids: HashSet<String>,
+    /// Book ids with a detail request in flight, holding the request serial
+    /// each fetch was issued under (the state's monotonically increasing
+    /// `next_detail_request`). A response retires — and may write the cache
+    /// from — its own serial only, so a superseded pre-refresh response can
+    /// neither retire a newer request's mark nor overwrite a newer entry.
+    pub detail_loading_ids: HashMap<String, u64>,
+    /// The serial issued to the most recent book-detail fetch.
+    pub next_detail_request: u64,
     pub detail_loading: bool,
     pub progress: HashMap<String, AudiobookshelfBookProgress>,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed
     /// whenever `books` changes (see `append_page_books`).
     pub buckets: Vec<SurnameBucket>,
+    /// The staged replacement catalog, `Some` only while a refresh batch is
+    /// collecting; the published `books` list is untouched until
+    /// `commit_catalog_replacement`.
+    pub replacement: Option<BookCatalogReplacement>,
+    /// The serial issued to the most recent catalog request chain.
+    pub next_catalog_request: u64,
+    /// The catalog request serial the state currently expects: `0` for the
+    /// initial load, bumped by `begin_catalog_replacement`.
+    pub catalog_request: u64,
 }
 
 impl AudiobookshelfBookBrowseState {
@@ -173,10 +202,14 @@ impl AudiobookshelfBookBrowseState {
             selected_id: None,
             error: None,
             detail_cache: HashMap::new(),
-            detail_loading_ids: HashSet::new(),
+            detail_loading_ids: HashMap::new(),
+            next_detail_request: 0,
             detail_loading: false,
             progress: HashMap::new(),
             buckets: Vec::new(),
+            replacement: None,
+            next_catalog_request: 0,
+            catalog_request: 0,
         }
     }
 
@@ -200,7 +233,7 @@ impl AudiobookshelfBookBrowseState {
         self.detail_loading = self
             .selected_id
             .as_ref()
-            .is_some_and(|id| self.detail_loading_ids.contains(id));
+            .is_some_and(|id| self.detail_loading_ids.contains_key(id));
     }
 
     #[must_use]
@@ -280,7 +313,7 @@ impl AudiobookshelfBookBrowseState {
             {
                 self.select(0);
             } else {
-                self.detail_loading = self.detail_loading_ids.contains(selected_id);
+                self.detail_loading = self.detail_loading_ids.contains_key(selected_id);
             }
         }
     }
@@ -288,6 +321,122 @@ impl AudiobookshelfBookBrowseState {
     #[must_use]
     pub fn needs_page(&self) -> Option<usize> {
         (self.books.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
+    }
+
+    /// Starts a library-local replacement batch: the published catalog keeps
+    /// serving the UI while pages stage separately. Returns the batch's
+    /// request serial; the pre-refresh chain is superseded, and page 0 is
+    /// marked in flight for the caller's immediate request.
+    pub fn begin_catalog_replacement(&mut self) -> u64 {
+        self.next_catalog_request += 1;
+        self.catalog_request = self.next_catalog_request;
+        let mut replacement = BookCatalogReplacement {
+            request: self.catalog_request,
+            ..BookCatalogReplacement::default()
+        };
+        replacement.loading_pages.insert(0);
+        self.replacement = Some(replacement);
+        // The pre-refresh chain's in-flight page marks are superseded: its
+        // results are discarded at the event boundary, so a leaked mark would
+        // strand the published catalog behind an unretirable `loading_pages`
+        // entry if the replacement later aborts (#745).
+        self.loading_pages.clear();
+        self.catalog_request
+    }
+
+    /// Stages a replacement page when `request` is the current chain; a
+    /// superseded request is ignored whole. Never touches the published
+    /// catalog or its selection. Returns whether it staged.
+    pub fn append_replacement_page(
+        &mut self,
+        request: u64,
+        page: usize,
+        total: usize,
+        books: Vec<AudiobookshelfBook>,
+    ) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        let Some(replacement) = self.replacement.as_mut() else {
+            return false;
+        };
+        replacement.loading_pages.remove(&page);
+        replacement.total = total;
+        replacement.next_page = replacement.next_page.max(page + 1);
+        for book in books {
+            if !replacement
+                .books
+                .iter()
+                .any(|existing| existing.library_item_id == book.library_item_id)
+            {
+                replacement.books.push(book);
+            }
+        }
+        replacement.books.sort_by(|left, right| {
+            left.author_sort_key
+                .to_lowercase()
+                .cmp(&right.author_sort_key.to_lowercase())
+                .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+        });
+        true
+    }
+
+    /// The next page the active replacement needs, when `request` is current.
+    #[must_use]
+    pub fn replacement_needs_page(&self, request: u64) -> Option<usize> {
+        if self.catalog_request != request {
+            return None;
+        }
+        let replacement = self.replacement.as_ref()?;
+        (replacement.books.len() < replacement.total && replacement.loading_pages.is_empty())
+            .then_some(replacement.next_page)
+    }
+
+    /// Publishes the staged replacement once traversal completed: the
+    /// published list becomes the authoritative result, so changed metadata is
+    /// updated and deleted books are removed. The selection and surname
+    /// buckets are reconciled against that complete result only. Returns
+    /// whether a batch was published.
+    pub fn commit_catalog_replacement(&mut self, request: u64) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        let Some(replacement) = self.replacement.take() else {
+            return false;
+        };
+        self.books = replacement.books;
+        self.total = replacement.total;
+        self.next_page = replacement.next_page;
+        self.loading_pages = replacement.loading_pages;
+        self.books.sort_by(|left, right| {
+            left.author_sort_key
+                .to_lowercase()
+                .cmp(&right.author_sort_key.to_lowercase())
+                .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+        });
+        self.buckets = build_surname_buckets(&self.books);
+        let selected_still_present = self
+            .selected_id
+            .as_deref()
+            .is_some_and(|id| self.books.iter().any(|book| book.library_item_id == id));
+        if !selected_still_present {
+            self.selected_id = self.books.first().map(|book| book.library_item_id.clone());
+        }
+        self.detail_loading = self
+            .selected_id
+            .as_ref()
+            .is_some_and(|id| self.detail_loading_ids.contains_key(id));
+        true
+    }
+
+    /// Discards the staged replacement on failure; the published catalog and
+    /// its browsing context are untouched. Returns whether a batch was
+    /// discarded.
+    pub fn abort_catalog_replacement(&mut self, request: u64) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        self.replacement.take().is_some()
     }
 }
 

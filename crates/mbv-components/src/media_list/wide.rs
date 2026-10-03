@@ -164,6 +164,15 @@ impl<Target> WideMediaList<Target> {
 }
 
 impl<Target: Clone + Eq> WideMediaList<Target> {
+    /// Content-preserving presentation reset (design D3): keep this flow's
+    /// rows, drop transient selection, and return the cursor and viewport to
+    /// their initial position. The retained painted geometry is invalidated so
+    /// a pointer gesture cannot resolve against the pre-reset frame.
+    pub fn reset_presentation(&mut self) {
+        self.invalidate_paint();
+        self.core.reset_presentation();
+    }
+
     /// The clamped viewport for a painted `viewport_height`, keeping the
     /// selected row on screen.
     pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {

@@ -193,7 +193,7 @@ const GLOBAL_CONFIGURABLE_ROWS: &[(&str, &str)] = &[
     ("settings_open", "Settings"),
     ("sessions_open", "Remote sessions"),
     ("playlists_open", "Playlists"),
-    ("f5_refresh", "Refresh view"),
+    ("f5_refresh", "Refresh destination"),
     ("visualizer", "Switch queue artwork / visualizer"),
     ("next_library_tab", "Cycle menu"),
     ("library_tab_jump", "Jump to tab"),

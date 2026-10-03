@@ -149,7 +149,7 @@ impl Model {
         }
     }
 
-    fn dismiss_blocking_modals(&mut self) {
+    pub(in crate::app) fn dismiss_blocking_modals(&mut self) {
         self.dismiss_modal(&Self::confirm_id());
         self.dismiss_modal(&Self::daemon_lost_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));

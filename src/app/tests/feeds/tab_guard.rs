@@ -185,14 +185,12 @@ fn feed_selection_enqueue_preserves_supplied_order() {
     );
 }
 
-/// F5 while the Feeds tab is selected must not dispatch into the Emby or
-/// Audiobookshelf refresh paths: the Emby library stays unmarked and the
-/// Audiobookshelf catalog keeps its state. (Whether F5 then refreshes feeds
-/// is owned by the refresh-dispatch change; the cross-Service no-leak is
-/// what this guards.)
 /// F5 on the Feeds destination invokes the feed refresh: the feed tab is
 /// marked loading and the Emby / Audiobookshelf / queue state stays
-/// untouched.
+/// untouched. The selected-destination contract (#745) makes F5 a feed
+/// refetch rather than a cross-Service leak; refresh keeps the current group,
+/// watched filter and Latest mode because only the per-subscription entries
+/// are replaced.
 #[test]
 fn f5_on_feeds_tab_invokes_feed_refresh() {
     let mut app = make_app_stub();

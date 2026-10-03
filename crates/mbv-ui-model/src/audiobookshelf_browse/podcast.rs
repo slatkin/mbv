@@ -47,6 +47,24 @@ pub enum PillSelection {
     Show(String),
 }
 
+/// The staged replacement catalog for one in-flight refresh (design D2 of
+/// `separate-data-refresh-from-ui-reset`): pages collect here while the
+/// published `shows` list keeps serving the UI, so a slow or failed refresh
+/// never empties or mutates the visible catalog. Only a completed traversal
+/// publishes the batch (`commit_catalog_replacement`); a failure discards it
+/// (`abort_catalog_replacement`).
+#[derive(Debug, Clone, Default)]
+pub struct ShowCatalogReplacement {
+    /// The catalog request serial this batch was started under: a page or
+    /// result carrying a different serial belongs to a superseded chain and
+    /// is ignored.
+    pub request: u64,
+    pub shows: Vec<AudiobookshelfShow>,
+    pub total: usize,
+    pub next_page: usize,
+    pub loading_pages: HashSet<usize>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AudiobookshelfBrowseState {
     pub library: AudiobookshelfLibrary,
@@ -70,6 +88,11 @@ pub struct AudiobookshelfBrowseState {
     /// neither retire a newer request's mark nor overwrite a newer cache
     /// entry.
     pub detail_loading_ids: HashMap<String, u64>,
+    /// Show ids whose episodes an in-flight refresh still owes a forced
+    /// re-request (design D2): the bounded fan-out re-requests each even
+    /// though its old episodes stay published until the fresh result lands,
+    /// and retires the mark when the request is issued.
+    pub refresh_pending: HashSet<String>,
     /// The serial issued to the most recent per-show episode fetch.
     pub next_detail_request: u64,
     /// The committed show-pill scope for the lazy episode fan-out (design
@@ -84,6 +107,17 @@ pub struct AudiobookshelfBrowseState {
     /// removes the episode from the views clears it.
     pub selected_episode: Option<(String, String)>,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
+    /// The staged replacement catalog, `Some` only while a refresh batch is
+    /// collecting. `append_replacement_page`/`replacement_needs_page` stage
+    /// and drive it; the published `shows` list is untouched until
+    /// `commit_catalog_replacement`.
+    pub replacement: Option<ShowCatalogReplacement>,
+    /// The serial issued to the most recent catalog request chain.
+    pub next_catalog_request: u64,
+    /// The catalog request serial the state currently expects: `0` for the
+    /// initial load, bumped by `begin_catalog_replacement`. Page completions
+    /// carrying a different serial are rejected as pre-refresh results.
+    pub catalog_request: u64,
 }
 
 impl AudiobookshelfBrowseState {
@@ -99,10 +133,14 @@ impl AudiobookshelfBrowseState {
             error: None,
             detail_cache: HashMap::new(),
             detail_loading_ids: HashMap::new(),
+            refresh_pending: HashSet::new(),
             next_detail_request: 0,
             committed_show_pill: None,
             selected_episode: None,
             progress: HashMap::new(),
+            replacement: None,
+            next_catalog_request: 0,
+            catalog_request: 0,
         }
     }
 
@@ -127,15 +165,6 @@ impl AudiobookshelfBrowseState {
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
         self.detail_cache.insert(id, episodes);
-    }
-
-    /// Clears the per-show episode cache, the in-flight fetch marks, and the
-    /// selected episode for a refresh; the episode views reload from the
-    /// per-show fan-out (the show list itself is cleared by the caller).
-    pub fn clear_episodes(&mut self) {
-        self.detail_cache.clear();
-        self.detail_loading_ids.clear();
-        self.selected_episode = None;
     }
 
     /// The fetched episode with exactly this `(library_item_id, episode_id)`
@@ -258,6 +287,148 @@ impl AudiobookshelfBrowseState {
     #[must_use]
     pub fn needs_page(&self) -> Option<usize> {
         (self.shows.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
+    }
+
+    /// Starts a library-local replacement batch (design D2): the published
+    /// catalog keeps serving the UI while pages stage separately. Returns the
+    /// batch's request serial; the pre-refresh chain is superseded, and page 0
+    /// is marked in flight for the caller's immediate request.
+    pub fn begin_catalog_replacement(&mut self) -> u64 {
+        self.next_catalog_request += 1;
+        self.catalog_request = self.next_catalog_request;
+        let mut replacement = ShowCatalogReplacement {
+            request: self.catalog_request,
+            ..ShowCatalogReplacement::default()
+        };
+        replacement.loading_pages.insert(0);
+        self.replacement = Some(replacement);
+        // The pre-refresh chain's in-flight page marks are superseded: its
+        // results are discarded at the event boundary, so a leaked mark would
+        // strand the published catalog behind an unretirable `loading_pages`
+        // entry if the replacement later aborts (#745).
+        self.loading_pages.clear();
+        self.catalog_request
+    }
+
+    /// Arms a forced episode re-request for each of `shows` (design D2): the
+    /// bounded fan-out re-requests them despite their cached episodes, which
+    /// stay published until the fresh result succeeds.
+    pub fn begin_detail_refresh(&mut self, shows: Vec<String>) {
+        self.refresh_pending.extend(shows);
+    }
+
+    /// Whether `id` still awaits its forced refresh request.
+    #[must_use]
+    pub fn needs_detail_refresh(&self, id: &str) -> bool {
+        self.refresh_pending.contains(id)
+    }
+
+    /// Retires `id`'s forced-refresh mark once its request is issued.
+    pub fn retire_detail_refresh(&mut self, id: &str) {
+        self.refresh_pending.remove(id);
+    }
+
+    /// Stages a replacement page when `request` is the current chain; a
+    /// superseded request is ignored whole. Never touches the published
+    /// catalog or its selection. Returns whether it staged.
+    pub fn append_replacement_page(
+        &mut self,
+        request: u64,
+        page: usize,
+        limit: usize,
+        total: usize,
+        shows: Vec<AudiobookshelfShow>,
+    ) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        let Some(replacement) = self.replacement.as_mut() else {
+            return false;
+        };
+        replacement.loading_pages.remove(&page);
+        replacement.total = total;
+        replacement.next_page = replacement.next_page.max(page + 1);
+        for show in shows {
+            if !replacement
+                .shows
+                .iter()
+                .any(|existing| existing.library_item_id == show.library_item_id)
+            {
+                replacement.shows.push(show);
+            }
+        }
+        replacement
+            .shows
+            .sort_by_key(|show| show.title.to_lowercase());
+        let _ = limit;
+        true
+    }
+
+    /// The next page the active replacement needs, when `request` is current.
+    #[must_use]
+    pub fn replacement_needs_page(&self, request: u64) -> Option<usize> {
+        if self.catalog_request != request {
+            return None;
+        }
+        let replacement = self.replacement.as_ref()?;
+        (replacement.shows.len() < replacement.total && replacement.loading_pages.is_empty())
+            .then_some(replacement.next_page)
+    }
+
+    /// Publishes the staged replacement once traversal completed (design D2):
+    /// the published list becomes the authoritative result, so changed
+    /// metadata is updated and deleted shows are removed. The selected show,
+    /// committed pill and selected episode are reconciled against that
+    /// complete result only — never against a partial page. Returns whether a
+    /// batch was published.
+    pub fn commit_catalog_replacement(&mut self, request: u64) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        let Some(replacement) = self.replacement.take() else {
+            return false;
+        };
+        self.shows = replacement.shows;
+        self.total = replacement.total;
+        self.next_page = replacement.next_page;
+        self.loading_pages = replacement.loading_pages;
+        self.shows.sort_by_key(|show| show.title.to_lowercase());
+        let selected_still_present = self
+            .selected_id
+            .as_deref()
+            .is_some_and(|id| self.shows.iter().any(|show| show.library_item_id == id));
+        if !selected_still_present {
+            self.selected_id = self.shows.first().map(|show| show.library_item_id.clone());
+        }
+        if self
+            .committed_show_pill
+            .as_deref()
+            .is_some_and(|id| !self.shows.iter().any(|show| show.library_item_id == id))
+        {
+            self.committed_show_pill = None;
+        }
+        if self
+            .selected_episode
+            .as_ref()
+            .is_some_and(|(show, _)| !self.shows.iter().any(|s| s.library_item_id == *show))
+        {
+            self.selected_episode = None;
+        }
+        // A show absent from the authoritative result no longer owes a
+        // refresh request.
+        self.refresh_pending
+            .retain(|id| self.shows.iter().any(|show| &show.library_item_id == id));
+        true
+    }
+
+    /// Discards the staged replacement on failure; the published catalog and
+    /// its browsing context are untouched. Returns whether a batch was
+    /// discarded.
+    pub fn abort_catalog_replacement(&mut self, request: u64) -> bool {
+        if self.catalog_request != request {
+            return false;
+        }
+        self.replacement.take().is_some()
     }
 }
 fn compare_publication_dates(left: Option<u64>, right: Option<u64>) -> std::cmp::Ordering {

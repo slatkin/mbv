@@ -238,8 +238,9 @@ _Avoid_: terminal continuity, UI state
 The one exit snapshot a completed TUI session leaves as the next launch's
 starting location. A TUI loads the saved snapshot once at startup, keeps its
 own launch-state changes in memory while running, and replaces the saved
-snapshot only as part of orderly exit — cursor, tab, pill, item, focus,
-refresh, and rendering activity never write it while open. When two TUIs
+snapshot only as part of orderly exit (a **UI-state reset** clears it outside
+exit) — cursor, tab, pill, item, focus, refresh, and rendering activity never
+write it while open. When two TUIs
 diverge in memory and exit in sequence, the last completed exit wins, with no
 Client identity, merge, or daemon synchronization. An attached **Client**
 restores the same bounded launch-state snapshot. The snapshot holds exactly
@@ -253,6 +254,23 @@ transient presentation state. A bounded launch location, not **Session
 continuity**; and unlike **Library position**, only the selected tab is
 recorded, never per-library state for unselected tabs.
 _Avoid_: session state, saved session, launch preferences
+
+**UI-state reset**:
+The global F2 Settings action labelled `Reset UI State`. It returns the running
+TUI's presentation and interaction state to defaults as a whole, not just the
+focused Panel: every retained destination returns to its root scope and default
+sort, filter, pill, selection, scroll and expansion; Queue's local cursor, marks
+and scroll reinitialize without changing its scope, slots or playback; Home is
+selected with default Panel mode, widths, artwork presentation and startup
+focus rules; transient overlays, Inline Search, multi-selection, Visual mode,
+drafts and pending UI navigation are cleared. Media, credentials, settings,
+queue contents, playback, progress and caches are untouched; the F5 data
+refresh, which refetches content, is a different action. It is the one
+deliberate exception to **TUI launch state** being exit-only: it clears the
+saved launch snapshot and the per-library saved positions and presentation
+preferences a launch would otherwise restore, so a Client started before the
+next orderly exit begins from defaults.
+_Avoid_: factory reset, clear cache, data reset, hard reset
 
 **Attach**:
 A Client establishing a ctrl connection to an existing Player owner. It is a

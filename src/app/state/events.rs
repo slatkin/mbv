@@ -226,6 +226,10 @@ pub enum AudiobookshelfEvent {
     },
     ShowsFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
+        /// The catalog request serial the fetch was issued under (the browse
+        /// state's `catalog_request`): a pre-refresh result carrying a
+        /// superseded serial is discarded whole.
+        request: u64,
         library_id: String,
         result: Result<
             mbv_audiobookshelf::AudiobookshelfShowPage,
@@ -234,6 +238,10 @@ pub enum AudiobookshelfEvent {
     },
     BooksFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
+        /// The catalog request serial the fetch was issued under (the browse
+        /// state's `catalog_request`): a pre-refresh result carrying a
+        /// superseded serial is discarded whole.
+        request: u64,
         library_id: String,
         result: Result<
             mbv_audiobookshelf::AudiobookshelfBookPage,
@@ -250,6 +258,11 @@ pub enum AudiobookshelfEvent {
     },
     BookDetailLoaded {
         generation: mbv_core::service_runtime::SetupGeneration,
+        /// The fetch's request serial (the book browse state's
+        /// `next_detail_request` at spawn): an arrival retires its in-flight
+        /// mark and may write the cache only when the book's current mark
+        /// still carries this serial.
+        request: u64,
         library_item_id: String,
         result: Result<
             (

@@ -275,6 +275,21 @@ impl EmbyLibraryContent {
         changed
     }
 
+    /// Reset this destination's local presentation without replacing its
+    /// content (design D3): back to the default library pill (not Latest, no
+    /// letter filter, first feed group), the first row and top of the list,
+    /// no `saved_browse_position`, no Hero scroll and no Inline Search.
+    pub fn reset_presentation(&mut self) {
+        self.latest_mode = false;
+        self.letter_filter = None;
+        self.feed_group_cursor = 0;
+        self.saved_browse_position = None;
+        self.hero_scroll = 0;
+        self.inline_search.close();
+        self.feed_owner();
+        self.carrier.reset_presentation();
+    }
+
     /// The authoritative selection of the shared owner, as an `items` index
     /// (the owner is the only cursor store).
     #[must_use]

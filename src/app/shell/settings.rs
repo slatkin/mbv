@@ -139,11 +139,16 @@ impl Model {
     }
 
     /// The settings main page's flat row list: section headers plus one row
-    /// per config key.
+    /// per config key. The trailing Actions section renders as plain rows
+    /// below the grid, but its rows use the same `settings_cursor_to_key`
+    /// ordinal as every other section, so an action needs no separately
+    /// hard-coded row (#745).
     fn main_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         let mut rows = Vec::new();
         let mut cursor = 0;
-        for (section, keys) in &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1] {
+        let (grid_sections, action_sections) =
+            SETTING_SECTIONS.split_at(SETTING_SECTIONS.len() - 1);
+        for (section, keys) in grid_sections {
             rows.push(SettingsRow {
                 label: (*section).into(),
                 value: String::new(),
@@ -152,24 +157,28 @@ impl Model {
                 kind: SettingValueKind::Key,
             });
             for &key in *keys {
-                rows.push(SettingsRow {
-                    label: settings::setting_label(key).into(),
-                    value: settings::setting_value(key, cfg, ui),
-                    section: false,
-                    cursor: Some(cursor),
-                    kind: settings::setting_kind(key),
-                });
+                rows.push(Self::key_row(key, cfg, ui, cursor));
                 cursor += 1;
             }
         }
-        rows.push(SettingsRow {
-            label: settings::setting_label(SettingKey::LogOut).into(),
-            value: String::new(),
+        for (_, keys) in action_sections {
+            for &key in *keys {
+                rows.push(Self::key_row(key, cfg, ui, cursor));
+                cursor += 1;
+            }
+        }
+        rows
+    }
+
+    /// One plain (non-header) settings row at cursor ordinal `cursor`.
+    fn key_row(key: SettingKey, cfg: &Config, ui: &UiConfig, cursor: usize) -> SettingsRow {
+        SettingsRow {
+            label: settings::setting_label(key).into(),
+            value: settings::setting_value(key, cfg, ui),
             section: false,
             cursor: Some(cursor),
-            kind: settings::setting_kind(SettingKey::LogOut),
-        });
-        rows
+            kind: settings::setting_kind(key),
+        }
     }
 
     /// The Keys destination's read-only content (design D7), derived from
@@ -335,9 +344,15 @@ impl Model {
                         1,
                     );
                 } else {
-                    self.app.handle_settings_activate(
-                        mbv_ui_model::settings::settings_cursor_to_key(cursor),
-                    );
+                    let key = mbv_ui_model::settings::settings_cursor_to_key(cursor);
+                    if key == SettingKey::ResetUiState {
+                        // #745: the global reset coordinator runs instead of
+                        // the App config-edit/save path; it dismisses Settings
+                        // and resets `settings_destination` itself.
+                        self.reset_ui_state();
+                    } else {
+                        self.app.handle_settings_activate(key);
+                    }
                 }
                 false
             }

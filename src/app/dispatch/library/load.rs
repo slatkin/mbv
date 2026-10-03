@@ -1,7 +1,7 @@
 use crate::app::state::playback::HomeContent;
 use crate::app::{
-    App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus, PendingQueueAction,
-    ReplacementExecutor, TabSelection, dispatch::notify::ToastSeverity,
+    App, BrowseLevel, FeedHomeVideoState, LibEvent, PendingQueueAction, ReplacementExecutor,
+    TabSelection, dispatch::notify::ToastSeverity,
 };
 use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
@@ -12,13 +12,11 @@ impl App {
         // Defensive bounds check: the dispatch front door normalizes a stale
         // destination first, but async Service removal can invalidate the
         // matched index between normalization and this call. No-op (never
-        // substitute library zero) on a miss. Callers own the panel-focus
-        // gate that the pre-parameterization body enforced here.
+        // substitute library zero) on a miss.
         if lib_idx >= self.libs.len() {
             return;
         }
         self.start_album_index(lib_idx, true);
-        self.clear_saved_library_position(lib_idx);
         if self.is_feed_home_video_group_view(lib_idx)
             && let Some(state) = self.libs[lib_idx].feed_home_video.as_mut()
         {
@@ -63,68 +61,44 @@ impl App {
         }
     }
 
-    /// Refresh the viewed queue by asking its Player owner to run the
-    /// enrichment fetch (row 5.3, design D6): the owner answers `Applied`
-    /// at once and the refreshed items appear only through the owner's
-    /// resulting snapshot — the Client holds no editable queue to merge
-    /// into (`unified-playback-queue` "Clients hold no editable queue",
-    /// scenario "Queue refresh"). The answered op blocks input only for
-    /// the answer bound.
-    fn refresh_queue(&mut self) {
-        let scope = self.viewed_queue_scope();
-        if self.queue_for_scope(scope).total_queue_len() == 0 {
-            return;
-        }
-        self.queue_op(scope, mbv_remote_player::QueueOp::Refresh);
-    }
-
+    /// Refresh the selected browse destination (Home, an Emby library, an
+    /// Audiobookshelf library, or Feeds) regardless of Panel focus or whether
+    /// the Library panel is painted. A stale selected library index normalizes
+    /// to Home and stops without a fetch. This is a data refresh only: it never
+    /// resets presentation state, writes preferences, or clears a saved
+    /// library position (#745).
     pub(in crate::app) fn refresh_current_view(&mut self) {
         self.force_clear = true;
-        match self.effective_panel_focus() {
-            // Queue refresh is a refresh of the visible queue only and never
-            // indexes the selected browse destination.
-            PanelFocus::Queue => self.refresh_queue(),
-            PanelFocus::Library => {
-                if self.normalize_stale_browse_destination() {
-                    return;
-                }
-                // Refreshing the active library view reverts the Wide hero
-                // split to the shared arrangement's default ratio. This reset
-                // is deliberately inside the library arm, not at the function
-                // top: refreshing while the Queue panel holds focus must leave
-                // the split untouched (design.md "Refresh reset lives in the
-                // library-side refresh arm").
-                self.list_pane_width = None;
-                self.save_prefs();
-                match self.tab {
-                    TabSelection::Home => {
-                        match self.fetch_home() {
-                            Ok(content) => {
-                                // The fetch runs synchronously (its App-side
-                                // side effects are order-sensitive); the
-                                // computed content travels to Model-owned
-                                // `home_content` via lib_tx (task 5.3d).
-                                let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                                    ModelContentEvent::HomeContentRefreshed(Box::new(content)),
-                                ));
-                            }
-                            Err(e) => {
-                                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
-                            }
-                        }
+        if self.normalize_stale_browse_destination() {
+            return;
+        }
+        match self.tab {
+            TabSelection::Home => {
+                match self.fetch_home() {
+                    Ok(content) => {
+                        // The fetch runs synchronously (its App-side
+                        // side effects are order-sensitive); the
+                        // computed content travels to Model-owned
+                        // `home_content` via lib_tx (task 5.3d).
+                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
+                        ));
                     }
-                    TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
-                    TabSelection::AudiobookshelfLibrary(index) => {
-                        match self.audiobookshelf_kind_at(index) {
-                            Some(
-                                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
-                            ) => self.audiobookshelf_book_refresh(),
-                            _ => self.audiobookshelf_refresh(),
-                        }
+                    Err(e) => {
+                        self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
                     }
-                    TabSelection::Feeds => self.refresh_feeds(),
                 }
             }
+            TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
+            TabSelection::AudiobookshelfLibrary(index) => {
+                match self.audiobookshelf_kind_at(index) {
+                    Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                        self.audiobookshelf_book_refresh();
+                    }
+                    _ => self.audiobookshelf_refresh(),
+                }
+            }
+            TabSelection::Feeds => self.refresh_feeds(),
         }
     }
 

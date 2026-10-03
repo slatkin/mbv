@@ -99,6 +99,14 @@ impl<Target> MediaListCarrier<Target> {
 }
 
 impl<Target: Clone + Eq> MediaListCarrier<Target> {
+    /// Content-preserving presentation reset (design D3): keep this flow's
+    /// rows, clear its marks and return the cursor/viewport to their initial
+    /// position. The destination's own scope and selection origin are
+    /// untouched.
+    pub fn reset_presentation(&mut self) {
+        self.wide.reset_presentation();
+    }
+
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.wide.set_content(rows);
     }

@@ -8,8 +8,12 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 use crate::app::input::router::RouterOutcome;
-use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::tests::{
+    QueueViewTestExt, make_app_stub, make_item, make_items, make_local_daemon_app_stub_with_cmd_rx,
+};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
+use mbv_ui_model::browse::ServerRows;
 use mbv_ui_msg::{OverlayId, UserEvent};
 
 fn key(code: Key) -> Event<UserEvent> {
@@ -163,5 +167,67 @@ fn shift_n_default_fires_next_track_through_tick() {
         outcome.router,
         RouterOutcome::Command(crate::app::dispatch::action::Command::NextTrack),
         "Shift+N must fire next_track through tick()"
+    );
+}
+
+/// #745: F5 is a global data refresh whose effect comes from the selected
+/// browse destination, not Panel focus. Driven through the live tick path
+/// (the harness mirrors `shell_run` by dispatching the resolved command):
+/// with Queue focused and an Emby library selected, the selected library is
+/// the refresh target and no owner Queue refresh is sent.
+#[test]
+fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(2));
+    while cmd_rx.try_recv().is_ok() {}
+    // A non-empty viewed queue makes the removed Queue-refresh branch
+    // observable: that branch would have sent UnifiedQueueRefresh here.
+    app.local_view.adopt_items(make_items(2), 0);
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: make_items(1),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Queue;
+    let mut harness = TickHarness::new(app);
+
+    harness.inject(key(Key::Function(5)));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(crate::app::dispatch::action::Command::RefreshCurrentView),
+        "F5 resolves the global refresh command under Queue focus"
+    );
+    // Drop anything the tick's own sync emitted; the assertion below is about
+    // the dispatched refresh only.
+    while cmd_rx.try_recv().is_ok() {}
+    harness
+        .model_mut()
+        .dispatch_router_command(&crate::app::dispatch::action::Command::RefreshCurrentView);
+
+    assert!(
+        harness.model().app.libs[0].nav_stack[0].loading,
+        "the selected Emby library is the refresh target under Queue focus"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "F5 must not send an owner Queue refresh"
     );
 }

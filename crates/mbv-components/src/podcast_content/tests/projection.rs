@@ -132,19 +132,69 @@ fn keyboard_pill_walk_wraps_at_both_ends() {
 fn a_refresh_that_drops_the_show_pill_resets_to_all() {
     let mut owner = owner();
     owner.set_focused(true);
-    // Walk to the Beta show pill, then refresh without it.
+    // Walk to the Beta show pill.
     for _ in 0..4 {
         owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
     }
     assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-    let mut state = AudiobookshelfBrowseState::new(library());
-    state.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
-    owner.set_content(&state, false);
+
+    // A completed refresh that still lists Beta replaces the catalog in
+    // place (design D2): the pill and its selected show are retained.
+    let mut kept = AudiobookshelfBrowseState::new(library());
+    kept.append_page(
+        0,
+        20,
+        2,
+        vec![show("alpha", "Alpha Show"), show("beta", "Beta Show")],
+    );
+    owner.set_content(&kept, false);
+    assert_eq!(owner.pill, PillSelection::Show("beta".into()));
+
+    // A completed refresh without Beta drops the pill back to the state
+    // pills.
+    let mut dropped = AudiobookshelfBrowseState::new(library());
+    dropped.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
+    owner.set_content(&dropped, false);
     assert_eq!(
         owner.pill,
         PillSelection::State(AudiobookshelfEpisodeFilter::All)
     );
     assert_eq!(owner.content().selector.unwrap().active, Some(1));
+}
+
+/// #745: reset returns the podcast owner to its default state pill and first
+/// episode, clearing marks and the prior viewport, and a refresh that lands
+/// afterwards preserves that selection instead of re-adopting the pre-reset
+/// pill or episode.
+#[test]
+fn reset_presentation_returns_to_all_and_survives_a_later_refresh() {
+    let mut owner = owner();
+    let first = owner.selected_episode_target();
+    owner.on_slot_event(LibrarySlotEvent::SelectorPicked(5));
+    assert_eq!(owner.pill(), &PillSelection::Show("beta".into()));
+    assert_eq!(item_rows(&owner), [("beta-one", "beta-one")]);
+    let selected = owner.selected_episode_target().expect("beta episode");
+    owner.episodes.set_scroll(2);
+    owner.episodes.toggle_selection(&selected);
+
+    owner.reset_presentation();
+
+    assert_eq!(
+        owner.pill(),
+        &PillSelection::State(AudiobookshelfEpisodeFilter::All)
+    );
+    assert_eq!(owner.selected_episode_target(), first);
+    assert_eq!(owner.episodes.scroll(), 0);
+    assert_eq!(owner.episodes.multi_selection().len(), 0);
+    assert_eq!(owner.content().selector.unwrap().active, Some(1));
+
+    // A refresh completing after the reset preserves the reset selection.
+    owner.set_content(&fixture_state(), false);
+    assert_eq!(
+        owner.pill(),
+        &PillSelection::State(AudiobookshelfEpisodeFilter::All)
+    );
+    assert_eq!(owner.selected_episode_target(), first);
 }
 
 #[test]

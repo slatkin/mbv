@@ -80,6 +80,14 @@ impl QueueComponent {
         self.carrier.clear_owner_selection();
     }
 
+    /// Reset the Queue's local presentation (cursor, marks, scroll) without
+    /// replacing its rows, scope or playback projection. A transient reorder
+    /// grab is dropped so no pointer gesture survives the reset.
+    pub fn reset_presentation(&mut self) {
+        self.carrier.reset_presentation();
+        self.drag_grab = None;
+    }
+
     #[must_use]
     pub fn selected_row_rect(&self) -> Option<Rect> {
         self.carrier.wide().current_selected_row_rect()

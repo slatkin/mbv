@@ -639,6 +639,76 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     assert_eq!(harness.model().app.mouse_capture_pending, Some(false));
 }
 
+/// #745 (row 5.2): the Actions `Reset UI State` row routes Enter through the
+/// existing activate intent to the shell reset coordinator instead of the App
+/// configuration-edit/save path, and the coordinator dismisses Settings.
+#[test]
+fn settings_reset_ui_state_row_runs_the_coordinator_and_dismisses_settings() {
+    let mut harness = TickHarness::new(make_app_stub());
+    let feed = |harness: &mut TickHarness, messages: Vec<Msg>| {
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+    };
+
+    harness.inject(key(Key::Function(2)));
+    let outcome = harness.step();
+    assert!(matches!(
+        outcome.router,
+        RouterOutcome::Command(Command::ToggleSettings)
+    ));
+    harness
+        .model_mut()
+        .dispatch_router_command(&Command::ToggleSettings);
+    feed(&mut harness, outcome.messages);
+    harness.model_mut().sync_mounted_surfaces();
+    let settings_id = ComponentId::Overlay(OverlayId::Settings);
+    assert!(harness.model().application.mounted(&settings_id));
+
+    // A non-default focus the coordinator must restore, so delivery is
+    // observable independently of dismissal.
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+
+    // Locate the ResetUiState row via the production cursor map, the single
+    // source of truth for the flat row order.
+    let row_count: usize = mbv_ui_model::settings::SETTING_SECTIONS
+        .iter()
+        .map(|(_, keys)| keys.len())
+        .sum();
+    let reset_downs = (0..row_count)
+        .find(|&cursor| {
+            mbv_ui_model::settings::settings_cursor_to_key(cursor)
+                == mbv_ui_model::settings::SettingKey::ResetUiState
+        })
+        .expect("ResetUiState row exists in the visible settings rows");
+    for _ in 0..reset_downs {
+        harness.inject(key(Key::Down));
+        let outcome = harness.step();
+        feed(&mut harness, outcome.messages);
+    }
+
+    harness.inject(key(Key::Enter));
+    let outcome = harness.step();
+    feed(&mut harness, outcome.messages);
+
+    assert!(
+        !harness.model().application.mounted(&settings_id),
+        "Reset UI State must dismiss Settings"
+    );
+    assert_eq!(
+        harness.model().app.panel_focus,
+        PanelFocus::Library,
+        "the reset coordinator must restore the default focus"
+    );
+    assert!(
+        harness.model().app.settings_save_at.is_none(),
+        "the reset must bypass the configuration-edit/save path"
+    );
+}
+
 mod disconnect;
 pub(crate) mod harness;
 mod keybinds;

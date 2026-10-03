@@ -198,12 +198,13 @@ fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
     );
 }
 
-/// F5 on the Audiobookshelf destination clears the current catalog and then
-/// restarts the catalog request from the first page: shows/total/episodes are
-/// reset, page 0 is marked pending, and neither the Emby library nor the
-/// queue is touched.
+/// F5 on the Audiobookshelf destination stages a catalog replacement without
+/// disturbing the published catalog: shows and episodes stay visible while the
+/// batch collects, page 0 of the replacement is marked pending, and neither
+/// the Emby library nor the queue is touched. The completed replacement
+/// publishes only when its own traversal finishes (design D2).
 #[test]
-fn audiobookshelf_f5_restarts_catalog_after_clear() {
+fn audiobookshelf_f5_stages_a_replacement_without_clearing_the_catalog() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
     app.panel_focus = PanelFocus::Library;
@@ -212,12 +213,24 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
     app.refresh_current_view();
 
     let state = &app.audiobookshelf_browse[0];
-    assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
-    assert_eq!(state.total, 0);
-    assert!(state.detail_cache.is_empty());
+    assert_eq!(
+        state.shows.len(),
+        1,
+        "the published catalog survives a refresh"
+    );
+    assert_eq!(state.selected_id.as_deref(), Some("show-a"));
     assert!(
-        state.loading_pages.contains(&0),
-        "page 0 must be marked pending so the catalog request restarts"
+        !state.detail_cache.is_empty(),
+        "published episodes survive a refresh"
+    );
+    let replacement = state
+        .replacement
+        .as_ref()
+        .expect("refresh stages a replacement batch");
+    assert_eq!(replacement.request, state.catalog_request);
+    assert!(
+        replacement.loading_pages.contains(&0),
+        "page 0 of the replacement is marked pending"
     );
     assert!(
         !app.libs[0].nav_stack[0].loading,
@@ -227,6 +240,49 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
         app.local_view.total_queue_len(),
         0,
         "Audiobookshelf refresh must not touch the queue"
+    );
+}
+
+/// A completed replacement publishes only when its own traversal finishes:
+/// the staged page commits the authoritative catalog (design D2).
+#[test]
+fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
+    let mut app = audiobookshelf_app();
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+
+    app.refresh_current_view();
+    let request = app.audiobookshelf_browse[0].catalog_request;
+    app.handle_lib_event(LibEvent::Audiobookshelf(
+        AudiobookshelfEvent::ShowsFetched {
+            generation: app.audiobookshelf_runtime.generation(),
+            request,
+            library_id: "abs-podcasts".into(),
+            result: Ok(mbv_audiobookshelf::AudiobookshelfShowPage {
+                page: 0,
+                limit: 20,
+                total: 1,
+                items: vec![mbv_audiobookshelf::AudiobookshelfShow {
+                    library_item_id: "show-b".into(),
+                    title: "Show B".into(),
+                    author: None,
+                    description: None,
+                    cover_path: None,
+                }],
+            }),
+        },
+    ));
+
+    let state = &app.audiobookshelf_browse[0];
+    assert!(state.replacement.is_none(), "the completed batch commits");
+    assert_eq!(
+        state
+            .shows
+            .iter()
+            .map(|show| show.library_item_id.as_str())
+            .collect::<Vec<_>>(),
+        ["show-b"],
+        "the authoritative replacement publishes"
     );
 }
 

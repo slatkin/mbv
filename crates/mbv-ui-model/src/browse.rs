@@ -227,7 +227,7 @@ pub struct BrowseLevel {
 /// from the level so callers stop cloning field-by-field; callers that
 /// intentionally diverge from the level (a new filter, a forced item type)
 /// overwrite the field after building.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LevelFetchKey {
     pub parent_id: String,
     pub item_types: Option<String>,

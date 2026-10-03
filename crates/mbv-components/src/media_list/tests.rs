@@ -181,3 +181,29 @@ fn item_level_derivation_makes_music_rows_ordinary() {
         MediaSemanticState::active(Some(50))
     );
 }
+
+/// #745: a content-preserving reset keeps the projected rows but returns the
+/// list to its normal initial presentation — first selectable row, top of the
+/// viewport, no marks, and no retained painted frame.
+#[test]
+fn reset_presentation_keeps_rows_and_restores_initial_selection_and_viewport() {
+    let mut carrier = MediaListCarrier::new();
+    carrier.set_content(vec![item("a"), item("b"), item("c")]);
+    carrier.select_target(&"c".to_string());
+    carrier.set_scroll(2);
+    carrier.toggle_selection(&"b".to_string());
+    let area = Rect::new(2, 1, 12, 3);
+    paint(carrier.wide_mut(), area);
+    assert!(carrier.claims_current_point(Position { x: 2, y: 1 }));
+
+    carrier.reset_presentation();
+
+    assert_eq!(carrier.rows().len(), 3, "rows are retained");
+    assert_eq!(carrier.selected_target(), Some(&"a".to_string()));
+    assert_eq!(carrier.scroll(), 0);
+    assert_eq!(carrier.multi_selection().len(), 0);
+    assert!(
+        !carrier.claims_current_point(Position { x: 2, y: 1 }),
+        "the pre-reset painted geometry is invalidated"
+    );
+}

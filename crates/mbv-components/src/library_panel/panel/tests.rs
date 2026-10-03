@@ -63,9 +63,19 @@ impl FixtureOwner {
         self.link = true;
         self
     }
+
+    /// The fixture's content-preserving reset: return the list to its first
+    /// row without replacing its rows.
+    fn reset_presentation(&mut self) {
+        self.carrier.reset_presentation();
+    }
 }
 
 impl LibraryContentOwner for FixtureOwner {
+    fn reset_presentation(&mut self) {
+        self.reset_presentation();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         LibraryPanelContent {
             selector: Some(SelectorRow {
@@ -169,6 +179,22 @@ fn line_text(buf: &ratatui::buffer::Buffer, row: u16) -> String {
     (0..buf.area.width)
         .map(|x| buf[(x, row)].symbol())
         .collect::<String>()
+}
+
+/// The fixture owner installed for `key`, downcast for state reads/writes.
+fn fixture_owner_mut<'a>(panel: &'a mut LibraryPanel, key: &LibraryKey) -> &'a mut FixtureOwner {
+    panel
+        .owner_mut(key)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FixtureOwner>())
+        .expect("fixture owner installed")
+}
+
+/// The fixture owner's current list selection, for reset assertions.
+fn fixture_selection(panel: &LibraryPanel, key: &LibraryKey) -> Option<String> {
+    panel
+        .owner(key)
+        .and_then(|owner| owner.as_any().downcast_ref::<FixtureOwner>())
+        .and_then(|owner| owner.carrier.selected_target().cloned())
 }
 
 /// The panel without a migrated owner claims nothing: no paint, no
@@ -502,7 +528,8 @@ fn interrupted_split_drag_does_not_claim_a_later_row_release_or_unchanged_drag()
 }
 
 /// Owner retention: dropping a key from the live set removes its owner;
-/// retained owners keep their state.
+/// retained owners keep their state. #745: a panel reset reaches every
+/// retained owner, active and inactive alike.
 #[test]
 fn owner_retention_follows_the_catalog() {
     let mut panel = LibraryPanel::new();
@@ -519,6 +546,30 @@ fn owner_retention_follows_the_catalog() {
             FixtureLog::default(),
         )))),
     );
+
+    // The reset reaches the active owner and the retained inactive owner,
+    // returning both lists to their first row without replacing their rows.
+    fixture_owner_mut(&mut panel, &LibraryKey::Home)
+        .carrier
+        .select_last();
+    fixture_owner_mut(&mut panel, &LibraryKey::Feeds)
+        .carrier
+        .select_last();
+    assert_eq!(
+        fixture_selection(&panel, &LibraryKey::Home).as_deref(),
+        Some("gamma")
+    );
+    panel.reset_presentation();
+    assert_eq!(
+        fixture_selection(&panel, &LibraryKey::Home).as_deref(),
+        Some("alpha")
+    );
+    assert_eq!(
+        fixture_selection(&panel, &LibraryKey::Feeds).as_deref(),
+        Some("alpha"),
+        "the inactive retained owner receives the reset too"
+    );
+
     panel.retain_owners(&[LibraryKey::Home]);
     assert!(panel.has_owner(&LibraryKey::Home));
     assert!(!panel.has_owner(&LibraryKey::Feeds));
