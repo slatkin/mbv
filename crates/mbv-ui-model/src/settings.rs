@@ -31,6 +31,7 @@ pub enum SettingKey {
     Panel,
     PanelSide,
     PanelCols,
+    PanelColsExpanded,
     PanelGutterTop,
     PanelGutterBottom,
     PanelGutterLeft,
@@ -238,6 +239,7 @@ fn setting_stepper_label(key: SettingKey) -> &'static str {
         key,
         &[
             (SettingKey::PanelCols, "Cols"),
+            (SettingKey::PanelColsExpanded, "Expanded cols"),
             (SettingKey::PanelGutterTop, "Gutter top"),
             (SettingKey::PanelGutterBottom, "Gutter bottom"),
             (SettingKey::PanelGutterLeft, "Gutter left"),
@@ -306,6 +308,7 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::AudioLanguage
         | K::PanelSide => V::Text,
         K::PanelCols
+        | K::PanelColsExpanded
         | K::PanelGutterTop
         | K::PanelGutterBottom
         | K::PanelGutterLeft
@@ -411,6 +414,7 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
 fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
         SettingKey::PanelCols => Some(cfg.panel.cols.to_string()),
+        SettingKey::PanelColsExpanded => Some(cfg.panel.cols_expanded.to_string()),
         SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
         SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
         SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
@@ -485,9 +489,10 @@ pub fn bool_val(v: bool) -> String {
 
 /// The Panel destination's rows, in paint and cursor order (design D6, row
 /// 4.3): `Side` first, then the five stepper rows.
-pub const PANEL_SETTING_KEYS: [SettingKey; 6] = [
+pub const PANEL_SETTING_KEYS: [SettingKey; 7] = [
     SettingKey::PanelSide,
     SettingKey::PanelCols,
+    SettingKey::PanelColsExpanded,
     SettingKey::PanelGutterTop,
     SettingKey::PanelGutterBottom,
     SettingKey::PanelGutterLeft,
@@ -543,6 +548,14 @@ pub fn changed_panel_config(
         SettingKey::PanelCols => {
             next.cols = u16::try_from(
                 i32::from(panel.cols)
+                    .saturating_add(delta)
+                    .max(i32::from(PANEL_COLS_MIN)),
+            )
+            .unwrap_or(u16::MAX);
+        }
+        SettingKey::PanelColsExpanded => {
+            next.cols_expanded = u16::try_from(
+                i32::from(panel.cols_expanded)
                     .saturating_add(delta)
                     .max(i32::from(PANEL_COLS_MIN)),
             )
