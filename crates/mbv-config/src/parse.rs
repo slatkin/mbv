@@ -368,7 +368,8 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
     };
     PanelConfig {
         side: panel_side(panel, defaults.side),
-        cols: panel_cols(panel, defaults.cols),
+        cols: panel_cols(panel, "cols", defaults.cols),
+        cols_expanded: panel_cols(panel, "cols_expanded", defaults.cols_expanded),
         gutter_top: panel_gutter(panel, "gutter_top", defaults.gutter_top),
         gutter_bottom: panel_gutter(panel, "gutter_bottom", defaults.gutter_bottom),
         gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),
@@ -386,14 +387,14 @@ fn panel_side(panel: &toml::Value, default: PanelSide) -> PanelSide {
     }
 }
 
-fn panel_cols(panel: &toml::Value, default: u16) -> u16 {
-    match panel.get("cols") {
+fn panel_cols(panel: &toml::Value, key: &str, default: u16) -> u16 {
+    match panel.get(key) {
         None => default,
         Some(value) => value
             .as_integer()
             .and_then(|v| u16::try_from(v).ok())
             .filter(|v| *v >= PANEL_COLS_MIN)
-            .unwrap_or_else(|| panel_fallback("cols", value, default)),
+            .unwrap_or_else(|| panel_fallback(key, value, default)),
     }
 }
 

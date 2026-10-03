@@ -434,6 +434,10 @@ fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Co
         toml::Value::Integer(i64::from(cfg.panel.cols)),
     );
     panel.insert(
+        "cols_expanded".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.cols_expanded)),
+    );
+    panel.insert(
         "gutter_top".to_string(),
         toml::Value::Integer(i64::from(cfg.panel.gutter_top)),
     );

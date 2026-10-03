@@ -2,7 +2,7 @@
 
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
-`cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 80)
+`cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 120)
 and `gutter_top`, `gutter_bottom`, `gutter_left`, `gutter_right` (integers in pixels, may be
 negative, default 0). An out-of-range or malformed value SHALL fall back to its default with a
 logged warning, without changing the other keys. The F2 settings screen SHALL provide a Panel page

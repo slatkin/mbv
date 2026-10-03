@@ -83,6 +83,11 @@ pub(in crate::app) enum Command {
     /// toggles queue-only and library-only.
     CyclePanelMode,
 
+    /// `pinned_width_toggle`: flip the running pinned panel between its
+    /// collapsed (`cols`) and expanded (`cols_expanded`) saved widths
+    /// (change `panel-expand-toggle`, design D3).
+    TogglePinnedWidth,
+
     // ── destination-independent routing ─────────────────────────────────
     /// Quit the client through the normal dirty-queue/prefs shutdown path.
     Quit,
@@ -214,7 +219,7 @@ impl App {
             | Command::OpenPlaylists
             | Command::OpenSearch
             | Command::OpenHelp => self.dispatch_navigation_command(command),
-            Command::FocusPanel(_) | Command::CyclePanelMode => {
+            Command::FocusPanel(_) | Command::CyclePanelMode | Command::TogglePinnedWidth => {
                 self.dispatch_panel_command(command);
             }
         }
@@ -302,6 +307,7 @@ impl App {
                 // shrank between image and seekbar.
             }
             Command::CyclePanelMode => self.cycle_panel_mode(),
+            Command::TogglePinnedWidth => self.toggle_pinned_width(),
             _ => unreachable!("dispatch_panel_command only accepts panel commands"),
         }
     }
