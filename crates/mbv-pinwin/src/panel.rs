@@ -34,6 +34,7 @@ impl<'fd> Panel<'fd> {
             master_fd: master.as_raw_fd(),
             layout: layout.to_abi(),
             keyboard_mode: keyboard_mode.to_abi(),
+            accent: ffi::PinwinAccent::DISABLED,
         };
         // SAFETY: `startup` is a live, fully initialized `PinwinStartup`, and
         // the C ABI only reads it for the duration of the call.
