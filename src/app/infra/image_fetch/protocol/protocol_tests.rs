@@ -138,6 +138,17 @@ fn title_overlay_variant_identity_rebuilds_once_per_change_and_reuses_on_ticks()
     assert_eq!(ensure(&mut app, "second"), Some(changed.clone()));
     assert_eq!(
         build_count(&app),
+        baseline + 3,
+        "the dimmed backdrop's sizing keeps the configured variant key and builds nothing"
+    );
+    // The suffix flip's re-encode lives at the paint path: under the backdrop
+    // the overlay is measured on the configured grid (stable key above), and
+    // the slot painter lazily re-encodes the variant for the fallback suffix
+    // when it resolves the protocol to paint.
+    app.cached_image_protocol_mut(&changed)
+        .expect("the painter resolves the variant under the fallback suffix");
+    assert_eq!(
+        build_count(&app),
         baseline + 4,
         "suffix flip re-encodes without recomposing"
     );

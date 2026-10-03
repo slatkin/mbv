@@ -102,16 +102,27 @@ impl App {
     }
 
     fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
-        let use_halfblock = self.dim_backdrop_active
-            && self.images.protocol_enabled()
-            && !self.images.is_halfblock_configured();
-        if use_halfblock {
+        if self.dim_halfblock_forced() {
             self.images.halfblock_picker().map(|p| (p, "halfblock"))
         } else {
             self.images
                 .image_picker()
                 .map(|p| (p, self.images.configured_protocol_name()))
         }
+    }
+
+    /// Whether the dimmed backdrop has forced the halfblock fallback picker
+    /// over a differently-configured protocol (#451). The fallback picker
+    /// measures cells on its hardcoded font grid, not the terminal font size
+    /// the configured picker detected, so a paint made under the fallback is
+    /// not geometry-comparable with the configured protocol's. Consumers that
+    /// feed geometry feedback loops (the queue card's size checkpoint and its
+    /// title-overlay sizing) must hold the configured protocol's geometry
+    /// while this is up.
+    pub(in crate::app) fn dim_halfblock_forced(&self) -> bool {
+        self.dim_backdrop_active
+            && self.images.protocol_enabled()
+            && !self.images.is_halfblock_configured()
     }
 
     /// The suffix of the protocol currently active: the halfblock picker's
@@ -130,6 +141,21 @@ impl App {
         bare_key: &str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
         let suffix = self.current_protocol_suffix();
+        self.cached_image_protocol_for_suffix_mut(bare_key, suffix)
+    }
+
+    /// `cached_image_protocol_mut` against an explicit protocol suffix:
+    /// resolves (lazily re-encoding from the retained source) the protocol
+    /// built for `suffix` rather than the currently active one. The queue
+    /// card's title-overlay sizing uses the configured suffix while the
+    /// dimmed backdrop forces the halfblock fallback, so the overlay's cache
+    /// key — which encodes the measured cols/rows — does not change when a
+    /// modal opens.
+    pub(in crate::app) fn cached_image_protocol_for_suffix_mut(
+        &mut self,
+        bare_key: &str,
+        suffix: &'static str,
+    ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
         let picker = self.images.picker_for_suffix(suffix)?;
         let reencode = self
             .images
@@ -176,6 +202,20 @@ impl App {
             })
     }
 
+    /// The font the queue card's title-overlay bitmap is composed at: always
+    /// the configured protocol's detected font size, never the dimmed
+    /// backdrop's halfblock fallback. `title_protocol_size` measures the
+    /// overlay on that same configured grid while the fallback is forced, and
+    /// the variant key encodes cols/rows but not the font — composing the
+    /// same key at the fallback's hardcoded grid would bake a stretched
+    /// bitmap into a key that outlives the modal.
+    fn title_overlay_font_size(&self) -> ratatui_image::FontSize {
+        self.images.image_picker().map_or(
+            ratatui_image::FontSize::new(10, 20),
+            ratatui_image::picker::Picker::font_size,
+        )
+    }
+
     /// One hero artwork box's pixel size from its cell size (task 5.10,
     /// design D5's cover-fit input).
     pub(in crate::app) fn hero_box_pixels(&self, box_w: u16, box_h: u16) -> (u32, u32) {
@@ -192,7 +232,18 @@ impl App {
         key: &str,
         available: ratatui::layout::Size,
     ) -> Option<ratatui::layout::Size> {
-        self.cached_image_protocol_mut(key)?
+        // While the dimmed backdrop forces the halfblock fallback, measure on
+        // the configured protocol's grid: the overlay's cache key encodes the
+        // measured cols/rows, so a fallback-measured variant would be a new,
+        // never-painted key and flip the title site back to the header row
+        // until the fallback paint landed (user-reported: the now-playing
+        // title flashed to the header for a moment on every modal open).
+        let suffix = if self.dim_halfblock_forced() {
+            self.images.configured_protocol_name()
+        } else {
+            self.current_protocol_suffix()
+        };
+        self.cached_image_protocol_for_suffix_mut(key, suffix)?
             .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), available)
     }
 
@@ -289,8 +340,14 @@ impl App {
         let logo = ready_logo_key
             .and_then(|key| self.images.image(key))
             .and_then(|entry| entry.img.as_ref());
-        let composed =
-            compose_title_overlay_bitmap(source, logo, self.image_font_size(), cols, rows, text);
+        let composed = compose_title_overlay_bitmap(
+            source,
+            logo,
+            self.title_overlay_font_size(),
+            cols,
+            rows,
+            text,
+        );
         let suffix = self.current_protocol_suffix();
         let entry = self.images.build_cached_image(key, Some(composed), suffix);
         self.images.insert_derived_image(key.to_owned(), entry);

@@ -312,7 +312,17 @@ impl App {
             out = (height, width, loading);
         }
         let (height, width, loading) = out;
-        self.images.record_card_size(height, width);
+        // A dimmed backdrop paints through the halfblock fallback (#451),
+        // whose hardcoded font grid measures cells differently than the
+        // configured protocol's detected font. Recording that paint's size
+        // would move the geometry checkpoint — resizing the reservation and
+        // pushing the queue rows below the slot — every time a modal or
+        // context menu opens, and back when it closes. The checkpoint stays
+        // on the configured protocol's last paint; closing the modal
+        // repaints the warm configured protocol at that same size.
+        if !self.dim_halfblock_forced() {
+            self.images.record_card_size(height, width);
+        }
         if painted && let Some(key) = painted_overlay_key(artwork_key.as_deref()) {
             self.images
                 .record_painted_title_overlay(Some(key.to_owned()));
@@ -656,6 +666,9 @@ impl App {
         );
     }
 }
+
+#[cfg(test)]
+mod queue_slot_tests;
 
 #[cfg(test)]
 mod title_site_tests;
