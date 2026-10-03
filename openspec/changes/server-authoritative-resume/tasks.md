@@ -92,7 +92,7 @@
   `src/app/tests/queue/consume.rs`, `mbv-daemon` `tests/loop.rs`) and fix the
   rest. Verify with
   `cargo nextest run -p mbv-ctrl -p mbv-player -p mbv-daemon -p mbv`.
-- [ ] 4.3 Delete `docs/invariants/02-pending-sync-protection.md`. Verify that
+- [x] 4.3 Delete `docs/invariants/02-pending-sync-protection.md`. Verify that
   `rg "pending.sync|progress_report_accepted|StopReportOutcome"` finds nothing
   outside `openspec/`.
   When syncing deltas, also drop the
