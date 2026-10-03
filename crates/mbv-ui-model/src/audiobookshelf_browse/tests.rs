@@ -87,25 +87,63 @@ fn episode_cache_fills_progressively_per_show_and_dedupes() {
 }
 
 #[test]
-fn cache_arrivals_keep_the_selected_episode_and_refresh_clears_it() {
+fn catalog_replacement_stages_until_commit_reconciles() {
     let mut state = AudiobookshelfBrowseState::new(library());
     state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
-    state.selected_episode = Some(("a".into(), "a-one".into()));
+    state.selected_episode = Some(("b".into(), "b-one".into()));
+    state.committed_show_pill = Some("b".into());
 
-    state.cache_detail("b".into(), vec![episode("b", "b-one")]);
+    // Staging keeps the published catalog and selection while loading, and a
+    // partial page is never treated as proof that an identity is gone.
+    let request = state.begin_catalog_replacement();
     assert_eq!(
-        state.selected_episode,
-        Some(("a".into(), "a-one".into())),
-        "a later show's cache arrival keeps the selected episode"
+        state.shows.len(),
+        2,
+        "the published catalog survives loading"
     );
+    assert!(state.append_replacement_page(request, 0, 20, 2, vec![show("a", "A renamed")]));
+    assert_eq!(state.replacement_needs_page(request), Some(1));
+    assert_eq!(
+        state.shows[0].title, "A",
+        "staging does not mutate the published catalog"
+    );
+    assert_eq!(state.selected_id.as_deref(), Some("a"));
+    assert_eq!(state.selected_episode, Some(("b".into(), "b-one".into())));
 
-    // Refresh: the cache reloads from the fan-out and the selected
-    // episode identity goes with it.
-    state.cache_detail("a".into(), vec![episode("a", "a-one")]);
-    state.clear_episodes();
-    assert!(state.detail_cache.is_empty());
-    assert!(state.detail_loading_ids.is_empty());
-    assert_eq!(state.selected_episode, None);
+    // A failed traversal discards the batch and keeps the published catalog.
+    assert!(state.abort_catalog_replacement(request));
+    assert_eq!(state.shows.len(), 2);
+    assert_eq!(state.selected_episode, Some(("b".into(), "b-one".into())));
+
+    // A completed replacement is authoritative: changed metadata and
+    // deletions publish, and the selection, committed pill and selected
+    // episode reconcile against it.
+    let request = state.begin_catalog_replacement();
+    assert!(state.append_replacement_page(request, 0, 20, 1, vec![show("a", "A renamed")]));
+    assert_eq!(state.replacement_needs_page(request), None);
+    assert!(state.commit_catalog_replacement(request));
+    assert_eq!(
+        state
+            .shows
+            .iter()
+            .map(|show| show.title.as_str())
+            .collect::<Vec<_>>(),
+        ["A renamed"],
+        "the completed replacement updates metadata and removes deleted shows"
+    );
+    assert_eq!(
+        state.selected_id.as_deref(),
+        Some("a"),
+        "a still-present selection is kept"
+    );
+    assert_eq!(
+        state.committed_show_pill, None,
+        "a vanished show pill falls back to the state pills"
+    );
+    assert_eq!(
+        state.selected_episode, None,
+        "a removed show's selected episode is reconciled away at commit"
+    );
 }
 
 #[test]
@@ -249,6 +287,57 @@ fn book_pages_group_by_author_surname_only() {
         ["a", "b", "c"],
         "books group and sort by author surname, not title"
     );
+}
+
+#[test]
+fn book_catalog_replacement_keeps_published_content_until_commit() {
+    let mut state = AudiobookshelfBookBrowseState::new(library());
+    state.append_page_books(
+        0,
+        2,
+        vec![
+            book("a", "Title A", "Alpha Author"),
+            book("b", "Title B", "Zelda Author"),
+        ],
+    );
+    state.selected_id = Some("b".into());
+
+    let request = state.begin_catalog_replacement();
+    assert!(state.append_replacement_page(
+        request,
+        0,
+        1,
+        vec![book("c", "Title C", "Beta Author")]
+    ));
+    assert_eq!(
+        state.books.len(),
+        2,
+        "staging does not mutate the published catalog"
+    );
+    assert_eq!(state.selected_id.as_deref(), Some("b"));
+    assert_eq!(state.replacement_needs_page(request), None);
+
+    assert!(state.commit_catalog_replacement(request));
+    assert_eq!(
+        state
+            .books
+            .iter()
+            .map(|b| b.library_item_id.as_str())
+            .collect::<Vec<_>>(),
+        ["c"],
+        "the completed replacement replaces the published catalog"
+    );
+    assert_eq!(
+        state.selected_id.as_deref(),
+        Some("c"),
+        "a vanished selection falls back to the first book"
+    );
+    assert_eq!(
+        state.buckets.len(),
+        1,
+        "surname buckets are rebuilt against the replacement"
+    );
+    assert_eq!(state.buckets[0].label, "A\u{2013}C");
 }
 
 #[test]
