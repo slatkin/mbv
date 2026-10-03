@@ -3,7 +3,7 @@ use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
     SharedQueueState, broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file,
-    project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
+    project_queue_state, setup_shutdown_signal, spawn_ctrl_client, start_queue_enrichment,
 };
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
@@ -12,7 +12,7 @@ use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
-use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId, StopReportOutcome};
+use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -51,7 +51,6 @@ pub(super) fn apply_track_completed_observation(
     was_played: bool,
     consume: bool,
     consume_policy: ConsumePolicy,
-    outcome: StopReportOutcome,
 ) -> bool {
     if !playback_run_identity_is_current(run_identity, player) {
         return false;
@@ -65,7 +64,6 @@ pub(super) fn apply_track_completed_observation(
             slot_id,
             observation.position_to_record(&slot.item),
             observation.played(),
-            outcome,
         );
     }
     if owner.core.consume_completed_slot(
@@ -87,7 +85,6 @@ pub(super) fn apply_stopped_observation(
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
     was_played: bool,
-    outcome: StopReportOutcome,
 ) -> Option<bool> {
     if !playback_run_identity_is_current(run_identity, player) {
         return None;
@@ -106,7 +103,6 @@ pub(super) fn apply_stopped_observation(
         slot_id,
         observation.position_to_record(&slot.item),
         observation.played(),
-        outcome,
     );
     Some(true)
 }
@@ -549,6 +545,16 @@ pub fn run_with_options(
         _tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
+    // Owner restore runs the same progress refresh as cold adoption and a
+    // manual queue refresh: the restored queue carries no Service positions
+    // (design D3), so Emby and Audiobookshelf slots get the server's values
+    // before the loop starts serving clients.
+    start_queue_enrichment(
+        &owner.core.queue,
+        &client,
+        audiobookshelf_runtime.as_ref(),
+        &merged_tx,
+    );
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
         role,

@@ -30,7 +30,6 @@ impl PlaybackRun {
             position_ticks: 0,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: Some(format!("audio output failed to start (device: {device})")),
         });
         true
@@ -50,9 +49,8 @@ impl PlaybackRun {
             return;
         }
         progress.stop_and_join(Self::progress_join_budget());
-        self.mark_reported(StopReport::mark_sent(
-            self.report_stopped_for_end_file(reason),
-        ));
+        let _ = self.report_stopped_for_end_file(reason);
+        self.mark_reported(StopReport::Sent);
     }
 
     fn retry_natural_mark_played(&mut self, natural_end: bool, completed_is_audio: bool) {
@@ -100,7 +98,6 @@ impl PlaybackRun {
                 position_ticks: 0,
                 played: natural_end && !completed_is_audio && self.reporter.has_session(),
                 consume: false,
-                progress_report_accepted: self.stop_report_accepted(),
                 error: None,
             });
             self.stopped_event_sent = true;
@@ -155,7 +152,6 @@ impl PlaybackRun {
                 position_ticks: self.last_valid_pos,
                 played: near_end,
                 consume: false,
-                progress_report_accepted: self.stop_report_accepted(),
                 error: None,
             });
         }
@@ -180,7 +176,6 @@ impl PlaybackRun {
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,
-            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
         // mpv exited on its own (not via our stop command) — tell the app to quit.

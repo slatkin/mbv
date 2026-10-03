@@ -48,7 +48,6 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
         position_ticks: 0,
         played: false,
         consume: false,
-        progress_report_accepted: false,
         error: None,
     });
 
@@ -108,7 +107,6 @@ fn stopped_consume_keeps_the_client_view_until_the_owner_snapshot() {
         position_ticks: 0,
         played: false,
         consume: true,
-        progress_report_accepted: false,
         error: None,
     });
 
@@ -129,7 +127,6 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
         position_ticks: 600_000_000,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
 
     let ids_after: Vec<_> = app.local_view.slots().iter().map(|s| s.slot_id).collect();
@@ -168,7 +165,6 @@ fn track_completed_consume_keeps_the_client_view_until_owner_snapshot() {
         position_ticks: 0,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
     assert_eq!(app.local_view.slots().len(), 3);
 
@@ -197,7 +193,6 @@ fn a_video_consume_flag_is_ignored_when_video_consumption_is_disabled() {
         position_ticks: 0,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
 
     assert!(
@@ -227,7 +222,6 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
         position_ticks: 0,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
 
     assert_eq!(app.local_view.emby_items().len(), 2);
@@ -259,7 +253,6 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
         position_ticks: 0,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
 
     assert_eq!(app.local_view.emby_items().len(), 2);
@@ -295,7 +288,6 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
         position_ticks: 0,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items().len(),
@@ -342,7 +334,6 @@ fn clients_hold_no_editable_queue_track_completed_audio_consume_keeps_view_until
         position_ticks: 600_000_000,
         played: true,
         consume: true,
-        progress_report_accepted: false,
     });
 
     assert_eq!(app.local_view.emby_items().len(), 2);
@@ -378,7 +369,6 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
         position_ticks: 0,
         played: false,
         consume: true,
-        progress_report_accepted: false,
     });
 
     assert_eq!(app.local_view.emby_items().len(), 2);

@@ -118,7 +118,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
@@ -183,7 +183,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
@@ -249,7 +249,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
@@ -307,7 +307,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
@@ -350,6 +350,14 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         core: PlayerOwnerState::new(queue, source),
         ..Default::default()
     };
+    // An installed runtime is the gate `has_audiobookshelf` used to stand in
+    // for; the default setup's empty server URL keeps the spawned refresh
+    // hermetic (no client, no request).
+    let abs_runtime = AudiobookshelfOwnerContext {
+        setup: mbv_config::AudiobookshelfSetup::default(),
+        device_id: "test-device".into(),
+        generation: SetupGeneration::new(1),
+    };
     handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
@@ -365,7 +373,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: true,
+            audiobookshelf: Some(&abs_runtime),
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,

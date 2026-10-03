@@ -135,7 +135,6 @@ impl PlaybackRun {
                 position_ticks: 0,
                 played: false,
                 consume: false,
-                progress_report_accepted: false,
                 error: Some(msg),
             });
         }
@@ -231,7 +230,6 @@ impl PlaybackRun {
             position_ticks: self.last_valid_pos,
             played,
             consume,
-            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
     }

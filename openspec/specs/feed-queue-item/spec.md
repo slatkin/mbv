@@ -105,7 +105,7 @@ zero position SHALL start from the beginning.
 
 #### Scenario: Feed entry has only trivial progress
 
-- **WHEN** a known-runtime feed entry has stored progress below 6%
+- **WHEN** a known-runtime feed entry has stored progress below 1%
 - **THEN** playback SHALL begin from the start
 
 #### Scenario: Stored feed entry is played

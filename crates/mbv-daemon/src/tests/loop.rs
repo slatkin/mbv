@@ -226,7 +226,6 @@ fn daemon_reads_consume_audio_turned_on_during_the_session() {
             position_ticks: 0,
             played: true,
             consume: true,
-            progress_report_accepted: false,
         }));
 
     assert_eq!(flow, LoopFlow::Continue);
@@ -347,7 +346,6 @@ fn track_completed_stale_run_leaves_queue_and_persists_nothing() {
             position_ticks: 900,
             played: true,
             consume: true,
-            progress_report_accepted: false,
         }));
 
     assert_eq!(flow, LoopFlow::Continue);
@@ -378,7 +376,6 @@ fn stopped_current_run_persists_once() {
             position_ticks: 900,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: None,
         }));
 
@@ -420,7 +417,6 @@ fn stopped_stale_run_persists_nothing() {
             position_ticks: 900,
             played: true,
             consume: false,
-            progress_report_accepted: false,
             error: None,
         }));
 
@@ -467,7 +463,6 @@ fn stopped_matching_pending_idle_load_commits_and_persists_once() {
             position_ticks: 900,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: None,
         }));
 
@@ -519,7 +514,6 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
             position_ticks: 900,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: None,
         }));
 
@@ -724,7 +718,6 @@ fn role_gate_non_local_dirty_event_persists_nothing() {
             position_ticks: 0,
             played: true,
             consume: true,
-            progress_report_accepted: false,
         }));
 
     assert_eq!(flow, LoopFlow::Continue);

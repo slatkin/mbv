@@ -368,7 +368,7 @@ _Avoid_: next command, previous command, relative navigation
 
 **Playback resume**:
 The rule deciding whether a previously watched entry should resume or start over.
-When position exceeds the 6% threshold of runtime (or runtime is unknown and
+When position exceeds the 1% threshold of runtime (or runtime is unknown and
 position > 0), resume starts from that position; otherwise from zero. Applies
 to Emby items, Feed entries, and Audiobookshelf episodes using the same
 threshold. Music (tracks, albums, artists) is fire-and-forget and never

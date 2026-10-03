@@ -314,8 +314,8 @@ fn active_item_state_resolves_episode_progress_and_identity() {
 }
 
 #[rstest]
-#[case::resumes_at_threshold(180_000_000, 180_000_000)]
-#[case::resets_below_threshold(179_999_999, 0)]
+#[case::resumes_at_threshold(30_000_000, 30_000_000)]
+#[case::resets_below_threshold(29_999_999, 0)]
 fn active_item_state_gates_feed_resume_position(#[case] position: i64, #[case] expected: i64) {
     let mut entry = super::make_feed_entry("feed", "Podcast");
     entry.position_ticks = position;

@@ -9,7 +9,7 @@
 use crate::transition::OwnerTransitionState;
 use crate::transition::TransitionCause;
 use mbv_ctrl::Direction;
-use mbv_queue::{PlaybackQueue, QueueRevisionMint, QueueSlotId, StopReportOutcome};
+use mbv_queue::{PlaybackQueue, QueueRevisionMint, QueueSlotId};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,11 +101,8 @@ impl PlayerOwnerState {
         slot_id: QueueSlotId,
         position_ticks: i64,
         played: bool,
-        outcome: StopReportOutcome,
     ) {
-        let _ = self
-            .queue
-            .record_reported_progress(slot_id, position_ticks, played, outcome);
+        let _ = self.queue.apply_progress(slot_id, position_ticks, played);
     }
 
     /// Consume a completed slot in the owner's canonical queue when the
@@ -401,7 +398,7 @@ mod tests {
         let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
 
         let watched_ticks = 86 * mbv_emby_model::TICKS_PER_SECOND;
-        owner.apply_completion_progress(slot_id, watched_ticks, false, StopReportOutcome::Accepted);
+        owner.apply_completion_progress(slot_id, watched_ticks, false);
 
         let slot = owner.queue.slot(slot_id).expect("slot still present");
         assert_eq!(slot.item.playback_position_ticks(), watched_ticks);

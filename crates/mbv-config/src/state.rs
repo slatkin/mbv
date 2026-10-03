@@ -7,12 +7,17 @@ use super::{
 use std::path::PathBuf;
 
 pub fn save_queue_state(state: &QueueState) -> Result<(), ConfigError> {
-    save_json_atomic(&queue_state_path(), state, "queue state")
+    save_json_atomic(
+        &queue_state_path(),
+        &state.without_service_positions(),
+        "queue state",
+    )
 }
 
 #[must_use]
 pub fn load_queue_state() -> Option<QueueState> {
-    load_json(&queue_state_path(), "queue_state.json")
+    let state: QueueState = load_json(&queue_state_path(), "queue_state.json")?;
+    Some(state.without_service_positions())
 }
 
 pub(super) fn save_json_atomic<T: serde::Serialize>(
@@ -68,7 +73,11 @@ pub fn save_stay_alive_queue_state_at(
     path: &std::path::Path,
     state: &StayAliveQueueState,
 ) -> Result<(), ConfigError> {
-    save_json_atomic(path, state, "owner queue")
+    let cleared = StayAliveQueueState {
+        queue: state.queue.without_service_positions(),
+        lineage: state.lineage,
+    };
+    save_json_atomic(path, &cleared, "owner queue")
 }
 
 pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), ConfigError> {
@@ -77,7 +86,9 @@ pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), Co
 
 #[must_use]
 pub fn load_stay_alive_queue_state_at(path: &std::path::Path) -> Option<StayAliveQueueState> {
-    load_json(path, "owner queue state")
+    let mut state: StayAliveQueueState = load_json(path, "owner queue state")?;
+    state.queue = state.queue.without_service_positions();
+    Some(state)
 }
 
 #[must_use]

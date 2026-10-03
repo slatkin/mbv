@@ -31,7 +31,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,
@@ -83,7 +83,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
@@ -201,10 +201,10 @@ fn apply_adopted_refresh_positions(
 }
 
 #[rstest]
-#[case::unplayed_lower_position(40_000_000, 0, false, 40_000_000, false)]
+#[case::unplayed_lower_position(40_000_000, 0, false, 0, false)]
 #[case::unplayed_newer_position(10_000_000, 20_000_000, false, 20_000_000, false)]
 #[case::played_reset(40_000_000, 0, true, 0, true)]
-fn adopted_refresh_merges_positions_with_played_reset_authority(
+fn adopted_refresh_takes_fetched_position_and_played(
     #[case] stored_position: i64,
     #[case] fetched_position: i64,
     #[case] fetched_played: bool,
@@ -272,7 +272,7 @@ fn adopted_refresh_does_not_prune_or_broadcast_after_queue_replacement() {
 }
 
 #[test]
-fn adopted_queue_refresh_does_not_overwrite_played_progress() {
+fn adopted_queue_refresh_takes_fetched_progress_over_local_completion() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (_client_id, client_rx) = {
@@ -288,9 +288,7 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
         1,
     );
     let slot_id = owner.core.queue.slots()[0].slot_id;
-    owner
-        .core
-        .apply_completion_progress(slot_id, 9, true, mbv_queue::StopReportOutcome::Accepted);
+    owner.core.apply_completion_progress(slot_id, 9, true);
 
     let mut refresh_item = item("played", "Video", "Movie");
     refresh_item.playback_position_ticks = 2;
@@ -302,10 +300,11 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
         &registry,
     );
 
-    assert!(client_rx.try_recv().is_err());
+    let refreshed = recv_event(&client_rx);
+    assert!(matches!(refreshed, CtrlEvent::UnifiedQueueState(_)));
     let refreshed_item = owner.core.queue.slots()[0].item.as_emby().unwrap();
-    assert_eq!(refreshed_item.playback_position_ticks, 9);
-    assert!(refreshed_item.played);
+    assert_eq!(refreshed_item.playback_position_ticks, 2);
+    assert!(!refreshed_item.played);
 }
 
 #[test]
@@ -341,7 +340,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,

@@ -1,10 +1,10 @@
 use super::{
-    AudiobookshelfPlayerContext, EmbyClient, EmbyItem, ExecSlot, Mpv, MpvRunConfig, PlaybackOrigin,
-    PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
-    QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs, active_file_load_location,
-    init_mpv, init_volume, make_wakeup_pipe, observe_properties, prepare_source,
-    queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
-    spawn_progress_reporter, start_queue_playback,
+    AudiobookshelfPlayerContext, EMBY_RESUME_RETRY_DELAYS, EmbyClient, EmbyItem, ExecSlot, Mpv,
+    MpvRunConfig, PlaybackOrigin, PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus,
+    PreparedSource, ProgressGuard, QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs,
+    active_file_load_location, init_mpv, init_volume, make_wakeup_pipe, observe_properties,
+    prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout,
+    refresh_emby_resume, send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
 use mbv_core::applog as app_logging;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
@@ -323,7 +323,6 @@ fn run_player_thread(mut start: PlayerThreadStart) {
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("mpv startup failed: {error}")),
                 });
                 return;
@@ -407,14 +406,26 @@ fn load_queue_sources(
     start: &PlayerThreadStart,
     active_file_projection: bool,
 ) -> Option<PreparedSource> {
+    // Design D1: an Emby video's start position comes from Emby, fetched
+    // before any `start=` option is baked into the loads below. This runs
+    // before `make_reporter`, so it uses the same Emby client the reporter
+    // will hold (`start.client`).
+    let items: Vec<QueueItem> = match start.client.as_deref() {
+        Some(client) => refresh_emby_resume(
+            start.items.iter().map(|slot| slot.item.clone()).collect(),
+            |ids| client.get_items_by_ids(ids),
+            &EMBY_RESUME_RETRY_DELAYS,
+        ),
+        None => start.items.iter().map(|slot| slot.item.clone()).collect(),
+    };
     let load_indices: Vec<_> = if active_file_projection {
         vec![start.start_idx]
     } else {
-        queue_load_indices(start.items.len(), start.start_idx).collect()
+        queue_load_indices(items.len(), start.start_idx).collect()
     };
     let mut active_prepared_source = None;
     for index in load_indices {
-        let item = &start.items[index].item;
+        let item = &items[index];
         let prepared = match prepare_source(
             item,
             &start.server_url,
@@ -430,7 +441,6 @@ fn load_queue_sources(
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("failed to prepare media: {error}")),
                 });
                 return None;
@@ -458,7 +468,6 @@ fn load_queue_sources(
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("failed to load media: {error}")),
                 });
                 return None;

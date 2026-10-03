@@ -25,7 +25,7 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,
@@ -76,6 +76,45 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
     assert_eq!(queue.active_index(), Some(1));
     assert_eq!(restored.queue.source, QueueSource::Album);
     assert_eq!(restored.lineage, mbv_queue::QueueLineage(42));
+}
+
+// A state file written before server-authoritative resume carries Service
+// positions; load clears them, while a Feed entry keeps its local one.
+#[test]
+fn stay_alive_legacy_state_file_loads_without_service_positions() {
+    let temp = mbv_config::TestTempDir::new();
+    let path = temp.join("stay_alive_queue_state.json");
+    let mut emby = emby_qi("persisted", "Video", "Movie");
+    if let QueueItem::Emby(item) = &mut emby {
+        item.playback_position_ticks = 20 * mbv_emby_model::TICKS_PER_SECOND;
+    }
+    let mut abs = abs_qi("library-a", "episode-1");
+    if let QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) = &mut abs {
+        episode.position_ticks = 5 * mbv_emby_model::TICKS_PER_SECOND;
+    }
+    let mut feed = video_feed_qi("feed-1");
+    if let QueueItem::Feed(entry) = &mut feed {
+        entry.position_ticks = 42;
+    }
+    let state = mbv_config::StayAliveQueueState {
+        queue: mbv_queue::QueueState {
+            items: vec![emby, abs, feed],
+            cursor: 0,
+            source: QueueSource::Unknown,
+            last_played_content_id: None,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: std::collections::HashMap::default(),
+        },
+        lineage: mbv_queue::QueueLineage(1),
+    };
+    std::fs::write(&path, serde_json::to_string(&state).unwrap()).unwrap();
+
+    let loaded = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
+
+    assert_eq!(loaded.queue.items[0].playback_position_ticks(), 0);
+    assert_eq!(loaded.queue.items[1].playback_position_ticks(), 0);
+    assert_eq!(loaded.queue.items[2].playback_position_ticks(), 42);
 }
 
 #[test]

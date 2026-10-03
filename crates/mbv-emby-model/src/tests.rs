@@ -158,9 +158,9 @@ fn emby_item_artist_identity_cases(
 #[case::zero_position(0, 0, false)]
 #[case::negative_position(-1, 0, false)]
 #[case::midway(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 3600, true)]
-#[case::under_six_percent(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 60, false)]
-#[case::exactly_six_percent(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6, true)]
-#[case::below_six_percent(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6 - 1, false)]
+#[case::under_one_percent(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 60, false)]
+#[case::exactly_one_percent(TICKS_PER_SECOND * 100, TICKS_PER_SECOND, true)]
+#[case::below_one_percent(TICKS_PER_SECOND * 100, TICKS_PER_SECOND - 1, false)]
 #[case::unknown_runtime(0, TICKS_PER_SECOND * 60, true)]
 fn should_resume_cases(
     #[case] runtime_ticks: i64,
@@ -174,7 +174,7 @@ fn should_resume_cases(
 fn emby_item_should_resume_uses_its_saved_position() {
     let mut item = item("Movie", "Movie");
     item.runtime_ticks = TICKS_PER_SECOND * 100;
-    item.playback_position_ticks = TICKS_PER_SECOND * 6;
+    item.playback_position_ticks = TICKS_PER_SECOND;
     assert!(item.should_resume());
 }
 

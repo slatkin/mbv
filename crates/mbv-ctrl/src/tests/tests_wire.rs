@@ -71,38 +71,6 @@ fn wire_command_tags_are_pinned() {
     );
 }
 
-#[test]
-fn old_stopped_player_event_defaults_progress_report_accepted() {
-    let event: CtrlEvent = serde_json::from_str(
-        r#"{"Player":{"Stopped":{"idx":0,"position_ticks":123,"played":false,"consume":false,"error":null}}}"#,
-    )
-    .unwrap();
-
-    match event {
-        CtrlEvent::Player(crate::player::PlayerEvent::Stopped {
-            progress_report_accepted,
-            ..
-        }) => assert!(!progress_report_accepted),
-        _ => panic!("expected stopped player event"),
-    }
-}
-
-#[test]
-fn old_track_completed_player_event_defaults_progress_report_accepted() {
-    let event: CtrlEvent = serde_json::from_str(
-        r#"{"Player":{"TrackCompleted":{"slot_id":1,"position_ticks":456,"played":true,"consume":true}}}"#,
-    )
-    .unwrap();
-
-    match event {
-        CtrlEvent::Player(crate::player::PlayerEvent::TrackCompleted {
-            progress_report_accepted,
-            ..
-        }) => assert!(!progress_report_accepted),
-        _ => panic!("expected track completed player event"),
-    }
-}
-
 // `run_identity` keeps the protocol-10 `(request id, generation)` pair on the
 // wire (the request slot is a hardcoded 0, dead data) while the model carries
 // the bare generation; a bare scalar also decodes so peers built while the
@@ -115,7 +83,6 @@ fn stopped_player_event_wire_keeps_the_protocol_10_run_identity_pair() {
         position_ticks: 123,
         played: false,
         consume: false,
-        progress_report_accepted: true,
         error: None,
     });
     let json = serde_json::to_string(&event).unwrap();

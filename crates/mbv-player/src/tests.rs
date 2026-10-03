@@ -4,6 +4,7 @@ mod active_file;
 mod basic;
 mod decisions;
 mod proxy;
+mod resume_refresh;
 mod session;
 mod session_feed;
 mod status;

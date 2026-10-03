@@ -4,8 +4,10 @@ use super::{
     admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
     daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
 };
+use crate::AudiobookshelfOwnerContext;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
@@ -79,7 +81,7 @@ pub(super) fn handle_adopt_queue(
         Some(cursor),
         ctx.audio_only,
         has_emby,
-        ctx.has_audiobookshelf,
+        ctx.audiobookshelf.is_some(),
     );
     ctx.player.set_initial_queue(&items, next_cursor);
     reset_slot_jumps(transitions, queued_transition_origin);
@@ -97,16 +99,26 @@ pub(super) fn handle_adopt_queue(
         None,
     );
 
-    start_queue_enrichment(queue, ctx.client, ctx.merged_tx);
+    start_queue_enrichment(queue, ctx.client, ctx.audiobookshelf, ctx.merged_tx);
 }
 
 pub(super) fn handle_queue_refresh(ctx: &mut CtrlContext<'_>) {
-    start_queue_enrichment(&ctx.owner.core.queue, ctx.client, ctx.merged_tx);
+    start_queue_enrichment(
+        &ctx.owner.core.queue,
+        ctx.client,
+        ctx.audiobookshelf,
+        ctx.merged_tx,
+    );
 }
 
-fn start_queue_enrichment(
+/// The one progress refresh behind cold adoption, a manual queue refresh
+/// (`CtrlCmd::UnifiedQueueRefresh`), and Owner restore. Fetches Emby items
+/// when the queue holds Emby slots and Audiobookshelf progress when it holds
+/// episode or book slots, off the event-loop thread.
+pub(crate) fn start_queue_enrichment(
     queue: &PlaybackQueue,
     client: &Arc<std::sync::Mutex<EmbyClient>>,
+    audiobookshelf: Option<&AudiobookshelfOwnerContext>,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
 ) {
     let adopted_slots: Vec<(QueueSlotId, String)> = queue
@@ -118,35 +130,69 @@ fn start_queue_enrichment(
                 .map(|item| (slot.slot_id, item.id.clone()))
         })
         .collect();
-    if adopted_slots.is_empty() {
+    if !adopted_slots.is_empty() {
+        let item_ids: Vec<String> = adopted_slots
+            .iter()
+            .map(|(_, item_id)| item_id.clone())
+            .collect();
+        super::playback::spawn_item_lookup(
+            client,
+            merged_tx,
+            item_ids,
+            move |result| match result {
+                Ok(items) => {
+                    let items_by_id: std::collections::HashMap<String, EmbyItem> = items
+                        .into_iter()
+                        .map(|item| (item.id.clone(), item))
+                        .collect();
+                    let enriched = adopted_slots
+                        .into_iter()
+                        .filter_map(|(slot_id, item_id)| {
+                            items_by_id
+                                .get(&item_id)
+                                .cloned()
+                                .map(|item| (slot_id, item))
+                        })
+                        .collect();
+                    Some(DaemonEvent::QueueEnriched(enriched))
+                }
+                Err(error) => {
+                    tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", error = %error, "adopted queue enrichment fetch failed");
+                    None
+                }
+            },
+        );
+    }
+    let Some(audiobookshelf) = audiobookshelf else {
+        return;
+    };
+    let episode_keys: HashSet<(String, String)> = queue
+        .slots()
+        .iter()
+        .filter_map(|slot| {
+            slot.item
+                .as_audiobookshelf()
+                .map(|episode| (episode.library_item_id.clone(), episode.episode_id.clone()))
+        })
+        .collect();
+    let book_ids: HashSet<String> = queue
+        .slots()
+        .iter()
+        .filter_map(|slot| {
+            slot.item
+                .as_audiobookshelf_book()
+                .map(|book| book.library_item_id.clone())
+        })
+        .collect();
+    if episode_keys.is_empty() && book_ids.is_empty() {
         return;
     }
-    let item_ids: Vec<String> = adopted_slots
-        .iter()
-        .map(|(_, item_id)| item_id.clone())
-        .collect();
-    super::playback::spawn_item_lookup(client, merged_tx, item_ids, move |result| match result {
-        Ok(items) => {
-            let items_by_id: std::collections::HashMap<String, EmbyItem> = items
-                .into_iter()
-                .map(|item| (item.id.clone(), item))
-                .collect();
-            let enriched = adopted_slots
-                .into_iter()
-                .filter_map(|(slot_id, item_id)| {
-                    items_by_id
-                        .get(&item_id)
-                        .cloned()
-                        .map(|item| (slot_id, item))
-                })
-                .collect();
-            Some(DaemonEvent::QueueEnriched(enriched))
-        }
-        Err(error) => {
-            tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", error = %error, "adopted queue enrichment fetch failed");
-            None
-        }
-    });
+    crate::audiobookshelf::spawn_audiobookshelf_progress_refresh(
+        audiobookshelf,
+        episode_keys,
+        book_ids,
+        merged_tx,
+    );
 }
 
 /// `CtrlCmd::UnifiedQueueSourceUpdate`: update only the source of the owner
@@ -251,7 +297,7 @@ fn prepare_replacement_slots(
         start_idx,
         ctx.audio_only,
         has_emby,
-        ctx.has_audiobookshelf,
+        ctx.audiobookshelf.is_some(),
     );
     if slots.is_empty() {
         return Err(crate::DaemonLibError::queue_setup(
@@ -428,7 +474,8 @@ pub(super) fn handle_queue_append(
         return;
     }
     let mut items = items;
-    items.retain(|item| daemon_admits(item, ctx.audio_only, has_emby, ctx.has_audiobookshelf));
+    items
+        .retain(|item| daemon_admits(item, ctx.audio_only, has_emby, ctx.audiobookshelf.is_some()));
     if items.is_empty() {
         reject_command(
             &RejectContext {

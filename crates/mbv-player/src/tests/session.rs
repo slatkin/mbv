@@ -424,31 +424,6 @@ fn player_join_or_timeout_does_not_wait_for_a_stuck_run() {
 }
 
 #[test]
-fn ordinary_stop_marks_stop_report_accepted_not_sent() {
-    // Regression test for a code-review finding: the non-shutdown (fast)
-    // path in report_stop_now_or_background used to hardcode
-    // StopReport::Sent, so progress_report_accepted was always false for
-    // an ordinary stop and record_reported_progress never ran —
-    // reopening the stale-overwrite race that pending-sync exists to
-    // close. It's still fire-and-forget, but should optimistically mark
-    // Accepted; see the call site's comment for why that's the safe
-    // failure mode if the background report actually fails.
-    let (mut session, _status) = make_queue_session_for_pos_tests(0);
-    let (stop_tx, _stop_rx) = mpsc::channel();
-    let mut guard = ProgressGuard {
-        stop_tx,
-        handle: None,
-    };
-
-    session.report_stop_now_or_background(&mut guard);
-
-    assert_eq!(session.stop_report(), StopReport::Accepted);
-    assert!(session.stop_report_accepted());
-}
-
-// ── queue_completed_pos / is_near_end ─────────────────────────────────
-
-#[test]
 fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
     let status = PlayerStatus {
         active: true,

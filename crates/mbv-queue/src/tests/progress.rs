@@ -99,101 +99,7 @@ fn refresh_matches_duplicate_fetched_items_in_queue_order() {
 }
 
 #[test]
-fn pending_progress_sync_blocks_stale_server_userdata() {
-    let mut queue = queue_from_items(vec![item("a")], Some(0));
-    let slot = queue.active_slot_id().unwrap();
-    assert!(matches!(
-        queue.record_reported_progress(
-            slot,
-            20 * TICKS_PER_SECOND,
-            false,
-            StopReportOutcome::Accepted,
-        ),
-        QueueMutationResult::Applied(())
-    ));
-
-    let result = queue.merge_refresh(vec![item_with_progress("a", 2, false)]);
-
-    assert!(result.stale_pending_slots.contains(&slot));
-    assert_eq!(
-        queue.slot(slot).unwrap().item.playback_position_ticks(),
-        20 * TICKS_PER_SECOND
-    );
-    assert!(queue.slot(slot).unwrap().pending_sync().is_some());
-}
-
-#[test]
-fn active_pending_progress_confirmation_clears_pending_but_keeps_local_progress() {
-    let mut queue = queue_from_items(vec![item("a")], Some(0));
-    let active = queue.active_slot_id().unwrap();
-    assert!(matches!(
-        queue.record_reported_progress(
-            active,
-            20 * TICKS_PER_SECOND,
-            false,
-            StopReportOutcome::Accepted,
-        ),
-        QueueMutationResult::Applied(())
-    ));
-
-    let result = queue.merge_refresh(vec![item_with_progress("a", 22, false)]);
-
-    assert!(result.pending_confirmed_slots.contains(&active));
-    assert!(result.protected_slots.contains(&active));
-    assert!(queue.slot(active).unwrap().pending_sync().is_none());
-    assert_eq!(
-        queue.slot(active).unwrap().item.playback_position_ticks(),
-        20 * TICKS_PER_SECOND
-    );
-}
-
-#[test]
-fn pending_progress_sync_clears_when_server_position_matches_within_tolerance() {
-    let mut queue = queue_from_items(vec![item("a")], None);
-    let slot = queue.slots()[0].slot_id;
-    assert!(matches!(
-        queue.record_reported_progress(
-            slot,
-            20 * TICKS_PER_SECOND,
-            false,
-            StopReportOutcome::Accepted,
-        ),
-        QueueMutationResult::Applied(())
-    ));
-
-    let result = queue.merge_refresh(vec![item_with_progress("a", 22, false)]);
-
-    assert!(result.pending_confirmed_slots.contains(&slot));
-    assert!(queue.slot(slot).unwrap().pending_sync().is_none());
-    assert_eq!(
-        queue.slot(slot).unwrap().item.playback_position_ticks(),
-        22 * TICKS_PER_SECOND
-    );
-}
-
-#[test]
-fn watched_state_confirmation_requires_exact_match() {
-    let mut queue = queue_from_items(vec![item("a")], Some(0));
-    let slot = queue.active_slot_id().unwrap();
-    assert!(matches!(
-        queue.record_reported_progress(
-            slot,
-            20 * TICKS_PER_SECOND,
-            true,
-            StopReportOutcome::Accepted,
-        ),
-        QueueMutationResult::Applied(())
-    ));
-
-    let result = queue.merge_refresh(vec![item_with_progress("a", 20, false)]);
-
-    assert!(result.stale_pending_slots.contains(&slot));
-    assert!(queue.slot(slot).unwrap().pending_sync().is_some());
-    assert!(queue.slot(slot).unwrap().item.played());
-}
-
-#[test]
-fn refresh_prunes_inactive_non_pending_missing_slots() {
+fn refresh_prunes_inactive_missing_slots() {
     let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
     let pruned = queue.slots()[1].slot_id;
 
@@ -205,87 +111,15 @@ fn refresh_prunes_inactive_non_pending_missing_slots() {
 }
 
 #[test]
-fn refresh_cannot_prune_active_or_pending_sync_slots() {
+fn refresh_cannot_prune_active_slot() {
     let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
     let active = queue.slots()[0].slot_id;
-    let pending = queue.slots()[1].slot_id;
-    assert!(matches!(
-        queue.record_reported_progress(
-            pending,
-            9 * TICKS_PER_SECOND,
-            false,
-            StopReportOutcome::Accepted,
-        ),
-        QueueMutationResult::Applied(())
-    ));
+    let inactive = queue.slots()[1].slot_id;
 
     let result = queue.merge_refresh(vec![item("c")]);
 
     assert!(result.protected_slots.contains(&active));
-    assert!(result.protected_slots.contains(&pending));
+    assert_eq!(result.pruned_slots, vec![inactive]);
     assert!(queue.slot(active).is_some());
-    assert!(queue.slot(pending).is_some());
-}
-
-#[rstest::rstest]
-#[case::emby_accepted(
-    QueueItem::Emby(Box::new(item("emby"))),
-    StopReportOutcome::Accepted,
-    true
-)]
-#[case::emby_rejected(
-    QueueItem::Emby(Box::new(item("emby"))),
-    StopReportOutcome::NotAccepted,
-    false
-)]
-#[case::feed_accepted(QueueItem::Feed(feed("feed")), StopReportOutcome::Accepted, false)]
-#[case::abs_episode_accepted(
-    QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
-        "lib", "episode"
-    ))),
-    StopReportOutcome::Accepted,
-    false
-)]
-fn record_reported_progress_arms_only_accepted_emby_reports(
-    #[case] item: QueueItem,
-    #[case] outcome: StopReportOutcome,
-    #[case] should_arm: bool,
-) {
-    let mut queue = queue_from_queue_items(vec![item], None);
-    let slot_id = queue.slots()[0].slot_id;
-    assert!(matches!(
-        queue.record_reported_progress(slot_id, 42, true, outcome),
-        QueueMutationResult::Applied(())
-    ));
-
-    let slot = queue.slot(slot_id).unwrap();
-    let expected = should_arm.then_some(SlotProgress {
-        position_ticks: 42,
-        played: true,
-    });
-    assert_eq!(slot.pending_sync(), expected);
-    assert_eq!(
-        slot.local_progress(),
-        SlotProgress {
-            position_ticks: 42,
-            played: true,
-        }
-    );
-}
-
-#[rstest::rstest]
-#[case::same_content(true)]
-#[case::changed_content(false)]
-fn update_slot_item_keeps_protection_only_for_same_content(#[case] same_content: bool) {
-    let mut queue = queue_from_items(vec![item("a")], None);
-    let slot_id = queue.slots()[0].slot_id;
-    let _ = queue.record_reported_progress(slot_id, 42, false, StopReportOutcome::Accepted);
-    let replacement_id = if same_content { "a" } else { "b" };
-
-    let _ = queue.update_slot_item(slot_id, QueueItem::Emby(Box::new(item(replacement_id))));
-
-    assert_eq!(
-        queue.slot(slot_id).unwrap().pending_sync().is_some(),
-        same_content
-    );
+    assert!(queue.slot(inactive).is_none());
 }
