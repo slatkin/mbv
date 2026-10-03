@@ -133,6 +133,18 @@ impl FeedsContent {
         }
     }
 
+    /// Reset Feeds' local presentation without replacing its content: the
+    /// default Latest group pill, the default Watched filter and the active
+    /// group's first entry, with the shared list back at its top (design D3).
+    /// The launch-window Latest acknowledgement is retained.
+    pub fn reset_presentation(&mut self) {
+        self.watched_filter = WatchedFilter::default();
+        self.selected_group = 0;
+        self.latest_selected = false;
+        self.rebuild_visible_entries();
+        self.carrier.reset_presentation();
+    }
+
     #[must_use]
     pub fn latest_selected(&self) -> bool {
         self.latest_selected
