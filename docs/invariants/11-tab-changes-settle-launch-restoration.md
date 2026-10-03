@@ -40,6 +40,47 @@ A failed Service state is written only through `fail_emby_service` and
 residual is the Audiobookshelf catalog failure in `drains.rs` that does not
 change Service state: it calls `expire_launch_service` directly.
 
+## Global UI-state reset ordering
+
+`Model::reset_ui_state` (row 5.1, #745) is the deliberate bypass of this
+invariant: it abandons launch intent instead of settling it. Its ordering is
+load-bearing and is not a free choice:
+
+1. `abandon_pending_ui_intents` runs first. It sets `LaunchRestore::Done` and
+   clears the pending navigate/series/track/overlay/queue-reanchor intents and
+   the shell-owned selection/gesture/search intent.
+2. Only then is Home selected through the existing settled-tab path,
+   `set_library_tab(0)`. `apply_tab_position` marks the move `Done` before it
+   calls `select_tab`.
+3. Layout/geometry defaults are restored (Panel mode and focus, widths,
+   artwork versus visualizer).
+4. Shell browse roots return to their default fields without refetch or cache
+   invalidation, and each retained Audiobookshelf podcast state clears its
+   committed show pill so the lazy fan-out scope matches the owner's default
+   `State(All)` pill.
+5. Transient overlays are dismissed through the existing lifecycle helpers.
+6. Mounted owners and Queue-local presentation reset
+   (`LibraryPanel::reset_presentation`, `QueueComponent::reset_presentation`).
+7. Saved presentation state is cleared last, after every live write, so a
+   later sync cannot recreate it. The live reset stays applied if that clear
+   fails.
+
+Done-before-`select_tab` is what makes step 1 matter. If the snapshot were
+still `Pending` when Home was selected, `select_tab` would wrap it into
+`TabSettled`; a live Service identity resolving when its catalog arrives would
+then re-settle the snapshot the reset discarded. With `launch_restore` already
+`Done`, that catalog arrival has no pending identity to resolve.
+
+One completion guard backs this up. A root-level `Loaded` whose
+`LevelFetchKey` no longer matches the reset root is dropped by
+`drop_stale_root_completion` in
+`src/app/dispatch/library/event/browse_loads.rs` (#745). The root's parent id
+survives a reset, so the parent-match check alone would accept a browse issued
+before the reset and reinstate its discarded sort/filter/scope; the fetch-key
+comparison rejects it. If that dropped completion was the unfiltered root's
+only in-flight load, the guard re-issues it under the reset fields so the
+default root still completes.
+
 ## What remains unenforced
 
 `App::tab` still has several production writers, and no accessor or single-writer
