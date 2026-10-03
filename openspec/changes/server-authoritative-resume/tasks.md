@@ -49,7 +49,7 @@
 
 ## 3. Queue progress refresh: Audiobookshelf parity and Owner restore (design D4)
 
-- [ ] 3.1 Extend `start_queue_enrichment` (`crates/mbv-daemon/src/control/queue_setup.rs`)
+- [x] 3.1 Extend `start_queue_enrichment` (`crates/mbv-daemon/src/control/queue_setup.rs`)
   so that, when the queue holds Audiobookshelf episode or book slots and the
   daemon has an Audiobookshelf context, it spawns one fetch. The fetch calls
   `progress_bounded` and `book_progress_bounded` and sends one new
@@ -57,7 +57,7 @@
   the episode/book maps filtered to queued items. Add a `ponytail:` comment
   noting the two identical `/api/me/progress` requests. A failure is logged and
   ignored. Verify with `cargo check -p mbv-daemon`.
-- [ ] 3.2 Handle `AudiobookshelfProgressRefreshed` with a new apply function
+- [x] 3.2 Handle `AudiobookshelfProgressRefreshed` with a new apply function
   next to `apply_audiobookshelf_progress` in `crates/mbv-daemon/src/audiobookshelf.rs`.
   Do not reuse it, because it targets the active slot. The new function drops
   a stale generation, applies position and finished state to every matching
@@ -67,7 +67,7 @@
   one test for the contract that distinguishes it from the session-sync apply:
   a refresh matching the active slot leaves its position unchanged while
   updating an inactive slot of the same item kind.
-- [ ] 3.3 After `initialize_queue` in `crates/mbv-daemon/src/run.rs`, call
+- [x] 3.3 After `initialize_queue` in `crates/mbv-daemon/src/run.rs`, call
   the same function when the restored queue has Emby or Audiobookshelf slots.
   Verify with `cargo check -p mbv-daemon`, and confirm by reading the diff
   that restore, adoption and `UnifiedQueueRefresh` all reach the one function.
