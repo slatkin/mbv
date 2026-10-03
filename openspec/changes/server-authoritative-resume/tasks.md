@@ -101,7 +101,7 @@
 
 ## 5. Shutdown waits for the stop report (design D6)
 
-- [ ] 5.1 Reorder `handle_shutdown`
+- [x] 5.1 Reorder `handle_shutdown`
   (`crates/mbv-daemon/src/event_loop/control_events.rs`) to: notify and flush
   clients, then `stop_for_shutdown(remaining(deadline))` and
   `join_or_timeout(remaining(deadline))`, then flush the persist queue and
