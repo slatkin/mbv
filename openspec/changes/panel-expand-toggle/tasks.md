@@ -5,8 +5,8 @@
 
 ## 2. Width-aware pinned layout
 
-- [ ] 2.1 `src/pin.rs`: add `pub(crate) enum PinnedWidth { Collapsed, Expanded }` (`Default` = `Collapsed`, plus a `toggled()` method); `layout_from_config(config, width)` selects `cols` or `cols_expanded`; `start` passes `Collapsed`; `apply_layout(panel, config, width)`. Add one named `#[case]` table test in `src/pin.rs` owning the width→cols contract the Expand/Collapse scenarios rest on: `layout_from_config` at `Collapsed` → `cols`, at `Expanded` → `cols_expanded`, and `Expanded` with `cols_expanded < cols` still → `cols_expanded`. Verify `cargo nextest run -p mbv -E 'test(layout_from_config)'`.
-- [ ] 2.2 `App` (`src/app/state/app_struct.rs`, `construct.rs`): add `pinned_width: PinnedWidth` next to `pinned_panel`. In `apply_panel_setting` (`src/app/dispatch/settings.rs`) apply at `Collapsed` for `PanelCols`, `Expanded` for `PanelColsExpanded`, otherwise the current `pinned_width`; store that width only in the `Some(panel)` arm on `Ok` — an unpinned launch never changes `pinned_width` (design D4). Verify `cargo check -p mbv`.
+- [x] 2.1 `src/pin.rs`: add `pub(crate) enum PinnedWidth { Collapsed, Expanded }` (`Default` = `Collapsed`, plus a `toggled()` method); `layout_from_config(config, width)` selects `cols` or `cols_expanded`; `start` passes `Collapsed`; `apply_layout(panel, config, width)`. Add one named `#[case]` table test in `src/pin.rs` owning the width→cols contract the Expand/Collapse scenarios rest on: `layout_from_config` at `Collapsed` → `cols`, at `Expanded` → `cols_expanded`, and `Expanded` with `cols_expanded < cols` still → `cols_expanded`. Verify `cargo nextest run -p mbv -E 'test(layout_from_config)'`.
+- [x] 2.2 `App` (`src/app/state/app_struct.rs`, `construct.rs`): add `pinned_width: PinnedWidth` next to `pinned_panel`. In `apply_panel_setting` (`src/app/dispatch/settings.rs`) apply at `Collapsed` for `PanelCols`, `Expanded` for `PanelColsExpanded`, otherwise the current `pinned_width`; store that width only in the `Some(panel)` arm on `Ok` — an unpinned launch never changes `pinned_width` (design D4). Verify `cargo check -p mbv`.
 
 ## 3. Toggle keybind
 
