@@ -112,7 +112,7 @@
 
 ## 6. Integration
 
-- [ ] 6.1 Run `cargo fmt`, then
+- [x] 6.1 Run `cargo fmt`, then
   `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo nextest run --workspace`. Verify that all are clean.
 - [ ] 6.2 Manual check, done by the user: play an Emby video past 6%, quit the
