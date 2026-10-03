@@ -15,10 +15,35 @@ use mbv_config::PanelConfig;
 /// The running panel handle the shell owns.
 pub(crate) type PinnedPanel = mbv_pinwin::Panel<'static>;
 
-/// Apply a full `[panel]` layout to the live panel (design D6).
-pub(crate) fn apply_layout(panel: &PinnedPanel, config: &PanelConfig) -> Result<(), String> {
+/// Which of the two saved widths the running panel shows (design D1). The
+/// active width is runtime state on `App`; it is never persisted, so every
+/// pinned launch starts collapsed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PinnedWidth {
+    #[default]
+    Collapsed,
+    Expanded,
+}
+
+impl PinnedWidth {
+    /// The other width (design D3).
+    #[must_use]
+    pub(crate) fn toggled(self) -> Self {
+        match self {
+            Self::Collapsed => Self::Expanded,
+            Self::Expanded => Self::Collapsed,
+        }
+    }
+}
+
+/// Apply a full `[panel]` layout to the live panel at `width` (design D6).
+pub(crate) fn apply_layout(
+    panel: &PinnedPanel,
+    config: &PanelConfig,
+    width: PinnedWidth,
+) -> Result<(), String> {
     panel
-        .apply_layout(layout_from_config(config))
+        .apply_layout(layout_from_config(config, width))
         .map_err(|error| error.to_string())
 }
 
@@ -95,7 +120,7 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
     let panel = mbv_pinwin::Panel::start(
         master.as_fd(),
-        layout_from_config(config),
+        layout_from_config(config, PinnedWidth::Collapsed),
         mbv_pinwin::KeyboardMode::OnDemand,
     )
     .map_err(PinStartError::Panel)?;
@@ -112,13 +137,16 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     Ok(panel)
 }
 
-fn layout_from_config(config: &PanelConfig) -> mbv_pinwin::Layout {
+fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> mbv_pinwin::Layout {
     mbv_pinwin::Layout {
         side: match config.side {
             mbv_config::PanelSide::Left => mbv_pinwin::Side::Left,
             mbv_config::PanelSide::Right => mbv_pinwin::Side::Right,
         },
-        cols: config.cols,
+        cols: match width {
+            PinnedWidth::Collapsed => config.cols,
+            PinnedWidth::Expanded => config.cols_expanded,
+        },
         gutters: mbv_pinwin::Gutters {
             top: config.gutter_top,
             bottom: config.gutter_bottom,
@@ -351,7 +379,28 @@ fn notify(message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{StartFailureAction, failure_action};
+    use super::{PinnedWidth, StartFailureAction, failure_action, layout_from_config};
+    use mbv_config::PanelConfig;
+
+    /// Design D2/D4: the active width selects `cols` (collapsed) or
+    /// `cols_expanded` (expanded); nothing constrains which value is larger.
+    #[rstest::rstest]
+    #[case::collapsed_uses_cols(PinnedWidth::Collapsed, 40, 80, 40)]
+    #[case::expanded_uses_cols_expanded(PinnedWidth::Expanded, 40, 80, 80)]
+    #[case::expanded_below_collapsed_still_wins(PinnedWidth::Expanded, 60, 30, 30)]
+    fn layout_from_config_selects_the_active_width(
+        #[case] width: PinnedWidth,
+        #[case] cols: u16,
+        #[case] cols_expanded: u16,
+        #[case] expected: u16,
+    ) {
+        let config = PanelConfig {
+            cols,
+            cols_expanded,
+            ..PanelConfig::default()
+        };
+        assert_eq!(layout_from_config(&config, width).cols, expected);
+    }
 
     /// Design D5: a failed pinned start falls back to the terminal only when
     /// there is one; otherwise it notifies and exits 1.

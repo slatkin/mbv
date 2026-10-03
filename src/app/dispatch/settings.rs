@@ -1,5 +1,6 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
+use crate::pin::PinnedWidth;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::SettingKey;
@@ -44,6 +45,12 @@ impl App {
     /// ±10 with Shift). The running panel validates the candidate layout
     /// first, and only an accepted layout is saved. A rejection keeps the
     /// previous value and shows its reason as a Warning toast.
+    ///
+    /// While pinned, the width applied is the one the edited row belongs to:
+    /// `Cols` validates collapsed, `Expanded cols` expanded, any other row at
+    /// the current width (change `panel-expand-toggle`, design D4). That width
+    /// is stored only when a panel accepted the candidate, so an unpinned
+    /// launch never changes the active width.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         let candidate = {
             let panel = self.config.lock().unwrap().panel;
@@ -52,16 +59,24 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
+        let width = match key {
+            SettingKey::PanelCols => PinnedWidth::Collapsed,
+            SettingKey::PanelColsExpanded => PinnedWidth::Expanded,
+            _ => self.pinned_width,
+        };
         // While pinned, the running panel validates the candidate layout and
         // only an accepted one is saved (design D6); a launch without a panel
         // saves without geometry validation.
         let applied = match &self.pinned_panel {
-            Some(panel) => crate::pin::apply_layout(panel, &candidate),
-            None => Ok(()),
+            Some(panel) => crate::pin::apply_layout(panel, &candidate, width).map(|()| Some(width)),
+            None => Ok(None),
         };
         match applied {
-            Ok(()) => {
+            Ok(width) => {
                 self.config.lock().unwrap().panel = candidate;
+                if let Some(width) = width {
+                    self.pinned_width = width;
+                }
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
             }
             Err(reason) => self.flash(reason, ToastSeverity::Warning),

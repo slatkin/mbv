@@ -436,6 +436,10 @@ pub struct App {
     /// `pin-mbv-in-pinwin`, design D3). Dropping the handle stops the panel
     /// before process exit.
     pub(in crate::app) pinned_panel: Option<crate::pin::PinnedPanel>,
+    /// The active width of the running pinned panel (change
+    /// `panel-expand-toggle`, design D1); never persisted, so a launch always
+    /// starts collapsed.
+    pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
