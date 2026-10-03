@@ -274,6 +274,120 @@ fn hiding_the_visual_slot_flips_the_header_visible_on_the_next_sync_pass() {
     );
 }
 
+/// Row 3.1 (design D2): a capable artwork-title setup with a measured card
+/// and a queue, so the header classification resolves to the artwork site
+/// (hidden) until an unreachable fallback input flips it.
+fn capable_artwork_app() -> crate::app::App {
+    let mut app = active_app(PanelMode::Both);
+    app.images.configure_protocol(None, true);
+    let mut picker = Picker::halfblocks();
+    picker.set_protocol_type(ProtocolType::Kitty);
+    app.images
+        .set_image_pickers_for_test(picker, Picker::halfblocks());
+    // (height, width): the card box the overlay is composed for.
+    app.images.record_card_size(8, 16);
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    app
+}
+
+/// The mounted `QueuePlaybackPanel`'s projected transport area, if sync
+/// published one (idle panels project `None`).
+fn projected_transport_area(harness: &TickHarness) -> Option<Rect> {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::QueuePlaybackPanel)
+        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
+        .expect("Queue playback panel mounted in a queue-visible layout")
+        .transport_area_for_test()
+}
+
+/// The queue panel placement the shell computes from the same `App` state.
+fn queue_placement(harness: &TickHarness, width: u16, height: u16) -> Rect {
+    harness
+        .model()
+        .app
+        .compute_chrome_geometry(Rect::new(0, 0, width, height))
+        .root
+        .queue
+        .expect("queue placed")
+}
+
+/// Row 3.1 (design D2): the panel's slot-region offset and the placement's
+/// header band read one shared `queue_header_rows()` policy, so flipping the
+/// projected flag on the artwork site shifts the transport area and the
+/// queue placement down by exactly the two header rows. Shell wiring only --
+/// the geometry math is row 2.1's arrangement-test contract.
+#[test]
+fn queue_header_flag_shifts_transport_and_queue_placement_by_two_rows() {
+    let mut harness = TickHarness::new(capable_artwork_app());
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        !harness.model().app.queue_card_projection.header_visible,
+        "a capable artwork site hides the header"
+    );
+    let (hidden_transport, hidden_queue) = (
+        projected_transport_area(&harness).expect("sync projects transport geometry"),
+        queue_placement(&harness, 100, 40),
+    );
+
+    // The visualizer is an unreachable fallback (design D1): the header
+    // carries the title while the slot stays painted, so the card geometry
+    // is unchanged and only the header band appears.
+    harness.model_mut().app.visualizer_enabled = true;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        harness.model().app.queue_card_projection.header_visible,
+        "the visualizer fallback shows the header"
+    );
+    let (shown_transport, shown_queue) = (
+        projected_transport_area(&harness).expect("sync projects transport geometry"),
+        queue_placement(&harness, 100, 40),
+    );
+
+    assert_eq!(
+        (shown_transport.x, shown_transport.y, shown_transport.width),
+        (
+            hidden_transport.x,
+            hidden_transport.y + 2,
+            hidden_transport.width
+        ),
+        "the transport area moves down by the header band"
+    );
+    assert_eq!(
+        (shown_queue.x, shown_queue.y, shown_queue.width),
+        (hidden_queue.x, hidden_queue.y + 2, hidden_queue.width),
+        "the queue placement moves down by the header band"
+    );
+}
+
+/// Row 3.1 (design D2): idle is not classified by the title rule -- the shell
+/// reserves the whole header band regardless of the projected flag, so
+/// flipping it moves nothing.
+#[test]
+fn idle_keeps_the_header_band_regardless_of_the_projected_flag() {
+    let app = capable_artwork_app();
+    app.player.status.lock().unwrap().active = false;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let before = queue_placement(&harness, 100, 40);
+    assert!(
+        projected_transport_area(&harness).is_none(),
+        "an idle panel projects no transport area"
+    );
+
+    harness.model_mut().app.queue_card_projection.header_visible = true;
+    harness.model_mut().sync_queue_playback_panel();
+    let after = queue_placement(&harness, 100, 40);
+
+    assert_eq!(
+        (after.x, after.y, after.width, after.height),
+        (before.x, before.y, before.width, before.height),
+        "the idle placement ignores the projected flag"
+    );
+}
+
 #[test]
 fn sync_projects_queue_transport_area_before_draw() {
     let mut app = active_app(PanelMode::Both);

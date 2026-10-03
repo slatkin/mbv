@@ -17,8 +17,7 @@ use mbv_components::{
     LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
 use mbv_render::arrangements::chrome::{
-    QUEUE_PLAYBACK_HEADER_ROWS, RootFrame, queue_playback_column_wide,
-    queue_playback_transport_area, status_bar_row,
+    RootFrame, queue_playback_column_wide, queue_playback_transport_area, status_bar_row,
 };
 use mbv_render::components::card::queue_card_reserved_rect;
 use mbv_render::components::widgets::{fill_surface, queue_panel_inset};
@@ -265,8 +264,11 @@ impl Model {
     /// Mount/unmount the `QueuePlaybackPanel` to the `RootFrame.queue_playback`
     /// placement and project its content (task 3.5): the header row's status
     /// word and playback target, and the transport facts from the shared
-    /// transport projection. Mounted in every queue-visible layout, idle
-    /// included, because the header is always painted (D10).
+    /// transport projection. The mount is placement-driven (design D4): the
+    /// placement exists whenever the column has slot/transport rows or the
+    /// idle header, and the D1 mount rule follows it. The slot region below
+    /// the header reads the same `queue_header_rows()` the geometry does, so
+    /// sync, paint and geometry cannot drift (D2).
     pub(in crate::app) fn sync_queue_playback_panel(&mut self) {
         let placement = self.sync_chrome_root().queue_playback;
         self.mount_to_placement(ChromePanel::QueuePlayback, placement);
@@ -283,9 +285,10 @@ impl Model {
         } else {
             placement.map(|placement| {
                 let inset = queue_panel_inset(placement);
+                let header_rows = self.app.queue_header_rows();
                 let slot_region = Rect {
-                    y: placement.y + QUEUE_PLAYBACK_HEADER_ROWS,
-                    height: placement.height.saturating_sub(QUEUE_PLAYBACK_HEADER_ROWS),
+                    y: placement.y + header_rows,
+                    height: placement.height.saturating_sub(header_rows),
                     ..inset
                 };
                 let wide = queue_playback_column_wide(placement.width);
@@ -328,13 +331,17 @@ impl Model {
             mbv_theme::Surface::QueueColumn,
             matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
         );
-        // The slot region starts on the row below the placement's header band
-        // (the header's recessed padding row plus the painted header row) and
-        // keeps the queue panel's shared horizontal inner padding.
+        // The slot region starts below the placement's header band when the
+        // header is reserved (the header's recessed padding row plus the
+        // painted header row) and keeps the queue panel's shared horizontal
+        // inner padding. The band height is the shared `queue_header_rows()`
+        // policy `compute_chrome_geometry` places with (D2), so paint and
+        // geometry agree.
+        let header_rows = self.app.queue_header_rows();
         let inset = queue_panel_inset(placement);
         let slot_region = Rect {
-            y: placement.y + QUEUE_PLAYBACK_HEADER_ROWS,
-            height: placement.height.saturating_sub(QUEUE_PLAYBACK_HEADER_ROWS),
+            y: placement.y + header_rows,
+            height: placement.height.saturating_sub(header_rows),
             ..inset
         };
         let wide = queue_playback_column_wide(placement.width);
