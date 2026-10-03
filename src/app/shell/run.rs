@@ -17,7 +17,7 @@ impl Model {
         // draw. The launch-tab resolution and the stale-destination fallback
         // settle the active tab so every projection below -- and the frame --
         // sees the resolved tab (the sync pass no longer writes `self.tab`),
-        // and the terminal-resize handling (image settle window, queue-column
+        // and the terminal-resize handling (card-image clear, queue-column
         // clamp + prefs save, and the mini-view focus hand-off on a real
         // Resize event) leaves the draw path, which now only reads geometry.
         self.sync_terminal_resize();
@@ -83,13 +83,11 @@ impl Model {
 
     /// Terminal-resize side effects, applied in the sync pass before any draw
     /// (task 1.2). A size drift against the size this pass last handled runs
-    /// the former draw-time mutations: the image settle window (cached card
-    /// images are kept, their painted placement held until the width is
-    /// stable) and the queue-column clamp + prefs save (this also picks up
-    /// the startup draw's size normalization and any direct-frame
-    /// normalization). The mini-view focus hand-off runs only when the Resize
-    /// observer armed it -- the real terminal-resize event, whose pre-resize
-    /// width the marker still holds.
+    /// the former draw-time mutations: the card-image state clear and the
+    /// queue-column clamp + prefs save (this also picks up the startup draw's
+    /// size normalization and any direct-frame normalization). The mini-view
+    /// focus hand-off runs only when the Resize observer armed it -- the real
+    /// terminal-resize event, whose pre-resize width the marker still holds.
     pub(super) fn sync_terminal_resize(&mut self) {
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
@@ -98,13 +96,7 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        // A width change must not churn the image pipeline mid-change: the
-        // pinned panel's animated apply resizes the pty at the tween's start,
-        // so a clear + refetch + re-encode + re-transmit here both flashed
-        // the queue art and flooded the panel's pty reader until its watchdog
-        // snapped the animation. Cached entries stay; the settle window holds
-        // their painted placement until the width is stable.
-        self.app.arm_image_settle_window();
+        self.app.images.clear_images_and_loading();
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {

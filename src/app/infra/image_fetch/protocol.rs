@@ -4,7 +4,6 @@ use mbv_images::{
     RENDER_FILTER, cover_fill_hero_box,
 };
 use mbv_theme as palette;
-use ratatui_image::ResizeEncodeRender as _;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 
@@ -391,14 +390,6 @@ impl App {
         {
             return true;
         }
-        // The settle window after a terminal resize holds the painted
-        // placement: rebuilding for the moved box would re-transmit the
-        // artwork payload mid-change (the pinned panel's animated width apply
-        // resizes the pty at the tween's start). The rebuild happens on the
-        // first projection after the width is stable.
-        if self.images_settling() && !entry.protocols.is_empty() {
-            return true;
-        }
         let Some((picker, suffix)) = self
             .picker_and_suffix()
             .map(|(picker, suffix)| (picker.clone(), suffix))
@@ -437,43 +428,26 @@ impl App {
         if paint.area.width == 0 || paint.area.height == 0 {
             return;
         }
-        // The settle window after a terminal resize holds the last encoded
-        // hero paint: the direct protocol render never triggers an encode, so
-        // the artwork payload is not re-transmitted mid-change; it is clipped
-        // to the box when the held size no longer fits.
-        let held = self
-            .images_settling()
-            .then(|| self.images.hero_paint_size())
-            .filter(|(height, width)| *height > 0 && *width > 0);
         if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: paint.area.width,
                 height: paint.area.height,
             };
-            let actual = held
-                .map(|(height, width)| ratatui::layout::Size { width, height })
-                .or_else(|| {
-                    state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
-                });
-            if let Some(actual) = actual {
+            if let Some(actual) =
+                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            {
                 let img_rect = ratatui::layout::Rect {
                     x: paint.area.x + paint.area.width.saturating_sub(actual.width) / 2,
                     y: paint.area.y,
-                    width: actual.width.min(paint.area.width),
-                    height: actual.height.min(paint.area.height),
+                    width: actual.width,
+                    height: actual.height,
                 };
-                if held.is_some() {
-                    state.render(img_rect, f.buffer_mut());
-                } else {
-                    f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                        img_rect,
-                        state,
-                    );
-                    self.images
-                        .record_hero_paint_size(actual.height, actual.width);
-                }
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                    img_rect,
+                    state,
+                );
                 return;
             }
         }

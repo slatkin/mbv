@@ -30,6 +30,3 @@ mbv-config = { path = "../mbv-config" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-core = { path = "../mbv-core" }
-
-[dev-dependencies]
-image.workspace = true

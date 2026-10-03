@@ -253,12 +253,6 @@ pub struct App {
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
     pub(in crate::app) settings_save_at: Option<Instant>,
-    /// Deadline while image paints hold the pre-resize placement after a
-    /// handled terminal resize (`App::arm_image_settle_window`): a pinned
-    /// panel width change resizes the pty at the animation's start, so the
-    /// re-encode and re-transmit of card/hero art must wait until the width
-    /// is stable instead of flooding the panel's pty reader mid-tween.
-    pub(in crate::app) images_settle_until: Option<Instant>,
     /// Live mouse-capture flip requested by the Settings toggle arm (ADR
     /// 0024): the run loop consumes it and applies `set_mouse_capture` on
     /// the session stdout once per tick.

@@ -5,7 +5,6 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
-use ratatui_image::ResizeEncodeRender as _;
 
 /// The rectangle the queue card reserves for artwork: the last rendered
 /// image/visualizer size, or the full reserved slot (capped like the artwork
@@ -94,10 +93,6 @@ pub fn render_card_painting(
     // `true` while a fetch for the slot's key is in flight: the painter
     // reserves the loading rectangle instead of leaving the slot blank.
     loading: bool,
-    // `true` inside the shell's image settle window after a terminal resize:
-    // hold the last encoded placement instead of letting the auto-resize
-    // re-encode and re-transmit the artwork payload mid-change.
-    hold_last_paint: bool,
     image: Option<&mut CardImageProtocol>,
     last_card: (u16, u16),
     terminal_height: u16,
@@ -120,37 +115,6 @@ pub fn render_card_painting(
     }
     .min(cap);
     let mut image = image;
-    // The settle hold: the checkpoint size is the last encoded area, so
-    // rendering the protocol into it needs no resize and emits placeholder
-    // cells only -- no image payload. The direct protocol render (instead of
-    // the auto-resizing widget) also never triggers an encode when the held
-    // size is wider than the resized slot; it clips to the slot instead.
-    let (last_height, last_width) = last_card;
-    if hold_last_paint
-        && area.width > 0
-        && area.height > 0
-        && last_height > 0
-        && last_width > 0
-        && let Some(state) = image.as_deref_mut()
-    {
-        let width = last_width.min(area.width);
-        let height = last_height.min(area.height);
-        let img_x = if left_align {
-            area.x
-        } else {
-            area.x + (area.width.saturating_sub(width)) / 2
-        };
-        state.render(
-            Rect {
-                x: img_x,
-                y: area.y,
-                width,
-                height,
-            },
-            f.buffer_mut(),
-        );
-        return (last_height, last_width, false, true);
-    }
     let actual_size = image.as_deref_mut().and_then(|state| {
         let avail = ratatui::layout::Size {
             width: area.width,
@@ -227,6 +191,3 @@ pub fn render_card_painting(
     }
     (reservation.height, placeholder_w, loading, false)
 }
-
-#[cfg(test)]
-mod tests;

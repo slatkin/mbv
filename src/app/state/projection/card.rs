@@ -285,11 +285,6 @@ impl App {
         let loading = !placeholder_slot && self.images.is_loading(key);
         let last_card = self.images.last_card_size();
         let terminal_height = self.terminal_height;
-        // The settle window after a terminal resize holds the last encoded
-        // placement: re-encoding for the moved slot would re-transmit the
-        // artwork payload mid-change (the pinned panel's animated width
-        // apply resizes the pty at the tween's start).
-        let hold_last_paint = self.images_settling();
         let image = self.cached_image_protocol_mut(key);
         let (height, width, loading, painted) = render_card_painting(
             f,
@@ -297,7 +292,6 @@ impl App {
             left_align,
             &projection,
             loading,
-            hold_last_paint,
             image,
             last_card,
             terminal_height,
@@ -319,7 +313,6 @@ impl App {
                 left_align,
                 &projection,
                 fallback_loading,
-                hold_last_paint,
                 fallback_image,
                 last_card,
                 terminal_height,
