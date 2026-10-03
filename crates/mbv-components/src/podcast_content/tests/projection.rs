@@ -132,14 +132,29 @@ fn keyboard_pill_walk_wraps_at_both_ends() {
 fn a_refresh_that_drops_the_show_pill_resets_to_all() {
     let mut owner = owner();
     owner.set_focused(true);
-    // Walk to the Beta show pill, then refresh without it.
+    // Walk to the Beta show pill.
     for _ in 0..4 {
         owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
     }
     assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-    let mut state = AudiobookshelfBrowseState::new(library());
-    state.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
-    owner.set_content(&state, false);
+
+    // A completed refresh that still lists Beta replaces the catalog in
+    // place (design D2): the pill and its selected show are retained.
+    let mut kept = AudiobookshelfBrowseState::new(library());
+    kept.append_page(
+        0,
+        20,
+        2,
+        vec![show("alpha", "Alpha Show"), show("beta", "Beta Show")],
+    );
+    owner.set_content(&kept, false);
+    assert_eq!(owner.pill, PillSelection::Show("beta".into()));
+
+    // A completed refresh without Beta drops the pill back to the state
+    // pills.
+    let mut dropped = AudiobookshelfBrowseState::new(library());
+    dropped.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
+    owner.set_content(&dropped, false);
     assert_eq!(
         owner.pill,
         PillSelection::State(AudiobookshelfEpisodeFilter::All)

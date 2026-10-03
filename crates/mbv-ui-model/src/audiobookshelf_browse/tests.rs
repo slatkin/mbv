@@ -144,6 +144,24 @@ fn catalog_replacement_stages_until_commit_reconciles() {
         state.selected_episode, None,
         "a removed show's selected episode is reconciled away at commit"
     );
+
+    // #745: a refresh begun while a published page request is in flight
+    // retires the superseded published mark, so aborting the replacement
+    // cannot strand the published catalog behind a leaked loading mark.
+    let mut paginating = AudiobookshelfBrowseState::new(library());
+    paginating.append_page(0, 20, 2, vec![show("a", "A")]);
+    paginating.loading_pages.insert(1);
+    let request = paginating.begin_catalog_replacement();
+    assert!(
+        !paginating.loading_pages.contains(&1),
+        "the superseded published page mark is retired"
+    );
+    assert!(paginating.abort_catalog_replacement(request));
+    assert_eq!(
+        paginating.needs_page(),
+        Some(1),
+        "the published catalog can still paginate after an aborted refresh"
+    );
 }
 
 #[test]
@@ -338,6 +356,22 @@ fn book_catalog_replacement_keeps_published_content_until_commit() {
         "surname buckets are rebuilt against the replacement"
     );
     assert_eq!(state.buckets[0].label, "A\u{2013}C");
+
+    // #745: the same published-mark retirement for the book catalog.
+    let mut paginating = AudiobookshelfBookBrowseState::new(library());
+    paginating.append_page_books(0, 2, vec![book("a", "Title A", "Alpha Author")]);
+    paginating.loading_pages.insert(1);
+    let request = paginating.begin_catalog_replacement();
+    assert!(
+        !paginating.loading_pages.contains(&1),
+        "the superseded published page mark is retired"
+    );
+    assert!(paginating.abort_catalog_replacement(request));
+    assert_eq!(
+        paginating.needs_page(),
+        Some(1),
+        "the published catalog can still paginate after an aborted refresh"
+    );
 }
 
 #[test]

@@ -137,6 +137,16 @@ fn launch_snapshot_uses_surname_bucket_identity_and_book_id() {
             id: "book-d".into(),
         })
     );
+
+    // A completed refresh that still lists the selected book replaces the
+    // catalog in place (design D2): the selection and its bucket are
+    // retained across the content push.
+    owner.set_content(
+        &state_with_books(vec![book("book-a", "Adams"), book("book-d", "Dover")]),
+        false,
+    );
+    assert_eq!(owner.selected_bucket, 1);
+    assert_eq!(owner.selected_book_id(), Some("book-d"));
 }
 
 #[test]

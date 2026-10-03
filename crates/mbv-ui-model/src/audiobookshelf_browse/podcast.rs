@@ -88,6 +88,11 @@ pub struct AudiobookshelfBrowseState {
     /// neither retire a newer request's mark nor overwrite a newer cache
     /// entry.
     pub detail_loading_ids: HashMap<String, u64>,
+    /// Show ids whose episodes an in-flight refresh still owes a forced
+    /// re-request (design D2): the bounded fan-out re-requests each even
+    /// though its old episodes stay published until the fresh result lands,
+    /// and retires the mark when the request is issued.
+    pub refresh_pending: HashSet<String>,
     /// The serial issued to the most recent per-show episode fetch.
     pub next_detail_request: u64,
     /// The committed show-pill scope for the lazy episode fan-out (design
@@ -128,6 +133,7 @@ impl AudiobookshelfBrowseState {
             error: None,
             detail_cache: HashMap::new(),
             detail_loading_ids: HashMap::new(),
+            refresh_pending: HashSet::new(),
             next_detail_request: 0,
             committed_show_pill: None,
             selected_episode: None,
@@ -159,15 +165,6 @@ impl AudiobookshelfBrowseState {
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
         self.detail_cache.insert(id, episodes);
-    }
-
-    /// Clears the per-show episode cache, the in-flight fetch marks, and the
-    /// selected episode for a refresh; the episode views reload from the
-    /// per-show fan-out (the show list itself is cleared by the caller).
-    pub fn clear_episodes(&mut self) {
-        self.detail_cache.clear();
-        self.detail_loading_ids.clear();
-        self.selected_episode = None;
     }
 
     /// The fetched episode with exactly this `(library_item_id, episode_id)`
@@ -305,7 +302,30 @@ impl AudiobookshelfBrowseState {
         };
         replacement.loading_pages.insert(0);
         self.replacement = Some(replacement);
+        // The pre-refresh chain's in-flight page marks are superseded: its
+        // results are discarded at the event boundary, so a leaked mark would
+        // strand the published catalog behind an unretirable `loading_pages`
+        // entry if the replacement later aborts (#745).
+        self.loading_pages.clear();
         self.catalog_request
+    }
+
+    /// Arms a forced episode re-request for each of `shows` (design D2): the
+    /// bounded fan-out re-requests them despite their cached episodes, which
+    /// stay published until the fresh result succeeds.
+    pub fn begin_detail_refresh(&mut self, shows: Vec<String>) {
+        self.refresh_pending.extend(shows);
+    }
+
+    /// Whether `id` still awaits its forced refresh request.
+    #[must_use]
+    pub fn needs_detail_refresh(&self, id: &str) -> bool {
+        self.refresh_pending.contains(id)
+    }
+
+    /// Retires `id`'s forced-refresh mark once its request is issued.
+    pub fn retire_detail_refresh(&mut self, id: &str) {
+        self.refresh_pending.remove(id);
     }
 
     /// Stages a replacement page when `request` is the current chain; a
@@ -394,6 +414,10 @@ impl AudiobookshelfBrowseState {
         {
             self.selected_episode = None;
         }
+        // A show absent from the authoritative result no longer owes a
+        // refresh request.
+        self.refresh_pending
+            .retain(|id| self.shows.iter().any(|show| &show.library_item_id == id));
         true
     }
 

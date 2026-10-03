@@ -336,6 +336,11 @@ impl AudiobookshelfBookBrowseState {
         };
         replacement.loading_pages.insert(0);
         self.replacement = Some(replacement);
+        // The pre-refresh chain's in-flight page marks are superseded: its
+        // results are discarded at the event boundary, so a leaked mark would
+        // strand the published catalog behind an unretirable `loading_pages`
+        // entry if the replacement later aborts (#745).
+        self.loading_pages.clear();
         self.catalog_request
     }
 

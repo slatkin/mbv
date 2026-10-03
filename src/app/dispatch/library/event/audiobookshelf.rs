@@ -1,6 +1,68 @@
 use crate::app::App;
 use crate::app::state::events::AudiobookshelfEvent;
 
+/// Applies one podcast catalog page to `state`: a pending replacement stages
+/// and is published only when its traversal completes (design D2), otherwise
+/// the published chain appends. Returns the next page the active chain needs.
+fn apply_show_page(
+    state: &mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState,
+    request: u64,
+    page: mbv_audiobookshelf::AudiobookshelfShowPage,
+) -> Option<usize> {
+    if state.replacement.is_none() {
+        state.append_page(page.page, page.limit, page.total, page.items);
+        return state.needs_page();
+    }
+    state.append_replacement_page(request, page.page, page.limit, page.total, page.items);
+    let next_page = state.replacement_needs_page(request);
+    if next_page.is_none() {
+        state.commit_catalog_replacement(request);
+    }
+    next_page
+}
+
+/// Book-shaped sibling of `apply_show_page`.
+fn apply_book_page(
+    state: &mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState,
+    request: u64,
+    page: mbv_audiobookshelf::AudiobookshelfBookPage,
+) -> Option<usize> {
+    if state.replacement.is_none() {
+        state.append_page_books(page.page, page.total, page.items);
+        return state.needs_page();
+    }
+    state.append_replacement_page(request, page.page, page.total, page.items);
+    let next_page = state.replacement_needs_page(request);
+    if next_page.is_none() {
+        state.commit_catalog_replacement(request);
+    }
+    next_page
+}
+
+/// Discards a failed podcast replacement and, when the retained published
+/// catalog was still mid-load, resumes its own traversal now that the
+/// superseded mark is gone (#745). Returns the next published page to request.
+fn abort_show_replacement(
+    state: &mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState,
+    request: u64,
+) -> Option<usize> {
+    if !state.abort_catalog_replacement(request) {
+        return None;
+    }
+    state.needs_page()
+}
+
+/// Book-shaped sibling of `abort_show_replacement`.
+fn abort_book_replacement(
+    state: &mut mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState,
+    request: u64,
+) -> Option<usize> {
+    if !state.abort_catalog_replacement(request) {
+        return None;
+    }
+    state.needs_page()
+}
+
 impl App {
     pub(super) fn handle_audiobookshelf_event(&mut self, ev: AudiobookshelfEvent) {
         match ev {
@@ -79,12 +141,14 @@ impl App {
                 }
                 match result {
                     Ok(page) => {
-                        state.append_page_books(page.page, page.total, page.items);
-                        next_page = state.needs_page();
+                        next_page = apply_book_page(state, request, page);
                         selected_detail =
                             state.selected_id.clone().filter(|_| !state.detail_loading);
                     }
-                    Err(error) => state.error = Some(error.to_string()),
+                    Err(error) => {
+                        state.error = Some(error.to_string());
+                        next_page = abort_book_replacement(state, request);
+                    }
                 }
             }
             if let Some(selected_detail) = selected_detail {
@@ -185,11 +249,13 @@ impl App {
             match result {
                 Ok(episodes) => state.cache_detail(library_item_id, episodes),
                 Err(_error) => {
-                    // A failed fetch consumed the show's once-per-session
-                    // request: caching an empty result keeps the bounded
-                    // fan-out from re-issuing it forever (design D5); the
-                    // refresh key re-requests everything.
-                    state.cache_detail(library_item_id, Vec::new());
+                    // A failed refresh keeps the show's prior episodes
+                    // (design D2). A show with no prior content caches an
+                    // empty result so the bounded fan-out does not re-issue
+                    // it forever (design D5).
+                    if !state.detail_cache.contains_key(&library_item_id) {
+                        state.cache_detail(library_item_id, Vec::new());
+                    }
                 }
             }
         }
@@ -226,11 +292,11 @@ impl App {
                     return;
                 }
                 match result {
-                    Ok(page) => {
-                        state.append_page(page.page, page.limit, page.total, page.items);
-                        next_page = state.needs_page();
+                    Ok(page) => next_page = apply_show_page(state, request, page),
+                    Err(error) => {
+                        state.error = Some(error.to_string());
+                        next_page = abort_show_replacement(state, request);
                     }
-                    Err(error) => state.error = Some(error.to_string()),
                 }
             }
             // A landed page may list shows the active pill's fan-out has not
@@ -334,6 +400,38 @@ mod tests {
         assert_eq!(state.total, 21);
         assert_eq!(state.next_page, 1);
         assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn books_fetched_stages_a_replacement_and_commits_on_completion() {
+        let mut app = app_with_book_state();
+        app.audiobookshelf_book_browse[0].books.push(book("book-a"));
+        let request = app.audiobookshelf_book_browse[0].begin_catalog_replacement();
+        app.handle_lib_event(LibEvent::Audiobookshelf(
+            AudiobookshelfEvent::BooksFetched {
+                generation: SetupGeneration::default(),
+                request,
+                library_id: "books".into(),
+                result: Ok(AudiobookshelfBookPage {
+                    page: 0,
+                    limit: 20,
+                    total: 1,
+                    items: vec![book("book-b")],
+                }),
+            },
+        ));
+
+        let state = &app.audiobookshelf_book_browse[0];
+        assert!(state.replacement.is_none(), "the completed batch commits");
+        assert_eq!(
+            state
+                .books
+                .iter()
+                .map(|b| b.library_item_id.as_str())
+                .collect::<Vec<_>>(),
+            ["book-b"],
+            "the authoritative replacement publishes"
+        );
     }
 
     fn books_fetched_does_not_apply(

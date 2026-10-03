@@ -41,6 +41,14 @@ impl App {
     /// setup must not leak the mark and blocklist the show for the session
     /// (reorganize-podcast-pill-navigation 3.3 carried obligation).
     pub(in crate::app) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
+        self.start_audiobookshelf_detail_inner(library_item_id, false);
+    }
+
+    /// `force` (design D2 refresh) issues a fresh request even when the show
+    /// already has a cached entry or an in-flight fetch: the old episodes stay
+    /// published until the fresh result replaces them, and the new serial
+    /// supersedes the previous in-flight mark.
+    fn start_audiobookshelf_detail_inner(&mut self, library_item_id: String, force: bool) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -55,8 +63,9 @@ impl App {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
         };
-        if state.detail_cache.contains_key(&library_item_id)
-            || state.detail_loading_ids.contains_key(&library_item_id)
+        if !force
+            && (state.detail_cache.contains_key(&library_item_id)
+                || state.detail_loading_ids.contains_key(&library_item_id))
         {
             return;
         }
@@ -91,14 +100,22 @@ impl App {
     /// Fetches the selected book's chapters/audio-files detail keyed by
     /// `library_item_id`.
     pub(in crate::app) fn start_audiobookshelf_book_detail(&mut self, library_item_id: String) {
+        self.start_audiobookshelf_book_detail_inner(library_item_id, false);
+    }
+
+    /// `force` (design D2 refresh) re-requests even a cached or in-flight
+    /// book: the old detail stays published until the fresh result replaces
+    /// it, and the new serial supersedes the previous in-flight mark.
+    fn start_audiobookshelf_book_detail_inner(&mut self, library_item_id: String, force: bool) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
         let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
             return;
         };
-        if state.detail_cache.contains_key(&library_item_id)
-            || state.detail_loading_ids.contains_key(&library_item_id)
+        if !force
+            && (state.detail_cache.contains_key(&library_item_id)
+                || state.detail_loading_ids.contains_key(&library_item_id))
         {
             state.detail_loading = state
                 .selected_id
@@ -172,7 +189,15 @@ impl App {
             if in_flight >= MAX_PODCAST_DETAILS_IN_FLIGHT {
                 break;
             }
-            self.start_audiobookshelf_detail(id);
+            // A refresh (design D2) forces a fresh request for each required
+            // show even though its old episodes stay published; the ordinary
+            // lazy path skips cached and in-flight shows.
+            if self.audiobookshelf_browse[index].needs_detail_refresh(&id) {
+                self.audiobookshelf_browse[index].retire_detail_refresh(&id);
+                self.start_audiobookshelf_detail_inner(id, true);
+            } else {
+                self.start_audiobookshelf_detail(id);
+            }
         }
     }
 
@@ -193,35 +218,42 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
+        // Coalesce a duplicate F5 while a replacement batch is already
+        // collecting (design D2): the pending batch already refreshes this
+        // destination.
+        if self
+            .audiobookshelf_browse
+            .get(index)
+            .is_some_and(|state| state.replacement.is_some())
+        {
+            return;
+        }
         let (library_id, generation, request) = {
             let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
                 return;
             };
-            state.shows.clear();
-            state.total = 0;
-            state.next_page = 0;
             state.error = None;
-            state.clear_episodes();
-            // `episode_filter` / episode-pane focus / `scroll` are
-            // component-owned now (split-browse-state-interaction-fields task
-            // 3.2); the content push after this reset drops the selected show,
-            // which resets the component's own interaction state.
-            state.loading_pages.clear();
-            // The cleared list also drops the component's show pill (it
-            // resets to `All` on the content push), so the fan-out scope
-            // follows it back to the state pills.
-            state.committed_show_pill = None;
-            // Mark page 0 pending before re-issuing it so the catalog reloads
-            // from the first page (the renderer shows a Loading placeholder
-            // until the response lands).
-            state.loading_pages.insert(0);
+            let request = state.begin_catalog_replacement();
+            // The active pill scopes the episode refetch (design D2/D5): one
+            // show for a show pill, every published show for a state pill.
+            // Their old episodes stay published until each fresh result lands.
+            let required = match state.committed_show_pill.as_ref() {
+                Some(id) => vec![id.clone()],
+                None => state
+                    .shows
+                    .iter()
+                    .map(|show| show.library_item_id.clone())
+                    .collect(),
+            };
+            state.begin_detail_refresh(required);
             (
                 state.library.id.clone(),
                 self.audiobookshelf_runtime.generation(),
-                state.catalog_request,
+                request,
             )
         };
-        // Restart the catalog request from page 0 after clearing state.
+        // Request the staged replacement from page 0; the published catalog
+        // keeps serving the UI until the completed replacement commits.
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
             self.config.lock().unwrap().clone(),
             generation,
@@ -230,12 +262,16 @@ impl App {
             0,
             self.channels.lib_tx.clone(),
         );
+        // Latest shelf behavior is unchanged.
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
             self.config.lock().unwrap().clone(),
             generation,
             library_id,
             self.channels.lib_tx.clone(),
         );
+        // The bounded fan-out consumes the armed refresh marks, re-requesting
+        // the required shows while their old episodes stay published.
+        self.start_audiobookshelf_podcast_fan_out(index);
     }
 
     pub(in crate::app) fn select_audiobookshelf_show(&mut self, cursor: usize) {

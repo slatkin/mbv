@@ -8,24 +8,31 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let (library_id, generation, request) = {
+        // Coalesce a duplicate F5 while a replacement batch is already
+        // collecting (design D2).
+        if self
+            .audiobookshelf_book_browse
+            .get(index)
+            .is_some_and(|state| state.replacement.is_some())
+        {
+            return;
+        }
+        let (library_id, generation, request, selected) = {
             let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
                 return;
             };
-            state.books.clear();
-            state.total = 0;
-            state.next_page = 0;
             state.error = None;
-            state.detail_cache.clear();
-            state.detail_loading_ids.clear();
-            state.loading_pages.clear();
-            state.loading_pages.insert(0);
+            let request = state.begin_catalog_replacement();
             (
                 state.library.id.clone(),
                 self.audiobookshelf_runtime.generation(),
-                state.catalog_request,
+                request,
+                state.selected_id.clone(),
             )
         };
+        // Request the staged replacement from page 0; the published catalog
+        // and detail cache keep serving the UI until the completed
+        // replacement commits.
         crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
             self.config.lock().unwrap().clone(),
             generation,
@@ -34,6 +41,11 @@ impl App {
             0,
             self.channels.lib_tx.clone(),
         );
+        // Refetch the selected book's detail without dropping its published
+        // presentation; the old detail stays until the fresh result lands.
+        if let Some(id) = selected {
+            self.start_audiobookshelf_book_detail_inner(id, true);
+        }
     }
 
     pub(in crate::app) fn select_audiobookshelf_book(&mut self, cursor: usize) {
