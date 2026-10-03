@@ -146,7 +146,7 @@ impl KeybindAction {
 /// hard binding (`Ctrl+q` already triggers quit in the daemon-lost overlay).
 pub const RESERVED_CHORDS: &[&str] = &["Ctrl+q"];
 
-/// The declared action table: 19 router-owned global chords plus the 12
+/// The declared action table: 20 router-owned global chords plus the 12
 /// split transport actions, sectioned per design D4.
 pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     // ── Global (chrome not tied to one settings domain) ─────────────────
@@ -165,6 +165,17 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         default_chords: &["F2"],
         gate: KeyGate::NoBlockingOverlay,
         policy: "settings_open",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "pinned_width_toggle",
+        section: KeySection::Global,
+        // Lowercase, like `ctrl_l_force_clear`: crossterm delivers Ctrl+E as
+        // `Char('e')` + CONTROL and the chord grammar maps a letter verbatim.
+        default_chords: &["Ctrl+e"],
+        gate: KeyGate::NoBlockingOverlay,
+        policy: "pinned_width_toggle",
         rebindable: true,
         prefix_addressable: true,
     },

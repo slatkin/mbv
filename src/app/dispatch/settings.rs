@@ -81,6 +81,30 @@ impl App {
         }
     }
 
+    /// `pinned_width_toggle` (change `panel-expand-toggle`, design D3): flip
+    /// the running panel to the other saved `[panel]` width. A launch without
+    /// a panel says so and changes nothing; the running panel validates the
+    /// other width first, and a rejected layout keeps the current width and
+    /// shows the reason as a Warning toast.
+    pub(crate) fn toggle_pinned_width(&mut self) {
+        let width = self.pinned_width.toggled();
+        let config = self.config.lock().unwrap().panel;
+        // The panic-free `map` keeps the `pinned_panel` borrow local so the
+        // match arms can mutate `self`.
+        let applied = self
+            .pinned_panel
+            .as_ref()
+            .map(|panel| crate::pin::apply_layout(panel, &config, width));
+        match applied {
+            None => self.flash(
+                "Width toggle needs a pinned launch (mbv --pin)".into(),
+                ToastSeverity::Neutral,
+            ),
+            Some(Ok(())) => self.pinned_width = width,
+            Some(Err(reason)) => self.flash(reason, ToastSeverity::Warning),
+        }
+    }
+
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {
         match key {
             SettingKey::Services => {
