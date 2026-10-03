@@ -5,7 +5,7 @@ use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_ui_msg::ConfirmIntent;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest};
 
@@ -140,6 +140,23 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     assert!(
         out.is_empty(),
         "no leaf message + FallThrough must run nothing (no global effect)"
+    );
+}
+
+#[test]
+fn ctrl_e_default_resolves_pinned_width_toggle() {
+    // `pinned_width_toggle` (task 3.1): the declared default `Ctrl+e` must
+    // resolve to its command under the default snapshot, exactly as the
+    // registry declares it (no override configured).
+    let key = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key,
+            &RouterSnapshot::default(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(Command::TogglePinnedWidth)
     );
 }
 

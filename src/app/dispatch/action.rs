@@ -83,6 +83,11 @@ pub(in crate::app) enum Command {
     /// toggles queue-only and library-only.
     CyclePanelMode,
 
+    /// `pinned_width_toggle`: flip the running pinned panel between its
+    /// collapsed (`cols`) and expanded (`cols_expanded`) saved widths
+    /// (change `panel-expand-toggle`, design D3).
+    TogglePinnedWidth,
+
     // ── destination-independent routing ─────────────────────────────────
     /// Quit the client through the normal dirty-queue/prefs shutdown path.
     Quit,
@@ -214,7 +219,7 @@ impl App {
             | Command::OpenPlaylists
             | Command::OpenSearch
             | Command::OpenHelp => self.dispatch_navigation_command(command),
-            Command::FocusPanel(_) | Command::CyclePanelMode => {
+            Command::FocusPanel(_) | Command::CyclePanelMode | Command::TogglePinnedWidth => {
                 self.dispatch_panel_command(command);
             }
         }
@@ -302,7 +307,32 @@ impl App {
                 // shrank between image and seekbar.
             }
             Command::CyclePanelMode => self.cycle_panel_mode(),
+            Command::TogglePinnedWidth => self.toggle_pinned_width(),
             _ => unreachable!("dispatch_panel_command only accepts panel commands"),
+        }
+    }
+
+    /// `pinned_width_toggle` (change `panel-expand-toggle`, design D3): flip
+    /// the running panel to the other saved `[panel]` width. A launch without
+    /// a panel says so and changes nothing; the running panel validates the
+    /// other width first, and a rejected layout keeps the current width and
+    /// shows the reason as a Warning toast.
+    pub(crate) fn toggle_pinned_width(&mut self) {
+        let width = self.pinned_width.toggled();
+        let config = self.config.lock().unwrap().panel;
+        // The panic-free `map` keeps the `pinned_panel` borrow local so the
+        // match arms can mutate `self`.
+        let applied = self
+            .pinned_panel
+            .as_ref()
+            .map(|panel| crate::pin::apply_layout(panel, &config, width));
+        match applied {
+            None => self.flash(
+                "Width toggle needs a pinned launch (mbv --pin)".into(),
+                ToastSeverity::Neutral,
+            ),
+            Some(Ok(())) => self.pinned_width = width,
+            Some(Err(reason)) => self.flash(reason, ToastSeverity::Warning),
         }
     }
 
