@@ -21,7 +21,7 @@
   stays slot-gated, exactly as today (design D1). Verify: harness test with the contract
   "hiding the visual slot while the artwork carries the title flips the flag to true on the next
   sync pass" (the header returns — the fallback rule).
-- [ ] 1.3 Audit the remaining `NowPlayingTitleSite` consumers after the flag exists (transport
+- [x] 1.3 Audit the remaining `NowPlayingTitleSite` consumers after the flag exists (transport
   projection field at `src/app/shell/playback.rs:82`, `HeaderTitle.title_site`,
   `title_site_tests`). If the painter cleanup in 3.2 leaves the enum without a live consumer,
   delete the enum and its projection field; otherwise leave it and record why. Verify:
@@ -45,7 +45,7 @@
 
 ## 3. Shell sync, paint, and the dead artwork-site header path
 
-- [ ] 3.1 Replace the `QUEUE_PLAYBACK_HEADER_ROWS` offsets in `sync_queue_playback_panel` and
+- [x] 3.1 Replace the `QUEUE_PLAYBACK_HEADER_ROWS` offsets in `sync_queue_playback_panel` and
   `render_queue_playback_panel` (`src/app/shell/chrome_panels.rs`) with the shared
   `queue_header_rows()`; update the mount-rule comment (mounted placement-driven, D10's
   "always-painted header" rationale gone). Verify: shell harness test (the panel mount/placement
@@ -53,7 +53,7 @@
   `transport_area` and the queue panel placement shift by exactly two rows when the flag flips,
   and are unchanged while idle. (Geometry math itself is owned by 2.1's arrangement tests; do
   not duplicate them here.)
-- [ ] 3.2 Gate `QueuePlaybackPanel::view`'s header painting on the projected flag
+- [x] 3.2 Gate `QueuePlaybackPanel::view`'s header painting on the projected flag
   (`crates/mbv-components/src/queue_playback_panel.rs`): paint the header row iff visible, keep
   the existing title/status-word content otherwise. Delete `render_header_title`'s Artwork
   branch — `artwork_brand_spans`, the `HeaderTitle.title_site`/`host`/`host_is_remote` fields,
