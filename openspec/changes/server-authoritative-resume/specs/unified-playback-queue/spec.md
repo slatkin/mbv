@@ -1,5 +1,10 @@
 # Spec Delta
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: A Player owner refreshes progress on a cold-adopted persisted queue`
+- TO: `### Requirement: A Player owner refreshes Service progress for its queue`
+
 ## MODIFIED Requirements
 
 ### Requirement: Queue persistence round-trips every QueueItem
@@ -33,7 +38,7 @@ Persisted queue state SHALL serialize the canonical tagged `QueueItem` sequence 
 - **WHEN** an Audiobookshelf podcast episode is persisted
 - **THEN** its representation SHALL contain no Service credential, playback `sessionId`, resolved URL, or request header
 
-### Requirement: A Player owner refreshes progress on a cold-adopted persisted queue
+### Requirement: A Player owner refreshes Service progress for its queue
 
 When a Player owner (Local daemon or packaged `mbvd`) builds its queue from persisted state, either by adopting a client's persisted queue snapshot while it has no queue of its own or by restoring its own Stay-alive queue at startup, and whenever a Client requests a queue refresh, it SHALL asynchronously refresh progress for the queue's Emby items from Emby and for its Audiobookshelf episodes and books from Audiobookshelf. The refresh SHALL NOT block playback of the queue. It SHALL apply the refreshed values to the owner's own canonical queue, not only to a client-side snapshot, and SHALL broadcast the refreshed queue or progress to attached clients once applied. A refreshed inactive slot SHALL take the server's position and watched or finished state as returned. A refresh SHALL NOT change the position of the slot that is currently playing, for either Service. An Audiobookshelf item the server reports no progress for SHALL keep no position.
 
