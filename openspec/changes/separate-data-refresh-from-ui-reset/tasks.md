@@ -36,7 +36,7 @@ These methods are prepared before the F2 action becomes reachable. Public method
 
 ## 4. Selective saved-state reset
 
-- [ ] 4.1 Add fallible saved-presentation clearing at `mbv-config`'s existing persistence boundary: remove launch snapshot (NotFound is success), clear per-library positions and patch only current/legacy presentation keys in preferences, preserving volume/mute, unknown unrelated keys and all other state files. Reuse custom domain errors; do not delete prefs or the state directory wholesale. Add one hermetic selective-persistence regression at this boundary using mocked I/O/test-support fixtures, with one distinct injected failure outcome if not already covered. Verify `cargo nextest run -p mbv-config -E 'test(ui_state_reset)'` (or the existing test module extended) and `cargo check -p mbv-config`. Dependencies: none.
+- [x] 4.1 Add fallible saved-presentation clearing at `mbv-config`'s existing persistence boundary: remove launch snapshot (NotFound is success), clear per-library positions and patch only current/legacy presentation keys in preferences, preserving volume/mute, unknown unrelated keys and all other state files. Reuse custom domain errors; do not delete prefs or the state directory wholesale. Add one hermetic selective-persistence regression at this boundary using mocked I/O/test-support fixtures, with one distinct injected failure outcome if not already covered. Verify `cargo nextest run -p mbv-config -E 'test(ui_state_reset)'` (or the existing test module extended) and `cargo check -p mbv-config`. Dependencies: none.
 
 ## 5. Global F2 action and reset coordination
 
