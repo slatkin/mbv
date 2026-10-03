@@ -354,6 +354,18 @@ impl MusicContent {
     pub fn clear_track_focus(&mut self) {
         self.workspace_focus = MusicWorkspaceFocus::AlbumRail;
     }
+
+    /// Reset Grouped Music's local presentation without replacing its
+    /// reconciled tree or cached tracks (design D3): drop the tree's filter,
+    /// marks and expansion, return the browser and track Workspace to their
+    /// first rows, and put Workspace focus back on the album rail.
+    pub fn reset_presentation(&mut self) {
+        self.browser.reset_presentation();
+        self.track_list.reset_presentation();
+        self.workspace_focus = MusicWorkspaceFocus::AlbumRail;
+        self.pending_artist_workspace_focus = None;
+        self.inline_search.close();
+    }
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn album_cursor(&self) -> usize {

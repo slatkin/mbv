@@ -164,6 +164,19 @@ impl TvContent {
     pub fn set_latest_marker(&mut self, marker: bool) {
         self.latest_marker = marker;
     }
+
+    /// Reset TV's local presentation without replacing its projected content
+    /// (design D3): return the flat carrier, show tree and episode control to
+    /// their first rows, the first season and the Series pane, and close
+    /// Inline Search.
+    pub fn reset_presentation(&mut self) {
+        self.carrier.reset_presentation();
+        self.browser.reset_presentation();
+        self.episodes.reset_presentation();
+        self.season_cursor = 0;
+        self.pane = Pane::Series;
+        self.inline_search.close();
+    }
     /// Keep the shared owner in its fixed-row presentation and clamp its
     /// viewport for the current geometry. No content or cursor state is copied
     /// between adapters.
