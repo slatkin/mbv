@@ -14,7 +14,9 @@
 
 ## Rule
 
-Rule (one sentence): The queue playback header row is hidden exactly while playback is active and the now-playing title is painted on the artwork; it remains in every other frame — idle, or any state where the header is the title's home.
+The queue playback header row is hidden exactly while playback is active and the now-playing title is
+painted on the artwork; it remains in every other frame — idle, or any state where the header is the
+title's home.
 
 Exact predicate:
 ```rust
@@ -24,7 +26,7 @@ header_hidden = status != NowPlayingStatus::Idle
 
 ## Scope
 
-Scope — ad-hoc change (no OpenSpec change, no spec/ADR/invariant edits). Files touched (5 + deletions in 1):
+Files touched (5 + deletions in 1):
 1. `crates/mbv-render/src/arrangements/chrome.rs` — add `pub header_visible: bool` to `ChromeGeometryInput`; in `queue_column_geometry`, pass `header_height: if input.header_visible { QUEUE_PLAYBACK_HEADER_ROWS } else { 0 }`.
 2. `src/app/shell/draw.rs` and `src/app/state/projection/tv_wide.rs` — set `header_visible` in both `ChromeGeometryInput` constructors (visible = `!(status != Idle && title_site == Artwork)`).
 3. `src/app/shell/chrome_panels.rs` — in `sync_queue_playback_panel` and `render_queue_playback_panel`, replace the two literal `QUEUE_PLAYBACK_HEADER_ROWS` slot-region offsets with the resolved rows (`0` when hidden) so the slot/transport sit at the top of the collapsed placement.
@@ -33,7 +35,6 @@ Scope — ad-hoc change (no OpenSpec change, no spec/ADR/invariant edits). Files
 
 ## Tasks & Verification
 
-Tasks & verification:
 - T1 Geometry collapse (files 1–3). Verify: `cargo nextest run -p mbv-render` plus one unit test in `arrangements/queue.rs`: with `header_height: 0`, `panel_area.y` rises by `QUEUE_PLAYBACK_HEADER_ROWS` (the reclaim contract, owned by the arrangement layer).
 - T2 Paint gate (file 4). Verify: extend `src/app/tests/tick_integration/queue_playback.rs` `hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints` (or a sibling) with two rows: playing + `title_site == Artwork` → playback height shrinks by 2 and the queue panel starts 2 rows higher; playing + images off (`title_site == Header`) → the 2 rows remain (the title's home — this row is the regression guard for the hole).
 - T3 Dead-code deletion (file 5). Verify: `cargo clippy --workspace --all-targets -- -D warnings` clean; delete the brand-row tests that exercised `artwork_brand_spans`.
@@ -41,7 +42,6 @@ Tasks & verification:
 
 ## Non-goals
 
-Non-goals (explicit):
 - No new visibility enum, policy layer, or protocol sniffing plumbed into `mbv-render`; the predicate is one `&&` over two existing projected facts.
 - No generalized "zero reserved rows" work beyond this header's 2 rows; visual-slot/transport geometry untouched.
 - No overlay-compose or transient re-expansion handling: when the artwork overlay arrives mid-track the header collapses on the next frame through the normal sync path — same seam as card load, nothing special.
@@ -50,7 +50,6 @@ Non-goals (explicit):
 
 ## The implementer must not
 
-The implementer must not:
 - Add any requirement the ask doesn't contain (the three invented ones from the discarded proposal are the anti-pattern: zero-reserved-rows-as-goal, no-transient-re-expansion, brand-row deletion as an end in itself — the brand arm dies only because it's unreachable, not as a goal).
 - Duplicate the predicate in more places than the five sites above; if a sixth site appears, route it through the same facts, don't fork the rule.
 - Touch `mbv-images`, the overlay pipeline, or the card projection to make this work — `title_site` already carries everything.
