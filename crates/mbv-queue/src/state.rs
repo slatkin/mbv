@@ -19,7 +19,7 @@ pub enum QueueSource {
     Unknown,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct QueueState {
     #[serde(default)]
     pub source: QueueSource,
@@ -144,6 +144,29 @@ impl QueueState {
     #[must_use]
     pub fn without_audiobookshelf(&self) -> Self {
         self.without_items(|item| !item.is_audiobookshelf())
+    }
+
+    /// Returns a copy with every Service-owned resume position cleared: the
+    /// Emby `playback_position_ticks` and the Audiobookshelf episode/book
+    /// `position_ticks` become 0. Feed entries keep their locally recorded
+    /// position. Used at the persistence boundary so no Service position is
+    /// written to or restored from disk (design D3).
+    #[must_use]
+    pub fn without_service_positions(&self) -> Self {
+        let mut state = self.clone();
+        for item in &mut state.items {
+            match item {
+                crate::QueueItem::Emby(emby) => emby.playback_position_ticks = 0,
+                crate::QueueItem::Audiobookshelf(crate::AudiobookshelfItem::Episode(episode)) => {
+                    episode.position_ticks = 0;
+                }
+                crate::QueueItem::Audiobookshelf(crate::AudiobookshelfItem::Book(book)) => {
+                    book.position_ticks = 0;
+                }
+                crate::QueueItem::Feed(_) => {}
+            }
+        }
+        state
     }
 }
 

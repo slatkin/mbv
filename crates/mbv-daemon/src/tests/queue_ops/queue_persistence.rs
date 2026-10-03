@@ -45,12 +45,28 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
 fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
     let temp = mbv_config::TestTempDir::new();
     let path = temp.join("stay_alive_queue_state.json");
+    let mut emby_with_position = emby_qi("persisted", "Video", "Movie");
+    if let QueueItem::Emby(item) = &mut emby_with_position {
+        item.playback_position_ticks = 20 * mbv_emby_model::TICKS_PER_SECOND;
+    }
+    let mut abs_with_position = abs_qi("library-a", "episode-1");
+    if let QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) =
+        &mut abs_with_position
+    {
+        episode.position_ticks = 5 * mbv_emby_model::TICKS_PER_SECOND;
+    }
+    let mut feed_with_position = video_feed_qi("feed-1");
+    if let QueueItem::Feed(entry) = &mut feed_with_position {
+        entry.position_ticks = 42;
+    }
     let state = mbv_config::StayAliveQueueState {
         queue: mbv_queue::QueueState {
             // Duplicate content still occupies two distinct queue slots.
             items: vec![
-                emby_qi("persisted", "Video", "Movie"),
-                emby_qi("persisted", "Video", "Movie"),
+                emby_with_position.clone(),
+                emby_with_position,
+                abs_with_position,
+                feed_with_position,
             ],
             cursor: 1,
             source: QueueSource::Album,
@@ -63,19 +79,32 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
     };
     mbv_config::save_stay_alive_queue_state_at(&path, &state).unwrap();
 
-    // A daemon restart loads a fresh owner state from the state file.
+    // A daemon restart loads a fresh owner state from the state file. Service
+    // positions are cleared on the way out; a Feed entry keeps its local one.
     let restored = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
+    assert_eq!(restored.queue.items[0].playback_position_ticks(), 0);
+    assert_eq!(restored.queue.items[1].playback_position_ticks(), 0);
+    assert_eq!(restored.queue.items[2].playback_position_ticks(), 0);
+    assert_eq!(restored.queue.items[3].playback_position_ticks(), 42);
     let queue = PlaybackQueue::from_queue_items(
         restored.queue.items,
         Some(restored.queue.cursor),
         crate::tests::revision_mint(),
     );
-    assert_eq!(queue.len(), 2);
+    assert_eq!(queue.len(), 4);
     assert_eq!(queue.slots()[0].item.id(), "persisted");
     assert_eq!(queue.slots()[1].item.id(), "persisted");
     assert_eq!(queue.active_index(), Some(1));
     assert_eq!(restored.queue.source, QueueSource::Album);
     assert_eq!(restored.lineage, mbv_queue::QueueLineage(42));
+
+    // A state file written before this change carries Service positions; the
+    // load path clears those too rather than only relying on the save path.
+    std::fs::write(&path, serde_json::to_string(&state).unwrap()).unwrap();
+    let earlier = mbv_config::load_stay_alive_queue_state_at(&path).unwrap();
+    assert_eq!(earlier.queue.items[0].playback_position_ticks(), 0);
+    assert_eq!(earlier.queue.items[2].playback_position_ticks(), 0);
+    assert_eq!(earlier.queue.items[3].playback_position_ticks(), 42);
 }
 
 #[test]
