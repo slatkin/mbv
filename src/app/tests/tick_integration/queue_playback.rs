@@ -511,3 +511,25 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         assert!(painted > 0, "{mode:?}: the seekbar track painted");
     }
 }
+
+/// Hiding the visual slot while playing (the user's hide toggle) takes the
+/// title's home back from the artwork: the sync pass resets the carried-over
+/// site to `Header`, so the header reappears over a slot that paints nothing
+/// instead of the title living nowhere.
+#[test]
+fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
+    let mut app = active_app(PanelMode::Both);
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
+    let mut harness = TickHarness::new(app);
+
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.visual_slot_hidden = true;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().app.queue_card_projection.title_site,
+        NowPlayingTitleSite::Header,
+        "the hidden slot's header is the title's home again"
+    );
+}

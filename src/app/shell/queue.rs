@@ -3,6 +3,7 @@ use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_components::{QueueComponent, QueueCursorUpdate};
 use mbv_queue::QueueSlotId;
+use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 
 /// The row projection inputs that can change queue rows. Chrome and pause
@@ -77,6 +78,13 @@ impl Model {
         if self.app.visual_slot_shown() {
             let column_resizing = self.queue_column_resizing();
             self.app.refresh_queue_card_image(column_resizing);
+        } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
+            // The slot is hidden while playing (the user's hide toggle): the
+            // artwork can no longer carry the title, so the header is its
+            // only home again — the carried-over site must not keep the
+            // header hidden over a slot that paints nothing.
+            self.app.queue_card_projection.title_site =
+                mbv_ui_model::playback::NowPlayingTitleSite::Header;
         }
         self.push_queue_projection(update);
     }

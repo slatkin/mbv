@@ -66,6 +66,17 @@ impl TitleLogGate {
     }
 }
 
+/// Why the title-site decision stops this sync, and what the header does
+/// about it. `ForceHeader` gates are stable presentation facts in which the
+/// header is the title's home (idle, images off, no art will ever exist, a
+/// font that cannot render the title); `Transient` gates are pipeline churn
+/// — a resize drag, a not-yet-measured protocol size — that must not
+/// resurrect the header: the site carries over until the churn passes.
+enum TitleSiteGate {
+    ForceHeader(&'static str),
+    Transient(&'static str),
+}
+
 fn title_site_skip_reason(
     app: &App,
     projection: &QueueCardProjection,
@@ -76,27 +87,28 @@ fn title_site_skip_reason(
     height: u16,
     width: u16,
     column_resizing: bool,
-) -> Option<&'static str> {
+) -> Option<TitleSiteGate> {
     if !playback.active {
-        Some("NotActive")
+        Some(TitleSiteGate::ForceHeader("NotActive"))
     } else if projection.visualizer {
-        Some("Visualizer")
+        Some(TitleSiteGate::ForceHeader("Visualizer"))
     } else if !projection.images_enabled {
-        Some("ImagesOff")
+        Some(TitleSiteGate::ForceHeader("ImagesOff"))
     } else if column_resizing {
         // User-reported regression: a queue-column resize drag builds a new
         // Lanczos3 overlay variant for every fitted width on the tick thread.
         // While the drag is active the card paints plain base art; the drag's
         // final width composes the overlay once the `DragEnd` clears the gate.
-        Some("ColumnResizing")
+        // The header stays hidden across the drag.
+        Some(TitleSiteGate::Transient("ColumnResizing"))
     } else if app.images.is_halfblock_configured() {
-        Some("HalfblockConfigured")
+        Some(TitleSiteGate::ForceHeader("HalfblockConfigured"))
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
-        Some("NoSlot")
+        Some(TitleSiteGate::ForceHeader("NoSlot"))
     } else if slotless_active && !slotless_title_present {
-        Some("NoTitle")
+        Some(TitleSiteGate::ForceHeader("NoTitle"))
     } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
-        Some("NoActiveItem")
+        Some(TitleSiteGate::ForceHeader("NoActiveItem"))
     } else if projection.cache_key.as_deref().is_some_and(|key| {
         app.images
             .image(key)
@@ -106,9 +118,11 @@ fn title_site_skip_reason(
         // title, so the header stays its home. A pending fetch (entry still
         // absent) falls through — eligibility is decided before the art
         // arrives.
-        Some("NoBaseArt")
-    } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
-        Some("NoBaseProtocolSize")
+        Some(TitleSiteGate::ForceHeader("NoBaseArt"))
+    } else if height == 0 || width == 0 {
+        // The protocol's cell size is not measured yet (before the first
+        // card paint). Churn, not a presentation fact — the site carries.
+        Some(TitleSiteGate::Transient("NoBaseProtocolSize"))
     } else {
         None
     }
@@ -475,12 +489,16 @@ impl App {
     /// The queue projection issues every fetch for the now-playing item and
     /// projects the slot the painter consumes. Active-first, then viewed selection.
     pub(in crate::app) fn refresh_queue_card_image(&mut self, column_resizing: bool) {
+        // The site carries over from the previous sync: transient pipeline
+        // churn (a resize drag, an unmeasured protocol size, an encode in
+        // flight) must not resurrect the header — only the mode gates below
+        // force it back to `Header` (invariant 16's transient class).
         let mut projection = QueueCardProjection {
             cache_key: None,
             plain_cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
-            title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
+            title_site: self.queue_card_projection.title_site,
         };
         if projection.visualizer || !projection.images_enabled {
             self.queue_title_site(
@@ -570,10 +588,21 @@ impl App {
             width,
             column_resizing,
         );
-        if let Some(reason) = reason {
-            self.title_log_gate
-                .log_decision(&identity, &item_kind, reason, base_dimensions);
-            return;
+        match reason {
+            Some(TitleSiteGate::ForceHeader(reason)) => {
+                self.title_log_gate
+                    .log_decision(&identity, &item_kind, reason, base_dimensions);
+                projection.title_site = NowPlayingTitleSite::Header;
+                return;
+            }
+            Some(TitleSiteGate::Transient(reason)) => {
+                // Pipeline churn: the site carries over, the header does not
+                // resurrect. The overlay rebuilds when the churn passes.
+                self.title_log_gate
+                    .log_decision(&identity, &item_kind, reason, base_dimensions);
+                return;
+            }
+            None => {}
         }
         let Some(parts) = parts else {
             self.title_log_gate
@@ -622,19 +651,21 @@ impl App {
             context: parts.context.as_ref().map(|part| part.text.as_str()),
             title: &parts.title.text,
         };
-        // The `covers` gate applies to the text rows actually drawn (design
-        // D7): a ready logo replaces the top row, and a one-part title then
-        // draws no text at all.
-        let draws_logo = self.images.ready_logo_key(logo_cache_key).is_some();
-        let title_covers = if draws_logo {
-            text.context.is_none() || mbv_images::title_overlay::covers(text.title)
-        } else {
-            mbv_images::title_overlay::covers(text.title)
-                && text.context.is_none_or(mbv_images::title_overlay::covers)
-        };
+        // The site's covers gate is the strict, logo-free rule: both parts'
+        // glyphs must be renderable by the embedded font. It is
+        // size- and logo-arrival-independent, so the decision cannot flip
+        // when a logo fetch lands mid-playback — that flip was a header
+        // disappearance flash. Whether the composed variant then draws a
+        // logo instead of a text row is the painter's business (design D7),
+        // not the site's.
+        let title_covers = mbv_images::title_overlay::covers(text.title)
+            && text.context.is_none_or(mbv_images::title_overlay::covers);
         if !title_covers {
             self.title_log_gate
                 .log_decision(&key, item_kind, "UncoveredGlyph", base_dimensions);
+            // A font that cannot render the title is a stable fact: the
+            // header is the title's home for as long as it holds.
+            projection.title_site = NowPlayingTitleSite::Header;
             return;
         }
         // The site is decided here, in the sync pass, before the panel first
