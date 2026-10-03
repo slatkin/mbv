@@ -1,7 +1,7 @@
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::Write;
 
-type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
+pub(in crate::app) type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
 
 pub(in crate::app) fn init_terminal(
     mouse_support: bool,
@@ -66,7 +66,7 @@ pub(crate) fn set_mouse_capture<W: Write>(writer: &mut W, enabled: bool) -> std:
 }
 
 pub(in crate::app) fn restore_terminal(
-    mut terminal: AppTerminal,
+    terminal: &mut AppTerminal,
 ) -> Result<(), Box<dyn std::error::Error>> {
     crossterm::terminal::disable_raw_mode()?;
     let _ = crossterm::execute!(
