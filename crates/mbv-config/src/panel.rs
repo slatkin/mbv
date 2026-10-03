@@ -43,7 +43,7 @@ pub const PANEL_COLS_MIN: u16 = 1;
 /// The `[panel] cols` default (design D6).
 pub const DEFAULT_PANEL_COLS: u16 = 40;
 /// The `[panel] cols_expanded` default (`panel-expand-toggle`, design D2).
-pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 80;
+pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 120;
 
 /// The `[panel]` section: docking side, width in columns and four gutters in
 /// logical pixels (negative values are allowed). Every value is already
