@@ -29,7 +29,7 @@
 
 ## 2. Geometry: conditional header rows
 
-- [ ] 2.1 Add `header_rows: u16` to `ChromeGeometryInput` and forward it through
+- [x] 2.1 Add `header_rows: u16` to `ChromeGeometryInput` and forward it through
   `queue_column_geometry` into `queue_panel_geometry`'s existing `header_height` input
   (`crates/mbv-render/src/arrangements/chrome.rs`); delete the unconditional
   `QUEUE_PLAYBACK_HEADER_ROWS` use there. Feed it from one App-level `queue_header_rows()`
