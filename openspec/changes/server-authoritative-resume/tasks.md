@@ -37,7 +37,7 @@
 
 ## 2. Persisted state carries no Service positions (design D3)
 
-- [ ] 2.1 Add one `mbv-queue` function that sets the Emby
+- [x] 2.1 Add one `mbv-queue` function that sets the Emby
   `playback_position_ticks` and the Audiobookshelf episode/book
   `position_ticks` to 0 and leaves Feed entries unchanged. Apply it in
   `crates/mbv-config/src/state.rs` on save and on load of both `QueueState` and
