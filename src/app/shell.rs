@@ -373,8 +373,13 @@ fn apply_terminal_observer(
             model.pending_terminal_resize = true;
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
-            model.app.force_clear = true;
-            model.app.images.clear_images_and_loading();
+            // A resize invalidates only the encoded protocols
+            // (panel-expand-toggle): the decoded sources and the fetch dedup
+            // survive, so the next paints re-encode from memory instead of
+            // refetching. No `force_clear` here: ratatui already full-redraws
+            // on resize, and a `terminal.clear()` would erase the painted
+            // image placements the re-encodes are about to replace.
+            model.app.images.invalidate_protocols();
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;

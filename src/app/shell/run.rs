@@ -83,11 +83,12 @@ impl Model {
 
     /// Terminal-resize side effects, applied in the sync pass before any draw
     /// (task 1.2). A size drift against the size this pass last handled runs
-    /// the former draw-time mutations: the card-image state clear and the
-    /// queue-column clamp + prefs save (this also picks up the startup draw's
-    /// size normalization and any direct-frame normalization). The mini-view
-    /// focus hand-off runs only when the Resize observer armed it -- the real
-    /// terminal-resize event, whose pre-resize width the marker still holds.
+    /// the former draw-time mutations: the card-image protocol invalidation
+    /// and the queue-column clamp + prefs save (this also picks up the startup
+    /// draw's size normalization and any direct-frame normalization). The
+    /// mini-view focus hand-off runs only when the Resize observer armed it --
+    /// the real terminal-resize event, whose pre-resize width the marker still
+    /// holds.
     pub(super) fn sync_terminal_resize(&mut self) {
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
@@ -96,7 +97,10 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        self.app.images.clear_images_and_loading();
+        // Decoded sources and the fetch dedup survive a size drift
+        // (panel-expand-toggle): only the encoded protocols go, so painters
+        // re-encode from memory at the new geometry.
+        self.app.images.invalidate_protocols();
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
