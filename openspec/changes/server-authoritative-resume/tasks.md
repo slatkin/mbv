@@ -83,7 +83,7 @@
   tests in `src/tests/progress.rs`, and change any max-merge test to assert the
   fetched position is taken as-is. Verify with
   `cargo nextest run -p mbv-queue`.
-- [ ] 4.2 Remove `progress_report_accepted` from `PlayerEvent::Stopped`,
+- [x] 4.2 Remove `progress_report_accepted` from `PlayerEvent::Stopped`,
   `TrackCompleted` and the `mbv-ctrl` wire. Remove the code that produces it
   (`mbv-player` `run/queue.rs`, `run/events/*`, `submit.rs`, `run_loop.rs`,
   `owner_state.rs`) and the code that consumes it (`mbv-daemon`
