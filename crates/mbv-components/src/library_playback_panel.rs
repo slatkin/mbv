@@ -28,7 +28,7 @@ use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::{PlaybackRenderContext, render_player_panel};
 use mbv_theme as palette;
-use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
+use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 
@@ -70,9 +70,6 @@ pub struct PlaybackProjection {
     /// is not addressable as a local queue item — `now_playing_title` then
     /// carries the plain fallback title.
     pub title_parts: Option<PlaybackTitleParts>,
-    /// Shell-projected site carrying the now-playing title; the Library strip
-    /// does not paint a header, but shares this transport projection.
-    pub title_site: NowPlayingTitleSite,
     /// Whether the Queue playback panel paints its header row this frame
     /// (design D1): resolved by the shell's `queue_header_rows()` policy —
     /// visible while idle (the idle rule) or while the artwork title overlay
@@ -114,7 +111,6 @@ impl LibraryPlaybackPanel {
                 panel_focused: false,
                 now_playing_title: None,
                 title_parts: None,
-                title_site: NowPlayingTitleSite::Header,
                 // The pre-sync resting state paints the header (idle rule).
                 header_visible: HeaderVisibility::Visible,
                 status_indicators: None,
@@ -327,7 +323,6 @@ mod tests {
             panel_focused: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: None,
-            title_site: NowPlayingTitleSite::Header,
             header_visible: HeaderVisibility::Visible,
             status_indicators: None,
             idle_feed_title: None,
@@ -372,7 +367,6 @@ mod tests {
             // target's plain title; the parts replace it when present.
             now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: Some(parts),
-            title_site: NowPlayingTitleSite::Header,
             header_visible: HeaderVisibility::Visible,
             status_indicators: None,
             idle_feed_title: None,

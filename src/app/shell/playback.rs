@@ -79,7 +79,6 @@ impl Model {
             panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
             now_playing_title,
             title_parts,
-            title_site: self.app.queue_card_projection.title_site,
             // The shell resolves the panel's header visibility once (D1/D2):
             // idle (the idle rule) or an unreachable artwork overlay. The same
             // helper drives the geometry, so paint and reservation agree.

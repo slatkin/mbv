@@ -9,7 +9,7 @@ use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
-use mbv_ui_model::playback::{NowPlayingTitleSite, QueueCardProjection};
+use mbv_ui_model::playback::QueueCardProjection;
 
 /// Log-dedup memo for the title overlay's decision and paint lines; shell
 /// state, not presentation.
@@ -67,8 +67,8 @@ impl TitleLogGate {
 }
 
 /// One title-site skip decision: the log reason plus design D1's
-/// header-visibility class. It is decomposed from the raw inputs, not from the
-/// painted overlay key — painted reality is `title_site`'s job.
+/// header-visibility class, decomposed from the raw inputs rather than read
+/// off the painted overlay key.
 struct TitleSiteSkip {
     reason: &'static str,
     /// The overlay is unreachable, so the header carries the title.
@@ -152,14 +152,6 @@ fn item_kind(item: &QueueItem) -> &str {
         }
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => "AudiobookshelfBook",
         QueueItem::Feed(_) => "Feed",
-    }
-}
-
-fn resolve_title_site(variant_key: &str, painted_key: Option<&str>) -> NowPlayingTitleSite {
-    if painted_key == Some(variant_key) {
-        NowPlayingTitleSite::Artwork
-    } else {
-        NowPlayingTitleSite::Header
     }
 }
 
@@ -521,7 +513,6 @@ impl App {
             plain_cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
-            title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
             header_visible: false,
         };
         if projection.visualizer || !projection.images_enabled {
@@ -690,16 +681,11 @@ impl App {
         };
         projection.plain_cache_key = Some(key.clone());
         projection.cache_key = Some(variant_key.clone());
-        projection.title_site =
-            resolve_title_site(&variant_key, self.images.painted_title_overlay_key());
+        let painted = self.images.painted_title_overlay_key() == Some(variant_key.as_str());
         self.title_log_gate.log_decision(
             &key,
             item_kind,
-            if projection.title_site == NowPlayingTitleSite::Artwork {
-                "Artwork"
-            } else {
-                "NotYetPainted"
-            },
+            if painted { "Artwork" } else { "NotYetPainted" },
             base_dimensions,
         );
     }

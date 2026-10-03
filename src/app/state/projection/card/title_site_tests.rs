@@ -174,8 +174,7 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
 
 /// Design D1: the header-visibility flag reads the decomposed class, not the
 /// painted overlay. A capable setup whose overlay has composed but not yet
-/// painted keeps `header_visible == false` even though the painted-reality
-/// `title_site` still reads `Header` (the flash this change removes).
+/// painted keeps `header_visible == false` (the flash this change removes).
 #[test]
 fn unpainted_overlay_on_a_capable_setup_keeps_the_header_hidden() {
     let mut app = overlay_app();
@@ -183,11 +182,6 @@ fn unpainted_overlay_on_a_capable_setup_keeps_the_header_hidden() {
     assert!(
         !app.queue_card_projection.header_visible,
         "a pending overlay keeps the header hidden"
-    );
-    assert_eq!(
-        app.queue_card_projection.title_site,
-        mbv_ui_model::playback::NowPlayingTitleSite::Header,
-        "the painted-reality site is independent of the classification"
     );
 }
 

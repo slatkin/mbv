@@ -81,7 +81,6 @@ impl QueuePlaybackPanel {
                 panel_focused: false,
                 now_playing_title: None,
                 title_parts: None,
-                title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
                 header_visible: HeaderVisibility::Visible,
                 status_indicators: None,
                 use_nerd_fonts: false,
