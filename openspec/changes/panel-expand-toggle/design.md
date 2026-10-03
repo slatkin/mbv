@@ -39,8 +39,8 @@ width unchanged. `Ctrl+e` is not a registry default or `KEY_POLICY` literal toda
 leaf-local in feeds components, which is why a Ctrl chord is used.
 
 **D4 — F2 edits pick the width they validate.** `apply_panel_setting` computes the width to apply:
-`PanelCols` → `Collapsed`, `PanelColsExpanded` → `Expanded`, anything else → current. On `Ok` it
-stores that width alongside the saved config, so the panel shows the value just edited.
+`PanelCols` → `Collapsed`, `PanelColsExpanded` → `Expanded`, anything else → current. While pinned, on `Ok` it
+stores that width alongside the saved config (an unpinned launch leaves the width untouched), so the panel shows the value just edited.
 Alternative rejected: applying at the current width always — editing the inactive width would then
 be saved without pinwin ever validating it.
 

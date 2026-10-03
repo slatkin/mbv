@@ -34,5 +34,5 @@ at a time. A single key that flips between two saved widths makes both usable.
 - `crates/mbv-config` (`PanelConfig`, parse, save), `crates/mbv-ui-model` (Panel setting key and
   row, `changed_panel_config`), `crates/mbv-keybinds` (registry entry), `src/app/input/key_policy.rs`
   (policy entry → `Command`), `src/app/dispatch/` (toggle + width-aware settings apply), `src/pin.rs`
-  (layout built from config plus active width), `CONTEXT.md` (new term).
+  (layout built from config plus active width), `CONTEXT.md` (new term), `README.md` and `dist/config.toml` (`[panel]` key docs).
 - No protocol, daemon, or pinwin changes.
