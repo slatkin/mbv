@@ -17,11 +17,11 @@ use mbv_components::{
     LibraryPlaybackPanel, QueueComponent, QueuePlaybackPanel, StatusBarPanel, TabPanel,
 };
 use mbv_render::arrangements::chrome::{
-    RootFrame, queue_playback_column_wide, queue_playback_header_rows,
-    queue_playback_header_visible, queue_playback_transport_area, status_bar_row,
+    RootFrame, queue_playback_column_wide, queue_playback_header_visible,
+    queue_playback_slot_region, queue_playback_transport_area, status_bar_row,
 };
 use mbv_render::components::card::queue_card_reserved_rect;
-use mbv_render::components::widgets::{fill_surface, queue_panel_inset};
+use mbv_render::components::widgets::fill_surface;
 use mbv_render::layout::CardGeometry;
 use mbv_render::{StatusBarModel, VisualModeIndicator};
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -61,15 +61,13 @@ impl Model {
             self.app.layout.card = CardGeometry::default();
             return;
         };
-        let header_rows = queue_playback_header_rows(queue_playback_header_visible(
-            self.app.now_playing_status(),
-            self.app.queue_card_projection.title_site,
-        ));
-        let slot_region = Rect {
-            y: placement.y + header_rows,
-            height: placement.height.saturating_sub(header_rows),
-            ..queue_panel_inset(placement)
-        };
+        let slot_region = queue_playback_slot_region(
+            placement,
+            queue_playback_header_visible(
+                self.app.now_playing_status(),
+                self.app.queue_card_projection.title_site,
+            ),
+        );
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let rect = queue_card_reserved_rect(
             self.app.images.last_card_size(),
@@ -296,17 +294,9 @@ impl Model {
             // The hidden-header rule: while the title lives on the artwork
             // the header text row collapses into the slot region (the
             // recess row stays), so the slot/transport sit one row higher.
-            let header_rows = queue_playback_header_rows(queue_playback_header_visible(
-                status,
-                transport.title_site,
-            ));
+            let header_visible = queue_playback_header_visible(status, transport.title_site);
             placement.map(|placement| {
-                let inset = queue_panel_inset(placement);
-                let slot_region = Rect {
-                    y: placement.y + header_rows,
-                    height: placement.height.saturating_sub(header_rows),
-                    ..inset
-                };
+                let slot_region = queue_playback_slot_region(placement, header_visible);
                 let wide = queue_playback_column_wide(placement.width);
                 let card = &self.app.layout.card;
                 queue_playback_transport_area(slot_region, wide, card.width, card.height)
@@ -353,16 +343,13 @@ impl Model {
         // header is hidden (the title lives on the artwork), when the header
         // text row collapses into the slot region and the recess row stays as
         // the blank row above the image.
-        let inset = queue_panel_inset(placement);
-        let header_rows = queue_playback_header_rows(queue_playback_header_visible(
-            self.app.now_playing_status(),
-            self.app.queue_card_projection.title_site,
-        ));
-        let slot_region = Rect {
-            y: placement.y + header_rows,
-            height: placement.height.saturating_sub(header_rows),
-            ..inset
-        };
+        let slot_region = queue_playback_slot_region(
+            placement,
+            queue_playback_header_visible(
+                self.app.now_playing_status(),
+                self.app.queue_card_projection.title_site,
+            ),
+        );
         let wide = queue_playback_column_wide(placement.width);
         // The slot region owns the QueueOnlyPlaybackPanel background even
         // when its content is hidden. Idle placements have a zero-height

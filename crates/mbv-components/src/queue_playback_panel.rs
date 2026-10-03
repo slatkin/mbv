@@ -13,11 +13,12 @@
 //! (task 3.6). Transport hit geometry is the panel's own retained
 //! state (task 3.7) — the legacy playback geometry side channel is not read here.
 
+use std::time::Instant;
+
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
-use std::time::Instant;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
@@ -213,10 +214,9 @@ impl Component for QueuePlaybackPanel {
         // title (moved up from the band's former title row — two-part
         // titles keep their context-left/title-right split, a lone title
         // paints yellow); idle paints the brand row, `[mbv] ... IDLE`.
-        if !queue_playback_header_visible(self.status, self.transport.title_site) {
-            // Hidden: the slot region starts at the placement's top; painting
-            // the header row here would overlap the slot's padding row.
-        } else if self.status != NowPlayingStatus::Idle
+        let header_visible = queue_playback_header_visible(self.status, self.transport.title_site);
+        if header_visible
+            && self.status != NowPlayingStatus::Idle
             && let Some((title, _)) = &self.transport.now_playing_title
         {
             render_header_title(
@@ -232,10 +232,9 @@ impl Component for QueuePlaybackPanel {
                         self.transport.use_nerd_fonts,
                         self.transport.state.paused,
                     ),
-                    title_site: self.transport.title_site,
                 },
             );
-        } else {
+        } else if header_visible {
             render_playback_header(frame, header, self.status);
         }
         // While idle — or whenever the shell hands no transport rect — the

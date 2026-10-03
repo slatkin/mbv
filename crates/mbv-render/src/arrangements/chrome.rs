@@ -51,6 +51,20 @@ pub fn queue_playback_header_rows(header_visible: bool) -> u16 {
     }
 }
 
+/// The visual slot's region within a queue playback placement: below the
+/// header band (`queue_playback_header_rows`), with the queue panel's shared
+/// horizontal inset. The one place the sync, paint and card-reservation
+/// passes derive it.
+#[must_use]
+pub fn queue_playback_slot_region(placement: Rect, header_visible: bool) -> Rect {
+    let header_rows = queue_playback_header_rows(header_visible);
+    Rect {
+        y: placement.y + header_rows,
+        height: placement.height.saturating_sub(header_rows),
+        ..queue_panel_inset(placement)
+    }
+}
+
 /// Rows the right column reserves at the bottom for the floating status
 /// bar: one gap row, the status row, one padding row below it, the same
 /// floating shape as the `QueueColumn` footer.

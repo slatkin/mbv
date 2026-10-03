@@ -4,7 +4,6 @@ use super::super::title_part_fg;
 use super::palette;
 use super::transport::width_u16;
 use mbv_queue::PlaybackTitleParts;
-use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -35,7 +34,6 @@ pub struct HeaderTitle<'a> {
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
     pub icon: (&'static str, Color),
-    pub title_site: NowPlayingTitleSite,
 }
 
 /// The queue header row's now-playing title: the state icon first, one

@@ -28,8 +28,8 @@ pub struct QueuePanelInputs {
     /// Rows the Queue playback panel's header row spends above the
     /// Queue panel while the header paints (design D10; task 3.2). The panel
     /// starts directly below the playback rows and borders the transport
-    /// band's bottom gap row. `0` while the header is hidden (the title
-    /// lives on the artwork): the header's rows collapse into the slot.
+    /// band's bottom gap row. Only the recess row while the header is hidden
+    /// (the title lives on the artwork).
     pub header_height: u16,
     pub card_height: u16,
 }
