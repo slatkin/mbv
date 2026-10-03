@@ -42,6 +42,8 @@ impl PanelSide {
 pub const PANEL_COLS_MIN: u16 = 1;
 /// The `[panel] cols` default (design D6).
 pub const DEFAULT_PANEL_COLS: u16 = 40;
+/// The `[panel] cols_expanded` default (change `panel-expand-toggle`, design D2).
+pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 80;
 
 /// The `[panel]` section: docking side, width in columns and four gutters in
 /// logical pixels (negative values are allowed). Every value is already
@@ -53,6 +55,9 @@ pub struct PanelConfig {
     pub side: PanelSide,
     /// Panel width in terminal columns.
     pub cols: u16,
+    /// Panel width in terminal columns when expanded (change
+    /// `panel-expand-toggle`): the width `pinned_width_toggle` switches to.
+    pub cols_expanded: u16,
     /// Inset from the output's top edge.
     pub gutter_top: i32,
     /// Inset from the output's bottom edge.
@@ -68,6 +73,7 @@ impl Default for PanelConfig {
         Self {
             side: PanelSide::Left,
             cols: DEFAULT_PANEL_COLS,
+            cols_expanded: DEFAULT_PANEL_COLS_EXPANDED,
             gutter_top: 0,
             gutter_bottom: 0,
             gutter_left: 0,
