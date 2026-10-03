@@ -1,4 +1,4 @@
-Prerequisites: `panel-expand-toggle` is merged to `main` (pinwin pin at `664e195`), and pinwin `dc46c61` is pushed to `origin/main` (`zig fetch` resolves the GitHub URL).
+Prerequisites: `panel-expand-toggle` is merged to `main` (pinwin pin at `664e195`). (pinwin `dc46c61` is on `origin/main` as of 2026-10-03.)
 
 ## 1. pinwin pin and FFI
 
