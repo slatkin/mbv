@@ -8,7 +8,7 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let (library_id, generation) = {
+        let (library_id, generation, request) = {
             let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
                 return;
             };
@@ -23,11 +23,13 @@ impl App {
             (
                 state.library.id.clone(),
                 self.audiobookshelf_runtime.generation(),
+                state.catalog_request,
             )
         };
         crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
             self.config.lock().unwrap().clone(),
             generation,
+            request,
             library_id,
             0,
             self.channels.lib_tx.clone(),

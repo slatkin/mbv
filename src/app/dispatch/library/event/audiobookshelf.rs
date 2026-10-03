@@ -17,14 +17,16 @@ impl App {
             ),
             AudiobookshelfEvent::ShowsFetched {
                 generation,
+                request,
                 library_id,
                 result,
-            } => self.handle_audiobookshelf_shows_fetched(generation, library_id, result),
+            } => self.handle_audiobookshelf_shows_fetched(generation, request, library_id, result),
             AudiobookshelfEvent::BooksFetched {
                 generation,
+                request,
                 library_id,
                 result,
-            } => self.handle_audiobookshelf_books_fetched(generation, library_id, result),
+            } => self.handle_audiobookshelf_books_fetched(generation, request, library_id, result),
             AudiobookshelfEvent::ShelfFetched {
                 generation,
                 library_id,
@@ -32,11 +34,13 @@ impl App {
             } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
             AudiobookshelfEvent::BookDetailLoaded {
                 generation,
+                request,
                 library_item_id,
                 result,
             } => {
                 self.handle_audiobookshelf_book_detail_fetched(
                     generation,
+                    request,
                     &library_item_id,
                     result,
                 );
@@ -50,6 +54,7 @@ impl App {
     pub(super) fn handle_audiobookshelf_books_fetched(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
+        request: u64,
         library_id: String,
         result: Result<
             mbv_audiobookshelf::AudiobookshelfBookPage,
@@ -67,6 +72,11 @@ impl App {
             let mut next_page = None;
             let mut selected_detail = None;
             if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
+                // A page from a superseded pre-refresh chain is discarded
+                // whole: it must neither append to nor clear newer content.
+                if state.catalog_request != request {
+                    return;
+                }
                 match result {
                     Ok(page) => {
                         state.append_page_books(page.page, page.total, page.items);
@@ -84,6 +94,7 @@ impl App {
                 crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
                     self.config.lock().unwrap().clone(),
                     generation,
+                    request,
                     library_id,
                     next_page,
                     self.channels.lib_tx.clone(),
@@ -97,6 +108,7 @@ impl App {
     pub(super) fn handle_audiobookshelf_book_detail_fetched(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
+        request: u64,
         library_item_id: &str,
         result: Result<
             (
@@ -109,38 +121,31 @@ impl App {
         if !self.audiobookshelf_runtime.accepts(generation) {
             return;
         }
-        match result {
-            Ok(detail) => {
-                if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
-                    state
-                        .books
-                        .iter()
-                        .any(|book| book.library_item_id == library_item_id)
-                }) {
-                    state.detail_loading_ids.remove(library_item_id);
-                    state.detail_loading = state
-                        .selected_id
-                        .as_ref()
-                        .is_some_and(|id| state.detail_loading_ids.contains(id));
-                    state
-                        .detail_cache
-                        .insert(library_item_id.to_owned(), detail);
-                }
-            }
-            Err(_error) => {
-                if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
-                    state
-                        .books
-                        .iter()
-                        .any(|book| book.library_item_id == library_item_id)
-                }) {
-                    state.detail_loading_ids.remove(library_item_id);
-                    state.detail_loading = state
-                        .selected_id
-                        .as_ref()
-                        .is_some_and(|id| state.detail_loading_ids.contains(id));
-                }
-            }
+        let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+            state
+                .books
+                .iter()
+                .any(|book| book.library_item_id == library_item_id)
+        }) else {
+            return;
+        };
+        // The response belongs to this book only when its in-flight mark
+        // still carries this serial: a superseded response (a newer request
+        // for the same book was issued, e.g. by a refresh) is discarded whole
+        // — it must neither retire the newer request's mark nor overwrite a
+        // newer entry.
+        if state.detail_loading_ids.get(library_item_id) != Some(&request) {
+            return;
+        }
+        state.detail_loading_ids.remove(library_item_id);
+        state.detail_loading = state
+            .selected_id
+            .as_ref()
+            .is_some_and(|id| state.detail_loading_ids.contains_key(id));
+        if let Ok(detail) = result {
+            state
+                .detail_cache
+                .insert(library_item_id.to_owned(), detail);
         }
     }
 
@@ -198,6 +203,7 @@ impl App {
     pub(super) fn handle_audiobookshelf_shows_fetched(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
+        request: u64,
         library_id: String,
         result: Result<
             mbv_audiobookshelf::AudiobookshelfShowPage,
@@ -214,6 +220,11 @@ impl App {
         {
             let mut next_page = None;
             if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                // A page from a superseded pre-refresh chain is discarded
+                // whole: it must neither append to nor clear newer content.
+                if state.catalog_request != request {
+                    return;
+                }
                 match result {
                     Ok(page) => {
                         state.append_page(page.page, page.limit, page.total, page.items);
@@ -230,6 +241,7 @@ impl App {
                 crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
                     self.config.lock().unwrap().clone(),
                     generation,
+                    request,
                     library_id,
                     next_page,
                     self.channels.lib_tx.clone(),
@@ -305,6 +317,7 @@ mod tests {
         app.handle_lib_event(LibEvent::Audiobookshelf(
             AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
+                request: 0,
                 library_id: "books".into(),
                 result: Ok(AudiobookshelfBookPage {
                     page: 0,
@@ -323,13 +336,19 @@ mod tests {
         assert!(state.error.is_none());
     }
 
-    fn books_fetched_does_not_apply(app: &mut crate::app::App, library_id: &str, stale: bool) {
+    fn books_fetched_does_not_apply(
+        app: &mut crate::app::App,
+        library_id: &str,
+        stale: bool,
+        request: u64,
+    ) {
         if stale {
             app.audiobookshelf_runtime.begin_setup();
         }
         app.handle_lib_event(LibEvent::Audiobookshelf(
             AudiobookshelfEvent::BooksFetched {
                 generation: SetupGeneration::default(),
+                request,
                 library_id: library_id.into(),
                 result: Ok(AudiobookshelfBookPage {
                     page: 0,
@@ -342,14 +361,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case::stale_generation("books", true)]
-    fn books_fetched_ignores_unknown_library_or_stale_generation(
+    #[case::stale_generation("books", true, 0)]
+    #[case::superseded_request("books", false, 0)]
+    fn books_fetched_ignores_stale_generation_or_superseded_request(
         #[case] library_id: &str,
         #[case] stale_generation: bool,
+        #[case] request: u64,
     ) {
         let mut app = app_with_book_state();
+        if !stale_generation {
+            // A newer catalog chain is current (as a refresh would establish);
+            // the older page must be discarded whole.
+            app.audiobookshelf_book_browse[0].begin_catalog_replacement();
+        }
 
-        books_fetched_does_not_apply(&mut app, library_id, stale_generation);
+        books_fetched_does_not_apply(&mut app, library_id, stale_generation, request);
 
         assert_eq!(
             app.audiobookshelf_book_browse[0].books,
@@ -390,11 +416,12 @@ mod tests {
         let state = &mut app.audiobookshelf_book_browse[0];
         state.books.push(book("book-a"));
         state.selected_id = Some("book-a".into());
-        state.detail_loading_ids.insert("book-a".into());
+        state.detail_loading_ids.insert("book-a".into(), 1);
         state.detail_loading = true;
         app.handle_lib_event(LibEvent::Audiobookshelf(
             AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
+                request: 1,
                 library_item_id: "book-a".into(),
                 result: detail_result(succeeds),
             },
@@ -402,36 +429,54 @@ mod tests {
 
         let state = &app.audiobookshelf_book_browse[0];
         assert!(!state.detail_loading);
-        assert!(!state.detail_loading_ids.contains("book-a"));
+        assert!(!state.detail_loading_ids.contains_key("book-a"));
         assert_eq!(state.detail_cache.contains_key("book-a"), succeeds);
     }
 
-    fn detail_completion_does_not_apply(app: &mut crate::app::App, stale_generation: bool) {
-        if stale_generation {
-            app.audiobookshelf_runtime.begin_setup();
-        }
+    fn detail_completion_does_not_apply(
+        app: &mut crate::app::App,
+        library_item_id: &str,
+        request: u64,
+    ) {
         app.handle_lib_event(LibEvent::Audiobookshelf(
             AudiobookshelfEvent::BookDetailLoaded {
                 generation: SetupGeneration::default(),
-                library_item_id: if stale_generation {
-                    "book-a"
-                } else {
-                    "missing"
-                }
-                .into(),
+                request,
+                library_item_id: library_item_id.into(),
                 result: Ok((Vec::new(), Vec::new())),
             },
         ));
     }
 
     #[rstest]
-    #[case::stale_generation(true)]
-    fn book_detail_completion_ignores_stale_or_unowned_result(#[case] stale_generation: bool) {
+    #[case::stale_generation("book-a", true, 0, false)]
+    #[case::unowned("missing", false, 0, false)]
+    #[case::superseded_request("book-a", false, 1, true)]
+    fn book_detail_completion_ignores_stale_unowned_or_superseded_result(
+        #[case] library_item_id: &str,
+        #[case] stale_generation: bool,
+        #[case] request: u64,
+        #[case] superseded: bool,
+    ) {
         let mut app = app_with_book_state();
         app.audiobookshelf_book_browse[0].books.push(book("book-a"));
+        if superseded {
+            // A newer request for the same book is in flight: the older
+            // same-setup response must not retire it or write the cache.
+            app.audiobookshelf_book_browse[0]
+                .detail_loading_ids
+                .insert("book-a".into(), 2);
+        }
+        if stale_generation {
+            app.audiobookshelf_runtime.begin_setup();
+        }
 
-        detail_completion_does_not_apply(&mut app, stale_generation);
+        detail_completion_does_not_apply(&mut app, library_item_id, request);
 
-        assert!(app.audiobookshelf_book_browse[0].detail_cache.is_empty());
+        let state = &app.audiobookshelf_book_browse[0];
+        assert!(state.detail_cache.is_empty());
+        if superseded {
+            assert_eq!(state.detail_loading_ids.get("book-a"), Some(&2));
+        }
     }
 }

@@ -120,6 +120,7 @@ pub(in crate::app) fn start_audiobookshelf_catalog(
 pub(in crate::app) fn start_audiobookshelf_shows(
     config: crate::config::Config,
     generation: SetupGeneration,
+    request: u64,
     library_id: String,
     page: usize,
     tx: mpsc::Sender<crate::app::state::events::LibEvent>,
@@ -138,6 +139,7 @@ pub(in crate::app) fn start_audiobookshelf_shows(
         let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
             AudiobookshelfEvent::ShowsFetched {
                 generation,
+                request,
                 library_id,
                 result,
             },
@@ -150,6 +152,7 @@ pub(in crate::app) fn start_audiobookshelf_shows(
 pub(in crate::app) fn start_audiobookshelf_books(
     config: crate::config::Config,
     generation: SetupGeneration,
+    request: u64,
     library_id: String,
     page: usize,
     tx: mpsc::Sender<crate::app::state::events::LibEvent>,
@@ -168,6 +171,7 @@ pub(in crate::app) fn start_audiobookshelf_books(
         let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
             AudiobookshelfEvent::BooksFetched {
                 generation,
+                request,
                 library_id,
                 result,
             },

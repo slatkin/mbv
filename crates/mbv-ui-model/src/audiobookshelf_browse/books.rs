@@ -166,8 +166,14 @@ pub struct AudiobookshelfBookBrowseState {
     pub selected_id: Option<String>,
     pub error: Option<String>,
     pub detail_cache: HashMap<String, (Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>)>,
-    /// Book ids with a detail request in flight.
-    pub detail_loading_ids: HashSet<String>,
+    /// Book ids with a detail request in flight, holding the request serial
+    /// each fetch was issued under (the state's monotonically increasing
+    /// `next_detail_request`). A response retires — and may write the cache
+    /// from — its own serial only, so a superseded pre-refresh response can
+    /// neither retire a newer request's mark nor overwrite a newer entry.
+    pub detail_loading_ids: HashMap<String, u64>,
+    /// The serial issued to the most recent book-detail fetch.
+    pub next_detail_request: u64,
     pub detail_loading: bool,
     pub progress: HashMap<String, AudiobookshelfBookProgress>,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed
@@ -196,7 +202,8 @@ impl AudiobookshelfBookBrowseState {
             selected_id: None,
             error: None,
             detail_cache: HashMap::new(),
-            detail_loading_ids: HashSet::new(),
+            detail_loading_ids: HashMap::new(),
+            next_detail_request: 0,
             detail_loading: false,
             progress: HashMap::new(),
             buckets: Vec::new(),
@@ -226,7 +233,7 @@ impl AudiobookshelfBookBrowseState {
         self.detail_loading = self
             .selected_id
             .as_ref()
-            .is_some_and(|id| self.detail_loading_ids.contains(id));
+            .is_some_and(|id| self.detail_loading_ids.contains_key(id));
     }
 
     #[must_use]
@@ -306,7 +313,7 @@ impl AudiobookshelfBookBrowseState {
             {
                 self.select(0);
             } else {
-                self.detail_loading = self.detail_loading_ids.contains(selected_id);
+                self.detail_loading = self.detail_loading_ids.contains_key(selected_id);
             }
         }
     }
@@ -413,7 +420,7 @@ impl AudiobookshelfBookBrowseState {
         self.detail_loading = self
             .selected_id
             .as_ref()
-            .is_some_and(|id| self.detail_loading_ids.contains(id));
+            .is_some_and(|id| self.detail_loading_ids.contains_key(id));
         true
     }
 

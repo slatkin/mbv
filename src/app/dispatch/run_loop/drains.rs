@@ -181,7 +181,7 @@ impl App {
         &self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
-        for library in &self.audiobookshelf_libraries {
+        for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =
                 mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
                     &library.media_type,
@@ -191,6 +191,7 @@ impl App {
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
                         self.config.lock().unwrap().clone(),
                         generation,
+                        self.audiobookshelf_browse[index].catalog_request,
                         library.id.clone(),
                         0,
                         self.channels.lib_tx.clone(),
@@ -206,6 +207,7 @@ impl App {
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
                         self.config.lock().unwrap().clone(),
                         generation,
+                        self.audiobookshelf_book_browse[index].catalog_request,
                         library.id.clone(),
                         0,
                         self.channels.lib_tx.clone(),

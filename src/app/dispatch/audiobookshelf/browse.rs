@@ -98,15 +98,19 @@ impl App {
             return;
         };
         if state.detail_cache.contains_key(&library_item_id)
-            || state.detail_loading_ids.contains(&library_item_id)
+            || state.detail_loading_ids.contains_key(&library_item_id)
         {
             state.detail_loading = state
                 .selected_id
                 .as_ref()
-                .is_some_and(|id| state.detail_loading_ids.contains(id));
+                .is_some_and(|id| state.detail_loading_ids.contains_key(id));
             return;
         }
-        state.detail_loading_ids.insert(library_item_id.clone());
+        state.next_detail_request += 1;
+        let request = state.next_detail_request;
+        state
+            .detail_loading_ids
+            .insert(library_item_id.clone(), request);
         state.detail_loading = true;
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
@@ -131,6 +135,7 @@ impl App {
             let _ = tx.send(crate::app::state::events::LibEvent::Audiobookshelf(
                 AudiobookshelfEvent::BookDetailLoaded {
                     generation,
+                    request,
                     library_item_id,
                     result,
                 },
@@ -188,7 +193,7 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let (library_id, generation) = {
+        let (library_id, generation, request) = {
             let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
                 return;
             };
@@ -213,12 +218,14 @@ impl App {
             (
                 state.library.id.clone(),
                 self.audiobookshelf_runtime.generation(),
+                state.catalog_request,
             )
         };
         // Restart the catalog request from page 0 after clearing state.
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
             self.config.lock().unwrap().clone(),
             generation,
+            request,
             library_id.clone(),
             0,
             self.channels.lib_tx.clone(),
