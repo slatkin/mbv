@@ -109,9 +109,11 @@ NOT defer for the last client or the end of the current track.
 ### Requirement: Coordinated shutdown durably preserves the authoritative queue
 
 Before accepting coordinated shutdown, the daemon SHALL persist its authoritative queue,
-cursor, source, and current non-audio playback positions to disk. It SHALL use daemon-owned
-state rather than a requesting client's shadow. An empty queue at quit SHALL NOT erase an
-older non-empty snapshot; only an explicit Clear Queue action may do that.
+cursor, source, and the current playback positions of non-audio feed entries to disk. Emby and
+Audiobookshelf positions SHALL NOT be persisted; their servers hold them, and the final stop
+report delivers the current one. It SHALL use daemon-owned state rather than a requesting
+client's shadow. An empty queue at quit SHALL NOT erase an older non-empty snapshot; only an
+explicit Clear Queue action may do that.
 
 #### Scenario: Concurrent client changed the queue
 
@@ -128,8 +130,10 @@ older non-empty snapshot; only an explicit Clear Queue action may do that.
 #### Scenario: Mid-track position is preserved
 
 - **WHEN** the local daemon is playing a non-audio item when it evaluates the request
-- **THEN** the persisted snapshot SHALL include the latest valid playback position before
-  the daemon accepts and stops
+- **THEN** for a feed entry, the persisted snapshot SHALL include the latest valid playback
+  position before the daemon accepts and stops
+- **THEN** for an Emby or Audiobookshelf item, the persisted snapshot SHALL carry no position,
+  and the item's next play SHALL resume from the position its server holds
 
 #### Scenario: Durable write fails
 

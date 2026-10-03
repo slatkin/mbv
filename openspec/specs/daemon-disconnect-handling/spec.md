@@ -55,7 +55,8 @@ Each recovery option SHALL have a distinct, predictable effect.
 #### Scenario: Restart and resume
 - **WHEN** the user chooses to restart and resume
 - **THEN** the client SHALL ensure a local daemon exists again and attach to it
-- **THEN** the queue and position SHALL be restored from the saved queue snapshot
+- **THEN** the queue SHALL be restored from the saved queue snapshot
+- **THEN** a resumed Emby or Audiobookshelf item SHALL start from the position its server holds, and a resumed feed entry SHALL start from the position in the snapshot
 
 #### Scenario: Restart without resuming
 - **WHEN** the user chooses to restart without resuming
