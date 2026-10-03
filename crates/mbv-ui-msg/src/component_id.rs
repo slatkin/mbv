@@ -28,7 +28,9 @@ pub enum ComponentId {
     /// retained hit geometry.
     LibraryPlaybackPanel,
     /// The Queue playback panel (`QueuePlaybackPanel`, task 3.5): paints the
-    /// `RootFrame.queue_playback` placement — the always-painted header row,
+    /// `RootFrame.queue_playback` placement — the header row (idle, or any
+    /// frame whose title site is `Header`; hidden while the title lives on
+    /// the artwork),
     /// the visual slot's region and the queue-column transport — and resolves
     /// transport clicks against its own retained hit geometry (task 3.7).
     QueuePlaybackPanel,

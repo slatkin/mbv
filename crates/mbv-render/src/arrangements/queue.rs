@@ -25,10 +25,11 @@ pub struct QueuePanelGeometry {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct QueuePanelInputs {
     pub left_content: Rect,
-    /// Rows the Queue playback panel's header row always spends above the
-    /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The panel starts directly below the playback rows and
-    /// borders the transport band's bottom gap row.
+    /// Rows the Queue playback panel's header row spends above the
+    /// Queue panel while the header paints (design D10; task 3.2). The panel
+    /// starts directly below the playback rows and borders the transport
+    /// band's bottom gap row. `0` while the header is hidden (the title
+    /// lives on the artwork): the header's rows collapse into the slot.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -68,9 +69,10 @@ pub fn queue_list_box(placement: Rect) -> Rect {
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
-    // The header row (always present, idle included) plus the visual-slot and
-    // transport rows sit directly above the panel: no separator row between
-    // the playback region and the queue list.
+    // The header row (present while the header paints — idle, or any frame
+    // whose title site is `Header`) plus the visual-slot and transport rows
+    // sit directly above the panel: no separator row between the playback
+    // region and the queue list.
     let playback_rows = input.header_height + input.card_height;
     let panel_area = Rect {
         y: input.left_content.y + playback_rows,
@@ -84,3 +86,6 @@ pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
         footer_row,
     }
 }
+
+#[cfg(test)]
+mod tests;

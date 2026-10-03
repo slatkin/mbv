@@ -11,6 +11,8 @@ use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 use mbv_components::{LibraryPlaybackPanel, QueuePlaybackPanel};
+use mbv_render::arrangements::chrome::QUEUE_PLAYBACK_HEADER_ROWS;
+use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_msg::PlaybackRequest;
 use mbv_ui_msg::{ComponentId, Msg};
@@ -240,6 +242,61 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             shown_card
         );
     }
+}
+
+/// The hidden-header rule's geometry: while playback is active and the title
+/// site is `Artwork` (the kitty/sixel overlay variant painted the title), the
+/// two header rows collapse into the slot region — the queue playback
+/// placement shrinks by `QUEUE_PLAYBACK_HEADER_ROWS` and the queue panel
+/// starts that much higher. With the title still on the header (`Header`,
+/// e.g. images off or the overlay not yet painted), the rows remain: the
+/// header is the title's only home then.
+#[rstest::rstest]
+#[case::title_on_artwork_collapses(NowPlayingTitleSite::Artwork, 0)]
+#[case::title_on_header_remains(NowPlayingTitleSite::Header, QUEUE_PLAYBACK_HEADER_ROWS)]
+fn header_rows_collapse_only_while_the_title_lives_on_the_artwork(
+    #[case] title_site: NowPlayingTitleSite,
+    #[case] reserved_header_rows: u16,
+) {
+    use mbv_render::arrangements::chrome::{queue_playback_column_wide, queue_playback_rows};
+
+    let mut app = active_app(PanelMode::Both);
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    app.images.record_card_size(8, 16);
+    let mut harness = TickHarness::new(app);
+
+    harness.model_mut().sync_queue_card_geometry();
+    // Set after the geometry sync so the projected fact this rule reads is
+    // exactly the one under test.
+    harness.model_mut().app.queue_card_projection.title_site = title_site;
+    let card_height = harness.model().app.layout.card.height;
+    assert!(card_height > 0, "the slot has a reservation while playing");
+
+    let root = harness
+        .model()
+        .app
+        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
+        .root;
+    let playback = root
+        .queue_playback
+        .expect("queue playback placed while playing");
+    let queue = root.queue.expect("queue placed");
+    let slot_transport_rows = queue_playback_rows(
+        queue_playback_column_wide(harness.model().app.queue_column_width),
+        card_height,
+        true,
+    );
+    assert_eq!(
+        playback.height,
+        reserved_header_rows + slot_transport_rows,
+        "only the header rows vary with the title site"
+    );
+    assert_eq!(
+        queue.y,
+        playback.y + reserved_header_rows + slot_transport_rows,
+        "the queue panel sits directly below the collapsed-or-full playback region"
+    );
 }
 
 #[test]

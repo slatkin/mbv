@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use tuirealm::event::KeyModifiers;
@@ -9,7 +10,7 @@ use tuirealm::event::KeyModifiers;
 #[test]
 fn transport_clicks_resolve_against_retained_geometry() {
     let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+    panel.set_header(NowPlayingStatus::Playing);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.show_controls = true;
     // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
@@ -63,4 +64,42 @@ fn transport_clicks_resolve_against_retained_geometry() {
     // A collapsed panel (no transport painted) resolves nothing.
     panel.set_transport_area(None);
     assert!(panel.on(&click(5, 4)).is_none());
+}
+
+/// The hidden-header paint gate: while playing with the title site
+/// `Artwork`, the panel paints nothing on the header row (its rows belong to
+/// the slot region then, and the title lives on the artwork); with the
+/// `Header` site the same projection paints the title there — the title is
+/// never absent from both sites.
+#[test]
+fn header_row_paints_the_title_only_while_it_is_the_title_site() {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_header(NowPlayingStatus::Playing);
+    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    panel.set_transport_area(Some(Rect::new(0, 2, 40, 6)));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    let header_row = |terminal: &Terminal<TestBackend>| {
+        (2..38)
+            .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_string())
+            .collect::<String>()
+    };
+
+    // Header site: the header row carries the title.
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    assert!(
+        header_row(&terminal).contains("Example"),
+        "the Header site paints the title on the header row"
+    );
+
+    // Artwork site: the header row's cells stay untouched.
+    panel.transport.title_site = NowPlayingTitleSite::Artwork;
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    assert!(
+        header_row(&terminal).chars().all(|c| c == ' '),
+        "the Artwork site leaves the header row unpainted"
+    );
 }

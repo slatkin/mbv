@@ -1,6 +1,6 @@
-//! The Queue playback panel's header row (task 3.5, design D10): one
-//! always-painted row at the top of the queue column's content in every
-//! queue-visible layout, idle included. ` [mbv]` left, the status word
+//! The Queue playback panel's header row (task 3.5, design D10): one row
+//! at the top of the queue column's content whenever the header paints —
+//! idle included. ` [mbv]` left, the status word
 //! right (`[mbv] ... IDLE`), on the chrome band. It never
 //! carries progress: the transport below owns the throbber, percent, and
 //! seekbar.

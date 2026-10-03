@@ -2,6 +2,8 @@ use super::queue::{QueuePanelInputs, queue_panel_geometry};
 use crate::components::widgets::{COLUMN_GAP, queue_panel_inset};
 use crate::layout::FrameChromeGeometry;
 use crate::layout::TABBAR_LEFT_RESERVE;
+use mbv_ui_model::playback::NowPlayingTitleSite;
+use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use ratatui::layout::Rect;
 
@@ -12,13 +14,32 @@ const TAB_BAR_BOX_HEIGHT: u16 = 3;
 /// blank trailing row).
 pub const PLAYER_BOX_HEIGHT: u16 = 3;
 
-/// Rows the Queue playback panel always spends on its header in every
-/// queue-visible layout, idle included (design D10; the painted row lands
-/// with task 3.2). The root placement reserves it now so the Queue panel's
-/// placement already starts below the Queue playback panel's header. Two
-/// rows: the header text row plus the `queue_panel_inset` row of column
-/// padding above it, which recesses the header from the column's top edge.
+/// Rows the Queue playback panel spends on its header while the header
+/// paints (design D10; the painted row lands with task 3.2). The root
+/// placement reserves it so the Queue panel's placement already starts
+/// below the Queue playback panel's header. Two rows: the header text row
+/// plus the `queue_panel_inset` row of column padding above it, which
+/// recesses the header from the column's top edge. The header hides while
+/// playback is active and the title lives on the artwork
+/// (`queue_playback_header_visible`); its rows then collapse into the
+/// visual slot instead of staying reserved.
 pub const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
+
+/// Whether the queue playback panel's header row paints this frame. The
+/// header is the now-playing title's home whenever the artwork is not
+/// carrying it: idle, or any frame whose title site is `Header`. While
+/// playback is active and the title site is `Artwork` — which only resolves
+/// once the kitty/sixel overlay variant has actually painted (invariant 16)
+/// — the header has nothing to show and its rows collapse into the visual
+/// slot. One definition of the rule: the root placements, the shell's sync
+/// and paint passes, and the panel's own paint gate all read it.
+#[must_use]
+pub fn queue_playback_header_visible(
+    status: NowPlayingStatus,
+    title_site: NowPlayingTitleSite,
+) -> bool {
+    !(status != NowPlayingStatus::Idle && title_site == NowPlayingTitleSite::Artwork)
+}
 
 /// Rows the right column reserves at the bottom for the floating status
 /// bar: one gap row, the status row, one padding row below it, the same
@@ -65,6 +86,11 @@ pub struct ChromeGeometryInput {
     /// transport to zero rows (task 3.6): the connected-idle exception is
     /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
+    /// Whether the queue playback panel's header row paints this frame
+    /// (`queue_playback_header_visible`). Hidden while playback is active
+    /// and the title is painted on the artwork; the two header rows then
+    /// collapse into the visual slot instead of staying reserved.
+    pub header_visible: bool,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -324,10 +350,16 @@ fn queue_column_geometry(
     // Queue playback panel's region (header row plus the visual
     // slot/transport rows) and the Queue panel directly below it, bordering
     // the transport band's bottom gap row; while idle only the header row is
-    // reserved. Both placements come from the shared
+    // reserved, and while the title lives on the artwork none is. Both
+    // placements come from the shared
     // `queue_panel_geometry` (task 3.2: the header row is one input alongside
     // the visual-slot and transport heights, single source), so they tile
     // the queue column's content exactly.
+    let header_height = if input.header_visible {
+        QUEUE_PLAYBACK_HEADER_ROWS
+    } else {
+        0
+    };
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
         input.card_height,
@@ -335,7 +367,7 @@ fn queue_column_geometry(
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,
-        header_height: QUEUE_PLAYBACK_HEADER_ROWS,
+        header_height,
         card_height: playback_rows,
     });
     let queue_playback_area = Rect {

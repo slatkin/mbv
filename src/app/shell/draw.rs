@@ -1,5 +1,7 @@
 use crate::app::App;
-use mbv_render::arrangements::chrome::{ChromeGeometryInput, chrome_geometry};
+use mbv_render::arrangements::chrome::{
+    ChromeGeometryInput, chrome_geometry, queue_playback_header_visible,
+};
 use mbv_render::arrangements::queue::{QueuePanelGeometry, queue_footer_row, queue_list_box};
 use mbv_render::layout::{AppLayout, FrameChromeGeometry};
 use ratatui::Frame;
@@ -27,6 +29,10 @@ impl App {
             terminal_width: self.terminal_width,
             card_height: self.layout.card.height,
             playback_active: self.effective_playback_state().active,
+            header_visible: queue_playback_header_visible(
+                self.now_playing_status(),
+                self.queue_card_projection.title_site,
+            ),
         })
     }
 
