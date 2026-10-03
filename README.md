@@ -28,6 +28,7 @@ mbv runs in F2's Panel page (the numeric rows step by 1, or by 10 with Shift).
 | --- | --- | --- | --- |
 | `side` | Screen edge the panel docks to | `"left"` or `"right"` | `"left"` |
 | `cols` | Panel width in terminal columns | 1–65535 | `40` |
+| `cols_expanded` | Expanded panel width in terminal columns | 1–65535 | `80` |
 | `gutter_top` | Space above the panel | any integer, may be negative | `0` |
 | `gutter_bottom` | Space below the panel | any integer, may be negative | `0` |
 | `gutter_left` | Space to the left of the panel | any integer, may be negative | `0` |

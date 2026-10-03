@@ -620,6 +620,13 @@ drawn to a pty the panel owns. It is a desktop window created only by a
 and the rest); a plain terminal launch draws the same TUI with no pinned panel.
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
+**Pinned panel width**:
+The current width of the **Pinned panel**, one of two saved `[panel]` values:
+collapsed (`cols`) or expanded (`cols_expanded`). Toggled while running by the
+`pinned_width_toggle` action. The active width is runtime state only and is
+never saved; every pinned launch starts collapsed.
+_Avoid_: panel mode, expand mode, panel size
+
 **Pinned launch**:
 A launch that runs mbv's TUI in the **Pinned panel** in the same process instead
 of the current terminal, selected only by the `--pin` flag. It chooses where the
