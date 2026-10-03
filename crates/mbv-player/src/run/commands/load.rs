@@ -5,6 +5,7 @@ use super::{
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
 use crate::run::StopAction;
+use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
     pub(super) fn cmd_load_new(
@@ -101,9 +102,20 @@ impl PlaybackRun {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }
+        // Design D1: every Emby video start position in this queue is
+        // overwritten with Emby's current value before any `start=` option is
+        // baked below. ponytail: a natural mpv advance still uses this
+        // load-time value; the upgrade path is fetch-and-seek on entry
+        // activation.
+        let slot_ids: Vec<QueueSlotId> = items.iter().map(|slot| slot.slot_id).collect();
+        let items = refresh_emby_resume(
+            items.into_iter().map(|slot| slot.item).collect(),
+            |ids| self.reporter.client.get_items_by_ids(ids),
+            &EMBY_RESUME_RETRY_DELAYS,
+        );
         let Some(sources) = items
             .iter()
-            .map(|slot| slot.item.mpv_url_source())
+            .map(QueueItem::mpv_url_source)
             .collect::<Option<Vec<_>>>()
         else {
             let reason = "Queue submission rejected: item has no direct mpv URL source".to_string();
@@ -137,7 +149,7 @@ impl PlaybackRun {
         // file, which would survive a no-play load plan as a stray entry.
         let _ = mpv.command("stop", &[]);
         for i in queue_load_indices(items.len(), start_idx) {
-            let item = &items[i].item;
+            let item = &items[i];
             let url = mpv_url_for_queue_item(sources[i], &self.server_url, &self.token);
             let (mode, index) = queue_load_location(i, start_idx);
             let opts = mpv_load_opts(item);
@@ -151,7 +163,7 @@ impl PlaybackRun {
         start_queue_playback(mpv, start_idx);
         reassert_queue_layout(mpv, start_idx, items.len());
 
-        let active_item = &items[start_idx].item;
+        let active_item = &items[start_idx];
         if let Some(emby) = active_item.as_emby() {
             send_ep_info(mpv, emby);
         }
@@ -161,12 +173,9 @@ impl PlaybackRun {
         let active_as_emby = active_item.as_emby().cloned();
         let active_guid = active_item.id().to_string();
         let active_title = active_item.title().to_string();
-        let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
+        let active_slot_id = slot_ids.get(start_idx).copied();
         self.queue = ExecutionSequence::from_slot_items(
-            items
-                .into_iter()
-                .map(|slot| (slot.slot_id, slot.item))
-                .collect(),
+            slot_ids.into_iter().zip(items).collect(),
             active_slot_id,
         );
         self.current_idx = start_idx;

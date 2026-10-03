@@ -20,7 +20,7 @@ use libmpv2::{
     mpv_end_file_reason,
 };
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
-use mbv_emby::EmbyClient;
+use mbv_emby::{EmbyClient, EmbyError};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seconds};
 #[cfg(test)]
 use mbv_queue::QueueMutationResult;
@@ -78,6 +78,77 @@ pub fn resume_ticks_for_item(item: &QueueItem) -> Option<i64> {
 #[must_use]
 pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
     resume_ticks_for_item(&queue.slot(slot_id)?.item)
+}
+
+/// Retry delays for the Emby resume-position fetch (design D2): two delays
+/// after the initial attempt, i.e. three attempts in total.
+pub(crate) const EMBY_RESUME_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(500), Duration::from_secs(2)];
+
+/// Overwrite each Emby video item's `playback_position_ticks` and `played`
+/// with what Emby reports now (design D1), so every start-position decision
+/// reads the server's value rather than a locally remembered one.
+///
+/// One batched fetch covers every distinct Emby video id; an `Ok` response
+/// that omits a requested id counts as a failed attempt for that id only, and
+/// only still-missing ids are retried. There are at most `delays.len() + 1`
+/// attempts. Emby audio ids are never fetched (they always start from the
+/// beginning), and feed and Audiobookshelf items pass through untouched. An id
+/// that never arrives after the final attempt starts from the beginning
+/// (`0`, unplayed).
+pub(crate) fn refresh_emby_resume(
+    items: Vec<QueueItem>,
+    mut fetch: impl FnMut(&[String]) -> Result<Vec<EmbyItem>, EmbyError>,
+    delays: &[Duration],
+) -> Vec<QueueItem> {
+    let mut seen = std::collections::HashSet::new();
+    let mut missing: Vec<String> = Vec::new();
+    for item in &items {
+        if let QueueItem::Emby(emby) = item
+            && !emby.is_audio()
+            && seen.insert(emby.id.clone())
+        {
+            missing.push(emby.id.clone());
+        }
+    }
+
+    let mut refreshed: std::collections::HashMap<String, EmbyItem> =
+        std::collections::HashMap::new();
+    for delay in std::iter::once(None).chain(delays.iter().map(Some)) {
+        if missing.is_empty() {
+            break;
+        }
+        if let Some(delay) = delay {
+            thread::sleep(*delay);
+        }
+        let Ok(fetched) = fetch(&missing) else {
+            continue;
+        };
+        for item in fetched {
+            refreshed.insert(item.id.clone(), item);
+        }
+        missing.retain(|id| !refreshed.contains_key(id));
+    }
+    if !missing.is_empty() {
+        tracing::warn!(name: "player.emby_resume.refresh_failed", target: "player", item_count = missing.len(), "Emby resume position unavailable after retries; starting those items from the beginning");
+    }
+
+    items
+        .into_iter()
+        .map(|item| match item {
+            QueueItem::Emby(mut emby) if !emby.is_audio() => {
+                if let Some(server) = refreshed.get(&emby.id) {
+                    emby.playback_position_ticks = server.playback_position_ticks;
+                    emby.played = server.played;
+                } else {
+                    emby.playback_position_ticks = 0;
+                    emby.played = false;
+                }
+                QueueItem::Emby(emby)
+            }
+            other => other,
+        })
+        .collect()
 }
 
 fn mpv_load_opts(item: &QueueItem) -> String {

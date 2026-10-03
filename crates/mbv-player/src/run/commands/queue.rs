@@ -1,9 +1,10 @@
 use super::{
-    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueSlotId, mpv_err_str,
+    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, mpv_err_str,
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
 use crate::run::{ForcedJump, StopReport};
+use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
@@ -30,6 +31,20 @@ impl PlaybackRun {
             return;
         };
         let transition = crate::transition::Transition::new(request_id, generation, slot_id);
+        // Design D1/1.3: an Emby video's resume position comes from Emby at
+        // jump time, not from the owner's load-time value. Feed and
+        // Audiobookshelf slots keep the owner's ticks.
+        let resume_ticks = match self.queue.slot(slot_id).map(|slot| &slot.item) {
+            Some(QueueItem::Emby(emby)) if !emby.is_audio() => {
+                let refreshed = refresh_emby_resume(
+                    vec![QueueItem::Emby(emby.clone())],
+                    |ids| self.reporter.client.get_items_by_ids(ids),
+                    &EMBY_RESUME_RETRY_DELAYS,
+                );
+                crate::resume_ticks_for_item(&refreshed[0])
+            }
+            _ => resume_ticks,
+        };
         self.set_pending_playlist_jump(ForcedJump {
             slot_id,
             transition: Some(transition),
@@ -164,9 +179,19 @@ impl PlaybackRun {
             self.active_file = true;
             return;
         }
-        let Some(sources) = new_items
+        // Design D1: every Emby video start position in the appended set is
+        // overwritten with Emby's current value before its `start=` option is
+        // baked. ponytail: a natural mpv advance still uses this load-time
+        // value; the upgrade path is fetch-and-seek on entry activation.
+        let slot_ids: Vec<QueueSlotId> = new_items.iter().map(|slot| slot.slot_id).collect();
+        let items = refresh_emby_resume(
+            new_items.into_iter().map(|slot| slot.item).collect(),
+            |ids| self.reporter.client.get_items_by_ids(ids),
+            &EMBY_RESUME_RETRY_DELAYS,
+        );
+        let Some(sources) = items
             .iter()
-            .map(|slot| slot.item.mpv_url_source())
+            .map(QueueItem::mpv_url_source)
             .collect::<Option<Vec<_>>>()
         else {
             let reason = "Queue append rejected: item has no direct mpv URL source".to_string();
@@ -174,9 +199,9 @@ impl PlaybackRun {
             let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
             return;
         };
-        for (slot, source) in new_items.iter().zip(sources) {
+        for (item, source) in items.iter().zip(sources) {
             let url = mpv_url_for_queue_item(source, &self.server_url, &self.token);
-            let opts = mpv_load_opts(&slot.item);
+            let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command(
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", opts.as_str()],
@@ -185,6 +210,12 @@ impl PlaybackRun {
             }
         }
 
-        self.append_items_to_queue(new_items);
+        self.append_items_to_queue(
+            slot_ids
+                .into_iter()
+                .zip(items)
+                .map(|(slot_id, item)| ExecSlot { slot_id, item })
+                .collect(),
+        );
     }
 }
