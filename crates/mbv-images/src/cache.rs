@@ -198,22 +198,6 @@ impl ImageCache {
         self.card_image_loading.clear();
     }
 
-    /// Drop every entry's encoded terminal protocols while keeping the
-    /// decoded sources and the fetch dedup (panel-expand-toggle). A terminal
-    /// resize changes the cell grid every protocol was encoded for, but the
-    /// decoded pixels stay valid: the lazy rebuilds
-    /// (`cached_image_protocol_for_suffix_mut`, `ensure_hero_cover_protocol`)
-    /// re-encode from the retained source for the new geometry instead of
-    /// refetching over HTTP. Keeping `card_image_loading` keeps in-flight
-    /// fetches deduped so their completions still land; keeping
-    /// `cover_box`/`applied_logo_key` leaves hero entries to their existing
-    /// box/logo rebuild checks.
-    pub fn invalidate_protocols(&mut self) {
-        for entry in self.card_image_states.values_mut() {
-            entry.protocols.clear();
-        }
-    }
-
     pub fn clear_audiobookshelf_images(&mut self) {
         let prefix = crate::AUDIOBOOKSHELF_CACHE_KEY_PREFIX;
         self.card_image_states
@@ -409,71 +393,6 @@ mod tests {
         assert!(!cache.is_cached("base:P"));
         assert!(!cache.is_cached("base:P:t:8x4:new"));
         assert!(cache.is_cached("other:P"));
-    }
-
-    /// A terminal resize must not throw away decoded images
-    /// (panel-expand-toggle): the protocols-only invalidation keeps each
-    /// entry's decoded source and the fetch dedup — the next paint re-encodes
-    /// from memory, and a key that is cached or already in flight is never
-    /// re-reserved over HTTP.
-    #[test]
-    fn resize_protocol_invalidation_keeps_decoded_sources_and_fetch_dedup() {
-        use crate::cache::FetchReservation;
-
-        let mut cache = cache(4);
-        cache.complete_fetch("item:P".into(), image());
-        let picker = ratatui_image::picker::Picker::halfblocks();
-        let proto = cache.build_protocol(
-            "item:P",
-            "halfblock",
-            &picker,
-            image().img.expect("test image decodes"),
-        );
-        cache
-            .image_mut("item:P")
-            .expect("entry present")
-            .protocols
-            .insert("halfblock", proto);
-        assert!(
-            !cache
-                .image("item:P")
-                .expect("entry present")
-                .protocols
-                .is_empty()
-        );
-
-        let req = super::ImageFetchReq {
-            cache_key: "loading:P".into(),
-            item_id: "loading".into(),
-            series_id: String::new(),
-            types: vec!["Primary".into()],
-            source: crate::ImageSource::Emby,
-        };
-        assert!(matches!(
-            cache.reserve_card_image_fetch(req, 2),
-            FetchReservation::Start(_)
-        ));
-
-        cache.invalidate_protocols();
-
-        let entry = cache.image("item:P").expect("entry present");
-        assert!(entry.img.is_some());
-        assert!(entry.protocols.is_empty());
-        assert!(cache.is_loading("loading:P"));
-
-        // The dedup survived: re-reserving the in-flight key is a Duplicate,
-        // not a second fetch.
-        let dup = super::ImageFetchReq {
-            cache_key: "loading:P".into(),
-            item_id: "loading".into(),
-            series_id: String::new(),
-            types: vec!["Primary".into()],
-            source: crate::ImageSource::Emby,
-        };
-        assert!(matches!(
-            cache.reserve_card_image_fetch(dup, 2),
-            FetchReservation::Duplicate
-        ));
     }
 
     #[test]
