@@ -47,14 +47,23 @@
   positions restore at 0, and a feed entry keeps its position. Run
   `cargo nextest run -p mbv-config -p mbv-daemon`.
 
-## 3. Owner restore refreshes Emby progress (design D4)
+## 3. Queue progress refresh: Audiobookshelf parity and Owner restore (design D4)
 
-- [ ] 3.1 After `initialize_queue` in `crates/mbv-daemon/src/run.rs`, when
-  the restored queue has Emby slots, start the same enrichment that adoption
-  uses (`start_queue_enrichment` in `control/queue_setup.rs`, made visible as
-  needed). Verify with `cargo check -p mbv-daemon`. If an existing adoption
-  enrichment test has a seam for the fetch, extend it with the restore case;
-  otherwise add no test.
+- [ ] 3.1 Extend `start_queue_enrichment` (`crates/mbv-daemon/src/control/queue_setup.rs`)
+  so that, when the queue holds Audiobookshelf episode or book slots and the
+  daemon has an Audiobookshelf context, it spawns one fetch. The fetch calls
+  `progress_bounded` and `book_progress_bounded` and sends
+  `DaemonEvent::AudiobookshelfProgress` / `AudiobookshelfBookProgress` with
+  the current setup generation for each queued item it finds. Add a
+  `ponytail:` comment noting the two identical `/api/me/progress` requests. A
+  failure is logged and ignored. Verify with `cargo nextest run -p mbv-daemon`.
+  The apply side is already covered by the existing
+  `apply_audiobookshelf_progress` tests, so add a test only if a fetch seam
+  already exists.
+- [ ] 3.2 After `initialize_queue` in `crates/mbv-daemon/src/run.rs`, call
+  the same function when the restored queue has Emby or Audiobookshelf slots.
+  Verify with `cargo check -p mbv-daemon`, and confirm by reading the diff
+  that restore, adoption and `UnifiedQueueRefresh` all reach the one function.
 
 ## 4. Remove pending-sync protection and the max merge (design D5)
 
@@ -100,4 +109,5 @@
   Owner (`pkill mbv` or the tray Quit), relaunch, and play the restored slot.
   It should resume at the quit position. Then advance the same item on another
   client and play it again here; it should resume at the other client's
-  position.
+  position. With an Audiobookshelf episode in the queue, relaunch the Owner:
+  its row should show the server's progress before it is played.

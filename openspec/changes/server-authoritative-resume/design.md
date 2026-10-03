@@ -53,7 +53,6 @@ See proposal.md, "Why". Here is what the code does today:
   Risks).
 - Suppressing progress reports for a run that started from 0:00 after fetches
   failed. The user accepted that trade-off.
-- An Audiobookshelf queue-row refresh on restore (see Risks).
 
 ## Decisions
 
@@ -113,11 +112,35 @@ the display or into the feed-only paths. `played` is kept: it is watched-state
 metadata, the next refresh corrects it, and clearing it could change consume
 or prune behaviour, which is out of scope.
 
-### D4. Refresh Emby progress on Owner restore
+### D4. One progress refresh for both providers, also run on Owner restore
 
-After the daemon loop is built (`run.rs`, after `initialize_queue`), if the
-restored queue has Emby slots, run the same enrichment that adoption runs.
-Expose `start_queue_enrichment` for this rather than adding a second fetch path.
+`start_queue_enrichment` (`control/queue_setup.rs:107`) is the single refresh
+behind all three triggers: cold adoption, manual queue refresh
+(`CtrlCmd::UnifiedQueueRefresh`), and now Owner restore. Today it fetches only
+Emby. Extend it so that, when the queue holds Audiobookshelf episode or book
+slots and the daemon has an Audiobookshelf context, it also spawns one fetch.
+That fetch calls `progress_bounded` and `book_progress_bounded`
+(`mbv-audiobookshelf` `catalog.rs:354`, `catalog_books.rs:206`; both read
+`GET /api/me/progress`). For each queued item it finds, it sends the existing
+`DaemonEvent::AudiobookshelfProgress` / `AudiobookshelfBookProgress` with the
+current setup generation. Those events already apply by provider-qualified
+identity (`apply_audiobookshelf_progress`/`_book_progress`) and broadcast to
+capable clients, so this adds no new apply or wire path. An Audiobookshelf
+fetch failure is logged and ignored, the same as an Emby enrichment failure.
+
+For restore: after the daemon loop is built (`run.rs`, after
+`initialize_queue`), call the same function when the restored queue has Emby
+or Audiobookshelf slots.
+
+This brings Audiobookshelf to parity with Emby on every refresh trigger, not
+just restore. Before this change, a manual queue refresh never updated
+Audiobookshelf rows.
+
+*Alternative considered:* a dedicated restore-only Audiobookshelf fetch.
+Rejected because it would leave manual refresh and adoption Emby-only.
+
+The two wrappers make two identical `/api/me/progress` requests. →
+`ponytail:` comment; merge them into one call if the request count matters.
 
 ### D5. Remove pending-sync and the max merge
 
@@ -143,6 +166,12 @@ In `handle_shutdown`:
 3. Flush the persist queue and `persist_owner_queue()`.
 4. Return `SHUTDOWN`.
 
+This also gives Audiobookshelf the same guarantee: `stop_for_shutdown` is the
+coordination point that finalizes an active Audiobookshelf session
+(`reconciliation.rs` `finalize_active_audiobookshelf`). Today, quitting during
+Audiobookshelf playback races its session close against `process::exit`, just
+as it does for the Emby stop report.
+
 Reuse an existing shutdown bound constant if one fits (for example the one
 `reconciliation.rs` uses). Otherwise add one named constant of about 5s,
 matching today's join timeout. Persisting after the stop matters less now,
@@ -165,9 +194,6 @@ snapshot's active slot consistent with the stopped player.
   after three failed fetches reports normally and can overwrite Emby's position.
   → Accepted by the user: it needs three consecutive failures against a
   reachable server.
-- **Audiobookshelf queue rows lose their progress bars after a restart.** They
-  show no progress until Audiobookshelf reports some (a play, or Socket.IO in
-  the TUI). → Accepted; display only. Follow-up if it bothers.
 - **Play waits on an extra request.** Each load, append or jump of an Emby
   video waits for one more round trip (about 3ms on LAN). → Batched per load,
   and skipped for audio.

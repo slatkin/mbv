@@ -24,9 +24,13 @@ media. Only feeds, which have no server, keep progress locally.
 - **Feeds: no change.** Their progress stays local.
 - **Persisted queue state stores no Emby or Audiobookshelf positions.** Saving
   and loading clear those items' playback positions. Feed positions are kept.
-- **The Owner refreshes Emby progress from the server on startup restore**, not
-  only on cold adoption. Refreshes take the server's position as-is: no
-  max(fetched, stored) merge.
+- **The Owner refreshes provider progress from the servers on startup
+  restore**, not only on cold adoption. Refreshes take the server's position
+  as-is: no max(fetched, stored) merge.
+- **Audiobookshelf parity:** the queue progress refresh (cold adoption, manual
+  queue refresh, Owner restore) now also refreshes Audiobookshelf episode and
+  book slots, not only Emby. The bounded shutdown stop also lets an active
+  Audiobookshelf session finalize before exit.
 - **Removed:** pending-sync protection (`pending_sync`, `StopReportOutcome`,
   the `progress_report_accepted` plumbing, and its requirement and invariant).
   It protected a local progress store, and that store is no longer used as a
@@ -51,7 +55,8 @@ _None._
   for Emby and Audiobookshelf, local for feeds) and how a failed Emby fetch is
   handled.
 - `unified-playback-queue`: persisted state drops provider positions; the
-  progress refresh also runs on Owner restore and takes server values as-is;
+  progress refresh covers Audiobookshelf as well as Emby, also runs on Owner
+  restore, and takes server values as-is;
   pending-sync protection is removed; "a slot resumes the same however it is
   reached" now resumes Emby from the server.
 - `local-daemon-stay-alive`: an explicit stop delivers the final stop report
@@ -65,7 +70,8 @@ _None._
   max-merge in `merge_fetched_slot`.
 - `crates/mbv-config`: clears provider positions on queue-state save and load.
 - `crates/mbv-daemon`: `handle_shutdown` ordering and deadline; enrichment on
-  restore; removes report-acceptance plumbing.
+  restore; Audiobookshelf progress in the queue refresh; removes
+  report-acceptance plumbing.
 - `crates/mbv-ctrl`: drops the `progress_report_accepted` wire field. It was
   `#[serde(default)]`, so older peers stay compatible.
 - `src/app`: the TUI queue copy stops arming protection.

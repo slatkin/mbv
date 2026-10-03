@@ -35,7 +35,7 @@ Persisted queue state SHALL serialize the canonical tagged `QueueItem` sequence 
 
 ### Requirement: A Player owner refreshes progress on a cold-adopted persisted queue
 
-When a Player owner (Local daemon or packaged `mbvd`) builds its queue from persisted state, either by adopting a client's persisted queue snapshot while it has no queue of its own or by restoring its own Stay-alive queue at startup, it SHALL asynchronously refresh progress for the queue's Emby items from Emby. The refresh SHALL NOT block playback of the queue. It SHALL apply the refreshed values to the owner's own canonical queue, not only to a client-side snapshot, and SHALL broadcast the refreshed queue to attached clients once applied. A refreshed inactive slot SHALL take Emby's position and watched state as returned.
+When a Player owner (Local daemon or packaged `mbvd`) builds its queue from persisted state, either by adopting a client's persisted queue snapshot while it has no queue of its own or by restoring its own Stay-alive queue at startup, it SHALL asynchronously refresh progress for the queue's Emby items from Emby and for its Audiobookshelf episodes and books from Audiobookshelf. The refresh SHALL NOT block playback of the queue. It SHALL apply the refreshed values to the owner's own canonical queue, not only to a client-side snapshot, and SHALL broadcast the refreshed queue or progress to attached clients once applied. A refreshed inactive slot SHALL take the server's position and watched or finished state as returned. An Audiobookshelf item the server reports no progress for SHALL keep no position.
 
 #### Scenario: Cold daemon adopts a persisted queue with server-side progress
 
@@ -52,6 +52,11 @@ When a Player owner (Local daemon or packaged `mbvd`) builds its queue from pers
 - **WHEN** the Stay-alive process starts and restores its persisted queue containing Emby items
 - **THEN** it fetches current progress for those items from Emby asynchronously and broadcasts the refreshed queue once applied
 
+#### Scenario: Restored Audiobookshelf slots show server progress
+
+- **WHEN** the Stay-alive process restores a queue holding an Audiobookshelf episode the server reports at 40% and a book it reports finished
+- **THEN** after the refresh applies, the episode slot SHALL show 40% and the book slot SHALL show as finished, without either being played
+
 #### Scenario: Adopted item is played before the refresh completes
 
 - **WHEN** the user plays an item from the adopted queue and the refresh result for that slot arrives while it is playing
@@ -67,7 +72,7 @@ When a Player owner (Local daemon or packaged `mbvd`) builds its queue from pers
 #### Scenario: Refresh does not regress adopted positions
 
 - **WHEN** the refresh returns a position for an inactive slot that is lower than the position the slot currently shows
-- **THEN** the slot SHALL take the fetched position; a lower server position is not a regression, because Emby's position is the only resume source for Emby items
+- **THEN** the slot SHALL take the fetched position; a lower server position is not a regression, because the server's position is the only progress source for Emby and Audiobookshelf items
 
 ### Requirement: A slot resumes the same however it is reached
 
