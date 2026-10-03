@@ -60,6 +60,7 @@ pub enum SettingKey {
     SubtitleLanguage,
     AudioLanguage,
     ManageFeeds,
+    ResetUiState,
     LogOut,
 }
 
@@ -161,7 +162,7 @@ pub static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     ("Feeds", &[SettingKey::ManageFeeds]),
-    ("Actions", &[SettingKey::LogOut]),
+    ("Actions", &[SettingKey::ResetUiState, SettingKey::LogOut]),
 ];
 
 use crate::UiConfig;
@@ -254,6 +255,7 @@ fn setting_collection_label(key: SettingKey) -> &'static str {
             (SettingKey::FeedViewLibraries, "Feed view"),
             (SettingKey::LibraryRoutes, "Library routes"),
             (SettingKey::ManageFeeds, "Manage feeds"),
+            (SettingKey::ResetUiState, "Reset UI state"),
             (SettingKey::LogOut, "Log out"),
         ],
     )
@@ -313,6 +315,7 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::FeedViewLibraries
         | K::LibraryRoutes
         | K::ManageFeeds
+        | K::ResetUiState
         | K::LogOut => V::Collection,
     }
 }
@@ -423,7 +426,7 @@ fn setting_collection_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::FeedViewLibraries => Some(fmt_feed_view_list(&cfg.feed_view_libraries)),
         SettingKey::LibraryRoutes => Some(fmt_library_routes(&cfg.library_routes)),
         SettingKey::ManageFeeds => Some(fmt_feeds_list(&cfg.feeds)),
-        SettingKey::LogOut => Some(String::new()),
+        SettingKey::ResetUiState | SettingKey::LogOut => Some(String::new()),
         _ => None,
     }
 }
