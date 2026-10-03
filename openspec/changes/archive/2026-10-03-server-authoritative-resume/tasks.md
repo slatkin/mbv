@@ -121,7 +121,7 @@
   client and play it again here; it should resume at the other client's
   position. With an Audiobookshelf episode in the queue, relaunch the Owner:
   its row should show the server's progress before it is played.
-- [ ] 6.3 Sync the applied deltas into `openspec/specs/` (`playback-resume`,
+- [x] 6.3 Sync the applied deltas into `openspec/specs/` (`playback-resume`,
   `unified-playback-queue`, `local-daemon-stay-alive`, `daemon-lifecycle`,
   `daemon-disconnect-handling`) and archive the change. Verify that
   `openspec validate --specs` passes and that the change sits under
