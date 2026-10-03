@@ -74,7 +74,7 @@
 
 ## 5. Integration checks
 
-- [ ] 5.1 Sweep tests that assume the always-painted header (`src/app/tests/panel_focus.rs`,
+- [x] 5.1 Sweep tests that assume the always-painted header (`src/app/tests/panel_focus.rs`,
   `tick_integration/mouse/panels.rs`, `tick_integration/queue_playback.rs`, queue geometry
   tests, `queue_op.rs` now-playing assertions) and update them to the conditional rule. Verify:
   `cargo nextest run --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`
