@@ -2,7 +2,7 @@
 
 ## 1. Emby start positions come from Emby (design D1, D2)
 
-- [ ] 1.1 Add `refresh_emby_resume` to `crates/mbv-player`, taking the items,
+- [x] 1.1 Add `refresh_emby_resume` to `crates/mbv-player`, taking the items,
   a fetch closure `FnMut(&[String]) -> Result<Vec<EmbyItem>, EmbyError>`, and
   a delay schedule. It does one batched fetch for Emby non-audio ids only and
   makes at most 3 attempts. An `Ok` that omits a requested id counts as a
@@ -15,7 +15,7 @@
   - one failure then success uses the fetched position after 2 attempts;
   - three failures give 0 after exactly 3 attempts;
   - a missing id is retried.
-- [ ] 1.2 Call it on the Player thread before start positions are decided: in
+- [x] 1.2 Call it on the Player thread before start positions are decided: in
   `submit.rs` `load_queue_sources` (on `start.items`), in
   `run/commands/load.rs` before the `loadfile` loop, and in
   `run/commands/queue.rs` append before its `loadfile` loop. Use the run's Emby
@@ -24,7 +24,7 @@
   that the upgrade path is fetch-and-seek on entry activation. Verify with
   `cargo check -p mbv-player`, and confirm by reading the diff that all three
   sites call it before `mpv_load_opts`/`prepare_source`.
-- [ ] 1.3 In `cmd_jump_to` (`run/commands/queue.rs:12`), replace the incoming
+- [x] 1.3 In `cmd_jump_to` (`run/commands/queue.rs:12`), replace the incoming
   `resume_ticks` for an Emby video slot with the refreshed item's
   `resume_ticks_for_item`. Leave Feed and Audiobookshelf slots unchanged.
   Verify with `cargo nextest run -p mbv-player`. Fix existing jump tests that
