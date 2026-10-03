@@ -70,19 +70,31 @@ fn mixed_services_app() -> App {
 }
 
 /// F5 with a library selected reloads only that Emby library: it marks the
-/// matched library's browse level loading and leaves the Audiobookshelf
-/// catalog and the Feeds tab untouched.
+/// matched library's browse level loading, keeps the session split width and
+/// the saved resting position, and leaves the Audiobookshelf catalog and the
+/// Feeds tab untouched (#745).
 #[test]
-fn refresh_current_view_targets_the_focused_emby_library_only() {
+fn refresh_current_view_targets_the_selected_emby_library_only() {
     let mut app = mixed_services_app();
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
+    app.list_pane_width = Some(64);
+    app.replace_saved_library_position(0, mbv_queue::LibraryPosition::default());
 
     app.refresh_current_view();
 
     assert!(
         app.libs[0].nav_stack[0].loading,
-        "focused Emby library must be marked loading"
+        "selected Emby library must be marked loading"
+    );
+    assert_eq!(
+        app.list_pane_width,
+        Some(64),
+        "F5 must not reset the Wide hero split"
+    );
+    assert!(
+        app.saved_library_position(0).is_some(),
+        "F5 must not clear the saved library position"
     );
     assert_eq!(
         app.audiobookshelf_browse[0].shows.len(),
@@ -102,16 +114,20 @@ fn refresh_current_view_targets_the_focused_emby_library_only() {
 /// wide library tabs neither clears nor re-clamps it, so the next surface
 /// consumes the same raw width (clamped against its own content area at paint
 /// time).
-/// Leaves every browse destination untouched when the queue has focus.
+/// F5 refreshes the selected browse destination even while Queue holds Panel
+/// focus; the unselected destinations are not the target (#745).
 #[test]
-fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() {
+fn refresh_current_view_with_queue_focus_refreshes_the_selected_destination() {
     let mut app = mixed_services_app();
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Queue;
 
     app.refresh_current_view();
 
-    assert!(!app.libs[0].nav_stack[0].loading);
+    assert!(
+        app.libs[0].nav_stack[0].loading,
+        "Queue-focused F5 must refresh the selected Emby library"
+    );
     assert_eq!(app.audiobookshelf_browse[0].shows.len(), 1);
     assert!(
         app.audiobookshelf_browse[0]

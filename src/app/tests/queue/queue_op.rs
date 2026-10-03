@@ -10,7 +10,7 @@ use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, PanelFocus, PendingQueueAction, QueueScope};
+use crate::app::{App, PendingQueueAction, QueueScope};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::{QueueItem, QueueSource};
@@ -434,15 +434,16 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // unified-playback-queue "Clients hold no editable queue", scenario
     // "Queue refresh": the Client asks the owner to refresh its queue, and
     // the refreshed items appear only through the owner's resulting
-    // snapshot — the Client merges nothing of its own.
+    // snapshot — the Client merges nothing of its own. Queue refresh is an
+    // explicit owner operation, not a side effect of the global F5
+    // browse-destination refresh (#745).
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     app.local_view.adopt_items(make_items(2), 0);
-    app.panel_focus = PanelFocus::Queue;
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.refresh_current_view();
+    app.queue_op(QueueScope::Local, QueueOp::Refresh);
 
     assert!(
         matches!(
