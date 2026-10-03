@@ -1,7 +1,7 @@
 ## 1. Config and settings model
 
-- [ ] 1.1 `crates/mbv-config`: add `cols_expanded: u16` to `PanelConfig` with `DEFAULT_PANEL_COLS_EXPANDED = 80`; parse it like `cols` (same range, same per-key fallback warning) and save it next to `cols`. Extend `panel_values_fall_back_per_key_and_a_valid_section_round_trips` (`crates/mbv-config/src/tests/settings.rs`) with a malformed and a valid `cols_expanded`; verify `cargo nextest run -p mbv-config`.
-- [ ] 1.2 `crates/mbv-ui-model/src/settings.rs`: add `SettingKey::PanelColsExpanded`, an `Expanded cols` row after `Cols` on the Panel page (and in `panel_cursor_to_key`), and its step arm in `changed_panel_config` (same clamp as `PanelCols`). Fix every exhaustive match the compiler flags (`crates/mbv-components`, `crates/mbv-render`, `src/app`) with the same handling as `PanelCols`; verify `cargo check --workspace`.
+- [x] 1.1 `crates/mbv-config`: add `cols_expanded: u16` to `PanelConfig` with `DEFAULT_PANEL_COLS_EXPANDED = 80`; parse it like `cols` (same range, same per-key fallback warning) and save it next to `cols`. Extend `panel_values_fall_back_per_key_and_a_valid_section_round_trips` (`crates/mbv-config/src/tests/settings.rs`) with a malformed and a valid `cols_expanded`; verify `cargo nextest run -p mbv-config`.
+- [x] 1.2 `crates/mbv-ui-model/src/settings.rs`: add `SettingKey::PanelColsExpanded`, an `Expanded cols` row after `Cols` on the Panel page (and in `panel_cursor_to_key`), and its step arm in `changed_panel_config` (same clamp as `PanelCols`). Fix every exhaustive match the compiler flags (`crates/mbv-components`, `crates/mbv-render`, `src/app`) with the same handling as `PanelCols`; verify `cargo check --workspace`.
 
 ## 2. Width-aware pinned layout
 
