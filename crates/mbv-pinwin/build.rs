@@ -29,6 +29,7 @@ fn main() {
     build_pinwin(&manifest_dir, &prefix, &out_dir.join("zig-cache"));
 
     let lib_dir = prefix.join("lib");
+    strip_syslib_refs(&lib_dir);
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     // Static archives first, in dependency order: pinwin references
@@ -43,6 +44,59 @@ fn main() {
         pkg_config::Config::new()
             .probe(package)
             .unwrap_or_else(|error| panic!("pkg-config failed for {package}: {error}"));
+    }
+}
+
+/// Zig bakes the system `.so` paths the pinwin static archive links against
+/// into the archive as members. rust-lld chokes on each with
+/// "archive member ... is neither `ET_REL` nor LLVM bitcode" and then links
+/// fine without them: the same libraries resolve via pkg-config below.
+/// Delete every non-object member so the compile is warning-free.
+fn strip_syslib_refs(lib_dir: &Path) {
+    let archives: Vec<PathBuf> = std::fs::read_dir(lib_dir)
+        .expect("zig build should install lib/ archives")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            (path.extension().is_some_and(|ext| ext == "a")).then_some(path)
+        })
+        .collect();
+    for archive in &archives {
+        let table = Command::new("zig")
+            .arg("ar")
+            .arg("t")
+            .arg(archive)
+            .output()
+            .expect("failed to run `zig ar t`");
+        assert!(
+            table.status.success(),
+            "`zig ar t` failed for {}: {}",
+            archive.display(),
+            String::from_utf8_lossy(&table.stderr)
+        );
+        let listing = String::from_utf8_lossy(&table.stdout);
+        let junk: Vec<&str> = listing
+            .lines()
+            .filter(|member| {
+                !Path::new(member)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("o"))
+            })
+            .collect();
+        if junk.is_empty() {
+            continue;
+        }
+        let status = Command::new("zig")
+            .arg("ar")
+            .arg("d")
+            .arg(archive)
+            .args(&junk)
+            .status()
+            .expect("failed to run `zig ar d`");
+        assert!(
+            status.success(),
+            "`zig ar d` failed for {}",
+            archive.display()
+        );
     }
 }
 
