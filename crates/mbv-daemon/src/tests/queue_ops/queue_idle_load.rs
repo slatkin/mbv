@@ -269,7 +269,6 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
             Some(old_slot),
             99_000_000,
             false,
-            mbv_queue::StopReportOutcome::NotAccepted,
         ),
         None,
         "late old-run observations are ignored after replacement",

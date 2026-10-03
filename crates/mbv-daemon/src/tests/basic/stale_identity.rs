@@ -116,7 +116,6 @@ fn stale_stopped_run_observation_is_rejected() {
             Some(stopped_slot),
             900,
             true,
-            mbv_queue::StopReportOutcome::Accepted,
         ),
         None
     );
@@ -137,7 +136,6 @@ fn stale_stopped_run_observation_is_rejected() {
             Some(stopped_slot),
             900,
             false,
-            mbv_queue::StopReportOutcome::NotAccepted,
         ),
         Some(true)
     );
@@ -242,7 +240,6 @@ fn stale_completed_run_observation_is_rejected() {
             videos: true,
             audio: false,
         },
-        mbv_queue::StopReportOutcome::Accepted,
     ));
     assert_stale_completion_unchanged(
         &completed_owner,
@@ -265,7 +262,6 @@ fn stale_completed_run_observation_is_rejected() {
             videos: true,
             audio: false,
         },
-        mbv_queue::StopReportOutcome::NotAccepted,
     ));
     assert_eq!(
         completed_owner
@@ -290,7 +286,6 @@ fn stale_completed_run_observation_is_rejected() {
             videos: true,
             audio: false,
         },
-        mbv_queue::StopReportOutcome::Accepted,
     ));
     assert_eq!(completed_owner.core.queue.len(), original_len - 1);
 }
@@ -299,35 +294,6 @@ fn stale_completed_run_observation_is_rejected() {
 fn stale_stopped_and_completed_run_observations_are_rejected() {
     stale_stopped_run_observation_is_rejected();
     stale_completed_run_observation_is_rejected();
-}
-
-#[test]
-fn stopped_observation_without_accepted_report_does_not_protect_slot() {
-    let player = cold_player();
-    player.status.lock().unwrap().sequence_generation = 5;
-    let queue = queue_from_items(&[item("stopped", "Video", "Movie")], 0);
-    let mut owner = DaemonPlayerOwner {
-        core: PlayerOwnerState::new(queue, QueueSource::Remote),
-        ..Default::default()
-    };
-    let slot_id = owner.core.queue.slots()[0].slot_id;
-
-    assert_eq!(
-        apply_stopped_observation(
-            &mut owner,
-            &player,
-            5,
-            Some(slot_id),
-            42,
-            false,
-            mbv_queue::StopReportOutcome::NotAccepted,
-        ),
-        Some(true)
-    );
-
-    let slot = owner.core.queue.slot(slot_id).unwrap();
-    assert_eq!(slot.pending_sync(), None);
-    assert_eq!(slot.local_progress().position_ticks, 42);
 }
 
 #[test]

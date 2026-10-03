@@ -409,7 +409,7 @@ fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
     assert_eq!(queue.revision(), after_active);
 
     assert!(matches!(
-        queue.record_reported_progress(first, TICKS_PER_SECOND, false, StopReportOutcome::Accepted),
+        queue.apply_progress(first, TICKS_PER_SECOND, false),
         QueueMutationResult::Applied(())
     ));
     assert_eq!(queue.revision(), after_active);

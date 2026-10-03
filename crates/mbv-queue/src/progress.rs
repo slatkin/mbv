@@ -2,7 +2,6 @@ use super::{AudiobookshelfItem, QueueItem};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
 const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND;
-const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgressObservation {
@@ -76,29 +75,6 @@ impl SlotProgress {
                 position_ticks: item.playback_position_ticks(),
                 played: item.played(),
             },
-        }
-    }
-
-    pub(crate) fn matches_server_confirmation(&self, item: &EmbyItem) -> bool {
-        (self.position_ticks - item.playback_position_ticks).abs()
-            <= PROGRESS_CONFIRMATION_TOLERANCE_TICKS
-            && self.played == item.played
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StopReportOutcome {
-    Accepted,
-    NotAccepted,
-}
-
-impl StopReportOutcome {
-    #[must_use]
-    pub fn from_accepted(accepted: bool) -> Self {
-        if accepted {
-            Self::Accepted
-        } else {
-            Self::NotAccepted
         }
     }
 }
