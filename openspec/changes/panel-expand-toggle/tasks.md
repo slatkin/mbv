@@ -15,6 +15,6 @@
 
 ## 4. Docs and specs
 
-- [ ] 4.1 `README.md` `[panel]` table: add a `cols_expanded` row after `cols` ("Expanded panel width in terminal columns", 1–65535, `80`). `dist/config.toml` `[panel]`: add `cols_expanded = 80` after `cols` and name it in the section comment. Verify by reading both.
-- [ ] 4.2 `CONTEXT.md`: add **Pinned panel width** after **Pinned panel** (collapsed = `cols`, expanded = `cols_expanded`, toggled by `pinned_width_toggle`, never saved; _Avoid_: panel mode, expand mode, panel size). Verify by reading the entry.
+- [x] 4.1 `README.md` `[panel]` table: add a `cols_expanded` row after `cols` ("Expanded panel width in terminal columns", 1–65535, `80`). `dist/config.toml` `[panel]`: add `cols_expanded = 80` after `cols` and name it in the section comment. Verify by reading both.
+- [x] 4.2 `CONTEXT.md`: add **Pinned panel width** after **Pinned panel** (collapsed = `cols`, expanded = `cols_expanded`, toggled by `pinned_width_toggle`, never saved; _Avoid_: panel mode, expand mode, panel size). Verify by reading the entry.
 - [ ] 4.3 Integration check (manual, user): `mbv --pin` on niri — `Ctrl+e` expands and tiles reflow, again collapses; stepping `Expanded cols` in F2 while collapsed expands the panel; relaunch opens collapsed; `Ctrl+e` in a plain terminal shows the toast. `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass.
