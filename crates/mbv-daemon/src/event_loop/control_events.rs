@@ -9,10 +9,16 @@ use super::super::{
 };
 use super::EventOutcome;
 use crate::control::intent_span;
+use crate::reconciliation::remaining;
 use mbv_ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+/// Upper bound for the final stop report and player-thread join during
+/// graceful shutdown, so a hung request cannot hold the process open.
+const SHUTDOWN_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise
@@ -229,6 +235,24 @@ impl DaemonLoop {
     pub(super) fn handle_shutdown(&mut self) -> EventOutcome {
         self.ctrl_clients.lock().unwrap().begin_shutdown();
         tracing::info!(name: "daemon.shutdown.started", target: "daemon", "graceful shutdown: stopping player");
+        // Announce the deliberate shutdown to every connected client
+        // before closing their connections, so they exit cleanly
+        // instead of treating this as an unannounced crash.
+        self.ctrl_clients
+            .lock()
+            .unwrap()
+            .notify_disconnected_all(DisconnectReason::DaemonShutdown);
+        self.ctrl_clients
+            .lock()
+            .unwrap()
+            .flush_writers(Duration::from_secs(1));
+        // Stop playback and let the active run's final stop report reach its
+        // server within one bound, so a hung request cannot hold the process
+        // open (design D6). Persisting after the stop keeps the snapshot's
+        // active slot consistent with the stopped player.
+        let deadline = Instant::now() + SHUTDOWN_FINALIZE_HARD_BOUND;
+        self.player.stop_for_shutdown(remaining(deadline));
+        self.player.join_or_timeout(remaining(deadline));
         if let Some(tx) = &self.queue_persist_tx {
             let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel(0);
             if tx
@@ -243,20 +267,6 @@ impl DaemonLoop {
         {
             tracing::error!(name: "daemon.queue_state_persist.failed", target: "queue", error = %error, "failed to persist Stay-alive queue on shutdown");
         }
-        // Announce the deliberate shutdown to every connected client
-        // before closing their connections, so they exit cleanly
-        // instead of treating this as an unannounced crash.
-        self.ctrl_clients
-            .lock()
-            .unwrap()
-            .notify_disconnected_all(DisconnectReason::DaemonShutdown);
-        self.ctrl_clients
-            .lock()
-            .unwrap()
-            .flush_writers(std::time::Duration::from_secs(1));
-        self.player.stop();
-        self.player
-            .join_or_timeout(std::time::Duration::from_secs(5));
         EventOutcome::SHUTDOWN
     }
 }

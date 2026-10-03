@@ -23,7 +23,7 @@ fn same_server(old: &EmbyOwnerContext, new_setup: &EmbySetup) -> bool {
         == normalized_server_url(&new_setup.server_url)
 }
 
-fn remaining(deadline: Instant) -> Duration {
+pub(crate) fn remaining(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
 }
 
