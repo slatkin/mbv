@@ -263,12 +263,12 @@ impl Model {
 
     /// Mount/unmount the `QueuePlaybackPanel` to the `RootFrame.queue_playback`
     /// placement and project its content (task 3.5): the header row's status
-    /// word and playback target, and the transport facts from the shared
-    /// transport projection. The mount is placement-driven (design D4): the
-    /// placement exists whenever the column has slot/transport rows or the
-    /// idle header, and the D1 mount rule follows it. The slot region below
-    /// the header reads the same `queue_header_rows()` the geometry does, so
-    /// sync, paint and geometry cannot drift (D2).
+    /// word and the transport facts from the shared transport projection. The
+    /// mount is placement-driven (design D4): the placement exists whenever the
+    /// column has slot/transport rows or the idle header, and the D1 mount rule
+    /// follows it. The slot region below the header reads the same
+    /// `queue_header_rows()` the geometry does, so sync, paint and geometry
+    /// cannot drift (D2).
     pub(in crate::app) fn sync_queue_playback_panel(&mut self) {
         let placement = self.sync_chrome_root().queue_playback;
         self.mount_to_placement(ChromePanel::QueuePlayback, placement);
@@ -279,7 +279,6 @@ impl Model {
         transport.panel = mbv_theme::Surface::QueueOnlyPlaybackPanel;
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
-        let (host, host_is_remote) = self.app.playback_host_label_and_remote();
         let transport_area = if status == NowPlayingStatus::Idle {
             None
         } else {
@@ -299,7 +298,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>()
         {
-            panel.set_header(status, host, host_is_remote);
+            panel.set_header(status);
             panel.set_transport(transport);
             panel.set_transport_area(transport_area);
         }

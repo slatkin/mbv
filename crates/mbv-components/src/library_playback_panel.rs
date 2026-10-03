@@ -32,6 +32,30 @@ use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
 
+/// Whether the Queue playback panel paints its header row this frame
+/// (design D1). A two-variant enum rather than a bare `bool`: the shared
+/// transport projection already carries three bools, and the workspace's
+/// clippy `pedantic` gate rejects a fourth (`struct_excessive_bools`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeaderVisibility {
+    Visible,
+    Hidden,
+}
+
+impl HeaderVisibility {
+    /// The gated header paint predicate.
+    #[must_use]
+    pub const fn is_visible(self) -> bool {
+        matches!(self, Self::Visible)
+    }
+}
+
+impl From<bool> for HeaderVisibility {
+    fn from(visible: bool) -> Self {
+        if visible { Self::Visible } else { Self::Hidden }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlaybackProjection {
     pub state: PlaybackState,
@@ -49,6 +73,15 @@ pub struct PlaybackProjection {
     /// Shell-projected site carrying the now-playing title; the Library strip
     /// does not paint a header, but shares this transport projection.
     pub title_site: NowPlayingTitleSite,
+    /// Whether the Queue playback panel paints its header row this frame
+    /// (design D1): resolved by the shell's `queue_header_rows()` policy —
+    /// visible while idle (the idle rule) or while the artwork title overlay
+    /// is unreachable, hidden while the artwork carries the title. A
+    /// two-variant enum rather than a bare `bool`: the projection already
+    /// carries three bools and the workspace's clippy `pedantic` gate rejects
+    /// a fourth (`struct_excessive_bools`). The Library strip does not paint a
+    /// header, but shares this transport projection.
+    pub header_visible: HeaderVisibility,
     pub status_indicators: Option<Vec<Span<'static>>>,
     pub idle_feed_title: Option<(String, bool)>,
     pub use_nerd_fonts: bool,
@@ -82,6 +115,8 @@ impl LibraryPlaybackPanel {
                 now_playing_title: None,
                 title_parts: None,
                 title_site: NowPlayingTitleSite::Header,
+                // The pre-sync resting state paints the header (idle rule).
+                header_visible: HeaderVisibility::Visible,
                 status_indicators: None,
                 use_nerd_fonts: false,
                 idle_feed_title: None,
@@ -293,6 +328,7 @@ mod tests {
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: None,
             title_site: NowPlayingTitleSite::Header,
+            header_visible: HeaderVisibility::Visible,
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,
@@ -337,6 +373,7 @@ mod tests {
             now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: Some(parts),
             title_site: NowPlayingTitleSite::Header,
+            header_visible: HeaderVisibility::Visible,
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,

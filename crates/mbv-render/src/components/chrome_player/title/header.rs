@@ -4,10 +4,9 @@ use super::super::title_part_fg;
 use super::palette;
 use super::transport::width_u16;
 use mbv_queue::PlaybackTitleParts;
-use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
@@ -35,34 +34,15 @@ pub struct HeaderTitle<'a> {
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
     pub icon: (&'static str, Color),
-    pub title_site: NowPlayingTitleSite,
-    /// The playback target's host label and whether it names a remote
-    /// target; the artwork-site brand row paints it after `on`
-    /// (`PLAYBACK_HOST_REMOTE_FG` when remote, cream when local).
-    pub host: &'a str,
-    pub host_is_remote: bool,
 }
 
 /// The header row's now-playing title (moved up from the band's title row):
 /// the state icon first, one space, then a two-part title — the
 /// context part (the show) left-aligned and clipped without scrolling, the
 /// title part with the marquee window of the remaining space — or a lone
-/// yellow title. Painted only while a target plays; idle keeps the
-/// status/host header row.
+/// yellow title. Painted only while a target plays.
 pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
     let panel_bg = palette::surface_colors(header.panel, false).fill;
-    if header.title_site == NowPlayingTitleSite::Artwork {
-        frame.render_widget(
-            Paragraph::new(Line::from(artwork_brand_spans(
-                header,
-                panel_bg,
-                row.width as usize,
-            )))
-            .style(Style::default().bg(panel_bg)),
-            row,
-        );
-        return;
-    }
     match header
         .parts
         .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))
@@ -81,8 +61,8 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
 
 /// The shared queue-header brand anchor: ` [mbv]` left-anchored (cream
 /// brackets, foam `mbv`), `right` right-anchored, one trailing space outside
-/// the right edge. The artwork-site playing row and the idle row both paint
-/// through this so the left anchor cannot drift.
+/// the right edge. The idle header row paints through this so the left anchor
+/// cannot drift.
 pub(crate) fn brand_row_spans(
     panel_bg: Color,
     row_width: usize,
@@ -107,39 +87,6 @@ pub(crate) fn brand_row_spans(
     spans.extend(right);
     spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
     spans
-}
-
-/// The artwork title site's header row: ` [mbv]` left-anchored and
-/// `PLAYING:<host>` right-anchored. The icon is dropped (the word carries
-/// the state), the brackets and the colon are cream, `mbv` is foam,
-/// `PLAYING` is aqua and bold, and the host is cream when local /
-/// `PLAYBACK_HOST_REMOTE_FG` when remote.
-fn artwork_brand_spans(
-    header: &HeaderTitle<'_>,
-    panel_bg: Color,
-    row_width: usize,
-) -> Vec<Span<'static>> {
-    let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
-    let mut right = vec![Span::styled(
-        "PLAYING",
-        Style::default()
-            .fg(palette::ACCENT)
-            .bg(panel_bg)
-            .add_modifier(Modifier::BOLD),
-    )];
-    if !header.host.is_empty() {
-        let host_fg = if header.host_is_remote {
-            palette::PLAYBACK_HOST_REMOTE_FG
-        } else {
-            palette::TEXT_EMPHASIS
-        };
-        right.push(Span::styled(":", cream));
-        right.push(Span::styled(
-            header.host.to_string(),
-            Style::default().fg(host_fg).bg(panel_bg),
-        ));
-    }
-    brand_row_spans(panel_bg, row_width, right)
 }
 
 /// The ` <icon> ` prefix every header title row starts with.

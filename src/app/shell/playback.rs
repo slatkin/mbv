@@ -1,6 +1,6 @@
 use super::Model;
 use super::{PanelFocus, palette};
-use mbv_components::PlaybackProjection;
+use mbv_components::{HeaderVisibility, PlaybackProjection};
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_ui_msg::PlaybackRequest;
 
@@ -80,6 +80,10 @@ impl Model {
             now_playing_title,
             title_parts,
             title_site: self.app.queue_card_projection.title_site,
+            // The shell resolves the panel's header visibility once (D1/D2):
+            // idle (the idle rule) or an unreachable artwork overlay. The same
+            // helper drives the geometry, so paint and reservation agree.
+            header_visible: HeaderVisibility::from(self.app.queue_header_rows() > 0),
             status_indicators: self.app.build_status_indicator_spans(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {

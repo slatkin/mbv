@@ -9,7 +9,7 @@ use tuirealm::event::KeyModifiers;
 #[test]
 fn transport_clicks_resolve_against_retained_geometry() {
     let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+    panel.set_header(NowPlayingStatus::Playing);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.show_controls = true;
     // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
@@ -63,4 +63,57 @@ fn transport_clicks_resolve_against_retained_geometry() {
     // A collapsed panel (no transport painted) resolves nothing.
     panel.set_transport_area(None);
     assert!(panel.on(&click(5, 4)).is_none());
+}
+
+/// The panel's painted header row text (placement row 1, `queue_panel_inset`).
+fn header_row_text(terminal: &Terminal<TestBackend>) -> String {
+    let buf = terminal.backend().buffer();
+    (0..40).map(|x| buf[(x, 1)].symbol().to_string()).collect()
+}
+
+/// Row 3.2 (design D1/D3): the header row paints iff the shell's projected
+/// flag; no playing state paints the removed artwork-site brand row
+/// (`[mbv] ... PLAYING:<host>`).
+#[test]
+fn header_row_paints_iff_the_projected_flag() {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_header(NowPlayingStatus::Playing);
+    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+
+    panel.transport.header_visible = HeaderVisibility::Hidden;
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    let hidden = header_row_text(&terminal);
+    assert!(
+        !hidden.contains("Example"),
+        "a hidden header paints nothing"
+    );
+    assert!(
+        !hidden.contains("[mbv]"),
+        "a playing state paints no brand row"
+    );
+    assert!(
+        !hidden.contains("PLAYING"),
+        "a playing state paints no brand word"
+    );
+
+    panel.transport.header_visible = HeaderVisibility::Visible;
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    let shown = header_row_text(&terminal);
+    assert!(
+        shown.contains("Example"),
+        "a visible header carries the title"
+    );
+    assert!(
+        !shown.contains("[mbv]"),
+        "the playing header is not a brand row"
+    );
+    assert!(
+        !shown.contains("PLAYING"),
+        "the playing header carries no brand word"
+    );
 }

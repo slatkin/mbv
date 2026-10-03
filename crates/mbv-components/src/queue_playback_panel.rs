@@ -25,7 +25,7 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::library_playback_panel::PlaybackProjection;
+use super::library_playback_panel::{HeaderVisibility, PlaybackProjection};
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
@@ -46,13 +46,8 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
-    /// The header's projected facts: the status word (idle's right-anchored
-    /// `IDLE`) and the playback target (`App::playback_host_label_and_remote`,
-    /// no tracking suffix) with its remote flag — the target and flag feed
-    /// only the artwork-site playing brand row's `PLAYING:<host>`.
+    /// The header's projected status word (idle's right-anchored `IDLE`).
     status: NowPlayingStatus,
-    host: String,
-    host_is_remote: bool,
     /// The transport's projected facts (the shared transport projection).
     transport: PlaybackProjection,
     /// The transport rect the shell computes in the sync pass from the
@@ -79,8 +74,6 @@ impl QueuePlaybackPanel {
     pub fn new() -> Self {
         Self {
             status: NowPlayingStatus::Idle,
-            host: String::new(),
-            host_is_remote: false,
             transport: PlaybackProjection {
                 state: mbv_ui_model::playback::PlaybackState::default(),
                 show_controls: false,
@@ -89,6 +82,7 @@ impl QueuePlaybackPanel {
                 now_playing_title: None,
                 title_parts: None,
                 title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
+                header_visible: HeaderVisibility::Visible,
                 status_indicators: None,
                 use_nerd_fonts: false,
                 idle_feed_title: None,
@@ -106,12 +100,9 @@ impl QueuePlaybackPanel {
         }
     }
 
-    /// Project the header row's facts (status word, playback target and
-    /// its remote flag for the hostname colour).
-    pub fn set_header(&mut self, status: NowPlayingStatus, host: String, host_is_remote: bool) {
+    /// Project the header row's status word.
+    pub fn set_header(&mut self, status: NowPlayingStatus) {
         self.status = status;
-        self.host = host;
-        self.host_is_remote = host_is_remote;
     }
 
     /// Project the transport's facts (the shared transport projection, with
@@ -206,43 +197,45 @@ impl Default for QueuePlaybackPanel {
 
 impl Component for QueuePlaybackPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        // The header row is the placement's painted row, painted in every
-        // queue-visible layout, idle included (D10). It sits one row down
-        // under the column's recessed top padding and is inset two columns
-        // each side (the queue column's canonical content inset), so it is
-        // not flush with the column's top, left, or right edge. Bottom
-        // padding stays zero: the slot/transport band follows it directly.
+        // The header row is the placement's painted row while the shell's
+        // projection reserves it: idle (the idle rule) or an unreachable
+        // artwork overlay (D1). While the artwork carries the now-playing
+        // title the placement reserves no header row (D2), so the panel
+        // paints nothing here. The row sits one row down under the column's
+        // recessed top padding and is inset two columns each side (the queue
+        // column's canonical content inset), so it is not flush with the
+        // column's top, left, or right edge. Bottom padding stays zero: the
+        // slot/transport band follows it directly.
         let header = Rect {
             height: 1,
             ..queue_panel_inset(area)
         };
-        // While a target plays, the header row carries the now-playing
-        // title (moved up from the band's former title row — two-part
-        // titles keep their context-left/title-right split, a lone title
-        // paints yellow); idle paints the brand row, `[mbv] ... IDLE`.
-        if self.status != NowPlayingStatus::Idle
-            && let Some((title, _)) = &self.transport.now_playing_title
-        {
-            render_header_title(
-                frame,
-                header,
-                &mut HeaderTitle {
-                    title: title.as_str(),
-                    parts: self.transport.title_parts.as_ref(),
-                    marquee_text: &mut self.marquee_text,
-                    marquee_started_at: &mut self.marquee_started_at,
-                    panel: TRANSPORT_SURFACE,
-                    icon: playback_state_icon(
-                        self.transport.use_nerd_fonts,
-                        self.transport.state.paused,
-                    ),
-                    title_site: self.transport.title_site,
-                    host: &self.host,
-                    host_is_remote: self.host_is_remote,
-                },
-            );
-        } else {
-            render_playback_header(frame, header, self.status);
+        if self.transport.header_visible.is_visible() {
+            // While a target plays, the header row carries the now-playing
+            // title (moved up from the band's former title row — two-part
+            // titles keep their context-left/title-right split, a lone title
+            // paints yellow); idle paints the brand row, `[mbv] ... IDLE`.
+            if self.status != NowPlayingStatus::Idle
+                && let Some((title, _)) = &self.transport.now_playing_title
+            {
+                render_header_title(
+                    frame,
+                    header,
+                    &mut HeaderTitle {
+                        title: title.as_str(),
+                        parts: self.transport.title_parts.as_ref(),
+                        marquee_text: &mut self.marquee_text,
+                        marquee_started_at: &mut self.marquee_started_at,
+                        panel: TRANSPORT_SURFACE,
+                        icon: playback_state_icon(
+                            self.transport.use_nerd_fonts,
+                            self.transport.state.paused,
+                        ),
+                    },
+                );
+            } else {
+                render_playback_header(frame, header, self.status);
+            }
         }
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
