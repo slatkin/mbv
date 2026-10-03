@@ -15,7 +15,7 @@
 
 ## 3b. Animated width
 
-- [x] 3.3 Bump the pinwin pin in `crates/mbv-pinwin/build.zig.zon` to 2ac05e340279cf227c54c01d67926cd387d3cdde (`zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#2ac05e340279cf227c54c01d67926cd387d3cdde"` in that directory); add `Panel::apply_layout_animated(layout, duration_ms)` over `pinwin_apply_layout_animated` (ffi.rs + panel.rs, `PINWIN_ANIM_DEFAULT_MS` = 200); `pin::apply_layout` calls it so the Ctrl+e toggle and the F2 width steps animate. Verify `cargo check -p mbv-pinwin -p mbv` and `cargo clippy --workspace --all-targets -- -D warnings`; visual smoothness is part of 4.3.
+- [x] 3.3 Bump the pinwin pin in `crates/mbv-pinwin/build.zig.zon` to 74d9859671a9198bb5c64016a7bf9dcd4eeb849a (`zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#74d9859671a9198bb5c64016a7bf9dcd4eeb849a"` in that directory); add `Panel::apply_layout_animated(layout, duration_ms)` over `pinwin_apply_layout_animated` (ffi.rs + panel.rs, `PINWIN_ANIM_DEFAULT_MS` = 200); `pin::apply_layout` calls it so the Ctrl+e toggle and the F2 width steps animate. Verify `cargo check -p mbv-pinwin -p mbv` and `cargo clippy --workspace --all-targets -- -D warnings`; visual smoothness is part of 4.3.
 
 ## 4. Docs and specs
 
