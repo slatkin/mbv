@@ -226,6 +226,23 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         }
     }
 
+    /// Content-preserving presentation reset (design D3): keep the projected
+    /// nodes but drop marks, Inline Search filtering, expansion and retained
+    /// painted geometry, then return the selection to the first visible
+    /// selectable node with the viewport at its top.
+    pub fn reset_presentation(&mut self) {
+        self.marks.clear();
+        self.filter_active = false;
+        self.filter_query.clear();
+        self.filter_anchor = None;
+        self.filter_matches.clear();
+        self.expanded.clear();
+        self.selected = None;
+        self.viewport_offset = 0;
+        self.reconcile_selection();
+        self.invalidate_paint();
+    }
+
     fn aggregate_mark_state_for(&self, target: &Target) -> AggregateMarkState {
         let Some(id) = self.target_to_node.get(target).copied() else {
             return AggregateMarkState::Unmarked;

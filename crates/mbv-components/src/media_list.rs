@@ -319,6 +319,20 @@ impl<Target> MediaList<Target> {
 }
 
 impl<Target: Clone + Eq> MediaList<Target> {
+    /// Content-preserving presentation reset (design D3): keep the projected
+    /// rows, drop transient multi-selection, and return the cursor and
+    /// resting scroll to their normal initial position. `cursor` indexes
+    /// `selectable`, so `0` is already the first selectable row for both
+    /// plain and grouped flows.
+    fn reset_presentation(&mut self) {
+        self.cursor = 0;
+        self.scroll = 0;
+        self.multi_selection.clear();
+        self.frozen_selection.clear();
+        self.selection_anchor = None;
+        self.live_range = false;
+    }
+
     /// The selectable-index position of `target`, if it is present.
     fn position_of(&self, target: &Target) -> Option<usize> {
         self.selectable
