@@ -13,12 +13,12 @@ Persisted queue state SHALL serialize the canonical tagged `QueueItem` sequence 
 - **THEN** restored Feed entries SHALL keep their playback position
 - **THEN** owner admission SHALL run before restored slots enter a Bound queue
 
-#### Scenario: Provider positions are not persisted
+#### Scenario: Service positions are not persisted
 
 - **WHEN** a queue holding an Emby video at 20 minutes and an Audiobookshelf episode at 5 minutes is persisted and restored
 - **THEN** both restored items SHALL have no playback position
 
-#### Scenario: Earlier state with provider positions
+#### Scenario: Earlier state with Service positions
 
 - **WHEN** persisted state written by an earlier version carries a playback position on an Emby item
 - **THEN** the restored item SHALL have no playback position
@@ -35,7 +35,7 @@ Persisted queue state SHALL serialize the canonical tagged `QueueItem` sequence 
 
 ### Requirement: A Player owner refreshes progress on a cold-adopted persisted queue
 
-When a Player owner (Local daemon or packaged `mbvd`) builds its queue from persisted state, either by adopting a client's persisted queue snapshot while it has no queue of its own or by restoring its own Stay-alive queue at startup, it SHALL asynchronously refresh progress for the queue's Emby items from Emby and for its Audiobookshelf episodes and books from Audiobookshelf. The refresh SHALL NOT block playback of the queue. It SHALL apply the refreshed values to the owner's own canonical queue, not only to a client-side snapshot, and SHALL broadcast the refreshed queue or progress to attached clients once applied. A refreshed inactive slot SHALL take the server's position and watched or finished state as returned. An Audiobookshelf item the server reports no progress for SHALL keep no position.
+When a Player owner (Local daemon or packaged `mbvd`) builds its queue from persisted state, either by adopting a client's persisted queue snapshot while it has no queue of its own or by restoring its own Stay-alive queue at startup, and whenever a Client requests a queue refresh, it SHALL asynchronously refresh progress for the queue's Emby items from Emby and for its Audiobookshelf episodes and books from Audiobookshelf. The refresh SHALL NOT block playback of the queue. It SHALL apply the refreshed values to the owner's own canonical queue, not only to a client-side snapshot, and SHALL broadcast the refreshed queue or progress to attached clients once applied. A refreshed inactive slot SHALL take the server's position and watched or finished state as returned. A refresh SHALL NOT change the position of the slot that is currently playing, for either Service. An Audiobookshelf item the server reports no progress for SHALL keep no position.
 
 #### Scenario: Cold daemon adopts a persisted queue with server-side progress
 
@@ -59,8 +59,14 @@ When a Player owner (Local daemon or packaged `mbvd`) builds its queue from pers
 
 #### Scenario: Adopted item is played before the refresh completes
 
-- **WHEN** the user plays an item from the adopted queue and the refresh result for that slot arrives while it is playing
+- **WHEN** the user plays an Emby or Audiobookshelf item from the adopted queue and the refresh result for that slot arrives while it is playing
 - **THEN** the slot SHALL keep its live playback position
+- **AND** attached clients SHALL NOT be told to show the refreshed position for that slot
+
+#### Scenario: Manual queue refresh updates Audiobookshelf rows
+
+- **WHEN** a Client requests a queue refresh while the owner's queue holds Audiobookshelf episodes whose server progress changed on another device
+- **THEN** the owner SHALL apply the server's progress to those inactive slots and broadcast the refreshed queue
 
 #### Scenario: Refresh is scoped to the owning Service
 

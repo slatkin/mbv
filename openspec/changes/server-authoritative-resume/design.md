@@ -101,7 +101,7 @@ and zero delays, per the "no real sleeps" rule. This copies the shape of
 `retry_mark_played` (`proxy.rs:167`), but runs inline because play needs the
 answer before it starts.
 
-### D3. Clear provider positions at the persistence boundary
+### D3. Clear Service positions at the persistence boundary
 
 `mbv-config`'s `save_queue_state`/`save_stay_alive_queue_state` and their
 `load_*` counterparts map items through one `mbv-queue` function. That
@@ -112,21 +112,34 @@ the display or into the feed-only paths. `played` is kept: it is watched-state
 metadata, the next refresh corrects it, and clearing it could change consume
 or prune behaviour, which is out of scope.
 
-### D4. One progress refresh for both providers, also run on Owner restore
+### D4. One progress refresh for both Services, also run on Owner restore
 
 `start_queue_enrichment` (`control/queue_setup.rs:107`) is the single refresh
 behind all three triggers: cold adoption, manual queue refresh
 (`CtrlCmd::UnifiedQueueRefresh`), and now Owner restore. Today it fetches only
-Emby. Extend it so that, when the queue holds Audiobookshelf episode or book
-slots and the daemon has an Audiobookshelf context, it also spawns one fetch.
-That fetch calls `progress_bounded` and `book_progress_bounded`
-(`mbv-audiobookshelf` `catalog.rs:354`, `catalog_books.rs:206`; both read
-`GET /api/me/progress`). For each queued item it finds, it sends the existing
-`DaemonEvent::AudiobookshelfProgress` / `AudiobookshelfBookProgress` with the
-current setup generation. Those events already apply by provider-qualified
-identity (`apply_audiobookshelf_progress`/`_book_progress`) and broadcast to
-capable clients, so this adds no new apply or wire path. An Audiobookshelf
-fetch failure is logged and ignored, the same as an Emby enrichment failure.
+Emby. Extend it so that, when the queue holds Audiobookshelf episode or book slots and
+the daemon has an Audiobookshelf context, it also spawns one fetch. That fetch
+calls `progress_bounded` and `book_progress_bounded` (`mbv-audiobookshelf`
+`catalog.rs:354`, `catalog_books.rs:206`; both read `GET /api/me/progress`)
+and sends one new `DaemonEvent::AudiobookshelfProgressRefreshed`. The event
+carries the setup generation and the episode and book progress maps, keeping
+only the entries for items in the queue.
+
+The handler is a new, small apply path. It does **not** reuse
+`apply_audiobookshelf_progress`/`_book_progress`. Those prefer the active slot
+and overwrite it, and they broadcast a per-item progress event that clients
+apply the same way. That is correct for the player's own acknowledged session
+sync, but a refresh landing mid-play would regress the playing row to the
+server's older value. The refresh handler:
+1. drops a stale generation;
+2. applies the fetched position and finished state to every matching
+   **non-active** slot through `PlaybackQueue::apply_progress`;
+3. calls `broadcast_owner_queue_state` once if anything changed, mirroring how
+   Emby enrichment (`apply_queue_enriched`) protects the active slot and
+   broadcasts the queue.
+
+An Audiobookshelf fetch failure is logged and ignored, the same as an Emby
+enrichment failure.
 
 For restore: after the daemon loop is built (`run.rs`, after
 `initialize_queue`), call the same function when the restored queue has Emby
@@ -153,9 +166,25 @@ Delete the following:
 - `progress_report_accepted` on `PlayerEvent::Stopped`, `TrackCompleted` and
   the ctrl wire.
 
-The active-slot branch, which keeps the live position, stays. The ctrl field
-was `#[serde(default)]` and ctrl does not deny unknown fields, so mixed-version
-peers still parse each other.
+The active-slot branch, which keeps the live position, stays.
+
+**No ctrl protocol bump.** The ctrl-protocol spec treats changing an existing
+event's wire shape as non-additive. v11 was bumped for a field *type* change
+(`openspec/specs/ctrl-protocol/spec.md:10`), and a non-additive hello-field
+removal is named as bump-worthy (`:211-212`). This removal is different in a
+way that matters. `progress_report_accepted` is `#[serde(default)]`
+(`mbv-ctrl/src/player.rs:280`), and nothing in `mbv-ctrl` uses
+`deny_unknown_fields`, so both directions parse:
+- an old peer that omits the field is read as `false`, which the new code
+  ignores anyway;
+- a new peer that omits it is defaulted by old code. Old code only uses the
+  field to arm protection, so the worst case is that an older Client doesn't
+  protect a slot the server is about to confirm anyway.
+
+Bumping to 12 would break every mixed-version pair under exact-match
+negotiation to guard against a difference neither side can observe. So we
+deliberately don't bump, consistent with preferring capabilities over
+protocol bumps.
 
 ### D6. Shutdown: bounded stop, then persist
 
