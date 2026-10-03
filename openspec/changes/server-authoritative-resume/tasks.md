@@ -74,7 +74,7 @@
 
 ## 4. Remove pending-sync protection and the max merge (design D5)
 
-- [ ] 4.1 In `crates/mbv-queue`: delete `QueueSlot::pending_sync`, its
+- [x] 4.1 In `crates/mbv-queue`: delete `QueueSlot::pending_sync`, its
   accessor, `SlotProgress` confirmation, `StopReportOutcome`, the arming in
   `record_reported_progress`, the pending branch and the `max(stored)` clamp in
   `merge_fetched_slot`, and the pending clause of
