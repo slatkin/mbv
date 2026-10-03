@@ -52,6 +52,11 @@ impl App {
         self.settings_destination = SettingsDestination::Keys;
     }
 
+    pub(crate) fn open_panel_settings(&mut self) {
+        self.request_sidebar_open(mbv_ui_model::overlay::SidebarId::Settings);
+        self.settings_destination = SettingsDestination::Panel;
+    }
+
     fn open_emby_setup(&mut self) {
         let previous = self.emby_runtime.state;
         let config = self.config.lock().unwrap().clone();

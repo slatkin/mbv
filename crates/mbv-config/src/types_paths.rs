@@ -1,6 +1,6 @@
 #[cfg(test)]
 use super::TEST_DEFAULT_STATE_DIR;
-use super::{AudiobookshelfSetup, EmbySetup, FeedSubscription};
+use super::{AudiobookshelfSetup, EmbySetup, FeedSubscription, PanelConfig};
 #[cfg(any(test, feature = "test"))]
 use super::{TEST_CONFIG_DIR_OVERRIDE, TEST_STATE_DIR_OVERRIDE};
 use std::env;
@@ -112,6 +112,9 @@ pub struct Config {
     /// prefix-namespace assignments, validated against the keybind registry
     /// at parse time. Absent section resolves to the all-defaults value.
     pub keybinds: mbv_keybinds::Keybinds,
+    /// `[panel]` layout for `--pin` (change `pin-mbv-in-pinwin`, design D6).
+    /// Read and preserved by every build; applied only by a pinned launch.
+    pub panel: PanelConfig,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -169,6 +172,7 @@ impl Default for Config {
             idle_feed_rotation_secs: 10,
             feeds: vec![],
             keybinds: mbv_keybinds::Keybinds::default(),
+            panel: PanelConfig::default(),
         }
     }
 }

@@ -1,0 +1,13 @@
+.{
+    .name = .mbv_pinwin,
+    .version = "0.0.0",
+    .fingerprint = 0x1d635744704d2bb,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{ "build.zig", "build.zig.zon" },
+    .dependencies = .{
+        .pinwin = .{
+            .url = "git+https://github.com/slatkin/pinwin#835d39cbcfd9bc93a92ba370100b61c271d703bf",
+            .hash = "pinwin-0.1.0-tWOmINVdAwCH6pm34A5E6Loa89BQGV_DmLB9WnZlygnS",
+        },
+    },
+}

@@ -1,7 +1,9 @@
 #[cfg(test)]
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
-use crate::{Config, config_path, load_config, parse_config, save_config_settings};
+use crate::{
+    Config, PanelConfig, PanelSide, config_path, load_config, parse_config, save_config_settings,
+};
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -492,4 +494,65 @@ url = "http://host"
 fn parse_invalid_toml_errors() {
     let error = parse_config("not [ valid toml !!!").unwrap_err();
     assert!(error.is_parse());
+}
+
+/// Contract (task 4.2 of `pin-mbv-in-pinwin`): an out-of-range or malformed
+/// `[panel]` value falls back to its own default without changing the other
+/// keys, and a valid `[panel]` section round-trips through save.
+#[test]
+fn panel_values_fall_back_per_key_and_a_valid_section_round_trips() {
+    let cfg = parse_config(
+        r#"
+[panel]
+side = "up"
+cols = 0
+gutter_top = 12
+gutter_bottom = 3000000000
+gutter_left = -5
+gutter_right = "wide"
+"#,
+    )
+    .unwrap();
+    assert_eq!(cfg.panel.side, PanelSide::Left);
+    assert_eq!(cfg.panel.cols, crate::DEFAULT_PANEL_COLS);
+    assert_eq!(cfg.panel.gutter_top, 12);
+    assert_eq!(cfg.panel.gutter_bottom, 0);
+    assert_eq!(cfg.panel.gutter_left, -5);
+    assert_eq!(cfg.panel.gutter_right, 0);
+
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-config-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
+
+    let expected = PanelConfig {
+        side: PanelSide::Right,
+        cols: 55,
+        gutter_top: 1,
+        gutter_bottom: -2,
+        gutter_left: 3,
+        gutter_right: -4,
+    };
+    save_config_settings(&Config {
+        panel: expected,
+        ..Default::default()
+    })
+    .unwrap();
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(
+        saved.contains("[panel]"),
+        "saved config writes the panel section:\n{saved}"
+    );
+    let reparsed = parse_config(&saved).unwrap();
+    assert_eq!(reparsed.panel, expected);
+
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
+    let _ = std::fs::remove_dir_all(&dir);
 }

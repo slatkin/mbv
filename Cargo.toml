@@ -1,9 +1,9 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbv-pinwin", "crates/mbvd"]
 default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 
 [workspace.package]
-version = "0.21.8"
+version = "0.22.2"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -81,7 +81,7 @@ unused_result_ok = "warn"
 literal_string_with_formatting_args = "allow"
 # Transitive dependency version skew (thiserror, getrandom, zbus family, etc.) —
 # no source fix exists; converges as upstreams update (issue #804).
-multiple-crate-versions = { level = "allow" }
+multiple_crate_versions = { level = "allow" }
 # No rustdoc is published and the flagged fns are only reachable by same-repo
 # path-dependency siblings, so hand-written `# Errors` sections would be filler
 # (resolve-clippy-doc-lints / issue #816).
@@ -116,6 +116,7 @@ name = "mbv"
 path = "src/main.rs"
 
 [dependencies]
+mbv-pinwin = { path = "crates/mbv-pinwin" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }
@@ -180,7 +181,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0"
+depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libgtk-4-1, libgtk4-layer-shell0"
 section = "video"
 priority = "optional"
 assets = [

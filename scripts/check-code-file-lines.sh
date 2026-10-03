@@ -19,7 +19,7 @@ is_governed_path() {
         *.toml|*.json|*.yaml|*.yml|*.lock|*.service|*.png|*.jpg|*.jpeg|*.gif|*.svg|*.ico|*.ttf|*.otf|*.woff|*.woff2|*.pdf|*.zip|*.gz|*.tar)
             return 1
             ;;
-        Makefile|PKGBUILD|PKGBUILD-git|*.rs|*.lua|*.sh|*.py|*.js|*.ts|*.tsx|*.c|*.h|*.cpp|*.hpp)
+        Makefile|PKGBUILD|PKGBUILD-git|*.rs|*.lua|*.sh|*.py|*.js|*.ts|*.tsx|*.c|*.h|*.cpp|*.hpp|*.zig)
             return 0
             ;;
         *)

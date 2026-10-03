@@ -1,5 +1,5 @@
 use mbv_theme as palette;
-use mbv_ui_model::settings::SettingsDestination;
+use mbv_ui_model::settings::{SettingValueKind, SettingsDestination};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -58,6 +58,7 @@ fn render_settings_panel(frame: &mut Frame, area: Rect, model: &SettingsRenderMo
         Some(SetupDraft::Audiobookshelf { .. }) => "AUDIOBOOKSHELF SETUP",
         None if model.destination == SettingsDestination::Services => "SERVICES",
         None if model.destination == SettingsDestination::Keys => "KEYS",
+        None if model.destination == SettingsDestination::Panel => "PANEL",
         None => "SETTINGS",
     };
     let hint = if model.setup.is_some() {
@@ -67,6 +68,9 @@ fn render_settings_panel(frame: &mut Frame, area: Rect, model: &SettingsRenderMo
     } else if model.destination == SettingsDestination::Keys {
         // Read-only destination (design D7): nothing to activate.
         "[↑↓]browse [Esc]back"
+    } else if model.destination == SettingsDestination::Panel {
+        // Stepper destination (design D6): Left/Right step, Shift steps by 10.
+        "[←→]step [Esc]back"
     } else {
         "[Space]toggle [Esc]close"
     };
@@ -255,6 +259,9 @@ pub struct SettingsRow {
     pub value: String,
     pub section: bool,
     pub cursor: Option<usize>,
+    /// The row's value interaction (design D6, change `pin-mbv-in-pinwin`):
+    /// a `Stepper` row's value keys step its number instead of cycling it.
+    pub kind: SettingValueKind,
 }
 
 #[derive(Clone, Debug, PartialEq)]

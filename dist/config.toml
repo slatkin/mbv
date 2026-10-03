@@ -31,3 +31,14 @@ show_systray_icon = true
 # RSS feed displayed in the playback panel when nothing is playing.
 # rss_url = "https://novaramedia.com/feed/"
 # rotation_interval_secs = 10
+
+[panel]
+# Layout of the pinned panel used by `mbv --pin` (also editable in F2's Panel
+# page). side is "left" or "right"; cols counts terminal columns; the four
+# gutters are logical pixels and may be negative.
+side          = "left"
+cols          = 40
+gutter_top    = 0
+gutter_bottom = 0
+gutter_left   = 0
+gutter_right  = 0

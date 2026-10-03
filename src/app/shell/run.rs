@@ -243,11 +243,35 @@ impl Model {
     }
 
     /// The run loop — the moved body of the former `App::run`.
+    ///
+    /// Split so a failed start-up still restores the terminal: without the
+    /// restore, an early error leaves the alternate screen and raw mode
+    /// attached to the user's terminal, which presents as a silent black
+    /// screen (and on a `--pin` launch the error line goes to the log, so
+    /// nothing is visible at all).
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mouse_support = self.app.config.lock().unwrap().mouse_support;
         let mut terminal = init_terminal(mouse_support)?;
-        terminal.clear()?;
+        let result = self.run_with_terminal(&mut terminal);
+        if result.is_err() {
+            let _ = restore_terminal(&mut terminal);
+        }
+        result
+    }
 
+    fn run_with_terminal(
+        &mut self,
+        terminal: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // No `terminal.clear()` here. ratatui's `Terminal::clear` queries the
+        // cursor position (`ESC[6n`) and waits for the terminal's reply on the
+        // crossterm event source that the tuirealm input listener is already
+        // polling concurrently (started in `Model::new`), so the reply is
+        // sometimes consumed by the listener and the query times out after 2s,
+        // killing the process before the first paint. The alternate screen is
+        // already blank (`EnterAlternateScreen` plus the ratatui-image
+        // capability probe's `ESC c` reset both precede this), and the first
+        // draw below fully repaints because the back buffer starts empty.
         // Image pickers are initialised in `main` before `Model::new` starts
         // the TuiRealm listener — see `App::init_image_pickers` (#654).
 
@@ -310,7 +334,7 @@ impl Model {
             }
 
             if self.finish_run_iteration(
-                &mut terminal,
+                terminal,
                 had_events,
                 &mut last_render,
                 music_resize,

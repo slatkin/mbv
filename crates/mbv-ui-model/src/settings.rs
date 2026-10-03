@@ -28,6 +28,13 @@ pub enum PanelMode {
 pub enum SettingKey {
     Services,
     Keys,
+    Panel,
+    PanelSide,
+    PanelCols,
+    PanelGutterTop,
+    PanelGutterBottom,
+    PanelGutterLeft,
+    PanelGutterRight,
     StayAlive,
     AutoReconnect,
     SavePlaylistOnQuit,
@@ -62,6 +69,7 @@ pub enum SettingsDestination {
     Main,
     Services,
     Keys,
+    Panel,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,6 +104,8 @@ pub static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     // Navigation-only entry (opens the read-only Keys destination); not a
     // config section, so `KeySection` has no `Keys` variant.
     ("Keys", &[SettingKey::Keys]),
+    // Navigation-only entry for the pinned-panel page (design D6).
+    ("Panel", &[SettingKey::Panel]),
     (
         "Playback",
         &[
@@ -163,6 +173,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingValueKind::Key => setting_key_label(key),
         SettingValueKind::Boolean => setting_boolean_label(key),
         SettingValueKind::Text => setting_text_label(key),
+        SettingValueKind::Stepper => setting_stepper_label(key),
         SettingValueKind::Collection => setting_collection_label(key),
     }
 }
@@ -173,6 +184,7 @@ fn setting_key_label(key: SettingKey) -> &'static str {
         &[
             (SettingKey::Services, "Services"),
             (SettingKey::Keys, "Keys"),
+            (SettingKey::Panel, "Panel"),
         ],
     )
 }
@@ -215,6 +227,20 @@ fn setting_text_label(key: SettingKey) -> &'static str {
             (SettingKey::SubtitleMode, "Subtitle mode"),
             (SettingKey::SubtitleLanguage, "Subtitle language"),
             (SettingKey::AudioLanguage, "Audio language"),
+            (SettingKey::PanelSide, "Side"),
+        ],
+    )
+}
+
+fn setting_stepper_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::PanelCols, "Cols"),
+            (SettingKey::PanelGutterTop, "Gutter top"),
+            (SettingKey::PanelGutterBottom, "Gutter bottom"),
+            (SettingKey::PanelGutterLeft, "Gutter left"),
+            (SettingKey::PanelGutterRight, "Gutter right"),
         ],
     )
 }
@@ -240,20 +266,22 @@ fn label_for(key: SettingKey, labels: &[(SettingKey, &'static str)]) -> &'static
         .unwrap_or_else(|| unreachable!("setting label group must contain its key"))
 }
 
-#[derive(Clone, Copy)]
-enum SettingValueKind {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingValueKind {
     Key,
     Boolean,
     Text,
+    Stepper,
     Collection,
 }
 
-fn setting_kind(key: SettingKey) -> SettingValueKind {
+#[must_use]
+pub fn setting_kind(key: SettingKey) -> SettingValueKind {
     use SettingKey as K;
     use SettingValueKind as V;
 
     match key {
-        K::Services | K::Keys => V::Key,
+        K::Services | K::Keys | K::Panel => V::Key,
         K::StayAlive
         | K::AutoReconnect
         | K::SavePlaylistOnQuit
@@ -270,7 +298,16 @@ fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::ShowSysTrayIcon
         | K::SystemNotifications
         | K::MouseSupport => V::Boolean,
-        K::ImageProtocol | K::SubtitleMode | K::SubtitleLanguage | K::AudioLanguage => V::Text,
+        K::ImageProtocol
+        | K::SubtitleMode
+        | K::SubtitleLanguage
+        | K::AudioLanguage
+        | K::PanelSide => V::Text,
+        K::PanelCols
+        | K::PanelGutterTop
+        | K::PanelGutterBottom
+        | K::PanelGutterLeft
+        | K::PanelGutterRight => V::Stepper,
         K::HiddenLibraries
         | K::MyLanguages
         | K::FeedViewLibraries
@@ -286,6 +323,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         SettingValueKind::Key => setting_key_value(key, cfg),
         SettingValueKind::Boolean => setting_boolean_value(key, cfg),
         SettingValueKind::Text => setting_text_value(key, cfg, ui),
+        SettingValueKind::Stepper => setting_stepper_value(key, cfg),
         SettingValueKind::Collection => setting_collection_value(key, cfg),
     }
     .unwrap_or_default()
@@ -294,6 +332,13 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
 fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
         SettingKey::Services => Some("Emby, Audiobookshelf, Feeds".into()),
+        // Navigation-only entry: the destination row summarizes the saved
+        // layout (design D6, row 4.3).
+        SettingKey::Panel => Some(format!(
+            "{} · {} cols",
+            cfg.panel.side.as_str(),
+            cfg.panel.cols
+        )),
         SettingKey::Keys => {
             // Live keybind summary (design D7): the configured prefix and
             // the number of actions whose router binding deviates from the
@@ -355,6 +400,18 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
         } else {
             cfg.audio_lang.clone()
         }),
+        SettingKey::PanelSide => Some(cfg.panel.side.as_str().to_string()),
+        _ => None,
+    }
+}
+
+fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
+    match key {
+        SettingKey::PanelCols => Some(cfg.panel.cols.to_string()),
+        SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
+        SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
+        SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
+        SettingKey::PanelGutterRight => Some(cfg.panel.gutter_right.to_string()),
         _ => None,
     }
 }
@@ -423,6 +480,18 @@ pub fn bool_val(v: bool) -> String {
     if v { "on".into() } else { "off".into() }
 }
 
+/// The Panel destination's rows, in paint and cursor order (design D6, row
+/// 4.3): `Side` first, then the five stepper rows.
+pub const PANEL_SETTING_KEYS: [SettingKey; 6] = [
+    SettingKey::PanelSide,
+    SettingKey::PanelCols,
+    SettingKey::PanelGutterTop,
+    SettingKey::PanelGutterBottom,
+    SettingKey::PanelGutterLeft,
+    SettingKey::PanelGutterRight,
+];
+
+/// Main-page cursor ordinal to `SettingKey`.
 #[must_use]
 pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
     let mut idx = 0;
@@ -435,4 +504,58 @@ pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
         }
     }
     SettingKey::LogOut
+}
+
+/// Panel-destination cursor ordinal to `SettingKey` (design D6, row 4.3).
+#[must_use]
+pub fn panel_cursor_to_key(cursor: usize) -> SettingKey {
+    PANEL_SETTING_KEYS
+        .get(cursor)
+        .copied()
+        .unwrap_or(SettingKey::PanelSide)
+}
+
+/// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
+/// left/right, and each numeric row steps by `delta` (already scaled to
+/// ±1/±10 by the caller) clamped to its Rust range. `None` for any key that
+/// is not a Panel value row.
+#[must_use]
+pub fn changed_panel_config(
+    key: SettingKey,
+    panel: mbv_config::PanelConfig,
+    delta: i32,
+) -> Option<mbv_config::PanelConfig> {
+    use mbv_config::{PANEL_COLS_MIN, PanelSide};
+
+    let mut next = panel;
+    match key {
+        SettingKey::PanelSide => {
+            next.side = match panel.side {
+                PanelSide::Left => PanelSide::Right,
+                PanelSide::Right => PanelSide::Left,
+            };
+        }
+        // `unwrap_or(u16::MAX)` is the upper clamp: a step past `u16::MAX`
+        // fails `try_from` and saturates at the top of the range.
+        SettingKey::PanelCols => {
+            next.cols = u16::try_from(
+                i32::from(panel.cols)
+                    .saturating_add(delta)
+                    .max(i32::from(PANEL_COLS_MIN)),
+            )
+            .unwrap_or(u16::MAX);
+        }
+        SettingKey::PanelGutterTop => next.gutter_top = panel.gutter_top.saturating_add(delta),
+        SettingKey::PanelGutterBottom => {
+            next.gutter_bottom = panel.gutter_bottom.saturating_add(delta);
+        }
+        SettingKey::PanelGutterLeft => {
+            next.gutter_left = panel.gutter_left.saturating_add(delta);
+        }
+        SettingKey::PanelGutterRight => {
+            next.gutter_right = panel.gutter_right.saturating_add(delta);
+        }
+        _ => return None,
+    }
+    Some(next)
 }

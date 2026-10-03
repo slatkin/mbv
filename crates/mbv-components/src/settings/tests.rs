@@ -1,7 +1,7 @@
 use super::*;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use tuirealm::event::{KeyModifiers, MouseButton};
+use tuirealm::event::MouseButton;
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -44,12 +44,14 @@ fn painted_settings(destination: SettingsDestination) -> SettingsComponent {
                     value: String::new(),
                     section: true,
                     cursor: None,
+                    kind: SettingValueKind::Key,
                 },
                 SettingsRow {
                     label: "Stay alive".into(),
                     value: "off".into(),
                     section: false,
                     cursor: Some(0),
+                    kind: SettingValueKind::Text,
                 },
             ],
             Vec::new(),

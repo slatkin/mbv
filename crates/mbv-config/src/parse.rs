@@ -1,7 +1,7 @@
 use super::{
     AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
-    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, config_path,
-    default_daemon_server_tcp_listen, is_valid_audio_device,
+    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MIN,
+    PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen, is_valid_audio_device,
 };
 
 pub fn load_config() -> Result<Config, ConfigError> {
@@ -27,6 +27,7 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
     let mbvd = parse_mbvd_section(doc.get("mbvd"));
     let library = parse_library_section(doc.get("library"));
     let idle_feed = parse_idle_feed_section(doc.get("idle_feed"));
+    let panel = parse_panel_section(doc.get("panel"));
     let (server_url, emby_setup) = parse_server_section(doc.get("server"));
     let audiobookshelf_setup = parse_audiobookshelf_section(doc.get("audiobookshelf"));
     let library_routes = parse_library_routes_section(doc.get("library_routes"));
@@ -92,6 +93,7 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
         idle_feed_rotation_secs: idle_feed.rotation_secs,
         feeds,
         keybinds,
+        panel,
     })
 }
 
@@ -353,6 +355,67 @@ struct LibrarySettings {
     hidden_libraries: Vec<String>,
     music_levels: Vec<String>,
     feed_view_libraries: Vec<String>,
+}
+
+/// Parse `[panel]` into validated values (design D6): every key is optional,
+/// and an out-of-range or malformed value falls back to its own default with
+/// a logged warning while the other keys keep their values. No geometry
+/// validation happens here — that needs live monitor metrics (pinwin's job).
+fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
+    let defaults = PanelConfig::default();
+    let Some(panel) = panel else {
+        return defaults;
+    };
+    PanelConfig {
+        side: panel_side(panel, defaults.side),
+        cols: panel_cols(panel, defaults.cols),
+        gutter_top: panel_gutter(panel, "gutter_top", defaults.gutter_top),
+        gutter_bottom: panel_gutter(panel, "gutter_bottom", defaults.gutter_bottom),
+        gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),
+        gutter_right: panel_gutter(panel, "gutter_right", defaults.gutter_right),
+    }
+}
+
+fn panel_side(panel: &toml::Value, default: PanelSide) -> PanelSide {
+    match panel.get("side") {
+        None => default,
+        Some(value) => value
+            .as_str()
+            .and_then(PanelSide::parse)
+            .unwrap_or_else(|| panel_fallback("side", value, default)),
+    }
+}
+
+fn panel_cols(panel: &toml::Value, default: u16) -> u16 {
+    match panel.get("cols") {
+        None => default,
+        Some(value) => value
+            .as_integer()
+            .and_then(|v| u16::try_from(v).ok())
+            .filter(|v| *v >= PANEL_COLS_MIN)
+            .unwrap_or_else(|| panel_fallback("cols", value, default)),
+    }
+}
+
+fn panel_gutter(panel: &toml::Value, key: &str, default: i32) -> i32 {
+    match panel.get(key) {
+        None => default,
+        Some(value) => value
+            .as_integer()
+            .and_then(|v| i32::try_from(v).ok())
+            .unwrap_or_else(|| panel_fallback(key, value, default)),
+    }
+}
+
+fn panel_fallback<T>(key: &str, value: &toml::Value, default: T) -> T {
+    tracing::warn!(
+        name: "config.panel.invalid",
+        target: "config",
+        key = key,
+        value = %value,
+        "invalid [panel] value; using default"
+    );
+    default
 }
 
 fn parse_library_section(library: Option<&toml::Value>) -> LibrarySettings {

@@ -3,7 +3,11 @@
 Rust terminal media client for Emby, Audiobookshelf, Feeds. Embeds mpv; every
 local TUI is a Client of the per-user Owner process, the sole local Player-owner
 host. Stay-alive controls whether that process outlives its Clients; packaged
-`mbvd` remains a separate Player owner.
+`mbvd` remains a separate Player owner. `mbvd` is a headless server daemon (a
+systemd unit, no desktop session): it never has a tray, pinned panel or any
+Client functionality, and connecting to it still leaves a Local process on the
+user's machine that owns those (`CONTEXT.md`: *mbvd*, *Local process*). Never
+reason about desktop features through `mbvd`.
 
 ## Start here
 
@@ -70,6 +74,7 @@ host. Stay-alive controls whether that process outlives its Clients; packaged
 * `crates/mbv-images/` — image cache, loading/processing, terminal image protocol support.
 * `crates/mbv-ui-model/` — plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/` — typed messages crossing the interactive-component boundary.
+* `crates/mbv-pinwin/` — Rust wrapper over the pinwin layer-shell panel (Zig/GTK4, separate repo `slatkin/pinwin`) that docks mbv's pinned panel beside tiled windows. pinwin is a Zig package dependency pinned by URL+hash in `crates/mbv-pinwin/build.zig.zon`; `build.rs` runs `zig build` there. Update the pin with `zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#<sha>"` run in that directory; fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 
