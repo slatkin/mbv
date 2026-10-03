@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::os::unix::net::UnixListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -6,6 +7,7 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::ctrl::{ClientRegistry, CtrlClientId, CtrlSender, serialize_ctrl_event};
+use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
@@ -56,6 +58,14 @@ pub(super) enum DaemonEvent {
     /// Book-shaped counterpart to `AudiobookshelfProgress`, keyed by
     /// `library_item_id` only.
     AudiobookshelfBookProgress(mbv_player::AudiobookshelfBookProgressUpdate),
+    /// Carries one bulk Audiobookshelf progress refresh for a queue's episode
+    /// and book slots back to the daemon event loop. Both maps hold only the
+    /// entries for items the queue holds.
+    AudiobookshelfProgressRefreshed {
+        generation: mbv_core::service_runtime::SetupGeneration,
+        progress: HashMap<(String, String), AudiobookshelfProgress>,
+        book_progress: HashMap<String, AudiobookshelfBookProgress>,
+    },
     /// Carries freshly fetched Emby progress for a queue adopted from a
     /// persisted snapshot back to the daemon event loop.
     QueueEnriched(Vec<(QueueSlotId, EmbyItem)>),

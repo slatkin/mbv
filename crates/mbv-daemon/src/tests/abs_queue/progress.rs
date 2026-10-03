@@ -1,4 +1,6 @@
 use super::*;
+use mbv_audiobookshelf::AudiobookshelfProgress;
+use std::collections::HashMap;
 
 // Acknowledged periodic sync updates the matching Bound slot and is broadcast
 // as redacted progress to a client that negotiated abs-progress.
@@ -270,5 +272,63 @@ fn acknowledged_progress_advances_through_play_pause_seek_and_completion() {
     assert!(
         ep.is_finished,
         "slot must be marked finished after completion"
+    );
+}
+
+// The bulk owner-restore/adoption refresh must leave the slot that is playing
+// alone while taking the server's position and finished state for an inactive
+// slot of the same kind. That is what distinguishes it from the acknowledged
+// session-sync apply, which targets the active slot.
+#[test]
+fn progress_refresh_updates_inactive_slot_and_leaves_active_untouched() {
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep_1"), abs_qi("li_2", "ep_2")],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
+    let progress = HashMap::from([
+        (
+            ("li_1".to_string(), "ep_1".to_string()),
+            AudiobookshelfProgress {
+                library_item_id: "li_1".into(),
+                episode_id: "ep_1".into(),
+                current_time_seconds: 30.0,
+                is_finished: false,
+            },
+        ),
+        (
+            ("li_2".to_string(), "ep_2".to_string()),
+            AudiobookshelfProgress {
+                library_item_id: "li_2".into(),
+                episode_id: "ep_2".into(),
+                current_time_seconds: 60.0,
+                is_finished: true,
+            },
+        ),
+    ]);
+
+    let changed = apply_audiobookshelf_progress_refresh(
+        &progress,
+        &HashMap::new(),
+        SetupGeneration::new(1),
+        Some(SetupGeneration::new(1)),
+        &mut queue,
+    );
+
+    assert!(changed, "a matching inactive slot is a queue change");
+    let active = queue.slots()[0].item.as_audiobookshelf().unwrap();
+    assert_eq!(
+        active.position_ticks, 0,
+        "the active slot must keep its live position"
+    );
+    let inactive = queue.slots()[1].item.as_audiobookshelf().unwrap();
+    assert_eq!(
+        inactive.position_ticks,
+        mbv_emby_model::seconds_to_ticks(60.0),
+        "the inactive slot must take the server's position"
+    );
+    assert!(
+        inactive.is_finished,
+        "the inactive slot takes finished state"
     );
 }

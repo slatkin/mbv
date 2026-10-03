@@ -190,7 +190,7 @@ pub(super) fn handle_queue_load_idle(
         Some(cursor),
         ctx.audio_only,
         ctx.has_emby(),
-        ctx.has_audiobookshelf,
+        ctx.audiobookshelf.is_some(),
     );
     let admission_error = if was_nonempty && admitted.is_empty() {
         Some("Playback owner rejected the queue load".to_string())

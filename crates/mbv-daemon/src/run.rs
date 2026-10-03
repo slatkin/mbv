@@ -3,7 +3,7 @@ use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
     DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
     SharedQueueState, broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file,
-    project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
+    project_queue_state, setup_shutdown_signal, spawn_ctrl_client, start_queue_enrichment,
 };
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
@@ -549,6 +549,16 @@ pub fn run_with_options(
         _tray,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
+    // Owner restore runs the same progress refresh as cold adoption and a
+    // manual queue refresh: the restored queue carries no Service positions
+    // (design D3), so Emby and Audiobookshelf slots get the server's values
+    // before the loop starts serving clients.
+    start_queue_enrichment(
+        &owner.core.queue,
+        &client,
+        audiobookshelf_runtime.as_ref(),
+        &merged_tx,
+    );
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
     start_local_control_server(
         role,

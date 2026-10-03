@@ -159,6 +159,13 @@ impl DaemonLoop {
             DaemonEvent::AudiobookshelfBookProgress(update) => {
                 self.handle_audiobookshelf_book_progress(&update)
             }
+            DaemonEvent::AudiobookshelfProgressRefreshed {
+                generation,
+                progress,
+                book_progress,
+            } => {
+                self.handle_audiobookshelf_progress_refreshed(generation, &progress, &book_progress)
+            }
             DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
                 self.handle_ctrl_event(cmd, client_id, &reply_tx)
             }

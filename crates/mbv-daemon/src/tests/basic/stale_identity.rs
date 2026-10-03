@@ -60,7 +60,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &dummy_merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Local,

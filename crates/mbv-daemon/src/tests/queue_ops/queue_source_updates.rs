@@ -176,7 +176,7 @@ impl SourceUpdateFixture {
                 owner: &mut self.owner,
                 shared_queue: &self.shared_queue,
                 ctrl_clients: &self.registry,
-                has_audiobookshelf: false,
+                audiobookshelf: None,
                 merged_tx: &self.merged_tx,
                 owner_settings: crate::owner_settings::fixed_reader(true),
                 role: crate::DaemonRole::Local,

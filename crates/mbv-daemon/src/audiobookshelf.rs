@@ -2,8 +2,10 @@ use super::core::{
     DaemonEvent, broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress,
 };
 use super::{AudiobookshelfOwnerContext, ClientRegistry};
+use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
 use mbv_player::Player;
 use mbv_queue::PlaybackQueue;
+use std::collections::HashMap;
 use std::sync::mpsc;
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
@@ -61,6 +63,120 @@ pub(super) fn install_daemon_audiobookshelf_context(
             }
         }
     });
+}
+
+/// Fetch current Audiobookshelf progress for the queue's episode and book
+/// slots off the daemon event-loop thread, filter it to exactly those items,
+/// and send one `DaemonEvent::AudiobookshelfProgressRefreshed`. A failed fetch
+/// is logged and ignored, the same as an Emby enrichment failure.
+pub(crate) fn spawn_audiobookshelf_progress_refresh(
+    runtime: &AudiobookshelfOwnerContext,
+    episode_keys: Vec<(String, String)>,
+    book_ids: Vec<String>,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+) {
+    let setup = runtime.setup.clone();
+    let generation = runtime.generation;
+    let tx = merged_tx.clone();
+    std::thread::spawn(mbv_core::applog::carry_context(move || {
+        let client = match mbv_audiobookshelf::AudiobookshelfClient::new(&setup.server_url) {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", error = %error, "Audiobookshelf progress refresh could not build a client");
+                return;
+            }
+        };
+        let Some(key) = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)
+        else {
+            tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", "Audiobookshelf progress refresh has no Service secret");
+            return;
+        };
+        // ponytail: `progress_bounded` and `book_progress_bounded` are two
+        // identical `GET /api/me/progress` requests; merge them into one call
+        // if the request count ever matters.
+        let result = (|| {
+            let progress = client.progress_bounded(
+                &key,
+                mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )?;
+            let book_progress = client.book_progress_bounded(
+                &key,
+                mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )?;
+            Ok::<_, mbv_audiobookshelf::AudiobookshelfError>((progress, book_progress))
+        })();
+        let (progress, book_progress) = match result {
+            Ok(maps) => maps,
+            Err(error) => {
+                tracing::warn!(name: "daemon.queue_enrichment.failed", target: "queue", error = %error, "Audiobookshelf progress refresh failed");
+                return;
+            }
+        };
+        let progress = progress
+            .into_iter()
+            .filter(|(key, _)| episode_keys.contains(key))
+            .collect();
+        let book_progress = book_progress
+            .into_iter()
+            .filter(|(item_id, _)| book_ids.contains(item_id))
+            .collect();
+        let _ = tx.send(DaemonEvent::AudiobookshelfProgressRefreshed {
+            generation,
+            progress,
+            book_progress,
+        });
+    }));
+}
+
+/// Apply one bulk Audiobookshelf progress refresh to the canonical Bound
+/// queue. Unlike [`apply_audiobookshelf_progress`] this targets every matching
+/// **non-active** slot, never overwrites the playing row, and sends no
+/// per-item progress broadcast — the caller broadcasts the whole owner queue
+/// once. Drops a stale setup generation without any side effect.
+pub(crate) fn apply_audiobookshelf_progress_refresh(
+    progress: &HashMap<(String, String), AudiobookshelfProgress>,
+    book_progress: &HashMap<String, AudiobookshelfBookProgress>,
+    update_generation: mbv_core::service_runtime::SetupGeneration,
+    current_generation: Option<mbv_core::service_runtime::SetupGeneration>,
+    queue: &mut PlaybackQueue,
+) -> bool {
+    if current_generation != Some(update_generation) {
+        return false;
+    }
+    let active_id = queue.active_slot_id();
+    let updates: Vec<(mbv_queue::QueueSlotId, i64, bool)> = queue
+        .slots()
+        .iter()
+        .filter(|slot| Some(slot.slot_id) != active_id)
+        .filter_map(|slot| {
+            if let Some(episode) = slot.item.as_audiobookshelf() {
+                progress
+                    .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
+                    .map(|fetched| {
+                        (
+                            slot.slot_id,
+                            mbv_emby_model::seconds_to_ticks(fetched.current_time_seconds),
+                            fetched.is_finished,
+                        )
+                    })
+            } else {
+                slot.item.as_audiobookshelf_book().and_then(|book| {
+                    book_progress.get(&book.library_item_id).map(|fetched| {
+                        (
+                            slot.slot_id,
+                            mbv_emby_model::seconds_to_ticks(fetched.current_time_seconds),
+                            fetched.is_finished,
+                        )
+                    })
+                })
+            }
+        })
+        .collect();
+    let before = queue.revision();
+    for (slot_id, position_ticks, is_finished) in updates {
+        let _ = queue.apply_progress(slot_id, position_ticks, is_finished);
+    }
+    queue.revision() != before
 }
 
 /// Apply an acknowledged Audiobookshelf progress update to the canonical Bound

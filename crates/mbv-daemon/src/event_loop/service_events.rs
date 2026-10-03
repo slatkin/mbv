@@ -3,14 +3,16 @@
 
 use super::super::{
     DaemonLoop, apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,
-    apply_queue_enriched, handle_ws,
+    apply_audiobookshelf_progress_refresh, apply_queue_enriched, handle_ws,
 };
 use super::EventOutcome;
+use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
 use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
 use mbv_queue::QueueSlotId;
 use mbv_ws::WsEvent;
+use std::collections::HashMap;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ws`: apply the service socket event when it belongs to
@@ -100,6 +102,29 @@ impl DaemonLoop {
                 .map(|runtime| runtime.generation),
             &mut self.owner.core.queue,
             &self.ctrl_clients,
+        ) {
+            self.broadcast_owner_queue_state();
+        }
+        EventOutcome::CONTINUE
+    }
+
+    /// `DaemonEvent::AudiobookshelfProgressRefreshed`: apply one bulk refresh to
+    /// the canonical queue's non-active Audiobookshelf slots, then broadcast the
+    /// owner queue once when anything changed.
+    pub(super) fn handle_audiobookshelf_progress_refreshed(
+        &mut self,
+        generation: SetupGeneration,
+        progress: &HashMap<(String, String), AudiobookshelfProgress>,
+        book_progress: &HashMap<String, AudiobookshelfBookProgress>,
+    ) -> EventOutcome {
+        if apply_audiobookshelf_progress_refresh(
+            progress,
+            book_progress,
+            generation,
+            self.audiobookshelf_runtime
+                .as_ref()
+                .map(|runtime| runtime.generation),
+            &mut self.owner.core.queue,
         ) {
             self.broadcast_owner_queue_state();
         }

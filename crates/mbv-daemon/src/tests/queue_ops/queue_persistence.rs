@@ -25,7 +25,7 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
             owner: &mut owner,
             shared_queue: &shared_queue_state(),
             ctrl_clients: &registry,
-            has_audiobookshelf: false,
+            audiobookshelf: None,
             merged_tx: &merged_tx,
             owner_settings: crate::owner_settings::fixed_reader(false),
             role: crate::DaemonRole::Packaged,

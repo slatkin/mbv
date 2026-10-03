@@ -93,7 +93,7 @@ impl DaemonLoop {
                 owner: &mut self.owner,
                 shared_queue: &self.shared_queue,
                 ctrl_clients: &self.ctrl_clients,
-                has_audiobookshelf: self.audiobookshelf_runtime.is_some(),
+                audiobookshelf: self.audiobookshelf_runtime.as_ref(),
                 merged_tx: &self.merged_tx,
                 owner_settings: Arc::clone(&self.owner_settings),
                 role: self.role,

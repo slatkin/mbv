@@ -58,6 +58,7 @@ pub(crate) use queue_load::{
     cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
     complete_pending_idle_queue_load, expire_pending_idle_queue_load,
 };
+pub(crate) use queue_setup::start_queue_enrichment;
 
 /// Mints the next queue lineage into `SharedQueueState.lineage`, the single
 /// source of truth for queue lineage (needed by other threads that seed
@@ -84,7 +85,7 @@ pub(super) struct CtrlContext<'a> {
     pub(super) owner: &'a mut DaemonPlayerOwner,
     pub(super) shared_queue: &'a SharedQueueState,
     pub(super) ctrl_clients: &'a ClientRegistry,
-    pub(super) has_audiobookshelf: bool,
+    pub(super) audiobookshelf: Option<&'a crate::AudiobookshelfOwnerContext>,
     pub(super) merged_tx: &'a mpsc::Sender<DaemonEvent>,
     pub(super) owner_settings: super::OwnerSettingsReader,
     pub(super) role: crate::DaemonRole,
