@@ -5,6 +5,7 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
+use ratatui_image::picker::{Picker, ProtocolType};
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::tests::make_app_stub;
@@ -240,6 +241,33 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
             shown_card
         );
     }
+}
+
+/// Design D1 / row 1.2: the header-visibility classification runs on every
+/// sync pass, ungated by slot visibility. Hiding the visual slot while the
+/// artwork carries the title flips the header visible on the next sync pass.
+#[test]
+fn hiding_the_visual_slot_flips_the_header_visible_on_the_next_sync_pass() {
+    let mut app = active_app(PanelMode::Both);
+    app.images.configure_protocol(None, true);
+    let mut picker = Picker::halfblocks();
+    picker.set_protocol_type(ProtocolType::Kitty);
+    app.images
+        .set_image_pickers_for_test(picker, Picker::halfblocks());
+    let mut harness = TickHarness::new(app);
+
+    harness.model_mut().sync_queue();
+    assert!(
+        !harness.model().app.queue_card_projection.header_visible,
+        "a capable setup keeps the header hidden while the artwork carries the title"
+    );
+
+    harness.model_mut().app.visual_slot_hidden = true;
+    harness.model_mut().sync_queue();
+    assert!(
+        harness.model().app.queue_card_projection.header_visible,
+        "hiding the visual slot makes the header carry the title"
+    );
 }
 
 #[test]

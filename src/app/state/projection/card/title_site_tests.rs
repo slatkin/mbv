@@ -3,6 +3,7 @@
 
 use super::{card_cache_key, card_image_types};
 use crate::app::App;
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;
 use ratatui_image::picker::{Picker, ProtocolType};
@@ -58,9 +59,14 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
 }
 
 /// An active-playing queue app with the card protocol and one base bitmap, so
-/// the title-site decision can reach the overlay-variant build.
-fn overlay_app() -> App {
+/// the title-site decision can reach the overlay-variant build. The single
+/// card's title is `title`, letting a test force the overlay font's coverage
+/// gate.
+fn overlay_app_titled(title: &str) -> App {
     let mut app = make_queue_app(1);
+    let mut item = mbv_emby_model::test_support::make_item(title, "Movie");
+    item.id = "overlay-item".into();
+    app.local_view.adopt_items(vec![item], 0);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
@@ -81,6 +87,45 @@ fn overlay_app() -> App {
     );
     app.images.insert_image(key, cached_colour_image(4, 2));
     app
+}
+
+fn overlay_app() -> App {
+    overlay_app_titled("Queue Item 0")
+}
+
+/// The unreachable fallback states (design D1) that must flip the header
+/// visible. Images disabled and a disabled image protocol are one bit in the
+/// image cache, so one case covers both.
+#[derive(Clone, Copy, Debug)]
+enum Fallback {
+    Visualizer,
+    ImagesOrProtocolDisabled,
+    Halfblock,
+    SlotHidden,
+}
+
+fn fallback_app(fallback: Fallback) -> App {
+    let mut app = overlay_app();
+    match fallback {
+        Fallback::Visualizer => app.visualizer_enabled = true,
+        Fallback::ImagesOrProtocolDisabled => {
+            app.images.configure_protocol(Some("kitty".into()), false);
+        }
+        Fallback::Halfblock => app
+            .images
+            .configure_protocol(Some("halfblocks".into()), true),
+        Fallback::SlotHidden => app.visual_slot_hidden = true,
+    }
+    app
+}
+
+/// A character the embedded overlay font leaves unmapped, so `covers` fails.
+fn uncovered_title() -> String {
+    ['\u{1F600}', '\u{0}', '\u{10FFFF}']
+        .into_iter()
+        .find(|candidate| !mbv_images::title_overlay::covers(&candidate.to_string()))
+        .expect("the embedded overlay font leaves at least one candidate uncovered")
+        .to_string()
 }
 
 /// User-reported regression: every distinct fitted width during a queue-column
@@ -125,4 +170,47 @@ fn column_resize_drag_builds_no_overlay_variant_until_it_ends() {
         "the ended drag projects the overlay variant: {:?}",
         app.queue_card_projection.cache_key
     );
+}
+
+/// Design D1: the header-visibility flag reads the decomposed class, not the
+/// painted overlay. A capable setup whose overlay has composed but not yet
+/// painted keeps `header_visible == false` even though the painted-reality
+/// `title_site` still reads `Header` (the flash this change removes).
+#[test]
+fn unpainted_overlay_on_a_capable_setup_keeps_the_header_hidden() {
+    let mut app = overlay_app();
+    app.refresh_queue_card_image(false);
+    assert!(
+        !app.queue_card_projection.header_visible,
+        "a pending overlay keeps the header hidden"
+    );
+    assert_eq!(
+        app.queue_card_projection.title_site,
+        mbv_ui_model::playback::NowPlayingTitleSite::Header,
+        "the painted-reality site is independent of the classification"
+    );
+}
+
+/// Design D1: every unreachable title-site fallback flips the header visible.
+#[rstest::rstest]
+#[case::visualizer(Fallback::Visualizer)]
+#[case::images_or_protocol_disabled(Fallback::ImagesOrProtocolDisabled)]
+#[case::halfblock(Fallback::Halfblock)]
+#[case::slot_hidden(Fallback::SlotHidden)]
+fn unreachable_fallback_flips_the_header_visible(#[case] fallback: Fallback) {
+    let mut app = fallback_app(fallback);
+    app.refresh_queue_card_image(false);
+    assert!(
+        app.queue_card_projection.header_visible,
+        "{fallback:?} makes the overlay unreachable, so the header carries the title"
+    );
+}
+
+/// Design D1: title glyphs the overlay font cannot cover make the overlay
+/// unreachable, so the header carries the title.
+#[test]
+fn uncovered_title_glyphs_flip_the_header_visible() {
+    let mut app = overlay_app_titled(&uncovered_title());
+    app.refresh_queue_card_image(false);
+    assert!(app.queue_card_projection.header_visible);
 }

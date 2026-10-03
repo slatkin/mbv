@@ -71,13 +71,13 @@ impl Model {
         }
         // The visual slot's image projection (task 3.4, D9): the queue
         // projection — not the painter — issues every fetch for the now-playing
-        // item and projects the slot's image state. The slot only paints while
-        // playback is active (idle collapse), so the projection follows the
-        // same gate the card's render used.
-        if self.app.visual_slot_shown() {
-            let column_resizing = self.queue_column_resizing();
-            self.app.refresh_queue_card_image(column_resizing);
-        }
+        // item and projects the slot's image state. The fetch and
+        // overlay-compose work stays gated on the slot inside the refresh (the
+        // slot only paints while playback is active; idle collapse), but the
+        // refresh runs on every sync pass so the header-visibility
+        // classification follows live App state ungated (design D1, row 1.2).
+        let column_resizing = self.queue_column_resizing();
+        self.app.refresh_queue_card_image(column_resizing);
         self.push_queue_projection(update);
     }
 

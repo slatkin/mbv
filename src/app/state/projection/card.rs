@@ -66,6 +66,33 @@ impl TitleLogGate {
     }
 }
 
+/// One title-site skip decision: the log reason plus design D1's
+/// header-visibility class. It is decomposed from the raw inputs, not from the
+/// painted overlay key — painted reality is `title_site`'s job.
+struct TitleSiteSkip {
+    reason: &'static str,
+    /// The overlay is unreachable, so the header carries the title.
+    header_visible: bool,
+}
+
+/// A pending skip: the overlay is expected, so the header stays hidden while
+/// art loading, composition, or a resize resolves toward the artwork site.
+const fn pending(reason: &'static str) -> TitleSiteSkip {
+    TitleSiteSkip {
+        reason,
+        header_visible: false,
+    }
+}
+
+/// An unreachable skip: the overlay can never carry the title this
+/// session/track, so the header must.
+const fn unreachable(reason: &'static str) -> TitleSiteSkip {
+    TitleSiteSkip {
+        reason,
+        header_visible: true,
+    }
+}
+
 fn title_site_skip_reason(
     app: &App,
     projection: &QueueCardProjection,
@@ -77,31 +104,41 @@ fn title_site_skip_reason(
     width: u16,
     base_dimensions: Option<(u32, u32)>,
     column_resizing: bool,
-) -> Option<&'static str> {
+) -> Option<TitleSiteSkip> {
     if !playback.active {
-        Some("NotActive")
+        // Idle is not classified here: the shell ORs idle in (the idle header
+        // is governed by the idle rule, not the title rule).
+        Some(pending("NotActive"))
     } else if projection.visualizer {
-        Some("Visualizer")
+        Some(unreachable("Visualizer"))
     } else if !projection.images_enabled {
-        Some("ImagesOff")
+        Some(unreachable("ImagesOff"))
+    } else if app.images.is_halfblock_configured() {
+        Some(unreachable("HalfblockConfigured"))
+    } else if !app.visual_slot_shown() {
+        // Decomposed from the conflated `NoSlot`: the slot being hidden is
+        // unreachable, a missing cache key merely pending.
+        Some(unreachable("SlotHidden"))
+    } else if !app.images.protocol_enabled() {
+        // Decomposed from the conflated `NoBaseProtocolSize`: no protocol is
+        // unreachable, an unmeasured card size merely pending.
+        Some(unreachable("ProtocolDisabled"))
     } else if column_resizing {
         // User-reported regression: a queue-column resize drag builds a new
         // Lanczos3 overlay variant for every fitted width on the tick thread.
         // While the drag is active the card paints plain base art; the drag's
         // final width composes the overlay once the `DragEnd` clears the gate.
-        Some("ColumnResizing")
-    } else if app.images.is_halfblock_configured() {
-        Some("HalfblockConfigured")
-    } else if !app.visual_slot_shown() || projection.cache_key.is_none() {
-        Some("NoSlot")
+        Some(pending("ColumnResizing"))
+    } else if projection.cache_key.is_none() {
+        Some(pending("NoSlot"))
     } else if slotless_active && !slotless_title_present {
-        Some("NoTitle")
+        Some(pending("NoTitle"))
     } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
-        Some("NoActiveItem")
+        Some(pending("NoActiveItem"))
     } else if base_dimensions.is_none() {
-        Some("NoBaseArt")
-    } else if height == 0 || width == 0 || !app.images.protocol_enabled() {
-        Some("NoBaseProtocolSize")
+        Some(pending("NoBaseArt"))
+    } else if height == 0 || width == 0 {
+        Some(pending("NoBaseProtocolSize"))
     } else {
         None
     }
@@ -468,25 +505,32 @@ impl App {
     /// The queue projection issues every fetch for the now-playing item and
     /// projects the slot the painter consumes. Active-first, then viewed selection.
     pub(in crate::app) fn refresh_queue_card_image(&mut self, column_resizing: bool) {
+        let playback = self.displayed_playback_state();
+        // The header-visibility classification (design D1) runs on live App
+        // state on every sync pass, ungated by slot visibility: with the slot
+        // hidden the header carries the title, so the projection's
+        // classification is all that changes. The slot's fetch and
+        // overlay-compose work below stays gated on the slot exactly as
+        // before. Idle is not classified here — the shell ORs it in.
+        if !self.visual_slot_shown() {
+            self.queue_card_projection.header_visible = playback.active;
+            return;
+        }
         let mut projection = QueueCardProjection {
             cache_key: None,
             plain_cache_key: None,
             images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
             title_site: mbv_ui_model::playback::NowPlayingTitleSite::Header,
+            header_visible: false,
         };
         if projection.visualizer || !projection.images_enabled {
-            self.queue_title_site(
-                &mut projection,
-                self.displayed_playback_state(),
-                column_resizing,
-            );
+            self.queue_title_site(&mut projection, playback, column_resizing);
             self.queue_card_projection = projection;
             return;
         }
 
         // Presentation follows a selected-but-unconfirmed slot, switching artwork with its highlight.
-        let playback = self.displayed_playback_state();
         let slotless_active = playback.active && playback.active_idx.is_none();
         let Some((cursor, item)) = self.queue_card_emby_source(playback) else {
             if slotless_active {
@@ -564,9 +608,10 @@ impl App {
             base_dimensions,
             column_resizing,
         );
-        if let Some(reason) = reason {
+        if let Some(skip) = reason {
+            projection.header_visible = skip.header_visible;
             self.title_log_gate
-                .log_decision(&identity, &item_kind, reason, base_dimensions);
+                .log_decision(&identity, &item_kind, skip.reason, base_dimensions);
             return;
         }
         let Some(parts) = parts else {
@@ -627,6 +672,9 @@ impl App {
                 && text.context.is_none_or(mbv_images::title_overlay::covers)
         };
         if !title_covers {
+            // The overlay font cannot render the title glyphs: the overlay is
+            // unreachable, so the header carries the title (design D1).
+            projection.header_visible = true;
             self.title_log_gate
                 .log_decision(&key, item_kind, "UncoveredGlyph", base_dimensions);
             return;

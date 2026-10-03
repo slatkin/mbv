@@ -46,4 +46,12 @@ pub struct QueueCardProjection {
     pub images_enabled: bool,
     pub visualizer: bool,
     pub title_site: NowPlayingTitleSite,
+    /// Whether the Queue playback panel's header must be painted because the
+    /// artwork title overlay is unreachable (design D1): the header carries
+    /// the now-playing title whenever the overlay cannot. `false` while the
+    /// overlay is merely pending — including a capable setup whose overlay has
+    /// composed but not yet painted — and false while idle, which the shell
+    /// ORs in (the idle header is governed by the idle rule). Derived from the
+    /// decomposed title-site inputs, never from the painted overlay key.
+    pub header_visible: bool,
 }
