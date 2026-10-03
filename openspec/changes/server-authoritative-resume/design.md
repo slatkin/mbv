@@ -63,7 +63,7 @@ start position is about to be decided, collects the Emby non-audio item ids,
 and calls `get_items_by_ids` once. It returns copies of those items with
 `playback_position_ticks` (and `played`) set from the response. If every
 attempt fails, those fields are set to 0/unplayed. All existing readers then
-call `resume_start_pos` on the refreshed copies unchanged, so the 6% rule and
+call `resume_start_pos` on the refreshed copies unchanged, so the 1% rule and
 every downstream path stay as they are.
 
 The helper is called on the Player thread in four places:

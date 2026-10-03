@@ -15,7 +15,7 @@ media. Only feeds, which have no server, keep progress locally.
 - **Emby: play reads the start position from Emby.** Whenever the Player
   decides where an Emby video entry starts (queue load, append, slot jump,
   Next/Previous, Next-Up), it fetches the item from Emby and applies the
-  existing 6% resume rule to the server's position. A failed fetch is retried
+  existing 1% resume rule to the server's position. A failed fetch is retried
   automatically up to 3 times (500ms, then 2s). After that, play starts from
   0:00 and never fails because of it. Audio items are not fetched, since they
   never resume.

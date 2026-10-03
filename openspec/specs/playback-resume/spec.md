@@ -4,26 +4,26 @@
 Defines when saved playback progress is substantial enough for mbv to resume
 an Emby item or feed entry instead of restarting it from the beginning.
 ## Requirements
-### Requirement: Resume requires six percent progress
+### Requirement: Resume requires one percent progress
 
 For any media with a known runtime, mbv SHALL treat a positive saved playback
-position as resumable only when it is at least 6% of runtime. Exactly 6% SHALL
+position as resumable only when it is at least 1% of runtime. Exactly 1% SHALL
 qualify. A positive saved position with unknown runtime SHALL remain resumable.
 Zero and negative saved positions SHALL NOT qualify.
 
-#### Scenario: Position is below six percent
+#### Scenario: Position is below one percent
 
-- **WHEN** an item with known runtime has positive saved progress below 6%
+- **WHEN** an item with known runtime has positive saved progress below 1%
 - **THEN** mbv SHALL start the item from its beginning rather than resuming
 
-#### Scenario: Position is exactly six percent
+#### Scenario: Position is exactly one percent
 
-- **WHEN** an item with known runtime has saved progress equal to 6%
+- **WHEN** an item with known runtime has saved progress equal to 1%
 - **THEN** mbv SHALL resume from the saved position
 
-#### Scenario: Position is above six percent
+#### Scenario: Position is above one percent
 
-- **WHEN** an item with known runtime has saved progress above 6%
+- **WHEN** an item with known runtime has saved progress above 1%
 - **THEN** mbv SHALL resume from the saved position
 
 #### Scenario: Runtime is unknown
@@ -39,7 +39,7 @@ Zero and negative saved positions SHALL NOT qualify.
 ### Requirement: Emby and feed playback share one resume rule
 
 mbv SHALL apply the same resume eligibility rule to Emby video items and feed
-entries. The item kind SHALL NOT change the 6% boundary or unknown-runtime
+entries. The item kind SHALL NOT change the 1% boundary or unknown-runtime
 behavior.
 
 #### Scenario: Equivalent Emby and feed progress
