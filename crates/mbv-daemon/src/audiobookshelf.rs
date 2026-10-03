@@ -152,12 +152,16 @@ pub(crate) fn apply_audiobookshelf_progress_refresh(
             let (seconds, finished) = if let Some(episode) = slot.item.as_audiobookshelf() {
                 progress
                     .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
-                    .map(|fetched| (fetched.current_time_seconds, fetched.is_finished))?
+                    .map_or((0.0, false), |fetched| {
+                        (fetched.current_time_seconds, fetched.is_finished)
+                    })
             } else {
                 let book = slot.item.as_audiobookshelf_book()?;
                 book_progress
                     .get(&book.library_item_id)
-                    .map(|fetched| (fetched.current_time_seconds, fetched.is_finished))?
+                    .map_or((0.0, false), |fetched| {
+                        (fetched.current_time_seconds, fetched.is_finished)
+                    })
             };
             Some((
                 slot.slot_id,

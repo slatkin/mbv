@@ -332,3 +332,30 @@ fn progress_refresh_updates_inactive_slot_and_leaves_active_untouched() {
         "the inactive slot takes finished state"
     );
 }
+
+// An inactive slot the server reports no progress for ends with no position,
+// even if an earlier refresh gave it one (progress reset on another device).
+#[test]
+fn progress_refresh_clears_inactive_slot_the_server_has_no_progress_for() {
+    let mut stale = abs_qi("li_2", "ep_2");
+    if let QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) = &mut stale {
+        episode.position_ticks = mbv_emby_model::seconds_to_ticks(60.0);
+    }
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep_1"), stale],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
+
+    let changed = apply_audiobookshelf_progress_refresh(
+        &HashMap::new(),
+        &HashMap::new(),
+        SetupGeneration::new(1),
+        Some(SetupGeneration::new(1)),
+        &mut queue,
+    );
+
+    assert!(changed);
+    let inactive = queue.slots()[1].item.as_audiobookshelf().unwrap();
+    assert_eq!(inactive.position_ticks, 0);
+}
