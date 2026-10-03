@@ -374,7 +374,11 @@ fn apply_terminal_observer(
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
             model.app.force_clear = true;
-            model.app.images.clear_images_and_loading();
+            // A resize invalidates only the encoded protocols
+            // (panel-expand-toggle): the decoded sources and the fetch dedup
+            // survive, so the next paints re-encode from memory instead of
+            // refetching over HTTP.
+            model.app.images.invalidate_protocols();
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;
