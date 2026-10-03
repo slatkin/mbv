@@ -52,6 +52,43 @@ pub(in crate::app) fn retain_grouped_music_level_items(
 }
 
 impl App {
+    /// The default top-level browse fields for library `idx`: server item
+    /// type filter, unplayed-only flag, sort field and order. One source for
+    /// both the first root-level load and the global UI-state reset (#745),
+    /// so a reset cannot drift from a fresh library's defaults.
+    pub(in crate::app) fn default_library_level_fields(
+        &self,
+        idx: usize,
+    ) -> (Option<String>, bool, String, String) {
+        let is_feed_view = self
+            .config
+            .lock()
+            .unwrap()
+            .feed_view_libraries
+            .contains(&self.libs[idx].library.name.to_lowercase());
+        match self.libs[idx].library.collection_type.as_str() {
+            "movies" => (
+                Some("Movie".to_string()),
+                false,
+                "SortName".to_string(),
+                "Ascending".to_string(),
+            ),
+            "tvshows" => (
+                Some("Series".to_string()),
+                false,
+                "SortName".to_string(),
+                "Ascending".to_string(),
+            ),
+            _ if is_feed_view => (
+                Some("Video".to_string()),
+                true,
+                "DateCreated".to_string(),
+                "Ascending".to_string(),
+            ),
+            _ => (None, false, "SortName".to_string(), "Ascending".to_string()),
+        }
+    }
+
     pub(in crate::app) fn ensure_lib_loaded_for(&mut self, idx: usize) {
         if idx >= self.libs.len() {
             return;
@@ -96,19 +133,8 @@ impl App {
             }
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
-            let is_feed_view = {
-                let c = self.config.lock().unwrap();
-                c.feed_view_libraries.contains(&lib_name.to_lowercase())
-            };
             let (item_types, unplayed_only, sort_by, sort_order) =
-                match self.libs[idx].library.collection_type.as_str() {
-                    "movies" => (Some("Movie".to_string()), false, "SortName", "Ascending"),
-                    "tvshows" => (Some("Series".to_string()), false, "SortName", "Ascending"),
-                    _ if is_feed_view => {
-                        (Some("Video".to_string()), true, "DateCreated", "Ascending")
-                    }
-                    _ => (None, false, "SortName", "Ascending"),
-                };
+                self.default_library_level_fields(idx);
             self.libs[idx].nav_stack.push(BrowseLevel {
                 parent_id: lib_id.clone(),
                 title: lib_name.clone(),
@@ -117,8 +143,8 @@ impl App {
                 resting: BrowseResting::new(0, 0),
                 item_types: item_types.clone(),
                 unplayed_only,
-                sort_by: sort_by.into(),
-                sort_order: sort_order.into(),
+                sort_by: sort_by.clone(),
+                sort_order: sort_order.clone(),
                 loading: true,
 
                 all_items: None,
@@ -132,8 +158,8 @@ impl App {
                 lib_name,
                 item_types,
                 unplayed_only,
-                sort_by.into(),
-                sort_order.into(),
+                sort_by,
+                sort_order,
             );
         }
     }

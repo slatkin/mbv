@@ -111,7 +111,7 @@ impl super::Model {
         self.app.config.lock().unwrap().feeds.len()
     }
 
-    fn dismiss_feeds_manage(&mut self) {
+    pub(in crate::app) fn dismiss_feeds_manage(&mut self) {
         let id = ComponentId::Popup(PopupId::FeedManage);
         if self.application.mounted(&id) {
             let _ = self.application.umount(&id);

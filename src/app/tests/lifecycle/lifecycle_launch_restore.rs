@@ -269,3 +269,29 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
     assert!(!serialized.contains("unselected-feed-item"));
     assert!(!serialized.contains("unselected-feed-selector"));
 }
+
+/// #745: a UI-state reset abandons pending launch restoration before it
+/// selects Home, so a catalog arriving after the reset cannot re-settle the
+/// snapshot the reset discarded.
+#[test]
+fn reset_ui_state_abandons_pending_launch_restore() {
+    let mut app = pending_emby_launch_at("lib-movies", mbv_config::LaunchPanelFocus::Library);
+    app.tab = TabSelection::Home;
+    let mut model = Model::new(app);
+
+    model.reset_ui_state();
+
+    assert_eq!(model.app.tab, TabSelection::Home);
+    assert_eq!(
+        model.app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+
+    // The late catalog arrival must not restore the discarded location.
+    rebuild_tabs(&mut model.app);
+    assert_eq!(model.app.tab, TabSelection::Home);
+    assert_eq!(
+        model.app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+}

@@ -57,6 +57,7 @@ mod root;
 mod run;
 mod settings;
 mod tv_workspace;
+mod ui_state_reset;
 
 /// How often the `TuiRealm` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
