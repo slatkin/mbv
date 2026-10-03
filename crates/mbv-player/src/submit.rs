@@ -323,7 +323,6 @@ fn run_player_thread(mut start: PlayerThreadStart) {
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("mpv startup failed: {error}")),
                 });
                 return;
@@ -442,7 +441,6 @@ fn load_queue_sources(
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("failed to prepare media: {error}")),
                 });
                 return None;
@@ -470,7 +468,6 @@ fn load_queue_sources(
                     position_ticks: 0,
                     played: false,
                     consume: false,
-                    progress_report_accepted: false,
                     error: Some(format!("failed to load media: {error}")),
                 });
                 return None;

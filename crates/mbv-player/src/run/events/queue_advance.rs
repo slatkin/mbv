@@ -193,7 +193,7 @@ impl PlaybackRun {
         self.tracks_initialized = false;
         self.set_next_item_status(&next_item);
 
-        let stop_report_accepted = self.reporter.report_stopped(end.completed_pos);
+        let _ = self.reporter.report_stopped(end.completed_pos);
         self.mark_played_or_retry(end.played_out, end.completed_item);
 
         let _ = mpv.set_property("start", "0");
@@ -217,7 +217,6 @@ impl PlaybackRun {
                 position_ticks: end.completed_pos,
                 played: end.played_out,
                 consume: end.consume_track,
-                progress_report_accepted: stop_report_accepted,
             });
         }
         if let Some(next_slot_id) = self.active_slot_id() {
@@ -261,7 +260,6 @@ impl PlaybackRun {
             position_ticks: 0,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: Some("failed to start media".into()),
         });
         Some(false)
@@ -314,16 +312,14 @@ impl PlaybackRun {
         tracing::warn!(name: "player.queue.completed_slot_missing", target: "player", index = ?completed_idx, queue_length = self.queue_len(), "completed item is out of bounds; stopping");
         progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
-        self.mark_reported(StopReport::mark_sent(
-            self.reporter.report_stopped(self.last_valid_pos),
-        ));
+        let _ = self.reporter.report_stopped(self.last_valid_pos);
+        self.mark_reported(StopReport::Sent);
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: completed_slot_id,
             run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: false,
             consume: false,
-            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
         false
@@ -369,9 +365,8 @@ impl PlaybackRun {
     fn stop_at_queue_end(&mut self, stop: &QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
         progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
-        self.mark_reported(StopReport::mark_sent(
-            self.reporter.report_stopped(stop.completed_pos),
-        ));
+        let _ = self.reporter.report_stopped(stop.completed_pos);
+        self.mark_reported(StopReport::Sent);
         self.close_prepared_source_at(provider_lifecycle_close_pos(
             stop.completed_item,
             stop.natural,
@@ -385,7 +380,6 @@ impl PlaybackRun {
             position_ticks: stop.completed_pos,
             played: stop.played_out,
             consume: stop.consume_track,
-            progress_report_accepted: self.stop_report_accepted(),
             error: None,
         });
         false // signals run() to return
@@ -405,7 +399,6 @@ impl PlaybackRun {
             position_ticks: 0,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: Some(format!("failed to prepare media: {error}")),
         });
         false

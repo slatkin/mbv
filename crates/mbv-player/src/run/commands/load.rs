@@ -208,9 +208,8 @@ impl PlaybackRun {
         join_progress: bool,
     ) {
         let action = if had_previous_queue {
-            StopAction::ReportedNow(StopReport::mark_sent(
-                self.reporter.report_stopped(self.last_valid_pos),
-            ))
+            let _ = self.reporter.report_stopped(self.last_valid_pos);
+            StopAction::ReportedNow(StopReport::Sent)
         } else {
             StopAction::NothingPlaying
         };
@@ -348,7 +347,8 @@ impl PlaybackRun {
         let old_pos = self.last_valid_pos;
         progress.stop_and_join(Self::progress_join_budget());
         if self.is_unreported() {
-            self.mark_reported(StopReport::mark_sent(self.reporter.report_stopped(old_pos)));
+            let _ = self.reporter.report_stopped(old_pos);
+            self.mark_reported(StopReport::Sent);
         }
         self.close_prepared_source_at(old_pos);
         let _ = mpv.command("stop", &[]);
@@ -401,7 +401,6 @@ impl PlaybackRun {
             position_ticks,
             played: false,
             consume: false,
-            progress_report_accepted: false,
             error: Some(error),
         });
     }

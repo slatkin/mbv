@@ -277,8 +277,6 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
-        #[serde(default)]
-        progress_report_accepted: bool,
         error: Option<String>,
     },
     /// mpv advanced to (or was jumped to) an occurrence. Names the
@@ -307,8 +305,6 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
-        #[serde(default)]
-        progress_report_accepted: bool,
     },
     NextUpThreshold {
         series_id: ItemId,

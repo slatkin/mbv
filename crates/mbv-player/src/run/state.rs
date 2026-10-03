@@ -73,10 +73,6 @@ impl ItemLifecycleState {
         self.stop_report == StopReport::NotSent
     }
 
-    pub(crate) fn is_accepted(self) -> bool {
-        self.stop_report.is_accepted()
-    }
-
     pub(crate) fn is_sent(self) -> bool {
         self.stop_report.is_sent()
     }
@@ -117,10 +113,6 @@ impl PlaybackRun {
         self.item_lifecycle.is_unreported()
     }
 
-    pub(crate) fn stop_report_accepted(&self) -> bool {
-        self.item_lifecycle.is_accepted()
-    }
-
     pub(crate) fn stop_report_sent(&self) -> bool {
         self.item_lifecycle.is_sent()
     }
@@ -138,24 +130,11 @@ impl PlaybackRun {
 pub(crate) enum StopReport {
     NotSent,
     Sent,
-    Accepted,
 }
 
 impl StopReport {
-    pub(crate) fn mark_sent(accepted: bool) -> Self {
-        if accepted {
-            StopReport::Accepted
-        } else {
-            StopReport::Sent
-        }
-    }
-
     pub(crate) fn reset(&mut self) {
         *self = StopReport::NotSent;
-    }
-
-    pub(crate) fn is_accepted(self) -> bool {
-        matches!(self, StopReport::Accepted)
     }
 
     pub(crate) fn is_sent(self) -> bool {

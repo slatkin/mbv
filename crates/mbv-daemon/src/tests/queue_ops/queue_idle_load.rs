@@ -283,7 +283,6 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
             position_ticks: 99_000_000,
             played: true,
             consume: true,
-            progress_report_accepted: false,
             error: None,
         },
         true,

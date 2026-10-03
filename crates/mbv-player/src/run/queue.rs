@@ -109,9 +109,8 @@ impl PlaybackRun {
     pub(crate) fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
         let _ = progress.stop_tx.send(());
         if self.is_quit_shutdown() {
-            self.mark_reported(StopReport::mark_sent(
-                self.report_stopped_for_current_context(),
-            ));
+            let _ = self.report_stopped_for_current_context();
+            self.mark_reported(StopReport::Sent);
         } else {
             let handle = progress.handle.take();
             let budget = Self::progress_join_budget();
@@ -124,9 +123,8 @@ impl PlaybackRun {
                     budget,
                     stopped,
                 });
-            // Fire-and-forget: we can't know synchronously whether Emby accepted
-            // this report, so mark it optimistically.
-            self.mark_reported(StopReport::Accepted);
+            // Fire-and-forget: the report is already on the worker's queue.
+            self.mark_reported(StopReport::Sent);
         }
     }
 
@@ -221,14 +219,12 @@ impl PlaybackRun {
         index: usize,
         mpv_pos_ticks: i64,
     ) -> bool {
-        self.mark_reported(StopReport::mark_sent(
-            self.reporter.report_stopped(abandoned_pos),
-        ));
+        let _ = self.reporter.report_stopped(abandoned_pos);
+        self.mark_reported(StopReport::Sent);
         if !self.adopt_mpv_entry(index, mpv_pos_ticks) {
             return false;
         }
-        let stop_accepted = self.stop_report_accepted();
-        self.announce_adopted_entry(abandoned_slot, abandoned_pos, stop_accepted);
+        self.announce_adopted_entry(abandoned_slot, abandoned_pos);
         true
     }
 
@@ -277,12 +273,7 @@ impl PlaybackRun {
     /// Announce an entry the run adopted because mpv moved to it on its own:
     /// the abandoned slot completed without finishing, and the adopted slot is
     /// the observation (no request identity — nothing asked for the move).
-    fn announce_adopted_entry(
-        &mut self,
-        abandoned_slot: Option<QueueSlotId>,
-        abandoned_pos: i64,
-        stop_accepted: bool,
-    ) {
+    fn announce_adopted_entry(&mut self, abandoned_slot: Option<QueueSlotId>, abandoned_pos: i64) {
         if let Some(slot_id) = abandoned_slot {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
                 slot_id,
@@ -290,7 +281,6 @@ impl PlaybackRun {
                 position_ticks: abandoned_pos,
                 played: false,
                 consume: false,
-                progress_report_accepted: stop_accepted,
             });
         }
         if let Some(slot_id) = self.active_slot_id() {
