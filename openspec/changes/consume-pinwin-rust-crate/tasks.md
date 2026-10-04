@@ -2,24 +2,24 @@
 
 ## 0. Gate (upstream — no mbv work until done)
 
-- [ ] 0.1 Confirm port tasks **4.1** (`panel` + `lib.rs` public API) and **6.3** (`cargo test`
+- [x] 0.1 Confirm port tasks **4.1** (`panel` + `lib.rs` public API) and **6.3** (`cargo test`
   passes, examples build) are complete in `feat/port`, and record the exact upstream rev the
   cutover pins (design D2). If the public names differ from design D4–D7 (`Panel`, `Layout`,
   `Side`, `Keyboard`, `Startup`, `Accent`, `PinwinError`), update design D3 first.
 
 ## 1. Swap the dependency
 
-- [ ] 1.1 Delete the wrapper: `crates/mbv-pinwin/src/ffi.rs`, the Zig build in `build.rs`,
+- [x] 1.1 Delete the wrapper: `crates/mbv-pinwin/src/ffi.rs`, the Zig build in `build.rs`,
   `build.zig`, `build.zig.zon`, `zig-pkg/`; remove `mbv-pinwin` from `Cargo.toml` workspace
   members and add the `pinwin` crate dependency at the rev from 0.1 (design D1/D2). Verify
   `cargo check -p pinwin` resolves and builds.
-- [ ] 1.2 Remove the now-dead `crates/mbv-pinwin/` remainder (`panel.rs`, `layout.rs`,
+- [x] 1.2 Remove the now-dead `crates/mbv-pinwin/` remainder (`panel.rs`, `layout.rs`,
   `error.rs`, `lib.rs`, `Cargo.toml`). `src/pin.rs` still references the wrapper until 2.1, so
   the workspace does not build yet; verification moves to the end of group 2.
 
 ## 2. Adapt `src/pin.rs` (owns the whole boundary, design D3)
 
-- [ ] 2.1 `PinnedPanel = pinwin::Panel` (lifetime gone; the `Box::leak` stays, comment reworded —
+- [x] 2.1 `PinnedPanel = pinwin::Panel` (lifetime gone; the `Box::leak` stays, comment reworded —
   `Panel`'s `Drop` never closes the fd). Start with
   `Panel::start(Startup { fd: master.as_raw_fd(), layout, keyboard: Keyboard::OnDemand,
   accent: None })`. Build `Layout` via `Layout::new(side, cols, top, bottom, left, right)` with
@@ -27,16 +27,16 @@
   `const ANIM_DEFAULT_MS: u32 = 200` in `pin.rs` and use it in `apply_layout`. Map the
   reshaped `PinwinError` (`Unknown` arm deleted, `InvalidFd` into `PinStartError::Panel` with
   the existing one-line reporting). Verify `cargo check -p mbv`.
-- [ ] 2.2 Re-express the `pin.rs` tests on the new types: `layout_from_config` still owns the
+- [x] 2.2 Re-express the `pin.rs` tests on the new types: `layout_from_config` still owns the
   collapsed/expanded width-selection contract (cases unchanged in meaning, columns now
   `NonZeroU16`); the start-failure fallback test is untouched. If another test already covers
   the mapping, extend it instead of adding one. Verify `cargo nextest run -p mbv pin::`.
-- [ ] 2.3 Verify no `mbv-pinwin` / `mbv_pinwin` reference remains outside archived changes
+- [x] 2.3 Verify no `mbv-pinwin` / `mbv_pinwin` reference remains outside archived changes
   (`rg` exact-string check) and `cargo check --workspace` passes.
 
 ## 3. Call sites (moved paths only)
 
-- [ ] 3.1 Expected: no edits — `src/main.rs`, `src/app/state/app_struct.rs`,
+- [x] 3.1 Expected: no edits — `src/main.rs`, `src/app/state/app_struct.rs`,
   `src/app/dispatch/action.rs` and `src/app/dispatch/settings.rs` only name `crate::pin::*`.
   Fix only what the compiler flags. No logic change. Verify
   `cargo clippy --workspace --all-targets -- -D warnings`.
