@@ -7,13 +7,20 @@
 
 use std::fmt;
 use std::io::IsTerminal;
+use std::num::NonZeroU16;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
+use pinwin::layout::{Keyboard, Layout, Side};
+use pinwin::panel::Startup;
 
 /// The running panel handle the shell owns.
-pub(crate) type PinnedPanel = mbv_pinwin::Panel<'static>;
+pub(crate) type PinnedPanel = pinwin::Panel;
+
+/// The animated apply duration (design D3): the C ABI wrapper carried this
+/// default, the Rust crate only clamps it, so mbv owns the value.
+const ANIM_DEFAULT_MS: u32 = 200;
 
 /// Which of the two saved widths the running panel shows (design D1). The
 /// active width is runtime state on `App`; it is never persisted, so every
@@ -43,10 +50,7 @@ pub(crate) fn apply_layout(
     width: PinnedWidth,
 ) -> Result<(), String> {
     panel
-        .apply_layout_animated(
-            layout_from_config(config, width),
-            mbv_pinwin::Panel::ANIM_DEFAULT_MS,
-        )
+        .apply_layout_animated(layout_from_config(config, width), ANIM_DEFAULT_MS)
         .map_err(|error| error.to_string())
 }
 
@@ -58,7 +62,7 @@ pub(crate) enum PinStartError {
     /// The pty pair could not be opened.
     Pty(std::io::Error),
     /// `pinwin` refused to start the panel.
-    Panel(mbv_pinwin::PinwinError),
+    Panel(pinwin::PinwinError),
     /// The stdio hand-over failed after the panel started.
     HandOver(std::io::Error),
 }
@@ -114,18 +118,18 @@ pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> 
 /// The pty pair, the panel, and the stdio hand-over. A failure after
 /// `pinwin_start` succeeded drops the panel, which stops it (design D3).
 fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
-    use std::os::fd::AsFd;
-
     let (master, slave) = open_pty()?;
-    // The panel reads the master until `pinwin_stop`; `App` owns the handle
-    // and cannot borrow a local fd, so the master is leaked for the life of
-    // the process, which the panel's whole life fits inside.
+    // The panel reads the master fd for its whole life and the library never
+    // closes it (design D7), so the fd must stay open even though `Panel` no
+    // longer borrows it: the owned fd is leaked for the life of the process,
+    // which the panel's whole life fits inside.
     let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
-    let panel = mbv_pinwin::Panel::start(
-        master.as_fd(),
-        layout_from_config(config, PinnedWidth::default()),
-        mbv_pinwin::KeyboardMode::OnDemand,
-    )
+    let panel = pinwin::Panel::start(Startup {
+        fd: master.as_raw_fd(),
+        layout: layout_from_config(config, PinnedWidth::default()),
+        keyboard: Keyboard::OnDemand,
+        accent: None,
+    })
     .map_err(PinStartError::Panel)?;
     detach_controlling_terminal()?;
     hand_over_stdio(&slave)?;
@@ -140,23 +144,25 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     Ok(panel)
 }
 
-fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> mbv_pinwin::Layout {
-    mbv_pinwin::Layout {
-        side: match config.side {
-            mbv_config::PanelSide::Left => mbv_pinwin::Side::Left,
-            mbv_config::PanelSide::Right => mbv_pinwin::Side::Right,
-        },
-        cols: match width {
-            PinnedWidth::Collapsed => config.cols,
-            PinnedWidth::Expanded => config.cols_expanded,
-        },
-        gutters: mbv_pinwin::Gutters {
-            top: config.gutter_top,
-            bottom: config.gutter_bottom,
-            left: config.gutter_left,
-            right: config.gutter_right,
-        },
-    }
+fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
+    let side = match config.side {
+        mbv_config::PanelSide::Left => Side::Left,
+        mbv_config::PanelSide::Right => Side::Right,
+    };
+    let cols = match width {
+        PinnedWidth::Collapsed => config.cols,
+        PinnedWidth::Expanded => config.cols_expanded,
+    };
+    Layout::new(
+        side,
+        // The fallback is unreachable: config clamps panel widths to at
+        // least one column on parse and on every F2 step.
+        NonZeroU16::new(cols).unwrap_or(NonZeroU16::MIN),
+        config.gutter_top,
+        config.gutter_bottom,
+        config.gutter_left,
+        config.gutter_right,
+    )
 }
 
 fn open_pty() -> Result<(std::os::fd::OwnedFd, std::os::fd::OwnedFd), PinStartError> {
@@ -384,6 +390,7 @@ fn notify(message: &str) {
 mod tests {
     use super::{PinnedWidth, StartFailureAction, failure_action, layout_from_config};
     use mbv_config::PanelConfig;
+    use std::num::NonZeroU16;
 
     /// Design D2/D4: the active width selects `cols` (collapsed) or
     /// `cols_expanded` (expanded); nothing constrains which value is larger.
@@ -402,7 +409,10 @@ mod tests {
             cols_expanded,
             ..PanelConfig::default()
         };
-        assert_eq!(layout_from_config(&config, width).cols, expected);
+        assert_eq!(
+            layout_from_config(&config, width).cols(),
+            NonZeroU16::new(expected).expect("test columns are non-zero")
+        );
     }
 
     /// Design D5: a failed pinned start falls back to the terminal only when
