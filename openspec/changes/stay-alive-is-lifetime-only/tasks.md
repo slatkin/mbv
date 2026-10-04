@@ -62,13 +62,13 @@
 
 ## 3. The Owner process starts and stops the Tray live
 
-- [ ] 3.1 In `crates/mbv-desktop/src/tray.rs`, make `spawn` box an owning wrapper (for example
+- [x] 3.1 In `crates/mbv-desktop/src/tray.rs`, make `spawn` box an owning wrapper (for example
   `struct RunningTray(ksni::blocking::Handle<MbvTray>)`) whose `Drop` calls
   `self.0.shutdown().wait()`. Dropping a raw ksni handle does not stop the service (design D5).
   Keep the `Option<Box<dyn Send>>` return type. Update the doc comment, which currently says
   "stay-alive tray", to say the Tray is enabled by Stay-alive or "Show systray icon". No unit
   test (it needs D-Bus); the manual check is in 4.1. Verify: `cargo check -p mbv-desktop`.
-- [ ] 3.2 Make the tray hook callable more than once (design D6):
+- [x] 3.2 Make the tray hook callable more than once (design D6):
   - in `crates/mbv-daemon/src/core.rs`, change `OnTrayReady` to
     `Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>`, and derive `Clone` for
     `DaemonPlayerHandle`;
@@ -78,7 +78,7 @@
     compiling.
 
   Verify: `cargo check -p mbv-daemon -p mbv -p mbvd --all-targets`.
-- [ ] 3.3 In `crates/mbv-daemon`, move Tray ownership into the daemon loop (design D4):
+- [x] 3.3 In `crates/mbv-daemon`, move Tray ownership into the daemon loop (design D4):
   1. Create a new module `src/event_loop/tray.rs` holding a `TrayState` with these fields:
      - the hook;
      - a `shutdown_signal_tx` clone;
@@ -106,7 +106,7 @@
 
   Contracts: `local-daemon-tray` "Stay-alive turned on/off during the session" and "A missing
   tray is not an error". Verify: `cargo nextest run -p mbv-daemon` passes.
-- [ ] 3.4 Update CONTEXT.md *Tray*: replace "For the local Owner process, it is present only when
+- [x] 3.4 Update CONTEXT.md *Tray*: replace "For the local Owner process, it is present only when
   Stay-alive is enabled." with "For the local Owner process, it is present while Stay-alive is
   enabled or Show systray icon is on, and follows those settings live." Verify: `rg -n "follows
   those settings live" CONTEXT.md`. Group gate: `cargo clippy --workspace --all-targets -- -D
