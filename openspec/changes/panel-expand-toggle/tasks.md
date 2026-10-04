@@ -15,10 +15,10 @@
 
 ## 3b. Animated width
 
-- [x] 3.3 Bump the pinwin pin in `crates/mbv-pinwin/build.zig.zon` to 664e195fe825828cb5372872cb4555ed5929a1d2 (`zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#664e195fe825828cb5372872cb4555ed5929a1d2"` in that directory); add `Panel::apply_layout_animated(layout, duration_ms)` over `pinwin_apply_layout_animated` (ffi.rs + panel.rs, `PINWIN_ANIM_DEFAULT_MS` = 200); `pin::apply_layout` calls it so the Ctrl+e toggle and the F2 width steps animate. Verify `cargo check -p mbv-pinwin -p mbv` and `cargo clippy --workspace --all-targets -- -D warnings`; visual smoothness is part of 4.3.
+- [x] 3.3 Bump the pinwin pin in `crates/mbv-pinwin/build.zig.zon` to c64af49c0379001793fa9f57443c138d468771e9 (`zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#c64af49c0379001793fa9f57443c138d468771e9"` in that directory); add `Panel::apply_layout_animated(layout, duration_ms)` over `pinwin_apply_layout_animated` (ffi.rs + panel.rs, `PINWIN_ANIM_DEFAULT_MS` = 200); `pin::apply_layout` calls it so the Ctrl+e toggle and the F2 width steps animate. Verify `cargo check -p mbv-pinwin -p mbv` and `cargo clippy --workspace --all-targets -- -D warnings`; visual smoothness is part of 4.3.
 
 ## 4. Docs and specs
 
 - [x] 4.1 `README.md` `[panel]` table: add a `cols_expanded` row after `cols` ("Expanded panel width in terminal columns", 1–65535, `120`). `dist/config.toml` `[panel]`: add `cols_expanded = 120` after `cols` and name it in the section comment. Verify by reading both.
 - [x] 4.2 `CONTEXT.md`: add **Pinned panel width** after **Pinned panel** (collapsed = `cols`, expanded = `cols_expanded`, toggled by `pinned_width_toggle`, never saved; _Avoid_: panel mode, expand mode, panel size). Verify by reading the entry.
-- [ ] 4.3 Integration check (manual, user): `mbv --pin` on niri — `Ctrl+e` expands and tiles reflow, again collapses; stepping `Expanded cols` in F2 while collapsed expands the panel; relaunch opens collapsed; `Ctrl+e` in a plain terminal shows the toast. `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass.
+- [x] 4.3 Integration check (manual, user): `mbv --pin` on niri — `Ctrl+e` expands and tiles reflow, again collapses; stepping `Expanded cols` in F2 while collapsed expands the panel; relaunch opens collapsed; `Ctrl+e` in a plain terminal shows the toast. `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass.

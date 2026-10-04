@@ -47,7 +47,7 @@ be saved without pinwin ever validating it.
 **D5 — Naming.** CONTEXT.md gains **Pinned panel width** (collapsed / expanded). Avoid "panel mode"
 (reserved for the in-TUI Panel mode) and "expand mode".
 
-**D6 — Width changes animate.** The pinwin pin bumps to 664e195f, which adds
+**D6 — Width changes animate.** The pinwin pin bumps to c64af49, which adds
 `pinwin_apply_layout_animated` (`PINWIN_ANIM_DEFAULT_MS` = 200). `pin::apply_layout` calls it, so
 the Ctrl+e toggle and the F2 width steps animate. Layout changes that do not alter the width
 apply in one step.
