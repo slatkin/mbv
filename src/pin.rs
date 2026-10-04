@@ -123,7 +123,7 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
     let panel = mbv_pinwin::Panel::start(
         master.as_fd(),
-        layout_from_config(config, PinnedWidth::Collapsed),
+        layout_from_config(config, PinnedWidth::default()),
         mbv_pinwin::KeyboardMode::OnDemand,
     )
     .map_err(PinStartError::Panel)?;

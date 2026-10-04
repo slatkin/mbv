@@ -75,16 +75,22 @@ impl App {
             Ok(width) => {
                 self.config.lock().unwrap().panel = candidate;
                 if let Some(width) = width {
-                    self.pinned_width = width;
-                    // A panel accepted the candidate, so the pty is already at
-                    // the new size: adopt it in this loop iteration (change
-                    // `panel-expand-toggle`).
-                    self.pinned_resize_pending = true;
+                    self.note_pinned_width_applied(width);
                 }
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
             }
             Err(reason) => self.flash(reason, ToastSeverity::Warning),
         }
+    }
+
+    /// Record the width a running panel accepted (change
+    /// `panel-expand-toggle`): store it as the active width and arm the
+    /// same-iteration pty-size adoption, so the shell does not paint a stale
+    /// frame while the terminal-event worker's `Resize` event is in flight.
+    /// Both the width toggle and a Panel settings step record through here.
+    pub(in crate::app) fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
+        self.pinned_width = width;
+        self.pinned_resize_pending = true;
     }
 
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {

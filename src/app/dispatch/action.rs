@@ -331,14 +331,7 @@ impl App {
                 "Width toggle needs a pinned launch (mbv --pin)".into(),
                 ToastSeverity::Neutral,
             ),
-            Some(Ok(())) => {
-                self.pinned_width = width;
-                // The apply resized the pty synchronously; let the shell adopt
-                // that size in this loop iteration (change
-                // `panel-expand-toggle`) instead of waiting for the
-                // terminal-event worker's `Resize` event.
-                self.pinned_resize_pending = true;
-            }
+            Some(Ok(())) => self.note_pinned_width_applied(width),
             Some(Err(reason)) => self.flash(reason, ToastSeverity::Warning),
         }
     }
