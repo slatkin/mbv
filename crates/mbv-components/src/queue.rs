@@ -55,16 +55,9 @@ pub struct QueueComponent {
     /// a mounted overlay blurs the component without changing the column's
     /// focused surface, exactly as before.
     frame_focused: bool,
-    /// Mini view historically suppressed the focused palette: the one
-    /// displayed panel has nothing to contrast the focused tone against, so
-    /// it painted the default (unfocused) palette even while it held
-    /// interaction focus. Projected per frame from the shell's breakpoint.
-    /// Since `pinned-mini-view-focus` the palette no longer follows this bit
-    /// alone: the projected `frame_focused` appearance bit already carries
-    /// the unpinned-rests / pinned-follows-window-focus / wide-ignores-focus
-    /// decision, so the body palette reads that instead of suppressing on
-    /// mini view unconditionally. Only the palette follows these bits, never
-    /// input — the focused panel keeps its cursor bar on the resting stripe.
+    /// Mini view suppresses the focused palette unless `frame_focused` says
+    /// otherwise. Projected per frame from the shell's breakpoint; only the
+    /// palette follows it, never input.
     mini_view: bool,
     empty_text: String,
     area: Rect,
@@ -188,11 +181,8 @@ impl QueueComponent {
     }
 
     /// Project the panel surface's focused bit (task 3.1): the same panel-
-    /// focus fact the legacy base frame used for the frame fill. Since
-    /// `pinned-mini-view-focus` this carries the shell's appearance-focus
-    /// decision (`panel_appearance_focus`): unpinned mini view rests, a
-    /// pinned mini view follows the window focus, 80+ columns ignores the
-    /// window focus -- and the body rows read it in mini view too.
+    /// focus fact the legacy base frame used for the frame fill; carries the
+    /// shell's appearance-focus decision (`panel_appearance_focus`).
     pub fn set_frame_focused(&mut self, focused: bool) {
         self.frame_focused = focused;
     }
@@ -314,14 +304,8 @@ impl Component for QueueComponent {
         }
         self.ensure_carrier();
         let list = self.carrier.wide_mut();
-        // The body rows follow the same appearance decision the frame fill
-        // does: wide view keeps the component's interaction focus, while mini
-        // view reads the projected `frame_focused` bit (unpinned mini always
-        // rests; a pinned mini follows the window focus) so the focused mini
-        // panel paints exactly the wide focused palette -- row base, zebra
-        // stripe, cursor highlight and scrollbar alike. The cursor follows
-        // interaction focus alone (the selected row is the exception to the
-        // palette suppression); the palette bit carries the composition.
+        // The cursor follows interaction focus; the palette follows the
+        // appearance decision in mini view (`frame_focused`).
         list.set_paint_policy(
             WideMediaListPaintPolicy::for_queue(self.focused)
                 .with_palette_focus(self.focused && (!self.mini_view || self.frame_focused))

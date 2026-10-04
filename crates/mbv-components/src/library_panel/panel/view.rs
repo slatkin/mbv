@@ -208,18 +208,9 @@ impl Component for LibraryPanel {
             .unwrap_or_default();
         let mut hit_regions = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
-        // The skeleton's palette bit follows the same appearance decision the
-        // shell's `library_body_fill` does: wide view keeps the component's
-        // interaction focus, while mini view reads the projected
-        // `frame_focused` bit (unpinned mini always rests; a pinned mini
-        // follows the window focus) so the focused mini panel paints exactly
-        // the wide focused palette -- list rows, selector pills and panel
-        // fills alike.
-        // The skeleton derives its `palette_focused`/`panel_focused` bits
-        // from `mini_view` internally (main's split), so the composition is
-        // threaded as the effective suppression bit: suppress only when the
-        // panel is mini AND the appearance bit rests. `focused` stays the
-        // interaction-focus bit, never palette.
+        // The skeleton derives its palette bits from `mini_view`, so thread
+        // the effective suppression: only a mini panel whose appearance bit
+        // rests. `focused` stays the interaction-focus bit.
         let mini_palette_suppressed = self.mini_view && !self.frame_focused;
         let overlay_area = paint_skeleton(
             frame,
