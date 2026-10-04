@@ -159,7 +159,12 @@ impl ksni::Tray for MbvTray {
     }
 }
 
-/// Spawns the stay-alive tray (#156 T7 / #168 T-phase-2).
+/// Spawns the tray (#156 T7 / #168 T-phase-2).
+///
+/// The daemon enables the Tray when Stay-alive is on or "Show systray icon"
+/// is on, and stops it when both turn off, so the returned box is the stop
+/// operation: dropping it removes the icon (a bare ksni handle drop does not
+/// stop the service loop), which is why it is wrapped in [`RunningTray`].
 ///
 /// `transport_tx` routes controls through the local daemon owner; the tray
 /// must stay on the local-daemon side of the architecture and must not
@@ -178,7 +183,7 @@ pub fn spawn(
         transport_tx,
     }
     .spawn()
-    .map(|tray| Box::new(tray) as Box<dyn Send>)
+    .map(|tray| Box::new(RunningTray(tray)) as Box<dyn Send>)
     .map_err(|e| {
         tracing::warn!(
             name: "tray.availability.failed",
@@ -188,6 +193,18 @@ pub fn spawn(
         );
     })
     .ok()
+}
+
+/// Owning wrapper around the ksni handle: dropping it shuts the tray
+/// service down and waits for that to complete, so dropping the boxed value
+/// removes the icon. Dropping a raw ksni handle does not stop the service
+/// (ksni 0.3.6 `service.rs` ignores a closed handle channel).
+struct RunningTray(ksni::blocking::Handle<MbvTray>);
+
+impl Drop for RunningTray {
+    fn drop(&mut self) {
+        self.0.shutdown().wait();
+    }
 }
 
 #[cfg(test)]
