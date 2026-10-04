@@ -6,6 +6,7 @@ MIT-licensed, © Microsoft Corporation.
 
 * Source: https://microsoft.github.io/rust-guidelines/agents/all.txt
 * Fetched: 2026-09-26. Refresh by hand. Don't edit rule files, re-fetch them instead.
+* A machine-wide copy is installed as the global `rust-guidelines` skill; re-fetch it from the same source when updating.
 
 ## How to use this
 
