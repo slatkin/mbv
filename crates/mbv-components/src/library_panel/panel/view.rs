@@ -21,7 +21,11 @@ impl Default for LibraryPanel {
 }
 
 struct SkeletonPaintState<'a> {
+    /// Interaction focus: the displayed panel keeps its cursor (selected-row
+    /// bar, marquee, scrollbar) even while the palette rests.
     focused: bool,
+    /// Mini-view palette suppression (see `LibraryPanel::set_mini_view`).
+    mini_view: bool,
     list_pane_width: Option<u16>,
     hovered_selector: Option<usize>,
     hovered_link: Option<usize>,
@@ -57,6 +61,7 @@ fn paint_skeleton(
             content,
             WideSkeletonPaintParams {
                 browser_focused: state.focused,
+                mini_view: state.mini_view,
                 override_width: state.list_pane_width,
                 overview_scroll,
                 hovered_selector: state.hovered_selector,
@@ -88,6 +93,7 @@ fn paint_skeleton(
             area,
             content,
             state.focused,
+            state.mini_view,
             state.hovered_selector,
             state.hit_regions,
             state.windows,
@@ -209,7 +215,12 @@ impl Component for LibraryPanel {
         // follows the window focus) so the focused mini panel paints exactly
         // the wide focused palette -- list rows, selector pills and panel
         // fills alike.
-        let skeleton_focused = self.focused && (!self.mini_view || self.frame_focused);
+        // The skeleton derives its `palette_focused`/`panel_focused` bits
+        // from `mini_view` internally (main's split), so the composition is
+        // threaded as the effective suppression bit: suppress only when the
+        // panel is mini AND the appearance bit rests. `focused` stays the
+        // interaction-focus bit, never palette.
+        let mini_palette_suppressed = self.mini_view && !self.frame_focused;
         let overlay_area = paint_skeleton(
             frame,
             area,
@@ -217,7 +228,8 @@ impl Component for LibraryPanel {
             overview_scroll,
             show_hero_pane,
             &mut SkeletonPaintState {
-                focused: skeleton_focused,
+                focused: self.focused,
+                mini_view: mini_palette_suppressed,
                 list_pane_width: self.list_pane_width,
                 hovered_selector: self.hovered_selector,
                 hovered_link: self.hovered_link,

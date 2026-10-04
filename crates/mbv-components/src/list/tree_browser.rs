@@ -101,6 +101,10 @@ pub struct TreeBrowser<Target> {
     filter_matches: HashSet<usize>,
     paint: PaintRetainedState<Target>,
     focused: bool,
+    /// The appearance bit for the zebra/base fills. Mini view rests the
+    /// palette while the displayed panel keeps its cursor (`focused`), so
+    /// the selected-row bar stays visible on the resting stripe.
+    palette_focused: bool,
     marquee_text: String,
     marquee_started_at: Instant,
     /// The area of the latest completed `view`, the paging viewport fallback
@@ -186,6 +190,7 @@ impl<Target> TreeBrowser<Target> {
             filter_matches: HashSet::new(),
             paint: PaintRetainedState::new(),
             focused: true,
+            palette_focused: true,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
             last_painted: None,
@@ -626,8 +631,13 @@ impl<Target> TreeBrowser<Target> {
         self.paint.invalidate();
     }
 
-    pub fn set_focused(&mut self, focused: bool) {
+    /// Set the cursor bit (selected-row bar, marquee, scrollbar, retained
+    /// full-width geometry) and the palette bit (zebra/base fills) together.
+    /// The panel drives both from one `PanelListPaintPolicy`; mini view
+    /// passes a resting palette with a live cursor.
+    pub fn set_paint_focus(&mut self, focused: bool, palette_focused: bool) {
         self.focused = focused;
+        self.palette_focused = palette_focused;
     }
 
     pub fn invalidate_paint(&mut self) {

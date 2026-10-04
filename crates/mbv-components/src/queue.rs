@@ -64,7 +64,7 @@ pub struct QueueComponent {
     /// the unpinned-rests / pinned-follows-window-focus / wide-ignores-focus
     /// decision, so the body palette reads that instead of suppressing on
     /// mini view unconditionally. Only the palette follows these bits, never
-    /// input.
+    /// input — the focused panel keeps its cursor bar on the resting stripe.
     mini_view: bool,
     empty_text: String,
     area: Rect,
@@ -319,12 +319,13 @@ impl Component for QueueComponent {
         // view reads the projected `frame_focused` bit (unpinned mini always
         // rests; a pinned mini follows the window focus) so the focused mini
         // panel paints exactly the wide focused palette -- row base, zebra
-        // stripe, cursor highlight and scrollbar alike.
+        // stripe, cursor highlight and scrollbar alike. The cursor follows
+        // interaction focus alone (the selected row is the exception to the
+        // palette suppression); the palette bit carries the composition.
         list.set_paint_policy(
-            WideMediaListPaintPolicy::for_queue(
-                self.focused && (!self.mini_view || self.frame_focused),
-            )
-            .with_zebra(queue_row_zebra_stripe()),
+            WideMediaListPaintPolicy::for_queue(self.focused)
+                .with_palette_focus(self.focused && (!self.mini_view || self.frame_focused))
+                .with_zebra(queue_row_zebra_stripe()),
         );
         Component::view(list, frame, content_area);
         if content_area.height < 1 {

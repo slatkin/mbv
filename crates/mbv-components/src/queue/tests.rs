@@ -74,14 +74,18 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
 }
 
 /// The other side of the contract: with the appearance bit resting (unpinned
-/// mini view), the body rows keep the resting palette -- no focused zebra, no
-/// selected bar -- even though the component holds interaction focus.
+/// mini view), the body rows keep the resting palette -- no focused zebra --
+/// even though the component holds interaction focus. The selected row is the
+/// exception to the palette suppression: its canonical cursor bar stays
+/// visible on the resting stripe (the same contract the app-level
+/// `panel_focus` proof asserts for the composed frame).
 #[test]
 fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
     let buf = draw_mini_queue(false);
 
     let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
+    let mut selected = 0;
     for y in row_area.y..row_area.bottom() {
         for x in row_area.x..row_area.right() {
             let bg = buf[(x, y)].style().bg;
@@ -90,11 +94,8 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
                 Some(focused_zebra),
                 "focused zebra tone at ({x}, {y}) while resting"
             );
-            assert_ne!(
-                bg,
-                Some(palette::SELECTED_ROW_BG),
-                "selected bar at ({x}, {y}) while resting"
-            );
+            selected += u32::from(bg == Some(palette::SELECTED_ROW_BG));
         }
     }
+    assert!(selected > 0, "the cursor bar stayed on the resting stripe");
 }

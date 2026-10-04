@@ -281,9 +281,17 @@ impl LibraryPanelContent<'_> {
 /// policy; destinations pass none.
 #[derive(Debug)]
 pub enum PanelListPaintPolicy {
-    /// The Wide browser presentation's policy: focus only. Selected rows use
-    /// the list backdrop surface.
-    Wide { focused: bool },
+    /// The Wide browser presentation's policy. `focused` is the interaction
+    /// bit: it drives the selected-row bar, the marquee, and the scrollbar.
+    /// `palette_focused` is the appearance bit: it selects the zebra stripe
+    /// tone. Mini view rests the palette (`palette_focused: false`) while the
+    /// displayed panel keeps its cursor (`focused: true`), so the single
+    /// panel's selected row stays visible against the resting stripe.
+    /// Selected rows use the list backdrop surface.
+    Wide {
+        focused: bool,
+        palette_focused: bool,
+    },
     /// The library Workspace presentation — one unified look in both the
     /// Wide Hero pane and the Library Hero overlay: the selected row takes
     /// the sheet chrome Ink bar, the box rests at Slate, and the zebra

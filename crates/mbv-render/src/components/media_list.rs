@@ -171,6 +171,11 @@ impl ZebraStripe {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
+    /// The appearance bit for the zebra fill. Mini view rests the palette
+    /// while the list keeps its cursor (`focused`), so the selected row's
+    /// bar stays visible on the resting stripe. Defaults to `focused` in
+    /// every constructor; only callers that split the bits set it.
+    palette_focused: bool,
     selected_surface: SelectedRowSurface,
     zebra: Option<ZebraStripe>,
 }
@@ -180,6 +185,7 @@ impl WideMediaListPaintPolicy {
     pub const fn new(focused: bool) -> Self {
         Self {
             focused,
+            palette_focused: focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
             zebra: None,
         }
@@ -189,6 +195,7 @@ impl WideMediaListPaintPolicy {
     pub const fn for_queue(focused: bool) -> Self {
         Self {
             focused,
+            palette_focused: focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
             zebra: None,
         }
@@ -198,9 +205,20 @@ impl WideMediaListPaintPolicy {
     pub const fn for_library_workspace(focused: bool) -> Self {
         Self {
             focused,
+            palette_focused: focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
             zebra: None,
         }
+    }
+
+    /// Override the zebra palette bit for a list whose cursor stays live
+    /// while its palette rests (mini view). Callers that do not split the
+    /// bits never need this: the constructors default the palette to the
+    /// interaction focus.
+    #[must_use]
+    pub const fn with_palette_focus(mut self, palette_focused: bool) -> Self {
+        self.palette_focused = palette_focused;
+        self
     }
 
     #[must_use]
@@ -212,7 +230,7 @@ impl WideMediaListPaintPolicy {
     #[must_use]
     pub fn zebra_bg(self) -> Option<Color> {
         self.zebra.map(|zebra| {
-            if self.focused {
+            if self.palette_focused {
                 zebra.focused
             } else {
                 zebra.unfocused
@@ -396,8 +414,10 @@ pub fn queue_row_background(focused: bool) -> Color {
     palette::surface_colors(palette::Surface::QueuePanel, focused).fill
 }
 
+/// The Queue's zebra tone at one focus state. Internal to
+/// `queue_row_zebra_stripe`; callers take the pair, never one tone.
 #[must_use]
-pub fn queue_row_zebra(focused: bool) -> Color {
+fn queue_row_zebra(focused: bool) -> Color {
     palette::surface_colors(palette::Surface::QueueColumn, focused).fill
 }
 

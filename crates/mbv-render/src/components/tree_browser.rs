@@ -42,6 +42,10 @@ pub fn tree_metadata_gutter_width(trailing: &str) -> usize {
         .saturating_add(TREE_METADATA_TRAILING_SPACE)
 }
 
+/// Paints the tree browser. `focused` is the cursor bit (selected-row bar,
+/// marquee, scrollbar); `palette_focused` selects the zebra/base fills.
+/// Mini view rests the palette while the displayed panel keeps its cursor,
+/// so the selected row stays visible on the resting stripe.
 pub fn render_tree_browser(
     frame: &mut Frame,
     claim_rect: Rect,
@@ -50,6 +54,7 @@ pub fn render_tree_browser(
     total_rows: usize,
     viewport_offset: usize,
     focused: bool,
+    palette_focused: bool,
     marquee_text: &mut String,
     marquee_started_at: &mut Instant,
 ) {
@@ -62,8 +67,8 @@ pub fn render_tree_browser(
         // Stripe with the browser pane's library pair, as the flat carrier's
         // Wide policy does — the Queue pair's resting values are the two
         // library fills swapped, which would invert the alternation at rest.
-        zebra: palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
-        base: palette::surface_colors(palette::Surface::LibraryPanel, focused).fill,
+        zebra: palette::surface_colors(palette::Surface::LibraryColumn, palette_focused).fill,
+        base: palette::surface_colors(palette::Surface::LibraryPanel, palette_focused).fill,
         focused,
         marquee_text,
         marquee_started_at,
