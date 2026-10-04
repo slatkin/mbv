@@ -85,12 +85,25 @@ pub struct LibraryPanel {
     /// Terminal row count, pushed each sync pass: the compact hero caps
     /// (artwork 15, overview 5) apply at 50 terminal rows or fewer.
     terminal_height: u16,
-    /// Mini view suppresses the focused palette: the one displayed panel has
-    /// nothing to contrast the focused tone against, so it paints the default
-    /// (unfocused) palette even while it holds interaction focus. Projected
-    /// per sync pass from the shell's breakpoint; only the skeleton's palette
-    /// bit follows this, never input (`focused` stays the Focus attribute).
+    /// Mini view historically suppressed the focused palette: the one
+    /// displayed panel has nothing to contrast the focused tone against, so
+    /// it painted the default (unfocused) palette even while it held
+    /// interaction focus. Projected per sync pass from the shell's
+    /// breakpoint. Since `pinned-mini-view-focus` the palette no longer
+    /// follows this bit alone: the projected `frame_focused` appearance bit
+    /// already carries the unpinned-rests / pinned-follows-window-focus /
+    /// wide-ignores-focus decision, so the skeleton's palette bit reads that
+    /// instead of suppressing on mini view unconditionally. Only the palette
+    /// follows these bits, never input (`focused` stays the Focus attribute).
     mini_view: bool,
+    /// The shell's appearance-focus projection (`panel_appearance_focus`)
+    /// for the Library column: unpinned mini view rests, a pinned mini view
+    /// follows the window focus, 80+ columns ignores the window focus. The
+    /// shell's own body fill (`library_body_fill`) reads the same bit, and
+    /// since `pinned-mini-view-focus` the skeleton's palette bit reads it in
+    /// mini view too instead of the flat mini-view suppression. Only the
+    /// palette follows this bit, never input.
+    frame_focused: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -143,6 +156,7 @@ impl LibraryPanel {
             list_pane_width: None,
             terminal_height: 0,
             mini_view: false,
+            frame_focused: false,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -252,6 +266,18 @@ impl LibraryPanel {
     /// Pushed each sync pass by the shell beside the other per-frame facts.
     pub fn set_mini_view(&mut self, mini_view: bool) {
         self.mini_view = mini_view;
+    }
+
+    /// Project the panel surface's focused bit: the same panel-focus fact the
+    /// shell's `library_body_fill` uses for the placement fill. Since
+    /// `pinned-mini-view-focus` this carries the shell's appearance-focus
+    /// decision (`panel_appearance_focus`): unpinned mini view rests, a
+    /// pinned mini view follows the window focus, 80+ columns ignores the
+    /// window focus -- and the skeleton's palette bit reads it in mini view
+    /// too. Pushed each sync pass by the shell beside the other per-frame
+    /// facts.
+    pub fn set_frame_focused(&mut self, focused: bool) {
+        self.frame_focused = focused;
     }
 
     /// The hero image box the last painted frame reserved — the Library Hero

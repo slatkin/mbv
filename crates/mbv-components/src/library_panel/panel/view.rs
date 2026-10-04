@@ -202,6 +202,14 @@ impl Component for LibraryPanel {
             .unwrap_or_default();
         let mut hit_regions = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
+        // The skeleton's palette bit follows the same appearance decision the
+        // shell's `library_body_fill` does: wide view keeps the component's
+        // interaction focus, while mini view reads the projected
+        // `frame_focused` bit (unpinned mini always rests; a pinned mini
+        // follows the window focus) so the focused mini panel paints exactly
+        // the wide focused palette -- list rows, selector pills and panel
+        // fills alike.
+        let skeleton_focused = self.focused && (!self.mini_view || self.frame_focused);
         let overlay_area = paint_skeleton(
             frame,
             area,
@@ -209,7 +217,7 @@ impl Component for LibraryPanel {
             overview_scroll,
             show_hero_pane,
             &mut SkeletonPaintState {
-                focused: self.focused && !self.mini_view,
+                focused: skeleton_focused,
                 list_pane_width: self.list_pane_width,
                 hovered_selector: self.hovered_selector,
                 hovered_link: self.hovered_link,
