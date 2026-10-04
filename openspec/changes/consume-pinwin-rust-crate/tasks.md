@@ -43,11 +43,11 @@
 
 ## 4. Docs, spec retirement and close-out
 
-- [ ] 4.1 Rewrite `AGENTS.md`'s `crates/mbv-pinwin/` repository-map entry and its
+- [x] 4.1 Rewrite `AGENTS.md`'s `crates/mbv-pinwin/` repository-map entry and its
   `zig fetch --save=pinwin` pin procedure to the `pinwin` git-rev dependency (design D5);
   reword `README.md`'s "needs Zig" to Zig-for-ghostty via the pinwin crate; `PKGBUILD-git`
   unchanged. `CONTEXT.md` needs no term change. Verify `cargo fmt --all -- --check`.
-- [ ] 4.2 Delete `openspec/specs/pinwin-panel/` (design D6) and confirm
+- [x] 4.2 Delete `openspec/specs/pinwin-panel/` (design D6) and confirm
   `openspec validate --all` passes and nothing under `openspec/specs/` still names
   `pinwin_start` / `PINWIN_ERR_*`.
 - [ ] 4.3 Integration check (manual, needs user approval for the live run): `mbv --pin` in a
