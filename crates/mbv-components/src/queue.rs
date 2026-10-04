@@ -308,7 +308,10 @@ impl Component for QueueComponent {
         // appearance decision in mini view (`frame_focused`).
         list.set_paint_policy(
             WideMediaListPaintPolicy::for_queue(self.focused)
-                .with_palette_focus(self.focused && (!self.mini_view || self.frame_focused))
+                .with_palette_focus(
+                    self.focused
+                        && !crate::mini_palette_suppressed(self.mini_view, self.frame_focused),
+                )
                 .with_zebra(queue_row_zebra_stripe()),
         );
         Component::view(list, frame, content_area);

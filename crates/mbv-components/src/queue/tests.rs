@@ -47,7 +47,14 @@ fn draw_mini_queue(frame_focused: bool) -> ratatui::buffer::Buffer {
     terminal.backend().buffer().clone()
 }
 
-/// Mini-view body palette (`pinned-mini-view-focus`): with the projected
+fn count_bg(buf: &ratatui::buffer::Buffer, area: Rect, color: ratatui::style::Color) -> usize {
+    (area.y..area.bottom())
+        .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+        .filter(|&(x, y)| buf[(x, y)].style().bg == Some(color))
+        .count()
+}
+
+/// Mini-view body palette: with the projected
 /// appearance bit focused, the rows paint exactly the wide focused palette --
 /// the selected row's opaque bar and the focused zebra stripe -- so the
 /// focused mini panel is the wide focused panel, not a third style. The
@@ -60,17 +67,14 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
 
     let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
-    let mut zebra = 0;
-    let mut selected = 0;
-    for y in row_area.y..row_area.bottom() {
-        for x in row_area.x..row_area.right() {
-            let bg = buf[(x, y)].style().bg;
-            zebra += u32::from(bg == Some(focused_zebra));
-            selected += u32::from(bg == Some(palette::SELECTED_ROW_BG));
-        }
-    }
-    assert!(zebra > 0, "the focused zebra stripe painted");
-    assert!(selected > 0, "the selected row bar painted");
+    assert!(
+        count_bg(&buf, row_area, focused_zebra) > 0,
+        "the focused zebra stripe painted"
+    );
+    assert!(
+        count_bg(&buf, row_area, palette::SELECTED_ROW_BG) > 0,
+        "the selected row bar painted"
+    );
 }
 
 /// The other side of the contract: with the appearance bit resting (unpinned
@@ -85,17 +89,13 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
 
     let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
-    let mut selected = 0;
-    for y in row_area.y..row_area.bottom() {
-        for x in row_area.x..row_area.right() {
-            let bg = buf[(x, y)].style().bg;
-            assert_ne!(
-                bg,
-                Some(focused_zebra),
-                "focused zebra tone at ({x}, {y}) while resting"
-            );
-            selected += u32::from(bg == Some(palette::SELECTED_ROW_BG));
-        }
-    }
-    assert!(selected > 0, "the cursor bar stayed on the resting stripe");
+    assert_eq!(
+        count_bg(&buf, row_area, focused_zebra),
+        0,
+        "focused zebra tone while resting"
+    );
+    assert!(
+        count_bg(&buf, row_area, palette::SELECTED_ROW_BG) > 0,
+        "the cursor bar stayed on the resting stripe"
+    );
 }

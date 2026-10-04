@@ -453,8 +453,7 @@ impl Model {
         panel.set_mini_view(self.app.is_mini_view());
         // The same appearance-focus projection the panel's own body fill
         // (`library_body_fill`) reads, so the skeleton's palette bit and the
-        // placement fill follow one bit in every geometry
-        // (`pinned-mini-view-focus`).
+        // placement fill follow one bit in every geometry.
         panel.set_frame_focused(self.app.panel_appearance_focus(super::PanelFocus::Library));
         panel.sync_mouse_eligibility(mouse_eligible);
     }
