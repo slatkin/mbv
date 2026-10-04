@@ -17,7 +17,7 @@ and `Startup.accent` already exist. No pin bump is needed.
 
 ## 3. Docs
 
-- [ ] 3.1 Add the three keys to the `[panel]` table in `README.md` and to `[panel]` in `dist/config.toml`, with their defaults. In `CONTEXT.md`, add **Focus accent** after **Pinned panel width**: a stroke around the pinned panel's window while it holds keyboard focus, fixed at launch. _Avoid_: focus ring, strip, highlight. Verify by reading.
+- [x] 3.1 Add the three keys to the `[panel]` table in `README.md` and to `[panel]` in `dist/config.toml`, with their defaults. In `CONTEXT.md`, add **Focus accent** after **Pinned panel width**: a stroke around the pinned panel's window while it holds keyboard focus, fixed at launch. _Avoid_: focus ring, strip, highlight. Verify by reading.
 
 ## 4. Integration
 
