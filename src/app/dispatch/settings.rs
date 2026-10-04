@@ -51,7 +51,16 @@ impl App {
     /// the current width (change `panel-expand-toggle`, design D4). That width
     /// is stored only when a panel accepted the candidate, so an unpinned
     /// launch never changes the active width.
+    ///
+    /// The accent rows (`pinned-panel-focus-accent`, design D3) are not part
+    /// of the layout and the accent is fixed at panel start, so they save
+    /// without `pin::apply_layout`; while pinned a `Neutral` toast announces
+    /// that the change applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+        let accent_row = matches!(
+            key,
+            SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth
+        );
         let candidate = {
             let panel = self.config.lock().unwrap().panel;
             mbv_ui_model::settings::changed_panel_config(key, panel, delta)
@@ -66,10 +75,13 @@ impl App {
         };
         // While pinned, the running panel validates the candidate layout and
         // only an accepted one is saved (design D6); a launch without a panel
-        // saves without geometry validation.
-        let applied = match &self.pinned_panel {
-            Some(panel) => crate::pin::apply_layout(panel, &candidate, width).map(|()| Some(width)),
-            None => Ok(None),
+        // saves without geometry validation. An accent row never touches the
+        // running panel (design D3).
+        let applied = match (&self.pinned_panel, accent_row) {
+            (_, true) | (None, _) => Ok(None),
+            (Some(panel), false) => {
+                crate::pin::apply_layout(panel, &candidate, width).map(|()| Some(width))
+            }
         };
         match applied {
             Ok(width) => {
@@ -78,6 +90,12 @@ impl App {
                     self.note_pinned_width_applied(width);
                 }
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+                if accent_row && self.pinned_panel.is_some() {
+                    self.flash(
+                        "Accent changes apply on the next mbv --pin launch".into(),
+                        ToastSeverity::Neutral,
+                    );
+                }
             }
             Err(reason) => self.flash(reason, ToastSeverity::Warning),
         }

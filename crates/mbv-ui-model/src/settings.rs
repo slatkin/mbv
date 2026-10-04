@@ -36,6 +36,9 @@ pub enum SettingKey {
     PanelGutterBottom,
     PanelGutterLeft,
     PanelGutterRight,
+    PanelAccent,
+    PanelAccentColor,
+    PanelAccentWidth,
     StayAlive,
     AutoReconnect,
     SavePlaylistOnQuit,
@@ -217,6 +220,7 @@ fn setting_boolean_label(key: SettingKey) -> &'static str {
             (SettingKey::ShowSysTrayIcon, "Show systray icon"),
             (SettingKey::SystemNotifications, "System notifications"),
             (SettingKey::MouseSupport, "Mouse support"),
+            (SettingKey::PanelAccent, "Accent"),
         ],
     )
 }
@@ -230,6 +234,7 @@ fn setting_text_label(key: SettingKey) -> &'static str {
             (SettingKey::SubtitleLanguage, "Subtitle language"),
             (SettingKey::AudioLanguage, "Audio language"),
             (SettingKey::PanelSide, "Side"),
+            (SettingKey::PanelAccentColor, "Accent color"),
         ],
     )
 }
@@ -244,6 +249,7 @@ fn setting_stepper_label(key: SettingKey) -> &'static str {
             (SettingKey::PanelGutterBottom, "Gutter bottom"),
             (SettingKey::PanelGutterLeft, "Gutter left"),
             (SettingKey::PanelGutterRight, "Gutter right"),
+            (SettingKey::PanelAccentWidth, "Accent width"),
         ],
     )
 }
@@ -301,18 +307,21 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::Autoload
         | K::ShowSysTrayIcon
         | K::SystemNotifications
-        | K::MouseSupport => V::Boolean,
+        | K::MouseSupport
+        | K::PanelAccent => V::Boolean,
         K::ImageProtocol
         | K::SubtitleMode
         | K::SubtitleLanguage
         | K::AudioLanguage
-        | K::PanelSide => V::Text,
+        | K::PanelSide
+        | K::PanelAccentColor => V::Text,
         K::PanelCols
         | K::PanelColsExpanded
         | K::PanelGutterTop
         | K::PanelGutterBottom
         | K::PanelGutterLeft
-        | K::PanelGutterRight => V::Stepper,
+        | K::PanelGutterRight
+        | K::PanelAccentWidth => V::Stepper,
         K::HiddenLibraries
         | K::MyLanguages
         | K::FeedViewLibraries
@@ -381,6 +390,7 @@ fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::ShowSysTrayIcon => cfg.show_systray_icon,
         SettingKey::SystemNotifications => cfg.system_notifications,
         SettingKey::MouseSupport => cfg.mouse_support,
+        SettingKey::PanelAccent => cfg.panel.accent,
         _ => return None,
     };
     Some(bool_val(value))
@@ -407,6 +417,7 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
             cfg.audio_lang.clone()
         }),
         SettingKey::PanelSide => Some(cfg.panel.side.as_str().to_string()),
+        SettingKey::PanelAccentColor => Some(cfg.panel.accent_color.to_string()),
         _ => None,
     }
 }
@@ -419,6 +430,7 @@ fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
         SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
         SettingKey::PanelGutterRight => Some(cfg.panel.gutter_right.to_string()),
+        SettingKey::PanelAccentWidth => Some(cfg.panel.accent_width.get().to_string()),
         _ => None,
     }
 }
@@ -488,8 +500,9 @@ pub fn bool_val(v: bool) -> String {
 }
 
 /// The Panel destination's rows, in paint and cursor order (design D6, row
-/// 4.3): `Side` first, then the six stepper rows.
-pub const PANEL_SETTING_KEYS: [SettingKey; 7] = [
+/// 4.3): `Side` first, then the six stepper rows, then the three accent rows
+/// (change `pinned-panel-focus-accent`).
+pub const PANEL_SETTING_KEYS: [SettingKey; 10] = [
     SettingKey::PanelSide,
     SettingKey::PanelCols,
     SettingKey::PanelColsExpanded,
@@ -497,6 +510,9 @@ pub const PANEL_SETTING_KEYS: [SettingKey; 7] = [
     SettingKey::PanelGutterBottom,
     SettingKey::PanelGutterLeft,
     SettingKey::PanelGutterRight,
+    SettingKey::PanelAccent,
+    SettingKey::PanelAccentColor,
+    SettingKey::PanelAccentWidth,
 ];
 
 /// Main-page cursor ordinal to `SettingKey`.
@@ -534,6 +550,38 @@ fn stepped_cols(cols: u16, delta: i32) -> u16 {
     .unwrap_or(u16::MAX)
 }
 
+/// Step the accent stroke's width by `delta`, clamped to `1..=65535`
+/// (`pinned-panel-focus-accent`, design D3).
+fn stepped_accent_width(width: std::num::NonZeroU16, delta: i32) -> std::num::NonZeroU16 {
+    let next = i32::from(width.get())
+        .saturating_add(delta)
+        .clamp(1, i32::from(u16::MAX));
+    // `next` is within 1..=u16::MAX, so both conversions succeed.
+    std::num::NonZeroU16::new(u16::try_from(next).unwrap_or(1)).unwrap_or(std::num::NonZeroU16::MIN)
+}
+
+/// The next `Accent color` value in the row's fixed cycle palette (design
+/// D3): the configured colour leads the cycle when it is not already in the
+/// list, so a custom value is never lost while it is configured.
+fn next_accent_color(configured: mbv_config::PanelAccentColor) -> mbv_config::PanelAccentColor {
+    const CYCLE: [mbv_config::PanelAccentColor; 5] = [
+        mbv_config::DEFAULT_PANEL_ACCENT_COLOR,
+        mbv_config::PanelAccentColor([0x7f, 0xc8, 0xda]),
+        mbv_config::PanelAccentColor([0xa3, 0xbe, 0x8c]),
+        mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]),
+        mbv_config::PanelAccentColor([0xff, 0xff, 0xff]),
+    ];
+    let mut cycle = CYCLE.to_vec();
+    if !cycle.contains(&configured) {
+        cycle.insert(0, configured);
+    }
+    let index = cycle
+        .iter()
+        .position(|candidate| *candidate == configured)
+        .unwrap_or(0);
+    cycle[(index + 1) % cycle.len()]
+}
+
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
 /// left/right, and each numeric row steps by `delta` (already scaled to
 /// ±1/±10 by the caller) clamped to its Rust range. `None` for any key that
@@ -568,7 +616,17 @@ pub fn changed_panel_config(
         SettingKey::PanelGutterRight => {
             next.gutter_right = panel.gutter_right.saturating_add(delta);
         }
+        SettingKey::PanelAccent => next.accent = !panel.accent,
+        SettingKey::PanelAccentColor => {
+            next.accent_color = next_accent_color(panel.accent_color);
+        }
+        SettingKey::PanelAccentWidth => {
+            next.accent_width = stepped_accent_width(panel.accent_width, delta);
+        }
         _ => return None,
     }
     Some(next)
 }
+
+#[cfg(test)]
+mod tests;
