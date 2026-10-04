@@ -22,14 +22,18 @@ pub const LEFT_WIDTH_DEFAULT: u16 = 40;
 pub const LEFT_WIDTH_STEP: u16 = 5;
 /// The single wide/narrow breakpoint. Minimum list-pane / Home-pane width at
 /// which the view switches to a two-column layout. Every screen and
-/// arrangement reads this one constant instead of testing width itself; the
-/// library list's column count derives from it (`library_column_count`), not
-/// the other way around.
-pub const TWO_COLUMN_THRESHOLD: u16 = 80;
+/// arrangement reads this one constant instead of testing width itself.
+///
+/// 76 = the default pinned expanded panel (120 cols, `DEFAULT_PANEL_COLS_
+/// EXPANDED`) minus the 40-col queue column (`queue_column_width`) and the
+/// two `TAB_LEFT_PAD` insets on the library content area, so the pinned
+/// panel's default expanded width is wide. A pinned `LibraryOnly` layout at
+/// 120 cols yields 118 and passes with room to spare either way.
+pub const TWO_COLUMN_THRESHOLD: u16 = 76;
 /// The narrow-terminal breakpoint below which the Power View uses the
 /// two-state "mini view" (`x` toggles library-only <-> queue-only) instead of
 /// the three-state both/queue-only/library-only cycle. Independent of and
-/// unrelated to `TWO_COLUMN_THRESHOLD` (80), which governs the library
+/// unrelated to `TWO_COLUMN_THRESHOLD` (76), which governs the library
 /// panel's internal list-column layout (see design.md).
 pub const MINI_VIEW_THRESHOLD: u16 = 80;
 /// Left margin for the tab row. The control pill used to live here (hence
