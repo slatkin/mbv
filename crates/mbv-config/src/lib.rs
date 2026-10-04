@@ -67,8 +67,8 @@ pub use emby_admin::{
 pub(crate) use emby_admin::{persist_emby_setup_and_secret_at, save_emby_setup_at};
 mod panel;
 pub use panel::{
-    DEFAULT_PANEL_ACCENT_COLOR, DEFAULT_PANEL_COLS, DEFAULT_PANEL_COLS_EXPANDED, PANEL_COLS_MIN,
-    PanelAccentColor, PanelConfig, PanelSide,
+    DEFAULT_PANEL_ACCENT_COLOR, DEFAULT_PANEL_ACCENT_WIDTH, DEFAULT_PANEL_COLS,
+    DEFAULT_PANEL_COLS_EXPANDED, PANEL_COLS_MIN, PanelAccentColor, PanelConfig, PanelSide,
 };
 mod parse;
 pub use parse::{load_config, parse_config, parse_feeds};

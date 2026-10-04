@@ -49,6 +49,8 @@ pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 120;
 
 /// The `[panel] accent_color` default (`pinned-panel-focus-accent`, design D2).
 pub const DEFAULT_PANEL_ACCENT_COLOR: PanelAccentColor = PanelAccentColor([0xda, 0xbc, 0x7f]);
+/// The `[panel] accent_width` default in pixels (`pinned-panel-focus-accent`).
+pub const DEFAULT_PANEL_ACCENT_WIDTH: NonZeroU16 = NonZeroU16::MIN;
 
 /// The `[panel] accent_color` value: an RGB triple parsed from `"#RRGGBB"` or
 /// `"RRGGBB"` and displayed as `#rrggbb`.
@@ -75,10 +77,11 @@ impl std::fmt::Display for PanelAccentColor {
     }
 }
 
-/// The `[panel]` section: docking side, width in columns and four gutters in
-/// logical pixels (negative values are allowed). Every value is already
-/// validated; an out-of-range or malformed TOML value was replaced with its
-/// default while parsing (design D6).
+/// The `[panel]` section: docking side, width in columns, four gutters in
+/// logical pixels (negative values are allowed), and the focus accent stroke
+/// (flag, colour, width in pixels). Every value is already validated; an
+/// out-of-range or malformed TOML value was replaced with its default while
+/// parsing (design D6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PanelConfig {
     /// The edge the panel docks to.
@@ -116,7 +119,7 @@ impl Default for PanelConfig {
             gutter_right: 0,
             accent: true,
             accent_color: DEFAULT_PANEL_ACCENT_COLOR,
-            accent_width: NonZeroU16::MIN,
+            accent_width: DEFAULT_PANEL_ACCENT_WIDTH,
         }
     }
 }

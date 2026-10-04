@@ -529,7 +529,7 @@ accent_width = 0
     assert_eq!(cfg.panel.gutter_right, 0);
     assert!(cfg.panel.accent);
     assert_eq!(cfg.panel.accent_color, crate::DEFAULT_PANEL_ACCENT_COLOR);
-    assert_eq!(cfg.panel.accent_width, NonZeroU16::MIN);
+    assert_eq!(cfg.panel.accent_width, crate::DEFAULT_PANEL_ACCENT_WIDTH);
 
     let _g = SYS_ENV_LOCK.lock().unwrap();
     let dir = std::env::temp_dir().join(format!(
