@@ -85,6 +85,12 @@ pub struct LibraryPanel {
     /// Terminal row count, pushed each sync pass: the compact hero caps
     /// (artwork 15, overview 5) apply at 50 terminal rows or fewer.
     terminal_height: u16,
+    /// Mini view suppresses the focused palette: the one displayed panel has
+    /// nothing to contrast the focused tone against, so it paints the default
+    /// (unfocused) palette even while it holds interaction focus. Projected
+    /// per sync pass from the shell's breakpoint; only the skeleton's palette
+    /// bit follows this, never input (`focused` stays the Focus attribute).
+    mini_view: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -136,6 +142,7 @@ impl LibraryPanel {
             painted_link_urls: Vec::new(),
             list_pane_width: None,
             terminal_height: 0,
+            mini_view: false,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -239,6 +246,12 @@ impl LibraryPanel {
     /// sync pass by the shell beside the other per-frame facts.
     pub fn set_terminal_height(&mut self, terminal_height: u16) {
         self.terminal_height = terminal_height;
+    }
+
+    /// Record the mini-view palette suppression (see the `mini_view` field).
+    /// Pushed each sync pass by the shell beside the other per-frame facts.
+    pub fn set_mini_view(&mut self, mini_view: bool) {
+        self.mini_view = mini_view;
     }
 
     /// The hero image box the last painted frame reserved — the Library Hero

@@ -209,7 +209,7 @@ impl Component for LibraryPanel {
             overview_scroll,
             show_hero_pane,
             &mut SkeletonPaintState {
-                focused: self.focused,
+                focused: self.focused && !self.mini_view,
                 list_pane_width: self.list_pane_width,
                 hovered_selector: self.hovered_selector,
                 hovered_link: self.hovered_link,

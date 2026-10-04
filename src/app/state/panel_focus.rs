@@ -29,6 +29,18 @@ impl App {
         }
     }
 
+    /// Whether a panel's surfaces paint their focused palette this frame.
+    /// Wide view contrasts the focused panel against its resting sibling, so
+    /// the focus bit selects the palette. Mini view displays a single panel --
+    /// nothing to contrast against -- so below `MINI_VIEW_THRESHOLD` every
+    /// panel paints the default (unfocused) palette regardless of which panel
+    /// holds focus. Input routing keeps `effective_panel_focus`; this bit is
+    /// for appearance (surface palette selection) only.
+    pub(in crate::app) fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
+        self.terminal_width >= mbv_render::layout::MINI_VIEW_THRESHOLD
+            && self.effective_panel_focus() == panel
+    }
+
     /// Record that the terminal just regained focus, arming the
     /// refocus-click suppression window (see `handle_mouse`).
     pub(in crate::app) fn note_focus_gained(&mut self) {

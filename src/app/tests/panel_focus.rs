@@ -3,6 +3,109 @@ use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_ui_msg::{Msg, TerminalObserverEvent};
 use tuirealm::event::Event;
 
+/// The appearance-focus contract: below `MINI_VIEW_THRESHOLD` the single
+/// displayed panel paints the default (unfocused) palette no matter which
+/// panel holds focus, so `panel_appearance_focus` reports false for both
+/// panels; at 80+ columns it follows the effective focus per panel.
+#[test]
+fn mini_view_reports_no_panel_appearance_focus_while_wide_follows_focus() {
+    let mut mini = make_app_stub();
+    mini.terminal_width = 60;
+    mini.mini_view_focus = PanelFocus::Library;
+    assert!(!mini.panel_appearance_focus(PanelFocus::Library));
+    assert!(!mini.panel_appearance_focus(PanelFocus::Queue));
+
+    mini.mini_view_focus = PanelFocus::Queue;
+    assert!(!mini.panel_appearance_focus(PanelFocus::Library));
+    assert!(!mini.panel_appearance_focus(PanelFocus::Queue));
+
+    let mut wide = make_app_stub();
+    wide.terminal_width = 100;
+    wide.panel_focus = PanelFocus::Library;
+    assert!(wide.panel_appearance_focus(PanelFocus::Library));
+    assert!(!wide.panel_appearance_focus(PanelFocus::Queue));
+
+    wide.panel_focus = PanelFocus::Queue;
+    assert!(!wide.panel_appearance_focus(PanelFocus::Library));
+    assert!(wide.panel_appearance_focus(PanelFocus::Queue));
+}
+
+/// The library column's named body-fill authority follows the appearance
+/// bit: in mini view the column rests at the unfocused `LibraryColumn` fill
+/// even while the library holds focus; wide keeps the focused fill.
+#[test]
+fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
+    let mut mini = make_app_stub();
+    mini.terminal_width = 60;
+    mini.mini_view_focus = PanelFocus::Library;
+    let harness = TickHarness::new(mini);
+    assert_eq!(
+        harness.model().library_body_fill(),
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, false).fill,
+    );
+
+    let mut wide = make_app_stub();
+    wide.terminal_width = 100;
+    wide.panel_focus = PanelFocus::Library;
+    let wide_harness = TickHarness::new(wide);
+    assert_eq!(
+        wide_harness.model().library_body_fill(),
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, true).fill,
+    );
+}
+
+/// The painted proof: in mini view with Queue focused, the queue panel's
+/// frame fill and the queue rows' zebra rest at the unfocused tones even
+/// though the component holds interaction focus -- one palette, the default
+/// (unfocused) one, because there is no sibling panel to contrast against.
+#[test]
+fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
+    let mut app = make_app_stub();
+    app.terminal_width = 60;
+    app.mini_view_focus = PanelFocus::Queue;
+    app.local_view.adopt_items(make_items(3), 0);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    let resting_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, false).fill;
+    let focused_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true).fill;
+    assert_ne!(
+        resting_zebra, focused_zebra,
+        "the QueueColumn focus pair must differ for this proof to bind"
+    );
+    let panel = harness.model().app.queue_panel_placement().panel_area;
+    assert!(panel.width > 2 && panel.height > 0, "queue panel placed");
+    let buf = terminal.backend().buffer();
+    // The placement's outer frame columns stay outside the inset list box,
+    // so their fill is the frame's own QueueColumn tone.
+    assert_eq!(
+        buf[(panel.x, panel.y)].style().bg,
+        Some(resting_zebra),
+        "mini view frame fill rests despite Queue holding focus"
+    );
+    // The zebra stripes across the rows follow the same suppression: no row
+    // paints the focused tone, and the resting stripe did paint.
+    let box_area = mbv_render::arrangements::queue::queue_list_box(panel);
+    let mut striped = 0;
+    for y in box_area.y..box_area.bottom() {
+        for x in box_area.x..box_area.right() {
+            let bg = buf[(x, y)].style().bg;
+            assert_ne!(
+                bg,
+                Some(focused_zebra),
+                "focused zebra tone at ({x}, {y}) in mini view"
+            );
+            striped += u32::from(bg == Some(resting_zebra));
+        }
+    }
+    assert!(striped > 0, "the resting zebra painted");
+}
+
 #[test]
 fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
     let mut app = make_app_stub();

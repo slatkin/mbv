@@ -335,7 +335,7 @@ impl Model {
             frame,
             placement,
             mbv_theme::Surface::QueueColumn,
-            matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+            self.app.panel_appearance_focus(PanelFocus::Queue),
         );
         // The slot region starts on the row below the placement's header band
         // (the header's recessed padding row plus the painted header row) and

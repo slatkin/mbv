@@ -450,6 +450,7 @@ impl Model {
         panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
         panel.set_terminal_height(self.app.terminal_height);
+        panel.set_mini_view(self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD);
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 
@@ -463,12 +464,13 @@ impl Model {
     }
 
     /// The Library column's body fill: the placement's own back, painted with
-    /// the panel's focus bit. Focused it takes the column level's
+    /// the panel's appearance-focus bit. Focused it takes the column level's
     /// `SURFACE_FOCUSED` fill, resting the column's app backdrop; one named
     /// authority both the placement fill and the status band's padding rows
-    /// read, so both follow the same bit in every geometry.
+    /// read, so both follow the same bit in every geometry. Mini view paints
+    /// the resting palette regardless of focus (`panel_appearance_focus`).
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
-        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        let focused = self.app.panel_appearance_focus(super::PanelFocus::Library);
         mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill
     }
 

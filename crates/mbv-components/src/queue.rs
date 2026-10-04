@@ -55,6 +55,12 @@ pub struct QueueComponent {
     /// a mounted overlay blurs the component without changing the column's
     /// focused surface, exactly as before.
     frame_focused: bool,
+    /// Mini view suppresses the focused palette: the one displayed panel has
+    /// nothing to contrast the focused tone against, so it paints the default
+    /// (unfocused) palette even while it holds interaction focus. Projected
+    /// per frame from the shell's breakpoint; only the palette follows this
+    /// bit, never input.
+    mini_view: bool,
     empty_text: String,
     area: Rect,
     /// The framed list content area the panel derives from its placement each
@@ -100,6 +106,7 @@ impl QueueComponent {
             scope: QueueScope::Local,
             focused: false,
             frame_focused: false,
+            mini_view: false,
             empty_text: String::new(),
             area: Rect::default(),
             content_area: Rect::default(),
@@ -179,6 +186,11 @@ impl QueueComponent {
     /// focus fact the legacy base frame used for the frame fill.
     pub fn set_frame_focused(&mut self, focused: bool) {
         self.frame_focused = focused;
+    }
+
+    /// Project the mini-view palette suppression (see the `mini_view` field).
+    pub fn set_mini_view(&mut self, mini_view: bool) {
+        self.mini_view = mini_view;
     }
 
     /// Project the status pill row (playlist source + autosave) and the
@@ -294,7 +306,8 @@ impl Component for QueueComponent {
         self.ensure_carrier();
         let list = self.carrier.wide_mut();
         list.set_paint_policy(
-            WideMediaListPaintPolicy::for_queue(self.focused).with_zebra(queue_row_zebra_stripe()),
+            WideMediaListPaintPolicy::for_queue(self.focused && !self.mini_view)
+                .with_zebra(queue_row_zebra_stripe()),
         );
         Component::view(list, frame, content_area);
         if content_area.height < 1 {
