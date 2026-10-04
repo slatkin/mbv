@@ -363,6 +363,12 @@ pub struct App {
     ///   subsequent clicks dispatch normally until the next
     ///   `FocusLost`.
     pub(in crate::app) refocus_at: Option<Instant>,
+    /// Whether the terminal window currently holds focus, per the terminal
+    /// focus reports (`note_focus_gained`/`note_focus_lost`). Defaults to
+    /// `true`: a launch with no focus report means the window is focused,
+    /// because pinwin reports only changes (design D1 of
+    /// `pinned-mini-view-focus`).
+    pub(in crate::app) window_focused: bool,
     pub(in crate::app) album_artist_cache: std::collections::HashMap<String, String>,
     /// Per-level album-artist fill lifecycle (design D4 of
     /// `fix-music-artist-resolution-batching`): one background request fills

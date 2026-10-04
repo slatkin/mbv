@@ -222,6 +222,7 @@ impl App {
                 .checked_sub(Duration::from_secs(1))
                 .unwrap_or_else(Instant::now),
             refocus_at: None,
+            window_focused: true,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),
             pending_level_artist_warmups: std::collections::VecDeque::new(),
