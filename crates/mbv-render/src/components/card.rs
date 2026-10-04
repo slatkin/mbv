@@ -104,10 +104,8 @@ pub fn render_card_painting(
     }
     // The bundled placeholder slot caps its height at the same tier cap as
     // the real image (24 rows at full height), like the compact banner's
-    // poster placeholder. The bound is checkpoint-free (the tier cap, never
-    // `area.height`): the slot region's height is derived from the recorded
-    // card size, so bounding the fit by it grew the slot one row per painted
-    // frame until the image arrived (see `queue_card_reserved_rect`).
+    // poster placeholder; the bound is checkpoint-free (see
+    // `queue_card_reserved_rect`).
     let placeholder_slot = projection.cache_key.is_none();
     let max_h = queue_card_height_cap(terminal_height);
     let mut image = image;
@@ -177,11 +175,19 @@ pub fn render_card_painting(
     // thumbnail) to estimate a tighter width the way the banner does
     // for posters specifically, so this fills the full reserved area.
     if loading && reservation.height > 0 {
+        // The placeholder paints only inside the slot region: on a terminal
+        // too short to fit header, transport and the tier cap, the queue
+        // column is clamped and the slot is shorter than the full-target
+        // reservation -- painting it unclamped would overwrite the Queue
+        // panel below. The paint is bounded; the recorded size is not.
         f.render_widget(
             Block::default().style(Style::default().bg(
                 palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill,
             )),
-            reservation,
+            Rect {
+                height: reservation.height.min(area.height),
+                ..reservation
+            },
         );
     }
     if placeholder_slot && reservation.height == 0 && last_width == 0 && !loading {
@@ -192,3 +198,6 @@ pub fn render_card_painting(
     }
     (reservation.height, placeholder_w, loading, false)
 }
+
+#[cfg(test)]
+mod tests;

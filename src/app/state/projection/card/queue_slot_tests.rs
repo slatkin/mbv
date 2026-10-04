@@ -82,12 +82,9 @@ fn app_with_square_card_image() -> App {
     app
 }
 
-/// The recorded card size must not depend on the slot region's height. The
-/// region's height is derived from the recorded size (`queue_playback_rows`),
-/// so a height-dependent record fed every paint back into the next frame one
-/// row taller — the panel grew line by line until the image arrived (user
-/// report, 2026-10-04). The fit's bound is the tier cap and the slot width,
-/// never the region itself.
+/// The recorded card size must not depend on the slot region's height -- the
+/// feedback loop behind the 2026-10-04 user report; the mechanism is
+/// documented at `queue_card_reserved_rect`.
 #[test]
 fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
     let mut short = app_with_square_card_image();

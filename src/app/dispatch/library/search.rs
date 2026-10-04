@@ -283,10 +283,14 @@ impl App {
 
     /// Whether `lib_idx`'s top level is a TV series root in a mode whose rows
     /// are a client-side-aggregated series corpus (`All` or a letter `Range`).
-    /// Such levels must paginate to completion unconditionally -- see
-    /// `maybe_fetch_next_page_sized`. `Latest`/`Upcoming` levels are complete
-    /// by construction (`ServerRows::complete`), and an unresolved mode
-    /// (`None`) is the capture load that the size default may replace, so
+    /// Such levels must paginate to completion unconditionally: the TV
+    /// workspace re-sorts and letter-buckets the series client-side and its
+    /// inline search filters the loaded slice, while the component owns the
+    /// selection cursor (`TvMoveRows`/`TvJumpCursor` are deliberate App
+    /// no-ops), so no cursor-proximity trigger can ever fire on that surface
+    /// -- see `maybe_fetch_next_page_sized`. `Latest`/`Upcoming` levels are
+    /// complete by construction (`ServerRows::complete`), and an unresolved
+    /// mode (`None`) is the capture load that the size default may replace, so
     /// neither qualifies.
     pub(in crate::app) fn is_tv_series_root_view(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
@@ -338,17 +342,8 @@ impl App {
         // paginates to completion unconditionally too, exactly like the feed
         // home-video root above -- there's no cursor-proximity heuristic that
         // stays correct once artists collapse/expand independently of the
-        // underlying flat array position.
-        //
-        // A TV series root in `All`/`Range` mode is the same shape: the TV
-        // workspace re-sorts and letter-buckets the series client-side and
-        // its inline search filters the loaded slice, while the component
-        // owns the selection cursor (`TvMoveRows`/`TvJumpCursor` are
-        // deliberate App no-ops since the Tuirealm migration), so no
-        // cursor-proximity trigger can ever fire on that surface. Unresolved
-        // mode (`None`) stays cursor-proximity: that is the large-library
-        // capture load, and eagerly completing it would fetch the whole
-        // corpus right before the default `Latest` pill replaces the level.
+        // underlying flat array position. `is_tv_series_root_view` levels are
+        // the same shape (see its doc).
         let paginate_to_completion = is_feed_home_video_root
             || self.is_music_group_view(lib_idx)
             || self.is_tv_series_root_view(lib_idx);

@@ -294,12 +294,8 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
 }
 
 // Regression (user report 2026-10-04): a TV library's `All` pill stopped at
-// the first 100 series. The Tuirealm migration made the TV workspace's series
-// cursor component-local (`TvMoveRows`/`TvJumpCursor` are deliberate App
-// no-ops), which silently removed the cursor-proximity trigger that used to
-// arm `maybe_fetch_next_page` on every TV list move -- so a TV series root in
-// `All` (or letter `Range`) mode never fetched past its first page. Those
-// levels now paginate to completion unconditionally (`is_tv_series_root_view`).
+// the first 100 series -- see `is_tv_series_root_view` for why All/Range
+// roots paginate to completion without any cursor movement.
 #[test]
 fn tv_all_root_paginates_to_completion_without_cursor_movement() {
     let mut app = make_app_stub();
@@ -322,10 +318,8 @@ fn tv_all_root_paginates_to_completion_without_cursor_movement() {
 
 #[test]
 fn tv_unresolved_mode_capture_load_does_not_paginate_to_completion() {
-    // A large library's first capture load (TV mode still unresolved, the
-    // level holds the first 100 of 2000 series) must not eagerly complete:
-    // the size default (`Latest`) is about to replace the level's rows
-    // wholesale, so completion stays cursor-proximity for `None`.
+    // Unresolved mode (`None`) is the large-library capture load the size
+    // default is about to replace, so completion stays cursor-proximity.
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 100);
@@ -338,10 +332,9 @@ fn tv_unresolved_mode_capture_load_does_not_paginate_to_completion() {
 
 #[test]
 fn tv_series_root_refresh_re_arms_completion_pagination() {
-    // Selecting the `All`/`Range` pill (or `r`, or a stop-refresh) replaces a
-    // TV series root's rows in place via `Refreshed` -- no `Loaded` event, no
-    // App-side cursor movement. The completion chain must re-arm from the
-    // refresh itself.
+    // A pill switch or stop-refresh replaces a TV series root's rows in
+    // place via `Refreshed` -- no `Loaded` event, no cursor movement -- so
+    // the completion chain must re-arm from the refresh itself.
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 3);

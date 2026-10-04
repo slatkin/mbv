@@ -534,14 +534,11 @@ fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
     );
 }
 
-/// The queue card's geometry checkpoint must reach its target and hold. The
-/// slot region's height is derived from the recorded card size
-/// (`queue_playback_rows`), so a paint recorded against that region used to
-/// feed back into the next frame's slot one row taller — the panel grew line
-/// by line until the image arrived (user report, 2026-10-04). The reservation
-/// and the painter bound the card by the terminal tier cap and the slot
-/// width, never by the slot region's own height, so the recorded size settles
-/// on the same target a feedback-free paint of the slot produces.
+/// The queue card's geometry checkpoint must reach its target and hold: the
+/// recorded size settles on the same target a feedback-free paint of the slot
+/// produces, never drifting or stalling below it. The feedback loop behind
+/// this (the 2026-10-04 user report) is documented at
+/// `queue_card_reserved_rect`.
 #[test]
 fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
     fn card_app() -> crate::app::App {
