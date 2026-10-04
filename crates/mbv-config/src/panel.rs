@@ -64,11 +64,8 @@ impl PanelAccentColor {
         if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return None;
         }
-        let mut rgb = [0u8; 3];
-        for (byte, chunk) in rgb.iter_mut().zip([&hex[0..2], &hex[2..4], &hex[4..6]]) {
-            *byte = u8::from_str_radix(chunk, 16).ok()?;
-        }
-        Some(Self(rgb))
+        let [_, r, g, b] = u32::from_str_radix(hex, 16).ok()?.to_be_bytes();
+        Some(Self([r, g, b]))
     }
 }
 

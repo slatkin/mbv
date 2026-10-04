@@ -561,8 +561,7 @@ fn stepped_accent_width(width: std::num::NonZeroU16, delta: i32) -> std::num::No
 }
 
 /// The next `Accent color` value in the row's fixed cycle palette (design
-/// D3): the configured colour leads the cycle when it is not already in the
-/// list, so a custom value is never lost while it is configured.
+/// D3); a custom colour outside the palette steps to the palette's first.
 fn next_accent_color(configured: mbv_config::PanelAccentColor) -> mbv_config::PanelAccentColor {
     const CYCLE: [mbv_config::PanelAccentColor; 5] = [
         mbv_config::DEFAULT_PANEL_ACCENT_COLOR,
@@ -571,15 +570,11 @@ fn next_accent_color(configured: mbv_config::PanelAccentColor) -> mbv_config::Pa
         mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]),
         mbv_config::PanelAccentColor([0xff, 0xff, 0xff]),
     ];
-    let mut cycle = CYCLE.to_vec();
-    if !cycle.contains(&configured) {
-        cycle.insert(0, configured);
-    }
-    let index = cycle
+    let next = CYCLE
         .iter()
         .position(|candidate| *candidate == configured)
-        .unwrap_or(0);
-    cycle[(index + 1) % cycle.len()]
+        .map_or(0, |index| (index + 1) % CYCLE.len());
+    CYCLE[next]
 }
 
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
