@@ -533,3 +533,109 @@ fn hiding_the_visual_slot_while_playing_returns_the_title_to_the_header() {
         "the hidden slot's header is the title's home again"
     );
 }
+
+/// The queue card's geometry checkpoint must reach its target and hold. The
+/// slot region's height is derived from the recorded card size
+/// (`queue_playback_rows`), so a paint recorded against that region used to
+/// feed back into the next frame's slot one row taller — the panel grew line
+/// by line until the image arrived (user report, 2026-10-04). The reservation
+/// and the painter bound the card by the terminal tier cap and the slot
+/// width, never by the slot region's own height, so the recorded size settles
+/// on the same target a feedback-free paint of the slot produces.
+#[test]
+fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
+    fn card_app() -> crate::app::App {
+        let mut app = active_app(PanelMode::Both);
+        app.terminal_width = 120;
+        app.terminal_height = 40;
+        let mut configured = ratatui_image::picker::Picker::halfblocks();
+        configured.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
+        app.images.configure_protocol(None, true);
+        app.images
+            .set_image_pickers_for_test(configured, ratatui_image::picker::Picker::halfblocks());
+        // A cached square artwork for the active item (the fixture's shared
+        // "id", a Movie: its landscape card key) so the slot paints instead
+        // of reserving a fetch no test client would complete.
+        app.images.insert_image(
+            mbv_images::emby_queue_landscape_cache_key("id"),
+            mbv_images::CachedImage {
+                img: Some(image::DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_pixel(200, 200, image::Rgba([20, 40, 60, 255])),
+                )),
+                protocols: std::collections::HashMap::new(),
+                cover_box: None,
+                applied_logo_key: None,
+            },
+        );
+        app
+    }
+
+    fn paint_until_recorded(app: &mut crate::app::App, area: ratatui::layout::Rect) -> (u16, u16) {
+        let mut size = (0, 0);
+        // Bounded spins, no sleeps: each paint pumps the protocol's encode
+        // channel; the fitted size lands within a few.
+        for _ in 0..50 {
+            let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+            terminal
+                .draw(|frame| {
+                    app.render_queue_playback_slot(frame, area, true);
+                })
+                .unwrap();
+            size = app.images.last_card_size();
+            if size != (0, 0) {
+                break;
+            }
+        }
+        size
+    }
+
+    let mut harness = TickHarness::new(card_app());
+    let mut sizes = Vec::new();
+    for _ in 0..6 {
+        harness.model_mut().sync_mounted_surfaces();
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        terminal
+            .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+            .unwrap();
+        sizes.push(harness.model().app.images.last_card_size());
+    }
+
+    // The feedback-free reference: the same slot painted with its height
+    // raised to the tier cap — the rows the band offers once it is sized by
+    // the target itself — with the slot projected directly (no sync pass).
+    let mut reference = card_app();
+    reference.queue_card_projection = mbv_ui_model::playback::QueueCardProjection {
+        cache_key: Some(mbv_images::emby_queue_landscape_cache_key("id")),
+        plain_cache_key: None,
+        images_enabled: true,
+        visualizer: false,
+        title_site: NowPlayingTitleSite::Header,
+    };
+    let placement = reference
+        .compute_chrome_geometry(Rect::new(0, 0, 120, 40))
+        .root
+        .queue_playback
+        .expect("queue playback placed while playing");
+    let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(
+        placement,
+        mbv_render::arrangements::chrome::queue_playback_header_visible(
+            reference.now_playing_status(),
+            reference.queue_card_projection.title_site,
+        ),
+    );
+    let target_area = ratatui::layout::Rect {
+        height: mbv_render::components::card::queue_card_height_cap(40),
+        ..slot
+    };
+    let expected = paint_until_recorded(&mut reference, target_area);
+    assert_ne!(expected, (0, 0), "the reference paint recorded a size");
+
+    assert_eq!(
+        sizes[4], sizes[5],
+        "the checkpoint must hold steady once reached"
+    );
+    assert_eq!(
+        sizes[5], expected,
+        "the closed loop must settle on the feedback-free target, not drift or stall below it"
+    );
+}

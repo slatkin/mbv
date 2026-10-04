@@ -61,12 +61,45 @@ fn app_with_card_image() -> App {
 }
 
 fn paint_slot(app: &mut App) {
+    paint_slot_in(app, Rect::new(0, 0, 40, 24));
+}
+
+fn paint_slot_in(app: &mut App, area: Rect) {
     let mut terminal = Terminal::new(TestBackend::new(48, 30)).unwrap();
     terminal
         .draw(|frame| {
-            app.render_queue_playback_slot(frame, Rect::new(0, 0, 40, 24), true);
+            app.render_queue_playback_slot(frame, area, true);
         })
         .unwrap();
+}
+
+/// Same slot, but square artwork: its fitted size is the tier cap bounded by
+/// half the slot width, so the arithmetic is easy to reason about.
+fn app_with_square_card_image() -> App {
+    let mut app = app_with_card_image();
+    app.images
+        .insert_image(CARD_KEY.to_owned(), cached(Some(card_image(100, 100))));
+    app
+}
+
+/// The recorded card size must not depend on the slot region's height. The
+/// region's height is derived from the recorded size (`queue_playback_rows`),
+/// so a height-dependent record fed every paint back into the next frame one
+/// row taller — the panel grew line by line until the image arrived (user
+/// report, 2026-10-04). The fit's bound is the tier cap and the slot width,
+/// never the region itself.
+#[test]
+fn the_recorded_card_size_does_not_depend_on_the_slot_regions_height() {
+    let mut short = app_with_square_card_image();
+    paint_slot_in(&mut short, Rect::new(0, 0, 40, 6));
+    let mut tall = app_with_square_card_image();
+    paint_slot_in(&mut tall, Rect::new(0, 0, 40, 24));
+
+    assert_eq!(
+        short.images.last_card_size(),
+        tall.images.last_card_size(),
+        "the same artwork must record the same size whatever the slot region's height"
+    );
 }
 
 fn title_parts(title: &str) -> mbv_queue::PlaybackTitleParts {
