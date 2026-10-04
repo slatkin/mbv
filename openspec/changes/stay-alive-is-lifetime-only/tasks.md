@@ -2,7 +2,7 @@
 
 ## 1. Client: route switching and notifications ignore Stay-alive
 
-- [ ] 1.1 In `src/app/dispatch/session/switch.rs` `attach_remote_owner`, delete the
+- [x] 1.1 In `src/app/dispatch/session/switch.rs` `attach_remote_owner`, delete the
   `if !self.config.lock().unwrap().stay_alive { self.player.stop(); }` block. The home link is
   still suspended, just never stopped first (design D1). In `src/app/tests/route_state.rs`,
   replace `switching_away_with_stay_alive_disabled_sends_stop_to_home_link` with
@@ -10,7 +10,7 @@
   that used to stop) and asserts `suspended_local.is_some()` and that `home_commands` received
   **no** `PlaybackIntent` Stop. Contract: `daemon-lifecycle` "Switching away from the home link
   keeps local playback". Verify: `cargo nextest run -p mbv route_state` passes.
-- [ ] 1.2 In `src/app/state/construct/remote.rs` `new_remote`, set
+- [x] 1.2 In `src/app/state/construct/remote.rs` `new_remote`, set
   `let system_notifications = app_config.system_notifications;` (design D2). In the same file's
   tests:
   - delete
@@ -21,7 +21,7 @@
 
   Contract: `toast-notification-semantics` "Stay-alive does not suppress notifications". Verify:
   `cargo nextest run -p mbv construct::remote` passes.
-- [ ] 1.3 Add a status note to `docs/adr/0030-owner-process-is-the-only-local-player-owner.md`
+- [x] 1.3 Add a status note to `docs/adr/0030-owner-process-is-the-only-local-player-owner.md`
   saying that stay-alive-off no longer keeps Bare behaviour for route switching or system
   notifications, and that Stay-alive decides only lifetime, exclusive admission and the forced
   Tray (change `stay-alive-is-lifetime-only`). Verify: `rg -n "stay-alive-is-lifetime-only"`
