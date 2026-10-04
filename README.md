@@ -16,8 +16,9 @@ The panel needs a Wayland session that provides layer-shell (for example niri, s
 Hyprland). GNOME and X11 do not, and are unsupported from the launcher: the panel fails to
 open, mbv records the reason in its log, sends a desktop notification and exits with status 1.
 Run plain `mbv` in a terminal on those sessions. The GTK4 and gtk4-layer-shell
-runtime libraries are required; building from source additionally needs Zig and
-the GTK4 and gtk4-layer-shell development packages.
+runtime libraries are required; building from source additionally needs Zig (at build time,
+for ghostty's `libghostty-vt` via the pinwin crate) and the GTK4 and gtk4-layer-shell
+development packages.
 
 ### Panel layout
 

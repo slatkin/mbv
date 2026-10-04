@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbv-pinwin", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 
 [workspace.package]
@@ -116,7 +116,7 @@ name = "mbv"
 path = "src/main.rs"
 
 [dependencies]
-mbv-pinwin = { path = "crates/mbv-pinwin" }
+pinwin = { git = "https://github.com/slatkin/pinwin", rev = "0d9be0b6c9cd9f78f942b8131a2653e02fec823a" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }

@@ -3,7 +3,7 @@
 //!
 //! Values are validated here with plain Rust range checks only; whether a
 //! layout actually fits the output needs live monitor metrics, so it is
-//! `pinwin`'s call (`pinwin_start` / `pinwin_apply_layout_animated`), never
+//! `pinwin`'s call (`Panel::start` / `Panel::apply_layout_animated`), never
 //! `mbv-config`'s.
 
 /// The screen edge the pinned panel docks to.

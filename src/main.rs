@@ -352,7 +352,7 @@ fn main() {
     // Decide and start the pinned panel after `load_config` and before any
     // terminal setup or output, including the remote-client connection line
     // (design D3/D5). The decision is the parsed flag alone: the environment
-    // and the `pinwin_start` result enter as start failures, never as decision
+    // and the `Panel::start` result enter as start failures, never as decision
     // inputs. `report_start_failure` has already exited when there is no
     // terminal to fall back to.
     let pinned_panel = if startup.pin_requested {

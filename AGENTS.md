@@ -74,7 +74,7 @@ reason about desktop features through `mbvd`.
 * `crates/mbv-images/` — image cache, loading/processing, terminal image protocol support.
 * `crates/mbv-ui-model/` — plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/` — typed messages crossing the interactive-component boundary.
-* `crates/mbv-pinwin/` — Rust wrapper over the pinwin layer-shell panel (Zig/GTK4, separate repo `slatkin/pinwin`) that docks mbv's pinned panel beside tiled windows. pinwin is a Zig package dependency pinned by URL+hash in `crates/mbv-pinwin/build.zig.zon`; `build.rs` runs `zig build` there. Update the pin with `zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#<sha>"` run in that directory; fix pinwin bugs upstream, never here.
+* `pinwin` — the Rust pinwin crate (GTK4 layer-shell panel, separate repo `slatkin/pinwin`) that docks mbv's pinned panel beside tiled windows; `src/pin.rs` is the only boundary. It is a git-rev dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", rev = "<sha>" }`) — update the pin by changing `rev` there. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 
