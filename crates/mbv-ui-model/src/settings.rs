@@ -539,6 +539,37 @@ pub fn panel_cursor_to_key(cursor: usize) -> SettingKey {
         .unwrap_or(SettingKey::PanelSide)
 }
 
+/// Whether a Panel row is one of the three accent rows (design D3): accent
+/// rows are not part of the layout, never touch the running panel, and apply
+/// on the next `mbv --pin` launch.
+#[must_use]
+pub fn is_panel_accent_row(key: SettingKey) -> bool {
+    matches!(
+        key,
+        SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth
+    )
+}
+
+/// The pinned width a Panel row's candidate layout is validated at (design
+/// D4): `Cols` validates the collapsed width, `Expanded cols` the expanded
+/// one, and any other row the caller's current width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelEditedWidth {
+    Collapsed,
+    Expanded,
+}
+
+/// Which pinned width the edited Panel row belongs to, or `None` for a row
+/// that validates at the caller's current width (design D4).
+#[must_use]
+pub fn panel_row_edited_width(key: SettingKey) -> Option<PanelEditedWidth> {
+    match key {
+        SettingKey::PanelCols => Some(PanelEditedWidth::Collapsed),
+        SettingKey::PanelColsExpanded => Some(PanelEditedWidth::Expanded),
+        _ => None,
+    }
+}
+
 /// Step a column count by `delta`, clamped to `PANEL_COLS_MIN..=u16::MAX`
 /// (a step past `u16::MAX` fails `try_from` and saturates at the top).
 fn stepped_cols(cols: u16, delta: i32) -> u16 {
@@ -556,19 +587,24 @@ fn stepped_accent_width(width: std::num::NonZeroU16, delta: i32) -> std::num::No
     let next = i32::from(width.get())
         .saturating_add(delta)
         .clamp(1, i32::from(u16::MAX));
-    // `next` is within 1..=u16::MAX, so both conversions succeed.
-    std::num::NonZeroU16::new(u16::try_from(next).unwrap_or(1)).unwrap_or(std::num::NonZeroU16::MIN)
+    // The clamp puts `next` in 1..=u16::MAX, so both conversions are total;
+    // a failure would be a bug above, not a bad input to fall back on
+    // (M-PANIC-ON-BUG).
+    std::num::NonZeroU16::new(u16::try_from(next).expect("clamped to 1..=u16::MAX"))
+        .expect("clamped to 1..=u16::MAX")
 }
 
 /// The next `Accent color` value in the row's fixed cycle palette (design
 /// D3); a custom colour outside the palette steps to the palette's first.
 fn next_accent_color(configured: mbv_config::PanelAccentColor) -> mbv_config::PanelAccentColor {
+    // The palette the `Accent color` row cycles: sand (the configured
+    // default), then frost, moss, ember and white.
     const CYCLE: [mbv_config::PanelAccentColor; 5] = [
-        mbv_config::DEFAULT_PANEL_ACCENT_COLOR,
-        mbv_config::PanelAccentColor([0x7f, 0xc8, 0xda]),
-        mbv_config::PanelAccentColor([0xa3, 0xbe, 0x8c]),
-        mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]),
-        mbv_config::PanelAccentColor([0xff, 0xff, 0xff]),
+        mbv_config::DEFAULT_PANEL_ACCENT_COLOR, // sand #dabc7f
+        mbv_config::PanelAccentColor([0x7f, 0xc8, 0xda]), // frost #7fc8da
+        mbv_config::PanelAccentColor([0xa3, 0xbe, 0x8c]), // moss #a3be8c
+        mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]), // ember #bf616a
+        mbv_config::PanelAccentColor([0xff, 0xff, 0xff]), // white #ffffff
     ];
     let next = CYCLE
         .iter()

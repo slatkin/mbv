@@ -3,6 +3,7 @@ use super::notify::ToastSeverity;
 use crate::pin::PinnedWidth;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_model::settings::PanelEditedWidth;
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_model::ui_util::{cycle_lang, next_subtitle_mode};
@@ -57,10 +58,7 @@ impl App {
     /// without `pin::apply_layout`; while pinned a `Neutral` toast announces
     /// that the change applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
-        let accent_row = matches!(
-            key,
-            SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth
-        );
+        let accent_row = mbv_ui_model::settings::is_panel_accent_row(key);
         let candidate = {
             let panel = self.config.lock().unwrap().panel;
             mbv_ui_model::settings::changed_panel_config(key, panel, delta)
@@ -68,10 +66,10 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
-        let width = match key {
-            SettingKey::PanelCols => PinnedWidth::Collapsed,
-            SettingKey::PanelColsExpanded => PinnedWidth::Expanded,
-            _ => self.pinned_width,
+        let width = match mbv_ui_model::settings::panel_row_edited_width(key) {
+            Some(PanelEditedWidth::Collapsed) => PinnedWidth::Collapsed,
+            Some(PanelEditedWidth::Expanded) => PinnedWidth::Expanded,
+            None => self.pinned_width,
         };
         // While pinned, the running panel validates the candidate layout and
         // only an accepted one is saved (design D6); a launch without a panel

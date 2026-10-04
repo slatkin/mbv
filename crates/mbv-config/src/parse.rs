@@ -377,8 +377,8 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),
         gutter_right: panel_gutter(panel, "gutter_right", defaults.gutter_right),
         accent: panel_bool(panel, "accent", defaults.accent),
-        accent_color: panel_accent_color(panel, defaults.accent_color),
-        accent_width: panel_accent_width(panel, defaults.accent_width),
+        accent_color: panel_accent_color(panel, "accent_color", defaults.accent_color),
+        accent_width: panel_accent_width(panel, "accent_width", defaults.accent_width),
     }
 }
 
@@ -422,24 +422,28 @@ fn panel_bool(panel: &toml::Value, key: &str, default: bool) -> bool {
     }
 }
 
-fn panel_accent_color(panel: &toml::Value, default: PanelAccentColor) -> PanelAccentColor {
-    match panel.get("accent_color") {
+fn panel_accent_color(
+    panel: &toml::Value,
+    key: &str,
+    default: PanelAccentColor,
+) -> PanelAccentColor {
+    match panel.get(key) {
         None => default,
         Some(value) => value
             .as_str()
             .and_then(PanelAccentColor::parse)
-            .unwrap_or_else(|| panel_fallback("accent_color", value, default)),
+            .unwrap_or_else(|| panel_fallback(key, value, default)),
     }
 }
 
-fn panel_accent_width(panel: &toml::Value, default: NonZeroU16) -> NonZeroU16 {
-    match panel.get("accent_width") {
+fn panel_accent_width(panel: &toml::Value, key: &str, default: NonZeroU16) -> NonZeroU16 {
+    match panel.get(key) {
         None => default,
         Some(value) => value
             .as_integer()
             .and_then(|v| u16::try_from(v).ok())
             .and_then(NonZeroU16::new)
-            .unwrap_or_else(|| panel_fallback("accent_width", value, default)),
+            .unwrap_or_else(|| panel_fallback(key, value, default)),
     }
 }
 
