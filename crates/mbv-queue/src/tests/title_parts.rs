@@ -37,6 +37,12 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
             a.artist = "Artist Name".to_string();
             QueueItem::Emby(Box::new(a))
         }
+        "emby_audio_track_track_artist_beats_album_artist" => {
+            let mut a = emby_item_of_type("a1", "Audio", "Audio", "Track Name");
+            a.artist = "Album Artist".to_string();
+            a.track_artist = "Track Artist".to_string();
+            QueueItem::Emby(Box::new(a))
+        }
         "emby_home_video" => QueueItem::Emby(Box::new(emby_item_of_type(
             "v1",
             "Video",
@@ -84,6 +90,14 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
     Some("Sub Name"),
     "Track Name",
     Some("Artist Name")
+)]
+// The track's own `Artists` tag outranks the album artist: the now-playing
+// panel describes a single track, not its album.
+#[case::emby_audio_track_track_artist_beats_album_artist(
+    "emby_audio_track_track_artist_beats_album_artist",
+    Some("Sub Name"),
+    "Track Name",
+    Some("Track Artist")
 )]
 #[case::emby_home_video("emby_home_video", Some("Sub Name"), "Home Clip", None)]
 #[case::audiobookshelf_podcast_episode(

@@ -197,6 +197,16 @@ fn parse_item_artist_cases(#[case] raw: serde_json::Value, #[case] expected: &st
     assert_eq!(parse_item(&raw).artist, expected);
 }
 
+// `track_artist` is the track-level `Artists` entry, independent of the
+// `artist` collapse (which prefers `AlbumArtist`) — per-track surfaces pick
+// between the two.
+#[rstest]
+#[case::track_artist_from_artists_array(json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "Artists": ["Track Artist"], "UserData": {} }), "Track Artist")]
+#[case::track_artist_absent_without_artists_array(json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "UserData": {} }), "")]
+fn parse_item_track_artist_cases(#[case] raw: serde_json::Value, #[case] expected: &str) {
+    assert_eq!(parse_item(&raw).track_artist, expected);
+}
+
 // ── parse_item: ArtistItems identity pairs (task 1.2) ──────────────────────────────
 
 #[test]

@@ -198,6 +198,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         unplayed_item_count: 0,
         path: String::new(),
         artist: String::new(),
+        track_artist: String::new(),
         artist_items: Vec::new(),
         sort_name: String::new(),
         production_year: 0,

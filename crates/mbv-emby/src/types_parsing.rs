@@ -336,6 +336,11 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .or_else(|| raw["Artists"].get(0).and_then(|v| v.as_str()))
             .unwrap_or("")
             .to_string(),
+        track_artist: raw["Artists"]
+            .get(0)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         artist_items: parse_artist_items(raw),
         sort_name: raw["SortName"].as_str().unwrap_or("").to_string(),
         production_year: raw["ProductionYear"]

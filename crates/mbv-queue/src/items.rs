@@ -360,8 +360,21 @@ impl QueueItem {
             Self::Emby(item) => {
                 if item.item_type == "Episode" && !item.series_name.is_empty() {
                     PlaybackTitleParts::two(item.name.clone(), item.series_name.clone())
-                } else if item.is_audio() && !item.artist.is_empty() {
-                    PlaybackTitleParts::two(item.name.clone(), item.artist.clone())
+                } else if item.is_audio() {
+                    // The panel describes a single track, so the track's own
+                    // `Artists` tag outranks the album artist; the album
+                    // artist is only the fallback when the track tag is
+                    // absent.
+                    let context = if item.track_artist.is_empty() {
+                        item.artist.as_str()
+                    } else {
+                        item.track_artist.as_str()
+                    };
+                    if context.is_empty() {
+                        PlaybackTitleParts::single(item.name.clone())
+                    } else {
+                        PlaybackTitleParts::two(item.name.clone(), context.to_owned())
+                    }
                 } else {
                     PlaybackTitleParts::single(item.name.clone())
                 }

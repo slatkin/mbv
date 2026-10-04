@@ -25,6 +25,7 @@ fn emby(date_added: &str) -> QueueItem {
         unplayed_item_count: 0,
         path: String::new(),
         artist: String::new(),
+        track_artist: String::new(),
         artist_items: Vec::<EmbyArtistRef>::new(),
         sort_name: String::new(),
         production_year: 0,

@@ -122,6 +122,13 @@ pub struct EmbyItem {
     pub unplayed_item_count: u32,
     pub path: String,
     pub artist: String,
+    /// The track-level artist from the payload's `Artists` list (first
+    /// entry), kept distinct from `artist` (the album artist) so per-track
+    /// surfaces can prefer the individual artist. `Default` so legacy
+    /// serialized queue items (which predate the field) deserialize
+    /// unchanged; serialized queue compatibility is unchanged.
+    #[serde(default)]
+    pub track_artist: String,
     /// `ArtistItems` name/ID pairs as returned on the payload, retained
     /// verbatim. `Default` so legacy serialized queue items (which predate
     /// the field) deserialize unchanged; serialized queue compatibility is
@@ -301,6 +308,7 @@ impl EmbyItem {
             unplayed_item_count: 0,
             path: String::new(),
             artist: String::new(),
+            track_artist: String::new(),
             artist_items: Vec::new(),
             sort_name: String::new(),
             production_year: 0,
