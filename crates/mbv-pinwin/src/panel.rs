@@ -34,6 +34,14 @@ impl<'fd> Panel<'fd> {
             master_fd: master.as_raw_fd(),
             layout: layout.to_abi(),
             keyboard_mode: keyboard_mode.to_abi(),
+            // The focus accent is change `pinned-panel-focus-accent`; off here.
+            accent: ffi::PinwinAccent {
+                enabled: 0,
+                r: 0,
+                g: 0,
+                b: 0,
+                width: 0,
+            },
         };
         // SAFETY: `startup` is a live, fully initialized `PinwinStartup`, and
         // the C ABI only reads it for the duration of the call.

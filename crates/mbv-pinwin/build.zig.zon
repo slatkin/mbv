@@ -6,8 +6,8 @@
     .paths = .{ "build.zig", "build.zig.zon" },
     .dependencies = .{
         .pinwin = .{
-            .url = "git+https://github.com/slatkin/pinwin#664e195fe825828cb5372872cb4555ed5929a1d2",
-            .hash = "pinwin-0.2.0-tWOmIHeBAwBucU_veFccdt8JN_BKW0xfukJbAl4wknyT",
+            .url = "git+https://github.com/slatkin/pinwin#c64af49c0379001793fa9f57443c138d468771e9",
+            .hash = "pinwin-0.2.0-tWOmIHfKAwBOngW2GTIp_YW8pgYB3ft8wa4BaowuxcK1",
         },
     },
 }

@@ -32,6 +32,17 @@ pub(crate) struct PinwinLayout {
     pub(crate) right: i32,
 }
 
+/// Mirror of `PinwinAccent`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PinwinAccent {
+    pub(crate) enabled: i32,
+    pub(crate) r: u8,
+    pub(crate) g: u8,
+    pub(crate) b: u8,
+    pub(crate) width: i32,
+}
+
 /// Mirror of `PinwinStartup`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -39,6 +50,7 @@ pub(crate) struct PinwinStartup {
     pub(crate) master_fd: i32,
     pub(crate) layout: PinwinLayout,
     pub(crate) keyboard_mode: i32,
+    pub(crate) accent: PinwinAccent,
 }
 
 unsafe extern "C" {
