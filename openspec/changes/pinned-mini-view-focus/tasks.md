@@ -13,4 +13,4 @@
 
 ## 3. Integration
 
-- [ ] 3.1 Integration check (manual, user): `mbv --pin` on niri, panel narrower than 80 columns. Focused palette while the panel holds focus, resting palette after clicking a tile, focused again after clicking back. Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings`; both must pass.
+- [x] 3.1 Integration check (manual, user): `mbv --pin` on niri, panel narrower than 80 columns. Focused palette while the panel holds focus, resting palette after clicking a tile, focused again after clicking back. Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings`; both must pass.
