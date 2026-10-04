@@ -89,6 +89,21 @@ impl Model {
     /// focus hand-off runs only when the Resize observer armed it -- the real
     /// terminal-resize event, whose pre-resize width the marker still holds.
     pub(super) fn sync_terminal_resize(&mut self) {
+        // Change `panel-expand-toggle`: a pinned width apply resizes the pty
+        // synchronously inside the apply call, so the new size is knowable
+        // before the terminal-event worker delivers its `Resize` observer
+        // event (measured ~50 ms later). Adopt it here, so the frame in this
+        // iteration is painted at the new width instead of painting the old
+        // one and waiting a second time for the event -- a stale wide paint
+        // that also wrote ~36 KB into the pty while the panel's width tween
+        // was running.
+        if std::mem::take(&mut self.app.pinned_resize_pending)
+            && let Ok((width, height)) = crossterm::terminal::size()
+        {
+            self.app.terminal_width = width;
+            self.app.terminal_height = height;
+            self.pending_terminal_resize = true;
+        }
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {
@@ -96,7 +111,11 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        self.app.images.clear_images_and_loading();
+        // D1 (panel-expand-toggle): the image cache survives a resize. The
+        // painters' protocol resize path re-encodes from the decoded sources
+        // at the new geometry; wiping the cache here (a second clear next to
+        // the observer's) only forced HTTP refetches and a longer placeholder
+        // window on every pinned width toggle.
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {

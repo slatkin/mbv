@@ -440,6 +440,11 @@ pub struct App {
     /// `panel-expand-toggle`, design D1); never persisted, so a launch always
     /// starts collapsed.
     pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
+    /// Set when a pinned panel accepted a layout (change
+    /// `panel-expand-toggle`): the apply call resized the pty synchronously,
+    /// so the shell adopts the new size in that same loop iteration instead of
+    /// waiting for the terminal-event worker's `Resize` event.
+    pub(in crate::app) pinned_resize_pending: bool,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }

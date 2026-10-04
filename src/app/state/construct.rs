@@ -119,6 +119,7 @@ impl App {
             terminal_height: 24,
             pinned_panel: None,
             pinned_width: crate::pin::PinnedWidth::Collapsed,
+            pinned_resize_pending: false,
 
             pending_overlay: None,
             pending_exit_message: None,

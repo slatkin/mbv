@@ -76,6 +76,10 @@ impl App {
                 self.config.lock().unwrap().panel = candidate;
                 if let Some(width) = width {
                     self.pinned_width = width;
+                    // A panel accepted the candidate, so the pty is already at
+                    // the new size: adopt it in this loop iteration (change
+                    // `panel-expand-toggle`).
+                    self.pinned_resize_pending = true;
                 }
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
             }

@@ -373,8 +373,16 @@ fn apply_terminal_observer(
             model.pending_terminal_resize = true;
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
-            model.app.force_clear = true;
-            model.app.images.clear_images_and_loading();
+            // D1 (panel-expand-toggle): no `force_clear` and no image-cache
+            // clear here. pinwin's animated width apply resizes the pty once,
+            // straight to the target width, at the tween's first frame; a
+            // `terminal.clear()` blanked the panel mid-tween and wiping the
+            // cache (decoded sources + fetch dedup) made every visible card
+            // and the hero refetch and re-encode from scratch, so art popped
+            // in only after the tween had finished. Ratatui's own autoresize
+            // already repaints every cell at the new size, and painters
+            // re-encode from the surviving decoded sources through their
+            // protocol resize path.
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;
