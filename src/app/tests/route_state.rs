@@ -272,8 +272,11 @@ fn local_route_while_home_link_is_suspended_reinstates_it() {
     assert!(!app.player.is_remote_disconnected());
 }
 
+// daemon-lifecycle "Switching away from the home link keeps local playback":
+// even with Stay-alive off (the case that used to stop the home link first),
+// route switching only suspends it -- no Stop ever reaches the home link.
 #[test]
-fn switching_away_with_stay_alive_disabled_sends_stop_to_home_link() {
+fn switching_away_from_home_never_stops_local_playback() {
     let (mut app, home_commands) = make_local_daemon_app_stub_with_cmd_rx(make_items(1));
     app.config.lock().unwrap().stay_alive = false;
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -281,7 +284,7 @@ fn switching_away_with_stay_alive_disabled_sends_stop_to_home_link() {
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
     assert!(app.suspended_local.is_some());
-    assert!(home_commands.try_iter().any(|command| matches!(
+    assert!(!home_commands.try_iter().any(|command| matches!(
         command,
         mbv_ctrl::CtrlCmd::PlaybackIntent(intent)
             if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
