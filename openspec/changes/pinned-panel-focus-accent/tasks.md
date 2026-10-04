@@ -21,4 +21,4 @@ and `Startup.accent` already exist. No pin bump is needed.
 
 ## 4. Integration
 
-- [ ] 4.1 Integration check (manual, user): `mbv --pin` on niri. Clicking into the panel shows a `#dabc7f` stroke around the panel, and clicking a tile removes it. `accent = false` shows no stroke after a relaunch. Editing an accent row in F2 while pinned shows the toast, and the new value applies after a relaunch. Run `cargo fmt --all -- --check` and `cargo nextest run --workspace`; both must pass.
+- [x] 4.1 Integration check (manual, user): `mbv --pin` on niri. Clicking into the panel shows a `#dabc7f` stroke around the panel, and clicking a tile removes it. `accent = false` shows no stroke after a relaunch. Editing an accent row in F2 while pinned shows the toast, and the new value applies after a relaunch. Run `cargo fmt --all -- --check` and `cargo nextest run --workspace`; both must pass.
