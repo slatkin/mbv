@@ -97,8 +97,10 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     let settings = Arc::new(Mutex::new(OwnerSettings {
         stay_alive: false,
         show_systray_icon: false,
-        consume_videos: false,
-        consume_audio: false,
+        consume: ConsumeKinds {
+            videos: false,
+            audio: false,
+        },
     }));
     let current_settings = Arc::clone(&settings);
     let event_loop = DaemonLoop {
@@ -216,7 +218,7 @@ fn daemon_reads_consume_audio_turned_on_during_the_session() {
         ],
         0,
     );
-    t.settings.lock().unwrap().consume_audio = true;
+    t.settings.lock().unwrap().consume.audio = true;
     let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
 
     let flow = t
@@ -245,8 +247,10 @@ fn daemon_reads_stay_alive_at_shutdown_decision_time_and_rejects_while_on() {
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
         show_systray_icon: false,
-        consume_videos: false,
-        consume_audio: false,
+        consume: ConsumeKinds {
+            videos: false,
+            audio: false,
+        },
     };
     let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -290,8 +294,10 @@ fn ordinary_disconnect_is_not_shutdown_when_reader_says_stay_alive() {
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
         show_systray_icon: false,
-        consume_videos: false,
-        consume_audio: false,
+        consume: ConsumeKinds {
+            videos: false,
+            audio: false,
+        },
     };
     let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);

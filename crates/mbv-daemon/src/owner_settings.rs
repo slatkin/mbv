@@ -2,11 +2,16 @@ use crate::DaemonRole;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ConsumeKinds {
+    pub videos: bool,
+    pub audio: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct OwnerSettings {
     pub stay_alive: bool,
     pub show_systray_icon: bool,
-    pub consume_videos: bool,
-    pub consume_audio: bool,
+    pub consume: ConsumeKinds,
 }
 
 impl OwnerSettings {
@@ -22,8 +27,10 @@ impl From<&mbv_config::Config> for OwnerSettings {
         Self {
             stay_alive: config.stay_alive,
             show_systray_icon: config.show_systray_icon,
-            consume_videos: config.consume_videos,
-            consume_audio: config.consume_audio,
+            consume: ConsumeKinds {
+                videos: config.consume_videos,
+                audio: config.consume_audio,
+            },
         }
     }
 }
@@ -58,8 +65,10 @@ pub(crate) fn fixed_reader(stay_alive: bool) -> OwnerSettingsReader {
     let settings = OwnerSettings {
         stay_alive,
         show_systray_icon: false,
-        consume_videos: false,
-        consume_audio: false,
+        consume: ConsumeKinds {
+            videos: false,
+            audio: false,
+        },
     };
     Arc::new(move || settings)
 }
@@ -82,7 +91,7 @@ mod tests {
         .unwrap();
         let last_successful = settings();
         assert!(last_successful.stay_alive);
-        assert!(last_successful.consume_audio);
+        assert!(last_successful.consume.audio);
 
         std::fs::write(mbv_config::config_path(), "invalid toml !!!").unwrap();
         assert_eq!(settings(), last_successful);

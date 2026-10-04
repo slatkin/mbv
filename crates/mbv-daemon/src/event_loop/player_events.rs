@@ -196,8 +196,8 @@ impl DaemonLoop {
         };
         let settings = (self.owner_settings)();
         let consume_policy = super::super::ConsumePolicy {
-            videos: settings.consume_videos,
-            audio: settings.consume_audio,
+            videos: settings.consume.videos,
+            audio: settings.consume.audio,
         };
         if !apply_track_completed_observation(
             &mut self.owner,
