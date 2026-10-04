@@ -56,11 +56,11 @@ saying it applies on the next `mbv --pin` launch.
 
 #### Scenario: Default accent
 - **WHEN** `mbv --pin` starts with no accent keys in `config.toml` and the user clicks into the panel
-- **THEN** a 1 px `#dabc7f` strip appears on the panel's workspace-facing edge
+- **THEN** a 1 px `#dabc7f` stroke appears around the panel's border while it holds focus
 
 #### Scenario: Accent off
 - **WHEN** `accent = false` and the user clicks into the panel
-- **THEN** no accent strip is drawn
+- **THEN** no accent stroke is drawn
 
 #### Scenario: Accent edit while pinned
 - **WHEN** mbv runs in the panel and the user toggles `Accent` in F2
