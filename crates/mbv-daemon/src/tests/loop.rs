@@ -124,6 +124,10 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
             Ok(())
         }),
         queue_persist_tx: None,
+        tray: {
+            let (tray_tx, _tray_rx) = mpsc::sync_channel(1);
+            TrayState::new(Box::new(|_| None), tray_tx)
+        },
     };
     TestLoop {
         event_loop,

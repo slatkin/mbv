@@ -599,7 +599,7 @@ pub struct DaemonPlayerHandle {
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;
-type OnTrayReady = Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
+pub(crate) type OnTrayReady = Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
 
 pub struct DaemonRuntimeHooks {
     pub on_player_ready: OnPlayerReady,
