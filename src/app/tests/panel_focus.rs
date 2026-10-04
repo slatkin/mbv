@@ -58,6 +58,8 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
 /// frame fill and the queue rows' zebra rest at the unfocused tones even
 /// though the component holds interaction focus -- one palette, the default
 /// (unfocused) one, because there is no sibling panel to contrast against.
+/// The selected row is the exception: the focused panel keeps its cursor bar
+/// on the resting stripe.
 #[test]
 fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     let mut app = make_app_stub();
@@ -89,12 +91,21 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
         "mini view frame fill rests despite Queue holding focus"
     );
     // The zebra stripes across the rows follow the same suppression: no row
-    // paints the focused tone, and the resting stripe did paint.
+    // paints the focused tone, and the resting stripe did paint. The
+    // selected row is the exception: it keeps the canonical cursor bar.
     let box_area = mbv_render::arrangements::queue::queue_list_box(panel);
+    assert_eq!(
+        buf[(box_area.x, box_area.y)].style().bg,
+        Some(mbv_theme::SELECTED_ROW_BG),
+        "mini view keeps the cursor bar on the first row"
+    );
     let mut striped = 0;
     for y in box_area.y..box_area.bottom() {
         for x in box_area.x..box_area.right() {
             let bg = buf[(x, y)].style().bg;
+            if bg == Some(mbv_theme::SELECTED_ROW_BG) {
+                continue;
+            }
             assert_ne!(
                 bg,
                 Some(focused_zebra),

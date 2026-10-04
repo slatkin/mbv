@@ -35,14 +35,21 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
-            PanelListPaintPolicy::Wide { focused } => {
+            PanelListPaintPolicy::Wide {
+                focused,
+                palette_focused,
+            } => {
                 // Every library browser list stripes again (7038e430 dropped
                 // it; restored 2026-09-20), in the Grouped Music tree's style:
-                // the stripe is the library column's own fill for this focus
-                // bit — focused `SURFACE_FOCUSED`, the same tone the music
-                // tree's rows alternate with, resting the app backdrop.
+                // the stripe is the library column's own fill for the
+                // palette bit — focused `SURFACE_FOCUSED`, the same tone the
+                // music tree's rows alternate with, resting the app backdrop.
+                // The policy keys the stripe tone on the palette bit, so a
+                // mini view panel keeps its selected-row bar on the resting
+                // stripe.
                 self.wide_mut().set_paint_policy(
                     WideMediaListPaintPolicy::new(focused)
+                        .with_palette_focus(palette_focused)
                         .with_zebra(zebra_stripe(Surface::LibraryColumn)),
                 );
             }
@@ -89,11 +96,14 @@ impl<Target: Clone + Eq + Hash> PanelList for crate::list::tree_browser::TreeBro
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
-        let focused = match policy {
-            PanelListPaintPolicy::Wide { focused }
-            | PanelListPaintPolicy::WideWorkspace { focused } => focused,
+        let (focused, palette_focused) = match policy {
+            PanelListPaintPolicy::Wide {
+                focused,
+                palette_focused,
+            } => (focused, palette_focused),
+            PanelListPaintPolicy::WideWorkspace { focused } => (focused, focused),
         };
-        self.set_focused(focused);
+        self.set_paint_focus(focused, palette_focused);
         self.invalidate_paint();
     }
 
@@ -198,7 +208,10 @@ mod panel_list_tests {
             .draw(|frame| {
                 PanelList::set_paint_policy(
                     &mut tree,
-                    PanelListPaintPolicy::Wide { focused: true },
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        palette_focused: true,
+                    },
                 );
                 PanelList::set_geometry(&mut tree, claim, content);
                 PanelList::view(&mut tree, frame, claim);
@@ -227,7 +240,10 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Wide { focused: true },
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        palette_focused: true,
+                    },
                 );
                 PanelList::view(&mut carrier, f, area);
             })
@@ -305,7 +321,10 @@ mod panel_list_tests {
                 .draw(|f| {
                     PanelList::set_paint_policy(
                         &mut carrier,
-                        PanelListPaintPolicy::Wide { focused },
+                        PanelListPaintPolicy::Wide {
+                            focused,
+                            palette_focused: focused,
+                        },
                     );
                     PanelList::view(&mut carrier, f, area);
                 })
@@ -327,11 +346,55 @@ mod panel_list_tests {
         }
     }
 
+    /// The mini-view split: a focused browser list with a resting palette
+    /// keeps the canonical Iris bar on its selected row while the zebra
+    /// stripe rests at the unfocused tone. The selected row is the exception
+    /// to the palette suppression, so the single displayed panel keeps a
+    /// visible cursor.
+    #[test]
+    fn mini_view_keeps_the_cursor_bar_on_the_resting_stripe() {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content(vec![item("a"), item("b")]);
+        let area = Rect::new(0, 0, 20, 2);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+
+        terminal
+            .draw(|f| {
+                PanelList::set_paint_policy(
+                    &mut carrier,
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        palette_focused: false,
+                    },
+                );
+                PanelList::view(&mut carrier, f, area);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let resting = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+        assert_ne!(
+            resting,
+            palette::surface_colors(palette::Surface::LibraryColumn, true).fill,
+            "the LibraryColumn focus pair must differ for this proof to bind"
+        );
+        assert_eq!(
+            buf[(area.x, area.y)].bg,
+            palette::SELECTED_ROW_BG,
+            "the focused row keeps its bar on the resting palette"
+        );
+        assert_eq!(
+            buf[(area.x + 2, area.y + 1)].bg,
+            resting,
+            "the stripe rests while the cursor stays"
+        );
+    }
+
     /// The shared tree stripes with the browser pane's library pair — the
     /// same `LibraryColumn` stripe over the `LibraryPanel` box fill the flat
     /// carrier resolves — in both focus states: group headings and the spacer
     /// between groups keep the box fill, and each group's first member opens
-    /// the alternation on the stripe.
+    /// the alternation on the stripe. The mini-view split (focused cursor on
+    /// a resting palette) keeps the selected row's bar on the resting stripe.
     #[test]
     fn shared_tree_stripes_with_the_library_browser_pair() {
         use crate::list::tree_browser::{
@@ -364,42 +427,61 @@ mod panel_list_tests {
         // The title column: content's x plus the 2-column quiet indent the
         // stripe is read from (the indent keeps the parent background).
         let x = content.x + 2;
-        for focused in [true, false] {
+        for (focused, palette_focused) in [(true, true), (false, false), (true, false)] {
             terminal
                 .draw(|frame| {
-                    PanelList::set_paint_policy(&mut tree, PanelListPaintPolicy::Wide { focused });
+                    PanelList::set_paint_policy(
+                        &mut tree,
+                        PanelListPaintPolicy::Wide {
+                            focused,
+                            palette_focused,
+                        },
+                    );
                     PanelList::set_geometry(&mut tree, claim, content);
                     PanelList::view(&mut tree, frame, claim);
                 })
                 .unwrap();
             let buf = terminal.backend().buffer();
-            let box_fill = palette::surface_colors(palette::Surface::LibraryPanel, focused).fill;
-            let stripe = palette::surface_colors(palette::Surface::LibraryColumn, focused).fill;
+            let box_fill =
+                palette::surface_colors(palette::Surface::LibraryPanel, palette_focused).fill;
+            let stripe =
+                palette::surface_colors(palette::Surface::LibraryColumn, palette_focused).fill;
+            let case = format!("focused={focused}, palette_focused={palette_focused}");
             assert_eq!(
                 buf[(x, 0)].bg,
                 box_fill,
-                "the group heading keeps the box fill, focused={focused}"
+                "the group heading keeps the box fill, {case}"
             );
             assert_eq!(
                 buf[(x, 2)].bg,
                 box_fill,
-                "the spacer between groups keeps the box fill, focused={focused}"
+                "the spacer between groups keeps the box fill, {case}"
             );
             assert_eq!(
                 buf[(x, 3)].bg,
                 box_fill,
-                "the next group's heading keeps the box fill, focused={focused}"
+                "the next group's heading keeps the box fill, {case}"
             );
             assert_eq!(
                 buf[(x, 1)].bg,
                 stripe,
-                "the group's first member opens on the stripe, focused={focused}"
+                "the group's first member opens on the stripe, {case}"
             );
             assert_ne!(
                 buf[(x, 1)].bg,
                 box_fill,
-                "the stripe must be visible against the box fill, focused={focused}"
+                "the stripe must be visible against the box fill, {case}"
             );
+            if focused {
+                // The selected Child row is the fourth content row; its bar
+                // reaches the claim rect's border in every focused state,
+                // including on the resting mini-view palette.
+                assert_eq!(
+                    buf[(claim.x, 4)].bg,
+                    palette::SELECTED_ROW_BG,
+                    "the selected row keeps its bar, {case}"
+                );
+            }
         }
     }
 
@@ -421,7 +503,10 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Wide { focused: true },
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        palette_focused: true,
+                    },
                 );
                 PanelList::view(&mut carrier, f, list_rect);
             })
@@ -442,7 +527,10 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Wide { focused: true },
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        palette_focused: true,
+                    },
                 );
                 PanelList::view(&mut carrier, f, list_rect);
             })

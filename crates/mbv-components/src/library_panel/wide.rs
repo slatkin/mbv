@@ -117,9 +117,14 @@ pub struct BrowserPaneGeometry {
 /// a short signature without losing the per-input docs.
 #[derive(Debug)]
 pub struct BrowserPanePaintParams<'a> {
-    /// Whether the browser list slot holds focus (drives the list's focused
-    /// surface and the Wide paint policy).
+    /// Whether the browser list slot holds interaction focus (drives the
+    /// list's cursor: selected-row bar, marquee, scrollbar).
     pub list_focused: bool,
+    /// Whether the browser panel paints the focused palette. Mini view
+    /// rests the palette while the displayed panel keeps its cursor, so the
+    /// box fills and the zebra stripe follow this bit, never `list_focused`
+    /// alone.
+    pub mini_view: bool,
     /// The whole panel's own bit (what the shell paints the column body
     /// with): the Selector row's spacer is the panel showing through, so the
     /// full-width spacer band follows that bit, not the list pane's narrower
@@ -143,6 +148,7 @@ fn paint_browser_list_slot(
     list_area: Rect,
     content: &mut LibraryPanelContent<'_>,
     list_focused: bool,
+    palette_focused: bool,
 ) {
     match &mut content.list {
         ListSlot::Search(search) => {
@@ -165,6 +171,7 @@ fn paint_browser_list_slot(
                 search.clamp_viewport(list_area.height.max(1) as usize);
                 search.set_paint_policy(PanelListPaintPolicy::Wide {
                     focused: list_focused,
+                    palette_focused,
                 });
                 // The canonical rail owns the full panel row, exactly as for
                 // `ListSlot::Media` (see that arm below).
@@ -182,6 +189,7 @@ fn paint_browser_list_slot(
             list.clamp_viewport(list_area.height.max(1) as usize);
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: list_focused,
+                palette_focused,
             });
             // The canonical rail owns the full panel row (matching the
             // pre-migration wide rail): the selected background reaches
@@ -216,6 +224,7 @@ pub fn paint_browser_pane(
 ) -> BrowserPaneGeometry {
     let BrowserPanePaintParams {
         list_focused,
+        mini_view,
         panel_focused,
         hovered_selector,
         hits,
@@ -255,12 +264,18 @@ pub fn paint_browser_pane(
     }
 
     // List box: fill, then the slot's content in the inset row-flow rect.
+    // The box fill is an appearance surface: it rests in mini view while
+    // the list keeps its cursor. The cursor follows interaction focus; the
+    // stripe follows the same palette bit, and the selected row is the
+    // exception to the suppression, so the displayed panel keeps a visible
+    // cursor.
+    let palette_focused = list_focused && !mini_view;
     let list_panel = pane.list_panel;
     mbv_render::components::widgets::fill_surface(
         f,
         list_panel,
         palette::Surface::LibraryPanel,
-        list_focused,
+        palette_focused,
     );
     // The rail's row flow keeps the side pads and both vertical pads,
     // matching the Workspace box's own `padded_rect` inset: one blank spacer
@@ -287,6 +302,7 @@ pub fn paint_browser_pane(
         list_area,
         content,
         list_focused,
+        palette_focused,
     );
 
     // The list slot's painted selection is the context-menu anchor's painted
@@ -322,8 +338,11 @@ pub fn paint_browser_pane(
 /// painter keeps a short signature without losing the per-input docs.
 #[derive(Debug)]
 pub struct WideSkeletonPaintParams<'a> {
-    /// Whether the browser panel holds focus.
+    /// Whether the browser panel holds interaction focus. Mini view keeps
+    /// this bit on the displayed panel: only the palette rests.
     pub browser_focused: bool,
+    /// Mini-view palette suppression (see `LibraryPanel::set_mini_view`).
+    pub mini_view: bool,
     /// Width override for the hero pane, when one is active.
     pub override_width: Option<u16>,
     /// The hero overview's scroll offset.
@@ -350,6 +369,7 @@ pub fn render_wide_skeleton(
 ) -> Option<WideSkeletonGeometry> {
     let WideSkeletonPaintParams {
         browser_focused,
+        mini_view,
         override_width,
         overview_scroll,
         hovered_selector,
@@ -390,7 +410,8 @@ pub fn render_wide_skeleton(
         content,
         BrowserPanePaintParams {
             list_focused,
-            panel_focused: browser_focused,
+            mini_view,
+            panel_focused: browser_focused && !mini_view,
             hovered_selector,
             hits,
             windows,

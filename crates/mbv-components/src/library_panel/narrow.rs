@@ -22,6 +22,7 @@ pub fn render_narrow_skeleton(
     area: Rect,
     content: &mut LibraryPanelContent<'_>,
     browser_focused: bool,
+    mini_view: bool,
     hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
@@ -30,13 +31,16 @@ pub fn render_narrow_skeleton(
     // The non-Wide rail's focus is the panel's bit alone: `workspace_focused`
     // is breakpoint-unaware (a Workspace focused in Wide survives a shrink
     // with the overlay closed), so the non-Wide rail never subtracts it.
+    // The palette rests in mini view while the displayed panel keeps its
+    // cursor, so the selected row stays visible on the resting stripe.
     let browser = paint_browser_pane(
         f,
         pane,
         content,
         BrowserPanePaintParams {
             list_focused: browser_focused,
-            panel_focused: browser_focused,
+            mini_view,
+            panel_focused: browser_focused && !mini_view,
             hovered_selector,
             hits,
             windows,

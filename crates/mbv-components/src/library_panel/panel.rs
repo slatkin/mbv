@@ -89,7 +89,8 @@ pub struct LibraryPanel {
     /// nothing to contrast the focused tone against, so it paints the default
     /// (unfocused) palette even while it holds interaction focus. Projected
     /// per sync pass from the shell's breakpoint; only the skeleton's palette
-    /// bit follows this, never input (`focused` stays the Focus attribute).
+    /// bit follows this — the focused panel keeps its cursor bar on the
+    /// resting stripe — never input (`focused` stays the Focus attribute).
     mini_view: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).

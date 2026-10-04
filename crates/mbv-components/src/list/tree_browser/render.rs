@@ -25,6 +25,7 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
             visible_rows.len(),
             self.viewport_offset,
             self.focused,
+            self.palette_focused,
             &mut self.marquee_text,
             &mut self.marquee_started_at,
         );

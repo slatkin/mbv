@@ -59,7 +59,8 @@ pub struct QueueComponent {
     /// nothing to contrast the focused tone against, so it paints the default
     /// (unfocused) palette even while it holds interaction focus. Projected
     /// per frame from the shell's breakpoint; only the palette follows this
-    /// bit, never input.
+    /// bit, never input — the focused panel keeps its cursor bar on the
+    /// resting stripe.
     mini_view: bool,
     empty_text: String,
     area: Rect,
@@ -305,8 +306,12 @@ impl Component for QueueComponent {
         }
         self.ensure_carrier();
         let list = self.carrier.wide_mut();
+        // The cursor follows interaction focus; the stripe rests in mini
+        // view. The selected row is the exception to the palette
+        // suppression, so the single displayed panel keeps a visible cursor.
         list.set_paint_policy(
-            WideMediaListPaintPolicy::for_queue(self.focused && !self.mini_view)
+            WideMediaListPaintPolicy::for_queue(self.focused)
+                .with_palette_focus(self.focused && !self.mini_view)
                 .with_zebra(queue_row_zebra_stripe()),
         );
         Component::view(list, frame, content_area);

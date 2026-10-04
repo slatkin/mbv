@@ -21,7 +21,11 @@ impl Default for LibraryPanel {
 }
 
 struct SkeletonPaintState<'a> {
+    /// Interaction focus: the displayed panel keeps its cursor (selected-row
+    /// bar, marquee, scrollbar) even while the palette rests.
     focused: bool,
+    /// Mini-view palette suppression (see `LibraryPanel::set_mini_view`).
+    mini_view: bool,
     list_pane_width: Option<u16>,
     hovered_selector: Option<usize>,
     hovered_link: Option<usize>,
@@ -57,6 +61,7 @@ fn paint_skeleton(
             content,
             WideSkeletonPaintParams {
                 browser_focused: state.focused,
+                mini_view: state.mini_view,
                 override_width: state.list_pane_width,
                 overview_scroll,
                 hovered_selector: state.hovered_selector,
@@ -88,6 +93,7 @@ fn paint_skeleton(
             area,
             content,
             state.focused,
+            state.mini_view,
             state.hovered_selector,
             state.hit_regions,
             state.windows,
@@ -209,7 +215,8 @@ impl Component for LibraryPanel {
             overview_scroll,
             show_hero_pane,
             &mut SkeletonPaintState {
-                focused: self.focused && !self.mini_view,
+                focused: self.focused,
+                mini_view: self.mini_view,
                 list_pane_width: self.list_pane_width,
                 hovered_selector: self.hovered_selector,
                 hovered_link: self.hovered_link,
