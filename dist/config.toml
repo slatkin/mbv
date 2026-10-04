@@ -43,3 +43,8 @@ gutter_top    = 0
 gutter_bottom = 0
 gutter_left   = 0
 gutter_right  = 0
+# Focus accent: a stroke around the panel window while it holds keyboard
+# focus. Fixed at launch (change it and restart `mbv --pin`).
+accent        = true
+accent_color  = "#dabc7f"
+accent_width  = 1

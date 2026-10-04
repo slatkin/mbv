@@ -627,6 +627,12 @@ with the `pinned_width_toggle` keybind (`Ctrl+e` by default), and every pinned
 launch starts at the collapsed width — the active width is never saved.
 _Avoid_: panel mode, expand mode, panel size
 
+**Focus accent**:
+A stroke around the **Pinned panel**'s window while it holds keyboard focus,
+drawn in the `[panel]` `accent_color` at `accent_width` pixels unless `accent`
+is false. It is fixed at launch, because pinwin has no runtime accent API.
+_Avoid_: focus ring, strip, highlight
+
 **Pinned launch**:
 A launch that runs mbv's TUI in the **Pinned panel** in the same process instead
 of the current terminal, selected only by the `--pin` flag. It chooses where the
