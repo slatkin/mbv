@@ -50,7 +50,8 @@
 - [x] 4.2 Delete `openspec/specs/pinwin-panel/` (design D6) and confirm
   `openspec validate --all` passes and nothing under `openspec/specs/` still names
   `pinwin_start` / `PINWIN_ERR_*`.
-- [ ] 4.3 Integration check (manual, needs user approval for the live run): `mbv --pin` in a
+- [x] 4.3 Integration check (manual, needs user approval for the live run): `mbv --pin` in a
   niri session — panel opens collapsed, `Ctrl+e` toggles with animation both ways, F2 Panel
   edits still apply live, stopping mbv removes the panel. Record the upstream rev verified
   against. `pinned-panel-focus-accent` rebases onto `Option<Accent>` afterwards (design D4).
+  Verified by the user manually against pinwin rev 0d9be0b6c9cd9f78f942b8131a2653e02fec823a.
