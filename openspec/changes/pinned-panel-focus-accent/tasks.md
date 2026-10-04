@@ -7,8 +7,8 @@ and `Startup.accent` already exist. No pin bump is needed.
 
 ## 1. Config
 
-- [ ] 1.1 In `crates/mbv-config/src/panel.rs`, add `PanelAccentColor([u8; 3])` with `parse(&str) -> Option<Self>` (accepts `#RRGGBB` or `RRGGBB`), `Display` as `#rrggbb`, and `DEFAULT_PANEL_ACCENT_COLOR = #dabc7f`. Add `accent: bool` (default `true`), `accent_color: PanelAccentColor` and `accent_width: NonZeroU16` (default 1) to `PanelConfig`. Parse them in `parse.rs` with the existing per-key fallback warning, and save them in `save.rs` after the gutters. Extend `panel_values_fall_back_per_key_and_a_valid_section_round_trips` (`crates/mbv-config/src/tests/settings.rs`) with a malformed colour, width 0, and a valid round trip of all three keys. Verify `cargo nextest run -p mbv-config`.
-- [ ] 1.2 In `src/pin.rs::start_panel`, replace `accent: None` with `config.accent.then(|| Accent::new(config.accent_color.0, config.accent_width))`, importing `pinwin::layout::Accent`. Verify `cargo check -p mbv`.
+- [x] 1.1 In `crates/mbv-config/src/panel.rs`, add `PanelAccentColor([u8; 3])` with `parse(&str) -> Option<Self>` (accepts `#RRGGBB` or `RRGGBB`), `Display` as `#rrggbb`, and `DEFAULT_PANEL_ACCENT_COLOR = #dabc7f`. Add `accent: bool` (default `true`), `accent_color: PanelAccentColor` and `accent_width: NonZeroU16` (default 1) to `PanelConfig`. Parse them in `parse.rs` with the existing per-key fallback warning, and save them in `save.rs` after the gutters. Extend `panel_values_fall_back_per_key_and_a_valid_section_round_trips` (`crates/mbv-config/src/tests/settings.rs`) with a malformed colour, width 0, and a valid round trip of all three keys. Verify `cargo nextest run -p mbv-config`.
+- [x] 1.2 In `src/pin.rs::start_panel`, replace `accent: None` with `config.accent.then(|| Accent::new(config.accent_color.0, config.accent_width))`, importing `pinwin::layout::Accent`. Verify `cargo check -p mbv`.
 
 ## 2. F2 rows
 
