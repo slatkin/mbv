@@ -1313,7 +1313,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps 9.0.0",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2983,7 +2983,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 [[package]]
 name = "pinwin"
 version = "0.2.0"
-source = "git+https://github.com/slatkin/pinwin?rev=fc053baa75e2fb5f164517a80fcf5cb119edec50#fc053baa75e2fb5f164517a80fcf5cb119edec50"
+source = "git+https://github.com/slatkin/pinwin?rev=0d9be0b6c9cd9f78f942b8131a2653e02fec823a#0d9be0b6c9cd9f78f942b8131a2653e02fec823a"
 dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
@@ -3588,7 +3588,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
