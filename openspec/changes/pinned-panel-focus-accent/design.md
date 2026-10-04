@@ -2,8 +2,9 @@
 
 ## Context
 
-pinwin `ef778e4` adds `PinwinAccent { int32_t enabled; uint8_t r, g, b; int32_t width; }` as the
-last field of `PinwinStartup`, which grows the struct from 32 to 44 bytes.
+pinwin `c64af49` (the pin landed by `panel-expand-toggle`) ships the focus accent:
+`PinwinAccent { int32_t enabled; uint8_t r, g, b; int32_t width; }` as the last field of
+`PinwinStartup`, which grew the struct from 32 to 44 bytes.
 - `startup_valid` returns `PINWIN_ERR_INVALID` when `enabled` is not 0 or 1, when `width` is
   outside 0..=65535, or when `enabled` is 1 and `width` is 0.
 - The strip is drawn on the workspace-facing edge in raw surface coordinates, and it stays
@@ -12,8 +13,9 @@ last field of `PinwinStartup`, which grows the struct from 32 to 44 bytes.
 - There is no runtime API to change the accent; it is fixed at `pinwin_start`.
 
 In mbv today:
-- `crates/mbv-pinwin/src/ffi.rs` mirrors `PinwinStartup` as `{ master_fd, layout, keyboard_mode }`.
-- `Panel::start(master, layout, keyboard_mode)` builds that struct.
+- `crates/mbv-pinwin/src/ffi.rs` already mirrors `PinwinAccent` and the `accent` field of
+  `PinwinStartup` (`panel-expand-toggle`), and `Panel::start` fills it with `enabled: 0`.
+- `Panel::start(master, layout, keyboard_mode)` has no accent parameter.
 - `src/pin.rs::start_panel` calls `Panel::start` with a layout built from `PanelConfig`.
 
 ## Goals / Non-Goals
@@ -38,9 +40,10 @@ the width widened to `i32`. Every state pinwin would reject is unrepresentable o
 
 **D2: Mirror layout.** `#[repr(C)] struct PinwinAccent { enabled: i32, r: u8, g: u8, b: u8,
 width: i32 }`, appended to `PinwinStartup` as `accent`, which matches the C field order. No
-`Pod`/`bytemuck` derive, so the padding byte after `b` is harmless. Add a `const _:` size
-assertion that `size_of::<PinwinStartup>() == 44`, so the next pinwin bump that changes the struct
-fails at compile time instead of becoming UB.
+`Pod`/`bytemuck` derive, so the padding byte after `b` is harmless. The mirror and the field
+landed with `panel-expand-toggle`; what remains is a `const _:` size assertion that
+`size_of::<PinwinStartup>() == 44`, so the next pinwin bump that changes the struct fails at
+compile time instead of becoming UB.
 
 **D3: Config shape.** `PanelConfig` gains:
 - `accent: bool`, default `true`.
@@ -70,5 +73,5 @@ rows.
 - [ABI drift on a future pin bump] → mitigated by the D2 size assertion.
 - [Colour cycling is limited] → any hex value can still be set in `config.toml`, and the cycle
   keeps that value.
-- [Ordering against `panel-expand-toggle`] → this change bumps from that change's pin. Implement
-  it only after `panel-expand-toggle` merges, so the pins never conflict.
+- [Ordering against `panel-expand-toggle`] → its pin `c64af49` already carries the accent, so this
+  change bumps nothing; implement it only after that change merges.

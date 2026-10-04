@@ -488,7 +488,7 @@ pub fn bool_val(v: bool) -> String {
 }
 
 /// The Panel destination's rows, in paint and cursor order (design D6, row
-/// 4.3): `Side` first, then the five stepper rows.
+/// 4.3): `Side` first, then the six stepper rows.
 pub const PANEL_SETTING_KEYS: [SettingKey; 7] = [
     SettingKey::PanelSide,
     SettingKey::PanelCols,

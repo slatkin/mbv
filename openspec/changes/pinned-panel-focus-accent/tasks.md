@@ -1,8 +1,13 @@
-Prerequisites: `panel-expand-toggle` is merged to `main` (pinwin pin at `664e195`). (pinwin `dc46c61` is on `origin/main` as of 2026-10-03.)
+# Tasks
 
-## 1. pinwin pin and FFI
+## Prerequisites
 
-- [ ] 1.1 In `crates/mbv-pinwin`, run `zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#dc46c6104139e91d60f4a740a6e965069d103888"`. In `ffi.rs`, add `#[repr(C)] PinwinAccent { enabled: i32, r: u8, g: u8, b: u8, width: i32 }` and the field `accent: PinwinAccent` after `keyboard_mode` in `PinwinStartup`. Add `const _: () = assert!(size_of::<PinwinStartup>() == 44);` (design D2).
+`panel-expand-toggle` is merged to `main` (pinwin pin at `c64af49`, whose `PinwinStartup`
+already carries the accent and whose strip is already drawn when enabled).
+
+## 1. Accent at the crate boundary
+
+- [ ] 1.1 In `crates/mbv-pinwin/src/ffi.rs`, add `const _: () = assert!(size_of::<PinwinStartup>() == 44);` (design D2). The `PinwinAccent` mirror and the `accent` field landed with `panel-expand-toggle`, so no pin bump is needed. Verify `cargo check -p mbv-pinwin`.
 - [ ] 1.2 In `crates/mbv-pinwin`, add public `Rgb { r, g, b }` and `Accent { color: Rgb, width: NonZeroU16 }` beside `Layout` (`layout.rs`), with a `to_abi(Option<Accent>) -> ffi::PinwinAccent` that maps `None` to `{enabled 0, width 1}` (design D1). `Panel::start` takes a fourth parameter `accent: Option<Accent>`. Fix the call in `src/pin.rs::start_panel` by passing `None` for now (2.2 wires config). Verify `cargo check -p mbv-pinwin -p mbv`.
 
 ## 2. Config
