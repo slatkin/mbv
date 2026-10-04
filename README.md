@@ -34,6 +34,9 @@ mbv runs in F2's Panel page (the numeric rows step by 1, or by 10 with Shift).
 | `gutter_bottom` | Space below the panel | any integer, may be negative | `0` |
 | `gutter_left` | Space to the left of the panel | any integer, may be negative | `0` |
 | `gutter_right` | Space to the right of the panel | any integer, may be negative | `0` |
+| `accent` | Draw the focus accent stroke while the panel has keyboard focus | `true` or `false` | `true` |
+| `accent_color` | Focus accent stroke colour | `"#RRGGBB"` or `"RRGGBB"` | `"#dabc7f"` |
+| `accent_width` | Focus accent stroke width in pixels | 1–65535 | `1` |
 
 Gutters are logical pixels. An out-of-range or malformed value falls back to its default with a
 logged warning, without changing the other keys.

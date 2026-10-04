@@ -2,8 +2,11 @@
 use crate::tests::SYS_ENV_LOCK;
 #[cfg(test)]
 use crate::{
-    Config, PanelConfig, PanelSide, config_path, load_config, parse_config, save_config_settings,
+    Config, PanelAccentColor, PanelConfig, PanelSide, config_path, load_config, parse_config,
+    save_config_settings,
 };
+#[cfg(test)]
+use std::num::NonZeroU16;
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -511,6 +514,9 @@ gutter_top = 12
 gutter_bottom = 3000000000
 gutter_left = -5
 gutter_right = "wide"
+accent = "yes"
+accent_color = "orange"
+accent_width = 0
 "#,
     )
     .unwrap();
@@ -521,6 +527,9 @@ gutter_right = "wide"
     assert_eq!(cfg.panel.gutter_bottom, 0);
     assert_eq!(cfg.panel.gutter_left, -5);
     assert_eq!(cfg.panel.gutter_right, 0);
+    assert!(cfg.panel.accent);
+    assert_eq!(cfg.panel.accent_color, crate::DEFAULT_PANEL_ACCENT_COLOR);
+    assert_eq!(cfg.panel.accent_width, crate::DEFAULT_PANEL_ACCENT_WIDTH);
 
     let _g = SYS_ENV_LOCK.lock().unwrap();
     let dir = std::env::temp_dir().join(format!(
@@ -542,6 +551,9 @@ gutter_right = "wide"
         gutter_bottom: -2,
         gutter_left: 3,
         gutter_right: -4,
+        accent: false,
+        accent_color: PanelAccentColor([0x12, 0x34, 0x56]),
+        accent_width: NonZeroU16::new(2).unwrap(),
     };
     save_config_settings(&Config {
         panel: expected,

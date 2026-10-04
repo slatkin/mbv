@@ -6,6 +6,8 @@
 //! `pinwin`'s call (`Panel::start` / `Panel::apply_layout_animated`), never
 //! `mbv-config`'s.
 
+use std::num::NonZeroU16;
+
 /// The screen edge the pinned panel docks to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelSide {
@@ -45,10 +47,41 @@ pub const DEFAULT_PANEL_COLS: u16 = 40;
 /// The `[panel] cols_expanded` default (`panel-expand-toggle`, design D2).
 pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 120;
 
-/// The `[panel]` section: docking side, width in columns and four gutters in
-/// logical pixels (negative values are allowed). Every value is already
-/// validated; an out-of-range or malformed TOML value was replaced with its
-/// default while parsing (design D6).
+/// The `[panel] accent_color` default (`pinned-panel-focus-accent`, design D2).
+pub const DEFAULT_PANEL_ACCENT_COLOR: PanelAccentColor = PanelAccentColor([0xda, 0xbc, 0x7f]);
+/// The `[panel] accent_width` default in pixels (`pinned-panel-focus-accent`).
+pub const DEFAULT_PANEL_ACCENT_WIDTH: NonZeroU16 = NonZeroU16::MIN;
+
+/// The `[panel] accent_color` value: an RGB triple parsed from `"#RRGGBB"` or
+/// `"RRGGBB"` and displayed as `#rrggbb`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PanelAccentColor(pub [u8; 3]);
+
+impl PanelAccentColor {
+    /// Parse an `accent_color` value from config; a malformed value yields
+    /// `None` so callers fall back to `DEFAULT_PANEL_ACCENT_COLOR`.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        let hex = s.strip_prefix('#').unwrap_or(s);
+        if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let [_, r, g, b] = u32::from_str_radix(hex, 16).ok()?.to_be_bytes();
+        Some(Self([r, g, b]))
+    }
+}
+
+impl std::fmt::Display for PanelAccentColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
+    }
+}
+
+/// The `[panel]` section: docking side, width in columns, four gutters in
+/// logical pixels (negative values are allowed), and the focus accent stroke
+/// (flag, colour, width in pixels). Every value is already validated; an
+/// out-of-range or malformed TOML value was replaced with its default while
+/// parsing (design D6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PanelConfig {
     /// The edge the panel docks to.
@@ -66,6 +99,12 @@ pub struct PanelConfig {
     pub gutter_left: i32,
     /// Inset from the output's right edge.
     pub gutter_right: i32,
+    /// Whether the focus accent stroke is drawn (`pinned-panel-focus-accent`).
+    pub accent: bool,
+    /// The focus accent stroke's colour.
+    pub accent_color: PanelAccentColor,
+    /// The focus accent stroke's width in pixels.
+    pub accent_width: NonZeroU16,
 }
 
 impl Default for PanelConfig {
@@ -78,6 +117,9 @@ impl Default for PanelConfig {
             gutter_bottom: 0,
             gutter_left: 0,
             gutter_right: 0,
+            accent: true,
+            accent_color: DEFAULT_PANEL_ACCENT_COLOR,
+            accent_width: DEFAULT_PANEL_ACCENT_WIDTH,
         }
     }
 }

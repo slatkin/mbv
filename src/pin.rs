@@ -12,7 +12,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
-use pinwin::layout::{Keyboard, Layout, Side};
+use pinwin::layout::{Accent, Keyboard, Layout, Side};
 use pinwin::panel::Startup;
 
 /// The running panel handle the shell owns.
@@ -128,7 +128,9 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
         fd: master.as_raw_fd(),
         layout: layout_from_config(config, PinnedWidth::default()),
         keyboard: Keyboard::OnDemand,
-        accent: None,
+        accent: config
+            .accent
+            .then(|| Accent::new(config.accent_color.0, config.accent_width)),
     })
     .map_err(PinStartError::Panel)?;
     detach_controlling_terminal()?;

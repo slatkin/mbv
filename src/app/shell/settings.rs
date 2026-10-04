@@ -122,8 +122,9 @@ impl Model {
         }
     }
 
-    /// The Panel destination's seven value rows, in paint and cursor order
-    /// (design D6, change `pin-mbv-in-pinwin`).
+    /// The Panel destination's ten value rows, in paint and cursor order
+    /// (design D6, change `pin-mbv-in-pinwin`; accent rows added by
+    /// `pinned-panel-focus-accent`).
     fn panel_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         settings::PANEL_SETTING_KEYS
             .iter()
