@@ -506,6 +506,7 @@ fn panel_values_fall_back_per_key_and_a_valid_section_round_trips() {
 [panel]
 side = "up"
 cols = 0
+cols_expanded = "wide"
 gutter_top = 12
 gutter_bottom = 3000000000
 gutter_left = -5
@@ -515,6 +516,7 @@ gutter_right = "wide"
     .unwrap();
     assert_eq!(cfg.panel.side, PanelSide::Left);
     assert_eq!(cfg.panel.cols, crate::DEFAULT_PANEL_COLS);
+    assert_eq!(cfg.panel.cols_expanded, crate::DEFAULT_PANEL_COLS_EXPANDED);
     assert_eq!(cfg.panel.gutter_top, 12);
     assert_eq!(cfg.panel.gutter_bottom, 0);
     assert_eq!(cfg.panel.gutter_left, -5);
@@ -535,6 +537,7 @@ gutter_right = "wide"
     let expected = PanelConfig {
         side: PanelSide::Right,
         cols: 55,
+        cols_expanded: 70,
         gutter_top: 1,
         gutter_bottom: -2,
         gutter_left: 3,

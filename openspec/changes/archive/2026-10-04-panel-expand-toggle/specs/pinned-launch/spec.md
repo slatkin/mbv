@@ -2,7 +2,7 @@
 
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
-`cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 80)
+`cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 120)
 and `gutter_top`, `gutter_bottom`, `gutter_left`, `gutter_right` (integers in pixels, may be
 negative, default 0). An out-of-range or malformed value SHALL fall back to its default with a
 logged warning, without changing the other keys. The F2 settings screen SHALL provide a Panel page
@@ -46,9 +46,12 @@ collapsed width. If the panel rejects the other width, a warning toast SHALL nam
 the panel SHALL stay at its current width. When mbv is not running in a pinned panel, the action
 SHALL show a neutral toast saying it needs a pinned launch and change nothing.
 
+The panel SHALL animate between the two widths rather than snapping. A layout change that does
+not alter the width SHALL apply in one step.
+
 #### Scenario: Expand
 - **WHEN** mbv runs in the panel at its collapsed width and the user presses `Ctrl+e`
-- **THEN** the panel resizes to `cols_expanded` columns and tiled windows reflow beside it
+- **THEN** the panel animates to `cols_expanded` columns and tiled windows reflow beside it
 
 #### Scenario: Collapse
 - **WHEN** mbv runs in the panel at its expanded width and the user presses `Ctrl+e`

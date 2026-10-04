@@ -1,0 +1,24 @@
+## 1. Config and settings model
+
+- [x] 1.1 `crates/mbv-config`: add `cols_expanded: u16` to `PanelConfig` with `DEFAULT_PANEL_COLS_EXPANDED = 120`; parse it like `cols` (same range, same per-key fallback warning) and save it next to `cols`. Extend `panel_values_fall_back_per_key_and_a_valid_section_round_trips` (`crates/mbv-config/src/tests/settings.rs`) with a malformed and a valid `cols_expanded`; verify `cargo nextest run -p mbv-config`.
+- [x] 1.2 `crates/mbv-ui-model/src/settings.rs`: add `SettingKey::PanelColsExpanded`, an `Expanded cols` row after `Cols` on the Panel page (and in `panel_cursor_to_key`), and its step arm in `changed_panel_config` (same clamp as `PanelCols`). Fix every exhaustive match the compiler flags (`crates/mbv-components`, `crates/mbv-render`, `src/app`) with the same handling as `PanelCols`; verify `cargo check --workspace`.
+
+## 2. Width-aware pinned layout
+
+- [x] 2.1 `src/pin.rs`: add `pub(crate) enum PinnedWidth { Collapsed, Expanded }` (`Default` = `Collapsed`, plus a `toggled()` method); `layout_from_config(config, width)` selects `cols` or `cols_expanded`; `start` passes `Collapsed`; `apply_layout(panel, config, width)`. Add one named `#[case]` table test in `src/pin.rs` owning the width→cols contract the Expand/Collapse scenarios rest on: `layout_from_config` at `Collapsed` → `cols`, at `Expanded` → `cols_expanded`, and `Expanded` with `cols_expanded < cols` still → `cols_expanded`. Verify `cargo nextest run -p mbv -E 'test(layout_from_config)'`.
+- [x] 2.2 `App` (`src/app/state/app_struct.rs`, `construct.rs`): add `pinned_width: PinnedWidth` next to `pinned_panel`. In `apply_panel_setting` (`src/app/dispatch/settings.rs`) apply at `Collapsed` for `PanelCols`, `Expanded` for `PanelColsExpanded`, otherwise the current `pinned_width`; store that width only in the `Some(panel)` arm on `Ok` — an unpinned launch never changes `pinned_width` (design D4). Verify `cargo check -p mbv`.
+
+## 3. Toggle keybind
+
+- [x] 3.1 `crates/mbv-keybinds/src/registry.rs`: add `pinned_width_toggle` (section `Global`, default `Ctrl+e`, gate `NoBlockingOverlay`, policy `pinned_width_toggle`, rebindable, prefix-addressable). `src/app/input/key_policy.rs`: matching `KEY_POLICY` entry (global, `NoBlockingOverlay`), `KeyPolicyBinding::PinnedWidthToggle`, and its arm `PinnedWidthToggle => Some(Command::TogglePinnedWidth)` in `command_for_simple_binding` (`key_policy.rs`; the `_ => None` fallthrough would otherwise leave the key silently dead). Add one routing-matrix row asserting `Ctrl+e` with default keybinds and the default snapshot resolves to `RouterOutcome::Command(Command::TogglePinnedWidth)` (precedent: the CONTROL-chord row in `src/app/tests/routing_matrix/blocking.rs`). Verify `cargo nextest run -p mbv-keybinds` and `cargo nextest run -p mbv -E 'test(routing_matrix) | test(defaults_reproduce_todays_resolution)'`.
+- [x] 3.2 `src/app/dispatch/action.rs`: dispatch `Command::TogglePinnedWidth` to an `App` method: no `pinned_panel` → `Neutral` toast "Width toggle needs a pinned launch (mbv --pin)"; otherwise `pin::apply_layout` at `pinned_width.toggled()`, `Ok` → store it, `Err(reason)` → `Warning` toast with `reason`, width unchanged. No handler test: the live pinwin handle cannot be mocked (the width mapping is covered by 2.1's table). Verify `cargo clippy --workspace --all-targets -- -D warnings`.
+
+## 3b. Animated width
+
+- [x] 3.3 Bump the pinwin pin in `crates/mbv-pinwin/build.zig.zon` to c64af49c0379001793fa9f57443c138d468771e9 (`zig fetch --save=pinwin "git+https://github.com/slatkin/pinwin#c64af49c0379001793fa9f57443c138d468771e9"` in that directory); add `Panel::apply_layout_animated(layout, duration_ms)` over `pinwin_apply_layout_animated` (ffi.rs + panel.rs, `PINWIN_ANIM_DEFAULT_MS` = 200); `pin::apply_layout` calls it so the Ctrl+e toggle and the F2 width steps animate. Verify `cargo check -p mbv-pinwin -p mbv` and `cargo clippy --workspace --all-targets -- -D warnings`; visual smoothness is part of 4.3.
+
+## 4. Docs and specs
+
+- [x] 4.1 `README.md` `[panel]` table: add a `cols_expanded` row after `cols` ("Expanded panel width in terminal columns", 1–65535, `120`). `dist/config.toml` `[panel]`: add `cols_expanded = 120` after `cols` and name it in the section comment. Verify by reading both.
+- [x] 4.2 `CONTEXT.md`: add **Pinned panel width** after **Pinned panel** (collapsed = `cols`, expanded = `cols_expanded`, toggled by `pinned_width_toggle`, never saved; _Avoid_: panel mode, expand mode, panel size). Verify by reading the entry.
+- [x] 4.3 Integration check (manual, user): `mbv --pin` on niri — `Ctrl+e` expands and tiles reflow, again collapses; stepping `Expanded cols` in F2 while collapsed expands the panel; relaunch opens collapsed; `Ctrl+e` in a plain terminal shows the toast. `cargo fmt --all -- --check` and `cargo nextest run --workspace` pass.

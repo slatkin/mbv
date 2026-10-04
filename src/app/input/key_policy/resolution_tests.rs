@@ -58,6 +58,24 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
     );
 }
 
+/// `pinned_width_toggle` (change `panel-expand-toggle`, task 3.1): the
+/// declared default `Ctrl+e` resolves to its command under the default
+/// snapshot, pinning the `command_for_simple_binding` arm whose absence the
+/// `_ => None` fallthrough would hide as a silently dead key.
+#[test]
+fn pinned_width_toggle_default_routes_to_its_command() {
+    let key = crossterm::event::KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
+    assert_eq!(
+        crate::app::input::router::resolve_router_outcome_with_focused(
+            key,
+            &snapshot(),
+            None,
+            &keybinds()
+        ),
+        crate::app::input::router::RouterOutcome::Command(Command::TogglePinnedWidth)
+    );
+}
+
 #[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();

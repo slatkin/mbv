@@ -151,6 +151,10 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
 * **Unit tests are hermetic mocks — no live or smoke tests.** No live mpv handle
   (`init_mpv`/`test_mpv`), real config/state dirs, or live servers; mock the
   boundary. Anything needing the real external is a manual check.
+* **Live-test debugging needs the user's approval.** The user does live testing.
+  Before running mbv, pinwin, a demo, compositor commands (`niri msg`) or any
+  self-driving diagnostic on the user's machine, ask with the exact command and
+  why; never proceed without a yes. "Find the issue" is not that approval.
 * **No real sleeps in tests** (`thread::sleep`, timeouts, retry backoff): inject
   the outcome, not the delay (mock returning the terminal state, zeroed timeout,
   seam observing attempts). A test that can't be fast without changing prod

@@ -17,7 +17,7 @@ about layout; the host owns both widths and which one is active.
 **Non-Goals:**
 - CLI flag / WM global key, IPC, pidfile (possible follow-up; one `--pin` process per user makes a
   pidfile + signal enough then).
-- Overlay expand (reservation stays narrow), animation, in-panel click affordance, pinwin changes.
+- Overlay expand (reservation stays narrow), in-panel click affordance, pinwin changes.
 - Persisting the active width across launches.
 
 ## Decisions
@@ -28,7 +28,7 @@ about layout; the host owns both widths and which one is active.
 
 **D2 — Layout = config + width.** `layout_from_config(config, width)` picks `config.cols` or
 `config.cols_expanded`; `pin::start` passes `Collapsed`, `pin::apply_layout` takes the width.
-`PanelConfig` gains `cols_expanded: u16` with `DEFAULT_PANEL_COLS_EXPANDED = 80`; parse and save
+`PanelConfig` gains `cols_expanded: u16` with `DEFAULT_PANEL_COLS_EXPANDED = 120`; parse and save
 mirror `cols` exactly (same range, same fallback warning).
 
 **D3 — Toggle path.** Registry entry `pinned_width_toggle` (Global, `Ctrl+e`,
@@ -46,6 +46,11 @@ be saved without pinwin ever validating it.
 
 **D5 — Naming.** CONTEXT.md gains **Pinned panel width** (collapsed / expanded). Avoid "panel mode"
 (reserved for the in-TUI Panel mode) and "expand mode".
+
+**D6 — Width changes animate.** The pinwin pin bumps to c64af49, which adds
+`pinwin_apply_layout_animated` (`PINWIN_ANIM_DEFAULT_MS` = 200). `pin::apply_layout` calls it, so
+the Ctrl+e toggle and the F2 width steps animate. Layout changes that do not alter the width
+apply in one step.
 
 ## Risks / Trade-offs
 

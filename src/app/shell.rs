@@ -373,8 +373,12 @@ fn apply_terminal_observer(
             model.pending_terminal_resize = true;
             model.app.terminal_width = *width;
             model.app.terminal_height = *height;
-            model.app.force_clear = true;
-            model.app.images.clear_images_and_loading();
+            // Invariant 17: a resize neither blanks the terminal nor wipes
+            // the image cache. A `force_clear` here blanked the panel in the
+            // middle of pinwin's width tween, and wiping the cache made every
+            // visible card and the hero refetch and re-encode; ratatui's own
+            // autoresize repaint and the painters' protocol resize path
+            // already cover the new geometry.
             model.push_inline_search_content();
             *music_resize = true;
             *tv_resize = true;

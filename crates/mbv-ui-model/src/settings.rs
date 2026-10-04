@@ -31,6 +31,7 @@ pub enum SettingKey {
     Panel,
     PanelSide,
     PanelCols,
+    PanelColsExpanded,
     PanelGutterTop,
     PanelGutterBottom,
     PanelGutterLeft,
@@ -238,6 +239,7 @@ fn setting_stepper_label(key: SettingKey) -> &'static str {
         key,
         &[
             (SettingKey::PanelCols, "Cols"),
+            (SettingKey::PanelColsExpanded, "Expanded cols"),
             (SettingKey::PanelGutterTop, "Gutter top"),
             (SettingKey::PanelGutterBottom, "Gutter bottom"),
             (SettingKey::PanelGutterLeft, "Gutter left"),
@@ -306,6 +308,7 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::AudioLanguage
         | K::PanelSide => V::Text,
         K::PanelCols
+        | K::PanelColsExpanded
         | K::PanelGutterTop
         | K::PanelGutterBottom
         | K::PanelGutterLeft
@@ -411,6 +414,7 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
 fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
         SettingKey::PanelCols => Some(cfg.panel.cols.to_string()),
+        SettingKey::PanelColsExpanded => Some(cfg.panel.cols_expanded.to_string()),
         SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
         SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
         SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
@@ -484,10 +488,11 @@ pub fn bool_val(v: bool) -> String {
 }
 
 /// The Panel destination's rows, in paint and cursor order (design D6, row
-/// 4.3): `Side` first, then the five stepper rows.
-pub const PANEL_SETTING_KEYS: [SettingKey; 6] = [
+/// 4.3): `Side` first, then the six stepper rows.
+pub const PANEL_SETTING_KEYS: [SettingKey; 7] = [
     SettingKey::PanelSide,
     SettingKey::PanelCols,
+    SettingKey::PanelColsExpanded,
     SettingKey::PanelGutterTop,
     SettingKey::PanelGutterBottom,
     SettingKey::PanelGutterLeft,
@@ -518,6 +523,17 @@ pub fn panel_cursor_to_key(cursor: usize) -> SettingKey {
         .unwrap_or(SettingKey::PanelSide)
 }
 
+/// Step a column count by `delta`, clamped to `PANEL_COLS_MIN..=u16::MAX`
+/// (a step past `u16::MAX` fails `try_from` and saturates at the top).
+fn stepped_cols(cols: u16, delta: i32) -> u16 {
+    u16::try_from(
+        i32::from(cols)
+            .saturating_add(delta)
+            .max(i32::from(mbv_config::PANEL_COLS_MIN)),
+    )
+    .unwrap_or(u16::MAX)
+}
+
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
 /// left/right, and each numeric row steps by `delta` (already scaled to
 /// ±1/±10 by the caller) clamped to its Rust range. `None` for any key that
@@ -528,7 +544,7 @@ pub fn changed_panel_config(
     panel: mbv_config::PanelConfig,
     delta: i32,
 ) -> Option<mbv_config::PanelConfig> {
-    use mbv_config::{PANEL_COLS_MIN, PanelSide};
+    use mbv_config::PanelSide;
 
     let mut next = panel;
     match key {
@@ -538,15 +554,9 @@ pub fn changed_panel_config(
                 PanelSide::Right => PanelSide::Left,
             };
         }
-        // `unwrap_or(u16::MAX)` is the upper clamp: a step past `u16::MAX`
-        // fails `try_from` and saturates at the top of the range.
-        SettingKey::PanelCols => {
-            next.cols = u16::try_from(
-                i32::from(panel.cols)
-                    .saturating_add(delta)
-                    .max(i32::from(PANEL_COLS_MIN)),
-            )
-            .unwrap_or(u16::MAX);
+        SettingKey::PanelCols => next.cols = stepped_cols(panel.cols, delta),
+        SettingKey::PanelColsExpanded => {
+            next.cols_expanded = stepped_cols(panel.cols_expanded, delta);
         }
         SettingKey::PanelGutterTop => next.gutter_top = panel.gutter_top.saturating_add(delta),
         SettingKey::PanelGutterBottom => {

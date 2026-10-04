@@ -17,9 +17,9 @@ impl Model {
         // draw. The launch-tab resolution and the stale-destination fallback
         // settle the active tab so every projection below -- and the frame --
         // sees the resolved tab (the sync pass no longer writes `self.tab`),
-        // and the terminal-resize handling (card-image clear, queue-column
-        // clamp + prefs save, and the mini-view focus hand-off on a real
-        // Resize event) leaves the draw path, which now only reads geometry.
+        // and the terminal-resize handling (queue-column clamp + prefs save,
+        // and the mini-view focus hand-off on a real Resize event) leaves the
+        // draw path, which now only reads geometry.
         self.sync_terminal_resize();
         self.app.resolve_launch_tab_on_sync();
         self.app.normalize_stale_browse_destination();
@@ -83,12 +83,28 @@ impl Model {
 
     /// Terminal-resize side effects, applied in the sync pass before any draw
     /// (task 1.2). A size drift against the size this pass last handled runs
-    /// the former draw-time mutations: the card-image state clear and the
-    /// queue-column clamp + prefs save (this also picks up the startup draw's
-    /// size normalization and any direct-frame normalization). The mini-view
-    /// focus hand-off runs only when the Resize observer armed it -- the real
-    /// terminal-resize event, whose pre-resize width the marker still holds.
+    /// the former draw-time mutations: the queue-column clamp + prefs save
+    /// (this also picks up the startup draw's size normalization and any
+    /// direct-frame normalization). The card-image clear those mutations used
+    /// to include is gone -- invariant 17. The mini-view focus hand-off runs
+    /// only when the Resize observer armed it -- the real terminal-resize
+    /// event, whose pre-resize width the marker still holds.
     pub(super) fn sync_terminal_resize(&mut self) {
+        // Change `panel-expand-toggle`: a pinned width apply resizes the pty
+        // synchronously inside the apply call, so the new size is knowable
+        // before the terminal-event worker delivers its `Resize` observer
+        // event (measured ~50 ms later). Adopt it here, so the frame in this
+        // iteration is painted at the new width instead of painting the old
+        // one and waiting a second time for the event -- a stale wide paint
+        // that also wrote ~36 KB into the pty while the panel's width tween
+        // was running.
+        if std::mem::take(&mut self.app.pinned_resize_pending)
+            && let Ok((width, height)) = crossterm::terminal::size()
+        {
+            self.app.terminal_width = width;
+            self.app.terminal_height = height;
+            self.pending_terminal_resize = true;
+        }
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {
@@ -96,7 +112,11 @@ impl Model {
         }
         let was_wide = self.handled_terminal_size.0 >= mbv_render::layout::MINI_VIEW_THRESHOLD;
         self.handled_terminal_size = size;
-        self.app.images.clear_images_and_loading();
+        // Invariant 17: the image cache survives a resize. The painters'
+        // protocol resize path re-encodes from the decoded sources at the new
+        // geometry; wiping the cache here (a second clear next to the
+        // observer's) only forced HTTP refetches and a longer placeholder
+        // window on every pinned width toggle.
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
