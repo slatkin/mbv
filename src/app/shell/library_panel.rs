@@ -450,7 +450,7 @@ impl Model {
         panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
         panel.set_terminal_height(self.app.terminal_height);
-        panel.set_mini_view(self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD);
+        panel.set_mini_view(self.app.is_mini_view());
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 

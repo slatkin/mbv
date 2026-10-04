@@ -2,13 +2,20 @@ use crate::app::{App, PanelFocus, PanelMode};
 use std::time::Instant;
 
 impl App {
+    /// Whether the terminal is below `MINI_VIEW_THRESHOLD` columns, i.e. the
+    /// Power View is in mini view: a single displayed panel, no sibling to
+    /// contrast a focused palette against.
+    pub(in crate::app) fn is_mini_view(&self) -> bool {
+        self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
+    }
+
     /// The panel mode actually in effect for rendering/input this frame.
     /// Below `MINI_VIEW_THRESHOLD` columns the Power View ignores the stored
     /// three-state `panel_mode` and derives a two-state mini view from the
     /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used
     /// unchanged.
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
-        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
+        if self.is_mini_view() {
             match self.mini_view_focus {
                 PanelFocus::Library => PanelMode::LibraryOnly,
                 PanelFocus::Queue => PanelMode::QueueOnly,
@@ -22,7 +29,7 @@ impl App {
     /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
     /// the stored `panel_focus` is returned unchanged.
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
-        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
+        if self.is_mini_view() {
             self.mini_view_focus
         } else {
             self.panel_focus
@@ -37,8 +44,7 @@ impl App {
     /// holds focus. Input routing keeps `effective_panel_focus`; this bit is
     /// for appearance (surface palette selection) only.
     pub(in crate::app) fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
-        self.terminal_width >= mbv_render::layout::MINI_VIEW_THRESHOLD
-            && self.effective_panel_focus() == panel
+        !self.is_mini_view() && self.effective_panel_focus() == panel
     }
 
     /// Record that the terminal just regained focus, arming the
@@ -58,7 +64,7 @@ impl App {
         // Alt+Left/Right, context actions) must move the ephemeral mini-view
         // focus, never the real persisted panel_focus -- that state has to
         // survive narrowing/widening untouched.
-        if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
+        if self.is_mini_view() {
             if self.mini_view_focus == focus {
                 return;
             }

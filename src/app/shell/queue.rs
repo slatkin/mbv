@@ -261,7 +261,7 @@ impl Model {
             // The frame is an appearance surface: mini view paints the
             // resting palette regardless of focus.
             queue.set_frame_focused(self.app.panel_appearance_focus(PanelFocus::Queue));
-            queue.set_mini_view(self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD);
+            queue.set_mini_view(self.app.is_mini_view());
             queue.set_area(self.app.queue_panel_placement().panel_area);
         }
     }
