@@ -16,9 +16,12 @@ SUMMARY="${2?Usage: tools/release.sh <version> \"<summary>\"}"
 VERSION="${VERSION#v}"
 TAG="v${VERSION}"
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "error: working tree is not clean"
-  echo "commit or stash existing changes before running a release"
+# Uncommitted *tracked* changes would make the test run validate code that the
+# tag does not contain. Untracked files never enter the release commit, so they
+# are not a reason to stop.
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "error: uncommitted changes to tracked files"
+  echo "commit them before running a release (untracked files are fine)"
   exit 1
 fi
 
