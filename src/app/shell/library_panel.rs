@@ -451,6 +451,10 @@ impl Model {
         panel.set_list_pane_width(list_pane_width);
         panel.set_terminal_height(self.app.terminal_height);
         panel.set_mini_view(self.app.is_mini_view());
+        // The same appearance-focus projection the panel's own body fill
+        // (`library_body_fill`) reads, so the skeleton's palette bit and the
+        // placement fill follow one bit in every geometry.
+        panel.set_frame_focused(self.app.panel_appearance_focus(super::PanelFocus::Library));
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 
@@ -467,8 +471,9 @@ impl Model {
     /// the panel's appearance-focus bit. Focused it takes the column level's
     /// `SURFACE_FOCUSED` fill, resting the column's app backdrop; one named
     /// authority both the placement fill and the status band's padding rows
-    /// read, so both follow the same bit in every geometry. Mini view paints
-    /// the resting palette regardless of focus (`panel_appearance_focus`).
+    /// read, so both follow the same bit in every geometry. Unpinned mini
+    /// view always rests, a pinned mini view follows the window focus, and
+    /// 80+ columns ignores window focus (`panel_appearance_focus`).
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = self.app.panel_appearance_focus(super::PanelFocus::Library);
         mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill

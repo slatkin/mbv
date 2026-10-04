@@ -43,6 +43,12 @@ pub fn selector_markers(len: usize, latest_marker: bool) -> Vec<bool> {
     markers
 }
 
+/// Whether a panel rests its palette: only a mini-view panel whose projected
+/// appearance bit (`frame_focused`) rests. Interaction focus is separate.
+pub(crate) fn mini_palette_suppressed(mini_view: bool, frame_focused: bool) -> bool {
+    mini_view && !frame_focused
+}
+
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;

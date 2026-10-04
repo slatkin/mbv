@@ -85,13 +85,16 @@ pub struct LibraryPanel {
     /// Terminal row count, pushed each sync pass: the compact hero caps
     /// (artwork 15, overview 5) apply at 50 terminal rows or fewer.
     terminal_height: u16,
-    /// Mini view suppresses the focused palette: the one displayed panel has
-    /// nothing to contrast the focused tone against, so it paints the default
-    /// (unfocused) palette even while it holds interaction focus. Projected
-    /// per sync pass from the shell's breakpoint; only the skeleton's palette
-    /// bit follows this — the focused panel keeps its cursor bar on the
-    /// resting stripe — never input (`focused` stays the Focus attribute).
+    /// Mini view suppresses the focused palette unless `frame_focused` says
+    /// otherwise. Projected per sync pass from the shell's breakpoint; only
+    /// the palette follows it, never input (`focused` stays the Focus
+    /// attribute).
     mini_view: bool,
+    /// The shell's appearance-focus projection (`panel_appearance_focus`):
+    /// unpinned mini view rests, a pinned mini view follows the window focus,
+    /// 80+ columns ignores it. `library_body_fill` reads the same bit. Only
+    /// the palette follows it, never input.
+    frame_focused: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -144,6 +147,7 @@ impl LibraryPanel {
             list_pane_width: None,
             terminal_height: 0,
             mini_view: false,
+            frame_focused: false,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -253,6 +257,12 @@ impl LibraryPanel {
     /// Pushed each sync pass by the shell beside the other per-frame facts.
     pub fn set_mini_view(&mut self, mini_view: bool) {
         self.mini_view = mini_view;
+    }
+
+    /// Project the shell's appearance-focus decision
+    /// (`panel_appearance_focus`), pushed each sync pass.
+    pub fn set_frame_focused(&mut self, focused: bool) {
+        self.frame_focused = focused;
     }
 
     /// The hero image box the last painted frame reserved — the Library Hero

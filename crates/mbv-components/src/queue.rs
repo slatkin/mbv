@@ -55,12 +55,9 @@ pub struct QueueComponent {
     /// a mounted overlay blurs the component without changing the column's
     /// focused surface, exactly as before.
     frame_focused: bool,
-    /// Mini view suppresses the focused palette: the one displayed panel has
-    /// nothing to contrast the focused tone against, so it paints the default
-    /// (unfocused) palette even while it holds interaction focus. Projected
-    /// per frame from the shell's breakpoint; only the palette follows this
-    /// bit, never input — the focused panel keeps its cursor bar on the
-    /// resting stripe.
+    /// Mini view suppresses the focused palette unless `frame_focused` says
+    /// otherwise. Projected per frame from the shell's breakpoint; only the
+    /// palette follows it, never input.
     mini_view: bool,
     empty_text: String,
     area: Rect,
@@ -184,7 +181,8 @@ impl QueueComponent {
     }
 
     /// Project the panel surface's focused bit (task 3.1): the same panel-
-    /// focus fact the legacy base frame used for the frame fill.
+    /// focus fact the legacy base frame used for the frame fill; carries the
+    /// shell's appearance-focus decision (`panel_appearance_focus`).
     pub fn set_frame_focused(&mut self, focused: bool) {
         self.frame_focused = focused;
     }
@@ -306,12 +304,14 @@ impl Component for QueueComponent {
         }
         self.ensure_carrier();
         let list = self.carrier.wide_mut();
-        // The cursor follows interaction focus; the stripe rests in mini
-        // view. The selected row is the exception to the palette
-        // suppression, so the single displayed panel keeps a visible cursor.
+        // The cursor follows interaction focus; the palette follows the
+        // appearance decision in mini view (`frame_focused`).
         list.set_paint_policy(
             WideMediaListPaintPolicy::for_queue(self.focused)
-                .with_palette_focus(self.focused && !self.mini_view)
+                .with_palette_focus(
+                    self.focused
+                        && !crate::mini_palette_suppressed(self.mini_view, self.frame_focused),
+                )
                 .with_zebra(queue_row_zebra_stripe()),
         );
         Component::view(list, frame, content_area);
@@ -357,3 +357,6 @@ impl AppComponent<Msg, UserEvent> for QueueComponent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
