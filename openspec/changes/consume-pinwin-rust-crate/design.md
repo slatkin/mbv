@@ -18,15 +18,16 @@ panel C ABI"):
   `libpinwin` and link it ahead of `ghostty-vt-static` and the GTK libraries.
 
 The only wrapper-touching file is `src/pin.rs`: `PinnedPanel = mbv_pinwin::Panel<'static>`
-(the master fd is `Box::leak`ed because the library outlives any borrow), `apply_layout`,
-`start_panel` (openpty, detach, stdio hand-over, env), plus `PinnedWidth` and failure
-reporting. Call sites only name `crate::pin` items and `mbv_pinwin::Panel::ANIM_DEFAULT_MS`;
-no component or painter names the wrapper (`App`/runtime boundary holds).
+(the master fd is `Box::leak`ed because the library outlives any borrow), `apply_layout`
+(the only user of `mbv_pinwin::Panel::ANIM_DEFAULT_MS`), `start_panel` (openpty, detach, stdio
+hand-over, env), plus `PinnedWidth` and failure reporting. Call sites only name `crate::pin`
+items; nothing outside `src/pin.rs` names the wrapper, and no component or painter does
+(`App`/runtime boundary holds).
 
 Upstream (`feat/port`, `port-to-rust` change) replaces all of this with a Rust crate whose
 public surface is, per its `design.md` D4–D7:
 
-- `Panel::start(RawFd, …)` on the host thread, lazily spawning one process-lifetime
+- `Panel::start(Startup { fd: RawFd, layout, keyboard, accent })` on the host thread, lazily spawning one process-lifetime
   `pinwin-gtk` thread (parked between panels, distinct application ids); apply posts a closure
   via `MainContext::invoke` with a 5 s bounded reply; `Drop` posts teardown without joining.
   Single-instance guard stays process-wide.
@@ -73,11 +74,11 @@ sites only see moved paths:
 
 | Today | New |
 |---|---|
-| `Panel<'fd>` borrowing the master | `pinwin::Panel` (no lifetime; the `Box::leak` stays — the lib still never closes the fd) |
-| `Layout { cols: u16 }` struct literal | constructor with `NonZeroU16` (`layout_from_config` maps `PanelConfig` widths; `0` is already rejected by config validation, so no new error path) |
-| `KeyboardMode::OnDemand` | `Keyboard::OnDemand` |
-| hardcoded disabled accent in `Panel::start` | `None` (D4 wires the real accent) |
-| `apply_layout_animated(&Layout, ANIM_DEFAULT_MS)` | same shape under the new paths; both plain and animated apply exist upstream |
+| `Panel<'fd>` borrowing the master | `pinwin::Panel` (no lifetime; the `Box::leak` stays — `Panel`'s `Drop` never closes the fd) |
+| `Panel::start(BorrowedFd, Layout, KeyboardMode)` | `Panel::start(Startup { fd: master.as_raw_fd(), layout, keyboard: Keyboard::OnDemand, accent: None })` (D4 wires the real accent) |
+| `Layout { side, cols: u16, gutters }` struct literal | `Layout::new(side, cols, top, bottom, left, right)` (fields are private upstream). `layout_from_config` converts widths with `NonZeroU16::new(c).unwrap_or(NonZeroU16::MIN)`; the fallback is unreachable because config clamps to `PANEL_COLS_MIN = 1` (parse and F2 step paths), so there is no new error path |
+| `Panel::ANIM_DEFAULT_MS` (200) | does not exist upstream (only the `ANIMATION_MAX_MS` clamp does); mbv owns `const ANIM_DEFAULT_MS: u32 = 200` in `src/pin.rs` |
+| `apply_layout_animated(&Layout, ms)` | `apply_layout_animated(Layout, ms)` by value (`Layout` is `Copy`) |
 | `PinwinError::Unknown(code)` display arm | deleted; new `InvalidFd` maps into `PinStartError::Panel` with the same one-line reporting |
 
 **D4: Accent sequencing.** `pinned-panel-focus-accent` was written against the C ABI mirror
@@ -90,4 +91,14 @@ against different `Panel::start` signatures — the second to land rebases.
 **D5: Build requirements.** mbv loses the Zig panel build (`build.rs`, `build.zig`, `zig-pkg/`)
 but inherits the crate's build-time need: Zig at build time for ghostty's `libghostty-vt`
 (port D2). CI/packaging notes that name "Zig for the panel" are updated to "Zig at build time
-for ghostty via the pinwin crate"; if no doc names it, nothing changes.
+for ghostty via the pinwin crate"; if no doc names it, nothing changes. `AGENTS.md`'s
+repository-map entry and pin-update procedure describe `crates/mbv-pinwin` and
+`zig fetch --save=pinwin`; both are rewritten to the `pinwin` git-rev dependency in
+`Cargo.toml`. `README.md`'s "needs Zig" stays true (via ghostty) and is reworded;
+`PKGBUILD-git` keeps `zig`.
+
+**D6: Retire the `pinwin-panel` main spec.** `openspec/specs/pinwin-panel/spec.md` specifies
+the pinwin library itself, including the "C ABI lifecycle" requirement and `pinwin_start` /
+`PINWIN_ERR_*` scenarios. That contract is now upstream's; mbv no longer owns or implements
+it, so the spec directory is deleted in this change rather than rewritten. The mbv-owned
+behaviour stays in `openspec/specs/pinned-launch/`.

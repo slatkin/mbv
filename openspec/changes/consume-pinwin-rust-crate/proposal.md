@@ -20,17 +20,20 @@ crate directly.
 - Delete the C-ABI wrapper: `crates/mbv-pinwin/src/ffi.rs`, the `zig build` in `build.rs`,
   `build.zig`, `build.zig.zon` (pin `c64af49`), and `zig-pkg/`; remove `mbv-pinwin` from the
   workspace and depend on the `pinwin` Rust crate instead (D2 pins how).
-- Adapt the only wrapper-touching file, `src/pin.rs`, plus its call sites (`src/main.rs`,
-  `src/app/state/app_struct.rs`, `src/app/dispatch/action.rs`, `src/app/dispatch/settings.rs`)
-  to the new types (D3): lifetime-free `Panel`, `NonZeroU16` columns, `Option<Accent>`,
-  reshaped `PinwinError` (`Unknown` gone, `InvalidFd` new).
-- No behaviour change: the panel starts, resizes (animated), and stops exactly as today; the
-  accent stays off until `pinned-panel-focus-accent` lands on top (D4).
+- Adapt the only wrapper-touching file, `src/pin.rs`, to the new types (D3): lifetime-free
+  `Panel`, `Startup` struct, `Layout::new` with `NonZeroU16` columns, `Option<Accent>`,
+  reshaped `PinwinError` (`Unknown` gone, `InvalidFd` new), and an mbv-owned
+  `ANIM_DEFAULT_MS = 200`. Other call sites only name `crate::pin::*` and are expected to need
+  no edits.
+- Delete the `pinwin-panel` main spec (D6): it specifies the pinwin library's C ABI, which is
+  now upstream's contract.
+- No user-visible behaviour change: the panel starts, resizes (animated), and stops exactly as
+  today; the accent stays off until `pinned-panel-focus-accent` lands on top (D4).
 
 ## Capabilities
 
-(none — pure dependency swap; no new or modified user-visible capabilities, so this change
-carries no spec delta.)
+(none — no new or modified mbv capabilities, so no spec delta. The only spec change is
+retiring `pinwin-panel`, which mbv no longer owns; see D6.)
 
 ## Impact
 
@@ -39,8 +42,9 @@ carries no spec delta.)
   - `Cargo.toml` / `Cargo.lock`: workspace membership, `pinwin` dependency + pin.
   - `src/pin.rs`: `PinnedPanel` type, `Layout`/`Keyboard` construction, error mapping, tests.
   - `src/main.rs`, `src/app/state/app_struct.rs`, `src/app/dispatch/action.rs`,
-    `src/app/dispatch/settings.rs`: moved paths/constants only.
-  - Build/packaging notes if they name Zig for the panel (D5).
+    `src/app/dispatch/settings.rs`: expected untouched; compiler-flagged fixes only.
+  - `openspec/specs/pinwin-panel/`: deleted (D6).
+  - `AGENTS.md` (repository map, pin procedure) and `README.md` (Zig wording) (D5).
 - No protocol, daemon, config, or theme changes.
 - Blocked on upstream: port tasks **4.1** (`panel` + `lib.rs` public API) and **6.3**
   (`cargo test` passes). Implement only after both are done.
