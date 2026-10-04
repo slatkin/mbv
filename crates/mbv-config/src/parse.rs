@@ -1,8 +1,10 @@
 use super::{
     AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
     DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MIN,
-    PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen, is_valid_audio_device,
+    PanelAccentColor, PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen,
+    is_valid_audio_device,
 };
+use std::num::NonZeroU16;
 
 pub fn load_config() -> Result<Config, ConfigError> {
     let path = config_path();
@@ -374,6 +376,9 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         gutter_bottom: panel_gutter(panel, "gutter_bottom", defaults.gutter_bottom),
         gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),
         gutter_right: panel_gutter(panel, "gutter_right", defaults.gutter_right),
+        accent: panel_bool(panel, "accent", defaults.accent),
+        accent_color: panel_accent_color(panel, defaults.accent_color),
+        accent_width: panel_accent_width(panel, defaults.accent_width),
     }
 }
 
@@ -405,6 +410,36 @@ fn panel_gutter(panel: &toml::Value, key: &str, default: i32) -> i32 {
             .as_integer()
             .and_then(|v| i32::try_from(v).ok())
             .unwrap_or_else(|| panel_fallback(key, value, default)),
+    }
+}
+
+fn panel_bool(panel: &toml::Value, key: &str, default: bool) -> bool {
+    match panel.get(key) {
+        None => default,
+        Some(value) => value
+            .as_bool()
+            .unwrap_or_else(|| panel_fallback(key, value, default)),
+    }
+}
+
+fn panel_accent_color(panel: &toml::Value, default: PanelAccentColor) -> PanelAccentColor {
+    match panel.get("accent_color") {
+        None => default,
+        Some(value) => value
+            .as_str()
+            .and_then(PanelAccentColor::parse)
+            .unwrap_or_else(|| panel_fallback("accent_color", value, default)),
+    }
+}
+
+fn panel_accent_width(panel: &toml::Value, default: NonZeroU16) -> NonZeroU16 {
+    match panel.get("accent_width") {
+        None => default,
+        Some(value) => value
+            .as_integer()
+            .and_then(|v| u16::try_from(v).ok())
+            .and_then(NonZeroU16::new)
+            .unwrap_or_else(|| panel_fallback("accent_width", value, default)),
     }
 }
 
