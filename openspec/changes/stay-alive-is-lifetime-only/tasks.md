@@ -30,24 +30,24 @@
 
 ## 2. The Tray setting is derived from both settings
 
-- [ ] 2.1 Change the `show_systray_icon` default from `true` to `false` in
+- [x] 2.1 Change the `show_systray_icon` default from `true` to `false` in
   `crates/mbv-config/src/parse.rs` (`unwrap_or(true)` in `PlaybackSettings`) and in
   `crates/mbv-config/src/types_paths.rs` (`Config` default). Don't add a test for the default
   value. Verify: `cargo nextest run -p mbv-config` passes; update any existing assertion that
   pinned `true`.
-- [ ] 2.2 In `crates/mbv-daemon/src/owner_settings.rs`:
+- [x] 2.2 In `crates/mbv-daemon/src/owner_settings.rs`:
   - add `show_systray_icon: bool` to `OwnerSettings`, filled from config in `From<&Config>`;
   - add `pub(crate) fn tray_enabled(&self) -> bool { self.stay_alive || self.show_systray_icon }`;
   - update `fixed_reader` and the existing reader test's struct literals so they compile.
 
   No new test: the method is one expression, and 3.3's tests exercise it. Verify:
   `cargo check -p mbv-daemon --all-targets`.
-- [ ] 2.3 In `crates/mbv-ui-model/src/settings.rs` `setting_boolean_value`, show the
+- [x] 2.3 In `crates/mbv-ui-model/src/settings.rs` `setting_boolean_value`, show the
   `ShowSysTrayIcon` row as `cfg.stay_alive || cfg.show_systray_icon` (design D3). Add one test:
   with `stay_alive = true` and `show_systray_icon = false`, `setting_value(ShowSysTrayIcon, ..)`
   returns `bool_val(true)`. Contract: `local-daemon-tray` "Row while stay-alive is on". Verify:
   `cargo nextest run -p mbv-ui-model` passes.
-- [ ] 2.4 In `src/app/dispatch/settings.rs`, refuse the `ShowSysTrayIcon` toggle while
+- [x] 2.4 In `src/app/dispatch/settings.rs`, refuse the `ShowSysTrayIcon` toggle while
   `stay_alive` is on:
   - leave config unchanged and call
     `self.flash("Tray stays on while Stay alive is on".into(), ToastSeverity::Neutral)`;
