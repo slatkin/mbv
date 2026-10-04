@@ -116,7 +116,7 @@ pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> 
 }
 
 /// The pty pair, the panel, and the stdio hand-over. A failure after
-/// `pinwin_start` succeeded drops the panel, which stops it (design D3).
+/// `Panel::start` succeeded drops the panel, which stops it (design D3).
 fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     let (master, slave) = open_pty()?;
     // The panel reads the master fd for its whole life and the library never
