@@ -4,8 +4,15 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct OwnerSettings {
     pub stay_alive: bool,
+    pub show_systray_icon: bool,
     pub consume_videos: bool,
     pub consume_audio: bool,
+}
+
+impl OwnerSettings {
+    pub(crate) fn tray_enabled(self) -> bool {
+        self.stay_alive || self.show_systray_icon
+    }
 }
 
 pub(crate) type OwnerSettingsReader = Arc<dyn Fn() -> OwnerSettings + Send + Sync>;
@@ -14,6 +21,7 @@ impl From<&mbv_config::Config> for OwnerSettings {
     fn from(config: &mbv_config::Config) -> Self {
         Self {
             stay_alive: config.stay_alive,
+            show_systray_icon: config.show_systray_icon,
             consume_videos: config.consume_videos,
             consume_audio: config.consume_audio,
         }
@@ -49,6 +57,7 @@ pub(crate) fn reader(role: DaemonRole, spawn_config: &mbv_config::Config) -> Own
 pub(crate) fn fixed_reader(stay_alive: bool) -> OwnerSettingsReader {
     let settings = OwnerSettings {
         stay_alive,
+        show_systray_icon: false,
         consume_videos: false,
         consume_audio: false,
     };

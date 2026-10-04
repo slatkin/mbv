@@ -146,7 +146,7 @@ impl Default for Config {
             consume_videos: false,
             consume_audio: false,
             always_skip_intro: false,
-            show_systray_icon: true,
+            show_systray_icon: false,
             no_scripts: false,
             stay_alive: false,
             save_playlist_on_quit: true,
