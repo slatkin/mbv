@@ -307,8 +307,12 @@ impl App {
         // A group switch refreshes the album level in place (no `Loaded`
         // event, which is where an ordinary first navigation kicks off
         // completion pagination); re-arm it here so the new group's level
-        // still loads to completion unconditionally.
-        if self.is_music_group_view(lib_idx) {
+        // still loads to completion unconditionally. The same applies to a TV
+        // series root's pill switch / refresh (`All`/`Range` replace the
+        // level's rows in place and the TV surface has no App-side cursor
+        // movement to re-arm proximity pagination) -- see
+        // `is_tv_series_root_view`.
+        if self.is_music_group_view(lib_idx) || self.is_tv_series_root_view(lib_idx) {
             self.maybe_fetch_next_page(lib_idx, 0);
         }
     }

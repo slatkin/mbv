@@ -4,7 +4,7 @@ use mbv_ui_model::browse::ServerRows;
 
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_items};
-use crate::app::{BrowseLevel, LibraryTab};
+use crate::app::{BrowseEvent, BrowseLevel, LibEvent, LibraryTab};
 use mbv_emby_model::EmbyItem;
 use rstest::rstest;
 
@@ -290,5 +290,76 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
     assert_eq!(
         filter.label, "A-I",
         "wrapping forward from S-Z should land on A-I"
+    );
+}
+
+// Regression (user report 2026-10-04): a TV library's `All` pill stopped at
+// the first 100 series. The Tuirealm migration made the TV workspace's series
+// cursor component-local (`TvMoveRows`/`TvJumpCursor` are deliberate App
+// no-ops), which silently removed the cursor-proximity trigger that used to
+// arm `maybe_fetch_next_page` on every TV list move -- so a TV series root in
+// `All` (or letter `Range`) mode never fetched past its first page. Those
+// levels now paginate to completion unconditionally (`is_tv_series_root_view`).
+#[test]
+fn tv_all_root_paginates_to_completion_without_cursor_movement() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 100);
+    let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+    lvl.tv_content_mode = Some(mbv_queue::TvContentMode::All);
+    lvl.rows = ServerRows::loaded(100, 150);
+
+    // Cursor 0 sits far from the loaded edge, so only unconditional
+    // completion can arm the next page: the component owns TV cursor
+    // movement and never reports it to the App.
+    app.maybe_fetch_next_page(0, 0);
+
+    assert!(
+        app.libs[0].nav_stack.last().unwrap().loading,
+        "an All-mode TV series root must fetch its next page without any cursor movement"
+    );
+}
+
+#[test]
+fn tv_unresolved_mode_capture_load_does_not_paginate_to_completion() {
+    // A large library's first capture load (TV mode still unresolved, the
+    // level holds the first 100 of 2000 series) must not eagerly complete:
+    // the size default (`Latest`) is about to replace the level's rows
+    // wholesale, so completion stays cursor-proximity for `None`.
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 100);
+    app.libs[0].nav_stack[0].rows = ServerRows::loaded(100, 2000);
+
+    app.maybe_fetch_next_page(0, 0);
+
+    assert!(!app.libs[0].nav_stack.last().unwrap().loading);
+}
+
+#[test]
+fn tv_series_root_refresh_re_arms_completion_pagination() {
+    // Selecting the `All`/`Range` pill (or `r`, or a stop-refresh) replaces a
+    // TV series root's rows in place via `Refreshed` -- no `Loaded` event, no
+    // App-side cursor movement. The completion chain must re-arm from the
+    // refresh itself.
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 3);
+    let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+    lvl.tv_content_mode = Some(mbv_queue::TvContentMode::All);
+    lvl.rows = ServerRows::loaded(3, 5);
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-1".into(),
+        item_types: Some("Series".into()),
+        unplayed_only: false,
+        items: make_items(3),
+        total_count: 5,
+    }));
+
+    assert!(
+        app.libs[0].nav_stack.last().unwrap().loading,
+        "an in-place TV series refresh must re-arm the next page fetch (3 of 5 rows loaded)"
     );
 }
