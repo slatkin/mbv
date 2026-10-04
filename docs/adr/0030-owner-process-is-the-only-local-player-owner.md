@@ -4,6 +4,8 @@ status: accepted
 
 # The Owner Process Is the Only Local Player Owner
 
+> **Status (2026-10-04):** Stay-alive decides only the Owner process lifetime, exclusive admission, and the forced Tray. Stay-alive off no longer keeps Bare behaviour for route switching or system notifications: the home link and notification semantics are identical under both policies (change `stay-alive-is-lifetime-only`).
+
 ## Decision
 
 Every local launch attaches to one per-user **Owner process**, the sole host
