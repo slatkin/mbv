@@ -1,4 +1,5 @@
 use super::make_app_stub;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::SettingKey;
 use rstest::rstest;
@@ -54,6 +55,23 @@ fn mouse_support_activation_updates_config_and_defers_terminal_flip() {
     assert_eq!(app.config.lock().unwrap().mouse_support, !initial);
     assert_eq!(app.mouse_capture_pending, Some(!initial));
     assert!(app.settings_save_at.is_some());
+}
+
+/// The `Show systray icon` row is refused while stay-alive is on: the stored
+/// preference is unchanged and a Neutral toast explains why (contract
+/// `local-daemon-tray` "Toggle refused while stay-alive is on", design D3,
+/// change `stay-alive-is-lifetime-only`).
+#[test]
+fn systray_toggle_is_refused_while_stay_alive_is_on() {
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().stay_alive = true;
+    app.config.lock().unwrap().show_systray_icon = false;
+
+    app.handle_settings_activate(SettingKey::ShowSysTrayIcon);
+
+    assert!(!app.config.lock().unwrap().show_systray_icon);
+    assert_eq!(app.status, "Tray stays on while Stay alive is on");
+    assert_eq!(app.status_severity, ToastSeverity::Neutral);
 }
 
 #[test]

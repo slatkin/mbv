@@ -172,6 +172,23 @@ impl App {
             SettingKey::SubtitleMode => self.apply_subtitle_mode(),
             SettingKey::SubtitleLanguage => self.cycle_subtitle_language(),
             SettingKey::AudioLanguage => self.cycle_audio_language(),
+            // Stay-alive forces the Tray on, so the row's toggle is refused
+            // with a toast and the stored preference is left alone (design
+            // D3, change `stay-alive-is-lifetime-only`). `toggle_config_setting`
+            // holds the config lock, so the refusal is decided here where
+            // flashing is possible.
+            SettingKey::ShowSysTrayIcon => {
+                let stay_alive = self.config.lock().unwrap().stay_alive;
+                if stay_alive {
+                    self.flash(
+                        "Tray stays on while Stay alive is on".into(),
+                        ToastSeverity::Neutral,
+                    );
+                } else {
+                    let mut c = self.config.lock().unwrap();
+                    c.show_systray_icon = !c.show_systray_icon;
+                }
+            }
             _ => self.toggle_config_setting(key),
         }
     }
@@ -241,7 +258,6 @@ impl App {
             SettingKey::UseMpvConfig => c.use_mpv_config = !c.use_mpv_config,
             SettingKey::NoScripts => c.no_scripts = !c.no_scripts,
             SettingKey::Autoload => c.autoload = !c.autoload,
-            SettingKey::ShowSysTrayIcon => c.show_systray_icon = !c.show_systray_icon,
             _ => {}
         }
     }
