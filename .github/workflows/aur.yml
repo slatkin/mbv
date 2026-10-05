@@ -11,7 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version to publish to AUR, e.g. "0.15.5" or "v0.15.5". Must match an existing GitHub release tag "v<version>".'
+        description: >-
+          Release version to publish to AUR, e.g. "0.15.5" or "v0.15.5".
+          Must match an existing GitHub release tag "v<version>".
         required: true
         type: string
 
@@ -51,7 +53,8 @@ jobs:
           set -euo pipefail
           VERSION="${VERSION_INPUT#v}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version '${VERSION_INPUT}'; expected e.g. 0.15.5 or v0.15.5" >&2
+            echo "Invalid version '${VERSION_INPUT}';" \
+              "expected e.g. 0.15.5 or v0.15.5" >&2
             exit 1
           fi
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
@@ -64,9 +67,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/release
-          gh release download "${TAG}" \
-            --pattern "mbv-${VERSION}-linux-x86_64.tar.gz" \
-            --dir /tmp/release --clobber
+          # Fetch through the API asset route, not the /releases/download/
+          # redirect. That public path is CDN-cached and served stale bytes
+          # right after a --clobber asset replace, which published a broken
+          # tarball sha to the AUR after the v0.23.0 retag. The API route
+          # signs a fresh object URL per request, so it cannot serve a
+          # pre-replace copy.
+          ASSET="mbv-${VERSION}-linux-x86_64.tar.gz"
+          ASSET_URL=$(gh api "repos/${GH_REPO}/releases/tags/${TAG}" \
+            --jq ".assets[] | select(.name == \"${ASSET}\") | .url")
+          test -n "${ASSET_URL}"
+          gh api --header "Accept: application/octet-stream" "${ASSET_URL}" \
+            > "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz"
           test -s "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz"
           echo "Downloaded release asset for ${TAG}"
 
@@ -79,7 +91,8 @@ jobs:
             echo "AUR_SSH_KEY secret is not set; cannot publish to AUR." >&2
             exit 1
           fi
-          SHA256=$(sha256sum "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz" | cut -d' ' -f1)
+          TARBALL="/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz"
+          SHA256=$(sha256sum "${TARBALL}" | cut -d' ' -f1)
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
           # Install the AUR SSH key with restrictive permissions. The secret is
@@ -88,13 +101,15 @@ jobs:
           umask 077
           printf '%s\n' "${AUR_SSH_KEY}" | tr -d '\r' > /root/.ssh/aur
           chmod 600 /root/.ssh/aur
-          export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
+          ssh_opts="-o StrictHostKeyChecking=accept-new"
+          export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur ${ssh_opts}"
           git config --global --add safe.directory '*'
           git clone ssh://aur@aur.archlinux.org/mbv.git /tmp/aur-mbv
           cp PKGBUILD /tmp/aur-mbv/PKGBUILD
           useradd -m aurbuild
           chown -R aurbuild /tmp/aur-mbv
-          su -c 'cd /tmp/aur-mbv && makepkg --printsrcinfo' aurbuild > /tmp/aur-mbv/.SRCINFO
+          su -c 'cd /tmp/aur-mbv && makepkg --printsrcinfo' aurbuild \
+            > /tmp/aur-mbv/.SRCINFO
           cd /tmp/aur-mbv
           git config user.name "mbv release"
           git config user.email "github@poo.town"
