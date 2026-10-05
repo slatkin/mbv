@@ -319,14 +319,7 @@ impl App {
     /// shows the reason as a Warning toast.
     pub(crate) fn toggle_pinned_width(&mut self) {
         let width = self.pinned_width.toggled();
-        let config = self.config.lock().unwrap().panel;
-        // The panic-free `map` keeps the `pinned_panel` borrow local so the
-        // match arms can mutate `self`.
-        let applied = self
-            .pinned_panel
-            .as_ref()
-            .map(|panel| crate::pin::apply_layout(panel, &config, width));
-        match applied {
+        match self.apply_pinned_layout(width) {
             None => self.flash(
                 "Width toggle needs a pinned launch (mbv --pin)".into(),
                 ToastSeverity::Neutral,
@@ -346,14 +339,18 @@ impl App {
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
         let width = self.pinned_width.toggled();
-        let config = self.config.lock().unwrap().panel;
-        let applied = self
-            .pinned_panel
-            .as_ref()
-            .map(|panel| crate::pin::apply_layout(panel, &config, width));
-        if let Some(result) = applied {
+        if let Some(result) = self.apply_pinned_layout(width) {
             self.apply_pinned_view(width, result);
         }
+    }
+
+    /// Resize the pinned panel to `width`; `None` when not pinned. The panic-free
+    /// `map` keeps the `pinned_panel` borrow local so callers can mutate `self`.
+    fn apply_pinned_layout(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
+        let config = self.config.lock().unwrap().panel;
+        self.pinned_panel
+            .as_ref()
+            .map(|panel| crate::pin::apply_layout(panel, &config, width))
     }
 
     /// Take an accepted target width and assign the matching pinned view, or
@@ -374,18 +371,21 @@ impl App {
             return;
         }
         self.note_pinned_width_applied(width);
-        match width {
-            crate::pin::PinnedWidth::Expanded => {
-                self.panel_mode = mbv_ui_model::settings::PanelMode::LibraryOnly;
-                self.mini_view_focus = mbv_ui_model::settings::PanelFocus::Library;
-                self.panel_focus = mbv_ui_model::settings::PanelFocus::Library;
-            }
-            crate::pin::PinnedWidth::Collapsed => {
-                self.panel_mode = mbv_ui_model::settings::PanelMode::QueueOnly;
-                self.mini_view_focus = mbv_ui_model::settings::PanelFocus::Queue;
-                self.panel_focus = mbv_ui_model::settings::PanelFocus::Queue;
-                self.focus_queue_initial_item();
-            }
+        let (mode, focus) = match width {
+            crate::pin::PinnedWidth::Expanded => (
+                mbv_ui_model::settings::PanelMode::LibraryOnly,
+                mbv_ui_model::settings::PanelFocus::Library,
+            ),
+            crate::pin::PinnedWidth::Collapsed => (
+                mbv_ui_model::settings::PanelMode::QueueOnly,
+                mbv_ui_model::settings::PanelFocus::Queue,
+            ),
+        };
+        self.panel_mode = mode;
+        self.mini_view_focus = focus;
+        self.panel_focus = focus;
+        if width == crate::pin::PinnedWidth::Collapsed {
+            self.focus_queue_initial_item();
         }
     }
 
