@@ -218,11 +218,12 @@ fn paint_visible_tabs(
             .padding("", ""),
         area,
     );
-    // The selected tab's underline (2026-10-05 user rule): upper-eighth
-    // blocks on the row below the text, in the emphasis colour, spanning
-    // exactly the selected title's run — the lead and marker cells stay
-    // bare. The tab bar box reserves the text row and one padding row below
-    // it, so the run lands inside the placement.
+    // The selected tab's eighth-block runs (2026-10-05 user rule): a
+    // lower-eighth run (▁) on the row above the text and an upper-eighth run
+    // (▔) on the row below, both in TAB_SELECTED_UNDERLINE, spanning exactly
+    // the selected title's cells — the lead and marker cells stay bare. The
+    // tab bar box reserves one padding row on each side of the text row, so
+    // both runs land inside the placement.
     if selected_tab < visible_end - visible_start {
         let title_len = u16::try_from(model.titles[visible_start + selected_tab].chars().count())
             .unwrap_or(u16::MAX);
@@ -238,14 +239,28 @@ fn paint_visible_tabs(
                 })
                 .sum::<u16>();
         if title_len > 0 {
+            let run_rect = Rect {
+                x: title_x + 1,
+                y: area.y,
+                width: title_len,
+                height: 1,
+            };
+            if area.y > 0 {
+                f.render_widget(
+                    Paragraph::new("▁".repeat(title_len as usize))
+                        .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
+                    Rect {
+                        y: area.y - 1,
+                        ..run_rect
+                    },
+                );
+            }
             f.render_widget(
                 Paragraph::new("▔".repeat(title_len as usize))
                     .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
                 Rect {
-                    x: title_x + 1,
                     y: area.y + 1,
-                    width: title_len,
-                    height: 1,
+                    ..run_rect
                 },
             );
         }

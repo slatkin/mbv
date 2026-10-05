@@ -75,17 +75,15 @@ fn selection_does_not_move_the_tab_titles() {
     assert_eq!(painted_x(0), painted_x(1));
 }
 
-/// 2026-10-05 user rule: the selected tab is underlined by upper-eighth
-/// blocks in the emphasis colour, spanning exactly its title run — its lead
-/// and marker cells and every unselected tab's columns stay bare.
-#[test]
-fn the_selected_tab_underlines_exactly_its_title_run() {
+/// Render a two-tab bar at `Rect(0, 0, 40, 3)` with `selected` selected;
+/// returns the terminal and the painted hit regions.
+fn rendered(selected: usize) -> (Terminal<TestBackend>, Vec<(Rect, usize)>) {
     let titles = vec!["alpha".to_string(), "bravo".to_string()];
     let markers = [false, false];
     let model = TabBarModel {
         titles: &titles,
         markers: &markers,
-        selected: 0,
+        selected,
         scroll: 0,
         hovered: None,
     };
@@ -94,6 +92,15 @@ fn the_selected_tab_underlines_exactly_its_title_run() {
     terminal
         .draw(|f| render_tab_bar(f, Rect::new(0, 0, 40, 3), &model, &mut hits))
         .unwrap();
+    (terminal, hits)
+}
+
+/// 2026-10-05 user rule: the selected tab is underlined by upper-eighth
+/// blocks in the underline role's colour, spanning exactly its title run —
+/// its lead and marker cells and every unselected tab's columns stay bare.
+#[test]
+fn the_selected_tab_underlines_exactly_its_title_run() {
+    let (terminal, hits) = rendered(0);
     let (rect, _) = hits[0];
     let buf = terminal.backend().buffer();
     let title_run = (rect.x + 1)..(rect.x + rect.width - 1);
@@ -117,6 +124,43 @@ fn the_selected_tab_underlines_exactly_its_title_run() {
             buf[(x, 2)].symbol(),
             "▔",
             "an unselected tab is not underlined (column {x})"
+        );
+    }
+}
+
+/// 2026-10-05 user rule: the row above the selected title carries a
+/// lower-eighth block run in the underline role's colour, spanning exactly
+/// the title — the lead and marker cells and unselected tabs' columns stay
+/// bare.
+#[test]
+fn the_selected_tab_gets_a_lower_eighth_run_on_the_row_above() {
+    let (terminal, hits) = rendered(0);
+    let (rect, _) = hits[0];
+    let buf = terminal.backend().buffer();
+    for x in (rect.x + 1)..(rect.x + rect.width - 1) {
+        let cell = buf[(x, 0)].clone();
+        assert_eq!(
+            cell.symbol(),
+            "▁",
+            "column {x} carries the run above the title"
+        );
+        assert_eq!(cell.style().fg, Some(palette::TAB_SELECTED_UNDERLINE));
+    }
+    for x in rect.x..rect.x + rect.width {
+        if !((rect.x + 1)..(rect.x + rect.width - 1)).contains(&x) {
+            assert_ne!(
+                buf[(x, 0)].symbol(),
+                "▁",
+                "the lead and marker cells stay bare (column {x})"
+            );
+        }
+    }
+    let (bravo, _) = hits[1];
+    for x in bravo.x..bravo.x + bravo.width {
+        assert_ne!(
+            buf[(x, 0)].symbol(),
+            "▁",
+            "an unselected tab has no run above (column {x})"
         );
     }
 }
