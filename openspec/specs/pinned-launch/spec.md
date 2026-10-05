@@ -61,12 +61,13 @@ The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`,
 `cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 120),
 `gutter_top`, `gutter_bottom`, `gutter_left`, `gutter_right` (integers in pixels, may be negative,
 default 0), `accent` (boolean, default `true`), `accent_color` (`"#RRGGBB"` or `"RRGGBB"`, default
-`"#dabc7f"`) and `accent_width` (integer pixels 1 through 65535, default 1). An out-of-range or
-malformed value SHALL fall back to its default with a logged warning, without changing the other
-keys. The F2 settings screen SHALL provide a Panel page with one row per value: `Side` cycles
-between left and right, `Accent` toggles on and off, `Accent color` cycles through a fixed colour
-list that always includes the configured value, and the numeric rows step down and up by 1, or by
-10 with Shift, within their ranges. Layout semantics (docking, reservation, negative gutters,
+`"#dabc7f"`), `accent_width` (integer pixels 1 through 65535, default 1) and `cover` (boolean,
+default `false`). An out-of-range or malformed value SHALL fall back to its default with a logged
+warning, without changing the other keys. The F2 settings screen SHALL provide a Panel page with
+one row per value except `cover`: `Side` cycles between left and right, `Accent` toggles on and
+off, `Accent color` cycles through a fixed colour list that always includes the configured value,
+and the numeric rows step down and up by 1, or by 10 with Shift, within their ranges. `cover` is
+read from `config.toml` only. Layout semantics (docking, reservation, covering, negative gutters,
 validation) are those of the `pinwin-panel` capability.
 
 While pinned, a change to `Cols` SHALL switch the panel to its collapsed width and a change to
@@ -101,6 +102,10 @@ an accent row SHALL NOT touch the running panel.
 #### Scenario: Custom colour survives cycling
 - **WHEN** `accent_color` is `#123456`, which is not in the fixed list, and the user opens the `Accent color` row
 - **THEN** `#123456` is one of the values the row cycles through
+
+#### Scenario: Malformed cover value
+- **WHEN** `config.toml` sets `cover = "yes"`
+- **THEN** `cover` falls back to `false` with a logged warning, and the other `[panel]` keys keep their values
 
 ### Requirement: GTK stays out of the daemon crates
 GTK, gtk4-layer-shell and the pinwin library SHALL be linked only into the `mbv` TUI binary.
@@ -168,3 +173,22 @@ saying it applies on the next `mbv --pin` launch.
 #### Scenario: Accent edit while pinned
 - **WHEN** mbv runs in the panel and the user toggles `Accent` in F2
 - **THEN** the value is saved, the panel is unchanged, and a neutral toast says the change applies on the next `mbv --pin` launch
+
+### Requirement: Panel covering mode
+`mbv --pin` SHALL build the panel layout in pinwin's covering mode when `[panel] cover` is true:
+the panel draws over the tiled windows and the compositor reserves no space beside it. When
+`cover` is false, the default, the layout SHALL use pinwin's pushing mode, so the compositor
+reserves a strip and tiled windows move aside. The choice SHALL be made where the layout is
+built; mbv SHALL provide no runtime toggle for it.
+
+#### Scenario: Default pushes
+- **WHEN** `mbv --pin` starts with no `cover` key in `config.toml`
+- **THEN** the compositor reserves a strip beside the panel and tiled windows move aside
+
+#### Scenario: Covering draws over tiles
+- **WHEN** `mbv --pin` starts with `cover = true`
+- **THEN** the panel draws over the tiled windows and the compositor reserves no strip
+
+#### Scenario: Cover value survives a save
+- **WHEN** mbv saves its settings while `cover` is `true`
+- **THEN** the saved `[panel]` section keeps `cover = true`

@@ -48,3 +48,7 @@ gutter_right  = 0
 accent        = true
 accent_color  = "#dabc7f"
 accent_width  = 1
+# Covering: when true, the panel draws over the tiled windows and niri
+# reserves no strip beside it. When false (the default), tiled windows move
+# aside. Fixed at launch (restart `mbv --pin`).
+cover         = false

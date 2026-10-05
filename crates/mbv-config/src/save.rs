@@ -462,6 +462,7 @@ fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Co
         "accent_width".to_string(),
         toml::Value::Integer(i64::from(cfg.panel.accent_width.get())),
     );
+    panel.insert("cover".to_string(), toml::Value::Boolean(cfg.panel.cover));
 }
 
 pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), ConfigError> {

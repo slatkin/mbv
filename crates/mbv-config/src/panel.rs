@@ -105,6 +105,11 @@ pub struct PanelConfig {
     pub accent_color: PanelAccentColor,
     /// The focus accent stroke's width in pixels.
     pub accent_width: NonZeroU16,
+    /// Whether the panel draws over the tiled windows instead of the
+    /// compositor reserving space beside it (pinwin's covering mode; change
+    /// `panel-cover-mode`). Pushing is the default, so `false` keeps today's
+    /// behaviour. Read from `config.toml` only: no F2 row or runtime toggle.
+    pub cover: bool,
 }
 
 impl Default for PanelConfig {
@@ -120,6 +125,7 @@ impl Default for PanelConfig {
             accent: true,
             accent_color: DEFAULT_PANEL_ACCENT_COLOR,
             accent_width: DEFAULT_PANEL_ACCENT_WIDTH,
+            cover: false,
         }
     }
 }

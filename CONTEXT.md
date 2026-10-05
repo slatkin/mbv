@@ -346,6 +346,10 @@ Focus accent:
 A stroke around the Pinned panel window while it holds keyboard focus. It draws in the `[panel]` `accent_color` at `accent_width` pixels unless `accent` is false. It is fixed at launch because pinwin has no runtime accent API.
 _Avoid_: focus ring, strip, highlight
 
+Panel covering:
+A `[panel]` setting (`cover`) for the Pinned panel. When it is true, the panel draws over the tiled windows and the compositor reserves no space beside it. When it is false, the default, the compositor reserves a strip and tiled windows move aside. The choice is made when the layout is built, so `mbv --pin` applies it at launch.
+_Avoid_: cover mode, overlay, always on top
+
 Pinned launch:
 A launch that runs the mbv TUI in the Pinned panel in the same process instead of the current terminal. Only the `--pin` flag selects it. It selects where the TUI draws, not who owns the Player. No configuration setting starts one. When the panel cannot start, mbv reports the reason. It then falls back to the current terminal or exits with a non-zero status.
 _Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)

@@ -155,7 +155,7 @@ fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
         PinnedWidth::Collapsed => config.cols,
         PinnedWidth::Expanded => config.cols_expanded,
     };
-    Layout::new(
+    let layout = Layout::new(
         side,
         // The fallback is unreachable: config clamps panel widths to at
         // least one column on parse and on every F2 step.
@@ -164,7 +164,15 @@ fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
         config.gutter_bottom,
         config.gutter_left,
         config.gutter_right,
-    )
+    );
+    // Covering is a per-layout choice made here, for the start layout and
+    // every later apply alike; there is no runtime lever (change
+    // `panel-cover-mode`).
+    if config.cover {
+        layout.covering()
+    } else {
+        layout
+    }
 }
 
 fn open_pty() -> Result<(std::os::fd::OwnedFd, std::os::fd::OwnedFd), PinStartError> {
@@ -423,5 +431,24 @@ mod tests {
     fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
         assert_eq!(failure_action(true), StartFailureAction::WarnInTerminal);
         assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
+    }
+
+    /// Change `panel-cover-mode`: `cover` selects pinwin's covering mode at
+    /// layout construction, and the default (`false`) keeps pushing.
+    #[rstest::rstest]
+    #[case::default_pushes(false, pinwin::layout::Coverage::Push)]
+    #[case::cover_set_covers(true, pinwin::layout::Coverage::Cover)]
+    fn layout_from_config_follows_the_cover_setting(
+        #[case] cover: bool,
+        #[case] expected: pinwin::layout::Coverage,
+    ) {
+        let config = PanelConfig {
+            cover,
+            ..PanelConfig::default()
+        };
+        assert_eq!(
+            layout_from_config(&config, PinnedWidth::Collapsed).coverage(),
+            expected
+        );
     }
 }
