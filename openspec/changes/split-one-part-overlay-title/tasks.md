@@ -1,7 +1,0 @@
-# Tasks
-
-## 1. Split long one-part titles in the overlay painter
-
-- [ ] 1.1 In `crates/mbv-images/src/title_overlay.rs`, add a pure helper that splits a title at the space nearest its middle (by character count, the earlier space on a tie) and returns `None` when the title has no space. Trim the space from both halves. Verify: unit tests in `crates/mbv-images/src/title_overlay/tests.rs` (new module file, declared with `#[cfg(test)] mod tests;`) cover the contract "split at the space nearest the middle" with a `#[case]` table: a multi-word title gives the expected halves, a tie between two spaces picks the earlier one, and a title with no space gives `None`.
-- [ ] 1.2 In `compose_title_overlay`'s no-logo branch, when `context` is `None` and `text_width` of the title at the nominal scale exceeds the row's max width, split with the 1.1 helper. Paint the first half in the top row and the second half in the bottom row, both with `colours.context` (yellow). Without a split, keep the current single top row. Keep the logo branch unchanged. Verify: one test in the same tests module composes a long two-word one-part title on a small blank image and asserts that the bottom row's pixels changed (scrim present). Run `cargo nextest run -p mbv-images`.
-- [ ] 1.3 Update the `compose_title_overlay` doc comment to describe the one-part split. Verify: `cargo clippy -p mbv-images --all-targets -- -D warnings` and `cargo fmt --all -- --check` pass.

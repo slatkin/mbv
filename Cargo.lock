@@ -2319,6 +2319,7 @@ dependencies = [
  "num-traits",
  "ratatui",
  "ratatui-image",
+ "rstest",
  "tracing",
 ]
 
