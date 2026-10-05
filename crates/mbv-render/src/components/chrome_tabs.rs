@@ -179,10 +179,11 @@ fn paint_visible_tabs(
             let title = title.to_uppercase();
             // Every tab paints exactly `title + 2` cells (lead space, title,
             // marker), so a selection change moves no title and shifts no tab;
-            // selection shows through the text style alone.
+            // selection shows through the text style alone — ACCENT_ACTIVE
+            // text, the theme role documented for the active tab.
             let style = if index == selected_tab {
                 Style::default()
-                    .fg(palette::TEXT_STRONG)
+                    .fg(palette::ACCENT_ACTIVE)
                     .add_modifier(Modifier::BOLD)
             } else if model.hovered == Some(position) {
                 Style::default().fg(palette::TEXT_STRONG)
