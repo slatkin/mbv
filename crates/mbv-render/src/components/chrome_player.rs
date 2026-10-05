@@ -131,7 +131,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
         {
             let spans = marquee_spans(
                 &mut ctx,
-                &[(title, palette::ACCENT)],
+                &[(title, palette::IDLE_FEED_TITLE_FG)],
                 title_area.width as usize,
             );
             frame.render_widget(
