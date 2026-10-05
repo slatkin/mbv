@@ -33,10 +33,10 @@ pub struct TabBarModel<'a> {
     pub hovered: Option<usize>,
 }
 
-/// Tab-title widths: one leading column, the title, and one marker column
-/// (`title + 2` — the unselected tab's painted width). The selected tab's
-/// accent-bar column is budgeted by `visible_tab_range`. One definition for
-/// the painted bar and the keyboard path's `App::tab_title_widths`.
+/// Tab-title widths: one lead cell (a space, or the accent bar on the
+/// selected tab), the title, and one marker column (`title + 2` — every
+/// tab's painted width, selected or not). One definition for the painted bar
+/// and the keyboard path's `App::tab_title_widths`.
 #[must_use]
 pub fn tab_title_widths(titles: &[String]) -> Vec<u16> {
     titles
@@ -61,9 +61,8 @@ pub fn visible_tab_range(widths: &[u16], scroll: usize, avail_w: u16) -> (usize,
     let mut budget = avail_w.saturating_sub(left_w);
     let mut end = start;
     while end < n {
-        // A tab paints `widths[end]` columns; the selected tab adds its
-        // accent-bar column, so budget one spare column per tab.
-        let tab_w: u16 = widths[end] + 1;
+        // A tab paints exactly `widths[end]` columns, selected or not.
+        let tab_w: u16 = widths[end];
         let right_w: u16 = if end + 1 < n { 2 } else { 0 };
         if budget < tab_w + right_w && end > start {
             break;
@@ -183,9 +182,12 @@ fn paint_visible_tabs(
                 let style = Style::default()
                     .fg(palette::TEXT_STRONG)
                     .add_modifier(Modifier::BOLD);
+                // The accent bar replaces the lead space rather than adding a
+                // column: every tab paints exactly `title + 2` cells (lead or
+                // bar, title, marker), so a selection change moves no title.
                 Line::from(vec![
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
-                    Span::styled(format!(" {title}"), style),
+                    Span::styled(title.clone(), style),
                     marker_span(style),
                 ])
             } else {
