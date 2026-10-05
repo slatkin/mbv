@@ -222,7 +222,7 @@ pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 /// value it painted before (user decision 2026-10-05): the idle title is
 /// ambience, not a focus accent, so it takes the foam blue and an accent
 /// edit can never move it.
-pub const IDLE_FEED_TITLE_FG: Color = Palette::Mauve.color();
+pub const IDLE_FEED_TITLE_FG: Color = Palette::Iris.color();
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progress track
