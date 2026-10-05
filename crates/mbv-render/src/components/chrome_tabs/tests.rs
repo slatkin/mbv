@@ -1,6 +1,7 @@
 use super::*;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use rstest::rstest;
 
 /// 2026-10-05 user rule: the gap between adjacent painted tab titles is two
 /// columns. Each tab paints one lead space, its title, and the marker
@@ -95,25 +96,30 @@ fn rendered(selected: usize) -> (Terminal<TestBackend>, Vec<(Rect, usize)>) {
     (terminal, hits)
 }
 
-/// 2026-10-05 user rule: the selected tab is underlined by upper-eighth
-/// blocks in the underline role's colour, spanning exactly its title run —
-/// its lead and marker cells and every unselected tab's columns stay bare.
-#[test]
-fn the_selected_tab_underlines_exactly_its_title_run() {
+/// 2026-10-05 user rule: the selected tab carries an eighth-block run in
+/// the underline role's colour, spanning exactly its title run — its lead
+/// and marker cells and every unselected tab's columns stay bare.
+#[rstest]
+#[case::below_the_title("▔", 2)]
+#[case::above_the_title("▁", 0)]
+fn the_selected_tab_gets_an_eighth_block_run_around_its_title(
+    #[case] glyph: &str,
+    #[case] row: u16,
+) {
     let (terminal, hits) = rendered(0);
     let (rect, _) = hits[0];
     let buf = terminal.backend().buffer();
     let title_run = (rect.x + 1)..(rect.x + rect.width - 1);
     for x in title_run {
-        let cell = buf[(x, 2)].clone();
-        assert_eq!(cell.symbol(), "▔", "column {x} underlines the title");
+        let cell = buf[(x, row)].clone();
+        assert_eq!(cell.symbol(), glyph, "column {x} carries the run");
         assert_eq!(cell.style().fg, Some(palette::TAB_SELECTED_UNDERLINE));
     }
     for x in rect.x..rect.x + rect.width {
         if !((rect.x + 1)..(rect.x + rect.width - 1)).contains(&x) {
             assert_ne!(
-                buf[(x, 2)].symbol(),
-                "▔",
+                buf[(x, row)].symbol(),
+                glyph,
                 "the lead and marker cells stay bare (column {x})"
             );
         }
@@ -121,46 +127,9 @@ fn the_selected_tab_underlines_exactly_its_title_run() {
     let (bravo, _) = hits[1];
     for x in bravo.x..bravo.x + bravo.width {
         assert_ne!(
-            buf[(x, 2)].symbol(),
-            "▔",
+            buf[(x, row)].symbol(),
+            glyph,
             "an unselected tab is not underlined (column {x})"
-        );
-    }
-}
-
-/// 2026-10-05 user rule: the row above the selected title carries a
-/// lower-eighth block run in the underline role's colour, spanning exactly
-/// the title — the lead and marker cells and unselected tabs' columns stay
-/// bare.
-#[test]
-fn the_selected_tab_gets_a_lower_eighth_run_on_the_row_above() {
-    let (terminal, hits) = rendered(0);
-    let (rect, _) = hits[0];
-    let buf = terminal.backend().buffer();
-    for x in (rect.x + 1)..(rect.x + rect.width - 1) {
-        let cell = buf[(x, 0)].clone();
-        assert_eq!(
-            cell.symbol(),
-            "▁",
-            "column {x} carries the run above the title"
-        );
-        assert_eq!(cell.style().fg, Some(palette::TAB_SELECTED_UNDERLINE));
-    }
-    for x in rect.x..rect.x + rect.width {
-        if !((rect.x + 1)..(rect.x + rect.width - 1)).contains(&x) {
-            assert_ne!(
-                buf[(x, 0)].symbol(),
-                "▁",
-                "the lead and marker cells stay bare (column {x})"
-            );
-        }
-    }
-    let (bravo, _) = hits[1];
-    for x in bravo.x..bravo.x + bravo.width {
-        assert_ne!(
-            buf[(x, 0)].symbol(),
-            "▁",
-            "an unselected tab has no run above (column {x})"
         );
     }
 }

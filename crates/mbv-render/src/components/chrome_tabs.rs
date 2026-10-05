@@ -163,6 +163,7 @@ fn paint_visible_tabs(
     hits: &mut Vec<(Rect, usize)>,
 ) {
     let mut tab_x = area.x;
+    let mut selected_rect: Option<Rect> = None;
     let titles: Vec<Line<'_>> = model.titles[visible_start..visible_end]
         .iter()
         .enumerate()
@@ -192,19 +193,20 @@ fn paint_visible_tabs(
             };
             let line = Line::from(vec![
                 Span::styled(" ", style),
-                Span::styled(title.clone(), style),
+                Span::styled(title, style),
                 marker_span(style),
             ]);
             let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
-            hits.push((
-                Rect {
-                    x: tab_x,
-                    y: area.y,
-                    width,
-                    height: 1,
-                },
-                position,
-            ));
+            let hit = Rect {
+                x: tab_x,
+                y: area.y,
+                width,
+                height: 1,
+            };
+            if index == selected_tab {
+                selected_rect = Some(hit);
+            }
+            hits.push((hit, position));
             tab_x += width;
             line
         })
@@ -223,46 +225,27 @@ fn paint_visible_tabs(
     // (▔) on the row below, both in TAB_SELECTED_UNDERLINE, spanning exactly
     // the selected title's cells — the lead and marker cells stay bare. The
     // tab bar box reserves one padding row on each side of the text row, so
-    // both runs land inside the placement.
-    if selected_tab < visible_end - visible_start {
-        let title_len = u16::try_from(model.titles[visible_start + selected_tab].chars().count())
-            .unwrap_or(u16::MAX);
-        // Every tab paints `title + 2` cells, so the selected tab's start is
-        // the sum of the painted widths before it.
-        let title_x = area.x
-            + model.titles[visible_start..visible_start + selected_tab]
-                .iter()
-                .map(|t| {
-                    u16::try_from(t.chars().count())
-                        .unwrap_or(u16::MAX)
-                        .saturating_add(2)
-                })
-                .sum::<u16>();
-        if title_len > 0 {
-            let run_rect = Rect {
-                x: title_x + 1,
-                y: area.y,
-                width: title_len,
-                height: 1,
+    // both runs land inside the placement. The recorded hit rect is the
+    // whole painted tab (lead, title, marker), so the run is the title cells
+    // between its first and last column.
+    if let Some(selected) = selected_rect {
+        let run = Rect {
+            x: selected.x + 1,
+            width: selected.width.saturating_sub(2),
+            ..selected
+        };
+        if run.width > 0 {
+            let mut paint_run = |glyph: &str, y: u16| {
+                f.render_widget(
+                    Paragraph::new(glyph.repeat(run.width as usize))
+                        .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
+                    Rect { y, ..run },
+                );
             };
             if area.y > 0 {
-                f.render_widget(
-                    Paragraph::new("▁".repeat(title_len as usize))
-                        .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
-                    Rect {
-                        y: area.y - 1,
-                        ..run_rect
-                    },
-                );
+                paint_run("▁", area.y - 1);
             }
-            f.render_widget(
-                Paragraph::new("▔".repeat(title_len as usize))
-                    .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
-                Rect {
-                    y: area.y + 1,
-                    ..run_rect
-                },
-            );
+            paint_run("▔", area.y + 1);
         }
     }
 }
