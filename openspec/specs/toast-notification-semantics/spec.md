@@ -43,7 +43,7 @@ Toast display duration SHALL be determined by severity class: Neutral and Succes
 
 ### Requirement: Silent neutral toasts, no bell
 
-Toasts SHALL NOT ring the terminal bell. Neutral toasts SHALL NOT emit a desktop notification and SHALL always render in-app. Success, Warning, and Error toasts SHALL attempt a desktop notification when system notifications are enabled; when the desktop notification succeeds, the in-app toast row is hidden.
+Toasts SHALL NOT ring the terminal bell. Neutral toasts SHALL NOT emit a desktop notification and SHALL always render in-app. Success, Warning, and Error toasts SHALL attempt a desktop notification when system notifications are enabled; when the desktop notification succeeds, the in-app toast row is hidden. Whether system notifications are enabled SHALL be decided by the system notifications setting alone, the same at startup and after a mid-session toggle, whatever stay-alive is set to.
 
 #### Scenario: No bell
 - **WHEN** any toast is displayed
@@ -55,6 +55,11 @@ Toasts SHALL NOT ring the terminal bell. Neutral toasts SHALL NOT emit a desktop
 
 #### Scenario: Colored toast notifies
 - **WHEN** a Success, Warning, or Error toast is displayed with system notifications enabled
+- **THEN** a desktop notification is attempted
+
+#### Scenario: Stay-alive does not suppress notifications
+- **WHEN** a TUI starts with stay-alive enabled and system notifications enabled
+- **WHEN** a Success, Warning, or Error toast is displayed
 - **THEN** a desktop notification is attempted
 
 ### Requirement: Severity-colored toast row
@@ -76,4 +81,3 @@ A toast shown when submitting playback to a remote session SHALL describe the re
 #### Scenario: Submission says requested
 - **WHEN** the user plays an item on an attached remote session
 - **THEN** the toast says playback was requested, not that it is playing
-
