@@ -624,7 +624,10 @@ _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, do
 Which of the two saved widths the **Pinned panel** currently uses: collapsed
 (`cols`) or expanded (`cols_expanded`). The running panel switches between them
 with the `pinned_width_toggle` keybind (`Ctrl+e` by default), and every pinned
-launch starts at the collapsed width — the active width is never saved.
+launch starts at the collapsed width — the active width is never saved. While
+pinned, `x` also switches the width and sets the **Panel mode** with it:
+expanded is Library-only, collapsed is Queue-only. `Ctrl+e` changes only the
+width.
 _Avoid_: panel mode, expand mode, panel size
 
 **Focus accent**:
