@@ -12,9 +12,9 @@ mod error;
 mod owner_settings;
 pub use context::{AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext};
 pub use error::DaemonLibError;
-pub(crate) use owner_settings::OwnerSettingsReader;
 #[cfg(test)]
-pub(crate) use owner_settings::{ConsumeKinds, OwnerSettings};
+pub(crate) use owner_settings::OwnerSettings;
+pub(crate) use owner_settings::OwnerSettingsReader;
 mod core;
 #[cfg(test)]
 pub(crate) use core::PlaybackIntentState;

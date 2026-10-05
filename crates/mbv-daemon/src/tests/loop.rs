@@ -97,7 +97,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     let settings = Arc::new(Mutex::new(OwnerSettings {
         stay_alive: false,
         show_systray_icon: false,
-        consume: ConsumeKinds {
+        consume: ConsumePolicy {
             videos: false,
             audio: false,
         },
@@ -251,7 +251,7 @@ fn daemon_reads_stay_alive_at_shutdown_decision_time_and_rejects_while_on() {
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
         show_systray_icon: false,
-        consume: ConsumeKinds {
+        consume: ConsumePolicy {
             videos: false,
             audio: false,
         },
@@ -298,7 +298,7 @@ fn ordinary_disconnect_is_not_shutdown_when_reader_says_stay_alive() {
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
         show_systray_icon: false,
-        consume: ConsumeKinds {
+        consume: ConsumePolicy {
             videos: false,
             audio: false,
         },

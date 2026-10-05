@@ -1,17 +1,11 @@
-use crate::DaemonRole;
+use crate::{ConsumePolicy, DaemonRole};
 use std::sync::{Arc, Mutex};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ConsumeKinds {
-    pub videos: bool,
-    pub audio: bool,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct OwnerSettings {
     pub stay_alive: bool,
     pub show_systray_icon: bool,
-    pub consume: ConsumeKinds,
+    pub consume: ConsumePolicy,
 }
 
 impl OwnerSettings {
@@ -27,7 +21,7 @@ impl From<&mbv_config::Config> for OwnerSettings {
         Self {
             stay_alive: config.stay_alive,
             show_systray_icon: config.show_systray_icon,
-            consume: ConsumeKinds {
+            consume: ConsumePolicy {
                 videos: config.consume_videos,
                 audio: config.consume_audio,
             },
@@ -65,7 +59,7 @@ pub(crate) fn fixed_reader(stay_alive: bool) -> OwnerSettingsReader {
     let settings = OwnerSettings {
         stay_alive,
         show_systray_icon: false,
-        consume: ConsumeKinds {
+        consume: ConsumePolicy {
             videos: false,
             audio: false,
         },

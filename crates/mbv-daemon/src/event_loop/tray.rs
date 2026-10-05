@@ -68,7 +68,7 @@ impl TrayState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ConsumeKinds, OwnerSettings};
+    use crate::{ConsumePolicy, OwnerSettings};
     use std::cell::Cell;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -111,7 +111,7 @@ mod tests {
             OwnerSettings {
                 stay_alive: true,
                 show_systray_icon: false,
-                consume: ConsumeKinds {
+                consume: ConsumePolicy {
                     videos: false,
                     audio: false,
                 },
