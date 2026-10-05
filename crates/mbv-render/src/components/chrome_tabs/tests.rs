@@ -3,10 +3,9 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 /// 2026-10-05 user rule: the gap between adjacent painted tab titles is two
-/// columns. Each tab paints one leading space, its title, and the marker
-/// column, so one tab's marker cell plus the next tab's leading space make
-/// the two-space gap — after the selected tab (whose leading pair is the
-/// accent bar plus a space) and between two unselected tabs alike.
+/// columns. Each tab paints one lead space, its title, and the marker
+/// column, so one tab's marker cell plus the next tab's lead space make the
+/// two-space gap, whatever the selection.
 #[test]
 fn adjacent_tab_titles_are_two_columns_apart() {
     let titles = vec![

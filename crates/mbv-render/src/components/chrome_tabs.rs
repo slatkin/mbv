@@ -33,10 +33,9 @@ pub struct TabBarModel<'a> {
     pub hovered: Option<usize>,
 }
 
-/// Tab-title widths: one lead cell (a space, or the accent bar on the
-/// selected tab), the title, and one marker column (`title + 2` — every
-/// tab's painted width, selected or not). One definition for the painted bar
-/// and the keyboard path's `App::tab_title_widths`.
+/// Tab-title widths: one lead column, the title, and one marker column
+/// (`title + 2` — every tab's painted width). One definition for the painted
+/// bar and the keyboard path's `App::tab_title_widths`.
 #[must_use]
 pub fn tab_title_widths(titles: &[String]) -> Vec<u16> {
     titles
@@ -178,31 +177,23 @@ fn paint_visible_tabs(
                 }
             };
             let title = title.to_uppercase();
-            let line = if index == selected_tab {
-                let style = Style::default()
+            // Every tab paints exactly `title + 2` cells (lead space, title,
+            // marker), so a selection change moves no title and shifts no tab;
+            // selection shows through the text style alone.
+            let style = if index == selected_tab {
+                Style::default()
                     .fg(palette::TEXT_STRONG)
-                    .add_modifier(Modifier::BOLD);
-                // The accent bar replaces the lead space rather than adding a
-                // column: every tab paints exactly `title + 2` cells (lead or
-                // bar, title, marker), so a selection change moves no title.
-                // Left quarter block: the bar hugs the tab's left edge and
-                // its empty right three quarters give the title air.
-                Line::from(vec![
-                    Span::styled("▎", Style::default().fg(palette::ACCENT)),
-                    Span::styled(title.clone(), style),
-                    marker_span(style),
-                ])
+                    .add_modifier(Modifier::BOLD)
+            } else if model.hovered == Some(position) {
+                Style::default().fg(palette::TEXT_STRONG)
             } else {
-                let style = if model.hovered == Some(position) {
-                    Style::default().fg(palette::TEXT_STRONG)
-                } else {
-                    Style::default().fg(palette::TEXT_MUTED)
-                };
-                Line::from(vec![
-                    Span::styled(format!(" {title}"), style),
-                    marker_span(style),
-                ])
+                Style::default().fg(palette::TEXT_MUTED)
             };
+            let line = Line::from(vec![
+                Span::styled(" ", style),
+                Span::styled(title.clone(), style),
+                marker_span(style),
+            ]);
             let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
             hits.push((
                 Rect {
