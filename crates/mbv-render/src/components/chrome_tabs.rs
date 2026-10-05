@@ -240,7 +240,7 @@ fn paint_visible_tabs(
         if title_len > 0 {
             f.render_widget(
                 Paragraph::new("▔".repeat(title_len as usize))
-                    .style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                    .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
                 Rect {
                     x: title_x + 1,
                     y: area.y + 1,

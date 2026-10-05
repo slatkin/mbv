@@ -100,7 +100,7 @@ fn the_selected_tab_underlines_exactly_its_title_run() {
     for x in title_run {
         let cell = buf[(x, 2)].clone();
         assert_eq!(cell.symbol(), "▔", "column {x} underlines the title");
-        assert_eq!(cell.style().fg, Some(palette::TEXT_EMPHASIS));
+        assert_eq!(cell.style().fg, Some(palette::TAB_SELECTED_UNDERLINE));
     }
     for x in rect.x..rect.x + rect.width {
         if !((rect.x + 1)..(rect.x + rect.width - 1)).contains(&x) {

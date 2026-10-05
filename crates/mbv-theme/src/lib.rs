@@ -87,6 +87,10 @@ pub const TEXT_MUTED: Color = Palette::Grey2.color(); // dim text, icons, unfocu
 /// watched without moving icons and unfocused chrome.
 pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
+/// The selected tab's underline run in the tab bar (upper-eighth blocks on
+/// the row below the tab text). Currently experimenting with Mauve
+/// (2026-10-05); it replaced the underline's original `TEXT_EMPHASIS` value.
+pub const TAB_SELECTED_UNDERLINE: Color = Palette::Mauve.color();
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
 /// The Workspace box's header label (`TRACKLIST`) in a music album Hero. Its
