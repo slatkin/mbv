@@ -240,7 +240,19 @@ impl Component for QueuePlaybackPanel {
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.
-        let Some(transport_area) = self.transport_area else {
+        // The retained rect is sync-projected and can be one frame stale
+        // against the frame's buffer: a pinned width tween resizes the pty
+        // after the sync pass read the size, so a collapse can hand down a
+        // wider band than the buffer holds. The gauge painter indexes the
+        // buffer without clipping (ratatui-widgets gauge.rs `buf[(x, y)]`),
+        // so an unclamped stale band panics (`index outside of buffer`,
+        // 2026-10-05 pinned view toggle). Clamp to the placement this frame
+        // actually paints: paint and hit geometry then agree with the
+        // buffer whatever the tween did between sync and draw.
+        let Some(transport_area) = self
+            .transport_area
+            .map(|retained| retained.intersection(area))
+        else {
             return;
         };
         // The transport band fills its whole rect before the four transport

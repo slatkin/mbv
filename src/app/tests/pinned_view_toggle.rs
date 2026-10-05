@@ -7,7 +7,10 @@
 //! the panel apply in front of it.
 
 use super::*;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::pin::PinnedWidth;
+use mbv_components::QueuePlaybackPanel;
+use mbv_ui_msg::ComponentId;
 
 /// Design D2/D3: from the collapsed width, an accepted expand records the
 /// expanded width and stores the library view. `terminal_width` is held at the
@@ -107,4 +110,65 @@ fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
     assert_eq!(app.panel_mode, PanelMode::LibraryOnly);
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert_eq!(app.mini_view_focus, PanelFocus::Library);
+}
+
+/// Regression (2026-10-05 crash, pinned view toggle): the collapse race must
+/// paint without indexing outside the buffer. The width tween resizes the pty
+/// after the sync pass read the size, so the first frame after the snap runs
+/// its sync pass at the stale expanded width — the queue playback panel
+/// retains a wider transport band than the collapsed buffer holds — and then
+/// draws into the snapped 40-column buffer. The band's gauge painter indexes
+/// the buffer without clipping (`ratatui-widgets` gauge.rs `buf[(x, y)]`), so
+/// the unclamped band panicked with `index outside of buffer`. The panel now
+/// clamps the retained transport rect to the placement it paints, and this
+/// drives that exact frame end to end: settle the expanded frame, flip the
+/// view, sync at the stale width, draw into the snapped buffer.
+#[test]
+fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_buffer() {
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(3);
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.terminal_width = 120;
+    app.terminal_height = 51;
+    let mut status = app.player.status.lock().unwrap();
+    status.active = true;
+    status.queue_len = 3;
+    status.current_idx = 0;
+    status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
+    status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
+    drop(status);
+    let mut harness = TickHarness::new(app);
+    let mut terminal = Terminal::new(TestBackend::new(120, 51)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    // The toggle dispatch: the view flips immediately, the width stays stale.
+    let model = harness.model_mut();
+    model.app.panel_mode = PanelMode::QueueOnly;
+    model.app.mini_view_focus = PanelFocus::Queue;
+    model.app.panel_focus = PanelFocus::Queue;
+    model.app.focus_queue_initial_item();
+    // The race frame: the sync pass still sees the stale expanded width, and
+    // the draw's buffer already holds the snapped collapsed size.
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(40, 51)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    // The transport's hit geometry reflects what the race frame painted:
+    // either clamped into the snapped buffer or zeroed when the stale band
+    // no longer overlaps it — never the stale expanded width.
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::QueuePlaybackPanel)
+        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
+        .expect("queue playback panel mounted in a queue-visible layout");
+    let (_, seekbar) = panel.transport_hits();
+    assert!(
+        seekbar.right() <= 40,
+        "the seekbar must stay within the snapped buffer, got {seekbar:?}"
+    );
 }
