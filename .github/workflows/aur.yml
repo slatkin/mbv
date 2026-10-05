@@ -68,11 +68,11 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/release
           # Fetch through the API asset route, not the /releases/download/
-          # redirect. That public path is CDN-cached and served stale bytes
-          # right after a --clobber asset replace, which published a broken
-          # tarball sha to the AUR after the v0.23.0 retag. The API route
-          # signs a fresh object URL per request, so it cannot serve a
-          # pre-replace copy.
+          # redirect. Both serve the current object, but the redirect path is
+          # a cacheable public URL whose bytes are ambiguous while a same-name
+          # --clobber replace is in flight; the API route names the asset by
+          # id and signs a fresh object URL per request, so what it returns
+          # is always the asset the release records right now.
           ASSET="mbv-${VERSION}-linux-x86_64.tar.gz"
           ASSET_URL=$(gh api "repos/${GH_REPO}/releases/tags/${TAG}" \
             --jq ".assets[] | select(.name == \"${ASSET}\") | .url")
