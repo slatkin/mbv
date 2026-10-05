@@ -119,7 +119,9 @@ running panel without restarting mbv, and the space reserved beside tiled window
 new width. Which width is active SHALL NOT be saved: every pinned launch SHALL start at the
 collapsed width. If the panel rejects the other width, a warning toast SHALL name the reason and
 the panel SHALL stay at its current width. When mbv is not running in a pinned panel, the action
-SHALL show a neutral toast saying it needs a pinned launch and change nothing.
+SHALL show a neutral toast saying it needs a pinned launch and change nothing. The width toggle
+SHALL change only the width: the stored panel mode SHALL be left exactly as it was, so the
+width toggle and the pinned view toggle (`panel-mode`) are independent.
 
 The panel SHALL animate between the two widths rather than snapping. A layout change that does
 not alter the width SHALL apply in one step.
@@ -143,6 +145,11 @@ not alter the width SHALL apply in one step.
 #### Scenario: Not pinned
 - **WHEN** mbv runs in a terminal and the user presses `Ctrl+e`
 - **THEN** a neutral toast says the toggle needs a pinned launch, and nothing else changes
+
+#### Scenario: Width toggle leaves the panel mode alone
+- **WHEN** mbv runs in the pinned panel showing library-only and the user presses `Ctrl+e` to collapse
+- **THEN** the panel collapses to `cols` columns and the stored panel mode is unchanged; the shown
+  panel follows the usual width-driven derivation
 
 ### Requirement: Focus accent applies at launch
 `mbv --pin` SHALL start the panel with the focus accent from `[panel]`: on with `accent_color` and

@@ -34,4 +34,4 @@ Follow `docs/architecture/tui-frontend.md`'s test-layer matrix and the existing 
 - [x] 3.1 Check the F1 help label and `README.md` wording for `panel_mode_cycle_x`/`x`; wherever
   the cycle is described unconditionally, note the pinned behaviour (or reference the pinned view
   toggle) instead of implying one universal `x` behaviour.
-- [ ] 3.2 Sync the delta specs into `openspec/specs/` and archive the change when done.
+- [x] 3.2 Sync the delta specs into `openspec/specs/` and archive the change when done.
