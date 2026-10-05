@@ -74,7 +74,11 @@ pub fn covers(text: &str) -> bool {
 /// truncation bound. The [`covers`] gate applies only to the text rows actually
 /// drawn, so a logo is painted even when the top row's text is uncovered.
 /// Without a logo the output is the text-only composition, unchanged apart from
-/// the centring.
+/// the centring, except that a one-part title wider than its row at the nominal
+/// size splits at the space nearest its middle (the earlier space wins a tie):
+/// the first half paints in the top row and the second half in the bottom row,
+/// both yellow, each fitted by the shrink-then-ellipsis rule. A one-part title
+/// with no space stays in the top row only.
 #[must_use]
 pub fn compose_title_overlay(
     base: &DynamicImage,
@@ -102,14 +106,26 @@ pub fn compose_title_overlay(
         if !covers(top_text) || (context.is_some() && !covers(text.title)) {
             return DynamicImage::ImageRgba8(image);
         }
+        let split = split_when_overflowing(&image, cell.height, context, text.title);
         paint_row(
             &mut image,
             0,
             row_height,
             cell.height,
-            top_text,
+            split.map_or(top_text, |(first, _)| first),
             colours.context,
         );
+        if let Some((_, second)) = split {
+            let bottom_y = image.height().saturating_sub(row_height);
+            paint_row(
+                &mut image,
+                bottom_y,
+                row_height,
+                cell.height,
+                second,
+                colours.context,
+            );
+        }
     }
 
     if context.is_some() {
@@ -147,6 +163,52 @@ fn paint_logo(image: &mut RgbaImage, logo: &DynamicImage, cell_height: u16) {
     image::imageops::overlay(image, &fitted.to_rgba8(), i64::from(x), i64::from(y));
 }
 
+/// Splits a one-part title at the space nearest its middle, by character count.
+///
+/// The earlier space wins a tie, and the split space is trimmed from both
+/// halves. Returns `None` when the title has no space.
+fn split_one_part_title(title: &str) -> Option<(&str, &str)> {
+    let middle = title.chars().count() / 2;
+    let mut nearest: Option<(usize, usize)> = None;
+    for (position, (index, character)) in title.char_indices().enumerate() {
+        if character == ' ' {
+            let distance = position.abs_diff(middle);
+            if nearest.is_none_or(|(best, _)| distance < best) {
+                nearest = Some((distance, index));
+            }
+        }
+    }
+    nearest.map(|(_, index)| (title[..index].trim(), title[index + 1..].trim()))
+}
+
+/// Splits a one-part title that overflows its row at the nominal scale.
+///
+/// Returns `None` for two-part titles, titles that fit, and titles with no
+/// space, leaving the current single top row unchanged.
+fn split_when_overflowing<'a>(
+    image: &RgbaImage,
+    cell_height: u16,
+    context: Option<&str>,
+    title: &'a str,
+) -> Option<(&'a str, &'a str)> {
+    if context.is_some() {
+        return None;
+    }
+    let (_, max_width, nominal) = row_metrics(image.width(), cell_height);
+    let characters: Vec<char> = title.chars().collect();
+    if text_width(&characters, nominal) <= max_width {
+        return None;
+    }
+    split_one_part_title(title)
+}
+
+fn row_metrics(image_width: u32, cell_height: u16) -> (u32, f64, f32) {
+    let padding = (image_width * SIDE_PADDING_PERCENT / 100).min(image_width / 2);
+    let max_width = f64::from(image_width.saturating_sub(padding * 2));
+    let nominal = (f32::from(cell_height) * GLYPH_SCALE).max(1.0);
+    (padding, max_width, nominal)
+}
+
 fn paint_row(
     image: &mut RgbaImage,
     row_y: u32,
@@ -156,9 +218,7 @@ fn paint_row(
     colour: [u8; 3],
 ) {
     let (width, height) = image.dimensions();
-    let padding = (width * SIDE_PADDING_PERCENT / 100).min(width / 2);
-    let max_width = f64::from(width.saturating_sub(padding * 2));
-    let nominal = (f32::from(cell_height) * GLYPH_SCALE).max(1.0);
+    let (padding, max_width, nominal) = row_metrics(width, cell_height);
     let floor = (nominal * MIN_GLYPH_SCALE).max(1.0);
     let (scale, fitted) = fit_text(text, max_width, nominal, floor);
     let right_limit = width.saturating_sub(padding);
@@ -336,3 +396,6 @@ fn blend_pixel(image: &mut RgbaImage, x: u32, y: u32, colour: [u8; 3], alpha: u8
     }
     pixel.0[3] = u8::try_from(output_alpha).expect("blended alpha should fit in one byte");
 }
+
+#[cfg(test)]
+mod tests;
