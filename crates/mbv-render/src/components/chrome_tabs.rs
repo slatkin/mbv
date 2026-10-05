@@ -185,10 +185,10 @@ fn paint_visible_tabs(
                 // The accent bar replaces the lead space rather than adding a
                 // column: every tab paints exactly `title + 2` cells (lead or
                 // bar, title, marker), so a selection change moves no title.
-                // Left half block: the bar hugs the tab's left edge and its
-                // empty right half gives the title a half-cell of air.
+                // Left quarter block: the bar hugs the tab's left edge and
+                // its empty right three quarters give the title air.
                 Line::from(vec![
-                    Span::styled("▌", Style::default().fg(palette::ACCENT)),
+                    Span::styled("▎", Style::default().fg(palette::ACCENT)),
                     Span::styled(title.clone(), style),
                     marker_span(style),
                 ])
