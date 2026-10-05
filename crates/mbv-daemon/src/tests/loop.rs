@@ -45,6 +45,13 @@ fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
     test_loop_with_queue(role, Vec::new(), 0)
 }
 
+/// A `TrayState` whose hook never produces a Tray: for loops whose events
+/// never reach the tray path.
+fn null_tray() -> TrayState {
+    let (tray_tx, _tray_rx) = mpsc::sync_channel(1);
+    TrayState::new(Box::new(|_| None), tray_tx)
+}
+
 #[test]
 fn audiobookshelf_acknowledged_progress_is_followed_by_queue_broadcast() {
     let mut fixture =
@@ -94,14 +101,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
-    let settings = Arc::new(Mutex::new(OwnerSettings {
-        stay_alive: false,
-        show_systray_icon: false,
-        consume: ConsumePolicy {
-            videos: false,
-            audio: false,
-        },
-    }));
+    let settings = Arc::new(Mutex::new(OwnerSettings::default()));
     let current_settings = Arc::clone(&settings);
     let event_loop = DaemonLoop {
         owner: owner_with(items, active),
@@ -124,10 +124,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
             Ok(())
         }),
         queue_persist_tx: None,
-        tray: {
-            let (tray_tx, _tray_rx) = mpsc::sync_channel(1);
-            TrayState::new(Box::new(|_| None), tray_tx)
-        },
+        tray: null_tray(),
     };
     TestLoop {
         event_loop,
@@ -250,11 +247,7 @@ fn daemon_reads_stay_alive_at_shutdown_decision_time_and_rejects_while_on() {
     let mut t = test_loop_with_role(crate::DaemonRole::Local);
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
-        show_systray_icon: false,
-        consume: ConsumePolicy {
-            videos: false,
-            audio: false,
-        },
+        ..Default::default()
     };
     let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -297,11 +290,7 @@ fn ordinary_disconnect_is_not_shutdown_when_reader_says_stay_alive() {
     let mut t = test_loop_with_role(crate::DaemonRole::Local);
     *t.settings.lock().unwrap() = OwnerSettings {
         stay_alive: true,
-        show_systray_icon: false,
-        consume: ConsumePolicy {
-            videos: false,
-            audio: false,
-        },
+        ..Default::default()
     };
     let (client_id, _client_rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
     t.event_loop.ctrl_clients.lock().unwrap().remove(client_id);

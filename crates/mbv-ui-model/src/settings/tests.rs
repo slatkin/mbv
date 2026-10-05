@@ -8,12 +8,12 @@ use rstest::rstest;
 /// first; a configured colour outside the fixed list leads the cycle while
 /// it is configured — from a custom colour the row steps to the palette's
 /// first entry.
-/// The `Show systray icon` row shows whether the Tray is enabled, not the
-/// stored preference: with stay-alive on the row reads on even when the
-/// preference is off (contract `local-daemon-tray` "Row while stay-alive is
-/// on", design D3).
+/// The Tray row (labelled `Show systray icon`) shows whether the Tray is
+/// enabled, not the stored preference: with stay-alive on the row reads on
+/// even when the preference is off (contract `local-daemon-tray` "Row while
+/// stay-alive is on", design D3).
 #[test]
-fn systray_row_reads_on_while_stay_alive_is_on() {
+fn tray_row_reads_on_while_stay_alive_is_on() {
     let cfg = mbv_config::Config {
         stay_alive: true,
         show_systray_icon: false,

@@ -223,7 +223,8 @@ pub fn run_local_daemon_main() -> ! {
     // Player ownership does not depend on Remote Service availability. The
     // Local role retains its existing Control-credential contract. Whether
     // the Tray is enabled is decided per call by the daemon loop from the
-    // live Owner settings (stay-alive || show_systray_icon); the hook is
+    // live Owner settings' `tray_enabled` (derived by `Config::tray_enabled`,
+    // the single source of that rule); the hook is
     // callable more than once and clones the handle each time.
     let player_handle: std::sync::Arc<std::sync::Mutex<Option<mbv_daemon::DaemonPlayerHandle>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));

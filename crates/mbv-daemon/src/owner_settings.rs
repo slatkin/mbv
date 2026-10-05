@@ -1,17 +1,15 @@
 use crate::{ConsumePolicy, DaemonRole};
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// The live Owner settings the loop acts on. `tray_enabled` is carried
+/// pre-derived — `From<&Config>` fills it from [`mbv_config::Config::tray_enabled`],
+/// the single source of the tray-enable rule — so this type never
+/// re-derives it.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct OwnerSettings {
     pub stay_alive: bool,
-    pub show_systray_icon: bool,
+    pub tray_enabled: bool,
     pub consume: ConsumePolicy,
-}
-
-impl OwnerSettings {
-    pub(crate) fn tray_enabled(self) -> bool {
-        self.stay_alive || self.show_systray_icon
-    }
 }
 
 pub(crate) type OwnerSettingsReader = Arc<dyn Fn() -> OwnerSettings + Send + Sync>;
@@ -20,7 +18,7 @@ impl From<&mbv_config::Config> for OwnerSettings {
     fn from(config: &mbv_config::Config) -> Self {
         Self {
             stay_alive: config.stay_alive,
-            show_systray_icon: config.show_systray_icon,
+            tray_enabled: config.tray_enabled(),
             consume: ConsumePolicy {
                 videos: config.consume_videos,
                 audio: config.consume_audio,
@@ -34,8 +32,11 @@ pub(crate) fn reader(role: DaemonRole, spawn_config: &mbv_config::Config) -> Own
     let last_successful_read = Mutex::new(spawn_settings);
     Arc::new(move || {
         if role == DaemonRole::Packaged {
+            // The packaged role forces stay-alive on, which per
+            // `Config::tray_enabled` forces the Tray on too.
             return OwnerSettings {
                 stay_alive: true,
+                tray_enabled: true,
                 ..spawn_settings
             };
         }
@@ -58,11 +59,7 @@ pub(crate) fn reader(role: DaemonRole, spawn_config: &mbv_config::Config) -> Own
 pub(crate) fn fixed_reader(stay_alive: bool) -> OwnerSettingsReader {
     let settings = OwnerSettings {
         stay_alive,
-        show_systray_icon: false,
-        consume: ConsumePolicy {
-            videos: false,
-            audio: false,
-        },
+        ..Default::default()
     };
     Arc::new(move || settings)
 }

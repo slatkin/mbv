@@ -61,14 +61,14 @@ impl TrayState {
             return;
         }
         self.last_check = now;
-        self.reconcile((*owner_settings)().tray_enabled());
+        self.reconcile((*owner_settings)().tray_enabled);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ConsumePolicy, OwnerSettings};
+    use crate::OwnerSettings;
     use std::cell::Cell;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -110,11 +110,8 @@ mod tests {
             *Mutex::lock(&reads).unwrap() += 1;
             OwnerSettings {
                 stay_alive: true,
-                show_systray_icon: false,
-                consume: ConsumePolicy {
-                    videos: false,
-                    audio: false,
-                },
+                tray_enabled: true,
+                ..Default::default()
             }
         })
     }
@@ -171,8 +168,8 @@ mod tests {
         assert_eq!(calls.get(), 1);
     }
 
-    /// Contract: design D4's 1 s cadence — `poll` reads the owner settings at
-    /// most once per interval, and does read them once the interval passes.
+    /// Contract: design D4's 1 s cadence — `poll` does not read the owner
+    /// settings within the interval after the last check.
     #[test]
     fn poll_within_one_second_of_the_last_check_does_not_read_settings() {
         let reads = Arc::new(Mutex::new(0));
@@ -181,12 +178,24 @@ mod tests {
         state.last_check = start;
 
         state.poll(start, &counting_reader(Arc::clone(&reads)));
+
         assert_eq!(*Mutex::lock(&reads).unwrap(), 0);
+    }
+
+    /// Contract: design D4's 1 s cadence — once the interval since the last
+    /// check passes, `poll` reads the owner settings again.
+    #[test]
+    fn poll_after_the_interval_reads_settings() {
+        let reads = Arc::new(Mutex::new(0));
+        let mut state = TrayState::new(counting_none_hook(Rc::new(Cell::new(0))), shutdown_tx());
+        let start = Instant::now();
+        state.last_check = start;
 
         state.poll(
-            start + Duration::from_secs(2),
+            start + TRAY_POLL_INTERVAL,
             &counting_reader(Arc::clone(&reads)),
         );
+
         assert_eq!(*Mutex::lock(&reads).unwrap(), 1);
     }
 }

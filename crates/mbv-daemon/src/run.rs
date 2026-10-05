@@ -36,7 +36,7 @@ pub(crate) fn playback_run_identity_is_current(
     run_identity == player.status.lock().unwrap().sequence_generation
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct ConsumePolicy {
     pub videos: bool,
     pub audio: bool,
@@ -256,7 +256,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // place of the old one-shot `start_tray`, then the loop's 1 s poll keeps
     // it in step with the live settings.
     let mut tray = TrayState::new(hooks.on_tray_ready, shutdown_signal_tx.clone());
-    tray.reconcile(owner_settings().tray_enabled());
+    tray.reconcile(owner_settings().tray_enabled);
     forward_transport(transport_rx, merged_tx.clone());
 
     let tx = merged_tx.clone();

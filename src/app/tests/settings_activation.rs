@@ -57,12 +57,12 @@ fn mouse_support_activation_updates_config_and_defers_terminal_flip() {
     assert!(app.settings_save_at.is_some());
 }
 
-/// The `Show systray icon` row is refused while stay-alive is on: the stored
-/// preference is unchanged and a Neutral toast explains why (contract
-/// `local-daemon-tray` "Toggle refused while stay-alive is on", design D3,
-/// change `stay-alive-is-lifetime-only`).
+/// The Tray row (labelled `Show systray icon`) is refused while stay-alive
+/// is on: the stored preference is unchanged and a Neutral toast explains
+/// why (contract `local-daemon-tray` "Toggle refused while stay-alive is
+/// on", design D3, change `stay-alive-is-lifetime-only`).
 #[test]
-fn systray_toggle_is_refused_while_stay_alive_is_on() {
+fn tray_toggle_is_refused_while_stay_alive_is_on() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().stay_alive = true;
     app.config.lock().unwrap().show_systray_icon = false;
