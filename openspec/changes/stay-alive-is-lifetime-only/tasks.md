@@ -114,7 +114,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Hand the user these manual live checks (do not run mbv yourself):
+- [x] 4.1 Hand the user these manual live checks (do not run mbv yourself):
   - (a) With Stay-alive off and "Show systray icon" off: no Tray. Toggle "Show systray icon" on
     and the Tray appears within about 1 s of the settings save; toggle it off and it disappears.
   - (b) Toggle Stay-alive on: the Tray appears and the row reads on. Toggling the row shows the
