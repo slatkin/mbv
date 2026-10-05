@@ -74,3 +74,49 @@ fn selection_does_not_move_the_tab_titles() {
 
     assert_eq!(painted_x(0), painted_x(1));
 }
+
+/// 2026-10-05 user rule: the selected tab is underlined by upper-eighth
+/// blocks in the emphasis colour, spanning exactly its title run — its lead
+/// and marker cells and every unselected tab's columns stay bare.
+#[test]
+fn the_selected_tab_underlines_exactly_its_title_run() {
+    let titles = vec!["alpha".to_string(), "bravo".to_string()];
+    let markers = [false, false];
+    let model = TabBarModel {
+        titles: &titles,
+        markers: &markers,
+        selected: 0,
+        scroll: 0,
+        hovered: None,
+    };
+    let mut hits = Vec::new();
+    let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
+    terminal
+        .draw(|f| render_tab_bar(f, Rect::new(0, 0, 40, 3), &model, &mut hits))
+        .unwrap();
+    let (rect, _) = hits[0];
+    let buf = terminal.backend().buffer();
+    let title_run = (rect.x + 1)..(rect.x + rect.width - 1);
+    for x in title_run {
+        let cell = buf[(x, 2)].clone();
+        assert_eq!(cell.symbol(), "▔", "column {x} underlines the title");
+        assert_eq!(cell.style().fg, Some(palette::TEXT_EMPHASIS));
+    }
+    for x in rect.x..rect.x + rect.width {
+        if !((rect.x + 1)..(rect.x + rect.width - 1)).contains(&x) {
+            assert_ne!(
+                buf[(x, 2)].symbol(),
+                "▔",
+                "the lead and marker cells stay bare (column {x})"
+            );
+        }
+    }
+    let (bravo, _) = hits[1];
+    for x in bravo.x..bravo.x + bravo.width {
+        assert_ne!(
+            buf[(x, 2)].symbol(),
+            "▔",
+            "an unselected tab is not underlined (column {x})"
+        );
+    }
+}

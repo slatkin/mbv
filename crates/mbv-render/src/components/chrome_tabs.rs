@@ -218,6 +218,38 @@ fn paint_visible_tabs(
             .padding("", ""),
         area,
     );
+    // The selected tab's underline (2026-10-05 user rule): upper-eighth
+    // blocks on the row below the text, in the emphasis colour, spanning
+    // exactly the selected title's run — the lead and marker cells stay
+    // bare. The tab bar box reserves the text row and one padding row below
+    // it, so the run lands inside the placement.
+    if selected_tab < visible_end - visible_start {
+        let title_len = u16::try_from(model.titles[visible_start + selected_tab].chars().count())
+            .unwrap_or(u16::MAX);
+        // Every tab paints `title + 2` cells, so the selected tab's start is
+        // the sum of the painted widths before it.
+        let title_x = area.x
+            + model.titles[visible_start..visible_start + selected_tab]
+                .iter()
+                .map(|t| {
+                    u16::try_from(t.chars().count())
+                        .unwrap_or(u16::MAX)
+                        .saturating_add(2)
+                })
+                .sum::<u16>();
+        if title_len > 0 {
+            f.render_widget(
+                Paragraph::new("▔".repeat(title_len as usize))
+                    .style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                Rect {
+                    x: title_x + 1,
+                    y: area.y + 1,
+                    width: title_len,
+                    height: 1,
+                },
+            );
+        }
+    }
 }
 
 #[cfg(test)]
