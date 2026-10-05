@@ -210,7 +210,7 @@ _Avoid_: client side (of mbvd), frontend, desktop daemon
 **Tray**:
 The desktop status icon shown by a **Local process**, giving playback controls
 and a stop action while no Client is on screen. Never mbvd's: mbvd is headless.
-For the local Owner process, it is present only when Stay-alive is enabled.
+For the local Owner process, it is present while Stay-alive is enabled or the `Show systray icon` preference is on, and follows those settings live.
 _Avoid_: systray, status icon, indicator, mbvd tray
 
 **Player endpoint**:

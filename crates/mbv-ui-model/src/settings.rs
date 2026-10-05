@@ -387,7 +387,9 @@ fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::UseMpvConfig => cfg.use_mpv_config,
         SettingKey::NoScripts => cfg.no_scripts,
         SettingKey::Autoload => cfg.autoload,
-        SettingKey::ShowSysTrayIcon => cfg.show_systray_icon,
+        // The Tray is enabled while stay-alive is on, whatever the stored
+        // preference (design D3, change `stay-alive-is-lifetime-only`).
+        SettingKey::ShowSysTrayIcon => cfg.tray_enabled(),
         SettingKey::SystemNotifications => cfg.system_notifications,
         SettingKey::MouseSupport => cfg.mouse_support,
         SettingKey::PanelAccent => cfg.panel.accent,

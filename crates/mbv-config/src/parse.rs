@@ -290,7 +290,7 @@ fn parse_playback_section(playback: Option<&toml::Value>) -> PlaybackSettings {
         show_systray_icon: playback
             .and_then(|d| d.get("show_systray_icon"))
             .and_then(toml::Value::as_bool)
-            .unwrap_or(true),
+            .unwrap_or(false),
         subtitle_mode: get_str("subtitle_mode"),
         subtitle_lang: get_str("subtitle_lang"),
         audio_lang: get_str("audio_lang"),

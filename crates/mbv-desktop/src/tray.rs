@@ -159,7 +159,12 @@ impl ksni::Tray for MbvTray {
     }
 }
 
-/// Spawns the stay-alive tray (#156 T7 / #168 T-phase-2).
+/// Spawns the tray (#156 T7 / #168 T-phase-2).
+///
+/// The daemon enables the Tray when Stay-alive is on or "Show systray icon"
+/// is on, and stops it when both turn off, so the returned box is the stop
+/// operation: dropping it removes the icon (a bare ksni handle drop does not
+/// stop the service loop), which is why it is wrapped in [`RunningTray`].
 ///
 /// `transport_tx` routes controls through the local daemon owner; the tray
 /// must stay on the local-daemon side of the architecture and must not
@@ -178,7 +183,7 @@ pub fn spawn(
         transport_tx,
     }
     .spawn()
-    .map(|tray| Box::new(tray) as Box<dyn Send>)
+    .map(|tray| Box::new(RunningTray(Some(tray))) as Box<dyn Send>)
     .map_err(|e| {
         tracing::warn!(
             name: "tray.availability.failed",
@@ -188,6 +193,31 @@ pub fn spawn(
         );
     })
     .ok()
+}
+
+/// Owning wrapper around the ksni handle: dropping it stops the tray
+/// service and waits for that to complete, so dropping the boxed value
+/// removes the icon. Dropping a raw ksni handle does not stop the service
+/// (ksni 0.3.6 `service.rs` ignores a closed handle channel).
+///
+/// That wait is a thread join, and the drop is reachable on the daemon's
+/// tick path (`TrayState::reconcile`), so the stop runs on a short-lived
+/// killer thread instead of the dropping thread: a wedged tray service
+/// thread must not stall every Client behind the daemon loop. A killer
+/// thread outlived by process exit needs no joining — the process's D-Bus
+/// connection closing removes the icon too.
+struct RunningTray(Option<ksni::blocking::Handle<MbvTray>>);
+
+impl Drop for RunningTray {
+    fn drop(&mut self) {
+        let Some(handle) = self.0.take() else { return };
+        // Thread creation failing (resource exhaustion) drops the handle
+        // without the graceful stop; the icon then goes only when the
+        // process's D-Bus connection closes. Practically unreachable.
+        let _ = std::thread::Builder::new()
+            .name("mbv-tray-stop".into())
+            .spawn(move || handle.shutdown().wait());
+    }
 }
 
 #[cfg(test)]

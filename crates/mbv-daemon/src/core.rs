@@ -592,14 +592,14 @@ impl SharedQueueState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     pub transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;
-type OnTrayReady = Box<dyn FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
+pub(crate) type OnTrayReady = Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
 
 pub struct DaemonRuntimeHooks {
     pub on_player_ready: OnPlayerReady,

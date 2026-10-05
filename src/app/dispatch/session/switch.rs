@@ -26,9 +26,10 @@ impl App {
         }
         self.player_endpoint = Some(endpoint.clone());
         if current_is_home {
-            if !self.config.lock().unwrap().stay_alive {
-                self.player.stop();
-            }
+            // The suspended home link stays playing while suspended: it is
+            // drained every tick (`drain_suspended_home_events`), so route
+            // switching must not stop it, whatever Stay-alive is set to
+            // (stay-alive-is-lifetime-only, design D1).
             self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,

@@ -146,7 +146,7 @@ impl Default for Config {
             consume_videos: false,
             consume_audio: false,
             always_skip_intro: false,
-            show_systray_icon: true,
+            show_systray_icon: false,
             no_scripts: false,
             stay_alive: false,
             save_playlist_on_quit: true,
@@ -178,6 +178,13 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Whether the Tray is enabled: always while stay-alive is on, whatever
+    /// the stored `show_systray_icon` preference.
+    #[must_use]
+    pub fn tray_enabled(&self) -> bool {
+        self.stay_alive || self.show_systray_icon
+    }
+
     /// The mpv audio-pipe FIFO path to write to, or `None` when the feature
     /// is disabled. Centralizes the enabled/path pair so callers never need
     /// to re-derive this themselves.

@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 mod control_events;
 mod player_events;
 mod service_events;
+mod tray;
+pub(crate) use tray::TrayState;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LoopFlow {
@@ -75,6 +77,8 @@ pub(crate) struct DaemonLoop {
     /// of writing real state files.
     pub(super) store: OwnerQueueStore,
     pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
+    /// Tray ownership reconciled against the live owner settings (design D4).
+    pub(super) tray: TrayState,
 }
 
 impl DaemonLoop {
@@ -97,6 +101,7 @@ impl DaemonLoop {
             });
             self.last_capabilities = now;
         }
+        self.tray.poll(now, &self.owner_settings);
     }
 
     /// Idle work performed when no event arrived within the poll timeout.

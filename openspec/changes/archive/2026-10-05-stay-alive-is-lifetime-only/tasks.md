@@ -2,7 +2,7 @@
 
 ## 1. Client: route switching and notifications ignore Stay-alive
 
-- [ ] 1.1 In `src/app/dispatch/session/switch.rs` `attach_remote_owner`, delete the
+- [x] 1.1 In `src/app/dispatch/session/switch.rs` `attach_remote_owner`, delete the
   `if !self.config.lock().unwrap().stay_alive { self.player.stop(); }` block. The home link is
   still suspended, just never stopped first (design D1). In `src/app/tests/route_state.rs`,
   replace `switching_away_with_stay_alive_disabled_sends_stop_to_home_link` with
@@ -10,7 +10,7 @@
   that used to stop) and asserts `suspended_local.is_some()` and that `home_commands` received
   **no** `PlaybackIntent` Stop. Contract: `daemon-lifecycle` "Switching away from the home link
   keeps local playback". Verify: `cargo nextest run -p mbv route_state` passes.
-- [ ] 1.2 In `src/app/state/construct/remote.rs` `new_remote`, set
+- [x] 1.2 In `src/app/state/construct/remote.rs` `new_remote`, set
   `let system_notifications = app_config.system_notifications;` (design D2). In the same file's
   tests:
   - delete
@@ -21,7 +21,7 @@
 
   Contract: `toast-notification-semantics` "Stay-alive does not suppress notifications". Verify:
   `cargo nextest run -p mbv construct::remote` passes.
-- [ ] 1.3 Add a status note to `docs/adr/0030-owner-process-is-the-only-local-player-owner.md`
+- [x] 1.3 Add a status note to `docs/adr/0030-owner-process-is-the-only-local-player-owner.md`
   saying that stay-alive-off no longer keeps Bare behaviour for route switching or system
   notifications, and that Stay-alive decides only lifetime, exclusive admission and the forced
   Tray (change `stay-alive-is-lifetime-only`). Verify: `rg -n "stay-alive-is-lifetime-only"`
@@ -30,24 +30,24 @@
 
 ## 2. The Tray setting is derived from both settings
 
-- [ ] 2.1 Change the `show_systray_icon` default from `true` to `false` in
+- [x] 2.1 Change the `show_systray_icon` default from `true` to `false` in
   `crates/mbv-config/src/parse.rs` (`unwrap_or(true)` in `PlaybackSettings`) and in
   `crates/mbv-config/src/types_paths.rs` (`Config` default). Don't add a test for the default
   value. Verify: `cargo nextest run -p mbv-config` passes; update any existing assertion that
   pinned `true`.
-- [ ] 2.2 In `crates/mbv-daemon/src/owner_settings.rs`:
+- [x] 2.2 In `crates/mbv-daemon/src/owner_settings.rs`:
   - add `show_systray_icon: bool` to `OwnerSettings`, filled from config in `From<&Config>`;
   - add `pub(crate) fn tray_enabled(&self) -> bool { self.stay_alive || self.show_systray_icon }`;
   - update `fixed_reader` and the existing reader test's struct literals so they compile.
 
   No new test: the method is one expression, and 3.3's tests exercise it. Verify:
   `cargo check -p mbv-daemon --all-targets`.
-- [ ] 2.3 In `crates/mbv-ui-model/src/settings.rs` `setting_boolean_value`, show the
+- [x] 2.3 In `crates/mbv-ui-model/src/settings.rs` `setting_boolean_value`, show the
   `ShowSysTrayIcon` row as `cfg.stay_alive || cfg.show_systray_icon` (design D3). Add one test:
   with `stay_alive = true` and `show_systray_icon = false`, `setting_value(ShowSysTrayIcon, ..)`
   returns `bool_val(true)`. Contract: `local-daemon-tray` "Row while stay-alive is on". Verify:
   `cargo nextest run -p mbv-ui-model` passes.
-- [ ] 2.4 In `src/app/dispatch/settings.rs`, refuse the `ShowSysTrayIcon` toggle while
+- [x] 2.4 In `src/app/dispatch/settings.rs`, refuse the `ShowSysTrayIcon` toggle while
   `stay_alive` is on:
   - leave config unchanged and call
     `self.flash("Tray stays on while Stay alive is on".into(), ToastSeverity::Neutral)`;
@@ -62,13 +62,13 @@
 
 ## 3. The Owner process starts and stops the Tray live
 
-- [ ] 3.1 In `crates/mbv-desktop/src/tray.rs`, make `spawn` box an owning wrapper (for example
+- [x] 3.1 In `crates/mbv-desktop/src/tray.rs`, make `spawn` box an owning wrapper (for example
   `struct RunningTray(ksni::blocking::Handle<MbvTray>)`) whose `Drop` calls
   `self.0.shutdown().wait()`. Dropping a raw ksni handle does not stop the service (design D5).
   Keep the `Option<Box<dyn Send>>` return type. Update the doc comment, which currently says
   "stay-alive tray", to say the Tray is enabled by Stay-alive or "Show systray icon". No unit
   test (it needs D-Bus); the manual check is in 4.1. Verify: `cargo check -p mbv-desktop`.
-- [ ] 3.2 Make the tray hook callable more than once (design D6):
+- [x] 3.2 Make the tray hook callable more than once (design D6):
   - in `crates/mbv-daemon/src/core.rs`, change `OnTrayReady` to
     `Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>`, and derive `Clone` for
     `DaemonPlayerHandle`;
@@ -78,7 +78,7 @@
     compiling.
 
   Verify: `cargo check -p mbv-daemon -p mbv -p mbvd --all-targets`.
-- [ ] 3.3 In `crates/mbv-daemon`, move Tray ownership into the daemon loop (design D4):
+- [x] 3.3 In `crates/mbv-daemon`, move Tray ownership into the daemon loop (design D4):
   1. Create a new module `src/event_loop/tray.rs` holding a `TrayState` with these fields:
      - the hook;
      - a `shutdown_signal_tx` clone;
@@ -106,7 +106,7 @@
 
   Contracts: `local-daemon-tray` "Stay-alive turned on/off during the session" and "A missing
   tray is not an error". Verify: `cargo nextest run -p mbv-daemon` passes.
-- [ ] 3.4 Update CONTEXT.md *Tray*: replace "For the local Owner process, it is present only when
+- [x] 3.4 Update CONTEXT.md *Tray*: replace "For the local Owner process, it is present only when
   Stay-alive is enabled." with "For the local Owner process, it is present while Stay-alive is
   enabled or Show systray icon is on, and follows those settings live." Verify: `rg -n "follows
   those settings live" CONTEXT.md`. Group gate: `cargo clippy --workspace --all-targets -- -D
@@ -114,7 +114,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Hand the user these manual live checks (do not run mbv yourself):
+- [x] 4.1 Hand the user these manual live checks (do not run mbv yourself):
   - (a) With Stay-alive off and "Show systray icon" off: no Tray. Toggle "Show systray icon" on
     and the Tray appears within about 1 s of the settings save; toggle it off and it disappears.
   - (b) Toggle Stay-alive on: the Tray appears and the row reads on. Toggling the row shows the

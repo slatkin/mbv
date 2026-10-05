@@ -172,6 +172,32 @@ impl App {
             SettingKey::SubtitleMode => self.apply_subtitle_mode(),
             SettingKey::SubtitleLanguage => self.cycle_subtitle_language(),
             SettingKey::AudioLanguage => self.cycle_audio_language(),
+            // The Tray row shows `tray_enabled()` — the single source of the
+            // tray-enable rule — not the stored preference, so its toggle is
+            // refused when flipping the preference cannot change that value:
+            // while stay-alive forces the Tray on (design D3, change
+            // `stay-alive-is-lifetime-only`). `toggle_config_setting` holds
+            // the config lock, so the refusal is decided here where flashing
+            // is possible; a refused toggle is reverted so the stored
+            // preference stays untouched.
+            SettingKey::ShowSysTrayIcon => {
+                let refused = {
+                    let mut c = self.config.lock().unwrap();
+                    let enabled = c.tray_enabled();
+                    c.show_systray_icon = !c.show_systray_icon;
+                    let refused = c.tray_enabled() == enabled;
+                    if refused {
+                        c.show_systray_icon = !c.show_systray_icon;
+                    }
+                    refused
+                };
+                if refused {
+                    self.flash(
+                        "Tray stays on while Stay alive is on".into(),
+                        ToastSeverity::Neutral,
+                    );
+                }
+            }
             _ => self.toggle_config_setting(key),
         }
     }
@@ -241,7 +267,6 @@ impl App {
             SettingKey::UseMpvConfig => c.use_mpv_config = !c.use_mpv_config,
             SettingKey::NoScripts => c.no_scripts = !c.no_scripts,
             SettingKey::Autoload => c.autoload = !c.autoload,
-            SettingKey::ShowSysTrayIcon => c.show_systray_icon = !c.show_systray_icon,
             _ => {}
         }
     }

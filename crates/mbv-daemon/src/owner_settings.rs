@@ -1,11 +1,15 @@
-use crate::DaemonRole;
+use crate::{ConsumePolicy, DaemonRole};
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// The live Owner settings the loop acts on. `tray_enabled` is carried
+/// pre-derived — `From<&Config>` fills it from [`mbv_config::Config::tray_enabled`],
+/// the single source of the tray-enable rule — so this type never
+/// re-derives it.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct OwnerSettings {
     pub stay_alive: bool,
-    pub consume_videos: bool,
-    pub consume_audio: bool,
+    pub tray_enabled: bool,
+    pub consume: ConsumePolicy,
 }
 
 pub(crate) type OwnerSettingsReader = Arc<dyn Fn() -> OwnerSettings + Send + Sync>;
@@ -14,8 +18,11 @@ impl From<&mbv_config::Config> for OwnerSettings {
     fn from(config: &mbv_config::Config) -> Self {
         Self {
             stay_alive: config.stay_alive,
-            consume_videos: config.consume_videos,
-            consume_audio: config.consume_audio,
+            tray_enabled: config.tray_enabled(),
+            consume: ConsumePolicy {
+                videos: config.consume_videos,
+                audio: config.consume_audio,
+            },
         }
     }
 }
@@ -25,8 +32,11 @@ pub(crate) fn reader(role: DaemonRole, spawn_config: &mbv_config::Config) -> Own
     let last_successful_read = Mutex::new(spawn_settings);
     Arc::new(move || {
         if role == DaemonRole::Packaged {
+            // The packaged role forces stay-alive on, which per
+            // `Config::tray_enabled` forces the Tray on too.
             return OwnerSettings {
                 stay_alive: true,
+                tray_enabled: true,
                 ..spawn_settings
             };
         }
@@ -49,8 +59,7 @@ pub(crate) fn reader(role: DaemonRole, spawn_config: &mbv_config::Config) -> Own
 pub(crate) fn fixed_reader(stay_alive: bool) -> OwnerSettingsReader {
     let settings = OwnerSettings {
         stay_alive,
-        consume_videos: false,
-        consume_audio: false,
+        ..Default::default()
     };
     Arc::new(move || settings)
 }
@@ -73,7 +82,7 @@ mod tests {
         .unwrap();
         let last_successful = settings();
         assert!(last_successful.stay_alive);
-        assert!(last_successful.consume_audio);
+        assert!(last_successful.consume.audio);
 
         std::fs::write(mbv_config::config_path(), "invalid toml !!!").unwrap();
         assert_eq!(settings(), last_successful);

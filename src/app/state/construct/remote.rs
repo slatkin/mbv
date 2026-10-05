@@ -202,7 +202,7 @@ impl App {
         let emby_configured_without_client = client.is_none() && app_config.emby_setup.is_some();
         let should_open_services =
             crate::app::dispatch::session::service_startup::should_open_services(&app_config);
-        let system_notifications = !app_config.stay_alive && app_config.system_notifications;
+        let system_notifications = app_config.system_notifications;
         // Both side effects below touch real system state, so test builds
         // must never run them (issue #757): the eviction thread scans and
         // prunes the user's real image-cache dir, and `mpris::start` claims
@@ -296,22 +296,10 @@ mod tests {
         )
     }
 
+    // toast-notification-semantics "Stay-alive does not suppress notifications":
+    // the setting is followed through unchanged whatever stay-alive is.
     #[test]
-    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_uses_system_notifications_when_stay_alive_is_off()
-     {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let config = crate::config::Config {
-            system_notifications: true,
-            ..Default::default()
-        };
-        let app = construct(config);
-
-        assert!(app.system_notifications);
-    }
-
-    #[test]
-    fn daemon_lifecycle_local_daemon_is_independent_of_emby_setup_suppresses_notifications_when_stay_alive_is_on()
-     {
+    fn system_notifications_follow_config_when_stay_alive_is_on() {
         let _guard = crate::config::TestStateDirGuard::new();
         let config = crate::config::Config {
             stay_alive: true,
@@ -320,7 +308,7 @@ mod tests {
         };
         let app = construct(config);
 
-        assert!(!app.system_notifications);
+        assert!(app.system_notifications);
     }
 
     #[test]
