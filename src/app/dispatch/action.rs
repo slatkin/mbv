@@ -319,14 +319,7 @@ impl App {
     /// shows the reason as a Warning toast.
     pub(crate) fn toggle_pinned_width(&mut self) {
         let width = self.pinned_width.toggled();
-        let config = self.config.lock().unwrap().panel;
-        // The panic-free `map` keeps the `pinned_panel` borrow local so the
-        // match arms can mutate `self`.
-        let applied = self
-            .pinned_panel
-            .as_ref()
-            .map(|panel| crate::pin::apply_layout(panel, &config, width));
-        match applied {
+        match self.apply_pinned_layout(width) {
             None => self.flash(
                 "Width toggle needs a pinned launch (mbv --pin)".into(),
                 ToastSeverity::Neutral,
@@ -336,7 +329,74 @@ impl App {
         }
     }
 
+    /// `panel_mode_cycle_x` while pinned (change `pinned-view-toggle`, design
+    /// D2/D3): flip the running panel between its two pinned views through the
+    /// same resize path as the width toggle. The expanded width shows
+    /// library-only with library focus; the collapsed width shows queue-only
+    /// with queue focus and re-runs the mini-view initial-item path. A
+    /// rejected target width keeps the current width and flashes the reason.
+    /// `cycle_panel_mode` guards pinned-ness (D1), so the not-pinned arm here
+    /// is unreachable.
+    pub(crate) fn pinned_view_toggle(&mut self) {
+        let width = self.pinned_width.toggled();
+        if let Some(result) = self.apply_pinned_layout(width) {
+            self.apply_pinned_view(width, result);
+        }
+    }
+
+    /// Resize the pinned panel to `width`; `None` when not pinned. The panic-free
+    /// `map` keeps the `pinned_panel` borrow local so callers can mutate `self`.
+    fn apply_pinned_layout(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
+        let config = self.config.lock().unwrap().panel;
+        self.pinned_panel
+            .as_ref()
+            .map(|panel| crate::pin::apply_layout(panel, &config, width))
+    }
+
+    /// Take an accepted target width and assign the matching pinned view, or
+    /// flash a rejected layout's reason and touch nothing (design D2/D3).
+    ///
+    /// The view fields are written directly: at dispatch time `terminal_width`
+    /// still holds the pre-toggle width (the pty resize is only observed a
+    /// frame later through `pinned_resize_pending`), so on expand
+    /// `set_panel_focus` would take its mini-view early return and leave the
+    /// stored `panel_focus` stale.
+    pub(in crate::app) fn apply_pinned_view(
+        &mut self,
+        width: crate::pin::PinnedWidth,
+        applied: Result<(), String>,
+    ) {
+        if let Err(reason) = applied {
+            self.flash(reason, ToastSeverity::Warning);
+            return;
+        }
+        self.note_pinned_width_applied(width);
+        let (mode, focus) = match width {
+            crate::pin::PinnedWidth::Expanded => (
+                mbv_ui_model::settings::PanelMode::LibraryOnly,
+                mbv_ui_model::settings::PanelFocus::Library,
+            ),
+            crate::pin::PinnedWidth::Collapsed => (
+                mbv_ui_model::settings::PanelMode::QueueOnly,
+                mbv_ui_model::settings::PanelFocus::Queue,
+            ),
+        };
+        self.panel_mode = mode;
+        self.mini_view_focus = focus;
+        self.panel_focus = focus;
+        if width == crate::pin::PinnedWidth::Collapsed {
+            self.focus_queue_initial_item();
+        }
+    }
+
     fn cycle_panel_mode(&mut self) {
+        // A pinned panel binds `x` to its two view states (change
+        // `pinned-view-toggle`, design D1/D2); the three-state cycle and the
+        // mini-view toggle are unreachable while pinned.
+        if self.pinned_panel.is_some() {
+            self.pinned_view_toggle();
+            return;
+        }
         // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
         // exactly two states, library-only ⇄ queue-only.
         if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {
