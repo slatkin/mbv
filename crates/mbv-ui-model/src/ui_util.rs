@@ -4,10 +4,13 @@ use mbv_emby_model::EmbyItem;
 use unicode_width::UnicodeWidthStr;
 
 /// Tab-bar label for the Continue tab: Nerd Font's house glyph (\u{f015})
-/// when Nerd Fonts are enabled, otherwise the Unicode house character.
+/// when Nerd Fonts are enabled, otherwise the Unicode house character. A
+/// trailing space keeps one extra column between the icon and whatever
+/// follows it in the tab bar (2026-10-05 user rule); the tab painter and the
+/// width model both derive from this string, so they stay consistent.
 #[must_use]
 pub fn continue_tab_title(use_nerd_fonts: bool) -> &'static str {
-    if use_nerd_fonts { "\u{f015}" } else { "⌂" }
+    if use_nerd_fonts { "\u{f015} " } else { "⌂ " }
 }
 
 /// Three-letter month names, indexed 0 = January (the same abbreviation
