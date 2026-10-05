@@ -336,7 +336,67 @@ impl App {
         }
     }
 
+    /// `panel_mode_cycle_x` while pinned (change `pinned-view-toggle`, design
+    /// D2/D3): flip the running panel between its two pinned views through the
+    /// same resize path as the width toggle. The expanded width shows
+    /// library-only with library focus; the collapsed width shows queue-only
+    /// with queue focus and re-runs the mini-view initial-item path. A
+    /// rejected target width keeps the current width and flashes the reason.
+    /// `cycle_panel_mode` guards pinned-ness (D1), so the not-pinned arm here
+    /// is unreachable.
+    pub(crate) fn pinned_view_toggle(&mut self) {
+        let width = self.pinned_width.toggled();
+        let config = self.config.lock().unwrap().panel;
+        let applied = self
+            .pinned_panel
+            .as_ref()
+            .map(|panel| crate::pin::apply_layout(panel, &config, width));
+        if let Some(result) = applied {
+            self.apply_pinned_view(width, result);
+        }
+    }
+
+    /// Take an accepted target width and assign the matching pinned view, or
+    /// flash a rejected layout's reason and touch nothing (design D2/D3).
+    ///
+    /// The view fields are written directly: at dispatch time `terminal_width`
+    /// still holds the pre-toggle width (the pty resize is only observed a
+    /// frame later through `pinned_resize_pending`), so on expand
+    /// `set_panel_focus` would take its mini-view early return and leave the
+    /// stored `panel_focus` stale.
+    pub(in crate::app) fn apply_pinned_view(
+        &mut self,
+        width: crate::pin::PinnedWidth,
+        applied: Result<(), String>,
+    ) {
+        if let Err(reason) = applied {
+            self.flash(reason, ToastSeverity::Warning);
+            return;
+        }
+        self.note_pinned_width_applied(width);
+        match width {
+            crate::pin::PinnedWidth::Expanded => {
+                self.panel_mode = mbv_ui_model::settings::PanelMode::LibraryOnly;
+                self.mini_view_focus = mbv_ui_model::settings::PanelFocus::Library;
+                self.panel_focus = mbv_ui_model::settings::PanelFocus::Library;
+            }
+            crate::pin::PinnedWidth::Collapsed => {
+                self.panel_mode = mbv_ui_model::settings::PanelMode::QueueOnly;
+                self.mini_view_focus = mbv_ui_model::settings::PanelFocus::Queue;
+                self.panel_focus = mbv_ui_model::settings::PanelFocus::Queue;
+                self.focus_queue_initial_item();
+            }
+        }
+    }
+
     fn cycle_panel_mode(&mut self) {
+        // A pinned panel binds `x` to its two view states (change
+        // `pinned-view-toggle`, design D1/D2); the three-state cycle and the
+        // mini-view toggle are unreachable while pinned.
+        if self.pinned_panel.is_some() {
+            self.pinned_view_toggle();
+            return;
+        }
         // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
         // exactly two states, library-only ⇄ queue-only.
         if self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD {

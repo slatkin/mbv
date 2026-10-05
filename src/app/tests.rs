@@ -15,6 +15,7 @@ mod lifecycle;
 mod music_grouping;
 mod narrow_browse_migration;
 mod panel_focus;
+mod pinned_view_toggle;
 mod podcast;
 mod queue;
 mod remote_commands;
