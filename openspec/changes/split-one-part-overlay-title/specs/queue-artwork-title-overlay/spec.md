@@ -62,7 +62,7 @@ the overlay text is as tall as the terminal's own text at every artwork size.
 ### Requirement: A long one-part title splits across the top and bottom rows
 
 When a one-part title is drawn as text (no logo replaces the top row) and is wider than its row at
-the nominal size, it SHALL split at the space nearest the middle of the title. The text before
+the nominal size, it SHALL split at the space nearest the middle of the title, and the earlier space SHALL win a tie. The text before
 that space SHALL be drawn in the top row and the text after it in the bottom row, both yellow,
 each over its own scrim and centred within the side padding. Each half SHALL then be fitted to
 its row by the shrink-then-ellipsis rule. A one-part title with no space SHALL NOT split and SHALL
