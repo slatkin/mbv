@@ -220,9 +220,9 @@ pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 /// The idle-feed marquee title: the RSS entry the strip shows while nothing
 /// is playing. Its own role rather than `ACCENT`, whose `Palette::Aqua`
 /// value it painted before (user decision 2026-10-05): the idle title is
-/// ambience, not a focus accent, so it takes the warm cream and an accent
+/// ambience, not a focus accent, so it takes the foam blue and an accent
 /// edit can never move it.
-pub const IDLE_FEED_TITLE_FG: Color = Palette::Cream.color();
+pub const IDLE_FEED_TITLE_FG: Color = Palette::Foam.color();
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progress track
