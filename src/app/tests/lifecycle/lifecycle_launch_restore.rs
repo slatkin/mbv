@@ -295,3 +295,42 @@ fn reset_ui_state_abandons_pending_launch_restore() {
         crate::app::state::app_struct::LaunchRestore::Done
     );
 }
+
+/// 2026-10-05 user rule: a pinned launch's default screen is always the
+/// Queue panel. Both saved sources of Panel focus lose to it — the persisted
+/// prefs focus and the saved launch snapshot's focus that the destination
+/// re-anchor re-applies — so a Library-focused snapshot cannot land the
+/// pinned panel on the Library column.
+#[test]
+fn pinned_launch_overrides_saved_focus_with_queue() {
+    let mut app = pending_emby_launch_at("lib-movies", mbv_config::LaunchPanelFocus::Library);
+    app.panel_focus = PanelFocus::Library;
+
+    app.pin_launch_focus_to_queue();
+
+    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    assert!(matches!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
+            panel_focus: mbv_config::LaunchPanelFocus::Queue,
+            ..
+        })
+    ));
+}
+
+/// The same rule when no launch snapshot exists: the persisted prefs focus
+/// alone is overridden, and the forcing path tolerates `LaunchRestore::Done`.
+#[test]
+fn pinned_launch_without_snapshot_still_starts_on_queue() {
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.panel_focus = PanelFocus::Library;
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::Done;
+
+    app.pin_launch_focus_to_queue();
+
+    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    assert_eq!(
+        app.launch_restore,
+        crate::app::state::app_struct::LaunchRestore::Done
+    );
+}
