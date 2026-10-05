@@ -33,7 +33,9 @@ pub struct TabBarModel<'a> {
     pub hovered: Option<usize>,
 }
 
-/// Tab-title widths: 2-column padding around each title. One definition for
+/// Tab-title widths: one leading column, the title, and one marker column
+/// (`title + 2` — the unselected tab's painted width). The selected tab's
+/// accent-bar column is budgeted by `visible_tab_range`. One definition for
 /// the painted bar and the keyboard path's `App::tab_title_widths`.
 #[must_use]
 pub fn tab_title_widths(titles: &[String]) -> Vec<u16> {
@@ -59,7 +61,9 @@ pub fn visible_tab_range(widths: &[u16], scroll: usize, avail_w: u16) -> (usize,
     let mut budget = avail_w.saturating_sub(left_w);
     let mut end = start;
     while end < n {
-        let tab_w: u16 = widths[end] + 2;
+        // A tab paints `widths[end]` columns; the selected tab adds its
+        // accent-bar column, so budget one spare column per tab.
+        let tab_w: u16 = widths[end] + 1;
         let right_w: u16 = if end + 1 < n { 2 } else { 0 };
         if budget < tab_w + right_w && end > start {
             break;
@@ -183,7 +187,6 @@ fn paint_visible_tabs(
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
                     Span::styled(format!(" {title}"), style),
                     marker_span(style),
-                    Span::styled(" ", style),
                 ])
             } else {
                 let style = if model.hovered == Some(position) {
@@ -192,9 +195,8 @@ fn paint_visible_tabs(
                     Style::default().fg(palette::TEXT_MUTED)
                 };
                 Line::from(vec![
-                    Span::styled(format!("  {title}"), style),
+                    Span::styled(format!(" {title}"), style),
                     marker_span(style),
-                    Span::styled(" ", style),
                 ])
             };
             let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
@@ -221,3 +223,6 @@ fn paint_visible_tabs(
         area,
     );
 }
+
+#[cfg(test)]
+mod tests;
