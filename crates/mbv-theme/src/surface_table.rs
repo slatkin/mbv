@@ -172,12 +172,14 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // The now-playing panel body: the projection at
         // `shell/playback.rs` and the pre-sync default at
-        // `components/playback.rs:55`.
+        // `components/library_playback_panel.rs`. Fixed at the app backdrop
+        // (user decision 2026-10-05): the strip's background is `#272e33` in
+        // both focus states, so it no longer follows the queue column's bit.
         Surface::PlaybackPanel => Row {
             level: Level::ContentBody,
-            focus: FocusSource::QueueColumn,
+            focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_RESTING,
+            resting: SURFACE_BACKDROP,
         },
         // The expanded (F1-F4) sidebar body paints the sidebar fill
         // (`render/components/chrome.rs:166-170`).
@@ -287,6 +289,13 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::MainContentBox,
         "the pane content box's resting half has always painted the app backdrop",
+    ),
+    (
+        Surface::PlaybackPanel,
+        "the right-column playback strip's body paints the app backdrop \
+         (`SURFACE_BACKDROP`, user decision 2026-10-05) rather than the \
+         content-body level's resting value; the row is fixed, so its focused \
+         half paints the same fill",
     ),
     (
         Surface::SidebarBody,
