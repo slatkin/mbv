@@ -459,8 +459,9 @@ impl App {
     /// attached, the selection is dispatched to the receiver instead of the
     /// local player (cast-session-control): the owner's `Replace` op always
     /// starts playback, so capable owners get the owner queue loaded without
-    /// starting it through the idle-load route first, and legacy owners are
-    /// dispatched with no owner call at all. The Client holds no editable
+    /// starting it through the idle-load route first, and the dispatch waits
+    /// for the owner's accepted load answer; legacy owners are dispatched
+    /// with no owner call at all. The Client holds no editable
     /// queue (row 5.3, design D6), so the view changes only through the
     /// owner's answer.
     /// Callers resolve their own provider-specific selection/admission ahead
@@ -495,14 +496,21 @@ impl App {
         // "Attaching to a cast target does not engage the local player") and
         // must never begin local playback of it.
         if self.is_cast_attached() {
-            if answered
-                && !self.load_idle_queue_on_owner(
+            if answered {
+                // The receiver is handed the owner-accepted queue: the idle
+                // load's correlated answer gates the dispatch, so a rejected
+                // or unanswered load (another idle load pending, a stale
+                // owner) flashes and dispatches nothing.
+                let Some(request_id) = self.send_idle_queue_load(
                     vec![item.clone()],
                     0,
                     mbv_queue::QueueSource::Unknown,
-                )
-            {
-                return false;
+                ) else {
+                    return false;
+                };
+                if !self.await_queue_load(request_id) {
+                    return false;
+                }
             }
             self.dispatch_selection_to_cast(vec![item], 0);
         } else {

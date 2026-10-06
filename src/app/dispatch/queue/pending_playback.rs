@@ -35,16 +35,16 @@ impl App {
         self.start_pending_queue_playback(items, start_idx, source);
     }
 
-    /// Sends the idle queue load to the current Player owner. Returns whether
-    /// the request was sent (and so accepted for correlation); a failed send
-    /// flashes and reports `false`, so a session hand-off does not start
-    /// playback of a queue the owner never accepted.
-    pub(in crate::app) fn load_idle_queue_on_owner(
+    /// Sends the idle queue load to the current Player owner. Returns the
+    /// request id the load is correlated by; a failed send flashes and
+    /// reports `None`, so a session hand-off does not start playback of a
+    /// queue the owner never accepted.
+    pub(in crate::app) fn send_idle_queue_load(
         &mut self,
         items: Vec<QueueItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
-    ) -> bool {
+    ) -> Option<mbv_ctrl::QueueLoadRequestId> {
         let request_id = self.next_owner_queue_load_request;
         self.next_owner_queue_load_request = self.next_owner_queue_load_request.saturating_add(1);
         let slots = items
@@ -55,27 +55,41 @@ impl App {
                 item,
             })
             .collect();
-        let result = self
+        match self
             .player
             .remote()
-            .load_queue_idle(request_id, slots, start_idx, source);
-        match result {
+            .load_queue_idle(request_id, slots, start_idx, source)
+        {
             Ok(()) => {
                 self.set_queue_scope(self.playing_queue_scope());
-                true
+                Some(request_id)
             }
             Err(_) if self.player.is_remote_disconnected() => {
                 self.flash(
                     crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                     ToastSeverity::Warning,
                 );
-                false
+                None
             }
             Err(reason) => {
                 self.flash(reason.to_string(), ToastSeverity::Error);
-                false
+                None
             }
         }
+    }
+
+    /// Sends the idle queue load to the current Player owner. Returns whether
+    /// the request was sent (and so accepted for correlation); a failed send
+    /// flashes and reports `false`, so a session hand-off does not start
+    /// playback of a queue the owner never accepted.
+    pub(in crate::app) fn load_idle_queue_on_owner(
+        &mut self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        source: mbv_queue::QueueSource,
+    ) -> bool {
+        self.send_idle_queue_load(items, start_idx, source)
+            .is_some()
     }
 
     fn start_pending_queue_playback(

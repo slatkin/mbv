@@ -179,7 +179,10 @@ impl App {
         }
     }
 
-    fn handle_unified_queue_load_result(&mut self, result: mbv_ctrl::QueueLoadResult) {
+    pub(in crate::app) fn handle_unified_queue_load_result(
+        &mut self,
+        result: mbv_ctrl::QueueLoadResult,
+    ) {
         match result {
             mbv_ctrl::QueueLoadResult::Accepted => {
                 self.flash("Queue load accepted".into(), ToastSeverity::Neutral);

@@ -598,6 +598,24 @@ fn wait_for_cast_call(
     }
 }
 
+/// Bounded negative check that no cast call was recorded: the dispatch thread
+/// is only ever spawned after the gate, so the short grace window just closes
+/// the race where a hypothetical misplaced dispatch would still be recording.
+fn assert_no_cast_call(calls: &Arc<std::sync::Mutex<Vec<String>>>) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(100);
+    while std::time::Instant::now() < deadline {
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "the receiver must not be handed a queue the owner never accepted"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(
+        calls.lock().unwrap().is_empty(),
+        "the receiver must not be handed a queue the owner never accepted"
+    );
+}
+
 #[test]
 fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
     // cast-session-control "Attaching to a cast target does not engage the
@@ -607,7 +625,14 @@ fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
     // through the idle-load route instead, and the receiver is dispatched the
     // played item (queue-owner-process #857 review follow-up).
     let (mut app, cmd_rx) = answered_local_daemon_app();
-    let _tx = inject_player_rx(&mut app);
+    let tx = inject_player_rx(&mut app);
+    // The idle load's correlated answer gates the dispatch; preload the
+    // owner's acceptance so the pump finds it without waiting.
+    tx.send(PlayerEvent::UnifiedQueueLoadResult {
+        request_id: 1,
+        result: mbv_ctrl::QueueLoadResult::Accepted,
+    })
+    .unwrap();
     app.attach_cast("device-1".to_string());
     let (job_tx, calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
         crate::app::state::types::cast::FakeCastTransport::default(),
@@ -639,6 +664,47 @@ fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
         |call| call == "load_queue(1, 0)",
         "load_queue(1, 0)",
     );
+}
+
+#[test]
+fn cast_attached_play_dispatches_nothing_when_the_owner_rejects_the_idle_load() {
+    // The receiver is handed the owner-accepted queue, so a rejected idle
+    // load — the owner's "another idle queue load is pending" gate — must
+    // dispatch nothing: the correlated answer gates the dispatch like the
+    // answered queue ops (queue-owner-process #857 review follow-up).
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    tx.send(PlayerEvent::UnifiedQueueLoadResult {
+        request_id: 1,
+        result: mbv_ctrl::QueueLoadResult::Rejected {
+            reason: "another idle queue load is pending".into(),
+        },
+    })
+    .unwrap();
+    app.attach_cast("device-1".to_string());
+    let (job_tx, calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+        crate::app::state::types::cast::FakeCastTransport::default(),
+    );
+    app.set_cast_client("device-1", job_tx);
+
+    assert!(
+        !app.submit_queue_item(feed_queue_item(), true),
+        "a rejected load fails the submit"
+    );
+
+    assert!(
+        app.status.contains("Queue load rejected"),
+        "the rejection is flashed, got {:?}",
+        app.status
+    );
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            CtrlCmd::UnifiedQueueLoadIdle { .. }
+        ),
+        "the load was sent before the rejection came back"
+    );
+    assert_no_cast_call(&calls);
 }
 
 #[test]

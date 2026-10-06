@@ -129,6 +129,44 @@ impl App {
         self.pump_queue_op_answer(scope, id, bound)
     }
 
+    /// Pump the current Player link's event receiver until the correlated
+    /// `UnifiedQueueLoadResult` arrives or [`QUEUE_OP_ANSWER_BOUND`] passes —
+    /// the same answer discipline as the queue-op pump, for the idle-load
+    /// request sent through [`App::send_idle_queue_load`]. The matched answer
+    /// is flashed exactly as the tick drain would flash it; every other event
+    /// is deferred to the next tick's source-link drain. Returns whether the
+    /// load was accepted.
+    pub(in crate::app) fn await_queue_load(
+        &mut self,
+        request_id: mbv_ctrl::QueueLoadRequestId,
+    ) -> bool {
+        let deadline = Instant::now() + QUEUE_OP_ANSWER_BOUND;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match self.player_rx.recv_timeout(remaining) {
+                Ok(PlayerEvent::UnifiedQueueLoadResult {
+                    request_id: answered,
+                    result,
+                }) if answered == request_id => {
+                    let accepted = matches!(result, mbv_ctrl::QueueLoadResult::Accepted);
+                    self.handle_unified_queue_load_result(result);
+                    return accepted;
+                }
+                Ok(other) => self.deferred_player_events.push_back(other),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    self.flash(
+                        "Playback owner did not respond to the queue load".to_string(),
+                        ToastSeverity::Error,
+                    );
+                    return false;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return false;
+                }
+            }
+        }
+    }
+
     /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or `bound`.
     /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`.
     /// Deferred to the next tick's source-link drain: every other event.
