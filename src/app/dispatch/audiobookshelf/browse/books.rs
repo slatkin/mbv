@@ -1,5 +1,51 @@
-use super::{App, QueueItem, ToastSeverity};
-use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
+use super::{App, AudiobookshelfItem, QueueItem, ToastSeverity};
+use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use mbv_ui_model::audiobookshelf_browse::books::{
+    audiobookshelf_book_item, audiobookshelf_book_queue_item,
+};
+
+/// What chapter-row activation resolves into before any effect runs
+/// (book-playback spec): one absolute seek on the active book's merged
+/// timeline, a replace-and-start of a book that is not the active slot at
+/// the chapter's offset, or a concise failure to flash (never a silent
+/// no-op).
+enum ChapterActivation {
+    Seek(f64),
+    Play(QueueItem),
+    Failed(&'static str),
+}
+
+/// Resolves chapter-row activation from the book browse state. The stable
+/// Service discriminator (chapter number) is resolved, never a display
+/// position: a refresh that re-composes the chapter rows must not make this
+/// activation land on a different chapter (design.md D4).
+fn resolve_chapter_activation(
+    state: &AudiobookshelfBookBrowseState,
+    target: &mbv_ui_msg::BookChapterTarget,
+    active_book_id: Option<&str>,
+) -> ChapterActivation {
+    let Some((chapters, _)) = state.detail_cache.get(target.book_library_item_id()) else {
+        return ChapterActivation::Failed("Chapter details are not loaded for this book");
+    };
+    let Some(chapter) = chapters
+        .iter()
+        .find(|chapter| chapter.id == target.row_discriminator())
+    else {
+        return ChapterActivation::Failed("That chapter is no longer available");
+    };
+    let target_seconds = chapter.start;
+    if active_book_id == Some(target.book_library_item_id()) {
+        return ChapterActivation::Seek(target_seconds);
+    }
+    let Some(mut book) = audiobookshelf_book_item(state, target.book_library_item_id()) else {
+        return ChapterActivation::Failed("That book is no longer in the library");
+    };
+    // The player honors the book item's position as the resume position on
+    // the merged timeline (`resume_seconds`), so starting at the chapter
+    // offset needs no separate seek.
+    book.position_ticks = super::seconds_to_ticks(target_seconds);
+    ChapterActivation::Play(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)))
+}
 
 // ---- Book browsing actions -----------------------------------------
 
@@ -130,9 +176,13 @@ impl App {
         }
     }
 
-    /// Chapter-row activation: one absolute seek to `chapters[].start` on the
-    /// active book's merged timeline, without stopping/reopening the queue
-    /// slot or session (book-playback spec).
+    /// Chapter-row activation (book-playback spec): on the active book, one
+    /// absolute seek to `chapters[].start` on the merged timeline, without
+    /// stopping/reopening the queue slot or session; on a book that is not
+    /// the active slot, a replace-and-start of that book at the chapter's
+    /// offset through the same play path the book row uses. Unresolvable
+    /// chapters or books flash a concise error instead of silently
+    /// doing nothing.
     pub(in crate::app) fn activate_audiobookshelf_book_row_target(
         &mut self,
         target: Option<mbv_ui_msg::BookChapterTarget>,
@@ -141,34 +191,39 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let Some((chapters, _)) = state.detail_cache.get(target.book_library_item_id()) else {
-            return;
-        };
-        // Resolve the stable Service discriminator (chapter number), never a
-        // display position: a refresh that re-composes the chapter rows must
-        // not make this seek land on a different chapter (design.md D4).
-        let Some(chapter) = chapters
-            .iter()
-            .find(|chapter| chapter.id == target.row_discriminator())
-        else {
-            return;
-        };
-        let target_seconds = chapter.start;
         let active_index = self.player.status.lock().unwrap().current_idx;
-        let active_book = self
+        let active_book_id = self
             .playback_queue()
             .item_at(active_index)
             .and_then(mbv_queue::QueueItem::as_audiobookshelf_book)
-            .is_some_and(|book| book.library_item_id == target.book_library_item_id());
-        if active_book {
-            let _ = self
-                .player
-                .send_command(mbv_ctrl::player::PlayerCommand::SeekAbsolute(
-                    target_seconds,
-                ));
+            .map(|book| book.library_item_id.clone());
+        let activation = {
+            let Some(state) = self.audiobookshelf_book_browse.get(index) else {
+                return;
+            };
+            resolve_chapter_activation(state, &target, active_book_id.as_deref())
+        };
+        match activation {
+            ChapterActivation::Seek(target_seconds) => {
+                let _ = self
+                    .player
+                    .send_command(mbv_ctrl::player::PlayerCommand::SeekAbsolute(
+                        target_seconds,
+                    ));
+            }
+            ChapterActivation::Play(item) => {
+                if !self.player.can_admit_audiobookshelf() {
+                    self.flash(
+                        "Audiobookshelf playback owner is unavailable".into(),
+                        ToastSeverity::Error,
+                    );
+                    return;
+                }
+                let _ = self.submit_queue_item(item, true);
+            }
+            ChapterActivation::Failed(message) => {
+                self.flash(message.into(), ToastSeverity::Error);
+            }
         }
     }
 

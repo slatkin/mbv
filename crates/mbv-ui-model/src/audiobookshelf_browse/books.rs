@@ -13,11 +13,26 @@ use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
 /// Resolve the selected book as a queue item without mutating playback state.
 #[must_use]
 pub fn audiobookshelf_book_queue_item(state: &AudiobookshelfBookBrowseState) -> Option<QueueItem> {
-    let book_id = state.selected_id.as_ref()?;
+    let book_id = state.selected_id.as_deref()?;
+    Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
+        audiobookshelf_book_item(state, book_id)?,
+    )))
+}
+
+/// Resolve one book by `library_item_id` -- not only the browse selection --
+/// as a queue-item payload without mutating playback state (chapter-row
+/// activation targets a book row directly, which may not be the selection).
+/// Duration is the sum of the book's audio-file durations (chapters are
+/// offsets, not durations).
+#[must_use]
+pub fn audiobookshelf_book_item(
+    state: &AudiobookshelfBookBrowseState,
+    book_id: &str,
+) -> Option<AudiobookshelfBookQueueItem> {
     let book = state
         .books
         .iter()
-        .find(|book| &book.library_item_id == book_id)?;
+        .find(|book| book.library_item_id == book_id)?;
     if book.library_item_id.trim().is_empty() {
         return None;
     }
@@ -40,23 +55,20 @@ pub fn audiobookshelf_book_queue_item(state: &AudiobookshelfBookBrowseState) -> 
             .and_then(|ticks| u64::try_from(ticks).ok())
     };
     let is_finished = progress.is_some_and(|progress| progress.is_finished);
-    Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
-        AudiobookshelfBookQueueItem {
-            library_item_id: book.library_item_id.clone(),
-            title: book.title.clone(),
-            author: book.author_display.clone(),
-            duration_ticks: duration_seconds.and_then(to_ticks),
-            position_ticks: progress
-                .and_then(|progress| {
-                    to_ticks(progress.current_time_seconds)
-                        .and_then(|ticks| i64::try_from(ticks).ok())
-                })
-                .unwrap_or(0),
-            played: is_finished,
-            is_finished,
-            cover_path: book.cover_path.clone(),
-        },
-    )))
+    Some(AudiobookshelfBookQueueItem {
+        library_item_id: book.library_item_id.clone(),
+        title: book.title.clone(),
+        author: book.author_display.clone(),
+        duration_ticks: duration_seconds.and_then(to_ticks),
+        position_ticks: progress
+            .and_then(|progress| {
+                to_ticks(progress.current_time_seconds).and_then(|ticks| i64::try_from(ticks).ok())
+            })
+            .unwrap_or(0),
+        played: is_finished,
+        is_finished,
+        cover_path: book.cover_path.clone(),
+    })
 }
 
 /// Fixed alphabetical author-surname bucket labels for the book tab's

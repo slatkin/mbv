@@ -52,7 +52,7 @@ mbv SHALL hand a book's `audioFiles` to mpv as a single merged timeline using mp
 - **AND** SHALL preserve the book-relative resume position across all of its audio files
 
 ### Requirement: Chapter rows seek the merged book timeline
-Activating a chapter row on the active book SHALL issue one absolute seek to that chapter's book-relative `start` offset on the merged timeline. Chapter seeking SHALL NOT require stopping and restarting the queue slot or reopening the playback session.
+Activating a chapter row on the active book SHALL issue one absolute seek to that chapter's book-relative `start` offset on the merged timeline. Chapter seeking SHALL NOT require stopping and restarting the queue slot or reopening the playback session. Activating a chapter row on a book that is not the active queue slot SHALL replace the queue with that book starting at the chapter's `start` offset and start playback, through the same submission path as playing the book.
 
 #### Scenario: User selects a later chapter
 - **WHEN** the user activates a chapter row later than the current position on the active book
@@ -62,6 +62,11 @@ Activating a chapter row on the active book SHALL issue one absolute seek to tha
 #### Scenario: User selects a chapter spanning a file boundary
 - **WHEN** the target chapter's `start` offset falls in a different underlying audio file than the current position
 - **THEN** the seek SHALL still resolve to the correct book-relative position without mbv computing the file offset itself
+
+#### Scenario: User activates a chapter on a book that is not the active slot
+- **WHEN** the user activates a chapter row on a browsed book that is not the active queue slot
+- **THEN** mbv SHALL replace the queue with that book and start it at the chapter's `start` offset
+- **AND** an activation whose chapter or book cannot be resolved SHALL flash a concise error instead of doing nothing
 
 ### Requirement: Book progress synchronization reports position without episode identity
 While a book is active, the Player owner SHALL periodically synchronize current position, duration, and monotonic wall-clock listening time to Audiobookshelf using `libraryItemId` only. Paused time and seek distance SHALL NOT increase listening time, and an ambiguously dispatched interval SHALL NOT be counted again.
