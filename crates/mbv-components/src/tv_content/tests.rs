@@ -4,6 +4,7 @@ use mbv_render::{LibraryListRenderCtx, TvWideRenderCtx};
 
 mod episode_rows_tests;
 mod flat_latest_activation_tests;
+mod mini_view_hero_tests;
 mod tree_panel_tests;
 mod tree_projection_tests;
 mod workspace_tests;
