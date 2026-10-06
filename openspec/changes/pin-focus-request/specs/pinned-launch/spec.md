@@ -42,6 +42,28 @@ in the terminal. This rule does not limit plain terminal launches.
 - **WHEN** a pinned launch is running and the user types `mbv` in a terminal
 - **THEN** mbv starts in that terminal as before, and the pinned launch is unchanged
 
+### Requirement: Panel start failure
+When `--pin` is given and the panel cannot start (`WAYLAND_DISPLAY` unset, no layer-shell, GTK
+init failure, a saved layout that does not fit the output, the pin lock file failing to open or
+lock for a reason other than another pinned launch holding it, or the terminal hand-over failing),
+mbv SHALL record the reason in its log. If stdin
+is a terminal, mbv SHALL print one line naming the reason to stderr and run in that terminal. If
+stdin is not a terminal, mbv SHALL send a desktop notification naming the reason and exit with
+status 1. A fatal start-up error after the panel has opened SHALL be logged and sent as a desktop
+notification.
+
+#### Scenario: Terminal fallback
+- **WHEN** the user types `mbv --pin` in a terminal on a compositor without layer-shell
+- **THEN** one warning line is printed and mbv runs in that terminal
+
+#### Scenario: Saved layout does not fit
+- **WHEN** `mbv --pin` starts with a `[panel]` layout that leaves the output no width
+- **THEN** the panel does not open, and mbv takes the same terminal or notification path
+
+#### Scenario: Desktop launch without layer-shell
+- **WHEN** the desktop entry is launched on GNOME or X11
+- **THEN** a notification says the panel could not open, and mbv exits with status 1
+
 ## ADDED Requirements
 
 ### Requirement: Pinned panel focus request

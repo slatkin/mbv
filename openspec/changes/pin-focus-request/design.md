@@ -39,9 +39,11 @@ Alternatives that were rejected:
 - One lock per Wayland display, as in pinwin's socket path: the user requires that two pinned launches cannot run at once, so the lock is per user.
 - Reuse of the Owner lock: the Owner lock belongs to the Player owner, and a pinned TUI is a Client. The two lifetimes differ.
 
+The pin lock copies the pattern in `single_instance::resolve`: std `OpenOptions` opens the file, and `nix::fcntl::Flock` locks it. That file and the std `UnixListener` are close-on-exec, so the Owner process that a pinned launch spawns (`local_daemon::spawn_detached`) does not inherit the lock. If the Owner inherited it, a stay-alive Owner would hold the lock after the pinned TUI exits, and every later `--pin` would fail. `single_instance::runtime_dir` becomes `pub(crate)`, and the pin paths use it.
+
 ### D3. A panel without the lock cannot exist
 
-A new type, `PinClaim`, holds the locked file and the bound, non-blocking `UnixListener`. `PinClaim::acquire()` returns `Claimed(PinClaim)` or `Busy`. Other I/O failures return an error.
+A new type, `PinClaim`, holds the locked file and the bound, non-blocking `UnixListener`. `PinClaim::acquire()` returns `PinAcquire::Claimed(PinClaim)` or `PinAcquire::Busy`. Other I/O failures return an error.
 
 `pin::start` takes the `PinClaim` by value. `PinnedPanel` changes from a type alias to a struct with private fields `panel: pinwin::Panel` and `claim: PinClaim`, in that order. Rust drops fields in declaration order, so the panel closes before the lock is released. The code cannot build a `PinnedPanel` without a claim, so the one-panel rule needs no comment to enforce it.
 
@@ -78,20 +80,21 @@ The shell does not set a redraw for a focus request. Focus does not change what 
 - `--focus` calls `run_focus_request()` and exits with its status.
 - `--pin` calls `PinClaim::acquire()`. `Busy` calls `run_focus_request()` and exits with its status. `Claimed(claim)` keeps the claim and passes it to `pin::start` at the existing call site. An `acquire` I/O error goes to `pin::report_start_failure` as a new `PinStartError::Lock(io::Error)` variant, with the same terminal or notification path as any other start failure.
 
-`run_focus_request()` maps `Ok` to status 0. It reports an `Err` with a log line, then the D5 rule of the original pin design: if stdin is a terminal, `eprintln!`, otherwise `notify`. It then returns status 1. The rule reuses the existing `failure_action` and `notify` helpers in `src/pin.rs`.
+`run_focus_request()` maps `Ok` to status 0. It reports an `Err` with a log line, then the D5 rule of the original pin design: if stdin is a terminal, `eprintln!`, otherwise `notify`. It then returns status 1. The rule reuses `notify` and the stdin terminal check in `src/pin.rs`. It does not reuse `StartFailureAction`, because a focus failure exits with status 1 on both branches.
 
 `--focus` is a runtime flag like `--pin`. It is parsed in `pre_config_startup` as `StartupArgs.focus_requested`. When both `--focus` and `--pin` are given, `--focus` wins, because it never starts a panel.
 
 ### D7. Module layout
 
-The lock, socket, server answer, and client go in a new child module `src/pin/focus.rs`, with `mod focus;` in `src/pin.rs`. `src/pin.rs` is 454 lines today and keeps the start path. The new module holds no start-up code.
+The lock, socket, server answer, and client go in a new child module `src/pin/focus.rs`, with `pub(crate) mod focus;` in `src/pin.rs`, so `main` can name `PinClaim` and `PinAcquire`. `src/pin.rs` is 454 lines today and keeps the start path. The new module holds no start-up code.
 
 ### D8. Tests
 
-There are two contracts. Each gets one test in `src/pin/focus.rs`. The tests use a unique temp directory, as in `src/single_instance.rs` tests, and do not use a live panel. To allow this, `PinClaim::acquire_at(dir)` and `request_focus_at(socket)` take paths, and the public wrappers pass the runtime directory paths.
+There are two contracts and three tests in `src/pin/focus.rs`. The tests use a unique temp directory, as in `src/single_instance.rs` tests, and do not use a live panel. To allow this, `PinClaim::acquire_at(dir)` and `request_focus_at(socket)` take paths, and the public wrappers pass the runtime directory paths.
 
 - Exclusive claim: a second `acquire_at` on the same directory returns `Busy` while the first claim lives, and `Claimed` after the first claim drops. This test guards the one-pinned-launch rule.
-- Answer mapping: the server answer function takes the focus result as a closure parameter, `answer(stream, focus: impl FnOnce() -> Result<(), PinwinError>)`. A `#[case]` table runs the client against it for `Ok(())`, which gives `Ok`, and for `Err(PinwinError::NotRunning)`, which gives `Refused`. One more case uses an empty directory, which gives `NotRunning`.
+- Answer mapping: the server answer function takes the focus result as a closure parameter, `answer(stream, focus: impl FnOnce() -> Result<(), PinwinError>)`. A two-case `#[case]` table runs `answer` on a spawned thread against a bound listener, with `Ok(())`, which gives `Ok`, and with `Err(PinwinError::NotRunning)`, which gives `Refused`.
+- No listener: `request_focus_at` on an empty directory gives `NotRunning`. This is a separate test, because it needs no server and a shared table would need a branch.
 
 No test covers the shell drain, `main` flag routing, or the help text. These parts are wiring, and the user covers them with live testing.
 
@@ -99,7 +102,7 @@ No test covers the shell drain, `main` flag routing, or the help text. These par
 
 - [A wedged GTK side blocks the TUI loop for up to 5 s per focus request.] → pinwin bounds the wait and reports `Internal`. A wedged panel already means a broken pinned launch, so the user has a bigger problem than a frozen frame.
 - [A local process can hold a connection open without sending data.] → The 100 ms read timeout bounds the stall for each connection. The socket mode is `0600`, so only the same user can connect.
-- [The first launch can hold the lock before it binds the socket.] → `acquire` binds right after it takes the lock, before any slow step. A second launch in that short gap gets `NotRunning` or `NoAnswer` and exits with status 1. It never opens a second panel.
+- [A focus request can arrive before the pinned launch serves it.] → The socket binds right after the lock, but the first loop pass runs only after `load_config`, `pin::start`, Owner spawn or attach (up to 10 s in `wait_for_owner_exit`), and App construction. A second launch in that window connects, waits the full 6 s, gets `NoAnswer`, reports "the pinned mbv did not answer", and exits with status 1. It never opens a second panel. The first loop pass still serves the queued request, so the panel takes focus a moment later. This is accepted.
 - [A second `mbv --pin` over ssh focuses the panel on the desktop.] → This is accepted. The lock is per user, and the request is harmless.
 
 ## Migration Plan
