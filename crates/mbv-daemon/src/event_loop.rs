@@ -1,6 +1,6 @@
 use super::{
-    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
-    EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
+    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner,
+    DaemonRole, EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
     cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
     expire_pending_idle_queue_load, persist_stay_alive_owner_queue,
 };
@@ -118,13 +118,13 @@ impl DaemonLoop {
                 self.owner.intents.invalidate_connection(connection_id);
             }
         }
-        expire_and_redispatch(
-            &mut self.owner,
-            &self.player,
-            &self.client,
-            &self.ctrl_clients,
-            &self.shared_queue,
-        );
+        expire_and_redispatch(&mut DaemonOwnerContext {
+            player: &self.player,
+            client: &self.client,
+            owner: &mut self.owner,
+            shared_queue: &self.shared_queue,
+            ctrl_clients: &self.ctrl_clients,
+        });
     }
 
     /// Processes exactly one event. Never exits the process: `Shutdown` is

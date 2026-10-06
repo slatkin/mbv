@@ -79,6 +79,12 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
 
 // Broadcast fan-out: capable and old peers both connected; after a queue
 // mutation the broadcast sends each peer its correctly projected snapshot.
+// The cold PlaySlot half of this test also pins the cold-start projection
+// contract (queue-owner-process #857): the broadcast must resolve the
+// requested slot as active even though the jump targeted a slot the queue's
+// own active marker did not name. The cold-start submission contract itself
+// (status seeding, no lingering in-flight transition) is owned by
+// tests/queue_ops/queue_play_slot.rs.
 #[test]
 fn broadcast_projects_abs_slots_per_connection_capability() {
     let player = cold_player();
@@ -105,9 +111,12 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     // Build a mixed queue directly (bypasses daemon_admits so ABS stays in).
+    // The active marker names the ABS slot, not the jump target, so the
+    // broadcast can only carry the requested slot if the cold-start path
+    // moved the marker to it.
     let queue = PlaybackQueue::from_queue_items(
         vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
-        Some(1),
+        Some(0),
         crate::tests::revision_mint(),
     );
     let source = QueueSource::Unknown;
@@ -157,21 +166,15 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     );
     assert!(old_data.slots[0].item.is_emby());
 
-    // A cold owner has no live run to jump: the fallback submission seeds
-    // playback at the requested slot, so the pending slot publishes as the
-    // active slot. The in-flight marker exists only for live-run jumps, where
-    // the run settles the transition by request identity — a cold run's own
-    // observation never carries it, so lingering in flight would wedge the
-    // queue until expiry.
+    // A cold owner has no live run to jump: the fallback submission
+    // cold-starts playback at the requested slot, and the cold-start
+    // bookkeeping moves the queue's active marker to it, so the broadcast
+    // publishes the requested slot as the active slot even though the queue's
+    // marker named the ABS slot before the jump.
     assert_eq!(
         capable_data.active_slot,
         Some(emby_slot_id),
-        "cold PlaySlot publishes the requested slot as the seeded active slot"
-    );
-    assert_eq!(
-        capable_data.in_flight_transition.map(|t| t.target_slot),
-        None,
-        "no transition lingers in flight on the cold path"
+        "cold PlaySlot publishes the requested slot as the active slot"
     );
 }
 

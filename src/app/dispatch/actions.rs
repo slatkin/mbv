@@ -250,7 +250,14 @@ impl App {
         // op always starts playback, so it must not be used while another
         // target owns playback), then playback starts on the session.
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            if !self.load_idle_queue_on_owner(items.clone(), start_idx, queue_source.clone()) {
+            if !self.load_idle_queue_on_owner(
+                items
+                    .iter()
+                    .map(|item| QueueItem::Emby(Box::new(item.clone())))
+                    .collect(),
+                start_idx,
+                queue_source.clone(),
+            ) {
                 return;
             }
             self.clear_playback_overlays();
@@ -445,11 +452,17 @@ impl App {
     /// Shared tail for submitting a single `QueueItem` to the canonical queue:
     /// play replaces the playing-target queue with exactly this item and starts
     /// it — the same single-item semantics as the Emby browse play path
-    /// (`play_item`), so every destination's Enter behaves alike — and enqueue
-    /// appends without starting playback. A cast receiver is handed the
-    /// owner-accepted replacement; legacy owners keep the append-if-absent
-    /// whole-queue wire form. The Client holds no editable queue (row 5.3,
-    /// design D6), so the view changes only through the owner's answer.
+    /// (`play_item`), so every destination's Enter behaves alike — through the
+    /// answered `Replace` op on capable owners and the same replace in its
+    /// legacy wire form (no op id, no answer to wait for) on legacy owners —
+    /// and enqueue appends without starting playback. While a cast target is
+    /// attached, the selection is dispatched to the receiver instead of the
+    /// local player (cast-session-control): the owner's `Replace` op always
+    /// starts playback, so capable owners get the owner queue loaded without
+    /// starting it through the idle-load route first, and legacy owners are
+    /// dispatched with no owner call at all. The Client holds no editable
+    /// queue (row 5.3, design D6), so the view changes only through the
+    /// owner's answer.
     /// Callers resolve their own provider-specific selection/admission ahead
     /// of the call. Returns whether the submit succeeded.
     pub(in crate::app) fn submit_queue_item(
@@ -472,30 +485,42 @@ impl App {
         if !self.has_direct_remote_queue() {
             self.on_queue_replace_silent();
         }
-        // Legacy owners have no answered Replace to start from, so they keep
-        // the legacy whole-queue submission (append-if-absent, replace-and-
-        // play); capable owners get the answered replace-and-start op, which
-        // also cold-starts a run when none is alive.
         let answered = self
             .queue_link(scope)
             .0
             .remote()
             .supports_answered_queue_ops();
-        if !answered {
-            return self.submit_queue_item_legacy_play(&item, scope);
-        }
-        let source = mbv_queue::QueueSource::Unknown;
-        let sent = self.replace_queue_on_owner(scope, vec![item], 0, source);
-        if sent == QueueOpEdit::NotApplied {
-            return false;
-        }
+        // While a cast target is attached, playing a selection dispatches it
+        // to the receiver instead of the local player (cast-session-control
+        // "Attaching to a cast target does not engage the local player") and
+        // must never begin local playback of it.
         if self.is_cast_attached() {
-            let all_items = self.queue_for_scope(scope).items();
-            self.dispatch_selection_to_cast(all_items, 0);
+            if answered
+                && !self.load_idle_queue_on_owner(
+                    vec![item.clone()],
+                    0,
+                    mbv_queue::QueueSource::Unknown,
+                )
+            {
+                return false;
+            }
+            self.dispatch_selection_to_cast(vec![item], 0);
         } else {
-            let _ = self
-                .player
-                .send_command(PlayerCommand::SetMute(self.mute_on));
+            // Row 5.3 (design D6): play replaces the owner queue with exactly
+            // this item and starts it, as an answered op when the owner
+            // negotiates `answered-queue-ops` (which also cold-starts a run
+            // when none is alive); legacy owners get the same replace in its
+            // legacy wire form.
+            let sent =
+                self.replace_queue_on_owner(scope, vec![item], 0, mbv_queue::QueueSource::Unknown);
+            if sent == QueueOpEdit::NotApplied {
+                return false;
+            }
+            if answered {
+                let _ = self
+                    .player
+                    .send_command(PlayerCommand::SetMute(self.mute_on));
+            }
         }
         self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -524,40 +549,6 @@ impl App {
             self.queue_dirty = true;
         }
         self.advance_queue_epoch();
-        true
-    }
-
-    /// The legacy-owner play path for a single submitted item (row 5.3):
-    /// append-if-absent against the displayed queue, start the whole queue at
-    /// the played entry, and dispatch a cast attachment its selection — the
-    /// legacy wire forms, with the same rollback and flash behaviour.
-    fn submit_queue_item_legacy_play(
-        &mut self,
-        item: &QueueItem,
-        scope: crate::app::QueueScope,
-    ) -> bool {
-        let mut items = self.queue_for_scope(scope).items();
-        let selected_index = items
-            .iter()
-            .position(|queued| queued.content_id() == item.content_id())
-            .unwrap_or_else(|| {
-                items.push(item.clone());
-                items.len() - 1
-            });
-        if self.is_cast_attached() {
-            self.dispatch_selection_to_cast(items, selected_index);
-        } else {
-            let source = self.queue_for_scope(scope).source().clone();
-            if self.replace_queue_on_owner(scope, items, selected_index, source)
-                == QueueOpEdit::NotApplied
-            {
-                return false;
-            }
-        }
-        self.set_queue_scope(scope);
-        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            self.set_panel_focus(PanelFocus::Queue);
-        }
         true
     }
 }

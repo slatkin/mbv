@@ -1,7 +1,10 @@
 // `UnifiedQueuePlaySlot` must start the target slot even when no Playback run
 // is alive: a bare `JumpTo` is dropped by a cold owner, which wedged every
 // later jump behind the never-settling transition (Enter on an Audiobookshelf
-// item after an owner restart played nothing and queued every retry).
+// item after an owner restart played nothing and queued every retry;
+// queue-owner-process #857). This file owns the cold-start submission
+// contract; the ABS admission broadcast test owns the per-capability
+// broadcast projection of the same path.
 
 use super::*;
 
@@ -38,7 +41,7 @@ fn play_slot_on_a_cold_owner_starts_the_queue_at_the_target_slot() {
         &registry,
     );
 
-    // The cold submission seeds the run at the target slot.
+    // The cold submission starts the run at the target slot.
     let status = player.status.lock().unwrap();
     assert!(status.active, "the cold start activated playback");
     assert_eq!(status.current_idx, 1, "playback starts at the target slot");

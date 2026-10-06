@@ -91,15 +91,6 @@ impl QueueView {
     }
 
     #[must_use]
-    pub fn items(&self) -> Vec<QueueItem> {
-        self.queue
-            .slots()
-            .iter()
-            .map(|slot| slot.item.clone())
-            .collect()
-    }
-
-    #[must_use]
     pub fn item_at(&self, index: usize) -> Option<&QueueItem> {
         self.slots().get(index).map(|slot| &slot.item)
     }

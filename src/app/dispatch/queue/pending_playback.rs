@@ -22,7 +22,14 @@ impl App {
             // Loading without starting playback keeps the owner's idle-load
             // request/result path (row 5.3, design D6): unblocked, and the
             // loaded playlist shows only through the owner's accepted state.
-            self.load_idle_queue_on_owner(items, start_idx, source);
+            self.load_idle_queue_on_owner(
+                items
+                    .into_iter()
+                    .map(|item| QueueItem::Emby(Box::new(item)))
+                    .collect(),
+                start_idx,
+                source,
+            );
             return;
         }
         self.start_pending_queue_playback(items, start_idx, source);
@@ -34,7 +41,7 @@ impl App {
     /// playback of a queue the owner never accepted.
     pub(in crate::app) fn load_idle_queue_on_owner(
         &mut self,
-        items: Vec<EmbyItem>,
+        items: Vec<QueueItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
     ) -> bool {
@@ -45,7 +52,7 @@ impl App {
             .enumerate()
             .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
                 slot_id: (index + 1) as u64,
-                item: QueueItem::Emby(Box::new(item)),
+                item,
             })
             .collect();
         let result = self
@@ -82,7 +89,14 @@ impl App {
         // op always starts playback, so it must not be used while another
         // target owns playback), then playback starts on the session.
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            if !self.load_idle_queue_on_owner(items.clone(), start_idx, source) {
+            if !self.load_idle_queue_on_owner(
+                items
+                    .iter()
+                    .map(|item| QueueItem::Emby(Box::new(item.clone())))
+                    .collect(),
+                start_idx,
+                source,
+            ) {
                 return;
             }
             self.clear_playback_overlays();

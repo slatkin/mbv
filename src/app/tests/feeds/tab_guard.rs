@@ -142,13 +142,16 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 
     app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
+    // Enter on a media item always replaces the queue with exactly the played
+    // entry and starts it (queue-owner-process #857 review follow-up), in the
+    // legacy wire form for this direct remote.
     match cmd_rx.try_recv().unwrap() {
         mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
             items,
-            start_idx: Some(1),
+            start_idx: Some(0),
             ..
         } => assert!(matches!(
-            &items[1],
+            &items[0],
             mbv_queue::QueueItem::Feed(entry)
                 if entry.guid == "feed-play"
         )),

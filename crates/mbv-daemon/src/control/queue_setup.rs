@@ -3,6 +3,7 @@ use super::{
     PlayerOwnerState, QueueItem, QueueSlotId, RejectContext, abs_queue_transport_rejection,
     admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
     daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
+    submit_queue_slots_cold_start,
 };
 use crate::AudiobookshelfOwnerContext;
 use mbv_emby::EmbyClient;
@@ -362,11 +363,7 @@ pub(super) fn handle_queue_replace(
     // route through `submit_queue_slots`, which cold-starts one when
     // needed (as `play_resolved_items` does).
     let queue_slots = queue.slot_pairs();
-    let all_audio = queue_slots.iter().all(|slot| slot.item.is_audio());
-    let c = Arc::new(ctx.client.lock().unwrap().clone());
-    let headless = ctx.player.headless_for(&c, all_audio);
-    ctx.player
-        .submit_queue_slots(queue_slots, next_cursor, Some(c), headless, 100);
+    submit_queue_slots_cold_start(ctx.player, queue_slots, next_cursor, ctx.client);
     ctx.owner.core.note_observed_active_slot(None);
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     // Publish after the submit, not before: the snapshot resolves its

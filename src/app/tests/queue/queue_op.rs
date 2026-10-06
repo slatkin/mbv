@@ -15,7 +15,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::{QueueItem, QueueSource};
 use mbv_remote_player::QueueOp;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 /// Local-daemon stub whose owner advertises `answered-queue-ops`.
@@ -558,4 +558,114 @@ fn single_item_play_replaces_the_populated_queue_with_the_played_item() {
         app.status.is_empty(),
         "a timely answer must not flash a timeout"
     );
+}
+
+fn feed_queue_item() -> QueueItem {
+    QueueItem::Feed(mbv_queue::FeedEntry {
+        guid: "cast-play".into(),
+        title: "Episode".into(),
+        enclosure_url: Some("https://feed/example.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: Some("feed".into()),
+        position_ticks: 0,
+        played: false,
+    })
+}
+
+/// Wait for the fake cast worker thread to record a matching call instead of
+/// sleeping a fixed delay: the transport records synchronously, so only the
+/// dispatch/worker thread hops are async. Fails loudly at the deadline if the
+/// call never arrives (same shape as the `playback_target` cast tests).
+fn wait_for_cast_call(
+    calls: &Arc<std::sync::Mutex<Vec<String>>>,
+    mut matches: impl FnMut(&str) -> bool,
+    desc: &str,
+) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if calls.lock().unwrap().iter().any(|call| matches(call)) {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for cast call {desc}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
+    // cast-session-control "Attaching to a cast target does not engage the
+    // local player": playing while attached dispatches the selection to the
+    // receiver and SHALL NOT begin local playback of it. The owner's
+    // `Replace` op always starts playback, so the owner queue is loaded
+    // through the idle-load route instead, and the receiver is dispatched the
+    // played item (queue-owner-process #857 review follow-up).
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let _tx = inject_player_rx(&mut app);
+    app.attach_cast("device-1".to_string());
+    let (job_tx, calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+        crate::app::state::types::cast::FakeCastTransport::default(),
+    );
+    app.set_cast_client("device-1", job_tx);
+
+    assert!(app.submit_queue_item(feed_queue_item(), true));
+
+    match cmd_rx.try_recv().unwrap() {
+        CtrlCmd::UnifiedQueueLoadIdle { slots, cursor, .. } => {
+            assert_eq!(slots.len(), 1, "the played item is the whole loaded queue");
+            assert_eq!(cursor, 0, "the load starts at the played item");
+        }
+        other => {
+            panic!("cast-attached play must not send a playback-starting command, got {other:?}")
+        }
+    }
+    assert!(
+        cmd_rx.try_iter().all(|command| !matches!(
+            command,
+            CtrlCmd::UnifiedQueueReplace { .. } | CtrlCmd::UnifiedQueuePlaySlot { .. }
+        )),
+        "no playback-starting command reaches the owner"
+    );
+
+    // The receiver is dispatched the played selection.
+    wait_for_cast_call(
+        &calls,
+        |call| call == "load_queue(1, 0)",
+        "load_queue(1, 0)",
+    );
+}
+
+#[test]
+fn single_item_play_on_a_legacy_owner_replaces_the_queue_with_the_played_item() {
+    // queue-owner-process #857 review follow-up: the legacy wire form must
+    // replace the owner queue with exactly the played item (start_idx 0),
+    // like the answered form, instead of appending to the displayed queue and
+    // resubmitting the whole list.
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(2));
+    while cmd_rx.try_recv().is_ok() {}
+    let _tx = inject_player_rx(&mut app);
+
+    let played = one_queue_item().remove(0);
+    assert!(app.submit_queue_item(played, true));
+
+    match cmd_rx.try_recv().unwrap() {
+        CtrlCmd::UnifiedQueueReplace {
+            items,
+            start_idx,
+            op,
+            ..
+        } => {
+            assert_eq!(items.len(), 1, "the played item is the whole queue");
+            assert_eq!(start_idx, Some(0), "play starts at the played item");
+            assert!(op.is_none(), "the legacy form carries no op id");
+        }
+        other => panic!("expected the legacy whole-queue replace form, got {other:?}"),
+    }
+    assert!(app.status.is_empty(), "the legacy send must not flash");
 }

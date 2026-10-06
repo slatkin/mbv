@@ -17,7 +17,7 @@ use mbv_ctrl::{
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::Player;
-use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use mbv_queue::{ExecSlot, PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
@@ -417,36 +417,52 @@ pub(super) enum JumpOrigin {
 
 /// Deliver one accepted transition's `JumpTo` to the Player. When no Playback
 /// run is alive the bare command would be dropped silently, so fall back to
-/// the same cold-start submission `handle_queue_replace` uses: submit the
-/// canonical queue starting at the target slot, which spawns a fresh run.
-/// The accepted transition is reset on that path because a cold run's own
-/// `TrackChanged` observation carries the run identity, never this request
-/// identity — an in-flight entry would otherwise linger until its expire
-/// deadline and wedge every later jump behind it.
+/// the same cold-start submission `handle_queue_replace` uses: point the
+/// canonical queue's active marker at the target slot, drop the dead run's
+/// stale observation, and submit the whole queue starting at the target slot,
+/// which spawns a fresh run. The accepted transition and its queued origin are
+/// reset on that path because a cold run's own `TrackChanged` observation
+/// carries the run identity, never this request identity — an in-flight entry
+/// would otherwise linger until its expire deadline and wedge every later jump
+/// behind it (queue-owner-process #857).
 /// Returns whether playback delivery started (live jump or cold start).
 pub(super) fn send_jump_or_cold_start(
-    queue: &PlaybackQueue,
-    transitions: &mut mbv_player::transition::OwnerTransitionState,
-    player: &Player,
-    client: &Arc<Mutex<EmbyClient>>,
+    ctx: &mut DaemonOwnerContext<'_>,
     transition: mbv_player::transition::Transition,
 ) -> bool {
     let target = transition.target;
-    let resume_ticks = mbv_player::resume_ticks_for_slot(queue, target);
-    if player.send_command(transition.into_jump(resume_ticks)) {
+    let resume_ticks = mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, target);
+    if ctx.player.send_command(transition.into_jump(resume_ticks)) {
         return true;
     }
-    transitions.reset();
-    let Some(start_idx) = queue.slot_index(target) else {
+    // No live run took the jump: the fresh run's own observation becomes
+    // playback truth, so this request can never settle and must not stay
+    // in flight.
+    reset_slot_jumps(
+        &mut ctx.owner.core.transitions,
+        &mut ctx.owner.queued_transition_origin,
+    );
+    let Some(start_idx) = ctx.owner.core.queue.slot_index(target) else {
         tracing::warn!(name: "daemon.transition_dispatch.cold_start.skipped", target: "transition", slot = ?target, "no live playback run and the target slot is absent; jump dropped");
         return false;
     };
     tracing::info!(name: "daemon.transition_dispatch.cold_start", target: "transition", slot = ?target, start_idx, "no live playback run; cold-starting the queue at the target slot");
-    let queue_slots = queue.slot_pairs();
-    let all_audio = queue_slots.iter().all(|slot| slot.item.is_audio());
-    let client = Arc::new(client.lock().unwrap().clone());
-    let headless = player.headless_for(&client, all_audio);
-    player.submit_queue_slots(queue_slots, start_idx, Some(client), headless, 100);
+    if !submit_queue_slots_cold_start(
+        ctx.player,
+        ctx.owner.core.queue.slot_pairs(),
+        start_idx,
+        ctx.client,
+    ) {
+        tracing::warn!(name: "daemon.transition_dispatch.cold_start.rejected", target: "transition", slot = ?target, "the cold-start submission was rejected");
+        return false;
+    }
+    // Mirror `handle_queue_replace`'s cold-start bookkeeping: the queue's own
+    // active marker follows the requested slot and the dead run's observation
+    // is dropped, so the broadcast that follows resolves the requested slot
+    // as active instead of the restored cursor's slot.
+    let _ = ctx.owner.core.queue.set_active_slot(target);
+    ctx.owner.core.note_observed_active_slot(None);
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
     true
 }
 
@@ -456,29 +472,19 @@ pub(super) fn dispatch_slot_jump(
     transition: mbv_player::transition::Transition,
     except: Option<CtrlClientId>,
 ) {
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin: queued_origin,
-        ..
-    } = &mut *ctx.owner;
     let transition_target = transition.target;
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
-    match transitions.accept(transition) {
+    let decision = ctx.owner.core.transitions.accept(transition);
+    match decision {
         mbv_player::transition::DispatchDecision::DispatchNow(t) => {
             tracing::info!(name: "daemon.transition_dispatch.started", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump dispatched");
-            send_jump_or_cold_start(queue, transitions, ctx.player, ctx.client, t);
+            send_jump_or_cold_start(ctx, t);
         }
         mbv_player::transition::DispatchDecision::Queued { superseded } => {
             tracing::info!(name: "daemon.transition_dispatch.queued", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump queued");
             if let Some(s) = superseded
-                && let Some((origin_request_id, origin_client)) = *queued_origin
+                && let Some((origin_request_id, origin_client)) = ctx.owner.queued_transition_origin
                 && origin_request_id == s.request_id
             {
                 ctx.ctrl_clients.lock().unwrap().send_to_client(
@@ -493,7 +499,7 @@ pub(super) fn dispatch_slot_jump(
             // Transport senders (MPRIS/tray/Emby-ws) have no ctrl wire form and
             // so no `Superseded` event to receive; only `Ctrl` origins are worth
             // tracking here.
-            *queued_origin = match origin {
+            ctx.owner.queued_transition_origin = match origin {
                 JumpOrigin::Ctrl(client_id) => Some((transition.request_id, client_id)),
                 JumpOrigin::Transport => None,
             };
@@ -502,6 +508,12 @@ pub(super) fn dispatch_slot_jump(
     // Accepting a transition mutates desired playback state (in_flight /
     // queued_latest); publish the coherent snapshot so Clients can render the
     // pending slot before it settles (task 4.1, design D5).
+    let PlayerOwnerState {
+        queue,
+        source,
+        transitions,
+        ..
+    } = &ctx.owner.core;
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,
@@ -526,30 +538,23 @@ pub(super) fn reset_slot_jumps(
 /// Settle the in-flight transition against a Playback-run observation and, if
 /// a newer transition was queued behind it, dispatch that one now (task 3.3).
 pub(super) fn settle_and_redispatch(
-    owner: &mut DaemonPlayerOwner,
-    player: &Player,
-    client: &Arc<Mutex<EmbyClient>>,
+    ctx: &mut DaemonOwnerContext<'_>,
     observed_request_id: PlaybackRequestId,
     observed_slot: QueueSlotId,
 ) {
-    let mbv_player::transition::SettleOutcome::Settled { dispatch_next } = owner
+    let outcome = ctx
+        .owner
         .core
         .transitions
-        .settle(observed_request_id, observed_slot)
-    else {
+        .settle(observed_request_id, observed_slot);
+    let mbv_player::transition::SettleOutcome::Settled { dispatch_next } = outcome else {
         tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = false, dispatch_next = false, "transition settled");
         return;
     };
     tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = true, dispatch_next = dispatch_next.is_some(), "transition settled");
-    owner.queued_transition_origin = None;
+    ctx.owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
-        send_jump_or_cold_start(
-            &owner.core.queue,
-            &mut owner.core.transitions,
-            player,
-            client,
-            next,
-        );
+        send_jump_or_cold_start(ctx, next);
     }
 }
 
@@ -558,25 +563,21 @@ pub(super) fn settle_and_redispatch(
 /// timeout to its origin ctrl client, and dispatch whatever was queued behind
 /// it — rebuilding the execution projection from `owner.core.queue` exactly as
 /// [`settle_and_redispatch`] does.
-pub(super) fn expire_and_redispatch(
-    owner: &mut DaemonPlayerOwner,
-    player: &Player,
-    client: &Arc<Mutex<EmbyClient>>,
-    ctrl_clients: &ClientRegistry,
-    shared_queue: &SharedQueueState,
-) {
+pub(super) fn expire_and_redispatch(ctx: &mut DaemonOwnerContext<'_>) {
+    let outcome = ctx.owner.core.transitions.expire(Instant::now());
     let mbv_player::transition::ExpireOutcome::Expired {
         expired,
         dispatch_next,
-    } = owner.core.transitions.expire(Instant::now())
+    } = outcome
     else {
         return;
     };
-    owner.queued_transition_origin = None;
+    ctx.owner.queued_transition_origin = None;
     // Emit a timeout to the abandoned request's origin when it is the current
     // guarded intent (Next/Previous). Owner-minted jumps carry no ctrl origin
     // and need no event.
-    if let Some((connection_id, request_id, generation)) = owner
+    if let Some((connection_id, request_id, generation)) = ctx
+        .owner
         .intents
         .current
         .as_ref()
@@ -588,35 +589,29 @@ pub(super) fn expire_and_redispatch(
                 current.generation,
             )
         })
-        && let Some(event) = owner.intents.rejected_if_current(
+        && let Some(event) = ctx.owner.intents.rejected_if_current(
             connection_id,
             request_id,
             generation,
             mbv_ctrl::PlaybackIntentRejection::Unavailable,
         )
     {
-        ctrl_clients
+        ctx.ctrl_clients
             .lock()
             .unwrap()
             .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
     if let Some(next) = dispatch_next {
-        send_jump_or_cold_start(
-            &owner.core.queue,
-            &mut owner.core.transitions,
-            player,
-            client,
-            next,
-        );
+        send_jump_or_cold_start(ctx, next);
     }
     // Abandoning / promoting a transition changed desired state; republish.
     broadcast_queue_state(
-        ctrl_clients,
-        player,
-        shared_queue,
-        &owner.core.queue,
-        &owner.core.source,
-        &owner.core.transitions,
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
         None,
     );
 }
@@ -667,6 +662,23 @@ pub fn pid_file() -> std::path::PathBuf {
     let dir = mbv_config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
     dir.join("mbv.pid")
+}
+
+/// Submit a whole canonical queue to the Player, cold-starting a playback run
+/// when none is alive (`submit_queue_slots` spawns one). The one shared form of
+/// the submission `handle_queue_replace`, owner reconciliation, and the
+/// cold-start slot jump all use. `100` is the initial volume a freshly spawned
+/// run starts at; playback paths apply mute parity separately via `SetMute`.
+pub(crate) fn submit_queue_slots_cold_start(
+    player: &Player,
+    slots: Vec<ExecSlot>,
+    start_idx: usize,
+    client: &Arc<Mutex<EmbyClient>>,
+) -> bool {
+    let all_audio = all_audio(slots.iter().map(|slot| &slot.item));
+    let client = Arc::new(client.lock().unwrap().clone());
+    let headless = player.headless_for(&client, all_audio);
+    player.submit_queue_slots(slots, start_idx, Some(client), headless, 100)
 }
 
 pub(super) fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {

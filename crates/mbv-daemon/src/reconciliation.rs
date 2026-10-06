@@ -1,6 +1,6 @@
 use super::{
     AudiobookshelfOwnerContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner,
-    EmbyOwnerContext, broadcast_queue_state,
+    EmbyOwnerContext, broadcast_queue_state, submit_queue_slots_cold_start,
 };
 use mbv_config::EmbySetup;
 use mbv_ctrl::ServiceSetupRejection;
@@ -71,10 +71,7 @@ fn update_player_queue(
         player.stop();
         return;
     }
-    let client = Arc::new(client.lock().unwrap().clone());
-    let all_audio = items.iter().all(|slot| slot.item.is_audio());
-    let headless = player.headless_for(&client, all_audio);
-    let _ = player.submit_queue_slots(items, active_index, Some(client), headless, 100);
+    let _ = submit_queue_slots_cold_start(player, items, active_index, client);
 }
 
 pub(super) fn reconcile_packaged_emby(

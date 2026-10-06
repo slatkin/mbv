@@ -21,7 +21,7 @@ pub(crate) use core::PlaybackIntentState;
 pub(crate) use core::{
     DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PendingIdleQueueLoad,
     QueuePersistenceRequest, SharedQueueState, audio_only_rejection, broadcast, dispatch_slot_jump,
-    expire_and_redispatch, reset_slot_jumps, settle_and_redispatch,
+    expire_and_redispatch, reset_slot_jumps, settle_and_redispatch, submit_queue_slots_cold_start,
 };
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, pid_file};
 mod core_ctrl_spawn;

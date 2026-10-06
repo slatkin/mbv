@@ -2,8 +2,8 @@
 //! completions, and all other player observations relayed to control clients.
 
 use super::super::{
-    DaemonLoop, apply_stopped_observation, apply_track_completed_observation, broadcast,
-    broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
+    DaemonLoop, DaemonOwnerContext, apply_stopped_observation, apply_track_completed_observation,
+    broadcast, broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
     complete_pending_idle_queue_load, settle_and_redispatch,
 };
 use super::EventOutcome;
@@ -45,9 +45,13 @@ impl DaemonLoop {
         // snapshot contains every owner change from this turn.
         if let Some((observed_request_id, _)) = transition {
             settle_and_redispatch(
-                &mut self.owner,
-                &self.player,
-                &self.client,
+                &mut DaemonOwnerContext {
+                    player: &self.player,
+                    client: &self.client,
+                    owner: &mut self.owner,
+                    shared_queue: &self.shared_queue,
+                    ctrl_clients: &self.ctrl_clients,
+                },
                 observed_request_id,
                 resolved_slot_id,
             );

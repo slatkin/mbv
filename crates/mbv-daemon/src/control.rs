@@ -2,7 +2,7 @@ use super::core::DaemonEvent;
 use super::{
     AuthorityHolder, ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext,
     DaemonPlayerOwner, PendingIdleQueueLoad, SharedQueueState, audio_only_rejection,
-    dispatch_slot_jump, reset_slot_jumps, send_to,
+    dispatch_slot_jump, reset_slot_jumps, send_to, submit_queue_slots_cold_start,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{
