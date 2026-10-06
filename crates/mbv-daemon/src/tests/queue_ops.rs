@@ -94,3 +94,5 @@ mod queue_idle_load;
 mod queue_source_updates;
 // Refresh and progress operations answer while preserving active-slot authority.
 mod queue_refresh_progress;
+// Slot jumps start playback even on a cold owner whose run is not alive.
+mod queue_play_slot;

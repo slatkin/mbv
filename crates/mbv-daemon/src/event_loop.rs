@@ -121,6 +121,7 @@ impl DaemonLoop {
         expire_and_redispatch(
             &mut self.owner,
             &self.player,
+            &self.client,
             &self.ctrl_clients,
             &self.shared_queue,
         );

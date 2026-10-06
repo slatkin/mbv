@@ -415,6 +415,41 @@ pub(super) enum JumpOrigin {
     Transport,
 }
 
+/// Deliver one accepted transition's `JumpTo` to the Player. When no Playback
+/// run is alive the bare command would be dropped silently, so fall back to
+/// the same cold-start submission `handle_queue_replace` uses: submit the
+/// canonical queue starting at the target slot, which spawns a fresh run.
+/// The accepted transition is reset on that path because a cold run's own
+/// `TrackChanged` observation carries the run identity, never this request
+/// identity — an in-flight entry would otherwise linger until its expire
+/// deadline and wedge every later jump behind it.
+/// Returns whether playback delivery started (live jump or cold start).
+pub(super) fn send_jump_or_cold_start(
+    queue: &PlaybackQueue,
+    transitions: &mut mbv_player::transition::OwnerTransitionState,
+    player: &Player,
+    client: &Arc<Mutex<EmbyClient>>,
+    transition: mbv_player::transition::Transition,
+) -> bool {
+    let target = transition.target;
+    let resume_ticks = mbv_player::resume_ticks_for_slot(queue, target);
+    if player.send_command(transition.into_jump(resume_ticks)) {
+        return true;
+    }
+    transitions.reset();
+    let Some(start_idx) = queue.slot_index(target) else {
+        tracing::warn!(name: "daemon.transition_dispatch.cold_start.skipped", target: "transition", slot = ?target, "no live playback run and the target slot is absent; jump dropped");
+        return false;
+    };
+    tracing::info!(name: "daemon.transition_dispatch.cold_start", target: "transition", slot = ?target, start_idx, "no live playback run; cold-starting the queue at the target slot");
+    let queue_slots = queue.slot_pairs();
+    let all_audio = queue_slots.iter().all(|slot| slot.item.is_audio());
+    let client = Arc::new(client.lock().unwrap().clone());
+    let headless = player.headless_for(&client, all_audio);
+    player.submit_queue_slots(queue_slots, start_idx, Some(client), headless, 100);
+    true
+}
+
 pub(super) fn dispatch_slot_jump(
     ctx: &mut DaemonOwnerContext<'_>,
     origin: JumpOrigin,
@@ -438,8 +473,7 @@ pub(super) fn dispatch_slot_jump(
     match transitions.accept(transition) {
         mbv_player::transition::DispatchDecision::DispatchNow(t) => {
             tracing::info!(name: "daemon.transition_dispatch.started", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump dispatched");
-            let resume_ticks = mbv_player::resume_ticks_for_slot(queue, transition_target);
-            ctx.player.send_command(t.into_jump(resume_ticks));
+            send_jump_or_cold_start(queue, transitions, ctx.player, ctx.client, t);
         }
         mbv_player::transition::DispatchDecision::Queued { superseded } => {
             tracing::info!(name: "daemon.transition_dispatch.queued", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump queued");
@@ -494,6 +528,7 @@ pub(super) fn reset_slot_jumps(
 pub(super) fn settle_and_redispatch(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
+    client: &Arc<Mutex<EmbyClient>>,
     observed_request_id: PlaybackRequestId,
     observed_slot: QueueSlotId,
 ) {
@@ -508,8 +543,13 @@ pub(super) fn settle_and_redispatch(
     tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = true, dispatch_next = dispatch_next.is_some(), "transition settled");
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
-        let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);
-        player.send_command(next.into_jump(resume_ticks));
+        send_jump_or_cold_start(
+            &owner.core.queue,
+            &mut owner.core.transitions,
+            player,
+            client,
+            next,
+        );
     }
 }
 
@@ -521,6 +561,7 @@ pub(super) fn settle_and_redispatch(
 pub(super) fn expire_and_redispatch(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
+    client: &Arc<Mutex<EmbyClient>>,
     ctrl_clients: &ClientRegistry,
     shared_queue: &SharedQueueState,
 ) {
@@ -560,8 +601,13 @@ pub(super) fn expire_and_redispatch(
             .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
     if let Some(next) = dispatch_next {
-        let resume_ticks = mbv_player::resume_ticks_for_slot(&owner.core.queue, next.target);
-        player.send_command(next.into_jump(resume_ticks));
+        send_jump_or_cold_start(
+            &owner.core.queue,
+            &mut owner.core.transitions,
+            player,
+            client,
+            next,
+        );
     }
     // Abandoning / promoting a transition changed desired state; republish.
     broadcast_queue_state(

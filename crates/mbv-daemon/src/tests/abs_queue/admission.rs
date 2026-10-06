@@ -82,6 +82,21 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
 #[test]
 fn broadcast_projects_abs_slots_per_connection_capability() {
     let player = cold_player();
+    // The mixed queue cold-submits through the player's ABS admission gate,
+    // so the cold player carries a locally constructed owner context; it
+    // opens no connection at construction.
+    player.update_audiobookshelf_context(Some(
+        mbv_player::AudiobookshelfPlayerContext::new(
+            mbv_core::service_runtime::SetupGeneration::default(),
+            mbv_config::AudiobookshelfSetup {
+                server_url: "http://abs.test".into(),
+                revision: 1,
+            },
+            "test-key".into(),
+            "test-device".into(),
+        )
+        .expect("locally constructed context resolves"),
+    ));
     let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (capable_id, capable_rx) = connect_client(&mut registry.lock().unwrap());
@@ -142,12 +157,21 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     );
     assert!(old_data.slots[0].item.is_emby());
 
-    // The broadcast follows transition dispatch, so the requested slot is
-    // published as in-flight (not left invisible until it settles).
+    // A cold owner has no live run to jump: the fallback submission seeds
+    // playback at the requested slot, so the pending slot publishes as the
+    // active slot. The in-flight marker exists only for live-run jumps, where
+    // the run settles the transition by request identity — a cold run's own
+    // observation never carries it, so lingering in flight would wedge the
+    // queue until expiry.
+    assert_eq!(
+        capable_data.active_slot,
+        Some(emby_slot_id),
+        "cold PlaySlot publishes the requested slot as the seeded active slot"
+    );
     assert_eq!(
         capable_data.in_flight_transition.map(|t| t.target_slot),
-        Some(emby_slot_id),
-        "PlaySlot broadcast must carry the pending slot as in-flight"
+        None,
+        "no transition lingers in flight on the cold path"
     );
 }
 

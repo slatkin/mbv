@@ -47,6 +47,7 @@ impl DaemonLoop {
             settle_and_redispatch(
                 &mut self.owner,
                 &self.player,
+                &self.client,
                 observed_request_id,
                 resolved_slot_id,
             );
