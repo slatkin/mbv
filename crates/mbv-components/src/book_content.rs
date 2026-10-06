@@ -456,11 +456,12 @@ impl BookContent {
                     self.chapter_target(),
                 )),
             ))),
-            // Enter on the selected book moves focus into the chapter
-            // workspace (the same rule as grouped Music's track pane); the
-            // shell decides wide focus vs narrow modal. Arrows never move
-            // focus between panels.
-            Key::Enter if !self.chapter_list.rows().is_empty() => Some(Msg::Shell(Box::new(
+            // Tab moves focus into the chapter workspace (the same rule as
+            // grouped Music's track pane); the shell decides wide focus vs
+            // narrow modal. Arrows never move focus between panels. Enter on
+            // the selected book plays it — the global Enter-replaces-queue
+            // behavior shared with podcasts and Emby.
+            Key::Tab => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters),
             ))),
             Key::Char(' ') => Some(Msg::Shell(Box::new(

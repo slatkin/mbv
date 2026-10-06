@@ -142,9 +142,10 @@ pub enum AudiobookshelfBookIntent {
     Play,
     Activate,
     Enqueue,
-    /// Enter on a selected book: the shell focuses the wide chapter
+    /// Tab on a selected book: the shell focuses the wide chapter
     /// workspace (the media-selection list in the hero pane). Narrow keeps
     /// the Library Hero overlay, mirroring `PodcastEpisodeIntent::OpenOrPlay(None)`.
+    /// Enter on a selected book plays it like every other destination.
     FocusChapters,
     ActivateChapter(Option<BookChapterTarget>),
 }

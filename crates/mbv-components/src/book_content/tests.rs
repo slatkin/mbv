@@ -80,7 +80,10 @@ fn book_keys_emit_play_activate_and_ctrl_a_select_all_intents() {
 }
 
 #[test]
-fn enter_focuses_chapters_when_the_selected_book_has_chapters() {
+fn enter_plays_the_book_even_when_chapters_are_loaded() {
+    // Enter on a selected book plays it — the global Enter-replaces-queue
+    // behavior shared with podcasts and Emby (chapter activation was
+    // previously unreachable on a book that was not already playing).
     let mut owner = BookContent::new();
     let mut state = state_with_books(vec![book("book-a", "Adams")]);
     state.detail_cache.insert(
@@ -99,6 +102,32 @@ fn enter_focuses_chapters_when_the_selected_book_has_chapters() {
 
     assert_eq!(
         owner.on_key(&key(Key::Enter, KeyModifiers::NONE)),
+        Some(Msg::Shell(Box::new(
+            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate,)
+        )))
+    );
+}
+
+#[test]
+fn tab_focuses_chapters_when_the_selected_book_has_chapters() {
+    let mut owner = BookContent::new();
+    let mut state = state_with_books(vec![book("book-a", "Adams")]);
+    state.detail_cache.insert(
+        "book-a".into(),
+        (
+            vec![mbv_audiobookshelf::AudiobookshelfChapter {
+                id: 0,
+                start: 0.0,
+                end: 30.0,
+                title: "Chapter one".into(),
+            }],
+            Vec::new(),
+        ),
+    );
+    owner.set_content(&state, false);
+
+    assert_eq!(
+        owner.on_key(&key(Key::Tab, KeyModifiers::NONE)),
         Some(Msg::Shell(Box::new(
             ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters,)
         )))
