@@ -1,5 +1,13 @@
 ---
-description: "Guided onboarding - walk through a complete OpenSpec workflow cycle with narration"
+name: openspec-onboard
+description: Guided onboarding for OpenSpec - walk through a complete workflow cycle with narration and real codebase work. Also use when the user says "openspec onboard" or "opsx onboard".
+allowed-tools: Bash(openspec:*)
+license: MIT
+compatibility: Requires openspec CLI.
+metadata:
+  author: openspec
+  version: "1.0"
+  generatedBy: "1.14.1"
 ---
 
 Guide the user through their first complete OpenSpec workflow cycle. This is a teaching experience—you'll do real work in their codebase while explaining each step.
@@ -31,7 +39,7 @@ openspec --version 2>&1 || echo "CLI_NOT_INSTALLED"
 ```
 
 **If CLI not installed:**
-> OpenSpec CLI is not installed. Install it first, then come back to `/opsx-onboard`.
+> OpenSpec CLI is not installed. Install it first, then come back to `$openspec-onboard (Codex) or /openspec-onboard (other agents)`.
 
 Stop here if not installed.
 
@@ -158,7 +166,7 @@ Spend 1-2 minutes investigating the relevant code:
 │   [Optional: ASCII diagram if helpful]  │
 └─────────────────────────────────────────┘
 
-Explore mode (`/opsx-explore`) is for this kind of thinking—investigating before implementing. You can use it anytime you need to think through a problem.
+Explore mode (`$openspec-explore (Codex) or /openspec-explore (other agents)`) is for this kind of thinking—investigating before implementing. You can use it anytime you need to think through a problem.
 
 Now let's create a change to hold our work.
 ```
@@ -493,17 +501,17 @@ This same rhythm works for any size change—a small fix or a major feature.
 
  | Command          | What it does                               |
  |------------------|--------------------------------------------|
- | `/opsx-propose` | Create a change and generate all artifacts |
- | `/opsx-explore` | Think through problems before/during work  |
- | `/opsx-apply`   | Implement tasks from a change              |
- | `/opsx-archive` | Archive a completed change                 |
- | `/opsx-continue` | Continue working on an existing change    |
+ | `$openspec-propose (Codex) or /openspec-propose (other agents)` | Create a change and generate all artifacts |
+ | `$openspec-explore (Codex) or /openspec-explore (other agents)` | Think through problems before/during work  |
+ | `$openspec-apply-change (Codex) or /openspec-apply-change (other agents)`   | Implement tasks from a change              |
+ | `$openspec-archive-change (Codex) or /openspec-archive-change (other agents)` | Archive a completed change                 |
+ | `$openspec-continue-change (Codex) or /openspec-continue-change (other agents)` | Continue working on an existing change    |
 
 ---
 
 ## What's Next?
 
-Try `/opsx-propose` on something you actually want to build. You've got the rhythm now!
+Try `$openspec-propose (Codex) or /openspec-propose (other agents)` on something you actually want to build. You've got the rhythm now!
 ```
 
 ---
@@ -518,8 +526,8 @@ If the user says they need to stop, want to pause, or seem disengaged:
 No problem! Your change is saved at the `changeRoot` reported by `openspec status --change "<name>" --json`.
 
 To pick up where we left off later, `openspec status --change "<name>" --json` shows exactly where the change stands.
-- `/opsx-continue <name>` - Resume artifact creation
-- `/opsx-apply <name>` - Jump to implementation (if tasks exist)
+- `$openspec-continue-change (Codex) or /openspec-continue-change (other agents) <name>` - Resume artifact creation
+- `$openspec-apply-change (Codex) or /openspec-apply-change (other agents) <name>` - Jump to implementation (if tasks exist)
 
 The work won't be lost. Come back whenever you're ready.
 ```
@@ -537,13 +545,13 @@ If the user says they just want to see the commands or skip the tutorial:
 
  | Command                  | What it does                               |
  |--------------------------|--------------------------------------------|
- | `/opsx-propose <name>`  | Create a change and generate all artifacts |
- | `/opsx-explore`         | Think through problems (no code changes)   |
- | `/opsx-apply <name>`    | Implement tasks                            |
- | `/opsx-archive <name>`  | Archive when done                          |
- | `/opsx-continue <name>` | Continue an existing change                |
+ | `$openspec-propose (Codex) or /openspec-propose (other agents) <name>`  | Create a change and generate all artifacts |
+ | `$openspec-explore (Codex) or /openspec-explore (other agents)`         | Think through problems (no code changes)   |
+ | `$openspec-apply-change (Codex) or /openspec-apply-change (other agents) <name>`    | Implement tasks                            |
+ | `$openspec-archive-change (Codex) or /openspec-archive-change (other agents) <name>`  | Archive when done                          |
+ | `$openspec-continue-change (Codex) or /openspec-continue-change (other agents) <name>` | Continue an existing change                |
 
-Try `/opsx-propose` to start your first change.
+Try `$openspec-propose (Codex) or /openspec-propose (other agents)` to start your first change.
 ```
 
 Exit gracefully.
