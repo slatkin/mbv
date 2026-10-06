@@ -522,3 +522,40 @@ fn idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result() {
         "the queued event is handled by the next tick, not by the load"
     );
 }
+
+#[test]
+fn single_item_play_replaces_the_populated_queue_with_the_played_item() {
+    // Play parity with the Emby browse single-item path (`play_item`): playing
+    // one item replaces the playing-target queue with exactly that item and
+    // starts it. The previous append-then-PlaySlot form kept the old queue
+    // growing across plays and dropped the jump on a cold owner (Enter on an
+    // Audiobookshelf item after an owner restart played nothing).
+    let (mut app, cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    tx.send(PlayerEvent::UnifiedQueueUpdated(snapshot(3)))
+        .unwrap();
+    tx.send(applied(1, snapshot(1))).unwrap();
+
+    let played = one_queue_item().remove(0);
+    assert!(app.submit_queue_item(played, true));
+
+    assert_eq!(
+        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        1,
+        "the played item is the whole queue"
+    );
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            CtrlCmd::UnifiedQueueReplace {
+                start_idx: Some(0),
+                ..
+            }
+        ),
+        "the play is an answered whole-queue replace-and-start"
+    );
+    assert!(
+        app.status.is_empty(),
+        "a timely answer must not flash a timeout"
+    );
+}

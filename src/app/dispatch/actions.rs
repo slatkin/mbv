@@ -443,12 +443,13 @@ impl App {
     }
 
     /// Shared tail for submitting a single `QueueItem` to the canonical queue:
-    /// play resolves the played entry against the owner's last accepted state
-    /// — an existing slot is started through the answered `PlaySlot` op, an
-    /// absent one is first appended through the answered `Append` op — and a
-    /// cast receiver is dispatched the owner-accepted queue; enqueue appends
-    /// without starting playback. The Client holds no editable queue (row
-    /// 5.3, design D6), so the view changes only through the owner's answer.
+    /// play replaces the playing-target queue with exactly this item and starts
+    /// it — the same single-item semantics as the Emby browse play path
+    /// (`play_item`), so every destination's Enter behaves alike — and enqueue
+    /// appends without starting playback. A cast receiver is handed the
+    /// owner-accepted replacement; legacy owners keep the append-if-absent
+    /// whole-queue wire form. The Client holds no editable queue (row 5.3,
+    /// design D6), so the view changes only through the owner's answer.
     /// Callers resolve their own provider-specific selection/admission ahead
     /// of the call. Returns whether the submit succeeded.
     pub(in crate::app) fn submit_queue_item(
@@ -468,9 +469,13 @@ impl App {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return false;
         }
-        // Legacy owners have no answered Append to resolve the played slot
-        // from, so they keep the legacy whole-queue submission (the legacy
-        // form of replace-and-play); capable owners get the answered ops.
+        if !self.has_direct_remote_queue() {
+            self.on_queue_replace_silent();
+        }
+        // Legacy owners have no answered Replace to start from, so they keep
+        // the legacy whole-queue submission (append-if-absent, replace-and-
+        // play); capable owners get the answered replace-and-start op, which
+        // also cold-starts a run when none is alive.
         let answered = self
             .queue_link(scope)
             .0
@@ -479,58 +484,18 @@ impl App {
         if !answered {
             return self.submit_queue_item_legacy_play(&item, scope);
         }
-        // Resolve the played entry against the owner's last accepted state.
-        let existing_index = self
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.item.content_id() == item.content_id());
-        let selected_slot = if let Some(index) = existing_index {
-            self.queue_for_scope(scope).slot_id_at(index)
-        } else {
-            // The item is new to the owner's queue: append it as an
-            // answered op, then start the slot the answer adopted at the
-            // tail.
-            if !self.append_on_owner(scope, vec![item]) {
-                return false;
-            }
-            let last = self
-                .queue_for_scope(scope)
-                .total_queue_len()
-                .saturating_sub(1);
-            self.queue_for_scope(scope).slot_id_at(last)
-        };
-        let Some(selected_slot) = selected_slot else {
-            return false;
-        };
-        // While a cast target is attached, playing a selection dispatches it
-        // to the receiver instead of the local player (cast-session-control
-        // "Attaching to a cast target does not engage the local player").
-        // The receiver is handed the owner-accepted queue, so the played
-        // entry must already be an owner-accepted slot.
-        if self.is_cast_attached() {
-            let selected_index = self.queue_for_scope(scope).slot_index(selected_slot);
-            let Some(selected_index) = selected_index else {
-                return false;
-            };
-            let all_items = self.queue_for_scope(scope).items();
-            self.dispatch_selection_to_cast(all_items, selected_index);
-            self.set_queue_scope(scope);
-            if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-                self.set_panel_focus(PanelFocus::Queue);
-            }
-            return true;
-        }
-        // Row 5.3 (design D6): starting the entry is an answered PlaySlot op
-        // against the owner that holds the queue.
-        let sent = self.queue_op(
-            scope,
-            mbv_remote_player::QueueOp::PlaySlot {
-                slot_id: mbv_ctrl::slot_id_to_u64(selected_slot),
-            },
-        );
+        let source = mbv_queue::QueueSource::Unknown;
+        let sent = self.replace_queue_on_owner(scope, vec![item], 0, source);
         if sent == QueueOpEdit::NotApplied {
             return false;
+        }
+        if self.is_cast_attached() {
+            let all_items = self.queue_for_scope(scope).items();
+            self.dispatch_selection_to_cast(all_items, 0);
+        } else {
+            let _ = self
+                .player
+                .send_command(PlayerCommand::SetMute(self.mute_on));
         }
         self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
