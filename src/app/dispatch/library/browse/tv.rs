@@ -45,6 +45,37 @@ impl TvUpcomingSource for EmbyClient {
     }
 }
 
+/// The canonical fetch fields each TV content mode's root level must carry
+/// while that mode owns the level. `drop_stale_root_completion` compares a
+/// root `Loaded`'s fetch key against the root level's, so the level armed for
+/// a pill fetch must be stamped with the same fields the pill's response
+/// carries, or the correct response is dropped and replaced by a generic
+/// alphabetical all-episodes refetch (seen 2026-10-06: Latest/Upcoming pill
+/// content clobbered by `SortName` episode listings).
+pub(in crate::app) fn tv_mode_fetch_fields(
+    mode: &mbv_queue::TvContentMode,
+) -> (Option<&'static str>, &'static str, &'static str) {
+    match mode {
+        mbv_queue::TvContentMode::Latest => (Some("Episode"), "DateCreated", "Descending"),
+        mbv_queue::TvContentMode::Upcoming => (Some("Episode"), "PremiereDate", "Ascending"),
+        mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_) => {
+            (Some("Series"), "SortName", "Ascending")
+        }
+    }
+}
+
+/// Stamps a root level with the fetch fields its TV content mode's fetch
+/// carries, so an arriving pill response passes the stale-root key check.
+pub(in crate::app) fn align_level_to_tv_mode(
+    level: &mut crate::app::BrowseLevel,
+    mode: &mbv_queue::TvContentMode,
+) {
+    let (item_types, sort_by, sort_order) = tv_mode_fetch_fields(mode);
+    level.item_types = item_types.map(str::to_string);
+    level.sort_by = sort_by.to_string();
+    level.sort_order = sort_order.to_string();
+}
+
 fn build_tv_latest_level<S: TvLatestSource>(
     source: &S,
     parent_id: String,
@@ -52,16 +83,17 @@ fn build_tv_latest_level<S: TvLatestSource>(
 ) -> Result<BrowseLevel, mbv_emby::EmbyError> {
     let items = source.get_latest_episodes(&parent_id, 30)?;
     let total_count = items.len();
+    let (item_types, sort_by, sort_order) = tv_mode_fetch_fields(&mbv_queue::TvContentMode::Latest);
     Ok(BrowseLevel {
         parent_id,
         title,
         items,
         rows: ServerRows::complete(total_count),
         resting: BrowseResting::new(0, 0),
-        item_types: Some("Episode".into()),
+        item_types: item_types.map(str::to_string),
         unplayed_only: false,
-        sort_by: "DateCreated".into(),
-        sort_order: "Descending".into(),
+        sort_by: sort_by.to_string(),
+        sort_order: sort_order.to_string(),
         loading: false,
         all_items: None,
         letter_filter: None,
@@ -77,16 +109,18 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
 ) -> Result<BrowseLevel, mbv_emby::EmbyError> {
     let items = source.get_upcoming(&parent_id, 30)?;
     let total_count = items.len();
+    let (item_types, sort_by, sort_order) =
+        tv_mode_fetch_fields(&mbv_queue::TvContentMode::Upcoming);
     Ok(BrowseLevel {
         parent_id,
         title,
         items,
         rows: ServerRows::complete(total_count),
         resting: BrowseResting::new(0, 0),
-        item_types: Some("Episode".into()),
+        item_types: item_types.map(str::to_string),
         unplayed_only: false,
-        sort_by: "PremiereDate".into(),
-        sort_order: "Ascending".into(),
+        sort_by: sort_by.to_string(),
+        sort_order: sort_order.to_string(),
         loading: false,
         all_items: None,
         letter_filter: None,
@@ -192,7 +226,19 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
+    pub(in crate::app) fn spawn_tv_latest(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        title: String,
+    ) {
+        if let Some(level) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Latest);
+        }
         self.spawn_tv_content(
             lib_idx,
             parent_id,
@@ -239,11 +285,18 @@ impl App {
     }
 
     pub(in crate::app) fn spawn_tv_upcoming(
-        &self,
+        &mut self,
         lib_idx: usize,
         parent_id: String,
         title: String,
     ) {
+        if let Some(level) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
+        }
         self.spawn_tv_content(
             lib_idx,
             parent_id,
@@ -260,9 +313,9 @@ mod tv_latest_tests {
     use rstest::rstest;
     use std::cell::RefCell;
 
-    struct FakeLatestSource {
-        request: RefCell<Option<(String, usize)>>,
-        items: Vec<EmbyItem>,
+    pub(crate) struct FakeLatestSource {
+        pub(crate) request: RefCell<Option<(String, usize)>>,
+        pub(crate) items: Vec<EmbyItem>,
     }
 
     impl TvLatestSource for FakeLatestSource {
@@ -377,5 +430,89 @@ mod tv_latest_tests {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tv_pill_stale_key_tests {
+    use super::tv_latest_tests::FakeLatestSource;
+    use super::*;
+    use crate::app::LibraryTab;
+    use std::cell::RefCell;
+
+    /// Regression (2026-10-06): a TV root armed for a pill fetch kept its
+    /// legacy `SortName` fetch key, so `drop_stale_root_completion` discarded
+    /// the pill's own `DateCreated`/`PremiereDate` response and re-issued a
+    /// generic alphabetical all-episodes fetch that replaced the Latest and
+    /// Upcoming pill content with old episodes.
+    #[test]
+    fn pill_response_arriving_after_pill_spawn_is_not_dropped_as_stale() {
+        let mut app = crate::app::tests::make_app_stub();
+        let config = crate::config::Config {
+            server_url: "http://127.0.0.1:1".into(),
+            ..crate::config::Config::default()
+        };
+        let http = mbv_net::mock_http::MockHttp::new();
+        let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
+        app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
+            std::sync::Arc::new(std::sync::Mutex::new(client)),
+        );
+
+        let mut library = mbv_emby_model::test_support::make_item("Shows", "CollectionFolder");
+        library.id = "tv-library".into();
+        library.collection_type = "tvshows".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "tv-library".into(),
+                title: "Shows".into(),
+                items: vec![],
+                rows: ServerRows::new(0),
+                resting: BrowseResting::new(0, 0),
+                item_types: Some("Episode".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: true,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: Some(mbv_queue::TvContentMode::Latest),
+                music_grouping: None,
+            }],
+            tv_content_mode: Some(mbv_queue::TvContentMode::Latest),
+            ..LibraryTab::new(mbv_emby_model::test_support::make_item(
+                "unused",
+                "CollectionFolder",
+            ))
+        });
+
+        // Arming the pill fetch aligns the root level's fetch fields with the
+        // fields the pill's response carries.
+        http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+        app.spawn_tv_latest(0, "tv-library".into(), "TV".into());
+        let level = &app.libs[0].nav_stack[0];
+        assert_eq!(level.sort_by, "DateCreated");
+        assert_eq!(level.sort_order, "Descending");
+
+        // A pill response — here a duplicate of the spawn's own completion,
+        // as happens when two pill fetches race — must apply, not be dropped
+        // and replaced by a generic refetch.
+        let mut episode = mbv_emby_model::test_support::make_item("New episode", "Episode");
+        episode.id = "new-episode".into();
+        let source = FakeLatestSource {
+            request: RefCell::new(None),
+            items: vec![episode.clone()],
+        };
+        let level = build_tv_latest_level(&source, "tv-library".into(), "TV".into())
+            .expect("fake Latest request succeeds");
+        app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "tv-library".into(),
+            level: Box::new(level),
+        }));
+
+        let level = &app.libs[0].nav_stack[0];
+        assert_eq!(level.items, vec![episode]);
+        assert!(!level.loading);
     }
 }

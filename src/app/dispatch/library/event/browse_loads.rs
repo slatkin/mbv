@@ -98,6 +98,15 @@ impl App {
             let (parent_id, title) = (root.parent_id.clone(), root.title.clone());
             let (item_types, unplayed_only) = (root.item_types.clone(), root.unplayed_only);
             let (sort_by, sort_order) = (root.sort_by.clone(), root.sort_order.clone());
+            tracing::warn!(
+                name: "browse.root_completion_dropped_stale",
+                target: "browse",
+                library_index = lib_idx,
+                parent = %parent_id,
+                incoming_sort_by = %level.sort_by,
+                root_sort_by = %sort_by,
+                "dropped stale root completion; re-issuing under root fields"
+            );
             self.spawn_browse(
                 lib_idx,
                 parent_id,
@@ -216,7 +225,6 @@ impl App {
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                     last.loading = true;
                     last.items.clear();
-                    last.item_types = Some("Episode".into());
                 }
                 self.spawn_tv_latest(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
@@ -371,6 +379,18 @@ impl App {
     ) -> Vec<BrowseLevel> {
         for (index, level) in nav_stack.iter_mut().enumerate() {
             self.retain_grouped_music_level_items(lib_idx, level);
+            // A position saved before pill fetch fields were aligned carries the
+            // legacy `SortName` root key on a Latest/Upcoming level; align it so
+            // the next pill response is not dropped as stale (#745 guard).
+            if index == 0
+                && let Some(mode) = level.tv_content_mode.clone().or_else(|| {
+                    self.libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.tv_content_mode.clone())
+                })
+            {
+                crate::app::dispatch::library::browse::align_level_to_tv_mode(level, &mode);
+            }
             if let Some(saved_level) = requested_position.levels.get(index) {
                 let cursor = saved_level
                     .focused_item_id

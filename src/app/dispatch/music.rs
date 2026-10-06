@@ -347,35 +347,32 @@ impl App {
         mode: &mbv_queue::TvContentMode,
         parent_id: String,
         unplayed_only: bool,
-        sort_by: String,
-        sort_order: String,
+        _sort_by: String,
+        _sort_order: String,
     ) {
+        let (item_types, sort_by, sort_order) =
+            crate::app::dispatch::library::browse::tv_mode_fetch_fields(mode);
+        let item_types = item_types.map(str::to_string);
+        if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+            last.loading = true;
+            last.item_types.clone_from(&item_types);
+            last.sort_by = sort_by.to_string();
+            last.sort_order = sort_order.to_string();
+        }
         match mode {
             mbv_queue::TvContentMode::Latest => {
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    last.loading = true;
-                    last.item_types = Some("Episode".into());
-                }
                 self.spawn_tv_latest(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
             mbv_queue::TvContentMode::Upcoming => {
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    last.loading = true;
-                    last.item_types = Some("Episode".into());
-                }
                 self.spawn_tv_upcoming(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
             mbv_queue::TvContentMode::All => {
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    last.loading = true;
-                    last.item_types = Some("Series".into());
-                }
                 let key = mbv_ui_model::browse::LevelFetchKey {
                     parent_id,
-                    item_types: Some("Series".into()),
+                    item_types,
                     unplayed_only,
-                    sort_by,
-                    sort_order,
+                    sort_by: sort_by.to_string(),
+                    sort_order: sort_order.to_string(),
                     letter_filter: None,
                 };
                 self.spawn_refresh(lib_idx, 0, key);
@@ -388,16 +385,14 @@ impl App {
                     return;
                 };
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    last.loading = true;
-                    last.item_types = Some("Series".into());
                     last.letter_filter = Some(filter.clone());
                 }
                 let key = mbv_ui_model::browse::LevelFetchKey {
                     parent_id,
-                    item_types: Some("Series".into()),
+                    item_types,
                     unplayed_only,
-                    sort_by,
-                    sort_order,
+                    sort_by: sort_by.to_string(),
+                    sort_order: sort_order.to_string(),
                     letter_filter: Some(filter),
                 };
                 self.spawn_refresh(lib_idx, 0, key);

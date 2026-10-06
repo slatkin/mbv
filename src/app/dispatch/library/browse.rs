@@ -11,3 +11,4 @@ pub(in crate::app) use search::full_library_fetch_limit;
 pub(in crate::app) use search::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
 };
+pub(in crate::app) use tv::{align_level_to_tv_mode, tv_mode_fetch_fields};
