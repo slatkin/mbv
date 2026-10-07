@@ -322,8 +322,8 @@ fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
 }
 
 /// Point fd 2 at the application log (opened for append), falling back to
-/// `/dev/null`: after the hand-over, native libraries (GTK/GLib/layer-shell)
-/// writing to stderr must not draw over the panel. mbv reports fatal
+/// `/dev/null`: after the hand-over, native libraries (Wayland, xkbcommon,
+/// fontconfig) writing to stderr must not draw over the panel. mbv reports fatal
 /// post-hand-over errors via the log and a notification (design D5), so the
 /// TUI does not need fd 2.
 fn redirect_stderr() -> Result<(), PinStartError> {
@@ -364,7 +364,7 @@ impl PanelEnv {
             saved.push((name, std::env::var_os(name)));
         }
         // SAFETY: this runs before any thread that reads or writes the process
-        // environment exists: the pinwin GTK thread is not started yet, and
+        // environment exists: the pinwin panel thread is not started yet, and
         // the TUI has not spawned its workers.
         unsafe {
             for (name, value) in PANEL_ENV_SET {
@@ -378,7 +378,7 @@ impl PanelEnv {
     }
 
     fn restore(self) {
-        // SAFETY: a failed start leaves no pinwin GTK thread running
+        // SAFETY: a failed start leaves no pinwin panel thread running
         // (upstream addition 3) and the TUI has not spawned its workers, so no
         // other thread reads the environment across these writes.
         unsafe {
