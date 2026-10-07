@@ -2,8 +2,8 @@
 
 ## 1. Baseline and deduplicate crate-local declarations
 
-- [ ] 1.1 Record the pre-change feature union (`cargo metadata` feature set per affected dep and/or `Cargo.lock` copy) and verify it is stored alongside the change for later comparison.
-- [ ] 1.2 Add workspace definitions for `tracing-subscriber` (`default-features = false`, no enabled features beyond basic `std`/`registry` per design decision 2), `tracing-log`, `rust_cast`, `mdns-sd`, `flume`, `ab_glyph`, `num-traits`, and switch `mbv-core`, `mbv-cast`, `mbv-images` (deps), `mbv-core` (dev-dep `rust_cast`), `mbv-cast` (dev-dep `flume`), `mbv-daemon`/`mbv-net`/`mbv-player` (dev-dep `tracing-subscriber`) to `<dep>.workspace = true` with per-member features where needed; verify `cargo check -p mbv-core,mbv-cast,mbv-images,mbv-daemon,mbv-net,mbv-player` passes.
+- [x] 1.1 Record the pre-change feature union (`cargo metadata` feature set per affected dep and/or `Cargo.lock` copy) and verify it is stored alongside the change for later comparison.
+- [x] 1.2 Add workspace definitions for `tracing-subscriber` (`default-features = false`, no enabled features beyond basic `std`/`registry` per design decision 2), `tracing-log`, `rust_cast`, `mdns-sd`, `flume`, `ab_glyph`, `num-traits`, and switch `mbv-core`, `mbv-cast`, `mbv-images` (deps), `mbv-core` (dev-dep `rust_cast`), `mbv-cast` (dev-dep `flume`), `mbv-daemon`/`mbv-net`/`mbv-player` (dev-dep `tracing-subscriber`) to `<dep>.workspace = true` with per-member features where needed; verify `cargo check -p mbv-core,mbv-cast,mbv-images,mbv-daemon,mbv-net,mbv-player` passes.
 
 ## 2. Strip non-basic features from workspace definitions
 
