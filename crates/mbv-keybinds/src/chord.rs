@@ -75,6 +75,8 @@ impl std::fmt::Display for ChordParseError {
     }
 }
 
+impl std::error::Error for ChordParseError {}
+
 impl Chord {
     /// Parse a chord string: optional modifiers (`Ctrl`, `Shift`, `Alt`,
     /// order-insensitive, case-insensitive) plus one key (a single character,
