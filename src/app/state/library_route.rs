@@ -30,6 +30,37 @@ const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 /// normal use.
 const LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD: usize = 2000;
 
+/// Parses a configured library-route endpoint, logging the malformed or
+/// accepted outcome. Only `tcp://` endpoints are accepted.
+fn parse_route_endpoint(library: &str, raw: &str) -> Option<mbv_remote_player::DaemonEndpoint> {
+    let Ok(endpoint @ mbv_remote_player::DaemonEndpoint::Tcp(_)) =
+        mbv_remote_player::DaemonEndpoint::parse(raw)
+    else {
+        tracing::warn!(name: "library_route.endpoint.malformed", target: "library_route", library = %library, endpoint = %raw, "malformed endpoint; expected tcp://host:port");
+        return None;
+    };
+    tracing::info!(name: "library_route.endpoint.accepted", target: "library_route", library = %library, endpoint = %endpoint, "accepted endpoint");
+    Some(endpoint)
+}
+
+/// Outcome of a library-route cache lookup.
+enum AncestorCacheLookup {
+    /// A fresh entry. The inner value is the resolved route, absent when the
+    /// cached ancestor has no configured route.
+    Fresh(Option<(String, mbv_remote_player::DaemonEndpoint)>),
+    /// No entry, or the entry is past its TTL (logged).
+    Stale,
+}
+
+/// Outcome of the ancestor lookup that fills the route cache.
+enum AncestorLookup {
+    /// The lookup succeeded; `Some(name)` when an owning library was found,
+    /// `None` when the call confirmed there is no owning library.
+    Resolved(Option<String>),
+    /// Transient failure: logged and never cached.
+    Failed,
+}
+
 impl App {
     /// True when `self.player` is remote for a reason other than library
     /// routing (#223): a Sessions-panel attached session, or a
@@ -69,13 +100,7 @@ impl App {
             tracing::info!(name: "library_route.route.missing", target: "library_route", library = %name, "configured library missing");
             return None;
         };
-        let Ok(endpoint @ mbv_remote_player::DaemonEndpoint::Tcp(_)) =
-            mbv_remote_player::DaemonEndpoint::parse(raw)
-        else {
-            tracing::warn!(name: "library_route.endpoint.malformed", target: "library_route", library = %name, endpoint = %raw, "malformed endpoint; expected tcp://host:port");
-            return None;
-        };
-        tracing::info!(name: "library_route.endpoint.accepted", target: "library_route", library = %name, endpoint = %endpoint, "accepted endpoint");
+        let endpoint = parse_route_endpoint(name, raw)?;
         Some((name.to_lowercase(), endpoint))
     }
 
@@ -117,41 +142,73 @@ impl App {
             tracing::info!(name: "library_route.route.empty", target: "library_route", item = %item_id, "route table empty; staying local");
             return None;
         }
+        self.prune_route_cache_if_full();
+        match self.cached_ancestor_route(item_id) {
+            AncestorCacheLookup::Fresh(route) => return route,
+            AncestorCacheLookup::Stale => {}
+        }
+        tracing::info!(name: "library_route.ancestor_cache.miss", target: "library_route", item = %item_id, "ancestor cache miss");
+        let library_name = match self.fetch_ancestor_library(item_id) {
+            AncestorLookup::Resolved(name) => name,
+            AncestorLookup::Failed => return None,
+        };
+        self.library_route_cache
+            .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
+        tracing::info!(name: "library_route.ancestor_resolution.succeeded", target: "library_route", item = %item_id, library = ?library_name, "ancestor resolution succeeded");
+        library_name.and_then(|name| self.resolve_route_for_library(&name))
+    }
+
+    /// Backstop against unbounded growth over a very long session: drop every
+    /// entry already past its TTL. Checked on every call (not just before an
+    /// insert) so a string of failed lookups -- which never insert -- cannot
+    /// keep the cache pinned above the threshold indefinitely.
+    fn prune_route_cache_if_full(&mut self) {
         if self.library_route_cache.len() >= LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
-            // Backstop against unbounded growth over a very long session:
-            // drop everything already past its TTL before doing anything
-            // else, rather than growing forever (#223 review follow-up).
-            // Checked on every call (not just before an insert) so a
-            // string of failed lookups -- which never insert -- can't
-            // keep the cache pinned above the threshold indefinitely.
             let now = Instant::now();
             self.library_route_cache.retain(|_, (_, cached_at)| {
                 now.duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL
             });
         }
-        if let Some((cached, cached_at)) = self.library_route_cache.get(item_id) {
-            if Instant::now().duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL {
-                tracing::info!(name: "library_route.ancestor_cache.hit", target: "library_route", item = %item_id, library = ?cached, "ancestor cache hit");
-                return cached
-                    .clone()
-                    .and_then(|name| self.resolve_route_for_library(&name));
-            }
-            tracing::info!(name: "library_route.ancestor_cache.expired", target: "library_route", item = %item_id, "ancestor cache expired");
-            // Expired -- fall through and re-resolve as a normal cache miss,
-            // so a mid-session library reorganization on the Emby server
-            // self-heals without requiring an app restart.
-        }
-        tracing::info!(name: "library_route.ancestor_cache.miss", target: "library_route", item = %item_id, "ancestor cache miss");
-        let ancestors = {
-            let client = self.emby_client()?;
+    }
 
-            client.lock().unwrap().get_ancestors(item_id)
+    /// Fresh cache hit for `item_id`, or `Stale` when there is no entry or it
+    /// has expired (which is logged).
+    fn cached_ancestor_route(&mut self, item_id: &str) -> AncestorCacheLookup {
+        let (cached, cached_at) = {
+            let Some(entry) = self.library_route_cache.get(item_id) else {
+                return AncestorCacheLookup::Stale;
+            };
+            (entry.0.clone(), entry.1)
         };
-        let library_name = match ancestors {
-            Ok(chain) => chain
-                .into_iter()
-                .find(|a| a.item_type == "CollectionFolder")
-                .map(|a| a.name),
+        if Instant::now().duration_since(cached_at) < LIBRARY_ROUTE_CACHE_TTL {
+            tracing::info!(name: "library_route.ancestor_cache.hit", target: "library_route", item = %item_id, library = ?cached, "ancestor cache hit");
+            return AncestorCacheLookup::Fresh(
+                cached.and_then(|name| self.resolve_route_for_library(&name)),
+            );
+        }
+        tracing::info!(name: "library_route.ancestor_cache.expired", target: "library_route", item = %item_id, "ancestor cache expired");
+        // Expired -- fall through and re-resolve as a normal cache miss, so a
+        // mid-session library reorganization on the Emby server self-heals
+        // without requiring an app restart.
+        AncestorCacheLookup::Stale
+    }
+
+    /// Ancestor lookup. `Resolved` covers a successful call, possibly
+    /// confirming there is no owning library; `Failed` is a transient failure,
+    /// logged and never cached, so it retries on the item's next
+    /// play/enqueue attempt.
+    fn fetch_ancestor_library(&mut self, item_id: &str) -> AncestorLookup {
+        let Some(client) = self.emby_client() else {
+            return AncestorLookup::Failed;
+        };
+        let ancestors = client.lock().unwrap().get_ancestors(item_id);
+        match ancestors {
+            Ok(chain) => AncestorLookup::Resolved(
+                chain
+                    .into_iter()
+                    .find(|a| a.item_type == "CollectionFolder")
+                    .map(|a| a.name),
+            ),
             Err(e) => {
                 tracing::warn!(
                     name: "library_route.ancestors.failed",
@@ -159,20 +216,9 @@ impl App {
                     { item = %item_id, error = %e },
                     "ancestor lookup failed"
                 );
-                // Per #223's post-grilling revision: a transient lookup
-                // failure is never cached -- only a successful
-                // `get_ancestors` call (whether it finds an owning
-                // library or confirms there isn't one) gets memoized.
-                // A failed lookup retries on the item's next
-                // play/enqueue attempt instead of being stuck at `None`
-                // until the process restarts.
-                return None;
+                AncestorLookup::Failed
             }
-        };
-        self.library_route_cache
-            .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
-        tracing::info!(name: "library_route.ancestor_resolution.succeeded", target: "library_route", item = %item_id, library = ?library_name, "ancestor resolution succeeded");
-        library_name.and_then(|name| self.resolve_route_for_library(&name))
+        }
     }
 
     /// Resolves the daemon route (if any) that a play/enqueue of `item`
@@ -193,19 +239,47 @@ impl App {
     ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
         tracing::info!(name: "library_route.route_resolution.started", target: "library_route", item = %item.id, item_name = %item.name, library_tab = self.tab.to_position_with_counts(self.libs.len(), self.feeds_tab_pos()), "route resolution");
         if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-            tracing::info!(name: "library_route.route_resolution.queue", target: "library_route", item = %item.id, "resolution path: queue");
-            self.active_route
-                .clone()
-                .and_then(|name| self.resolve_route_for_library(&name))
-                .or_else(|| self.route_for_item_via_ancestors(&item.id))
-        } else if self.tab.is_home() {
-            tracing::info!(name: "library_route.route_resolution.ancestor", target: "library_route", item = %item.id, "resolution path: ancestor");
-            self.route_for_item_via_ancestors(&item.id)
-        } else {
-            let lib_idx = self.tab.emby_library_index().unwrap();
-            tracing::info!(name: "library_route.route_resolution.library", target: "library_route", item = %item.id, library_index = lib_idx, "resolution path: library");
-            self.route_for_active_library_view(lib_idx)
+            return self.resolve_queue_play_route(item);
         }
+        if self.tab.is_home() {
+            return self.resolve_ancestor_play_route(item);
+        }
+        self.resolve_library_play_route(item)
+    }
+
+    /// Queue focus has no library of its own: keep an active route rather
+    /// than re-resolving from nav context (there is none); otherwise resolve
+    /// from the queued item itself.
+    fn resolve_queue_play_route(
+        &mut self,
+        item: &mbv_emby_model::EmbyItem,
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
+        tracing::info!(name: "library_route.route_resolution.queue", target: "library_route", item = %item.id, "resolution path: queue");
+        self.active_route
+            .clone()
+            .and_then(|name| self.resolve_route_for_library(&name))
+            .or_else(|| self.route_for_item_via_ancestors(&item.id))
+    }
+
+    /// Cross-library aggregate views (`tab_idx == 0`) resolve their route from
+    /// the item's ancestor chain.
+    fn resolve_ancestor_play_route(
+        &mut self,
+        item: &mbv_emby_model::EmbyItem,
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
+        tracing::info!(name: "library_route.route_resolution.ancestor", target: "library_route", item = %item.id, "resolution path: ancestor");
+        self.route_for_item_via_ancestors(&item.id)
+    }
+
+    /// Library-scoped views resolve their route from the active navigation
+    /// library, with no network call.
+    fn resolve_library_play_route(
+        &mut self,
+        item: &mbv_emby_model::EmbyItem,
+    ) -> Option<(String, mbv_remote_player::DaemonEndpoint)> {
+        let lib_idx = self.tab.emby_library_index().unwrap();
+        tracing::info!(name: "library_route.route_resolution.library", target: "library_route", item = %item.id, library_index = lib_idx, "resolution path: library");
+        self.route_for_active_library_view(lib_idx)
     }
 
     /// Route resolution specifically for `do_enqueue_folder` (#223 follow-up,

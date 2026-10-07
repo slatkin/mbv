@@ -57,6 +57,19 @@ impl PlaybackRun {
             return self.on_end_file_standalone(reason, progress);
         }
 
+        self.on_end_file_queue(reason, mpv, progress, completed_slot_id, completed_is_audio)
+    }
+
+    /// Queue-origin end-of-file: advance to the next entry, or stop at the end
+    /// of the queue.
+    fn on_end_file_queue(
+        &mut self,
+        reason: EndFileReason,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+        completed_slot_id: Option<QueueSlotId>,
+        completed_is_audio: bool,
+    ) -> bool {
         let completed_idx = completed_slot_id.and_then(|slot_id| self.queue.slot_index(slot_id));
         tracing::warn!(name: "player.queue_advance.started", target: "player", reason = ?reason, last_valid_position = self.last_valid_pos, runtime = self.status.lock().unwrap().runtime_ticks, "advancing queue after end-file");
         // H11: bounds-check completed_idx — QueueRemove can shrink the list

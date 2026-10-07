@@ -101,12 +101,7 @@ impl PlaybackRun {
                 ep_title,
                 artist,
             } => {
-                tracing::warn!(name: "player.next_up.message_sent", target: "player", item = %item_id, show_title = %show_title, episode_title = %ep_title, "sending next-up script message");
-                let result = mpv.command(
-                    "script-message",
-                    &["mbv-next-up", &item_id, &show_title, &ep_title, &artist],
-                );
-                tracing::warn!(name: "player.next_up.message_result", target: "player", result = ?result, "next-up script message result");
+                send_next_up_message(mpv, &item_id, &show_title, &ep_title, &artist);
             }
             PlayerCommand::TogglePause => {
                 let paused = self.status.lock().unwrap().paused;
@@ -138,6 +133,16 @@ impl PlaybackRun {
             }
         }
     }
+}
+
+/// Sends the next-up overlay script message and logs its outcome.
+fn send_next_up_message(mpv: &Mpv, item_id: &str, show_title: &str, ep_title: &str, artist: &str) {
+    tracing::warn!(name: "player.next_up.message_sent", target: "player", item = %item_id, show_title = %show_title, episode_title = %ep_title, "sending next-up script message");
+    let result = mpv.command(
+        "script-message",
+        &["mbv-next-up", item_id, show_title, ep_title, artist],
+    );
+    tracing::warn!(name: "player.next_up.message_result", target: "player", result = ?result, "next-up script message result");
 }
 
 mod load;

@@ -3,17 +3,7 @@ use mbv_visualizer::PipeWireWorker;
 
 impl App {
     pub(in crate::app) fn sync_visualizer(&mut self) {
-        if let Some(worker) = self.visualizer.as_ref() {
-            match worker.take_latest_window() {
-                Ok(Some(window)) => self.visualizer_window = window,
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
-                    self.visualizer_failed = true;
-                    self.stop_visualizer_capture();
-                }
-            }
-        }
+        self.drain_visualizer_worker();
 
         let should_run = self.visualizer_should_run();
         if !should_run {
@@ -21,15 +11,38 @@ impl App {
             return;
         }
         if self.visualizer.is_none() && !self.visualizer_failed {
-            match PipeWireWorker::start() {
-                Ok(worker) => {
-                    tracing::info!(name: "visualizer.worker.started", target: "visualizer", "started PipeWire system-audio worker");
-                    self.visualizer = Some(worker);
-                }
-                Err(error) => {
-                    tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error = %error }, "system-audio visualizer unavailable");
-                    self.visualizer_failed = true;
-                }
+            self.start_visualizer_worker();
+        }
+    }
+
+    /// Pulls the newest captured window and disables the visualizer if the
+    /// `PipeWire` worker died.
+    fn drain_visualizer_worker(&mut self) {
+        let Some(worker) = self.visualizer.as_ref() else {
+            return;
+        };
+        match worker.take_latest_window() {
+            Ok(Some(window)) => self.visualizer_window = window,
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(name: "visualizer.worker.stopped", target: "visualizer", { error = %error }, "PipeWire worker stopped; visualizer disabled for this playback");
+                self.visualizer_failed = true;
+                self.stop_visualizer_capture();
+            }
+        }
+    }
+
+    /// Spawns the capture worker once; a failed start is latched in
+    /// `visualizer_failed` so it is not retried every tick.
+    fn start_visualizer_worker(&mut self) {
+        match PipeWireWorker::start() {
+            Ok(worker) => {
+                tracing::info!(name: "visualizer.worker.started", target: "visualizer", "started PipeWire system-audio worker");
+                self.visualizer = Some(worker);
+            }
+            Err(error) => {
+                tracing::warn!(name: "visualizer.capture.unavailable", target: "visualizer", { error = %error }, "system-audio visualizer unavailable");
+                self.visualizer_failed = true;
             }
         }
     }

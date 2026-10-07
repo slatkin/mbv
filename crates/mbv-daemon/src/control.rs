@@ -240,21 +240,40 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
     }
 
     let player_status = ctx.player.status.lock().unwrap().clone();
-    let mut queue_state = project_queue_state(
-        &ctx.owner.core.queue,
-        &ctx.owner.core.source,
-        &player_status,
-    );
+    let queue_state = shutdown_queue_state(ctx, &player_status);
+    if !persist_shutdown_queue(ctx, &queue_state) {
+        return false;
+    }
+
+    let mut clients = ctx.ctrl_clients.lock().unwrap();
+    if clients.authority == AuthorityHolder::EmbyRemote {
+        clients.authority = AuthorityHolder::Ctrl;
+    }
+    true
+}
+
+/// The queue state a coordinated shutdown persists: the projected state, or a
+/// previously persisted non-empty queue when a remote owner has nothing loaded.
+fn shutdown_queue_state(
+    ctx: &CtrlContext<'_>,
+    player_status: &mbv_ctrl::player::PlayerStatus,
+) -> mbv_queue::QueueState {
+    let queue_state =
+        project_queue_state(&ctx.owner.core.queue, &ctx.owner.core.source, player_status);
 
     if ctx.role != crate::DaemonRole::Local
         && queue_state.items.is_empty()
         && let Some(existing) = mbv_config::load_queue_state()
         && !existing.items.is_empty()
     {
-        queue_state = existing;
+        return existing;
     }
+    queue_state
+}
 
-    if let Err(e) = mbv_config::save_queue_state(&queue_state) {
+/// Persists the shutdown queue, rejecting the request when the save fails.
+fn persist_shutdown_queue(ctx: &CtrlContext<'_>, queue_state: &mbv_queue::QueueState) -> bool {
+    if let Err(e) = mbv_config::save_queue_state(queue_state) {
         tracing::error!(name: "daemon.shutdown_queue_persist.failed", target: "daemon", error = %e, "coordinated shutdown rejected: queue persistence failed");
         send_to(
             ctx.reply_tx,
@@ -263,11 +282,6 @@ fn prepare_shutdown(ctx: &CtrlContext<'_>) -> bool {
             },
         );
         return false;
-    }
-
-    let mut clients = ctx.ctrl_clients.lock().unwrap();
-    if clients.authority == AuthorityHolder::EmbyRemote {
-        clients.authority = AuthorityHolder::Ctrl;
     }
     true
 }

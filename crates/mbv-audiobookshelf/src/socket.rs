@@ -226,6 +226,13 @@ fn run_socket_thread(
     }
 }
 
+/// Control signal from one `socket.read()` poll.
+enum ReadOutcome {
+    Continue,
+    Stop,
+    Fatal,
+}
+
 fn run_connected(
     mut socket: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
     token: &str,
@@ -234,17 +241,7 @@ fn run_connected(
     ping_interval: &mut Duration,
     ping_timeout: &mut Duration,
 ) -> Result<bool, ()> {
-    // Short read timeout so we can drain outbound messages between reads.
-    let timeout = Some(Duration::from_millis(100));
-    match socket.get_ref() {
-        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
-            let _ = tcp.set_read_timeout(timeout);
-        }
-        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
-            let _ = tls.get_ref().set_read_timeout(timeout);
-        }
-        _ => {}
-    }
+    set_read_timeout(&socket, Some(Duration::from_millis(100)));
 
     // Socket.IO v4: open the default namespace. A send failure at the WebSocket
     // level will surface on the next read/send inside 'conn and trigger reconnect.
@@ -269,39 +266,73 @@ fn run_connected(
             break 'conn;
         }
 
-        match socket.read() {
-            Ok(Message::Text(txt)) => {
-                last_activity = Instant::now();
-                if !handle_text(
-                    &mut socket,
-                    &txt,
-                    token,
-                    event_tx,
-                    ping_interval,
-                    ping_timeout,
-                ) {
-                    return Err(());
-                }
-            }
-            Ok(Message::Ping(data)) => {
-                last_activity = Instant::now();
-                let _ = socket.send(Message::Pong(data));
-            }
-            Ok(Message::Pong(_)) => last_activity = Instant::now(),
-            Ok(Message::Close(_)) => {
-                tracing::info!(name: "audiobookshelf.socket.closed", target: "audiobookshelf_socket", "server closed WebSocket; reconnecting");
-                break 'conn;
-            }
-            Err(tungstenite::Error::Io(e))
-                if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
-            Err(e) => {
-                tracing::warn!(name: "audiobookshelf.socket.disconnected", target: "audiobookshelf_socket", error = %e, "WebSocket error; reconnecting");
-                break 'conn;
-            }
-            _ => {}
+        match read_once(
+            &mut socket,
+            &mut last_activity,
+            token,
+            event_tx,
+            ping_interval,
+            ping_timeout,
+        ) {
+            ReadOutcome::Continue => {}
+            ReadOutcome::Stop => break 'conn,
+            ReadOutcome::Fatal => return Err(()),
         }
     }
     Ok(false)
+}
+
+/// Short read timeout so the loop can drain outbound messages between reads.
+fn set_read_timeout(
+    socket: &tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    timeout: Option<Duration>,
+) {
+    match socket.get_ref() {
+        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+            let _ = tcp.set_read_timeout(timeout);
+        }
+        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
+            let _ = tls.get_ref().set_read_timeout(timeout);
+        }
+        _ => {}
+    }
+}
+
+/// One poll of the socket, folding the transport-level outcomes into a single
+/// control signal for the connection loop.
+fn read_once(
+    socket: &mut tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    last_activity: &mut Instant,
+    token: &str,
+    event_tx: &mpsc::Sender<SocketEvent>,
+    ping_interval: &mut Duration,
+    ping_timeout: &mut Duration,
+) -> ReadOutcome {
+    match socket.read() {
+        Ok(Message::Text(txt)) => {
+            *last_activity = Instant::now();
+            if !handle_text(socket, &txt, token, event_tx, ping_interval, ping_timeout) {
+                return ReadOutcome::Fatal;
+            }
+        }
+        Ok(Message::Ping(data)) => {
+            *last_activity = Instant::now();
+            let _ = socket.send(Message::Pong(data));
+        }
+        Ok(Message::Pong(_)) => *last_activity = Instant::now(),
+        Ok(Message::Close(_)) => {
+            tracing::info!(name: "audiobookshelf.socket.closed", target: "audiobookshelf_socket", "server closed WebSocket; reconnecting");
+            return ReadOutcome::Stop;
+        }
+        Err(tungstenite::Error::Io(e))
+            if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
+        Err(e) => {
+            tracing::warn!(name: "audiobookshelf.socket.disconnected", target: "audiobookshelf_socket", error = %e, "WebSocket error; reconnecting");
+            return ReadOutcome::Stop;
+        }
+        _ => {}
+    }
+    ReadOutcome::Continue
 }
 
 fn handle_text(

@@ -315,22 +315,7 @@ impl App {
             self.playback_eligibility(std::slice::from_ref(&item)),
             PlaybackEligibility::WhollyUnplayable { .. }
         ) {
-            // The deferred play must carry what the ordinary path would
-            // submit: session control plays the single item, but the
-            // direct-remote/local path expands the series continuation
-            // first, so deferring one episode would drop the rest of the
-            // series on confirmation.
-            if self.connected_session_id.is_none()
-                && !item.series_id.is_empty()
-                && self.player.always_play_next
-                && let Some(episodes) = self
-                    .series_episodes_from(&item)
-                    .filter(|episodes| episodes.len() > 1)
-            {
-                self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
-                return;
-            }
-            self.defer_local_play(vec![item], 0, self.playback_queue().source().clone());
+            self.defer_unplayable_play_item(item);
             return;
         }
         if self.in_non_library_thin_client_mode() {
@@ -347,45 +332,52 @@ impl App {
             self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            self.advance_queue_epoch();
-            self.clear_playback_overlays();
-            let id = conn_id.clone();
-            let item_id = item.id.clone();
-            let start_ticks = item.playback_position_ticks;
-            self.flash(
-                format!("Requesting playback: {label}"),
-                ToastSeverity::Neutral,
-            );
-            self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+        if self.play_on_connected_session(&item, &label) {
             return;
         }
-        if !item.series_id.is_empty() && self.player.always_play_next {
-            let Some(episodes) = self.series_episodes_from(&item) else {
-                self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                return;
-            };
-            if episodes.len() > 1 {
-                if !direct_remote {
-                    self.on_queue_replace_silent();
-                }
-                // Row 5.3 (design D6): the replacement is an answered owner
-                // op; the Client holds no editable queue of its own.
-                let sent = self.replace_emby_queue_on_owner(
-                    self.playing_queue_scope(),
-                    episodes,
-                    0,
-                    mbv_queue::QueueSource::Series,
-                );
-                if sent == QueueOpEdit::NotApplied {
-                    return;
-                }
-                let _ = self
-                    .player
-                    .send_command(PlayerCommand::SetMute(self.mute_on));
-                return;
-            }
+        if self.play_series_continuation(&item, direct_remote) {
+            return;
         }
+        self.play_single_item(item, direct_remote, &label);
+    }
+
+    /// Plays the rest of a series when "always play next" is on and the item
+    /// belongs to a series with more than one episode. Returns `true` when the
+    /// attempt was terminal (dispatched, or already flashed), `false` to let
+    /// the caller fall through to the single-item path.
+    fn play_series_continuation(&mut self, item: &EmbyItem, direct_remote: bool) -> bool {
+        if item.series_id.is_empty() || !self.player.always_play_next {
+            return false;
+        }
+        let Some(episodes) = self.series_episodes_from(item) else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return true;
+        };
+        if episodes.len() <= 1 {
+            return false;
+        }
+        if !direct_remote {
+            self.on_queue_replace_silent();
+        }
+        // Row 5.3 (design D6): the replacement is an answered owner
+        // op; the Client holds no editable queue of its own.
+        let sent = self.replace_emby_queue_on_owner(
+            self.playing_queue_scope(),
+            episodes,
+            0,
+            mbv_queue::QueueSource::Series,
+        );
+        if sent == QueueOpEdit::NotApplied {
+            return true;
+        }
+        let _ = self
+            .player
+            .send_command(PlayerCommand::SetMute(self.mute_on));
+        true
+    }
+
+    /// Submits a single-item queue replacement, then mutes the local player.
+    fn play_single_item(&mut self, item: EmbyItem, direct_remote: bool, label: &str) {
         if direct_remote {
             self.flash(
                 format!("Requesting playback: {label}"),
@@ -406,6 +398,44 @@ impl App {
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
+    }
+
+    /// Routes a play request through the connected Emby session when one is
+    /// attached. Returns `false` when playback is local and the caller should
+    /// fall through to the queue-replacement path.
+    fn play_on_connected_session(&mut self, item: &EmbyItem, label: &str) -> bool {
+        let Some(conn_id) = self.connected_session_id.clone() else {
+            return false;
+        };
+        self.advance_queue_epoch();
+        self.clear_playback_overlays();
+        let item_id = item.id.clone();
+        let start_ticks = item.playback_position_ticks;
+        self.flash(
+            format!("Requesting playback: {label}"),
+            ToastSeverity::Neutral,
+        );
+        self.do_session_command(move |c| c.session_play(&conn_id, &item_id, start_ticks));
+        true
+    }
+
+    /// Defers an unplayable item for confirmation. The deferred play must carry
+    /// what the ordinary path would submit: session control plays the single
+    /// item, but the direct-remote/local path expands the series continuation
+    /// first, so deferring one episode would drop the rest of the series on
+    /// confirmation.
+    fn defer_unplayable_play_item(&mut self, item: EmbyItem) {
+        if self.connected_session_id.is_none()
+            && !item.series_id.is_empty()
+            && self.player.always_play_next
+            && let Some(episodes) = self
+                .series_episodes_from(&item)
+                .filter(|episodes| episodes.len() > 1)
+        {
+            self.defer_local_play(episodes, 0, mbv_queue::QueueSource::Series);
+            return;
+        }
+        self.defer_local_play(vec![item], 0, self.playback_queue().source().clone());
     }
 
     pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_emby_model::EmbyItem) {

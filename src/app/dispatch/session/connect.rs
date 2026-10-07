@@ -242,76 +242,107 @@ impl App {
             return;
         }
         tracing::info!(name: "auto_reconnect.state_load.started", target: "auto_reconnect", "loading auto-reconnect state");
-        let last = match mbv_config::load_last_remote_connection() {
-            Ok(Some(last)) => last,
-            Ok(None) => {
-                tracing::info!(name: "auto_reconnect.state.missing", target: "auto_reconnect", "auto-reconnect state missing; staying local");
-                return;
-            }
-            Err(e) => {
-                tracing::warn!(name: "auto_reconnect.state_load.failed", target: "auto_reconnect", error = %e, "auto-reconnect state load failed; staying local");
-                return;
-            }
+        let Some(last) = Self::load_last_remote_connection() else {
+            return;
         };
         match last {
             mbv_config::LastRemoteConnection::LibraryRoute { library } => {
-                tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "library_route", library = %library, "auto-reconnect state loaded");
-                let Some((name, endpoint)) = self.resolve_route_for_library(&library) else {
-                    tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
-                    return;
-                };
-                if endpoint.is_local()
-                    && (self.suspended_local.is_some()
-                        || (self.home_is_local_daemon && self.is_local_daemon()))
-                {
-                    self.restore_local_mode("Local playback restored");
-                    return;
-                }
-                match Self::try_daemon_route_connect(&endpoint, &name) {
-                    Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
-                    }
-                    Err(_) => self.flash(
-                        format!(
-                            "\u{26a0} {name} route unreachable, using local playback (mbv.log)"
-                        ),
-                        ToastSeverity::Warning,
-                    ),
-                }
+                self.reconnect_library_route(&library);
             }
             mbv_config::LastRemoteConnection::DirectSession { device_name } => {
-                tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "direct_session", device = %device_name, "auto-reconnect state loaded");
-                let sessions = match self.fetch_sessions_blocking() {
-                    Ok(sessions) => sessions,
-                    Err(e) => {
-                        tracing::warn!(name: "auto_reconnect.sessions_load.failed", target: "auto_reconnect", error = %e, "failed to list sessions");
-                        self.flash(format!(
-                            "\u{26a0} Auto-reconnect couldn't list sessions ({e}), using local playback"
-                        ), ToastSeverity::Warning);
-                        return;
-                    }
-                };
-                if let Some(sess) = sessions
-                    .into_iter()
-                    .find(|s| s.device_name.eq_ignore_ascii_case(&device_name))
-                {
-                    tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved; connecting");
-                    self.connect_to_session(&sess);
-                    if self.remote.direct_remote_connected {
-                        tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "direct_daemon_upgrade", "direct session connected");
-                    } else if self.connected_session_id.is_some() {
-                        tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "emby_session_control", "direct session connected");
-                    } else {
-                        tracing::warn!(name: "auto_reconnect.direct_session.connect_failed", target: "auto_reconnect", device = %device_name, "direct session connection failed; staying local");
-                    }
-                } else {
-                    tracing::info!(name: "auto_reconnect.direct_session.not_found", target: "auto_reconnect", device = %device_name, "device not found in current sessions; staying local");
-                    self.flash(
-                        format!("\u{26a0} {device_name} not found, using local playback"),
-                        ToastSeverity::Warning,
-                    );
-                }
+                self.reconnect_direct_session(&device_name);
             }
+        }
+    }
+
+    /// Loads the persisted last remote connection, logging why the load
+    /// found nothing when it does not.
+    fn load_last_remote_connection() -> Option<mbv_config::LastRemoteConnection> {
+        match mbv_config::load_last_remote_connection() {
+            Ok(Some(last)) => Some(last),
+            Ok(None) => {
+                tracing::info!(name: "auto_reconnect.state.missing", target: "auto_reconnect", "auto-reconnect state missing; staying local");
+                None
+            }
+            Err(e) => {
+                tracing::warn!(name: "auto_reconnect.state_load.failed", target: "auto_reconnect", error = %e, "auto-reconnect state load failed; staying local");
+                None
+            }
+        }
+    }
+
+    /// Restores the persisted library route, falling back to local playback
+    /// when it no longer resolves or its daemon is unreachable.
+    fn reconnect_library_route(&mut self, library: &str) {
+        tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "library_route", library = %library, "auto-reconnect state loaded");
+        let Some((name, endpoint)) = self.resolve_route_for_library(library) else {
+            tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
+            return;
+        };
+        if endpoint.is_local()
+            && (self.suspended_local.is_some()
+                || (self.home_is_local_daemon && self.is_local_daemon()))
+        {
+            self.restore_local_mode("Local playback restored");
+            return;
+        }
+        match Self::try_daemon_route_connect(&endpoint, &name) {
+            Ok((remote, remote_rx)) => {
+                self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
+            }
+            Err(_) => self.flash(
+                format!("\u{26a0} {name} route unreachable, using local playback (mbv.log)"),
+                ToastSeverity::Warning,
+            ),
+        }
+    }
+
+    /// Restores the persisted direct session, staying local when the device is
+    /// gone or the session list cannot be fetched.
+    fn reconnect_direct_session(&mut self, device_name: &str) {
+        tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "direct_session", device = %device_name, "auto-reconnect state loaded");
+        let Some(sess) = self.find_session_by_device(device_name) else {
+            tracing::info!(name: "auto_reconnect.direct_session.not_found", target: "auto_reconnect", device = %device_name, "device not found in current sessions; staying local");
+            self.flash(
+                format!("\u{26a0} {device_name} not found, using local playback"),
+                ToastSeverity::Warning,
+            );
+            return;
+        };
+        tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved; connecting");
+        self.connect_to_session(&sess);
+        self.log_direct_session_outcome(device_name);
+    }
+
+    /// Finds the session whose device name matches `device_name`, or `None`
+    /// after flashing the fetch failure.
+    fn find_session_by_device(&mut self, device_name: &str) -> Option<mbv_emby::SessionInfo> {
+        let sessions = match self.fetch_sessions_blocking() {
+            Ok(sessions) => sessions,
+            Err(e) => {
+                tracing::warn!(name: "auto_reconnect.sessions_load.failed", target: "auto_reconnect", error = %e, "failed to list sessions");
+                self.flash(
+                    format!(
+                        "\u{26a0} Auto-reconnect couldn't list sessions ({e}), using local playback"
+                    ),
+                    ToastSeverity::Warning,
+                );
+                return None;
+            }
+        };
+        sessions
+            .into_iter()
+            .find(|s| s.device_name.eq_ignore_ascii_case(device_name))
+    }
+
+    /// Records how the direct-session connect attempt turned out.
+    fn log_direct_session_outcome(&self, device_name: &str) {
+        if self.remote.direct_remote_connected {
+            tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "direct_daemon_upgrade", "direct session connected");
+        } else if self.connected_session_id.is_some() {
+            tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "emby_session_control", "direct session connected");
+        } else {
+            tracing::warn!(name: "auto_reconnect.direct_session.connect_failed", target: "auto_reconnect", device = %device_name, "direct session connection failed; staying local");
         }
     }
 }

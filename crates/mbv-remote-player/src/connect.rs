@@ -604,47 +604,14 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
             Err(_) => break,
             Ok(l) if l.is_empty() => {}
             Ok(l) => {
-                let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
-                    tracing::warn!(name: "remote.daemon_event_parse.failed", target: "remote", bytes = l.len(), "unrecognized event from daemon");
-                    continue;
-                };
-
-                // Handle shutdown request responses directly.
-                match &ev {
-                    CtrlEvent::ShutdownAccepted => {
-                        if let Some(tx) = shutdown_request.lock().unwrap().take() {
-                            let _ = tx.send(crate::ShutdownResponse::Accepted);
-                        }
-                    }
-                    CtrlEvent::ShutdownRejected { reason } => {
-                        if let Some(tx) = shutdown_request.lock().unwrap().take() {
-                            let _ = tx.send(crate::ShutdownResponse::Rejected {
-                                reason: reason.clone(),
-                            });
-                        }
-                    }
-                    _ => {}
-                }
-
-                // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
-                // a notification — the connection stays open. Only set expected_disconnect
-                // for events that actually close the connection. Exhaustive match ensures
-                // new DisconnectReason variants are evaluated.
-                let is_structured_disconnect = match &ev {
-                    CtrlEvent::Disconnected { reason } => {
-                        matches!(reason, DisconnectReason::DaemonShutdown)
-                    }
-                    _ => false,
-                };
-                apply_ctrl_event(
-                    ev,
+                expected_disconnect |= handle_remote_line(
+                    &l,
                     &status,
                     &unified_queue,
-                    &event_tx,
                     &pending_playback,
-                    true,
+                    &shutdown_request,
+                    &event_tx,
                 );
-                expected_disconnect |= is_structured_disconnect;
             }
         }
     }
@@ -681,6 +648,50 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
             mbv_ctrl::player::CONNECTION_LOST_MESSAGE.to_string(),
         ));
     }
+}
+
+/// Applies one decoded daemon line. Returns true when the line was a
+/// structured disconnect that closes the connection.
+fn handle_remote_line(
+    line: &str,
+    status: &Arc<Mutex<PlayerStatus>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    shutdown_request: &Arc<Mutex<Option<mpsc::Sender<crate::ShutdownResponse>>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+) -> bool {
+    let Ok(ev) = serde_json::from_str::<CtrlEvent>(line) else {
+        tracing::warn!(name: "remote.daemon_event_parse.failed", target: "remote", bytes = line.len(), "unrecognized event from daemon");
+        return false;
+    };
+
+    // Handle shutdown request responses directly.
+    match &ev {
+        CtrlEvent::ShutdownAccepted => {
+            if let Some(tx) = shutdown_request.lock().unwrap().take() {
+                let _ = tx.send(crate::ShutdownResponse::Accepted);
+            }
+        }
+        CtrlEvent::ShutdownRejected { reason } => {
+            if let Some(tx) = shutdown_request.lock().unwrap().take() {
+                let _ = tx.send(crate::ShutdownResponse::Rejected {
+                    reason: reason.clone(),
+                });
+            }
+        }
+        _ => {}
+    }
+
+    // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
+    // a notification — the connection stays open. Only set expected_disconnect
+    // for events that actually close the connection. Exhaustive match ensures
+    // new DisconnectReason variants are evaluated.
+    let is_structured_disconnect = match &ev {
+        CtrlEvent::Disconnected { reason } => matches!(reason, DisconnectReason::DaemonShutdown),
+        _ => false,
+    };
+    apply_ctrl_event(ev, status, unified_queue, event_tx, pending_playback, true);
+    is_structured_disconnect
 }
 
 fn write_remote_commands(

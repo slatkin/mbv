@@ -622,17 +622,7 @@ impl Model {
             return;
         }
 
-        {
-            let mut c = self.app.config.lock().unwrap();
-            if cursor == 0 {
-                c.library_routes.remove(&library_lower);
-                tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
-            } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
-                c.library_routes
-                    .insert(library_lower.clone(), endpoint.clone());
-                tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
-            }
-        }
+        self.apply_device_selection_to_config(&library_lower, &devices, cursor);
         let cfg = self.app.config.lock().unwrap().clone();
         self.app.library_routes = cfg.library_routes.clone();
         tracing::info!(name: "library_route.route_table.synchronized", target: "library_route", count = self.app.library_routes.len(), "runtime route table synchronized");
@@ -674,6 +664,25 @@ impl Model {
             stage: LibraryRouteStage::PickLibrary { items },
             cursor: restored_cursor,
         });
+    }
+
+    /// Writes the selected device route into config, or removes the override
+    /// when the automatic (index 0) entry is chosen.
+    fn apply_device_selection_to_config(
+        &mut self,
+        library_lower: &str,
+        devices: &[(String, Option<String>)],
+        cursor: usize,
+    ) {
+        let mut c = self.app.config.lock().unwrap();
+        if cursor == 0 {
+            c.library_routes.remove(library_lower);
+            tracing::info!(name: "library_route.route.removed", target: "library_route", library = %library_lower, "F2 route removed");
+        } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
+            c.library_routes
+                .insert(library_lower.to_string(), endpoint.clone());
+            tracing::info!(name: "library_route.endpoint.persisted", target: "library_route", library = %library_lower, endpoint = %endpoint, "F2 endpoint persisted");
+        }
     }
 
     pub(in crate::app) fn finish_route_config_save(

@@ -23,49 +23,15 @@ impl EmbyClient {
             "IsPlayback": true,
         });
         tracing::info!(name: "emby.playback_info.requested", target: "api", item = %item_id, "requesting playback info");
-        let resp: Value = match self
-            .post(&format!(
-                "/Items/{}/PlaybackInfo",
-                mbv_net::encode_path_segment(item_id)
-            ))
-            .send_json(body)
-        {
-            Ok(mut r) => match r.body_mut().read_json() {
-                Ok(v) => v,
-                Err(e) => {
-                    tracing::warn!(name: "emby.playback_info.parse_failed", target: "api", error = %e, "failed to parse playback info response");
-                    return PlaybackInfo {
-                        session_id: gen_session_id(),
-                        media_source_id: MediaSourceId::new(item_id.to_string()),
-                        external_subtitle_urls: vec![],
-                    };
-                }
-            },
-            Err(e) => {
-                tracing::warn!(name: "emby.playback_info.request_failed", target: "api", error = %e, "playback info request failed");
-                return PlaybackInfo {
-                    session_id: gen_session_id(),
-                    media_source_id: MediaSourceId::new(item_id.to_string()),
-                    external_subtitle_urls: vec![],
-                };
-            }
+        let Some(resp) = self.request_playback_info(item_id, body) else {
+            return Self::fallback_playback_info(item_id);
         };
         let sid = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
         let msid = resp["MediaSources"][0]["Id"]
             .as_str()
             .unwrap_or(item_id)
             .to_string();
-        let sub_urls: Vec<String> = resp["MediaSources"][0]["MediaStreams"]
-            .as_array()
-            .map_or(&[] as &[Value], Vec::as_slice)
-            .iter()
-            .filter(|s| {
-                s["Type"].as_str() == Some("Subtitle")
-                    && s["DeliveryMethod"].as_str() == Some("External")
-            })
-            .filter_map(|s| s["DeliveryUrl"].as_str())
-            .map(|u| format!("{}{}", self.config.server_url, u))
-            .collect();
+        let sub_urls = self.external_subtitle_urls(&resp);
         tracing::info!(name: "emby.playback_info.received", target: "api", play_session = %sid, media_source = %msid, external_subtitle_count = sub_urls.len(), "received playback info");
         let session_id = if sid.is_empty() {
             gen_session_id()
@@ -77,6 +43,52 @@ impl EmbyClient {
             media_source_id: MediaSourceId::new(msid),
             external_subtitle_urls: sub_urls,
         }
+    }
+
+    /// Sends the playback-info request and parses the body, returning `None`
+    /// (after logging which stage failed) when either step fails.
+    fn request_playback_info(&self, item_id: &str, body: serde_json::Value) -> Option<Value> {
+        match self
+            .post(&format!(
+                "/Items/{}/PlaybackInfo",
+                mbv_net::encode_path_segment(item_id)
+            ))
+            .send_json(body)
+        {
+            Ok(mut r) => match r.body_mut().read_json() {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    tracing::warn!(name: "emby.playback_info.parse_failed", target: "api", error = %e, "failed to parse playback info response");
+                    None
+                }
+            },
+            Err(e) => {
+                tracing::warn!(name: "emby.playback_info.request_failed", target: "api", error = %e, "playback info request failed");
+                None
+            }
+        }
+    }
+
+    fn fallback_playback_info(item_id: &str) -> PlaybackInfo {
+        PlaybackInfo {
+            session_id: gen_session_id(),
+            media_source_id: MediaSourceId::new(item_id.to_string()),
+            external_subtitle_urls: vec![],
+        }
+    }
+
+    fn external_subtitle_urls(&self, resp: &Value) -> Vec<String> {
+        resp["MediaSources"][0]["MediaStreams"]
+            .as_array()
+            .map_or(&[] as &[Value], Vec::as_slice)
+            .iter()
+            .filter(|s| {
+                s["Type"].as_str() == Some("Subtitle")
+                    && s["DeliveryMethod"].as_str() == Some("External")
+            })
+            .filter_map(|s| s["DeliveryUrl"].as_str())
+            .map(|u| format!("{}{}", self.config.server_url, u))
+            .collect()
     }
 
     /// Requests playback info with a Chromecast device profile and resolves

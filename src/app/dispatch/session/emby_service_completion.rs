@@ -32,45 +32,14 @@ impl App {
         >,
         delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
     ) -> Option<HomeContent> {
-        use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
             tracing::debug!(name: "startup.emby.stale_startup_completion_ignored", target: "startup", "ignored stale Emby startup completion");
             return None;
         }
         match result {
-            Ok(startup) => {
-                let ws_url = startup.client.ws_url();
-                // Capability registration is an HTTP POST. Keep it behind
-                // successful authentication, but never make Ready
-                // application wait on the Emby agent timeout.
-                let capability_client = startup.client.clone();
-                std::thread::spawn(move || capability_client.register_capabilities());
-                let client = Arc::new(Mutex::new(startup.client));
-                let (ws_tx, ws_rx) = mpsc::channel();
-                self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
-                self.ws_rx = ws_rx;
-                self.emby_runtime.client = Some(client);
-                let content = self.apply_emby_bootstrap(startup.bootstrap);
-                self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
-                // Warm the music group levels in the background (design D5 of
-                // `fix-music-artist-resolution-batching`); never gates startup.
-                self.spawn_music_group_warmup();
-                self.sync_subtitle_prefs_from_emby();
-                self.flash("Emby is ready".into(), ToastSeverity::Success);
-                tracing::info!(name: "startup.emby.completed", target: "startup", "Emby startup completed");
-                // An app launch without an Emby client at construction
-                // can't call `try_auto_reconnect` synchronously the way an
-                // attached launch does -- it waits for async startup here.
-                // Guarded on
-                // `player_endpoint` being still unset so this only fires on
-                // that first-ever completion, not on a later reconfigure
-                // that also flows through this branch.
-                if self.player_endpoint.is_none() {
-                    self.try_auto_reconnect();
-                }
-                Some(content)
-            }
+            Ok(startup) => Some(self.apply_emby_startup(startup)),
             Err(error) => {
+                use crate::app::dispatch::notify::ToastSeverity;
                 let state =
                     crate::app::dispatch::session::service_startup::classify_failure(&error);
                 self.fail_emby_service(state);
@@ -94,6 +63,45 @@ impl App {
                 None
             }
         }
+    }
+
+    /// Applies a successful Emby startup: websocket, client, bootstrap content
+    /// and Ready state.
+    fn apply_emby_startup(
+        &mut self,
+        startup: crate::app::dispatch::session::service_startup::Startup,
+    ) -> HomeContent {
+        use crate::app::dispatch::notify::ToastSeverity;
+        let ws_url = startup.client.ws_url();
+        // Capability registration is an HTTP POST. Keep it behind
+        // successful authentication, but never make Ready
+        // application wait on the Emby agent timeout.
+        let capability_client = startup.client.clone();
+        std::thread::spawn(move || capability_client.register_capabilities());
+        let client = Arc::new(Mutex::new(startup.client));
+        let (ws_tx, ws_rx) = mpsc::channel();
+        self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
+        self.ws_rx = ws_rx;
+        self.emby_runtime.client = Some(client);
+        let content = self.apply_emby_bootstrap(startup.bootstrap);
+        self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+        // Warm the music group levels in the background (design D5 of
+        // `fix-music-artist-resolution-batching`); never gates startup.
+        self.spawn_music_group_warmup();
+        self.sync_subtitle_prefs_from_emby();
+        self.flash("Emby is ready".into(), ToastSeverity::Success);
+        tracing::info!(name: "startup.emby.completed", target: "startup", "Emby startup completed");
+        // An app launch without an Emby client at construction
+        // can't call `try_auto_reconnect` synchronously the way an
+        // attached launch does -- it waits for async startup here.
+        // Guarded on
+        // `player_endpoint` being still unset so this only fires on
+        // that first-ever completion, not on a later reconfigure
+        // that also flows through this branch.
+        if self.player_endpoint.is_none() {
+            self.try_auto_reconnect();
+        }
+        content
     }
 
     /// Central boundary for an authenticated Emby request made after startup.

@@ -45,19 +45,23 @@ impl EmbyClient {
                 tracing::info!(name: "emby.playback_start.reported", target: "api", http_response_status_code = r.status().as_u16(), "playback start reported");
                 true
             }
+            Err(e) => self.retry_report_start(body, &e),
+        }
+    }
+
+    /// Second attempt for [`Self::report_start`], covering both the first
+    /// failure's log line and the retry outcome.
+    fn retry_report_start(&self, body: serde_json::Value, first_error: &ureq::Error) -> bool {
+        tracing::warn!(name: "emby.playback_start.report_failed", target: "api", error = %first_error, "playback start report failed; retrying");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        match self.post("/Sessions/Playing").send_json(body) {
+            Ok(r) => {
+                tracing::info!(name: "emby.playback_start.retry_reported", target: "api", http_response_status_code = r.status().as_u16(), "playback start retry reported");
+                true
+            }
             Err(e) => {
-                tracing::warn!(name: "emby.playback_start.report_failed", target: "api", error = %e, "playback start report failed; retrying");
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                match self.post("/Sessions/Playing").send_json(body) {
-                    Ok(r) => {
-                        tracing::info!(name: "emby.playback_start.retry_reported", target: "api", http_response_status_code = r.status().as_u16(), "playback start retry reported");
-                        true
-                    }
-                    Err(e) => {
-                        tracing::warn!(name: "emby.playback_start.retry_failed", target: "api", error = %e, "playback start retry failed");
-                        false
-                    }
-                }
+                tracing::warn!(name: "emby.playback_start.retry_failed", target: "api", error = %e, "playback start retry failed");
+                false
             }
         }
     }
@@ -174,19 +178,23 @@ impl EmbyClient {
                 tracing::info!(name: "emby.playback_stop.reported", target: "api", http_response_status_code = r.status().as_u16(), "playback stop reported");
                 true
             }
+            Err(e) => self.retry_report_stopped(body, &e),
+        }
+    }
+
+    /// Second attempt for [`Self::report_stopped`], covering both the first
+    /// failure's log line and the retry outcome.
+    fn retry_report_stopped(&self, body: serde_json::Value, first_error: &ureq::Error) -> bool {
+        tracing::warn!(name: "emby.playback_stop.report_failed", target: "api", error = %first_error, "playback stop report failed; retrying");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        match self.post("/Sessions/Playing/Stopped").send_json(body) {
+            Ok(r) => {
+                tracing::info!(name: "emby.playback_stop.retry_reported", target: "api", http_response_status_code = r.status().as_u16(), "playback stop retry reported");
+                true
+            }
             Err(e) => {
-                tracing::warn!(name: "emby.playback_stop.report_failed", target: "api", error = %e, "playback stop report failed; retrying");
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                match self.post("/Sessions/Playing/Stopped").send_json(body) {
-                    Ok(r) => {
-                        tracing::info!(name: "emby.playback_stop.retry_reported", target: "api", http_response_status_code = r.status().as_u16(), "playback stop retry reported");
-                        true
-                    }
-                    Err(e) => {
-                        tracing::warn!(name: "emby.playback_stop.retry_failed", target: "api", error = %e, "playback stop retry failed");
-                        false
-                    }
-                }
+                tracing::warn!(name: "emby.playback_stop.retry_failed", target: "api", error = %e, "playback stop retry failed");
+                false
             }
         }
     }
@@ -240,35 +248,51 @@ impl EmbyClient {
             timeout_ms = hard_bound.as_millis(),
             "reporting playback stopped for shutdown"
         );
-        let result = mbv_net::bounded::run_with_hard_bound_or_error(
+        let result = Self::bounded_stopped_report(client, body, hard_bound);
+        let elapsed_ms = started.elapsed().as_millis();
+        Self::shutdown_report_outcome(result, elapsed_ms)
+    }
+
+    /// Runs the shutdown stop report under its hard bound, mapping the HTTP
+    /// status to a plain code so callers need no response type.
+    fn bounded_stopped_report(
+        client: Self,
+        body: serde_json::Value,
+        hard_bound: std::time::Duration,
+    ) -> Result<u16, crate::EmbyError> {
+        mbv_net::bounded::run_with_hard_bound_or_error(
             move || -> Result<_, crate::EmbyError> {
                 let status = client
                     .post("/Sessions/Playing/Stopped")
                     .send_json(body)?
                     .status();
-                Ok(status)
+                Ok(status.as_u16())
             },
             {
                 let secs = hard_bound.as_secs();
                 move || crate::EmbyError::bounded_timeout(format!("timed out after {secs}s"))
             },
             hard_bound,
-        );
-        let elapsed_ms = started.elapsed().as_millis();
+        )
+    }
+
+    fn shutdown_report_outcome(result: Result<u16, crate::EmbyError>, elapsed_ms: u128) -> bool {
         match result {
             Ok(status) => {
-                tracing::info!(name: "emby.playback_stop.shutdown_reported", target: "api", http_response_status_code = status.as_u16(), duration_ms = elapsed_ms, "playback stop reported for shutdown");
+                tracing::info!(name: "emby.playback_stop.shutdown_reported", target: "api", http_response_status_code = status, duration_ms = elapsed_ms, "playback stop reported for shutdown");
                 true
             }
-            Err(e) if e.is_bounded_timeout() => {
-                tracing::warn!(name: "emby.playback_stop.shutdown_timed_out", target: "api", duration_ms = elapsed_ms, error = %e, "playback stop shutdown report timed out");
-                false
-            }
-            Err(e) => {
-                tracing::warn!(name: "emby.playback_stop.shutdown_failed", target: "api", duration_ms = elapsed_ms, error = %e, "playback stop shutdown report failed");
-                false
-            }
+            Err(e) => Self::shutdown_report_failure(&e, elapsed_ms),
         }
+    }
+
+    fn shutdown_report_failure(error: &crate::EmbyError, elapsed_ms: u128) -> bool {
+        if error.is_bounded_timeout() {
+            tracing::warn!(name: "emby.playback_stop.shutdown_timed_out", target: "api", duration_ms = elapsed_ms, error = %error, "playback stop shutdown report timed out");
+        } else {
+            tracing::warn!(name: "emby.playback_stop.shutdown_failed", target: "api", duration_ms = elapsed_ms, error = %error, "playback stop shutdown report failed");
+        }
+        false
     }
 
     /// Register with the client's configured audio-pipe setting.

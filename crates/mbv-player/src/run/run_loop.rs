@@ -348,9 +348,7 @@ impl PlaybackRun {
                 }
             }
             ("sid", PropertyData::Str(s)) => {
-                let id = s.parse::<i64>().unwrap_or(0);
-                tracing::info!(name: "player.subtitle_id.changed", target: "player", raw_sid = ?s, sid = id, "subtitle id changed");
-                self.status.lock().unwrap().sub_id = id;
+                self.set_subtitle_id(s);
             }
             ("aid", PropertyData::Str(_)) => {
                 refresh_tracks(mpv, &self.status);
@@ -359,18 +357,16 @@ impl PlaybackRun {
                 self.status.lock().unwrap().muted = m;
             }
             ("video-params/h", PropertyData::Int64(h)) => {
-                tracing::info!(name: "player.video_height.changed", target: "player", height = h, "video height changed");
-                self.status.lock().unwrap().video_height = h;
+                self.set_video_height(h);
             }
             ("video-params/h", change) => {
-                tracing::warn!(name: "player.video_height.unexpected_type", target: "player", value = ?change, "unexpected video height property type");
+                Self::warn_unexpected_video_height(&change);
             }
             ("audio-codec-name", PropertyData::Str(s)) => {
                 self.status.lock().unwrap().audio_codec = s.to_lowercase();
             }
             ("current-tracks/video/image", PropertyData::Flag(is_img)) => {
-                tracing::info!(name: "player.video_image.changed", target: "player", is_image = is_img, "video image state changed");
-                self.status.lock().unwrap().video_is_image = is_img;
+                self.set_video_image(is_img);
             }
             ("playlist-pos", PropertyData::Int64(pos)) => {
                 self.on_playlist_pos_changed(pos, mpv_position_ticks(mpv));
@@ -380,6 +376,29 @@ impl PlaybackRun {
             }
             _ => {}
         }
+    }
+
+    /// Applies a subtitle stream id property change.
+    fn set_subtitle_id(&mut self, s: &str) {
+        let id = s.parse::<i64>().unwrap_or(0);
+        tracing::info!(name: "player.subtitle_id.changed", target: "player", raw_sid = ?s, sid = id, "subtitle id changed");
+        self.status.lock().unwrap().sub_id = id;
+    }
+
+    /// Applies a video height property change.
+    fn set_video_height(&mut self, h: i64) {
+        tracing::info!(name: "player.video_height.changed", target: "player", height = h, "video height changed");
+        self.status.lock().unwrap().video_height = h;
+    }
+
+    fn warn_unexpected_video_height(change: &PropertyData) {
+        tracing::warn!(name: "player.video_height.unexpected_type", target: "player", value = ?change, "unexpected video height property type");
+    }
+
+    /// Applies an attached-cover (video image) property change.
+    fn set_video_image(&mut self, is_img: bool) {
+        tracing::info!(name: "player.video_image.changed", target: "player", is_image = is_img, "video image state changed");
+        self.status.lock().unwrap().video_is_image = is_img;
     }
 }
 

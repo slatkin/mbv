@@ -360,41 +360,69 @@ impl App {
     /// and must actually swap the player back to local, not just show a
     /// warning while silently staying connected to the old route.
     pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_emby_model::EmbyItem) {
-        let resolved = self.resolve_route_for_play(item);
-        match (resolved, self.active_route.clone()) {
-            (Some((name, _)), Some(current)) if name == current => {
-                tracing::info!(name: "library_route.playback_route.already_active", target: "library_route", route = %name, item = %item.id, "playback route already active");
+        match self.resolve_route_for_play(item) {
+            Some((name, endpoint)) => self.apply_resolved_playback_route(item, &name, &endpoint),
+            None => self.clear_unresolved_playback_route(item),
+        }
+    }
+
+    /// Applies a resolved playback route: keep an already-active one, otherwise
+    /// connect it.
+    fn apply_resolved_playback_route(
+        &mut self,
+        item: &mbv_emby_model::EmbyItem,
+        name: &str,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) {
+        if self.active_route.as_deref() == Some(name) {
+            tracing::info!(name: "library_route.playback_route.already_active", target: "library_route", route = %name, item = %item.id, "playback route already active");
+            return;
+        }
+        let was_routed = self.active_route.is_some();
+        self.connect_playback_route(name, endpoint, was_routed);
+    }
+
+    /// Connects the resolved library route, falling back to local playback when
+    /// it is local or unreachable.
+    fn connect_playback_route(
+        &mut self,
+        name: &str,
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+        was_routed: bool,
+    ) {
+        if endpoint.is_local()
+            && (self.suspended_local.is_some()
+                || (self.home_is_local_daemon && self.is_local_daemon()))
+        {
+            self.restore_local_mode("Local playback restored");
+            return;
+        }
+        match Self::try_daemon_route_connect(endpoint, name) {
+            Ok((remote, remote_rx)) => {
+                self.switch_to_library_route(name, remote, remote_rx, endpoint);
             }
-            (Some((name, endpoint)), was_routed) => {
-                if endpoint.is_local()
-                    && (self.suspended_local.is_some()
-                        || (self.home_is_local_daemon && self.is_local_daemon()))
-                {
-                    self.restore_local_mode("Local playback restored");
-                    return;
-                }
-                match Self::try_daemon_route_connect(&endpoint, &name) {
-                    Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
-                    }
-                    Err(error) => {
-                        tracing::warn!(name: "library_route.connect.failed", target: "library_route", route = %name, endpoint = %endpoint, error = %error, "library route connection failed");
-                        let warning = format!(
-                            "\u{26a0} {name} route unreachable, using local playback (mbv.log)"
-                        );
-                        if was_routed.is_some() {
-                            self.restore_local_mode(&warning);
-                        } else {
-                            self.flash(warning, ToastSeverity::Warning);
-                        }
-                    }
+            Err(error) => {
+                tracing::warn!(name: "library_route.connect.failed", target: "library_route", route = %name, endpoint = %endpoint, error = %error, "library route connection failed");
+                let warning =
+                    format!("\u{26a0} {name} route unreachable, using local playback (mbv.log)");
+                if was_routed {
+                    self.restore_local_mode(&warning);
+                } else {
+                    self.flash(warning, ToastSeverity::Warning);
                 }
             }
-            (None, Some(current)) => {
+        }
+    }
+
+    /// No route resolved: restore local playback when one was active, otherwise
+    /// stay local.
+    fn clear_unresolved_playback_route(&mut self, item: &mbv_emby_model::EmbyItem) {
+        match self.active_route.clone() {
+            Some(current) => {
                 tracing::info!(name: "library_route.playback_route.unresolved", target: "library_route", current_route = %current, item = %item.id, "no route resolved while routed; restoring local");
                 self.restore_local_mode("Local playback restored");
             }
-            (None, None) => {
+            None => {
                 tracing::info!(name: "library_route.playback_route.unresolved", target: "library_route", item = %item.id, "no route resolved while local; staying local");
             }
         }

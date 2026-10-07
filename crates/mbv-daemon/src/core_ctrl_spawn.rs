@@ -14,19 +14,8 @@ fn ctrl_client_capabilities(
 ) -> Option<(CtrlAudiobookshelfCapabilities, bool, bool)> {
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
-            if let Err(e) = info.validate_peer() {
-                tracing::warn!(name: "daemon.ctrl_client.peer_validation_failed", target: "daemon", error = %e, "ctrl client rejected");
+            if !hello_credentials_valid(&info, control_credential) {
                 return None;
-            }
-            if let Some(control_credential) = control_credential {
-                if info.control_token.is_none() {
-                    tracing::warn!(name: "daemon.ctrl_client.control_credential_missing", target: "daemon", "ctrl client rejected: missing Control credential");
-                    return None;
-                }
-                if let Err(e) = info.validate_control_credential(control_credential) {
-                    tracing::warn!(name: "daemon.ctrl_client.control_credential_invalid", target: "daemon", error = %e, "ctrl client rejected");
-                    return None;
-                }
             }
             Some((
                 CtrlAudiobookshelfCapabilities {
@@ -48,6 +37,31 @@ fn ctrl_client_capabilities(
             None
         }
     }
+}
+
+/// Validates a decoded hello's peer identity and, when a Control credential
+/// is required, that credential — logging the specific rejection.
+fn hello_credentials_valid(info: &CtrlHello, control_credential: Option<&str>) -> bool {
+    if let Err(e) = info.validate_peer() {
+        tracing::warn!(name: "daemon.ctrl_client.peer_validation_failed", target: "daemon", error = %e, "ctrl client rejected");
+        return false;
+    }
+    match control_credential {
+        None => true,
+        Some(control_credential) => control_credential_is_valid(info, control_credential),
+    }
+}
+
+fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bool {
+    if info.control_token.is_none() {
+        tracing::warn!(name: "daemon.ctrl_client.control_credential_missing", target: "daemon", "ctrl client rejected: missing Control credential");
+        return false;
+    }
+    if let Err(e) = info.validate_control_credential(control_credential) {
+        tracing::warn!(name: "daemon.ctrl_client.control_credential_invalid", target: "daemon", error = %e, "ctrl client rejected");
+        return false;
+    }
+    true
 }
 
 fn send_admission_refusal(

@@ -8,7 +8,24 @@ impl EmbyClient {
     /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.
     pub fn get_episodes_from(&self, series_id: &ItemId, from_item_id: &ItemId) -> Vec<EmbyItem> {
         tracing::debug!(name: "emby.episodes_from.requested", target: "api", series = %series_id, from_item = %from_item_id, "requesting episodes");
-        let resp: Value = match self
+        let Some(resp) = self.request_episodes(series_id) else {
+            return vec![];
+        };
+        let Some(all) = resp["Items"].as_array() else {
+            return vec![];
+        };
+        let items = Self::episodes_starting_at(all, from_item_id);
+        if items.is_empty() {
+            return Self::fallback_episodes(all, from_item_id);
+        }
+        tracing::info!(name: "emby.episodes_from.loaded", target: "api", count = items.len(), first_item = %items[0].display_name(), "loaded episodes");
+        items
+    }
+
+    /// Fetches the episode list for `series_id`, logging (and swallowing) a
+    /// request or parse failure as `None`.
+    fn request_episodes(&self, series_id: &ItemId) -> Option<Value> {
+        match self
             .get(&format!(
                 "/Shows/{}/Episodes",
                 mbv_net::encode_path_segment(series_id.as_str())
@@ -21,23 +38,24 @@ impl EmbyClient {
             .call()
         {
             Ok(mut r) => match r.body_mut().read_json() {
-                Ok(v) => v,
+                Ok(v) => Some(v),
                 Err(e) => {
                     tracing::warn!(name: "emby.episodes_from.parse_failed", target: "api", error = %e, "failed to parse episodes response");
-                    return vec![];
+                    None
                 }
             },
             Err(e) => {
                 tracing::warn!(name: "emby.episodes_from.request_failed", target: "api", error = %e, "episodes request failed");
-                return vec![];
+                None
             }
-        };
-        let Some(all) = resp["Items"].as_array() else {
-            return vec![];
-        };
+        }
+    }
+
+    /// Returns the episodes from `all` starting at `from_item_id` (inclusive),
+    /// or an empty list when that item is not in `all`.
+    fn episodes_starting_at(all: &[Value], from_item_id: &ItemId) -> Vec<EmbyItem> {
         let mut found = false;
-        let items: Vec<EmbyItem> = all
-            .iter()
+        all.iter()
             .filter_map(|v| {
                 if found {
                     return Some(parse_item(v));
@@ -47,14 +65,15 @@ impl EmbyClient {
                     parse_item(v)
                 })
             })
-            .collect();
-        if items.is_empty() {
-            // from_item_id not in series — return everything as a fallback
-            tracing::warn!(name: "emby.episodes_from.item_not_found", target: "api", from_item = %from_item_id, "starting item not found; returning all episodes");
-            return all.iter().map(parse_item).collect();
-        }
-        tracing::info!(name: "emby.episodes_from.loaded", target: "api", count = items.len(), first_item = %items[0].display_name(), "loaded episodes");
-        items
+            .collect()
+    }
+
+    /// Fallback for a `from_item_id` that is not in the series: report it and
+    /// return every episode.
+    fn fallback_episodes(all: &[Value], from_item_id: &ItemId) -> Vec<EmbyItem> {
+        // from_item_id not in series — return everything as a fallback
+        tracing::warn!(name: "emby.episodes_from.item_not_found", target: "api", from_item = %from_item_id, "starting item not found; returning all episodes");
+        all.iter().map(parse_item).collect()
     }
 
     // ── Remote session control ───────────────────────────────────────────────

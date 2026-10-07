@@ -238,21 +238,36 @@ fn resolve_overlay_fonts() -> PathBuf {
 /// hwdec policy). Set after init so a user's mpv.conf cannot override them.
 fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
     if config.headless {
-        let _ = mpv.set_property("vo", "null");
-        let _ = mpv.set_property("force-window", "no");
-        // #656: with vo=null, attached cover art would still be selected and
-        // decoded (video/image=true per audio track) for no benefit.
-        let _ = mpv.set_property("audio-display", "no");
-        // Audio-sized demuxer cache: a headless host has no video window to
-        // justify the video-sized budget below.
-        if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
-            tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_forward", error = %e, "failed to configure mpv cache");
-        }
-        if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
-            tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_back", error = %e, "failed to configure mpv cache");
-        }
+        configure_headless_caches(mpv);
         return;
     }
+    configure_video_caches(mpv, config);
+    if !config.use_mpv_config
+        && let Err(e) = mpv.set_property("hwdec", "auto-safe")
+    {
+        tracing::warn!(name: "player.hardware_decode.configure_failed", target: "player", error = %e, "failed to configure hardware decode policy");
+    }
+}
+
+/// Headless budgets: no video window, so the audio-sized demuxer cache and an
+/// audio-only display policy replace the video-sized budgets.
+fn configure_headless_caches(mpv: &Mpv) {
+    let _ = mpv.set_property("vo", "null");
+    let _ = mpv.set_property("force-window", "no");
+    // #656: with vo=null, attached cover art would still be selected and
+    // decoded (video/image=true per audio track) for no benefit.
+    let _ = mpv.set_property("audio-display", "no");
+    // Audio-sized demuxer cache: a headless host has no video window to
+    // justify the video-sized budget below.
+    if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
+        tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_forward", error = %e, "failed to configure mpv cache");
+    }
+    if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
+        tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "headless_back", error = %e, "failed to configure mpv cache");
+    }
+}
+
+fn configure_video_caches(mpv: &Mpv, config: &MpvRunConfig) {
     if let Err(e) = mpv.set_property(
         "demuxer-max-bytes",
         format!("{}M", config.video_cache_forward_mb),
@@ -264,11 +279,6 @@ fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
         format!("{}M", config.video_cache_back_mb),
     ) {
         tracing::warn!(name: "player.cache.configure_failed", target: "player", cache = "video_back", error = %e, "failed to configure mpv cache");
-    }
-    if !config.use_mpv_config
-        && let Err(e) = mpv.set_property("hwdec", "auto-safe")
-    {
-        tracing::warn!(name: "player.hardware_decode.configure_failed", target: "player", error = %e, "failed to configure hardware decode policy");
     }
 }
 
@@ -308,11 +318,23 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
         return false;
     }
     let rate = config.audio_pipe_samplerate.to_string();
-    let (bitdepth, audio_format) = match config.audio_pipe_bitdepth {
+    let (bitdepth, audio_format) = audio_pipe_format(config.audio_pipe_bitdepth);
+    let failed = set_audio_pipe_properties(mpv, path, audio_format, &rate);
+    log_audio_pipe_outcome(path, &rate, bitdepth, &failed)
+}
+
+/// Maps the configured bit depth onto the mpv audio format string.
+fn audio_pipe_format(bitdepth: u8) -> (u8, &'static str) {
+    match bitdepth {
         16 => (16u8, "s16"),
         24 => (24u8, "s24"),
         _ => (32u8, "s32"),
-    };
+    }
+}
+
+/// Sets the PCM output properties, collecting `property: error` strings for
+/// every one mpv rejected.
+fn set_audio_pipe_properties(mpv: &Mpv, path: &str, audio_format: &str, rate: &str) -> Vec<String> {
     let mut failed = Vec::new();
     if let Err(e) = mpv.set_property("ao", "pcm") {
         failed.push(format!("ao: {}", mpv_err_str(&e)));
@@ -334,12 +356,16 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
     if let Err(e) = mpv.set_property("audio-channels", "stereo") {
         failed.push(format!("audio-channels: {}", mpv_err_str(&e)));
     }
-    if let Err(e) = mpv.set_property("audio-samplerate", rate.as_str()) {
+    if let Err(e) = mpv.set_property("audio-samplerate", rate) {
         failed.push(format!("audio-samplerate: {}", mpv_err_str(&e)));
     }
     if let Err(e) = mpv.set_property("audio-swresample-o", "resampler=soxr,precision=28") {
         failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
     }
+    failed
+}
+
+fn log_audio_pipe_outcome(path: &str, rate: &str, bitdepth: u8, failed: &[String]) -> bool {
     if failed.is_empty() {
         tracing::info!(name: "player.audio_pipe.configured", target: "player", { sample_rate_hz = %rate, bit_depth = bitdepth, file.path = %path }, "writing stereo PCM; blocks until a reader attaches");
         true
@@ -349,23 +375,34 @@ fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
     }
 }
 
-pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError> {
-    let ipc_path = mbv_config::mpv_ipc_path();
-    let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
-    let ipc_existed = Path::new(&ipc_path).exists();
+/// Removes a leftover IPC socket and records what was found.
+fn prepare_ipc_socket(ipc_path: &str) {
+    let ipc_existed = Path::new(ipc_path).exists();
     if ipc_existed {
-        let _ = std::fs::remove_file(&ipc_path);
+        let _ = std::fs::remove_file(ipc_path);
         tracing::info!(name: "player.ipc_socket.stale_removed", target: "player", { file.path = %ipc_path }, "removed stale IPC socket");
     }
     tracing::info!(name: "player.ipc_socket.checked", target: "player", { file.path = %ipc_path, existed = ipc_existed }, "checked IPC socket path");
+}
 
-    let no_scripts = config.no_scripts;
-    let use_mpv_config = config.use_mpv_config;
+/// Records which overlay-script policy this run uses. `no_scripts` wins over
+/// `use_mpv_config` (both disable mbv's own scripts, for different reasons).
+fn log_overlay_script_policy(no_scripts: bool, use_mpv_config: bool) {
     if no_scripts {
         tracing::warn!(name: "player.overlay_script.disabled", target: "player", { file.path = %mbv_config::osc_script_source().chosen.display() }, "mpv overlay scripts disabled by config and will not be handed to mpv");
     } else if use_mpv_config {
         tracing::warn!(name: "player.overlay_script.user_managed", target: "player", "user mpv config manages scripts; mbv hands mpv no overlay scripts");
     }
+}
+
+pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError> {
+    let ipc_path = mbv_config::mpv_ipc_path();
+    let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
+    prepare_ipc_socket(&ipc_path);
+
+    let no_scripts = config.no_scripts;
+    let use_mpv_config = config.use_mpv_config;
+    log_overlay_script_policy(no_scripts, use_mpv_config);
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
         macro_rules! opt {

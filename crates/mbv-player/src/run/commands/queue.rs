@@ -161,24 +161,36 @@ impl PlaybackRun {
             return;
         }
         if new_items.iter().any(|slot| slot.item.is_audiobookshelf()) {
-            let Some(active_item) = self.active_item().cloned() else {
-                return;
-            };
-            let prepared = match self.prepare_item(&active_item) {
-                Ok(prepared) => prepared,
-                Err(error) => {
-                    tracing::warn!(name: "player.active_file.transition_failed", target: "player", error = %error, "active-file transition failed");
-                    return;
-                }
-            };
-            if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
+            self.promote_to_active_file(new_items, mpv);
+            return;
+        }
+        self.append_items_via_mpv(new_items, mpv);
+    }
+
+    /// Audiobookshelf append with no active file: install the current item's
+    /// projection as the active file first, then append.
+    fn promote_to_active_file(&mut self, new_items: Vec<ExecSlot>, mpv: &Mpv) {
+        let Some(active_item) = self.active_item().cloned() else {
+            return;
+        };
+        let prepared = match self.prepare_item(&active_item) {
+            Ok(prepared) => prepared,
+            Err(error) => {
                 tracing::warn!(name: "player.active_file.transition_failed", target: "player", error = %error, "active-file transition failed");
                 return;
             }
-            self.append_items_to_queue(new_items);
-            self.active_file = true;
+        };
+        if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
+            tracing::warn!(name: "player.active_file.transition_failed", target: "player", error = %error, "active-file transition failed");
             return;
         }
+        self.append_items_to_queue(new_items);
+        self.active_file = true;
+    }
+
+    /// Appends a non-audiobookshelf set straight to mpv's playlist, using
+    /// Emby's current resume positions.
+    fn append_items_via_mpv(&mut self, new_items: Vec<ExecSlot>, mpv: &Mpv) {
         // Design D1: every Emby video start position in the appended set is
         // overwritten with Emby's current value before its `start=` option is
         // baked. ponytail: a natural mpv advance still uses this load-time

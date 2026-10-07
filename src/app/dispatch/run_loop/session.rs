@@ -213,30 +213,7 @@ impl App {
         // interval). After that window lapses we treat it as paused/stopped.
         let api_active = self.remote.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
         let seek_pending = now < self.remote.remote_seek_pending_until;
-        if seek_pending && !item_changed {
-            // A seek was just dispatched; hold the optimistic position until
-            // the API catches up. Once the API reports the new position (or
-            // the window expires) we fall through to normal reconciliation.
-            tracing::debug!(name: "sessions.position.held", target: "sessions", api_position_seconds = s.position_s, remote_position_seconds = self.remote.remote_pos_s, "holding position while seek is pending");
-        } else if item_changed {
-            tracing::debug!(name: "sessions.position.reset", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "resetting position after item change");
-            self.remote.remote_pos_s = s.position_s;
-            self.remote.remote_api_pos_advanced_at = now;
-            self.remote.remote_seek_pending_until =
-                now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
-        } else if api_active {
-            let elapsed = self.remote.remote_pos_at.elapsed().as_secs_f64();
-            let extrapolated = Self::extrapolated_remote_position(
-                self.remote.remote_pos_s,
-                self.remote.remote_pos_at.elapsed(),
-            );
-            let new_pos = s.position_s.max(extrapolated);
-            tracing::debug!(name: "sessions.position.extrapolated", target: "sessions", api_position_seconds = s.position_s, paused = s.is_paused, elapsed_seconds = elapsed, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = new_pos, "extrapolated remote session position");
-            self.remote.remote_pos_s = new_pos;
-        } else {
-            tracing::debug!(name: "sessions.position.idle", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "remote session position is idle");
-            self.remote.remote_pos_s = s.position_s;
-        }
+        self.apply_remote_position_estimate(s, now, item_changed, seek_pending, api_active);
         if !seek_pending || item_changed {
             self.remote.remote_pos_at = now;
         }
@@ -261,6 +238,61 @@ impl App {
         } else {
             self.remote.runtime_zero_since = None;
         }
+    }
+
+    /// Dispatches the monotonic position estimate for one poll. Each arm is a
+    /// one-event helper so no function carries more than three tracing events.
+    fn apply_remote_position_estimate(
+        &mut self,
+        s: &mbv_emby::SessionInfo,
+        now: Instant,
+        item_changed: bool,
+        seek_pending: bool,
+        api_active: bool,
+    ) {
+        if seek_pending && !item_changed {
+            self.hold_remote_position_for_pending_seek(s);
+        } else if item_changed {
+            self.reset_remote_position_after_item_change(s, now);
+        } else if api_active {
+            self.advance_extrapolated_remote_position(s);
+        } else {
+            self.idle_remote_position(s);
+        }
+    }
+
+    /// A seek was just dispatched; hold the optimistic position until the API
+    /// catches up. Once the API reports the new position (or the window
+    /// expires) reconciliation falls through to the other arms.
+    fn hold_remote_position_for_pending_seek(&self, s: &mbv_emby::SessionInfo) {
+        tracing::debug!(name: "sessions.position.held", target: "sessions", api_position_seconds = s.position_s, remote_position_seconds = self.remote.remote_pos_s, "holding position while seek is pending");
+    }
+
+    /// The playing item changed; re-anchor the estimate to the API position.
+    fn reset_remote_position_after_item_change(&mut self, s: &mbv_emby::SessionInfo, now: Instant) {
+        tracing::debug!(name: "sessions.position.reset", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "resetting position after item change");
+        self.remote.remote_pos_s = s.position_s;
+        self.remote.remote_api_pos_advanced_at = now;
+        self.remote.remote_seek_pending_until =
+            now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
+    }
+
+    /// Interpolate forward from the last anchor, never behind the API position.
+    fn advance_extrapolated_remote_position(&mut self, s: &mbv_emby::SessionInfo) {
+        let elapsed = self.remote.remote_pos_at.elapsed().as_secs_f64();
+        let extrapolated = Self::extrapolated_remote_position(
+            self.remote.remote_pos_s,
+            self.remote.remote_pos_at.elapsed(),
+        );
+        let new_pos = s.position_s.max(extrapolated);
+        tracing::debug!(name: "sessions.position.extrapolated", target: "sessions", api_position_seconds = s.position_s, paused = s.is_paused, elapsed_seconds = elapsed, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = new_pos, "extrapolated remote session position");
+        self.remote.remote_pos_s = new_pos;
+    }
+
+    /// The API position is not advancing; track it verbatim.
+    fn idle_remote_position(&mut self, s: &mbv_emby::SessionInfo) {
+        tracing::debug!(name: "sessions.position.idle", target: "sessions", api_position_seconds = s.position_s, previous_remote_position_seconds = self.remote.remote_pos_s, remote_position_seconds = s.position_s, "remote session position is idle");
+        self.remote.remote_pos_s = s.position_s;
     }
 
     /// The missing-connected-session half of `SessionEvent::Loaded`: count
