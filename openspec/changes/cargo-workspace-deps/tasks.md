@@ -7,8 +7,8 @@
 
 ## 2. Strip non-basic features from workspace definitions
 
-- [ ] 2.1 Rewrite workspace definitions for `ureq`, `serde`, `uuid`, `tungstenite`, `nix`, `time`, `textwrap`, `ratatui-image`, `image` to `default-features = false` with no non-basic enabled features, and re-declare each removed feature on the member(s) that actually exercise it (call-site inspection per design decision 3); verify each touched member compiles via `cargo check -p <package>`.
-- [ ] 2.2 Confirm no member manifest outside section 1 still declares a third-party version directly (only `version.workspace`-style or path deps plus per-member `features` remain) by re-running the issue's evidence greps and verifying zero hits; verify `cargo check --workspace --all-targets` passes.
+- [x] 2.1 Rewrite workspace definitions for `ureq`, `serde`, `uuid`, `tungstenite`, `nix`, `time`, `textwrap`, `ratatui-image`, `image` to `default-features = false` with no non-basic enabled features, and re-declare each removed feature on the member(s) that actually exercise it (call-site inspection per design decision 3); verify each touched member compiles via `cargo check -p <package>`.
+- [x] 2.2 Confirm no member manifest outside section 1 still declares a third-party version directly (only `version.workspace`-style or path deps plus per-member `features` remain) by re-running the issue's evidence greps and verifying zero hits; verify `cargo check --workspace --all-targets` passes.
 
 ## 3. Integration verification
 
