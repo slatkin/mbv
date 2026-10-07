@@ -1,7 +1,10 @@
-use std::{error::Error, ffi::NulError, fmt, io};
+use std::{backtrace::Backtrace, error::Error, ffi::NulError, fmt, io};
 
 #[derive(Debug)]
-pub struct PlayerError(PlayerErrorKind);
+pub struct PlayerError {
+    kind: PlayerErrorKind,
+    backtrace: Backtrace,
+}
 
 #[derive(Debug)]
 enum PlayerErrorKind {
@@ -42,51 +45,84 @@ enum PlayerErrorKind {
 }
 
 impl PlayerError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn remove_directory(path: String, source: io::Error) -> Self {
-        Self(PlayerErrorKind::RemoveDirectory { path, source })
+        Self {
+            kind: PlayerErrorKind::RemoveDirectory { path, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn remove_path(path: String, source: io::Error) -> Self {
-        Self(PlayerErrorKind::RemovePath { path, source })
+        Self {
+            kind: PlayerErrorKind::RemovePath { path, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn inspect_directory(path: String, source: io::Error) -> Self {
-        Self(PlayerErrorKind::InspectDirectory { path, source })
+        Self {
+            kind: PlayerErrorKind::InspectDirectory { path, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn create_directory(path: String, source: io::Error) -> Self {
-        Self(PlayerErrorKind::CreateDirectory { path, source })
+        Self {
+            kind: PlayerErrorKind::CreateDirectory { path, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn write_config(path: String, source: io::Error) -> Self {
-        Self(PlayerErrorKind::WriteConfig { path, source })
+        Self {
+            kind: PlayerErrorKind::WriteConfig { path, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn pipe_not_fifo(path: &str) -> Self {
-        Self(PlayerErrorKind::PipeNotFifo(path.to_owned()))
+        Self {
+            kind: PlayerErrorKind::PipeNotFifo(path.to_owned()),
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn make_pipe(path: &str, source: io::Error) -> Self {
-        Self(PlayerErrorKind::MakePipe {
-            path: path.to_owned(),
-            source,
-        })
+        Self {
+            kind: PlayerErrorKind::MakePipe {
+                path: path.to_owned(),
+                source,
+            },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn set_audio_device(device: &str, source: libmpv2::Error) -> Self {
-        Self(PlayerErrorKind::SetAudioDevice {
-            device: device.to_owned(),
-            source,
-        })
+        Self {
+            kind: PlayerErrorKind::SetAudioDevice {
+                device: device.to_owned(),
+                source,
+            },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn mpv_init(message: String, source: libmpv2::Error) -> Self {
-        Self(PlayerErrorKind::MpvInit { message, source })
+        Self {
+            kind: PlayerErrorKind::MpvInit { message, source },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
-        match &self.0 {
+        match &self.kind {
             PlayerErrorKind::RemoveDirectory { .. } => "player.remove_config_directory",
             PlayerErrorKind::RemovePath { .. } => "player.remove_config_path",
             PlayerErrorKind::InspectDirectory { .. } => "player.inspect_config_directory",
@@ -103,7 +139,7 @@ impl PlayerError {
 
 impl fmt::Display for PlayerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
+        match &self.kind {
             PlayerErrorKind::RemoveDirectory { path, source } => {
                 write!(
                     f,
@@ -150,7 +186,7 @@ impl fmt::Display for PlayerError {
 
 impl Error for PlayerError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0 {
+        match &self.kind {
             PlayerErrorKind::RemoveDirectory { source, .. }
             | PlayerErrorKind::RemovePath { source, .. }
             | PlayerErrorKind::InspectDirectory { source, .. }
@@ -167,6 +203,9 @@ impl Error for PlayerError {
 
 impl From<NulError> for PlayerError {
     fn from(source: NulError) -> Self {
-        Self(PlayerErrorKind::PipePath(source))
+        Self {
+            kind: PlayerErrorKind::PipePath(source),
+            backtrace: Backtrace::capture(),
+        }
     }
 }

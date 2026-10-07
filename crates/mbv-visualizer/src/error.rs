@@ -1,7 +1,10 @@
-use std::{error::Error, fmt, io, sync::mpsc};
+use std::{backtrace::Backtrace, error::Error, fmt, io, sync::mpsc};
 
 #[derive(Debug)]
-pub struct VisualizerError(VisualizerErrorKind);
+pub struct VisualizerError {
+    kind: VisualizerErrorKind,
+    backtrace: Backtrace,
+}
 
 #[derive(Debug)]
 enum VisualizerErrorKind {
@@ -19,36 +22,57 @@ enum VisualizerErrorKind {
 }
 
 impl VisualizerError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn startup_failed(message: String) -> Self {
-        Self(VisualizerErrorKind::StartupFailed(message))
+        Self {
+            kind: VisualizerErrorKind::StartupFailed(message),
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn worker_stopped() -> Self {
-        Self(VisualizerErrorKind::WorkerStopped)
+        Self {
+            kind: VisualizerErrorKind::WorkerStopped,
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn buffer_poisoned() -> Self {
-        Self(VisualizerErrorKind::BufferPoisoned)
+        Self {
+            kind: VisualizerErrorKind::BufferPoisoned,
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn capture_frame(message: &'static str) -> Self {
-        Self(VisualizerErrorKind::CaptureFrame(message))
+        Self {
+            kind: VisualizerErrorKind::CaptureFrame(message),
+            backtrace: Backtrace::capture(),
+        }
     }
 
     pub(crate) fn operation<E>(name: &'static str, message: &'static str, source: E) -> Self
     where
         E: Error + Send + Sync + 'static,
     {
-        Self(VisualizerErrorKind::Operation {
-            name,
-            message,
-            source: Box::new(source),
-        })
+        Self {
+            kind: VisualizerErrorKind::Operation {
+                name,
+                message,
+                source: Box::new(source),
+            },
+            backtrace: Backtrace::capture(),
+        }
     }
 
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
-        match &self.0 {
+        match &self.kind {
             VisualizerErrorKind::Spawn(_) => "visualizer.spawn",
             VisualizerErrorKind::StartupFailed(_) => "visualizer.startup",
             VisualizerErrorKind::StartupTimeout(_) => "visualizer.startup_timeout",
@@ -62,7 +86,7 @@ impl VisualizerError {
 
 impl fmt::Display for VisualizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
+        match &self.kind {
             VisualizerErrorKind::Spawn(error) => {
                 write!(f, "failed to start PipeWire worker: {error}")
             }
@@ -88,7 +112,7 @@ impl fmt::Display for VisualizerError {
 
 impl Error for VisualizerError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0 {
+        match &self.kind {
             VisualizerErrorKind::Spawn(error) => Some(error),
             VisualizerErrorKind::StartupTimeout(error) => Some(error),
             VisualizerErrorKind::Operation { source, .. } => Some(source.as_ref()),
@@ -102,12 +126,18 @@ impl Error for VisualizerError {
 
 impl From<io::Error> for VisualizerError {
     fn from(source: io::Error) -> Self {
-        Self(VisualizerErrorKind::Spawn(source))
+        Self {
+            kind: VisualizerErrorKind::Spawn(source),
+            backtrace: Backtrace::capture(),
+        }
     }
 }
 
 impl From<mpsc::RecvTimeoutError> for VisualizerError {
     fn from(source: mpsc::RecvTimeoutError) -> Self {
-        Self(VisualizerErrorKind::StartupTimeout(source))
+        Self {
+            kind: VisualizerErrorKind::StartupTimeout(source),
+            backtrace: Backtrace::capture(),
+        }
     }
 }

@@ -22,7 +22,18 @@ stable crate-qualified dotted name for each kind (the log `error.type`
 value). Every error type SHALL implement
 `Display` (one summary sentence), `std::error::Error` with the upstream cause
 available via `source()`, and `From` for each upstream error it converts
-(`M-FROM-ERROR`). No crate SHALL introduce `anyhow`, `thiserror`, or `eyre`.
+(`M-FROM-ERROR`). Every error type SHALL carry a `Backtrace` captured at
+construction with `Backtrace::capture()` and expose it through `backtrace()`;
+because a backtrace is neither clonable nor comparable, error types SHALL NOT
+derive `Clone`, `PartialEq`, or `Eq`. No crate SHALL introduce `anyhow`,
+`thiserror`, or `eyre`.
+
+#### Scenario: A failure carries where it came from
+
+- **WHEN** a domain error is constructed
+- **THEN** it holds the backtrace captured at that construction site,
+  retrievable through `backtrace()`, and it pays no stack-walk cost unless
+  `RUST_BACKTRACE` asks for one
 
 #### Scenario: Caller distinguishes failure kinds without parsing text
 

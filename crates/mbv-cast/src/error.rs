@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct CastError {
     kind: CastErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -59,11 +60,18 @@ enum WorkerKind {
 }
 
 impl CastError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     fn new(kind: CastErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -75,6 +83,7 @@ impl CastError {
             kind,
             message: format!("{context}: {source}"),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -178,6 +187,7 @@ impl CastError {
             kind: CastErrorKind::Dispatch(DispatchKind::EmbyPlaybackInfo),
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -198,6 +208,7 @@ impl CastError {
             kind: CastErrorKind::Dispatch(DispatchKind::AudiobookshelfSession),
             message: format!("\"{title}\" Audiobookshelf session failed: {source}"),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -307,6 +318,7 @@ impl From<mdns_sd::Error> for CastError {
             kind: CastErrorKind::Discovery,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }

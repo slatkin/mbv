@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct UiModelError {
     kind: UiModelErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -13,11 +14,18 @@ enum UiModelErrorKind {
 }
 
 impl UiModelError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub fn operation(message: impl Into<String>) -> Self {
         Self {
             kind: UiModelErrorKind::Operation,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -31,6 +39,7 @@ impl UiModelError {
             kind: UiModelErrorKind::Operation,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 

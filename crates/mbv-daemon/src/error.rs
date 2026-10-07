@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct DaemonLibError {
     kind: DaemonLibErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -16,6 +17,12 @@ enum DaemonLibErrorKind {
 }
 
 impl DaemonLibError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn owner_context(message: impl Into<String>) -> Self {
         Self::new(DaemonLibErrorKind::OwnerContext, message)
     }
@@ -29,6 +36,7 @@ impl DaemonLibError {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -40,6 +48,7 @@ impl DaemonLibError {
             kind,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
