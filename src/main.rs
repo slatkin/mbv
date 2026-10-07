@@ -233,6 +233,8 @@ fn print_usage() {
     println!("                             <endpoint> instead of owning a local Player.");
     println!("      --pin                  Run the TUI docked in a Wayland layer-shell");
     println!("                             panel instead of this terminal.");
+    println!("      --toggle               Show or hide the running pinned panel");
+    println!("                             (bind this to a compositor key).");
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
 }
@@ -285,6 +287,14 @@ fn pre_config_startup() -> Option<StartupArgs> {
 
     if has_flag(&args, "-q") {
         stop_running_instance();
+        return None;
+    }
+
+    // `--toggle` asks the running pinned panel to show or hide; like `-q`, it
+    // is handled before applog, config migration and `load_config` (design
+    // D3). It exits 1 itself when the request fails.
+    if has_flag(&args, "--toggle") {
+        pin::toggle_running();
         return None;
     }
 
@@ -352,12 +362,15 @@ fn main() {
     // Decide and start the pinned panel after `load_config` and before any
     // terminal setup or output, including the remote-client connection line
     // (design D3/D5). The decision is the parsed flag alone: the environment
-    // and the `Panel::start` result enter as start failures, never as decision
-    // inputs. `report_start_failure` has already exited when there is no
-    // terminal to fall back to.
+    // and the instance-socket bind enter as start failures, never as decision
+    // inputs. When a pinned mbv already runs on this display, the running
+    // panel was asked to show and this process exits 0 with no TUI and no
+    // second panel (design D2). `report_start_failure` has already exited
+    // when there is no terminal to fall back to.
     let pinned_panel = if startup.pin_requested {
         match pin::start(&config.panel) {
-            Ok(panel) => Some(panel),
+            Ok(pin::PinLaunch::Started(panel)) => Some(panel),
+            Ok(pin::PinLaunch::ShownExisting) => return,
             Err(error) => {
                 pin::report_start_failure(&error);
                 None
