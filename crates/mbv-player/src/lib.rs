@@ -1,11 +1,7 @@
 mod error;
 pub use error::PlayerError;
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-    mpsc,
-};
+use std::sync::{Arc, atomic::Ordering, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{

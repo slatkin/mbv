@@ -62,10 +62,11 @@ fn cached_colour_image(width: u32, height: u32) -> CachedImage {
 fn overlay_app() -> App {
     let mut app = make_queue_app(1);
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 0;
-        status.queue_len = 1;
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 0;
+            status.queue_len = 1;
+        });
     };
     let mut picker = Picker::halfblocks();
     picker.set_protocol_type(ProtocolType::Kitty);

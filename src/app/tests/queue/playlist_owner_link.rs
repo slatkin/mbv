@@ -21,7 +21,7 @@ fn app_with_suspended_home() -> (
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (home, home_rx, home_cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(make_items(1), 0);
-    home.unified_queue.lock().unwrap().as_mut().unwrap().lineage = QueueLineage(7);
+    home.update_unified_queue_state_for_test(|state| state.lineage = QueueLineage(7));
     app.player = mbv_player::PlayerProxy::from_remote(home, false);
     app.player_rx = home_rx;
 

@@ -489,7 +489,7 @@ impl App {
         if !self.player.is_remote_disconnected() {
             return false;
         }
-        let status = self.player.status.lock().unwrap();
+        let status = self.player.status_snapshot();
         let active = status.active;
         let current_idx = status.current_idx;
         drop(status);
@@ -591,7 +591,7 @@ impl App {
         // both Feed and Emby items: jump to an active slot or
         // cold-start the full canonical queue.
         let scope = self.viewed_queue_scope();
-        let st = self.player.status.lock().unwrap();
+        let st = self.player.status_snapshot();
         let active = st.active;
         let current_idx = st.current_idx;
         drop(st);

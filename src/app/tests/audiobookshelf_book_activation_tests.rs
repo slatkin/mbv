@@ -104,10 +104,10 @@ fn chapter_activation_on_the_active_book_seeks_without_resubmitting() {
         0,
         0,
     );
-    let mut status = app.player.status.lock().unwrap();
-    status.active = true;
-    status.current_idx = 0;
-    drop(status);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+    });
     while cmd_rx.try_recv().is_ok() {}
 
     app.activate_audiobookshelf_book_row_target(Some(mbv_ui_msg::BookChapterTarget::new(

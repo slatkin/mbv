@@ -28,7 +28,7 @@ impl App {
             return;
         }
         let player_vol = {
-            let s = self.player.status.lock().unwrap();
+            let s = self.player.status_snapshot();
             s.active.then(|| {
                 u8::try_from(s.volume.clamp(0, 200)).expect("clamped player volume fits in u8")
             })
@@ -161,7 +161,7 @@ impl App {
     fn handle_paused_changed(&mut self, paused: bool) {
         // Persist Feed position on pause (one write per pause event).
         let (active, current_idx) = {
-            let status = self.player.status.lock().unwrap();
+            let status = self.player.status_snapshot();
             (status.active, status.current_idx)
         };
         if paused
@@ -416,7 +416,7 @@ impl App {
             index
         } else {
             tracing::warn!(name: "player.track_changed.slot_missing", target: "player", slot = ?target_slot_id, "track change has no live slot; skipping activation");
-            let status = self.player.status.lock().unwrap();
+            let status = self.player.status_snapshot();
             if status.active { status.current_idx } else { 0 }
         };
         if !self.queue_cursor_held_by_user() {
@@ -485,7 +485,7 @@ impl App {
     ) -> bool {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
-        *self.player.status.lock().unwrap() = unified.status.clone();
+        self.player.set_status(unified.status.clone());
         let scope = self.playing_queue_scope();
         let held = self.queue_cursor_held_by_user();
         self.queue_for_scope_mut(scope).adopt(
@@ -506,7 +506,7 @@ impl App {
         // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,
         // so it cannot both dismiss the menu and raise DaemonLost here.
         let last_playing_title = {
-            let idx = self.player.status.lock().unwrap().current_idx;
+            let idx = self.player.status_snapshot().current_idx;
             self.playback_queue()
                 .item_at(idx)
                 .map(|item| item.title().to_string())
@@ -558,7 +558,7 @@ impl App {
             && let mbv_queue::QueueItem::Feed(ref entry) = slot.item
             && entry.feed_id.is_some()
         {
-            let pos_ticks = self.player.status.lock().unwrap().position_ticks;
+            let pos_ticks = self.player.status_snapshot().position_ticks;
             self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
         }
     }

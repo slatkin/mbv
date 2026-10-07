@@ -2,6 +2,7 @@ use super::*;
 use crate::run::StopAction;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use rstest::rstest;
+use std::sync::Mutex;
 
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────
 

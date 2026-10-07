@@ -16,7 +16,9 @@ use std::sync::{Arc, Mutex, mpsc};
 /// `main.rs::run_remote_app` before the constructor ran). Moved here so App
 /// owns the resulting handle and can `rebind` it later if
 /// `switch_to_direct_remote` / `restore_local_mode` swap which target owns
-/// playback.
+/// playback. Each closure gets its own cheap `RemotePlayer` clone (shared
+/// connection state), so MPRIS reads status and the disconnect signal
+/// through behavior, never through shared-state handles.
 ///
 /// Test builds leave `mpris` unset (`build()` initializes it to None):
 /// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
@@ -25,11 +27,13 @@ use std::sync::{Arc, Mutex, mpsc};
 /// (issue #757). Tests leave `mpris` unset.
 #[cfg(not(test))]
 fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::MprisHandle {
-    let mpris_remote = remote.clone();
+    let status_remote = remote.clone();
+    let send_remote = remote.clone();
+    let disconnect_remote = remote.clone();
     mbv_desktop::mpris::start(
-        std::sync::Arc::clone(&mpris_remote.status),
-        move |transport| mpris_remote.send_transport(transport),
-        Some(remote.disconnected_flag()),
+        move || status_remote.status_snapshot(),
+        move |transport| send_remote.send_transport(transport),
+        Some(move || disconnect_remote.is_disconnected()),
         crate::config::image_disk_cache_path,
     )
 }

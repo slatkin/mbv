@@ -130,13 +130,13 @@ fn the_collapse_race_frame_paints_the_stale_wide_transport_within_the_snapped_bu
     app.panel_focus = PanelFocus::Library;
     app.terminal_width = 120;
     app.terminal_height = 51;
-    let mut status = app.player.status.lock().unwrap();
-    status.active = true;
-    status.queue_len = 3;
-    status.current_idx = 0;
-    status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
-    status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
-    drop(status);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.queue_len = 3;
+        status.current_idx = 0;
+        status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
+        status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
+    });
     let mut harness = TickHarness::new(app);
     let mut terminal = Terminal::new(TestBackend::new(120, 51)).unwrap();
     terminal

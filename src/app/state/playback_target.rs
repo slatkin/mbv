@@ -179,7 +179,7 @@ impl App {
                 paused: remote.is_paused,
             }
         } else {
-            let s = self.player.status.lock().unwrap();
+            let s = self.player.status_snapshot();
             let active_idx = s.current_idx;
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
             mbv_ui_model::playback::PlaybackState {
@@ -270,9 +270,10 @@ mod now_playing_status_tests {
     }
 
     fn set_player(app: &App, active: bool, paused: bool) {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = active;
-        status.paused = paused;
+        app.player.update_status(|status| {
+            status.active = active;
+            status.paused = paused;
+        });
     }
 
     #[test]

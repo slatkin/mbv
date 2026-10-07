@@ -86,7 +86,7 @@ impl App {
         // Preserve the remote owner's playback unless the daemon lifetime
         // policy below requests its shutdown.
         let (was_playing, current_idx, position_ticks, last_valid_pos) = {
-            let st = self.player.status.lock().unwrap();
+            let st = self.player.status_snapshot();
             (
                 st.active,
                 st.current_idx,

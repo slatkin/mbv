@@ -54,12 +54,13 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
     }
     app.panel_focus = PanelFocus::Queue;
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.queue_len = 3;
-        status.current_idx = 0;
-        status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
-        status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
+        app.player.update_status(|status| {
+            status.active = true;
+            status.queue_len = 3;
+            status.current_idx = 0;
+            status.position_ticks = 45 * mbv_emby_model::TICKS_PER_SECOND;
+            status.runtime_ticks = 90 * mbv_emby_model::TICKS_PER_SECOND;
+        });
     };
     app
 }
@@ -381,7 +382,7 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     let mut app = make_app_stub();
     // Collapsed means idle: the stub player starts active (a remote-owner
     // stand-in), which would paint the transport this test expects hidden.
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     app.terminal_width = 80;
     app.terminal_height = 40;
     let mut harness = TickHarness::new(app);

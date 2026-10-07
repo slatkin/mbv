@@ -38,7 +38,10 @@ fn ui_root_router_command_opens_help() {
 #[test]
 fn unhandled_space_fires_the_playback_candidate_once() {
     let mut model = Model::new(make_app_stub());
-    model.app.player.status.lock().unwrap().active = true;
+    model
+        .app
+        .player
+        .update_status(|status| status.active = true);
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
@@ -59,7 +62,10 @@ fn unhandled_space_fires_the_playback_candidate_once() {
 #[test]
 fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     let mut model = Model::new(make_app_stub());
-    model.app.player.status.lock().unwrap().active = true;
+    model
+        .app
+        .player
+        .update_status(|status| status.active = true);
     // A focused media list holding an active Visual selection consumes Space
     // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
@@ -88,7 +94,10 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 #[test]
 fn first_escape_falls_through_and_second_dispatches_the_stop_candidate() {
     let mut model = Model::new(make_app_stub());
-    model.app.player.status.lock().unwrap().active = true;
+    model
+        .app
+        .player
+        .update_status(|status| status.active = true);
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 

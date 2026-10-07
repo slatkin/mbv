@@ -57,7 +57,7 @@ impl App {
                 }
             }
         };
-        *self.player.subtitle_prefs.lock().unwrap() = prefs;
+        self.player.set_subtitle_prefs(prefs);
         self.push_subtitle_prefs();
     }
 
@@ -83,13 +83,13 @@ impl App {
                 return;
             }
         };
-        *self.player.subtitle_prefs.lock().unwrap() = prefs;
+        self.player.set_subtitle_prefs(prefs);
         self.push_subtitle_prefs();
     }
 
-    /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
+    /// Clone the current subtitle prefs and notify the player thread.
     pub(in crate::app) fn push_subtitle_prefs(&self) {
-        let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
+        let prefs = self.player.subtitle_prefs_snapshot();
         let _ = self
             .player
             .send_command(mbv_ctrl::player::PlayerCommand::SetSubtitlePrefs {
@@ -107,11 +107,7 @@ impl App {
             (config.subtitle_mode.clone(), config.clone())
         };
         self.player
-            .subtitle_prefs
-            .lock()
-            .unwrap()
-            .mode
-            .clone_from(&new_mode);
+            .update_subtitle_prefs(|prefs| prefs.mode.clone_from(&new_mode));
         self.push_subtitle_prefs();
         if let Err(e) =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)

@@ -290,7 +290,7 @@ impl Model {
         };
         let cfg = self.app.config.lock().unwrap().clone();
         {
-            let mut p = self.app.player.subtitle_prefs.lock().unwrap();
+            let mut p = self.app.player.subtitle_prefs_snapshot();
             p.subtitle_lang.clone_from(&cfg.subtitle_lang);
             p.audio_lang.clone_from(&cfg.audio_lang);
         };

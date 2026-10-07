@@ -211,12 +211,14 @@ impl App {
 
     pub(in crate::app) fn rebind_mpris_to_current_player(&self) {
         if let Some(handle) = &self.mpris {
-            let sender = self.player.transport_sender();
+            let status_player = self.player.clone();
+            let send_player = self.player.clone();
+            let disconnect_player = self.player.clone();
             mbv_desktop::mpris::rebind(
                 handle,
-                std::sync::Arc::clone(&self.player.status),
-                move |transport| sender(transport),
-                self.player.disconnected_flag(),
+                move || status_player.status_snapshot(),
+                move |transport| send_player.send_transport(transport),
+                Some(move || disconnect_player.is_remote_disconnected()),
             );
         }
     }

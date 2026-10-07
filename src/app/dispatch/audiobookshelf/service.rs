@@ -26,7 +26,7 @@ impl App {
     }
 
     fn stop_active_audiobookshelf_playback(&mut self) {
-        let active_index = self.player.status.lock().unwrap().current_idx;
+        let active_index = self.player.status_snapshot().current_idx;
         let active_is_audiobookshelf = self
             .playback_queue()
             .item_at(active_index)
@@ -129,7 +129,7 @@ impl App {
 
     fn clear_audiobookshelf_queue_memory(&mut self) {
         // If the currently active slot is Audiobookshelf, stop playback.
-        let active_index = self.player.status.lock().unwrap().current_idx;
+        let active_index = self.player.status_snapshot().current_idx;
         let active_is_abs = self
             .playback_queue()
             .item_at(active_index)
@@ -382,7 +382,7 @@ impl App {
         &self,
         progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
     ) -> bool {
-        let active_index = self.player.status.lock().unwrap().current_idx;
+        let active_index = self.player.status_snapshot().current_idx;
         self.playback_queue()
             .item_at(active_index)
             .and_then(mbv_queue::QueueItem::as_audiobookshelf)

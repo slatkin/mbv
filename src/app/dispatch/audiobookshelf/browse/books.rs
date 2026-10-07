@@ -191,7 +191,7 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let active_index = self.player.status.lock().unwrap().current_idx;
+        let active_index = self.player.status_snapshot().current_idx;
         let active_book_id = self
             .playback_queue()
             .item_at(active_index)

@@ -257,9 +257,10 @@ fn entering_queue_focus_selects_now_playing_item() {
     app.local_view.adopt_items(make_items(3), 0);
     app.local_view.set_cursor(2);
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 1;
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 1;
+        });
     };
 
     app.set_panel_focus(PanelFocus::Queue);

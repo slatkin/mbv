@@ -414,7 +414,7 @@ impl Model {
             }
             QueueIntent::PlayNow => {
                 let (active, current_idx) = {
-                    let status = self.app.player.status.lock().unwrap();
+                    let status = self.app.player.status_snapshot();
                     (status.active, status.current_idx)
                 };
                 if active {
@@ -541,12 +541,12 @@ mod tests {
         });
         let mut app = make_app_stub();
         app.local_view = crate::app::QueueView::from_snapshot(&snapshot);
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = 0;
-        status.position_ticks = 500;
-        status.runtime_ticks = 1_000;
-        drop(status);
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 0;
+            status.position_ticks = 500;
+            status.runtime_ticks = 1_000;
+        });
 
         let displayed = app.displayed_playback_state();
         let rows = mbv_components::queue::queue_media_rows(
@@ -628,9 +628,10 @@ mod tests {
         app.panel_focus = PanelFocus::Queue;
         app.images.configure_protocol(None, true);
         {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 0;
+            app.player.update_status(|status| {
+                status.active = true;
+                status.current_idx = 0;
+            });
         };
         let mut model = Model::new(app);
 
@@ -648,7 +649,10 @@ mod tests {
         assert_eq!(model.app.images.fetch_work_snapshot(), fetch_work);
 
         // A new now-playing key reserves exactly one new key.
-        model.app.player.status.lock().unwrap().current_idx = 1;
+        model
+            .app
+            .player
+            .update_status(|status| status.current_idx = 1);
         model.sync_queue();
         assert!(model.app.images.is_loading("id1:QB"));
     }
@@ -660,9 +664,10 @@ mod tests {
         app.images.configure_protocol(None, true);
         app.visual_slot_hidden = true;
         {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 0;
+            app.player.update_status(|status| {
+                status.active = true;
+                status.current_idx = 0;
+            });
         };
         let mut model = Model::new(app);
 

@@ -157,7 +157,7 @@ fn audiobookshelf_service_removal_and_replacement_wait_for_owner_queue_snapshot(
         .unwrap();
     app.local_view
         .adopt_queue_items_with_active(mixed.clone(), 2, 2);
-    app.player.status.lock().unwrap().active = true;
+    app.player.update_status(|status| status.active = true);
     app.remote_view = Some(crate::app::state::queue_view::QueueView::default());
     app.remote_view
         .as_mut()

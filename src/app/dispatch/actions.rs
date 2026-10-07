@@ -141,7 +141,7 @@ impl App {
     }
 
     pub(in crate::app) fn playback_indicator_target(&self) -> PlaybackTarget {
-        let local_active = self.player.status.lock().unwrap().active;
+        let local_active = self.player.status_snapshot().active;
         if local_active {
             PlaybackTarget::Local(LocalPlaybackTarget)
         } else {

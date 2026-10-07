@@ -10,7 +10,7 @@ fn attached_app() -> App {
     // The stub player starts active (a remote-owner stand-in); this
     // scenario watches a remote session, so park the local player idle
     // to reach the session-reported now-playing path.
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     app.connected_session_id = Some("session".into());
     app.connected_session_state = Some(mbv_emby::test_support::make_session("Client", "Emby"));
     app.terminal_width = 160;
@@ -124,7 +124,7 @@ fn session_item_change_selects_owner_reported_queue_slot_and_unblocks_removal() 
     let cmd_rx = live_owner_channel(&mut app);
     // The live stub starts active on row 0; this scenario watches the remote
     // session's now-playing item, so park the local player idle again.
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     app.remove_from_queue(0);
     assert!(
         app.pending_overlay.is_none(),

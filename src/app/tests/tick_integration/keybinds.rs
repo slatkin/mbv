@@ -156,7 +156,7 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
 #[test]
 fn shift_n_default_fires_next_track_through_tick() {
     let app = make_app_stub();
-    app.player.status.lock().unwrap().active = true;
+    app.player.update_status(|status| status.active = true);
     let mut harness = TickHarness::new(app);
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('N'),

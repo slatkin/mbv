@@ -1,13 +1,16 @@
 use mbv_ids::ItemId;
 
-use super::{Arc, AtomicBool, Duration, EmbyClient, EmbyItem, EndFileReason, ExecSlot, Mutex};
+use super::{Arc, Duration, EmbyClient, EmbyItem, EndFileReason, ExecSlot};
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus, SubtitlePrefs};
 
-#[derive(Debug)]
+/// Client-side view of a `RemotePlayer`.
+///
+/// The shared-state internals of the wrapped `RemotePlayer` stay hidden:
+/// callers read state through `status_snapshot` / `subtitle_prefs_snapshot`
+/// and act through the send methods, never through the shared mutexes.
+#[derive(Clone, Debug)]
 pub struct PlayerProxy {
     pub always_play_next: bool,
-    pub status: Arc<Mutex<PlayerStatus>>,
-    pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     remote: mbv_remote_player::RemotePlayer,
 }
 
@@ -16,8 +19,6 @@ impl PlayerProxy {
     pub fn from_remote(remote: mbv_remote_player::RemotePlayer, always_play_next: bool) -> Self {
         Self {
             always_play_next,
-            status: Arc::clone(&remote.status),
-            subtitle_prefs: Arc::clone(&remote.subtitle_prefs),
             remote,
         }
     }
@@ -150,15 +151,46 @@ impl PlayerProxy {
         self.remote.is_shutdown_announced()
     }
 
+    /// Snapshot of the owner-reported playback state. Locks internally and
+    /// returns an owned value; callers never touch the shared mutex.
     #[must_use]
-    pub fn disconnected_flag(&self) -> Option<Arc<AtomicBool>> {
-        Some(self.remote.disconnected_flag())
+    pub fn status_snapshot(&self) -> PlayerStatus {
+        self.remote.status_snapshot()
     }
 
+    /// Replace the whole owner-reported playback state (used when an owner
+    /// event carries a fresh full status).
+    pub fn set_status(&self, status: PlayerStatus) {
+        self.remote.set_status(status);
+    }
+
+    /// In-place update of the owner-reported playback state.
+    pub fn update_status(&self, apply: impl FnOnce(&mut PlayerStatus)) {
+        self.remote.update_status(apply);
+    }
+
+    /// Snapshot of the negotiated subtitle/audio preferences.
     #[must_use]
-    pub fn transport_sender(&self) -> Arc<dyn Fn(mbv_ctrl::TransportCommand) + Send + Sync> {
-        let remote = self.remote.clone();
-        Arc::new(move |transport| remote.send_transport(transport))
+    pub fn subtitle_prefs_snapshot(&self) -> SubtitlePrefs {
+        self.remote.subtitle_prefs_snapshot()
+    }
+
+    /// Replace the stored subtitle/audio preferences (client-side sync path;
+    /// the owner learns of the change through the next preference command).
+    pub fn set_subtitle_prefs(&self, prefs: SubtitlePrefs) {
+        self.remote.set_subtitle_prefs(prefs);
+    }
+
+    /// In-place update of the stored subtitle/audio preferences.
+    pub fn update_subtitle_prefs(&self, apply: impl FnOnce(&mut SubtitlePrefs)) {
+        self.remote.update_subtitle_prefs(apply);
+    }
+
+    /// Dispatch a transport command (MPRIS/tray) through the remote owner:
+    /// `Step` becomes a guarded playback intent, everything else goes over
+    /// the legacy command channel.
+    pub fn send_transport(&self, transport: mbv_ctrl::TransportCommand) {
+        self.remote.send_transport(transport);
     }
 }
 

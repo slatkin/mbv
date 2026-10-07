@@ -174,7 +174,7 @@ impl App {
         if self.connected_session_id.is_some() {
             return (true, true);
         }
-        let st = self.player.status.lock().unwrap();
+        let st = self.player.status_snapshot();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 

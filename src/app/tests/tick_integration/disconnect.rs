@@ -29,11 +29,12 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     let (event_tx, event_rx) = mpsc::channel();
     app.suspended_local.as_mut().unwrap().player_rx = event_rx;
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.position_ticks = 9876;
-        status.current_idx = 1;
-        status.active = true;
-        status.title = "Remote status".into();
+        app.player.update_status(|status| {
+            status.position_ticks = 9876;
+            status.current_idx = 1;
+            status.active = true;
+            status.title = "Remote status".into();
+        });
     };
     let snapshot = |items: Vec<mbv_emby_model::EmbyItem>, source: mbv_queue::QueueSource| {
         let mut state = emby_unified_state(&items, 0);
@@ -65,7 +66,7 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
         app.local_view.source(),
         mbv_queue::QueueSource::Series
     ));
-    let status = app.player.status.lock().unwrap();
+    let status = app.player.status_snapshot();
     assert_eq!(status.position_ticks, 9876);
     assert_eq!(status.current_idx, 1);
     assert!(status.active);

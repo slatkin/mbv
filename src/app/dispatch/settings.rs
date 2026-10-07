@@ -221,7 +221,8 @@ impl App {
             c.subtitle_mode = next_subtitle_mode(&c.subtitle_mode).to_string();
             c.subtitle_mode.clone()
         };
-        self.player.subtitle_prefs.lock().unwrap().mode = new_mode;
+        self.player
+            .update_subtitle_prefs(|prefs| prefs.mode = new_mode);
         self.push_subtitle_prefs();
     }
 
@@ -232,7 +233,8 @@ impl App {
             c.subtitle_lang.clone_from(&new);
             new
         };
-        self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
+        self.player
+            .update_subtitle_prefs(|prefs| prefs.subtitle_lang = new_lang);
         self.push_subtitle_prefs();
     }
 
@@ -243,7 +245,8 @@ impl App {
             c.audio_lang.clone_from(&new);
             new
         };
-        self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
+        self.player
+            .update_subtitle_prefs(|prefs| prefs.audio_lang = new_lang);
         self.push_subtitle_prefs();
     }
 

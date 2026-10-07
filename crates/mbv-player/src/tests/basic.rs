@@ -1,6 +1,7 @@
 use super::*;
 use mbv_emby_model::EmbyImageTags;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
+use std::sync::Mutex;
 
 // ── shift_index_for_move ──────────────────────────────────────────────────
 

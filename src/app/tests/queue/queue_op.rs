@@ -276,7 +276,7 @@ fn rapid_repeated_removals_each_act_on_the_answered_state() {
     app.local_view.adopt_items(make_items(4), 0);
     // Nothing is playing: the stub player starts active on row 0, which
     // would route row-0 removals into the now-playing confirm flow.
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     // One answer per removal, each holding the queue as the owner keeps it
     // after applying that removal (slot identities re-based per snapshot).
     tx.send(applied(1, snapshot_from_base(3, 100))).unwrap();
@@ -318,7 +318,7 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     app.local_view.adopt_items(make_items(4), 0);
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     // Owner answer: the third entry (index 2) is gone; the entry that
     // followed it now sits at index 2 with slot 102.
     let mut remaining = make_items(4);
@@ -357,7 +357,7 @@ fn undoing_a_removal_past_the_end_appends_at_the_end() {
     let (mut app, cmd_rx) = answered_local_daemon_app();
     let tx = inject_player_rx(&mut app);
     app.local_view.adopt_items(make_items(2), 0);
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     // Owner answer: the last entry is gone; one entry remains (slot 100).
     tx.send(applied(1, snapshot_from_base(1, 100))).unwrap();
 

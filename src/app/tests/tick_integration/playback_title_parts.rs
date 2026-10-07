@@ -37,10 +37,11 @@ fn title_parts_app(active_idx: usize) -> App {
     movie.id = "movie-one".into();
     app.local_view.adopt_items(vec![track, movie], 0);
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.current_idx = active_idx;
-        status.queue_len = 2;
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = active_idx;
+            status.queue_len = 2;
+        });
     };
     app
 }
@@ -100,10 +101,7 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
         .model_mut()
         .app
         .player
-        .status
-        .lock()
-        .unwrap()
-        .current_idx = 1;
+        .update_status(|status| status.current_idx = 1);
     step_tick(&mut harness);
     assert_eq!(
         queue_panel(&harness)
@@ -128,10 +126,7 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
         .model_mut()
         .app
         .player
-        .status
-        .lock()
-        .unwrap()
-        .current_idx = 0;
+        .update_status(|status| status.current_idx = 0);
     step_tick(&mut harness);
     assert_eq!(
         strip(&harness).title_parts_for_test().as_ref(),

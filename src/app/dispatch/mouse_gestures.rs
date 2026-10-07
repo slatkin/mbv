@@ -34,7 +34,7 @@ impl App {
             self.do_session_command(move |c| c.session_seek(&id, ticks));
             return;
         }
-        let runtime_ticks = self.player.status.lock().unwrap().runtime_ticks;
+        let runtime_ticks = self.player.status_snapshot().runtime_ticks;
         if runtime_ticks == 0 {
             return;
         }
@@ -45,7 +45,7 @@ impl App {
         // Mark a pending Feed seek so the next OutputStarted persists
         // the resulting position (confirmed seek completion).
         let active_index = {
-            let status = self.player.status.lock().unwrap();
+            let status = self.player.status_snapshot();
             status.active.then_some(status.current_idx)
         };
         if let Some(slot) = active_index.and_then(|index| self.playback_queue().slots().get(index))

@@ -7,7 +7,7 @@ use mbv_ui_model::ui_util::take_chars;
 
 impl LocalPlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(app: &mut App) {
-        let paused = !app.player.status.lock().unwrap().paused;
+        let paused = !app.player.status_snapshot().paused;
         app.flash(
             if paused {
                 "Pause requested".to_string()
@@ -76,7 +76,7 @@ impl LocalPlaybackTarget {
 
     pub(in crate::app) fn cycle_audio(app: &mut App) {
         let (tracks, current_id) = {
-            let s = app.player.status.lock().unwrap();
+            let s = app.player.status_snapshot();
             (s.audio_tracks.clone(), s.audio_id)
         };
         if tracks.is_empty() {
@@ -103,9 +103,9 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn adjust_volume(app: &mut App, delta: i64) {
-        let active = app.player.status.lock().unwrap().active;
+        let active = app.player.status_snapshot().active;
         if active {
-            let st = app.player.status.lock().unwrap();
+            let st = app.player.status_snapshot();
             let v = u8::try_from((st.volume + delta).clamp(0, st.volume_max)).unwrap_or(u8::MAX);
             drop(st);
             let _ = app
@@ -121,7 +121,7 @@ impl LocalPlaybackTarget {
 
     pub(in crate::app) fn cycle_sub(app: &mut App) {
         let (active, tracks, current_id) = {
-            let s = app.player.status.lock().unwrap();
+            let s = app.player.status_snapshot();
             (s.active, s.sub_tracks.clone(), s.sub_id)
         };
         if !active {
@@ -139,7 +139,7 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn displayed_volume(app: &App) -> i64 {
-        let s = app.player.status.lock().unwrap();
+        let s = app.player.status_snapshot();
         if s.active {
             if s.muted { 0 } else { s.volume }
         } else if app.mute_on {
@@ -157,7 +157,7 @@ impl LocalPlaybackTarget {
     }
 
     pub(in crate::app) fn indicator_data(app: &App) -> Option<IndicatorData> {
-        let pst = app.player.status.lock().unwrap();
+        let pst = app.player.status_snapshot();
         if !pst.active {
             return None;
         }

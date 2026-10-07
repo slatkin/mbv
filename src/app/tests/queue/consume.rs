@@ -16,9 +16,10 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
         transition: None,
     });
     {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
+        app.player.update_status(|st| {
+            st.active = true;
+            st.current_idx = 0;
+        });
     };
     app.ask_confirm(ConfirmModal {
         message: String::new(),

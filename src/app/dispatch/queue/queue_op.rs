@@ -232,7 +232,7 @@ impl App {
     ) {
         if own_answer {
             if scope == self.playing_queue_scope() {
-                *self.player.status.lock().unwrap() = unified.status.clone();
+                self.player.set_status(unified.status.clone());
             }
             self.queue_for_scope_mut(scope).adopt(
                 unified,

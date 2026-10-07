@@ -80,7 +80,7 @@ impl App {
             return false;
         }
         let (active, current_idx) = {
-            let s = self.player.status.lock().unwrap();
+            let s = self.player.status_snapshot();
             (s.active, s.current_idx)
         };
         if active {

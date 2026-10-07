@@ -17,7 +17,7 @@ impl App {
     }
 
     fn clear_emby_memory(&mut self) {
-        let active_index = self.player.status.lock().unwrap().current_idx;
+        let active_index = self.player.status_snapshot().current_idx;
         let active_is_feed = self
             .playback_queue()
             .item_at(active_index)

@@ -79,7 +79,7 @@ fn queue_focused_harness() -> TickHarness {
 fn active_queue_harness() -> TickHarness {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
-    app.player.status.lock().unwrap().active = true;
+    app.player.update_status(|status| status.active = true);
     TickHarness::new(app)
 }
 

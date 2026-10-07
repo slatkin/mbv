@@ -128,7 +128,7 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     add_emby_movie_library(&mut app);
     let before_queue = app.local_view.total_queue_len();
     let before_nav = app.libs[0].nav_stack.len();
-    let before_active = app.player.status.lock().unwrap().active;
+    let before_active = app.player.status_snapshot().active;
 
     app.activate_audiobookshelf_episode(0, 0);
     app.enqueue_audiobookshelf_episode(0, 0);
@@ -144,7 +144,7 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
         "activation seams must not navigate the Emby library"
     );
     assert_eq!(
-        app.player.status.lock().unwrap().active,
+        app.player.status_snapshot().active,
         before_active,
         "activation seams must not change playback state"
     );

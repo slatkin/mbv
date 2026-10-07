@@ -31,7 +31,7 @@ fn cycle_sub_local_idle_cycles_subtitle_mode_not_a_track() {
     let _xdg = XdgHomeGuard::new();
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     let before = app.config.lock().unwrap().subtitle_mode.clone();
 
     app.cycle_sub();
@@ -50,10 +50,11 @@ fn cycle_sub_local_active_does_not_fall_back_to_subtitle_mode() {
 
     let mut app = crate::app::tests::make_app_stub();
     {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.sub_tracks = vec![(1, "English".to_string(), false)];
-        status.sub_id = 0;
+        app.player.update_status(|status| {
+            status.active = true;
+            status.sub_tracks = vec![(1, "English".to_string(), false)];
+            status.sub_id = 0;
+        });
     };
     let before = app.config.lock().unwrap().subtitle_mode.clone();
 

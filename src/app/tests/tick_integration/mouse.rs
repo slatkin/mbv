@@ -390,7 +390,7 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     // The stub player starts active (a remote-owner stand-in), which would
     // route the volume intent through the player status instead of the
     // shell's idle `ui_volume` this test stages.
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     let mut harness = TickHarness::new(app);
     // The panels mount in the first sync pass from paint-free chrome
     // geometry; draw with them mounted, then sync + draw again -- the

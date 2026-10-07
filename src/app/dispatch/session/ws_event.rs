@@ -38,19 +38,19 @@ impl App {
                 let _ = self.player.send_command(PlayerCommand::Seek(secs));
             }
             WsEvent::SetVolume(v) => {
-                let vol_max = self.player.status.lock().unwrap().volume_max;
+                let vol_max = self.player.status_snapshot().volume_max;
                 let _ = self
                     .player
                     .send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max)));
             }
             WsEvent::VolumeUp => {
-                let st = self.player.status.lock().unwrap();
+                let st = self.player.status_snapshot();
                 let v = (st.volume + 5).min(st.volume_max);
                 drop(st);
                 let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::VolumeDown => {
-                let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
+                let v = self.player.status_snapshot().volume.saturating_sub(5);
                 let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::SetMute(muted) => {
@@ -59,7 +59,7 @@ impl App {
                 self.save_prefs();
             }
             WsEvent::ToggleMute => {
-                let muted = !self.player.status.lock().unwrap().muted;
+                let muted = !self.player.status_snapshot().muted;
                 self.mute_on = muted;
                 let _ = self.player.send_command(PlayerCommand::SetMute(muted));
                 self.save_prefs();
@@ -70,9 +70,7 @@ impl App {
             WsEvent::SetSub(index) => {
                 let sid = self
                     .player
-                    .status
-                    .lock()
-                    .unwrap()
+                    .status_snapshot()
                     .subtitle_stream_index_to_mpv_id(index);
                 if let Some(sid) = sid {
                     let _ = self.player.send_command(PlayerCommand::SetSub(sid));

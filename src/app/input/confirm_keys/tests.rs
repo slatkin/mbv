@@ -200,7 +200,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
 fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     app.local_view.adopt_items(vec![audio("existing")], 0);
     app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
@@ -216,7 +216,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     );
     assert_eq!(queue_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().cursor(), 0);
-    assert!(!app.player.status.lock().unwrap().active);
+    assert!(!app.player.status_snapshot().active);
 }
 
 /// D6 cancellation: a dismiss key at the first prompt also clears the stored
@@ -349,7 +349,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player.status.lock().unwrap().active = false;
+    app.player.update_status(|status| status.active = false);
     app.local_view.adopt_items(vec![audio("existing")], 0);
 
     app.execute_context_action(
@@ -380,7 +380,7 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     assert!(!app.queue_deferrals.has_gated_replacement());
     assert_eq!(queue_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().cursor(), 0);
-    assert!(!app.player.status.lock().unwrap().active);
+    assert!(!app.player.status_snapshot().active);
 }
 
 /// Row 3.4: an empty target queue runs a routed shuffle and a playlist load

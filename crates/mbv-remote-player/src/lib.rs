@@ -62,9 +62,9 @@ pub enum ShutdownResponse {
 
 #[derive(Clone, Debug)]
 pub struct RemotePlayer {
-    pub status: Arc<Mutex<PlayerStatus>>,
-    pub subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
-    pub unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
+    status: Arc<Mutex<PlayerStatus>>,
+    subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
+    unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
@@ -127,7 +127,11 @@ impl RemotePlayer {
     /// though `status` itself isn't guaranteed to be updated synchronously
     /// with the disconnect (an "expected" disconnect, e.g. an Emby Remote
     /// takeover, never sends a `Stopped` event -- see the reader thread in
-    /// `connect_endpoint`).
+    /// `connect_endpoint`). This is the one deliberate smart-pointer
+    /// exposure on this type (M-AVOID-WRAPPERS, issue #893): the flag must
+    /// be shared with an independent polling thread, so an owned `bool`
+    /// accessor alone cannot serve that reader. Everything else reads
+    /// through `is_disconnected()` / `status_snapshot()`.
     #[must_use]
     pub fn disconnected_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.disconnected)
@@ -486,6 +490,72 @@ impl RemotePlayer {
         Ok(op)
     }
 
+    /// Snapshot of the owner-reported playback state. Locks internally and
+    /// returns an owned value; callers never touch the shared mutex.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `status` mutex is poisoned: a previous owner panicked
+    /// while holding it.
+    #[must_use]
+    pub fn status_snapshot(&self) -> PlayerStatus {
+        self.status.lock().unwrap().clone()
+    }
+
+    /// Replace the whole owner-reported playback state (used when an owner
+    /// event carries a fresh full status).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `status` mutex is poisoned: a previous owner panicked
+    /// while holding it.
+    pub fn set_status(&self, status: PlayerStatus) {
+        *self.status.lock().unwrap() = status;
+    }
+
+    /// In-place update of the owner-reported playback state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `status` mutex is poisoned: a previous owner panicked
+    /// while holding it.
+    pub fn update_status(&self, apply: impl FnOnce(&mut PlayerStatus)) {
+        apply(&mut self.status.lock().unwrap());
+    }
+
+    /// Snapshot of the negotiated subtitle/audio preferences. Locks
+    /// internally and returns an owned value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `subtitle_prefs` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[must_use]
+    pub fn subtitle_prefs_snapshot(&self) -> mbv_ctrl::player::SubtitlePrefs {
+        self.subtitle_prefs.lock().unwrap().clone()
+    }
+
+    /// Replace the stored subtitle/audio preferences (client-side sync path;
+    /// the owner learns of the change through the next preference command).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `subtitle_prefs` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    pub fn set_subtitle_prefs(&self, prefs: mbv_ctrl::player::SubtitlePrefs) {
+        *self.subtitle_prefs.lock().unwrap() = prefs;
+    }
+
+    /// In-place update of the stored subtitle/audio preferences.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `subtitle_prefs` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    pub fn update_subtitle_prefs(&self, apply: impl FnOnce(&mut mbv_ctrl::player::SubtitlePrefs)) {
+        apply(&mut self.subtitle_prefs.lock().unwrap());
+    }
+
     /// # Panics
     ///
     /// Panics if the `unified_queue` mutex is poisoned: a previous owner
@@ -493,6 +563,24 @@ impl RemotePlayer {
     #[must_use]
     pub fn unified_queue_state(&self) -> Option<mbv_ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
+    }
+
+    /// Test-support seam: in-place edit of the cached unified queue state
+    /// (`None` stays `None`), for stubs that must present owner state the
+    /// fake connection never delivers over ctrl.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `unified_queue` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn update_unified_queue_state_for_test(
+        &self,
+        apply: impl FnOnce(&mut mbv_ctrl::UnifiedQueueStateData),
+    ) {
+        if let Some(state) = self.unified_queue.lock().unwrap().as_mut() {
+            apply(state);
+        }
     }
 
     #[cfg(any(test, feature = "test"))]

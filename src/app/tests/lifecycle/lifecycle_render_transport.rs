@@ -67,10 +67,11 @@ fn transport_prev_next(
         app.connected_session_id = Some("session-1".into());
     }
     {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = active;
-        st.queue_len = queue_len;
-        st.current_idx = current_idx;
+        app.player.update_status(|st| {
+            st.active = active;
+            st.queue_len = queue_len;
+            st.current_idx = current_idx;
+        });
     };
     assert_eq!(app.transport_prev_next_available(), expected);
 }

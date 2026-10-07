@@ -49,7 +49,7 @@ impl App {
 
     fn visualizer_should_run(&self) -> bool {
         let audio_pipe_enabled = self.config.lock().unwrap().audio_pipe_enabled;
-        let active = self.player.status.lock().unwrap().active;
+        let active = self.player.status_snapshot().active;
         self.visualizer_enabled
             && self.connected_session_id.is_none()
             && !self.is_cast_attached()
@@ -88,7 +88,7 @@ mod tests {
         app.visualizer_enabled = true;
         // The shared stub status starts active; idle is the precondition
         // this test names.
-        app.player.status.lock().unwrap().active = false;
+        app.player.update_status(|status| status.active = false);
 
         app.sync_visualizer();
 
@@ -101,7 +101,7 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
         app.visual_slot_hidden = true;
-        app.player.status.lock().unwrap().active = true;
+        app.player.update_status(|status| status.active = true);
 
         app.sync_visualizer();
 
@@ -116,7 +116,7 @@ mod tests {
     fn direct_remote_playback_allows_local_pipewire() {
         let mut app = crate::app::tests::make_remote_app_stub(Vec::new(), Vec::new());
         app.visualizer_enabled = true;
-        app.player.status.lock().unwrap().active = true;
+        app.player.update_status(|status| status.active = true);
 
         assert!(app.visualizer_should_run());
     }
@@ -125,7 +125,7 @@ mod tests {
     fn attached_cast_target_blocks_the_visualizer_gate() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
-        app.player.status.lock().unwrap().active = true;
+        app.player.update_status(|status| status.active = true);
         assert!(app.visualizer_should_run());
 
         app.attach_cast("device-1".to_string());

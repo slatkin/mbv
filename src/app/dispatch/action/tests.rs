@@ -180,8 +180,8 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
 fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
     let mut app = make_remote_app_stub(make_items(1), make_items(1));
     app.player
+        .remote()
         .disconnected_flag()
-        .unwrap()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     app.play_item(make_item("Track", "Audio"));

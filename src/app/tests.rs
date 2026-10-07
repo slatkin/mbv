@@ -199,7 +199,7 @@ fn apply_app_stub_defaults(app: &mut App) {
 pub(crate) fn live_owner_channel(app: &mut App) -> std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd> {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-    remote.status.lock().unwrap().volume_max = 100;
+    remote.update_status(|status| status.volume_max = 100);
     app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app.player_rx = player_rx;
     cmd_rx
@@ -266,7 +266,7 @@ pub(crate) fn make_built_app() -> App {
     use std::sync::Mutex;
 
     let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    remote.status.lock().unwrap().volume_max = 100;
+    remote.update_status(|status| status.volume_max = 100);
     let (_, ws_rx) = std::sync::mpsc::channel();
     let (_, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
