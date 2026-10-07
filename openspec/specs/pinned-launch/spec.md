@@ -71,13 +71,13 @@ The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`,
 `cols` (integer 1 through 65535, default 40), `cols_expanded` (integer 1 through 65535, default 120),
 `gutter_top`, `gutter_bottom`, `gutter_left`, `gutter_right` (integers in pixels, may be negative,
 default 0), `accent` (boolean, default `true`), `accent_color` (`"#RRGGBB"` or `"RRGGBB"`, default
-`"#dabc7f"`), `accent_width` (integer pixels 1 through 65535, default 1) and `cover` (boolean,
-default `false`). An out-of-range or malformed value SHALL fall back to its default with a logged
-warning, without changing the other keys. The F2 settings screen SHALL provide a Panel page with
-one row per value except `cover`: `Side` cycles between left and right, `Accent` toggles on and
-off, `Accent color` cycles through a fixed colour list that always includes the configured value,
-and the numeric rows step down and up by 1, or by 10 with Shift, within their ranges. `cover` is
-read from `config.toml` only. Layout semantics (docking, reservation, covering, negative gutters,
+`"#dabc7f"`) and `accent_width` (integer pixels 1 through 65535, default 1). An out-of-range or
+malformed value SHALL fall back to its default with a logged warning, without changing the other
+keys. A `cover` key left in the section by an earlier version SHALL be ignored without a warning.
+The F2 settings screen SHALL provide a Panel page with one row per value: `Side` cycles between
+left and right, `Accent` toggles on and off, `Accent color` cycles through a fixed colour list that
+always includes the configured value, and the numeric rows step down and up by 1, or by 10 with
+Shift, within their ranges. Layout semantics (docking, reservation, covering, negative gutters,
 validation) are those of the `pinwin-panel` capability.
 
 While pinned, a change to `Cols` SHALL switch the panel to its collapsed width and a change to
@@ -114,8 +114,8 @@ an accent row SHALL NOT touch the running panel.
 - **THEN** `#123456` is one of the values the row cycles through
 
 #### Scenario: Malformed cover value
-- **WHEN** `config.toml` sets `cover = "yes"`
-- **THEN** `cover` falls back to `false` with a logged warning, and the other `[panel]` keys keep their values
+- **WHEN** `config.toml` still sets `cover = "yes"` or `cover = true` under `[panel]`
+- **THEN** the key is ignored without a warning, and the other `[panel]` keys keep their values
 
 ### Requirement: Panel libraries stay out of the daemon crates
 The pinwin library and its Wayland, xkbcommon and fontconfig stack SHALL be linked only into the
@@ -130,9 +130,10 @@ directly or transitively. No mbv binary SHALL link GTK or gtk4-layer-shell.
 mbv SHALL provide a configurable keybind action, `pinned_width_toggle` (default `Ctrl+e`, Global
 section), that switches the running pinned panel between its collapsed width (`cols`) and its
 expanded width (`cols_expanded`), keeping `side` and the gutters. The switch SHALL resize the
-running panel without restarting mbv, and the space reserved beside tiled windows SHALL follow the
-new width. Which width is active SHALL NOT be saved: every pinned launch SHALL start at the
-collapsed width. If the panel rejects the other width, a warning toast SHALL name the reason and
+running panel without restarting mbv. Expanding SHALL draw the panel over the tiled windows
+without moving them, and collapsing SHALL return to the reserved strip without moving them (see
+Panel covering mode). Which width is active SHALL NOT be saved: every pinned launch SHALL start at
+the collapsed width. If the panel rejects the other width, a warning toast SHALL name the reason and
 the panel SHALL stay at its current width. When mbv is not running in a pinned panel, the action
 SHALL show a neutral toast saying it needs a pinned launch and change nothing. The width toggle
 SHALL change only the width: the stored panel mode SHALL be left exactly as it was, so the
@@ -143,11 +144,11 @@ not alter the width SHALL apply in one step.
 
 #### Scenario: Expand
 - **WHEN** mbv runs in the panel at its collapsed width and the user presses `Ctrl+e`
-- **THEN** the panel animates to `cols_expanded` columns and tiled windows reflow beside it
+- **THEN** the panel animates to `cols_expanded` columns over the tiled windows, and no tiled window moves
 
 #### Scenario: Collapse
 - **WHEN** mbv runs in the panel at its expanded width and the user presses `Ctrl+e`
-- **THEN** the panel resizes to `cols` columns
+- **THEN** the panel resizes to `cols` columns, and no tiled window moves
 
 #### Scenario: Launch starts collapsed
 - **WHEN** the user quits mbv while expanded and starts `mbv --pin` again
@@ -184,35 +185,6 @@ saying it applies on the next `mbv --pin` launch.
 - **WHEN** mbv runs in the panel and the user toggles `Accent` in F2
 - **THEN** the value is saved, the panel is unchanged, and a neutral toast says the change applies on the next `mbv --pin` launch
 
-### Requirement: Panel covering mode
-`mbv --pin` SHALL build the panel layout in pinwin's covering mode when `[panel] cover` is true:
-the panel draws over the tiled windows and the compositor reserves no space beside it. When
-`cover` is false, the default, the layout SHALL use pinwin's pushing mode, so the compositor
-reserves a strip and tiled windows move aside. The choice SHALL be made where the layout is
-built; mbv SHALL provide no runtime toggle for it. The same setting SHALL govern a hidden panel,
-with no setting of its own: a hidden pushing panel releases its strip and a shown one takes it
-back, while hiding or showing a covering panel moves no tiled window.
-
-#### Scenario: Default pushes
-- **WHEN** `mbv --pin` starts with no `cover` key in `config.toml`
-- **THEN** the compositor reserves a strip beside the panel and tiled windows move aside
-
-#### Scenario: Covering draws over tiles
-- **WHEN** `mbv --pin` starts with `cover = true`
-- **THEN** the panel draws over the tiled windows and the compositor reserves no strip
-
-#### Scenario: Cover value survives a save
-- **WHEN** mbv saves its settings while `cover` is `true`
-- **THEN** the saved `[panel]` section keeps `cover = true`
-
-#### Scenario: Hiding a pushing panel
-- **WHEN** the panel runs with `cover` false and the user hides it
-- **THEN** the reserved strip is released and tiled windows take the space back
-
-#### Scenario: Hiding a covering panel
-- **WHEN** the panel runs with `cover = true` and the user hides or shows it
-- **THEN** no tiled window moves
-
 ### Requirement: Panel toggle
 mbv SHALL accept `--toggle`, which asks the pinned mbv running on the current Wayland display to
 hide its panel if shown, or to show it if hidden, and exits with status 0. It SHALL NOT start
@@ -235,3 +207,34 @@ showing SHALL NOT resize the TUI or change its width state.
 #### Scenario: Nothing pinned from a key
 - **WHEN** a compositor key runs `mbv --toggle` with no pinned mbv running
 - **THEN** a desktop notification says no pinned mbv is running, and no mbv starts
+
+### Requirement: Panel width decides pushing or covering
+`mbv --pin` SHALL build the collapsed panel layout in pushing mode and the expanded panel layout
+in covering mode, with no setting for either. A pushing panel makes the compositor reserve a strip
+beside it, so tiled windows move aside. A covering panel draws over the tiled windows and holds
+the strip already reserved, so expanding and collapsing move no tiled window. mbv SHALL provide no
+runtime toggle for the choice.
+
+#### Scenario: Collapsed panel pushes
+- **WHEN** `mbv --pin` starts
+- **THEN** the compositor reserves a strip beside the panel and tiled windows move aside
+
+#### Scenario: Expanding leaves tiles in place
+- **WHEN** mbv runs in the panel at its collapsed width and the user expands it
+- **THEN** the panel draws over the tiled windows and no tiled window moves
+
+#### Scenario: Collapsing leaves tiles in place
+- **WHEN** mbv runs in the panel at its expanded width and the user collapses it
+- **THEN** the panel shrinks to the collapsed strip and no tiled window moves
+
+### Requirement: Hidden panel follows its width
+A hidden collapsed panel SHALL release its reserved strip, and showing it SHALL take the strip
+back. Hiding or showing an expanded panel SHALL move no tiled window.
+
+#### Scenario: Hiding a collapsed panel
+- **WHEN** the panel runs at its collapsed width and the user hides it
+- **THEN** the reserved strip is released and tiled windows take the space back
+
+#### Scenario: Hiding an expanded panel
+- **WHEN** the panel runs at its expanded width and the user hides or shows it
+- **THEN** no tiled window moves
