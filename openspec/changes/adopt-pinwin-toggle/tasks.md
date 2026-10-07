@@ -2,17 +2,17 @@
 
 ## 1. Bump pinwin
 
-- [ ] 1.1 In `Cargo.toml`, replace `pinwin = { git = "https://github.com/slatkin/pinwin", tag = "0.2.2" }` with `rev = "8127ff81079d91f326dc5b8427ab03a1dc17992c"` (tag 0.3.0, design D4). Run `cargo update -p pinwin` so `Cargo.lock` follows.
-- [ ] 1.2 In `src/pin.rs` `start_panel`, replace the `Startup { fd, layout, keyboard, accent }` struct literal with `Startup::new(fd, layout, keyboard, accent)`. Verify with `cargo check -p mbv`.
+- [x] 1.1 In `Cargo.toml`, replace `pinwin = { git = "https://github.com/slatkin/pinwin", tag = "0.2.2" }` with `rev = "8127ff81079d91f326dc5b8427ab03a1dc17992c"` (tag 0.3.0, design D4). Run `cargo update -p pinwin` so `Cargo.lock` follows.
+- [x] 1.2 In `src/pin.rs` `start_panel`, replace the `Startup { fd, layout, keyboard, accent }` struct literal with `Startup::new(fd, layout, keyboard, accent)`. Verify with `cargo check -p mbv`.
 
 ## 2. Instance socket and `--toggle` (`src/pin.rs`, `src/main.rs`)
 
-- [ ] 2.1 In `pin.rs`, add a private `instance_name()` that returns `pinwin::instance::InstanceName::parse("mbv")` (D1).
-- [ ] 2.2 Add `PinLaunch { Started(PinnedPanel), ShownExisting }`. Add `PinStartError::Instance(pinwin::instance::InstanceError)` and `PinStartError::ShowExisting(pinwin::instance::SendError)`. Extend `Display` and `source` exhaustively.
-- [ ] 2.3 Rework `pin::start` to return `Result<PinLaunch, PinStartError>` in the D2 order: Wayland check, then `InstanceSocket::bind`. On `Duplicate`, call `instance::send(.., Request::Show)` and return `ShownExisting` or `ShowExisting(err)`. Any other bind error returns `Instance(err)`. On `Ok(socket)`, run `PanelEnv::apply` and then `start_panel(config, socket)`, which uses `.with_instance(socket)`.
-- [ ] 2.4 In `main.rs` `main`, match the new result. `Ok(Started(panel))` gives `Some(panel)`. `Ok(ShownExisting)` returns from `main` (exit 0). `Err` goes to the unchanged `report_start_failure`. Update the comment above the block.
-- [ ] 2.5 Add `pin::toggle_running()` (D3). It sends `Request::Toggle` and returns on `Ok`. On `NotListening`, it reports "mbv: no pinned mbv is running". Any other `Err(error)` reports "mbv: cannot toggle the pinned panel: {error}". Both reports go through one helper: stderr when stdin is a TTY, otherwise `notify`, then exit 1. The helper reuses `failure_action`.
-- [ ] 2.6 In `pre_config_startup`, handle `--toggle` right after `-q`: call `pin::toggle_running()` and then `return None`. Add a `--toggle` line to the help text below `--pin`: "Show or hide the running pinned panel (bind this to a compositor key)."
+- [x] 2.1 In `pin.rs`, add a private `instance_name()` that returns `pinwin::instance::InstanceName::parse("mbv")` (D1).
+- [x] 2.2 Add `PinLaunch { Started(PinnedPanel), ShownExisting }`. Add `PinStartError::Instance(pinwin::instance::InstanceError)` and `PinStartError::ShowExisting(pinwin::instance::SendError)`. Extend `Display` and `source` exhaustively.
+- [x] 2.3 Rework `pin::start` to return `Result<PinLaunch, PinStartError>` in the D2 order: Wayland check, then `InstanceSocket::bind`. On `Duplicate`, call `instance::send(.., Request::Show)` and return `ShownExisting` or `ShowExisting(err)`. Any other bind error returns `Instance(err)`. On `Ok(socket)`, run `PanelEnv::apply` and then `start_panel(config, socket)`, which uses `.with_instance(socket)`.
+- [x] 2.4 In `main.rs` `main`, match the new result. `Ok(Started(panel))` gives `Some(panel)`. `Ok(ShownExisting)` returns from `main` (exit 0). `Err` goes to the unchanged `report_start_failure`. Update the comment above the block.
+- [x] 2.5 Add `pin::toggle_running()` (D3). It sends `Request::Toggle` and returns on `Ok`. On `NotListening`, it reports "mbv: no pinned mbv is running". Any other `Err(error)` reports "mbv: cannot toggle the pinned panel: {error}". Both reports go through one helper: stderr when stdin is a TTY, otherwise `notify`, then exit 1. The helper reuses `failure_action`.
+- [x] 2.6 In `pre_config_startup`, handle `--toggle` right after `-q`: call `pin::toggle_running()` and then `return None`. Add a `--toggle` line to the help text below `--pin`: "Show or hide the running pinned panel (bind this to a compositor key)."
 - [ ] 2.7 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run -p mbv`. Existing `pin.rs` tests must pass unchanged. Add no new unit tests: the bind, show and toggle contract is owned and tested by pinwin, and mbv's outcome mapping is covered by the manual run in 5.1.
 
 ## 3. Packaging and CI
