@@ -13,7 +13,7 @@
 - [x] 2.4 In `main.rs` `main`, match the new result. `Ok(Started(panel))` gives `Some(panel)`. `Ok(ShownExisting)` returns from `main` (exit 0). `Err` goes to the unchanged `report_start_failure`. Update the comment above the block.
 - [x] 2.5 Add `pin::toggle_running()` (D3). It sends `Request::Toggle` and returns on `Ok`. On `NotListening`, it reports "mbv: no pinned mbv is running". Any other `Err(error)` reports "mbv: cannot toggle the pinned panel: {error}". Both reports go through one helper: stderr when stdin is a TTY, otherwise `notify`, then exit 1. The helper reuses `failure_action`.
 - [x] 2.6 In `pre_config_startup`, handle `--toggle` right after `-q`: call `pin::toggle_running()` and then `return None`. Add a `--toggle` line to the help text below `--pin`: "Show or hide the running pinned panel (bind this to a compositor key)."
-- [ ] 2.7 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run -p mbv`. Existing `pin.rs` tests must pass unchanged. Add no new unit tests: the bind, show and toggle contract is owned and tested by pinwin, and mbv's outcome mapping is covered by the manual run in 5.1.
+- [x] 2.7 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run -p mbv`. (Clippy fails on 28 pre-existing functions after the pinwin bump; refactor deferred to #884 by user decision.) Existing `pin.rs` tests must pass unchanged. Add no new unit tests: the bind, show and toggle contract is owned and tested by pinwin, and mbv's outcome mapping is covered by the manual run in 5.1.
 
 ## 3. Packaging and CI
 
