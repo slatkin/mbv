@@ -36,6 +36,8 @@ rstest = { version = "0.27", default-features = false }
 fuzzy-matcher = "0.3"
 time = { version = "0.3", features = ["parsing", "formatting", "local-offset", "macros"] }
 tracing = "0.1.44"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-log = "0.2"
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -44,6 +46,11 @@ ratatui-image = { version = "11", default-features = false, features = ["crosste
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 unicode-width = "0.2.2"
 tui-scrollbar = "0.2.7"
+rust_cast = "0.21"
+mdns-sd = { version = "0.21", default-features = false }
+flume = "0.12"
+ab_glyph = "0.2"
+num-traits = "0.2"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
