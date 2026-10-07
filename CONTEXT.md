@@ -335,7 +335,7 @@ The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values 
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 Pinned panel:
-The GTK layer-shell window that pinwin shows beside tiled windows. It holds the mbv TUI drawn to a pty that the panel owns. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel.
+The Wayland layer-shell surface that pinwin shows beside tiled windows. It holds the mbv TUI drawn to a pty that the panel owns. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. It can be hidden and shown with `mbv --toggle` while mbv keeps running.
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
