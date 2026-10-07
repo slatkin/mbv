@@ -246,13 +246,14 @@ fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
         config.gutter_left,
         config.gutter_right,
     );
-    // Covering is a per-layout choice made here, for the start layout and
-    // every later apply alike; there is no runtime lever (change
-    // `panel-cover-mode`).
-    if config.cover {
-        layout.covering()
-    } else {
-        layout
+    // The collapsed panel pushes (the compositor reserves a strip beside it)
+    // and the expanded panel covers (it draws over the tiled windows while
+    // holding that strip); the width alone decides, for the start layout and
+    // every later apply alike, with no setting or runtime lever (issue #898,
+    // change `pinned-expand-covers-collapsed-pushes`).
+    match width {
+        PinnedWidth::Collapsed => layout,
+        PinnedWidth::Expanded => layout.covering(),
     }
 }
 
@@ -514,21 +515,17 @@ mod tests {
         assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
     }
 
-    /// Change `panel-cover-mode`: `cover` selects pinwin's covering mode at
-    /// layout construction, and the default (`false`) keeps pushing.
+    /// Issue #898 (`pinned-expand-covers-collapsed-pushes`): the collapsed
+    /// panel pushes and the expanded panel covers; no setting takes part.
     #[rstest::rstest]
-    #[case::default_pushes(false, pinwin::layout::Coverage::Push)]
-    #[case::cover_set_covers(true, pinwin::layout::Coverage::Cover)]
-    fn layout_from_config_follows_the_cover_setting(
-        #[case] cover: bool,
+    #[case::collapsed_pushes(PinnedWidth::Collapsed, pinwin::layout::Coverage::Push)]
+    #[case::expanded_covers(PinnedWidth::Expanded, pinwin::layout::Coverage::Cover)]
+    fn layout_from_config_coverage_follows_the_width(
+        #[case] width: PinnedWidth,
         #[case] expected: pinwin::layout::Coverage,
     ) {
-        let config = PanelConfig {
-            cover,
-            ..PanelConfig::default()
-        };
         assert_eq!(
-            layout_from_config(&config, PinnedWidth::Collapsed).coverage(),
+            layout_from_config(&PanelConfig::default(), width).coverage(),
             expected
         );
     }
