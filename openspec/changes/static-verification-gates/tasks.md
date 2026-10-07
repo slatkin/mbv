@@ -4,7 +4,7 @@
 
 - [x] 1.1 Install cargo-hack locally and run `cargo hack check --each-feature --workspace` (plus the dev-deps configuration the repo actually builds) and verify the command completes; record every failing feature combination.
 - [x] 1.2 Fix each failing combination from 1.1 that is in covered code (or document-and-defer on issue #888 with reasoning if it is deliberately excluded territory) and verify `cargo hack check --each-feature --workspace` passes clean.
-- [ ] 1.3 Add the cargo-hack job to `.github/workflows/build.yml` (install via `taiki-e/install-action@cargo-hack` matching the existing pattern, parallel job so it never sits on the release critical path) and verify the workflow YAML parses and the job's commands pass locally as written.
+- [x] 1.3 Add the cargo-hack job to `.github/workflows/build.yml` (install via `taiki-e/install-action@cargo-hack` matching the existing pattern, parallel job so it never sits on the release critical path) and verify the workflow YAML parses and the job's commands pass locally as written.
 
 ## 2. Miri scoped gate
 
