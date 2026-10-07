@@ -315,3 +315,73 @@ jobs:
         # dev-dependency-enabled `test` features, so without it the gate would
         # skip the configuration the workspace actually builds.
         run: cargo hack check --each-feature --workspace --all-targets
+
+# Miri scope audit (issue #888, change `static-verification-gates`, task 2.1).
+#
+# Miri (task 2.4) can only execute pure unsafe that never leaves the process:
+# it cannot run syscalls/FFI, signal handlers, or spawned threads by
+# construction, and it rejects `env::set_var`/`remove_var` once any thread
+# exists. This audit (HEAD 37ba2fef4, 2026-10-07) sorted every `unsafe` site
+# in the workspace into:
+#
+#   (a) miri-runnable pure unsafe worth gating, and
+#   (b) excluded, with a reason.
+#
+# Method: `rg "unsafe" --type rust` over the workspace (target excluded) found
+# 43 `unsafe` keyword occurrences (2 further grep hits are "thread-unsafe"
+# comments) across exactly 11 files, forming 42 distinct unsafe blocks or
+# declarations. Each site was read and classified below.
+#
+# SET (a) -- EMPTY.
+# Every audited site is a libc or libmpv FFI call, a signal/pty/pipe/fd
+# syscall wrapper, or process-environment mutation. No raw-pointer or
+# data-layout unsafe that could run under miri exists in the workspace. The
+# `cargo +nightly miri test -p <crate...>` invocation of task 2.4 therefore
+# has no crate list from this audit; task 2.2 has no sites to cover. An
+# empty-but-documented gate is the honest outcome the change design accepts
+# (design decision 2 and its risk entry).
+#
+# SET (b) -- excluded with reason, by group:
+#
+# 1. `mbv` (root TUI binary), 20 sites (21 keyword occurrences: the signals
+#    extern declaration uses the keyword twice):
+#    - src/main.rs (3): `mallopt(M_ARENA_MAX)` FFI; fatal-signal handler
+#      install; async-signal-safe handler body (write/signal/raise).
+#      Reason: libc FFI + signal handlers.
+#    - src/local_daemon.rs (2): `setsid` in a `pre_exec` closure; `sigaction`
+#      SIGHUP-ignore. Reason: process/syscall FFI + signals.
+#    - src/pin.rs (11): `openpty`/`open("/dev/tty")`/`ioctl(TIOCNOTTY)`/
+#      `dup2`/`close` pty hand-over; SIGHUP disposition via `signal`;
+#      `PanelEnv` `env::set_var`/`remove_var`. Reason: pty/fd syscall FFI +
+#      signals + environment mutation (design keeps env writes pre-thread,
+#      but the surrounding hand-over path is un-runnable under miri).
+#    - src/single_instance.rs (1): `kill(pid, SIGTERM)`. Reason: signal FFI.
+#    - src/app/infra/signals.rs (3 sites): the `unsafe extern
+#      "C" { fn signal }` declaration; its registration block; the
+#      `poll` POLLHUP probe. Reason: signal-handler declaration and
+#      registration + poll(2).
+#
+# 2. `mbvd`, 6 sites (crates/mbvd/src/main.rs): `mallopt`; fatal-signal
+#    handler install + handler body; `env::set_var("MBV_SYSTEM")` in the
+#    three CLI admin actions. Reasons: libc FFI + signals + env mutation.
+#
+# 3. `mbv-player`, 11 sites:
+#    - runtime.rs (2): `mkfifo` syscall; `mpv_request_log_messages` FFI.
+#    - controller.rs (4): self-pipe `write`/`close`/`pipe`/`fcntl`.
+#    - run/run_loop.rs (5): `mpv_command_async` FFI; self-pipe
+#      `poll`/`read`/`write`/`close`.
+#      Reasons: libmpv FFI cannot load under miri; pipe/poll/read/write
+#      syscall wrappers; the run loop spawns worker threads (miri cannot
+#      execute spawned threads).
+#
+# 4. `mbv-daemon`, 3 sites (run_shutdown.rs): `sigemptyset`/`sigaddset`/
+#    `pthread_sigmask`/`sigwait` around a dedicated signal-wait thread.
+#    Reason: signals + threads by design.
+#
+# 5. `mbv-config`, 2 sites (test_support.rs): `set_test_env_var`/
+#    `remove_test_env_var`. Reason: environment mutation is rejected by miri
+#    in the multi-threaded test harness; these helpers exist precisely
+#    because that harness is multi-threaded.
+#
+# If a future unsafe site is added, extend this audit before relying on the
+# miri gate; set (a) must stay an explicit, verified list.
