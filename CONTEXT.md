@@ -347,7 +347,7 @@ A stroke around the Pinned panel window while it holds keyboard focus. It draws 
 _Avoid_: focus ring, strip, highlight
 
 Panel covering:
-A `[panel]` setting (`cover`) for the Pinned panel. When it is true, the panel draws over the tiled windows and the compositor reserves no space beside it. When it is false, the default, the compositor reserves a strip and tiled windows move aside. The choice is made when the layout is built, so `mbv --pin` applies it at launch.
+The fixed covering rule of the Pinned panel. The collapsed panel always pushes: the compositor reserves a strip beside it. The expanded panel always covers: it draws over the tiled windows and holds the reserved strip, so expanding and collapsing move no tiled window. There is no setting for either.
 _Avoid_: cover mode, overlay, always on top
 
 Pinned launch:

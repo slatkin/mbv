@@ -517,7 +517,6 @@ gutter_right = "wide"
 accent = "yes"
 accent_color = "orange"
 accent_width = 0
-cover = "yes"
 "#,
     )
     .unwrap();
@@ -531,7 +530,6 @@ cover = "yes"
     assert!(cfg.panel.accent);
     assert_eq!(cfg.panel.accent_color, crate::DEFAULT_PANEL_ACCENT_COLOR);
     assert_eq!(cfg.panel.accent_width, crate::DEFAULT_PANEL_ACCENT_WIDTH);
-    assert!(!cfg.panel.cover);
 
     let _g = SYS_ENV_LOCK.lock().unwrap();
     let dir = std::env::temp_dir().join(format!(
@@ -556,7 +554,6 @@ cover = "yes"
         accent: false,
         accent_color: PanelAccentColor([0x12, 0x34, 0x56]),
         accent_width: NonZeroU16::new(2).unwrap(),
-        cover: true,
     };
     save_config_settings(&Config {
         panel: expected,

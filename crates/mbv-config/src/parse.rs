@@ -379,7 +379,6 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         accent: panel_bool(panel, "accent", defaults.accent),
         accent_color: panel_accent_color(panel, "accent_color", defaults.accent_color),
         accent_width: panel_accent_width(panel, "accent_width", defaults.accent_width),
-        cover: panel_bool(panel, "cover", defaults.cover),
     }
 }
 
