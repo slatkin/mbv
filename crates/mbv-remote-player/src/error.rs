@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct RemotePlayerError {
     kind: RemotePlayerErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug)]
@@ -21,6 +22,12 @@ enum RemotePlayerErrorKind {
 }
 
 impl RemotePlayerError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn endpoint(message: impl Into<String>) -> Self {
         Self::new(RemotePlayerErrorKind::Endpoint, message)
     }
@@ -46,6 +53,7 @@ impl RemotePlayerError {
             kind: RemotePlayerErrorKind::ExclusiveOwner { pid },
             message: String::new(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -54,6 +62,7 @@ impl RemotePlayerError {
             kind: RemotePlayerErrorKind::OwnerShuttingDown,
             message: "the owner is shutting down".to_string(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -64,6 +73,7 @@ impl RemotePlayerError {
             },
             message: String::new(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -80,6 +90,7 @@ impl RemotePlayerError {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -91,6 +102,7 @@ impl RemotePlayerError {
             kind,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 

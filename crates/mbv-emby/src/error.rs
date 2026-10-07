@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct EmbyError {
     kind: EmbyErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -20,6 +21,12 @@ enum EmbyErrorKind {
 }
 
 impl EmbyError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn auth(message: impl Into<String>) -> Self {
         Self::new(EmbyErrorKind::Auth, message)
     }
@@ -65,6 +72,7 @@ impl EmbyError {
             kind,
             message: format!("{context}: {source}"),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -73,6 +81,7 @@ impl EmbyError {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -134,6 +143,7 @@ impl From<ureq::Error> for EmbyError {
             kind,
             message,
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -145,6 +155,7 @@ impl From<serde_json::Error> for EmbyError {
             kind: EmbyErrorKind::Parse,
             message,
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }

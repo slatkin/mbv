@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::backtrace::Backtrace;
 use std::time::Duration;
 
 mod catalog;
@@ -126,10 +127,10 @@ pub enum AudiobookshelfFailureClass {
 
 /// A redacted request failure. It contains a classification only: in
 /// particular, no ureq error, URL, header, or response body is retained.
-#[derive(Clone, PartialEq, Eq)]
 pub struct AudiobookshelfError {
     pub class: AudiobookshelfFailureClass,
     message: Option<String>,
+    backtrace: Backtrace,
 }
 
 impl std::fmt::Debug for AudiobookshelfError {
@@ -166,6 +167,12 @@ impl From<mbv_config::ConfigError> for AudiobookshelfError {
 }
 
 impl AudiobookshelfError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
         match self.class {
@@ -195,14 +202,15 @@ impl AudiobookshelfError {
     }
 
     #[must_use]
-    pub const fn from_class(class: AudiobookshelfFailureClass) -> Self {
+    pub fn from_class(class: AudiobookshelfFailureClass) -> Self {
         Self::new(class)
     }
 
-    const fn new(class: AudiobookshelfFailureClass) -> Self {
+    fn new(class: AudiobookshelfFailureClass) -> Self {
         Self {
             class,
             message: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -221,18 +229,19 @@ impl AudiobookshelfError {
         Self {
             class,
             message: Some(message.into()),
+            backtrace: Backtrace::capture(),
         }
     }
 
-    const fn connectivity() -> Self {
+    fn connectivity() -> Self {
         Self::new(AudiobookshelfFailureClass::Connectivity)
     }
 
-    const fn protocol() -> Self {
+    fn protocol() -> Self {
         Self::new(AudiobookshelfFailureClass::Protocol)
     }
 
-    const fn malformed() -> Self {
+    fn malformed() -> Self {
         Self::new(AudiobookshelfFailureClass::MalformedResponse)
     }
 }

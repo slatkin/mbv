@@ -8,6 +8,7 @@ mod operations;
 mod render;
 mod types;
 
+use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::time::Instant;
@@ -25,24 +26,79 @@ pub use types::{
 ///
 /// The error deliberately contains only stable targets.  Arena identifiers
 /// are an implementation detail and never cross this boundary.
-#[derive(Clone, PartialEq, Eq)]
-pub enum TreeReconciliationError<Target> {
+pub struct TreeReconciliationError<Target> {
+    kind: TreeReconciliationErrorKind<Target>,
+    backtrace: Backtrace,
+}
+
+enum TreeReconciliationErrorKind<Target> {
     DuplicateTarget { target: Target },
     MissingParent { target: Target, parent: Target },
     SelfParent { target: Target },
     Cycle { target: Target },
 }
 
+impl<Target> TreeReconciliationError<Target> {
+    fn new(kind: TreeReconciliationErrorKind<Target>) -> Self {
+        Self {
+            kind,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
+    /// Stable name of the rejected projection's failure kind.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            TreeReconciliationErrorKind::DuplicateTarget { .. } => {
+                "components.tree_browser.duplicate_target"
+            }
+            TreeReconciliationErrorKind::MissingParent { .. } => {
+                "components.tree_browser.missing_parent"
+            }
+            TreeReconciliationErrorKind::SelfParent { .. } => "components.tree_browser.self_parent",
+            TreeReconciliationErrorKind::Cycle { .. } => "components.tree_browser.cycle",
+        }
+    }
+}
+
 impl<Target> std::fmt::Debug for TreeReconciliationError<Target> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::DuplicateTarget { .. } => "DuplicateTarget",
-            Self::MissingParent { .. } => "MissingParent",
-            Self::SelfParent { .. } => "SelfParent",
-            Self::Cycle { .. } => "Cycle",
+        f.write_str(match &self.kind {
+            TreeReconciliationErrorKind::DuplicateTarget { .. } => "DuplicateTarget",
+            TreeReconciliationErrorKind::MissingParent { .. } => "MissingParent",
+            TreeReconciliationErrorKind::SelfParent { .. } => "SelfParent",
+            TreeReconciliationErrorKind::Cycle { .. } => "Cycle",
         })
     }
 }
+
+impl<Target: std::fmt::Debug> std::fmt::Display for TreeReconciliationError<Target> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            TreeReconciliationErrorKind::DuplicateTarget { target } => {
+                write!(f, "duplicate tree target {target:?}")
+            }
+            TreeReconciliationErrorKind::MissingParent { target, parent } => {
+                write!(f, "tree target {target:?} names missing parent {parent:?}")
+            }
+            TreeReconciliationErrorKind::SelfParent { target } => {
+                write!(f, "tree target {target:?} is its own parent")
+            }
+            TreeReconciliationErrorKind::Cycle { target } => {
+                write!(f, "tree target {target:?} closes a parent cycle")
+            }
+        }
+    }
+}
+
+impl<Target: std::fmt::Debug> std::error::Error for TreeReconciliationError<Target> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructuralRow {
@@ -129,24 +185,30 @@ where
     let mut target_to_index = HashMap::with_capacity(nodes.len());
     for (index, node) in nodes.iter().enumerate() {
         if target_to_index.insert(node.target.clone(), index).is_some() {
-            return Err(TreeReconciliationError::DuplicateTarget {
-                target: node.target.clone(),
-            });
+            return Err(TreeReconciliationError::new(
+                TreeReconciliationErrorKind::DuplicateTarget {
+                    target: node.target.clone(),
+                },
+            ));
         }
     }
 
     for node in nodes {
         if let Some(parent) = &node.parent {
             if parent == &node.target {
-                return Err(TreeReconciliationError::SelfParent {
-                    target: node.target.clone(),
-                });
+                return Err(TreeReconciliationError::new(
+                    TreeReconciliationErrorKind::SelfParent {
+                        target: node.target.clone(),
+                    },
+                ));
             }
             if !target_to_index.contains_key(parent) {
-                return Err(TreeReconciliationError::MissingParent {
-                    target: node.target.clone(),
-                    parent: parent.clone(),
-                });
+                return Err(TreeReconciliationError::new(
+                    TreeReconciliationErrorKind::MissingParent {
+                        target: node.target.clone(),
+                        parent: parent.clone(),
+                    },
+                ));
             }
         }
     }
@@ -158,7 +220,9 @@ where
         let mut current = Some(node.target.clone());
         while let Some(target) = current {
             if !seen.insert(target.clone()) {
-                return Err(TreeReconciliationError::Cycle { target });
+                return Err(TreeReconciliationError::new(
+                    TreeReconciliationErrorKind::Cycle { target },
+                ));
             }
             current = target_to_index
                 .get(&target)

@@ -7,6 +7,7 @@ use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_config as config;
 use mbv_queue::ServiceKind;
 use serde_json::{Map, Value, json};
+use std::backtrace::Backtrace;
 use std::{
     collections::BTreeSet,
     io::{Read, Write},
@@ -23,6 +24,7 @@ const MPV_BOUND: Duration = Duration::from_secs(15);
 pub struct ProbeError {
     kind: ProbeErrorKind,
     message: String,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug)]
@@ -31,6 +33,12 @@ enum ProbeErrorKind {
 }
 
 impl ProbeError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
         match self.kind {
@@ -42,6 +50,7 @@ impl ProbeError {
         Self {
             kind: ProbeErrorKind::Contract,
             message: message.into(),
+            backtrace: Backtrace::capture(),
         }
     }
 }

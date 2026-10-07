@@ -4,6 +4,7 @@
 //! subscriber filter. Use `parse` for user input and the accessors to inspect a
 //! validated specification.
 
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 
 use tracing_subscriber::layer::Filter;
@@ -143,15 +144,23 @@ impl<S: tracing::Subscriber> Filter<S> for LogSpec {
 }
 
 /// An invalid log-level specification.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct LogSpecError {
     spec: String,
+    backtrace: Backtrace,
 }
 
 impl LogSpecError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     fn new(spec: &str) -> Self {
         Self {
             spec: spec.to_owned(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -219,7 +228,12 @@ mod tests {
     #[case("=debug")]
     #[case("player=debug=trace")]
     fn parse_rejects_malformed_directives(#[case] input: &str) {
-        assert_eq!(LogSpec::parse(input), Err(LogSpecError::new(input)));
+        let error = LogSpec::parse(input).expect_err("malformed spec must be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            format!("invalid log-level specification {input:?}")
+        );
     }
 
     #[test]
@@ -234,7 +248,9 @@ mod tests {
     fn display_round_trips_through_parse() {
         let spec = LogSpec::parse("info,player=debug,player::load=trace").expect("valid spec");
 
-        assert_eq!(LogSpec::parse(&spec.to_string()), Ok(spec));
+        let reparsed = LogSpec::parse(&spec.to_string()).expect("rendered spec must parse");
+
+        assert_eq!(reparsed, spec);
     }
 
     #[test]

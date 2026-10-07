@@ -1,6 +1,4 @@
-use super::super::{
-    TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation, TreeReconciliationError,
-};
+use super::super::{TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::{Target, node, paint};
 use mbv_render::components::media_list::MediaSemanticState;
 use ratatui::Terminal;
@@ -162,23 +160,23 @@ fn changing_heading_content_invalidates_retained_geometry() {
 #[rstest]
 #[case::duplicate(
     vec![node(Target::Root, None), node(Target::Root, None)],
-    TreeReconciliationError::DuplicateTarget { target: Target::Root }
+    "components.tree_browser.duplicate_target"
 )]
 #[case::missing_parent(
     vec![node(Target::Leaf, Some(Target::Other))],
-    TreeReconciliationError::MissingParent { target: Target::Leaf, parent: Target::Other }
+    "components.tree_browser.missing_parent"
 )]
 #[case::self_parent(
     vec![node(Target::Root, Some(Target::Root))],
-    TreeReconciliationError::SelfParent { target: Target::Root }
+    "components.tree_browser.self_parent"
 )]
 #[case::cycle(
     vec![node(Target::Root, Some(Target::Branch)), node(Target::Branch, Some(Target::Root))],
-    TreeReconciliationError::Cycle { target: Target::Root }
+    "components.tree_browser.cycle"
 )]
 fn invalid_projection_returns_typed_error_without_mutating_owner(
     #[case] projection: Vec<TreeNode<Target>>,
-    #[case] expected: TreeReconciliationError<Target>,
+    #[case] expected_kind: &str,
 ) {
     let mut browser = TreeBrowser::new();
     browser
@@ -206,7 +204,7 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
     );
 
     let error = browser.reconcile(projection).unwrap_err();
-    assert_eq!(error, expected);
+    assert_eq!(error.kind_name(), expected_kind);
     assert_eq!(browser.model_revision, revision);
     assert_eq!(browser.selected_target().cloned(), selected);
     assert_eq!(browser.expanded, expanded);

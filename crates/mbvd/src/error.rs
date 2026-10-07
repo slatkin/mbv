@@ -1,10 +1,11 @@
-use std::{error::Error, fmt};
+use std::{backtrace::Backtrace, error::Error, fmt};
 
 #[derive(Debug)]
 pub struct DaemonError {
     kind: DaemonErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -15,6 +16,12 @@ enum DaemonErrorKind {
 }
 
 impl DaemonError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     pub(crate) fn failure(message: impl Into<String>) -> Self {
         Self::new(DaemonErrorKind::Failure, message)
     }
@@ -49,6 +56,7 @@ impl DaemonError {
             kind,
             message: format!("{}: {source}", context.into()),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -57,6 +65,7 @@ impl DaemonError {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -101,6 +110,7 @@ impl From<mbv_emby::EmbyError> for DaemonError {
             kind: DaemonErrorKind::Failure,
             message,
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -112,6 +122,7 @@ impl From<mbv_audiobookshelf::AudiobookshelfError> for DaemonError {
             kind: DaemonErrorKind::Failure,
             message,
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -122,6 +133,7 @@ impl From<mbv_config::ConfigError> for DaemonError {
             kind: DaemonErrorKind::Failure,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -132,6 +144,7 @@ impl From<std::io::Error> for DaemonError {
             kind: DaemonErrorKind::Failure,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -142,6 +155,7 @@ impl From<serde_json::Error> for DaemonError {
             kind: DaemonErrorKind::Failure,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 }

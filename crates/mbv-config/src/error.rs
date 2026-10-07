@@ -1,10 +1,11 @@
-use std::{error::Error, fmt, io};
+use std::{backtrace::Backtrace, error::Error, fmt, io};
 
 #[derive(Debug)]
 pub struct ConfigError {
     kind: ConfigErrorKind,
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -20,11 +21,18 @@ enum ConfigErrorKind {
 }
 
 impl ConfigError {
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &Backtrace {
+        &self.backtrace
+    }
+
     fn new(kind: ConfigErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
             source: None,
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -36,6 +44,7 @@ impl ConfigError {
             kind,
             message: source.to_string(),
             source: Some(Box::new(source)),
+            backtrace: Backtrace::capture(),
         }
     }
 
