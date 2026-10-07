@@ -81,8 +81,8 @@ jobs:
           # rust-toolchain.toml pins an exact channel, so hashing it stands in
           # for the rustc version and lets this restore run before the first
           # rustc invocation, keeping the toolchain warm. The base-devel-...
-          # literal must match the `container:` image above; bump it with
-          # rust-toolchain.toml.
+          # literal must match the `container:` image above and the
+          # feature-matrix job below; bump it with rust-toolchain.toml.
           # NOTE: this step must stay the first thing after checkout. Every
           # cargo/rustc use below (tool installs, fmt, clippy, build) hits the
           # warmed toolchain/registry/target instead of refetching. That is
@@ -251,3 +251,67 @@ jobs:
             target/debian/mbv_*.deb
             target/debian/mbvd_*.deb
           if-no-files-found: error
+
+  feature-matrix:
+    # cargo-hack feature-matrix gate (issue #888). A separate parallel job,
+    # not a step in `build`: --each-feature re-checks the workspace once per
+    # feature, and that cost must never sit on the release critical path.
+    runs-on: ubuntu-latest
+    # Same pinned builder image as `build` (keep the literal in sync with the
+    # container above and with the cache key below): `cargo check` still runs
+    # every build script, so this job needs the same makedeps and the same
+    # toolchain pin from rust-toolchain.toml.
+    container: archlinux/archlinux:base-devel-20260818.0.575430
+    permissions:
+      contents: read
+
+    steps:
+      # Same makedeps as `build`: check runs build scripts (pkg-config probes
+      # for mpv/pipewire/openssl), and checkout needs git for a real clone (see
+      # the comment on the matching step in `build`).
+      - name: Update system and install makedeps
+        run: |
+          pacman_retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              pacman -Syy --noconfirm
+              sleep $((attempt * 10))
+            done
+            "$@"
+          }
+          pacman_retry pacman -Syu --noconfirm
+          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig
+
+      - uses: actions/checkout@v7
+
+      - name: Cache Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.cargo/advisory-db
+            ~/.rustup/toolchains
+            target
+          # Own key family (`hack-`, deliberately not under `build`'s
+          # `cargo-` restore-keys prefix): otherwise whichever job saves last
+          # wins the shared key, and the release build could restore this
+          # job's check-only target instead of its own release warmness. Same
+          # hashFiles inputs as `build`; the base-devel literal must match the
+          # `container:` image above.
+          key: ${{ runner.os }}-hack-base-devel-20260818.0.575430-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-hack-
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      - name: Check feature matrix
+        # `--each-feature`, not `--feature-powerset`: the 12+ `test` features
+        # are additive shims and a powerset over them is combinatorial and
+        # unjustified. `--all-targets` is required, not cosmetic: a plain
+        # `cargo hack check` builds libs only and never activates the
+        # dev-dependency-enabled `test` features, so without it the gate would
+        # skip the configuration the workspace actually builds.
+        run: cargo hack check --each-feature --workspace --all-targets
