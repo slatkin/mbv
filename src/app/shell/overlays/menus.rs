@@ -289,11 +289,10 @@ impl Model {
             c.my_languages = selected;
         };
         let cfg = self.app.config.lock().unwrap().clone();
-        {
-            let mut p = self.app.player.subtitle_prefs_snapshot();
+        self.app.player.update_subtitle_prefs(|p| {
             p.subtitle_lang.clone_from(&cfg.subtitle_lang);
             p.audio_lang.clone_from(&cfg.audio_lang);
-        };
+        });
         if let Err(e) =
             crate::config::save_config_section(&cfg, mbv_config::ConfigSection::Playback)
         {

@@ -492,7 +492,6 @@ impl App {
         let status = self.player.status_snapshot();
         let active = status.active;
         let current_idx = status.current_idx;
-        drop(status);
         let queue = self.displayed_queue();
         let is_jump =
             active && self.viewed_queue_scope() == self.playing_queue_scope() && t != current_idx;
@@ -594,7 +593,6 @@ impl App {
         let st = self.player.status_snapshot();
         let active = st.active;
         let current_idx = st.current_idx;
-        drop(st);
         if active && self.queue_scope_is_playback(scope) {
             if t == current_idx {
                 let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));

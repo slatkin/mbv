@@ -236,3 +236,52 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
         "executing a menu entry must close the menu"
     );
 }
+
+/// Regression for issue #893 (spec review): `commit_my_languages` must write
+/// the committed language selection through to the player's subtitle prefs
+/// so the next prefs push carries it. The pre-fix code mutated a dropped
+/// `subtitle_prefs_snapshot()` copy, leaving shared prefs stale.
+/// Commit path only (mount + `commit_snapshot`), not keyboard dispatch — the
+/// component-to-shell wiring is owned by
+/// `settings_popup_multiselect_shell_syncs_and_commits_component_choices`.
+#[test]
+fn my_languages_commit_writes_prefs_through_to_player() {
+    let _state_dir = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(make_app_stub());
+    model.app.config.lock().unwrap().subtitle_lang = "English".into(); // selected: stays
+    model.app.config.lock().unwrap().audio_lang = "jpn".into(); // not selected: cleared
+    let id = ComponentId::Popup(PopupId::Multiselect);
+    model
+        .application
+        .mount(id.clone(), Box::new(MultiselectComponent::new()), vec![])
+        .expect("mount Multiselect");
+    model.application.active(&id).expect("activate Multiselect");
+    if let Some(comp) = model.application.get_component_mut(&id)
+        && let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>()
+    {
+        multiselect.set_content(&MultiSelectPopup {
+            kind: MultiSelectKind::MyLanguages,
+            items: vec![("english".into(), "English".into(), true)],
+            cursor: 0,
+        });
+    }
+
+    model.handle_multiselect_commit();
+
+    assert_eq!(
+        model.app.config.lock().unwrap().my_languages,
+        vec!["English".to_string()],
+        "committed selection persists to config"
+    );
+    let prefs = model.app.player.subtitle_prefs_snapshot();
+    assert_eq!(
+        prefs.subtitle_lang,
+        model.app.config.lock().unwrap().subtitle_lang,
+        "player subtitle prefs must mirror committed config"
+    );
+    assert_eq!(
+        prefs.audio_lang,
+        model.app.config.lock().unwrap().audio_lang,
+        "player audio prefs must mirror committed config"
+    );
+}

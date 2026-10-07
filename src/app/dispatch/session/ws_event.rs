@@ -46,7 +46,6 @@ impl App {
             WsEvent::VolumeUp => {
                 let st = self.player.status_snapshot();
                 let v = (st.volume + 5).min(st.volume_max);
-                drop(st);
                 let _ = self.player.send_command(PlayerCommand::SetVolume(v));
             }
             WsEvent::VolumeDown => {

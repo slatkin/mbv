@@ -107,7 +107,6 @@ impl LocalPlaybackTarget {
         if active {
             let st = app.player.status_snapshot();
             let v = u8::try_from((st.volume + delta).clamp(0, st.volume_max)).unwrap_or(u8::MAX);
-            drop(st);
             let _ = app
                 .player
                 .send_command(PlayerCommand::SetVolume(i64::from(v)));

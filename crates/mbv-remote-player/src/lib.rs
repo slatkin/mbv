@@ -120,21 +120,11 @@ impl RemotePlayer {
         self.shutdown_announced.load(Ordering::SeqCst)
     }
 
-    /// Shared handle to the disconnect flag, cloneable independent of the
-    /// rest of `RemotePlayer` (#160): the root `mbv` crate's MPRIS polling
-    /// loop holds this alongside `status` so it can stop advertising a
-    /// live/active track the moment the daemon connection drops, even
-    /// though `status` itself isn't guaranteed to be updated synchronously
-    /// with the disconnect (an "expected" disconnect, e.g. an Emby Remote
-    /// takeover, never sends a `Stopped` event -- see the reader thread in
-    /// `connect_endpoint`). This is the one deliberate smart-pointer
-    /// exposure on this type (M-AVOID-WRAPPERS, issue #893): the flag must
-    /// be shared with an independent polling thread, so an owned `bool`
-    /// accessor alone cannot serve that reader. Everything else reads
-    /// through `is_disconnected()` / `status_snapshot()`.
-    #[must_use]
-    pub fn disconnected_flag(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.disconnected)
+    /// Test-support seam: force the disconnect flag for stubs that must
+    /// present a disconnected remote without a live daemon connection.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_disconnected_for_test(&self, value: bool) {
+        self.disconnected.store(value, Ordering::SeqCst);
     }
 
     #[must_use]
