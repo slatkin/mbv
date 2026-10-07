@@ -17,16 +17,16 @@
 
 ## 3. Packaging and CI
 
-- [ ] 3.1 Build `cargo build --release -p mbv`. Run `ldd target/release/mbv | rg -i 'gtk|wayland|xkbcommon|fontconfig'`, confirm no GTK, and note which of libwayland-client, libxkbcommon and libfontconfig are linked (D5).
-- [ ] 3.2 In the `Cargo.toml` `[package.metadata.deb] depends`, drop `libgtk-4-1, libgtk4-layer-shell0` and add the Debian packages for the libraries 3.1 found (`libxkbcommon0`, `libfontconfig1`, and `libwayland-client0` only if linked).
-- [ ] 3.3 In `PKGBUILD` and `PKGBUILD-git`, replace `gtk4 gtk4-layer-shell` with `libxkbcommon fontconfig` (plus `wayland` if 3.1 shows libwayland-client) in `depends` and in `makedepends`.
-- [ ] 3.4 In `.github/workflows/build.yml`, swap `gtk4 gtk4-layer-shell` in the pacman install line for the 3.3 packages. Point the two deb `Depends` greps (`libgtk-4-1`, `libgtk4-layer-shell0`) at the new Debian names from 3.2.
+- [x] 3.1 Build `cargo build --release -p mbv`. Run `ldd target/release/mbv | rg -i 'gtk|wayland|xkbcommon|fontconfig'`, confirm no GTK, and note which of libwayland-client, libxkbcommon and libfontconfig are linked (D5).
+- [x] 3.2 In the `Cargo.toml` `[package.metadata.deb] depends`, drop `libgtk-4-1, libgtk4-layer-shell0` and add the Debian packages for the libraries 3.1 found (`libxkbcommon0`, `libfontconfig1`, and `libwayland-client0` only if linked).
+- [x] 3.3 In `PKGBUILD` and `PKGBUILD-git`, replace `gtk4 gtk4-layer-shell` with `libxkbcommon fontconfig` (plus `wayland` if 3.1 shows libwayland-client) in `depends` and in `makedepends`.
+- [x] 3.4 In `.github/workflows/build.yml`, swap `gtk4 gtk4-layer-shell` in the pacman install line for the 3.3 packages. Point the two deb `Depends` greps (`libgtk-4-1`, `libgtk4-layer-shell0`) at the new Debian names from 3.2.
 
 ## 4. Docs
 
-- [ ] 4.1 In `src/pin.rs`, remove the stale GTK wording from the comments only. That covers `redirect_stderr` ("GTK/GLib/layer-shell") and the two `PanelEnv` comments ("pinwin GTK thread"), which become "the pinwin panel thread".
-- [ ] 4.2 In `CONTEXT.md` *Pinned panel*, change "GTK layer-shell window" to "Wayland layer-shell surface", and add that it can be hidden and shown with `mbv --toggle` while mbv keeps running.
-- [ ] 4.3 In `AGENTS.md`, change the pinwin entry from "GTK4 layer-shell panel" to "Wayland layer-shell panel". Leave its `rev` instruction, which now matches.
+- [x] 4.1 In `src/pin.rs`, remove the stale GTK wording from the comments only. That covers `redirect_stderr` ("GTK/GLib/layer-shell") and the two `PanelEnv` comments ("pinwin GTK thread"), which become "the pinwin panel thread".
+- [x] 4.2 In `CONTEXT.md` *Pinned panel*, change "GTK layer-shell window" to "Wayland layer-shell surface", and add that it can be hidden and shown with `mbv --toggle` while mbv keeps running.
+- [x] 4.3 In `AGENTS.md`, change the pinwin entry from "GTK4 layer-shell panel" to "Wayland layer-shell panel". Leave its `rev` instruction, which now matches.
 
 ## 5. Manual verification (user-run)
 
