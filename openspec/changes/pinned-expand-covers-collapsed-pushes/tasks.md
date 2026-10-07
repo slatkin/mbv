@@ -4,7 +4,7 @@
 
 - [x] 1.1 Delete the `cover` field and its default from `PanelConfig` (`crates/mbv-config/src/panel.rs`), its parse line (`parse.rs`, the `cover: panel_bool(...)` entry) and its save line (`save.rs`, the `panel.insert("cover", ...)` entry). Verify: `cargo check -p mbv-config` reports errors only in `tests/settings.rs`.
 - [x] 1.2 In `crates/mbv-config/src/tests/settings.rs`, delete the `cover = "yes"` input line, the `assert!(!cfg.panel.cover)` line and the `cover: true` struct field. Do not add a test for the ignored key. Verify: `cargo nextest run -p mbv-config` passes.
-- [ ] 1.3 Remove the `cover` entry and its comment block from `dist/config.toml` (the "Covering:" comment and `cover = false`). Verify: `rg -n "cover" dist/config.toml` prints nothing.
+- [x] 1.3 Remove the `cover` entry and its comment block from `dist/config.toml` (the "Covering:" comment and `cover = false`). Verify: `rg -n "cover" dist/config.toml` prints nothing.
 
 ## 2. Make the width decide push or cover
 
@@ -13,8 +13,8 @@
 
 ## 3. Docs and spec vocabulary
 
-- [ ] 3.1 Rewrite the *Panel covering* entry in `CONTEXT.md` to say the collapsed panel pushes and the expanded panel covers, with no setting. Keep the `_Avoid_` line. Verify: `rg -n "\`cover\`" CONTEXT.md` prints nothing.
-- [ ] 3.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `openspec validate pinned-expand-covers-collapsed-pushes`. Verify: all three exit 0.
+- [x] 3.1 Rewrite the *Panel covering* entry in `CONTEXT.md` to say the collapsed panel pushes and the expanded panel covers, with no setting. Keep the `_Avoid_` line. Verify: `rg -n "\`cover\`" CONTEXT.md` prints nothing.
+- [x] 3.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `openspec validate pinned-expand-covers-collapsed-pushes`. Verify: all three exit 0.
 
 ## Workflow follow-up
 
