@@ -132,7 +132,7 @@ section), that switches the running pinned panel between its collapsed width (`c
 expanded width (`cols_expanded`), keeping `side` and the gutters. The switch SHALL resize the
 running panel without restarting mbv. Expanding SHALL draw the panel over the tiled windows
 without moving them, and collapsing SHALL return to the reserved strip without moving them (see
-Panel covering mode). Which width is active SHALL NOT be saved: every pinned launch SHALL start at
+Panel width decides pushing or covering). Which width is active SHALL NOT be saved: every pinned launch SHALL start at
 the collapsed width. If the panel rejects the other width, a warning toast SHALL name the reason and
 the panel SHALL stay at its current width. When mbv is not running in a pinned panel, the action
 SHALL show a neutral toast saying it needs a pinned launch and change nothing. The width toggle
