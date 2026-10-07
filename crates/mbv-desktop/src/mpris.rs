@@ -588,7 +588,12 @@ pub fn start(
         {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("MPRIS tokio error: {e}");
+                tracing::error!(
+                    name: "mpris.runtime.build.failed",
+                    target: "mpris",
+                    error = %e,
+                    "MPRIS runtime failed to start"
+                );
                 return;
             }
         };
@@ -611,7 +616,12 @@ pub fn start(
             {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("MPRIS D-Bus error: {e}");
+                    tracing::error!(
+                        name: "mpris.dbus.connect.failed",
+                        target: "mpris",
+                        error = %e,
+                        "MPRIS D-Bus session connection failed"
+                    );
                     return;
                 }
             };

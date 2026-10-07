@@ -52,13 +52,13 @@ fn device_id_in(data_home: &std::path::Path) -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        eprintln!("mbv: could not create {}: {}", dir.display(), e);
-    } else if let Err(e) = std::fs::write(&path, &id) {
-        eprintln!(
-            "mbv: could not write device_id to {}: {}",
-            path.display(),
-            e
+    if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, &id)) {
+        tracing::warn!(
+            name: "emby.device_id.persist.failed",
+            target: "startup",
+            path = %path.display(),
+            error = %e,
+            "could not persist device_id"
         );
     }
     id
