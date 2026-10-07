@@ -930,7 +930,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2667,8 +2667,8 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pinwin"
-version = "0.3.0"
-source = "git+https://github.com/slatkin/pinwin?rev=8127ff81079d91f326dc5b8427ab03a1dc17992c#8127ff81079d91f326dc5b8427ab03a1dc17992c"
+version = "0.3.1"
+source = "git+https://github.com/slatkin/pinwin?rev=a0a33f2f34e9d561a0ea6640a0f25e60e6f65f3e#a0a33f2f34e9d561a0ea6640a0f25e60e6f65f3e"
 dependencies = [
  "calloop",
  "calloop-wayland-source",
@@ -3311,7 +3311,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3811,10 +3811,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

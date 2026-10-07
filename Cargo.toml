@@ -116,7 +116,7 @@ name = "mbv"
 path = "src/main.rs"
 
 [dependencies]
-pinwin = { git = "https://github.com/slatkin/pinwin", rev = "8127ff81079d91f326dc5b8427ab03a1dc17992c" }
+pinwin = { git = "https://github.com/slatkin/pinwin", rev = "a0a33f2f34e9d561a0ea6640a0f25e60e6f65f3e" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }
