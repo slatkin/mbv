@@ -62,7 +62,7 @@ jobs:
           # changes only when that pin is bumped deliberately. clang stays a
           # system package (native build-script tooling, not a cache-keyed
           # compiler).
-          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig gtk4 gtk4-layer-shell
+          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig
 
       - uses: actions/checkout@v7
 
@@ -152,8 +152,9 @@ jobs:
           MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )pipewire(,|$)'
           dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
-          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk-4-1(,| \(|$)'
-          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libgtk4-layer-shell0(,| \(|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libwayland-client0(,|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libxkbcommon0(,|$)'
+          dpkg-deb --field "${MBV_DEB}" Depends | grep -Eq '(^|, )libfontconfig1(,|$)'
           if dpkg-deb --field "${MBVD_DEB}" Depends | grep -Eq '(^|, )(pipewire|libpipewire-0\.3-0)(,|$)'; then
             echo "mbvd must not depend on PipeWire runtime packages"
             exit 1
