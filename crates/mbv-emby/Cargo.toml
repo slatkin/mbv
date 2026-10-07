@@ -25,7 +25,7 @@ mbv-text = { path = "../mbv-text" }
 mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
 mbv-ids = { path = "../mbv-ids" }
-ureq.workspace = true
+ureq = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true

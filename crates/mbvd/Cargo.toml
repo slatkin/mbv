@@ -28,7 +28,7 @@ mbv-config = { path = "../mbv-config" }
 libc.workspace = true
 tracing.workspace = true
 mimalloc.workspace = true
-nix.workspace = true
+nix = { workspace = true, features = ["term"] }
 serde_json.workspace = true
 
 [dev-dependencies]

@@ -28,11 +28,10 @@ mbv-config = { path = "../mbv-config" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-keybinds = { path = "../mbv-keybinds" }
-textwrap.workspace = true
-time.workspace = true
+textwrap = { workspace = true, features = ["unicode-width"] }
+time = { workspace = true, features = ["parsing"] }
 tuirealm.workspace = true
 ratatui.workspace = true
-ratatui-image.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]

@@ -17,7 +17,7 @@ workspace = true
 mbv-queue = { path = "../mbv-queue" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-ids = { path = "../mbv-ids" }
-serde.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 rstest.workspace = true

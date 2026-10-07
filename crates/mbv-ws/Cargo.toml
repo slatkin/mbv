@@ -14,7 +14,7 @@ readme = "../../README.md"
 workspace = true
 
 [dependencies]
-tungstenite.workspace = true
+tungstenite = { workspace = true, features = ["handshake", "native-tls"] }
 serde_json.workspace = true
 tracing.workspace = true
 mbv-net = { path = "../mbv-net" }

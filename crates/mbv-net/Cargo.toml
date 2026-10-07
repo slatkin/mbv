@@ -17,7 +17,7 @@ workspace = true
 test = []
 
 [dependencies]
-ureq.workspace = true
+ureq = { workspace = true, features = ["native-tls"] }
 percent-encoding.workspace = true
 rand.workspace = true
 tracing.workspace = true
