@@ -5,7 +5,11 @@ default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybind
 [workspace.package]
 version = "0.23.10"
 edition = "2024"
-rust-version = "1.88"
+# MSRV policy (M-MSRV): a few minors behind the rust-toolchain.toml pin. Bump
+# alongside a pin bump, never independently, and verify with an installed
+# toolchain of exactly this version (cargo +<version> check --workspace
+# --all-targets) before committing the bump. Bumping MSRV is a minor release.
+rust-version = "1.96"
 license = "MIT"
 repository = "https://github.com/slatkin/mbv"
 keywords = ["emby", "tui", "media-player", "audiobookshelf", "terminal"]
