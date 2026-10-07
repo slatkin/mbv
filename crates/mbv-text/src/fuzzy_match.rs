@@ -26,16 +26,49 @@
 //! those letters live in two words. Words are the unit; that is the point.
 
 use fuzzy_matcher::FuzzyMatcher;
-pub use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::skim::SkimMatcherV2;
+
+/// The one matcher every client-side search scores through. It wraps
+/// `SkimMatcherV2` (always case-insensitive: media titles are searched
+/// without smart-case) so no third-party type appears in this crate's public
+/// API; callers keep one construction site via `WordMatcher::new`.
+pub struct WordMatcher {
+    inner: SkimMatcherV2,
+}
+
+impl WordMatcher {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            inner: SkimMatcherV2::default().ignore_case(),
+        }
+    }
+
+    fn fuzzy_match(&self, choice: &str, pattern: &str) -> Option<i64> {
+        self.inner.fuzzy_match(choice, pattern)
+    }
+}
+
+impl Default for WordMatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for WordMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WordMatcher").finish_non_exhaustive()
+    }
+}
 
 /// Scores `text` against `query` by matching every word of `query` inside a
 /// single word of `text`, in order, or `None` when that is impossible.
 ///
 /// The score is the sum of the per-word scores, so it stays comparable across
 /// candidates for one query (every accepted candidate matched the same words).
-/// `matcher` is the caller's own case-insensitive matcher, so every caller
-/// keeps one construction site and the same scoring config.
-pub fn word_match_score(matcher: &SkimMatcherV2, text: &str, query: &str) -> Option<i64> {
+/// `matcher` is the caller's own shared matcher, so every caller keeps one
+/// construction site and the same scoring config.
+pub fn word_match_score(matcher: &WordMatcher, text: &str, query: &str) -> Option<i64> {
     let mut words = text.split_whitespace();
     let mut matched_a_query_word = false;
     let mut total = 0i64;
@@ -53,8 +86,8 @@ pub fn word_match_score(matcher: &SkimMatcherV2, text: &str, query: &str) -> Opt
 mod tests {
     use super::*;
 
-    fn matcher() -> SkimMatcherV2 {
-        SkimMatcherV2::default().ignore_case()
+    fn matcher() -> WordMatcher {
+        WordMatcher::new()
     }
 
     fn score(text: &str, query: &str) -> Option<i64> {

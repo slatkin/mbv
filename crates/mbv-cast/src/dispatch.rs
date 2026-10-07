@@ -19,18 +19,37 @@ pub enum CastSubtitleKind {
 }
 
 /// The Chromecast device profile sent with a cast-bound `PlaybackInfo`
-/// request. `profile_json` is the codec/container baseline confirmed
+/// request. The serialized profile is the codec/container baseline confirmed
 /// against a Shield Android TV (design.md Risks, task 1.4); loosen it
-/// against observed receiver failures, not speculatively.
+/// against observed receiver failures, not speculatively. It stays an opaque
+/// string on the public surface so no third-party JSON type leaks into this
+/// crate's API; crate-internal code reads it back through `profile_value`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CastDeviceProfile {
-    pub profile_json: serde_json::Value,
+    profile_json: String,
     pub subtitle_stream_index: Option<i64>,
+}
+
+impl CastDeviceProfile {
+    /// The serialized device profile, ready to send as `DeviceProfile`.
+    #[must_use]
+    pub fn profile_json(&self) -> &str {
+        &self.profile_json
+    }
+
+    /// The profile as a JSON value for tests. The stored string is
+    /// serialized from a JSON value this crate built, so parsing it back
+    /// cannot fail in practice; a `Null` fallback keeps a corrupt string
+    /// from panicking instead.
+    #[cfg(test)]
+    pub(crate) fn profile_value(&self) -> serde_json::Value {
+        serde_json::from_str(&self.profile_json).unwrap_or(serde_json::Value::Null)
+    }
 }
 
 #[must_use]
 pub fn build_cast_device_profile(subtitles: CastSubtitleKind) -> CastDeviceProfile {
-    let profile_json = serde_json::json!({
+    let profile = serde_json::json!({
         "Name": "mbv-chromecast",
         "MaxStreamingBitrate": 120_000_000,
         "DirectPlayProfiles": [
@@ -52,7 +71,7 @@ pub fn build_cast_device_profile(subtitles: CastSubtitleKind) -> CastDeviceProfi
         CastSubtitleKind::None | CastSubtitleKind::Text => None,
     };
     CastDeviceProfile {
-        profile_json,
+        profile_json: profile.to_string(),
         subtitle_stream_index,
     }
 }
@@ -154,7 +173,7 @@ mod tests {
         ] {
             let profile = build_cast_device_profile(kind);
             assert_eq!(
-                profile.profile_json["SubtitleProfiles"],
+                profile.profile_value()["SubtitleProfiles"],
                 serde_json::json!([])
             );
         }
@@ -191,7 +210,7 @@ mod tests {
         let profile = build_cast_device_profile(CastSubtitleKind::Text);
         assert!(profile.subtitle_stream_index.is_none());
         assert_eq!(
-            profile.profile_json["SubtitleProfiles"],
+            profile.profile_value()["SubtitleProfiles"],
             serde_json::json!([])
         );
     }

@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use mbv_text::fuzzy_match::{SkimMatcherV2, word_match_score};
+use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
 use ratatui::layout::Rect;
 
 use crate::list::{
@@ -117,7 +117,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 .filter_map(|id| self.arena.get(id).map(|entry| entry.node.target.clone()))
                 .collect();
         }
-        let matcher = SkimMatcherV2::default().ignore_case();
+        let matcher = WordMatcher::new();
         self.ordered_nodes
             .iter()
             .filter_map(|id| self.arena.get(id))

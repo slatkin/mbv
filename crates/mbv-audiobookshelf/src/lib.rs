@@ -263,8 +263,8 @@ pub struct AudiobookshelfClient {
 impl AudiobookshelfClient {
     pub const REQUEST_HARD_BOUND: Duration = Duration::from_secs(5);
 
-    pub fn new(server_url: &str) -> Result<Self, AudiobookshelfError> {
-        let server_url = server_url.trim().trim_end_matches('/');
+    pub fn new(server_url: impl AsRef<str>) -> Result<Self, AudiobookshelfError> {
+        let server_url = server_url.as_ref().trim().trim_end_matches('/');
         if server_url.is_empty() {
             return Err(AudiobookshelfError::protocol());
         }
@@ -289,10 +289,12 @@ impl AudiobookshelfClient {
     /// Validate a new or replacement candidate entirely in memory. No config,
     /// secret, runtime identity, or Service-owned state is touched here.
     pub fn validate_setup_bounded(
-        server_url: &str,
-        api_key: &str,
+        server_url: impl AsRef<str>,
+        api_key: impl AsRef<str>,
         hard_bound: Duration,
     ) -> Result<AudiobookshelfValidatedSetup, AudiobookshelfError> {
+        let server_url = server_url.as_ref();
+        let api_key = api_key.as_ref();
         let setup = mbv_config::AudiobookshelfSetup::new(server_url);
         if setup.server_url.is_empty() || api_key.trim().is_empty() {
             return Err(AudiobookshelfError::protocol());

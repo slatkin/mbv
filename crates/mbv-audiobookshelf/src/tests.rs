@@ -1,9 +1,19 @@
 use super::*;
+use rstest::rstest;
 use std::collections::HashMap;
 
 mod catalog;
 mod failure;
 mod playback;
+
+/// Issue #894 item 3: the constructor takes `impl AsRef<str>`, so an owned
+/// `String` validates exactly like a borrow.
+#[rstest]
+#[case::owned_valid_url("http://127.0.0.1:1/".to_string(), true)]
+#[case::owned_blank_url("   ".to_string(), false)]
+fn new_accepts_owned_server_urls(#[case] server_url: String, #[case] valid: bool) {
+    assert_eq!(AudiobookshelfClient::new(server_url).is_ok(), valid);
+}
 
 #[test]
 fn invalid_setup_candidate_does_not_change_persisted_setup() {

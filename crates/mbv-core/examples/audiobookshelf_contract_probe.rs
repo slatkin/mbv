@@ -417,7 +417,7 @@ fn controlled_failure(status: u16, body: &'static str) -> Result<Value, ProbeErr
             let _ = stream.write_all(response.as_bytes());
         }
     });
-    let client = AudiobookshelfClient::new(&format!("http://{address}"))
+    let client = AudiobookshelfClient::new(format!("http://{address}"))
         .map_err(|error| ProbeError::contract(error.to_string()))?;
     let class = client
         .me_bounded("<LOOPBACK_CREDENTIAL>", REQUEST_BOUND)

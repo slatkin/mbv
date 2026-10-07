@@ -106,13 +106,16 @@ impl EmbyClient {
         is_audio: bool,
         profile: &mbv_cast::dispatch::CastDeviceProfile,
     ) -> Result<CastPlaybackInfo, crate::EmbyError> {
+        let device_profile: Value = serde_json::from_str(profile.profile_json()).map_err(|e| {
+            crate::EmbyError::playback_context("cast device profile is not valid JSON", e)
+        })?;
         let mut body = serde_json::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140_000_000,
             "EnableDirectPlay": true,
             "EnableDirectStream": false,
             "IsPlayback": true,
-            "DeviceProfile": profile.profile_json,
+            "DeviceProfile": device_profile,
         });
         if let Some(index) = profile.subtitle_stream_index {
             body["SubtitleStreamIndex"] = serde_json::json!(index);
