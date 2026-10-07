@@ -52,7 +52,15 @@ fn device_id_in(data_home: &std::path::Path) -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, &id)) {
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        tracing::warn!(
+            name: "emby.device_id.dir.failed",
+            target: "startup",
+            dir = %dir.display(),
+            error = %e,
+            "could not create device_id directory"
+        );
+    } else if let Err(e) = std::fs::write(&path, &id) {
         tracing::warn!(
             name: "emby.device_id.persist.failed",
             target: "startup",
