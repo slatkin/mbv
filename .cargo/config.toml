@@ -1,0 +1,12 @@
+# M-TARGET-CPU policy (issue #887): the prebuilt tarball, .deb, and AUR
+# binaries all ship the same binary for unknown x86-64 machines, so the floor
+# is x86-64-v2 (SSE4.2 + POPCNT, roughly 2009 and newer). Not v3: v3 needs
+# AVX2, which common NAS/HTPC chips (e.g. Gemini/Jasper Lake Celeron/Pentium)
+# lack, and heavy decode lives in the system libmpv/FFmpeg (runtime SIMD),
+# not in this code. Revisit v3 only on profile evidence per M-HOTPATH.
+# Linux-only: no Windows target entry because no Windows artifact is shipped.
+# NOTE: a RUSTFLAGS env var overrides these rustflags entirely (Cargo
+# behavior), so the release workflow must not set RUSTFLAGS or the binary
+# silently falls back to baseline. Verified: build.yml sets no RUSTFLAGS.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=x86-64-v2"]

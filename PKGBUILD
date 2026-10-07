@@ -2,7 +2,7 @@
 pkgname=mbv
 pkgver=0.23.9
 pkgrel=1
-pkgdesc="Terminal client for Emby media server"
+pkgdesc="Terminal client for Emby media server (requires x86-64-v2 CPU)"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
