@@ -6,7 +6,7 @@ pkgdesc="Terminal client for Emby media server"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
-depends=('mpv' 'openssl' 'pipewire' 'gtk4' 'gtk4-layer-shell')
+depends=('mpv' 'openssl' 'pipewire' 'wayland' 'libxkbcommon' 'fontconfig')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('a2777a1cb3149a4e73bbb076cb6386971e967d0e11cf7cabb66ca35a6396e945')
 

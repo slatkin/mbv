@@ -12,11 +12,19 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
+use pinwin::instance::{InstanceError, InstanceName, InstanceSocket, Request, SendError};
 use pinwin::layout::{Accent, Keyboard, Layout, Side};
 use pinwin::panel::Startup;
 
 /// The running panel handle the shell owns.
 pub(crate) type PinnedPanel = pinwin::Panel;
+
+/// The fixed instance name every pinned mbv listens under (design D1):
+/// pinwin scopes the socket path by `WAYLAND_DISPLAY`, so this names one
+/// pinned panel per display.
+fn instance_name() -> InstanceName {
+    InstanceName::parse("mbv").expect("the fixed instance name is valid")
+}
 
 /// The animated apply duration (design D3): the C ABI wrapper carried this
 /// default, the Rust crate only clamps it, so mbv owns the value.
@@ -54,11 +62,24 @@ pub(crate) fn apply_layout(
         .map_err(|error| error.to_string())
 }
 
+/// What a pinned launch did (design D2).
+#[derive(Debug)]
+pub(crate) enum PinLaunch {
+    /// This process owns the panel.
+    Started(PinnedPanel),
+    /// A pinned mbv already runs on this display and was asked to show.
+    ShownExisting,
+}
+
 /// Why a pinned launch did not reach the stdio hand-over (design D5).
 #[derive(Debug)]
 pub(crate) enum PinStartError {
     /// `WAYLAND_DISPLAY` is unset or empty.
     NoWaylandDisplay,
+    /// The instance socket could not be bound.
+    Instance(InstanceError),
+    /// A running pinned mbv did not answer the show request.
+    ShowExisting(SendError),
     /// The pty pair could not be opened.
     Pty(std::io::Error),
     /// `pinwin` refused to start the panel.
@@ -71,6 +92,10 @@ impl fmt::Display for PinStartError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NoWaylandDisplay => f.write_str("WAYLAND_DISPLAY is unset"),
+            Self::Instance(error) => write!(f, "the instance socket could not be bound: {error}"),
+            Self::ShowExisting(error) => {
+                write!(f, "the running pinned panel did not show: {error}")
+            }
             Self::Pty(error) => write!(f, "could not open a pty pair: {error}"),
             Self::Panel(error) => write!(f, "{error}"),
             Self::HandOver(error) => write!(f, "terminal hand-over failed: {error}"),
@@ -83,6 +108,8 @@ impl std::error::Error for PinStartError {
         match self {
             Self::Pty(error) | Self::HandOver(error) => Some(error),
             Self::Panel(error) => Some(error),
+            Self::Instance(error) => Some(error),
+            Self::ShowExisting(error) => Some(error),
             Self::NoWaylandDisplay => None,
         }
     }
@@ -99,15 +126,30 @@ pub(crate) fn is_pinned() -> bool {
 }
 
 /// Start the pinned panel and hand this process's stdio to its pty (design
-/// D3). The terminal environment is restored if anything fails before the
-/// hand-over completes.
-pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
+/// D2). The Wayland check comes first, then the instance socket bind: a
+/// duplicate leaves the environment, the pty and the terminal untouched, and
+/// only asks the running panel to show. The terminal environment is restored
+/// if anything fails after the bind completes.
+pub(crate) fn start(config: &PanelConfig) -> Result<PinLaunch, PinStartError> {
     if std::env::var_os("WAYLAND_DISPLAY").is_none_or(|value| value.is_empty()) {
         return Err(PinStartError::NoWaylandDisplay);
     }
+    let name = instance_name();
+    let socket = match InstanceSocket::bind(&name) {
+        Ok(socket) => socket,
+        // A pinned mbv already owns the name on this display: ask it to
+        // show and report that no second panel opened (design D2).
+        Err(InstanceError::Duplicate) => {
+            return match pinwin::instance::send(&name, Request::Show) {
+                Ok(()) => Ok(PinLaunch::ShownExisting),
+                Err(error) => Err(PinStartError::ShowExisting(error)),
+            };
+        }
+        Err(error) => return Err(PinStartError::Instance(error)),
+    };
     let saved_env = PanelEnv::apply();
-    match start_panel(config) {
-        Ok(panel) => Ok(panel),
+    match start_panel(config, socket) {
+        Ok(panel) => Ok(PinLaunch::Started(panel)),
         Err(error) => {
             saved_env.restore();
             Err(error)
@@ -116,22 +158,28 @@ pub(crate) fn start(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> 
 }
 
 /// The pty pair, the panel, and the stdio hand-over. A failure after
-/// `Panel::start` succeeded drops the panel, which stops it (design D3).
-fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
+/// `Panel::start` succeeded drops the panel, which stops it and removes the
+/// instance socket file (design D3).
+fn start_panel(config: &PanelConfig, socket: InstanceSocket) -> Result<PinnedPanel, PinStartError> {
     let (master, slave) = open_pty()?;
     // The panel reads the master fd for its whole life and the library never
     // closes it (design D7), so the fd must stay open even though `Panel` no
     // longer borrows it: the owned fd is leaked for the life of the process,
     // which the panel's whole life fits inside.
     let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
-    let panel = pinwin::Panel::start(Startup {
-        fd: master.as_raw_fd(),
-        layout: layout_from_config(config, PinnedWidth::default()),
-        keyboard: Keyboard::OnDemand,
-        accent: config
-            .accent
-            .then(|| Accent::new(config.accent_color.0, config.accent_width)),
-    })
+    let panel = pinwin::Panel::start(
+        Startup::new(
+            master.as_raw_fd(),
+            layout_from_config(config, PinnedWidth::default()),
+            Keyboard::OnDemand,
+            config
+                .accent
+                .then(|| Accent::new(config.accent_color.0, config.accent_width)),
+        )
+        // A panel started with a socket serves `toggle` and `show` on a
+        // detached thread until the `Panel` drops (design D2).
+        .with_instance(socket),
+    )
     .map_err(PinStartError::Panel)?;
     detach_controlling_terminal()?;
     hand_over_stdio(&slave)?;
@@ -144,6 +192,39 @@ fn start_panel(config: &PanelConfig) -> Result<PinnedPanel, PinStartError> {
     }
     HANDED_OVER.store(true, Ordering::Relaxed);
     Ok(panel)
+}
+
+/// Ask the running pinned mbv on this display to toggle its panel (design
+/// D3): hide it if shown, show it if hidden. Exits 1 with a report when no
+/// panel is listening or the request fails; exits 0 silently on success.
+pub(crate) fn toggle_running() {
+    match pinwin::instance::send(&instance_name(), Request::Toggle) {
+        Ok(()) => {}
+        Err(SendError::NotListening { .. }) => {
+            report_toggle_failure("no pinned mbv is running");
+        }
+        // `SendError` is non-exhaustive, so mbv reports its `Display` and
+        // does not re-classify it.
+        Err(error) => {
+            report_toggle_failure(&format!("cannot toggle the pinned panel: {error}"));
+        }
+    }
+}
+
+/// Report a failed `--toggle` and exit 1 (design D3): stderr when stdin is a
+/// terminal, otherwise a desktop notification, because a compositor key has
+/// no terminal.
+fn report_toggle_failure(reason: &str) -> ! {
+    let message = format!("mbv: {reason}");
+    match failure_action(std::io::stdin().is_terminal()) {
+        StartFailureAction::WarnInTerminal => {
+            eprintln!("{message}");
+        }
+        StartFailureAction::NotifyAndExit => {
+            notify(&message);
+        }
+    }
+    std::process::exit(1);
 }
 
 fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
@@ -241,8 +322,8 @@ fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
 }
 
 /// Point fd 2 at the application log (opened for append), falling back to
-/// `/dev/null`: after the hand-over, native libraries (GTK/GLib/layer-shell)
-/// writing to stderr must not draw over the panel. mbv reports fatal
+/// `/dev/null`: after the hand-over, native libraries (Wayland, xkbcommon,
+/// fontconfig) writing to stderr must not draw over the panel. mbv reports fatal
 /// post-hand-over errors via the log and a notification (design D5), so the
 /// TUI does not need fd 2.
 fn redirect_stderr() -> Result<(), PinStartError> {
@@ -283,7 +364,7 @@ impl PanelEnv {
             saved.push((name, std::env::var_os(name)));
         }
         // SAFETY: this runs before any thread that reads or writes the process
-        // environment exists: the pinwin GTK thread is not started yet, and
+        // environment exists: the pinwin panel thread is not started yet, and
         // the TUI has not spawned its workers.
         unsafe {
             for (name, value) in PANEL_ENV_SET {
@@ -297,7 +378,7 @@ impl PanelEnv {
     }
 
     fn restore(self) {
-        // SAFETY: a failed start leaves no pinwin GTK thread running
+        // SAFETY: a failed start leaves no pinwin panel thread running
         // (upstream addition 3) and the TUI has not spawned its workers, so no
         // other thread reads the environment across these writes.
         unsafe {

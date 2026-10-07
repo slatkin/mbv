@@ -116,7 +116,7 @@ name = "mbv"
 path = "src/main.rs"
 
 [dependencies]
-pinwin = { git = "https://github.com/slatkin/pinwin", tag = "0.2.2" }
+pinwin = { git = "https://github.com/slatkin/pinwin", rev = "8127ff81079d91f326dc5b8427ab03a1dc17992c" }
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
 mbv-audiobookshelf = { path = "crates/mbv-audiobookshelf" }
@@ -181,7 +181,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libgtk-4-1, libgtk4-layer-shell0"
+depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libfontconfig1"
 section = "video"
 priority = "optional"
 assets = [
