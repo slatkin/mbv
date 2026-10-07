@@ -22,11 +22,15 @@ stable crate-qualified dotted name for each kind (the log `error.type`
 value). Every error type SHALL implement
 `Display` (one summary sentence), `std::error::Error` with the upstream cause
 available via `source()`, and `From` for each upstream error it converts
-(`M-FROM-ERROR`). Every error type SHALL carry a `Backtrace` captured at
-construction with `Backtrace::capture()` and expose it through `backtrace()`;
-because a backtrace is neither clonable nor comparable, error types SHALL NOT
-derive `Clone`, `PartialEq`, or `Eq`. No crate SHALL introduce `anyhow`,
-`thiserror`, or `eyre`.
+(`M-FROM-ERROR`). Every error type exposed by a crate's public API SHALL carry
+a `Backtrace` captured at construction with `Backtrace::capture()` and expose
+it through `backtrace()`. Because a backtrace is neither clonable nor
+comparable, error types SHALL NOT derive `Clone`, `PartialEq`, or `Eq`;
+callers that need to distinguish failures read `kind_name()` or an `is_*()`
+predicate instead of comparing error values. No crate SHALL introduce
+`anyhow`, `thiserror`, or `eyre`. This supersedes the archived
+`2026-09-28-replace-stringly-typed-errors` non-goal that excluded backtrace
+fields.
 
 #### Scenario: A failure carries where it came from
 

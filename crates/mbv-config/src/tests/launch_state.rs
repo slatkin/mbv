@@ -4,7 +4,7 @@ use crate::launch_state::{
 use crate::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
     FeedsSelectorKey, HomeSelectorKey, LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity,
-    TUI_LAUNCH_STATE_VERSION, TabIdentity, TestTempDir, TuiLaunchState, TuiLaunchStateError,
+    TUI_LAUNCH_STATE_VERSION, TabIdentity, TestTempDir, TuiLaunchState,
 };
 use mbv_queue::ServiceKind;
 
@@ -206,9 +206,10 @@ fn tui_launch_state_failed_replace_leaves_no_tmp_sibling() {
     std::fs::create_dir(&path).unwrap();
     std::fs::write(path.join("sentinel"), "x").unwrap();
     let err = save_tui_launch_state_at(&path, &launch_state_sample()).unwrap_err();
-    assert!(
-        matches!(err, TuiLaunchStateError::Replace(_)),
-        "expected Replace error, got: {err:?}"
+    assert_eq!(
+        err.kind_name(),
+        "config.launch_state.replace",
+        "expected a replace failure, got: {err:?}"
     );
     let debris: Vec<_> = std::fs::read_dir(scratch.path())
         .unwrap()

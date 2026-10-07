@@ -269,21 +269,57 @@ pub enum LibraryItemIdentity {
 /// Domain error for launch-state writes. Reads are infallible by design
 /// (missing/malformed → `None`, never a startup failure), so only the
 /// writer surfaces errors.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TuiLaunchStateError {
+#[derive(Debug)]
+pub struct TuiLaunchStateError {
+    kind: TuiLaunchStateErrorKind,
+    backtrace: std::backtrace::Backtrace,
+}
+
+#[derive(Debug)]
+enum TuiLaunchStateErrorKind {
     CreateDirectory(String),
     Serialize(String),
     Write(String),
     Replace(String),
 }
 
+impl TuiLaunchStateError {
+    fn new(kind: TuiLaunchStateErrorKind) -> Self {
+        Self {
+            kind,
+            backtrace: std::backtrace::Backtrace::capture(),
+        }
+    }
+
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &std::backtrace::Backtrace {
+        &self.backtrace
+    }
+
+    /// Stable name of the failed launch-state operation.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            TuiLaunchStateErrorKind::CreateDirectory(_) => "config.launch_state.create_directory",
+            TuiLaunchStateErrorKind::Serialize(_) => "config.launch_state.serialize",
+            TuiLaunchStateErrorKind::Write(_) => "config.launch_state.write",
+            TuiLaunchStateErrorKind::Replace(_) => "config.launch_state.replace",
+        }
+    }
+}
+
 impl std::fmt::Display for TuiLaunchStateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CreateDirectory(detail) => write!(f, "create directory: {detail}"),
-            Self::Serialize(detail) => write!(f, "serialize launch state: {detail}"),
-            Self::Write(detail) => write!(f, "write launch state: {detail}"),
-            Self::Replace(detail) => write!(f, "replace launch state: {detail}"),
+        match &self.kind {
+            TuiLaunchStateErrorKind::CreateDirectory(detail) => {
+                write!(f, "create directory: {detail}")
+            }
+            TuiLaunchStateErrorKind::Serialize(detail) => {
+                write!(f, "serialize launch state: {detail}")
+            }
+            TuiLaunchStateErrorKind::Write(detail) => write!(f, "write launch state: {detail}"),
+            TuiLaunchStateErrorKind::Replace(detail) => write!(f, "replace launch state: {detail}"),
         }
     }
 }
@@ -312,17 +348,29 @@ pub(super) fn save_tui_launch_state_at(
     state: &TuiLaunchState,
 ) -> Result<(), TuiLaunchStateError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|e| TuiLaunchStateError::CreateDirectory(format!("{}: {e}", dir.display())))?;
+        std::fs::create_dir_all(dir).map_err(|e| {
+            TuiLaunchStateError::new(TuiLaunchStateErrorKind::CreateDirectory(format!(
+                "{}: {e}",
+                dir.display()
+            )))
+        })?;
     }
-    let json =
-        serde_json::to_string(state).map_err(|e| TuiLaunchStateError::Serialize(e.to_string()))?;
+    let json = serde_json::to_string(state)
+        .map_err(|e| TuiLaunchStateError::new(TuiLaunchStateErrorKind::Serialize(e.to_string())))?;
     let tmp = tui_launch_state_tmp_path(path);
-    std::fs::write(&tmp, &json)
-        .map_err(|e| TuiLaunchStateError::Write(format!("{}: {e}", tmp.display())))?;
+    std::fs::write(&tmp, &json).map_err(|e| {
+        TuiLaunchStateError::new(TuiLaunchStateErrorKind::Write(format!(
+            "{}: {e}",
+            tmp.display()
+        )))
+    })?;
     std::fs::rename(&tmp, path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
-        TuiLaunchStateError::Replace(format!("{} to {}: {e}", tmp.display(), path.display()))
+        TuiLaunchStateError::new(TuiLaunchStateErrorKind::Replace(format!(
+            "{} to {}: {e}",
+            tmp.display(),
+            path.display()
+        )))
     })
 }
 

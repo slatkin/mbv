@@ -214,12 +214,19 @@ fn parser_accepts_canonical_and_reordered_forms() {
         chord_case("N", KeyMods::NONE, Key::Char('N')),
     ];
     for (input, expected) in cases {
-        assert_eq!(&Chord::parse(input), &Ok(expected), "parsing `{input}`");
+        assert_eq!(
+            Chord::parse(input).expect("case table chord must parse"),
+            expected,
+            "parsing `{input}`"
+        );
     }
-    assert_eq!(Chord::parse("Shift+Ctrl+b"), Chord::parse("Ctrl+Shift+b"));
     assert_eq!(
-        Chord::parse("Shift+Alt+Ctrl+x"),
-        Chord::parse("Ctrl+Shift+Alt+x")
+        Chord::parse("Shift+Ctrl+b").expect("modifier order must parse"),
+        Chord::parse("Ctrl+Shift+b").expect("modifier order must parse")
+    );
+    assert_eq!(
+        Chord::parse("Shift+Alt+Ctrl+x").expect("modifier order must parse"),
+        Chord::parse("Ctrl+Shift+Alt+x").expect("modifier order must parse")
     );
 }
 
@@ -250,8 +257,8 @@ fn display_round_trips_every_declared_chord() {
         for text in action.default_chords {
             let chord = Chord::parse(text).expect("declared default must parse");
             assert_eq!(
-                Chord::parse(&chord.to_string()),
-                Ok(chord),
+                Chord::parse(&chord.to_string()).expect("canonical rendering must parse"),
+                chord,
                 "canonical rendering of `{text}` must round-trip"
             );
         }
@@ -415,7 +422,10 @@ fn load_accepts_a_valid_partially_overridden_config() {
 
 #[test]
 fn load_accepts_an_absent_keys_section_and_a_redundant_default_override() {
-    assert_eq!(load(&RawKeybinds::default()), Ok(Keybinds::defaults()));
+    assert_eq!(
+        load(&RawKeybinds::default()).expect("defaults must load"),
+        Keybinds::defaults()
+    );
 
     // An override equal to the declared default is not a collision.
     let raw = RawKeybinds {
@@ -429,17 +439,14 @@ fn load_accepts_an_absent_keys_section_and_a_redundant_default_override() {
 /// (both entries for the collision classes).
 #[test]
 fn load_rejects_every_validation_class() {
-    let cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])> = vec![
+    let cases: Vec<(&str, RawKeybinds, &str, &[&str])> = vec![
         (
             "reserved chord as prefix",
             RawKeybinds {
                 prefix: Some("Ctrl+q".to_string()),
                 sections: Vec::new(),
             },
-            KeybindsError::ReservedChord {
-                chord: "Ctrl+q".to_string(),
-                entry: "keys.prefix".to_string(),
-            },
+            "keybinds.reserved_chord",
             &["Ctrl+q", "reserved", "keys.prefix"],
         ),
         (
@@ -448,10 +455,7 @@ fn load_rejects_every_validation_class() {
                 prefix: None,
                 sections: vec![raw_router("global", &[("help_open", "Ctrl+q")])],
             },
-            KeybindsError::ReservedChord {
-                chord: "Ctrl+q".to_string(),
-                entry: "keys.global.help_open".to_string(),
-            },
+            "keybinds.reserved_chord",
             &["Ctrl+q", "reserved", "keys.global.help_open"],
         ),
         (
@@ -460,10 +464,7 @@ fn load_rejects_every_validation_class() {
                 prefix: None,
                 sections: vec![raw_prefix("library", &[("next_library_tab", "Ctrl+q")])],
             },
-            KeybindsError::ReservedChord {
-                chord: "Ctrl+q".to_string(),
-                entry: "keys.library.prefix.next_library_tab".to_string(),
-            },
+            "keybinds.reserved_chord",
             &["Ctrl+q", "reserved", "keys.library.prefix.next_library_tab"],
         ),
         (
@@ -472,11 +473,7 @@ fn load_rejects_every_validation_class() {
                 prefix: None,
                 sections: vec![raw_router("global", &[("help_open", "F13")])],
             },
-            KeybindsError::UnparseableChord {
-                chord: "F13".to_string(),
-                entry: "keys.global.help_open".to_string(),
-                reason: Chord::parse("F13").unwrap_err().to_string(),
-            },
+            "keybinds.unparseable_chord",
             &["F13", "keys.global.help_open", "unparseable"],
         ),
         (
@@ -485,10 +482,7 @@ fn load_rejects_every_validation_class() {
                 prefix: None,
                 sections: vec![raw_router("global", &[("help_opn", "F9")])],
             },
-            KeybindsError::UnknownAction {
-                action: "help_opn".to_string(),
-                section: "global".to_string(),
-            },
+            "keybinds.unknown_action",
             &["help_opn"],
         ),
         (
@@ -497,9 +491,7 @@ fn load_rejects_every_validation_class() {
                 prefix: None,
                 sections: vec![raw_router("bogus", &[("help_open", "F9")])],
             },
-            KeybindsError::UnknownSection {
-                section: "bogus".to_string(),
-            },
+            "keybinds.unknown_section",
             &["bogus"],
         ),
     ];
@@ -508,7 +500,7 @@ fn load_rejects_every_validation_class() {
 
 #[test]
 fn load_rejects_section_and_prefix_namespace_validation_classes() {
-    let cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])> = vec![
+    let cases: Vec<(&str, RawKeybinds, &str, &[&str])> = vec![
         (
             "case-variant duplicate section names",
             RawKeybinds {
@@ -518,10 +510,7 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
                     raw_router("library", &[("next_library_tab", "n")]),
                 ],
             },
-            KeybindsError::DuplicateSection {
-                first: "Library".to_string(),
-                second: "library".to_string(),
-            },
+            "keybinds.duplicate_section",
             &["Library", "library"],
         ),
         (
@@ -530,11 +519,7 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
                 prefix: None,
                 sections: vec![raw_router("library", &[("help_open", "F9")])],
             },
-            KeybindsError::SectionMismatch {
-                action: "help_open".to_string(),
-                section: "library".to_string(),
-                declared: KeySection::Global,
-            },
+            "keybinds.section_mismatch",
             &["help_open", "library", "Global"],
         ),
         (
@@ -543,10 +528,7 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
                 prefix: None,
                 sections: vec![raw_prefix("playback", &[("stop", "s")])],
             },
-            KeybindsError::NotPrefixAddressable {
-                action: "stop".to_string(),
-                section: "playback".to_string(),
-            },
+            "keybinds.not_prefix_addressable",
             &["stop", "prefix-addressable"],
         ),
         (
@@ -555,10 +537,7 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
                 prefix: None,
                 sections: vec![raw_prefix("library", &[("library_tab_jump", "n")])],
             },
-            KeybindsError::NotPrefixAddressable {
-                action: "library_tab_jump".to_string(),
-                section: "library".to_string(),
-            },
+            "keybinds.not_prefix_addressable",
             &["library_tab_jump", "prefix-addressable"],
         ),
         (
@@ -567,10 +546,7 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
                 prefix: Some("F1".to_string()),
                 sections: Vec::new(),
             },
-            KeybindsError::PrefixCollision {
-                chord: "F1".to_string(),
-                entry: "keys.Global.help_open".to_string(),
-            },
+            "keybinds.prefix_collision",
             &["F1", "keys.Global.help_open"],
         ),
     ];
@@ -579,17 +555,14 @@ fn load_rejects_section_and_prefix_namespace_validation_classes() {
 
 #[test]
 fn load_rejects_collision_validation_classes() {
-    let cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])> = vec![
+    let cases: Vec<(&str, RawKeybinds, &str, &[&str])> = vec![
         (
             "prefix collides with a configured override",
             RawKeybinds {
                 prefix: Some("F9".to_string()),
                 sections: vec![raw_router("global", &[("help_open", "F9")])],
             },
-            KeybindsError::PrefixCollision {
-                chord: "F9".to_string(),
-                entry: "keys.Global.help_open".to_string(),
-            },
+            "keybinds.prefix_collision",
             &["F9", "keys.Global.help_open"],
         ),
         (
@@ -598,10 +571,7 @@ fn load_rejects_collision_validation_classes() {
                 prefix: Some("n".to_string()),
                 sections: vec![raw_prefix("library", &[("next_library_tab", "n")])],
             },
-            KeybindsError::PrefixCollision {
-                chord: "n".to_string(),
-                entry: "keys.Library.prefix.next_library_tab".to_string(),
-            },
+            "keybinds.prefix_collision",
             &["n", "keys.Library.prefix.next_library_tab"],
         ),
         (
@@ -613,11 +583,7 @@ fn load_rejects_collision_validation_classes() {
                     &[("help_open", "F2"), ("settings_open", "F2")],
                 )],
             },
-            KeybindsError::RouterCollision {
-                chord: "F2".to_string(),
-                first: "help_open".to_string(),
-                second: "settings_open".to_string(),
-            },
+            "keybinds.router_collision",
             &["F2", "help_open", "settings_open"],
         ),
         (
@@ -626,11 +592,7 @@ fn load_rejects_collision_validation_classes() {
                 prefix: None,
                 sections: vec![raw_router("global", &[("help_open", "q")])],
             },
-            KeybindsError::RouterCollision {
-                chord: "q".to_string(),
-                first: "help_open".to_string(),
-                second: "quit".to_string(),
-            },
+            "keybinds.router_collision",
             &["q", "help_open", "quit"],
         ),
         (
@@ -642,22 +604,18 @@ fn load_rejects_collision_validation_classes() {
                     raw_prefix("playback", &[("toggle_play_pause", "n")]),
                 ],
             },
-            KeybindsError::PrefixNamespaceCollision {
-                chord: "n".to_string(),
-                first: "next_library_tab".to_string(),
-                second: "toggle_play_pause".to_string(),
-            },
+            "keybinds.prefix_namespace_collision",
             &["n", "next_library_tab", "toggle_play_pause"],
         ),
     ];
     assert_rejected_cases(cases);
 }
 
-fn assert_rejected_cases(cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])>) {
-    for (name, raw, expected, message_parts) in cases {
-        let result = load(&raw);
-        assert_eq!(result.as_ref(), Err(&expected), "case `{name}`");
-        let message = result.unwrap_err().to_string();
+fn assert_rejected_cases(cases: Vec<(&str, RawKeybinds, &str, &[&str])>) {
+    for (name, raw, expected_kind, message_parts) in cases {
+        let error = load(&raw).unwrap_err();
+        assert_eq!(error.kind_name(), expected_kind, "case `{name}`");
+        let message = error.to_string();
         for part in message_parts {
             assert!(
                 message.contains(part),

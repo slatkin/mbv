@@ -124,8 +124,17 @@ pub struct RawSection {
 
 /// A load-time rejection, naming the offending entry (both entries for the
 /// collision classes).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeybindsError {
+#[derive(Debug)]
+pub struct KeybindsError {
+    kind: KeybindsErrorKind,
+    // Boxed: this is the one error whose kind alone is 88 bytes (three-`String`
+    // `UnparseableChord`), so an inline backtrace would push the `Err` variant
+    // past clippy's 128-byte large-error threshold on every `load` signature.
+    backtrace: Box<std::backtrace::Backtrace>,
+}
+
+#[derive(Debug)]
+enum KeybindsErrorKind {
     ReservedChord {
         chord: String,
         entry: String,
@@ -171,14 +180,48 @@ pub enum KeybindsError {
     },
 }
 
+impl KeybindsError {
+    fn new(kind: KeybindsErrorKind) -> Self {
+        Self {
+            kind,
+            backtrace: Box::new(std::backtrace::Backtrace::capture()),
+        }
+    }
+
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &std::backtrace::Backtrace {
+        &self.backtrace
+    }
+
+    /// Stable name of the load-time rejection kind.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            KeybindsErrorKind::ReservedChord { .. } => "keybinds.reserved_chord",
+            KeybindsErrorKind::UnparseableChord { .. } => "keybinds.unparseable_chord",
+            KeybindsErrorKind::UnknownAction { .. } => "keybinds.unknown_action",
+            KeybindsErrorKind::UnknownSection { .. } => "keybinds.unknown_section",
+            KeybindsErrorKind::DuplicateSection { .. } => "keybinds.duplicate_section",
+            KeybindsErrorKind::SectionMismatch { .. } => "keybinds.section_mismatch",
+            KeybindsErrorKind::NotPrefixAddressable { .. } => "keybinds.not_prefix_addressable",
+            KeybindsErrorKind::PrefixCollision { .. } => "keybinds.prefix_collision",
+            KeybindsErrorKind::RouterCollision { .. } => "keybinds.router_collision",
+            KeybindsErrorKind::PrefixNamespaceCollision { .. } => {
+                "keybinds.prefix_namespace_collision"
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for KeybindsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ReservedChord { chord, entry } => write!(
+        match &self.kind {
+            KeybindsErrorKind::ReservedChord { chord, entry } => write!(
                 f,
                 "keys: chord `{chord}` in `{entry}` is reserved and cannot be configured"
             ),
-            Self::UnparseableChord {
+            KeybindsErrorKind::UnparseableChord {
                 chord,
                 entry,
                 reason,
@@ -186,18 +229,18 @@ impl std::fmt::Display for KeybindsError {
                 f,
                 "keys: `{entry}` has unparseable chord `{chord}`: {reason}"
             ),
-            Self::UnknownAction { action, section } => write!(
+            KeybindsErrorKind::UnknownAction { action, section } => write!(
                 f,
                 "keys: unknown action `{action}` in section `keys.{section}`"
             ),
-            Self::UnknownSection { section } => {
+            KeybindsErrorKind::UnknownSection { section } => {
                 write!(f, "keys: unknown section `keys.{section}`")
             }
-            Self::DuplicateSection { first, second } => write!(
+            KeybindsErrorKind::DuplicateSection { first, second } => write!(
                 f,
                 "keys: sections `keys.{first}` and `keys.{second}` name the same section under different spellings"
             ),
-            Self::SectionMismatch {
+            KeybindsErrorKind::SectionMismatch {
                 action,
                 section,
                 declared,
@@ -206,15 +249,15 @@ impl std::fmt::Display for KeybindsError {
                 "keys: action `{action}` is declared in section `{}` but configured under `keys.{section}`",
                 declared.name()
             ),
-            Self::NotPrefixAddressable { action, section } => write!(
+            KeybindsErrorKind::NotPrefixAddressable { action, section } => write!(
                 f,
                 "keys: action `{action}` is not prefix-addressable (`keys.{section}.prefix.{action}`)"
             ),
-            Self::PrefixCollision { chord, entry } => write!(
+            KeybindsErrorKind::PrefixCollision { chord, entry } => write!(
                 f,
                 "keys: prefix chord `{chord}` collides with binding `{entry}`"
             ),
-            Self::RouterCollision {
+            KeybindsErrorKind::RouterCollision {
                 chord,
                 first,
                 second,
@@ -222,7 +265,7 @@ impl std::fmt::Display for KeybindsError {
                 f,
                 "keys: actions `{first}` and `{second}` share router-scope chord `{chord}`"
             ),
-            Self::PrefixNamespaceCollision {
+            KeybindsErrorKind::PrefixNamespaceCollision {
                 chord,
                 first,
                 second,
@@ -299,16 +342,17 @@ fn load_sections(
             .iter()
             .find(|seen| seen.eq_ignore_ascii_case(section_name))
         {
-            return Err(KeybindsError::DuplicateSection {
+            return Err(KeybindsError::new(KeybindsErrorKind::DuplicateSection {
                 first: (*first).to_string(),
                 second: section_name.clone(),
-            });
+            }));
         }
         seen_sections.push(section_name);
-        let section =
-            KeySection::from_name(section_name).ok_or_else(|| KeybindsError::UnknownSection {
+        let section = KeySection::from_name(section_name).ok_or_else(|| {
+            KeybindsError::new(KeybindsErrorKind::UnknownSection {
                 section: section_name.clone(),
-            })?;
+            })
+        })?;
         let mut bindings = SectionBindings::default();
         for (id, chord) in &raw_section.router {
             let action = lookup_in_section(id, section_name)?;
@@ -320,10 +364,12 @@ fn load_sections(
         for (id, chord) in &raw_section.prefix {
             let action = lookup_in_section(id, section_name)?;
             if !action.prefix_addressable {
-                return Err(KeybindsError::NotPrefixAddressable {
-                    action: id.clone(),
-                    section: section_name.clone(),
-                });
+                return Err(KeybindsError::new(
+                    KeybindsErrorKind::NotPrefixAddressable {
+                        action: id.clone(),
+                        section: section_name.clone(),
+                    },
+                ));
             }
             let entry = format!("keys.{section_name}.prefix.{id}");
             let parsed = parse_configured(chord, &entry, reserved)?;
@@ -346,18 +392,18 @@ fn reject_prefix_collisions(
     };
     for (action, chord) in configured_router {
         if *chord == prefix {
-            return Err(KeybindsError::PrefixCollision {
+            return Err(KeybindsError::new(KeybindsErrorKind::PrefixCollision {
                 chord: prefix.to_string(),
                 entry: format!("keys.{}.{}", action.section.name(), action.id),
-            });
+            }));
         }
     }
     for (action, chord) in configured_prefix_ns {
         if *chord == prefix {
-            return Err(KeybindsError::PrefixCollision {
+            return Err(KeybindsError::new(KeybindsErrorKind::PrefixCollision {
                 chord: prefix.to_string(),
                 entry: format!("keys.{}.prefix.{}", action.section.name(), action.id),
-            });
+            }));
         }
     }
     for action in KEYBIND_ACTIONS {
@@ -368,10 +414,10 @@ fn reject_prefix_collisions(
             continue;
         }
         if action.parsed_default_chords().contains(&prefix) {
-            return Err(KeybindsError::PrefixCollision {
+            return Err(KeybindsError::new(KeybindsErrorKind::PrefixCollision {
                 chord: prefix.to_string(),
                 entry: format!("keys.{}.{}", action.section.name(), action.id),
-            });
+            }));
         }
     }
     Ok(())
@@ -393,11 +439,11 @@ fn reject_router_collisions(
                 None => other.parsed_default_chords(),
             };
             if other_effective.contains(chord) {
-                return Err(KeybindsError::RouterCollision {
+                return Err(KeybindsError::new(KeybindsErrorKind::RouterCollision {
                     chord: chord.to_string(),
                     first: action.id.to_string(),
                     second: other.id.to_string(),
-                });
+                }));
             }
         }
     }
@@ -410,11 +456,13 @@ fn reject_prefix_namespace_collisions(
     for (index, (first, chord)) in configured_prefix_ns.iter().enumerate() {
         for (second, other_chord) in configured_prefix_ns.iter().skip(index + 1) {
             if first.id != second.id && chord == other_chord {
-                return Err(KeybindsError::PrefixNamespaceCollision {
-                    chord: chord.to_string(),
-                    first: first.id.to_string(),
-                    second: second.id.to_string(),
-                });
+                return Err(KeybindsError::new(
+                    KeybindsErrorKind::PrefixNamespaceCollision {
+                        chord: chord.to_string(),
+                        first: first.id.to_string(),
+                        second: second.id.to_string(),
+                    },
+                ));
             }
         }
     }
@@ -425,31 +473,35 @@ fn lookup_in_section(
     id: &str,
     section_name: &str,
 ) -> Result<&'static KeybindAction, KeybindsError> {
-    let action = action_by_id(id).ok_or_else(|| KeybindsError::UnknownAction {
-        action: id.to_string(),
-        section: section_name.to_string(),
+    let action = action_by_id(id).ok_or_else(|| {
+        KeybindsError::new(KeybindsErrorKind::UnknownAction {
+            action: id.to_string(),
+            section: section_name.to_string(),
+        })
     })?;
     if !action.section.name().eq_ignore_ascii_case(section_name) {
-        return Err(KeybindsError::SectionMismatch {
+        return Err(KeybindsError::new(KeybindsErrorKind::SectionMismatch {
             action: id.to_string(),
             section: section_name.to_string(),
             declared: action.section,
-        });
+        }));
     }
     Ok(action)
 }
 
 fn parse_configured(chord: &str, entry: &str, reserved: &[Chord]) -> Result<Chord, KeybindsError> {
-    let parsed = Chord::parse(chord).map_err(|reason| KeybindsError::UnparseableChord {
-        chord: chord.to_string(),
-        entry: entry.to_string(),
-        reason: reason.to_string(),
-    })?;
-    if reserved.contains(&parsed) {
-        return Err(KeybindsError::ReservedChord {
+    let parsed = Chord::parse(chord).map_err(|reason| {
+        KeybindsError::new(KeybindsErrorKind::UnparseableChord {
             chord: chord.to_string(),
             entry: entry.to_string(),
-        });
+            reason: reason.to_string(),
+        })
+    })?;
+    if reserved.contains(&parsed) {
+        return Err(KeybindsError::new(KeybindsErrorKind::ReservedChord {
+            chord: chord.to_string(),
+            entry: entry.to_string(),
+        }));
     }
     Ok(parsed)
 }

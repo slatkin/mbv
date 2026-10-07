@@ -56,21 +56,53 @@ pub struct Chord {
 }
 
 /// Why a chord string failed to parse.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ChordParseError {
+#[derive(Debug)]
+pub struct ChordParseError {
+    kind: ChordParseErrorKind,
+    backtrace: std::backtrace::Backtrace,
+}
+
+#[derive(Debug)]
+enum ChordParseErrorKind {
     Empty,
     EmptyToken,
     UnknownModifier(String),
     UnknownKey(String),
 }
 
+impl ChordParseError {
+    fn new(kind: ChordParseErrorKind) -> Self {
+        Self {
+            kind,
+            backtrace: std::backtrace::Backtrace::capture(),
+        }
+    }
+
+    /// Backtrace captured when this error was created.
+    #[must_use]
+    pub fn backtrace(&self) -> &std::backtrace::Backtrace {
+        &self.backtrace
+    }
+
+    /// Stable name of the parse failure kind.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            ChordParseErrorKind::Empty => "keybinds.chord.empty",
+            ChordParseErrorKind::EmptyToken => "keybinds.chord.empty_token",
+            ChordParseErrorKind::UnknownModifier(_) => "keybinds.chord.unknown_modifier",
+            ChordParseErrorKind::UnknownKey(_) => "keybinds.chord.unknown_key",
+        }
+    }
+}
+
 impl std::fmt::Display for ChordParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Empty => write!(f, "empty chord"),
-            Self::EmptyToken => write!(f, "empty chord token"),
-            Self::UnknownModifier(name) => write!(f, "unknown modifier `{name}`"),
-            Self::UnknownKey(name) => write!(f, "unknown key `{name}`"),
+        match &self.kind {
+            ChordParseErrorKind::Empty => write!(f, "empty chord"),
+            ChordParseErrorKind::EmptyToken => write!(f, "empty chord token"),
+            ChordParseErrorKind::UnknownModifier(name) => write!(f, "unknown modifier `{name}`"),
+            ChordParseErrorKind::UnknownKey(name) => write!(f, "unknown key `{name}`"),
         }
     }
 }
@@ -92,7 +124,7 @@ impl Chord {
     pub fn parse(s: &str) -> Result<Self, ChordParseError> {
         let s = s.trim();
         if s.is_empty() {
-            return Err(ChordParseError::Empty);
+            return Err(ChordParseError::new(ChordParseErrorKind::Empty));
         }
         let mut chars = s.chars();
         if let (Some(c), None) = (chars.next(), chars.next()) {
@@ -107,14 +139,16 @@ impl Chord {
         for token in modifier_tokens {
             let token = token.trim();
             if token.is_empty() {
-                return Err(ChordParseError::EmptyToken);
+                return Err(ChordParseError::new(ChordParseErrorKind::EmptyToken));
             }
             let modifier = match token.to_ascii_lowercase().as_str() {
                 "ctrl" | "control" => KeyMods::CTRL,
                 "shift" => KeyMods::SHIFT,
                 "alt" => KeyMods::ALT,
                 _ => {
-                    return Err(ChordParseError::UnknownModifier(token.to_string()));
+                    return Err(ChordParseError::new(ChordParseErrorKind::UnknownModifier(
+                        token.to_string(),
+                    )));
                 }
             };
             mods = mods.union(modifier);
@@ -151,7 +185,7 @@ fn parse_key(token: &str) -> Result<Key, ChordParseError> {
 
     let token = token.trim();
     if token.is_empty() {
-        return Err(ChordParseError::EmptyToken);
+        return Err(ChordParseError::new(ChordParseErrorKind::EmptyToken));
     }
     let mut chars = token.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
@@ -166,7 +200,7 @@ fn parse_key(token: &str) -> Result<Key, ChordParseError> {
         .and_then(|number| number.parse::<u8>().ok())
         .filter(|number| (1..=12).contains(number))
         .map(Key::F)
-        .ok_or_else(|| ChordParseError::UnknownKey(token.to_string()))
+        .ok_or_else(|| ChordParseError::new(ChordParseErrorKind::UnknownKey(token.to_string())))
 }
 
 impl std::fmt::Display for Key {
