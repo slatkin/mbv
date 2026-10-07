@@ -276,6 +276,24 @@ impl ImageCache {
         self.resize_response_rx.try_recv()
     }
 
+    /// Rebuild the resize worker after its thread exited — the only owner-
+    /// visible sign of a caught `resize_encode` panic is the shared response
+    /// channel closing (M-PANIC-CONTINUATION, issue #895). Spawns a fresh
+    /// worker and drops every cached protocol: the old worker took each
+    /// entry's per-key `ResizeRequest` receiver with it, so no cached
+    /// protocol can receive resize results any more; every entry re-encodes
+    /// and re-registers lazily on its next paint (via
+    /// `cached_image_protocol_for_suffix_mut`'s missing-suffix rebuild path)
+    /// from the retained source image.
+    pub fn respawn_resize_worker(&mut self) {
+        let (register_tx, response_rx) = crate::resize::spawn_resize_worker();
+        self.resize_register_tx = register_tx;
+        self.resize_response_rx = response_rx;
+        for entry in self.card_image_states.values_mut() {
+            entry.protocols.clear();
+        }
+    }
+
     #[must_use]
     pub fn card_image_tx(&self) -> &mpsc::Sender<(String, Option<image::DynamicImage>)> {
         &self.card_image_tx
@@ -369,6 +387,51 @@ mod tests {
             cover_box: None,
             applied_logo_key: None,
         }
+    }
+
+    /// Issue #895 (M-PANIC-CONTINUATION): after the resize worker exits (a
+    /// caught panic closes the shared response channel), the respawn must
+    /// install a live worker and drop every cached protocol — the old
+    /// worker took their per-key request receivers with it, so each entry
+    /// re-encodes and re-registers on its next paint.
+    #[test]
+    fn respawn_replaces_a_dead_worker_and_clears_cached_protocols() {
+        let mut cache = cache(2);
+        let mut entry = image();
+        let (tx, _rx) = mpsc::channel();
+        entry.protocols.insert(
+            "halfblock",
+            ratatui_image::thread::ThreadProtocol::new(
+                tx,
+                Some(
+                    ratatui_image::picker::Picker::halfblocks()
+                        .new_resize_protocol(entry.img.clone().expect("test image")),
+                ),
+            ),
+        );
+        cache.insert_image("base:P".into(), entry);
+        // The `cache` helper drops the response sender at construction —
+        // the same disconnected channel a worker exit produces.
+        assert!(matches!(
+            cache.try_recv_resize_response(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+
+        cache.respawn_resize_worker();
+
+        assert!(
+            matches!(
+                cache.try_recv_resize_response(),
+                Err(mpsc::TryRecvError::Empty)
+            ),
+            "the respawned worker's response channel must be live"
+        );
+        assert!(
+            cache
+                .image("base:P")
+                .is_some_and(|entry| entry.protocols.is_empty()),
+            "cached protocols must be dropped so they re-register with the new worker"
+        );
     }
 
     /// Review a05a530ba: derived overlay variants share the cache budget

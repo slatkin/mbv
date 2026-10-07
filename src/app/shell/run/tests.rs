@@ -564,3 +564,45 @@ fn music_owner_artist_survives_a_stale_restore_after_a_tab_round_trip() {
         "a stale saved album cursor (bug: Pizzicato Five) must not override the retained owner after a tab round trip"
     );
 }
+
+/// Issue #895 (M-PANIC-CONTINUATION): a resize worker that exits after a
+/// caught panic closes the shared response channel — the only owner-visible
+/// sign. The drain must respawn the worker (a live channel again) instead of
+/// leaving image resizing silently dead for the rest of the session. The
+/// protocol-clearing half of the respawn is owned by the `mbv-images` test
+/// (`respawn_replaces_a_dead_worker_and_clears_cached_protocols`).
+#[test]
+fn drain_resize_responses_respawns_the_worker_after_it_exits() {
+    let mut model = Model::new(make_app_stub());
+    // A cache whose response sender was dropped at construction stands in
+    // for the worker having exited: the drain observes Disconnected
+    // immediately, without any cross-thread waiting.
+    let (card_tx, card_rx) = std::sync::mpsc::channel();
+    let (register_tx, _) = std::sync::mpsc::channel();
+    let (_, response_rx) = std::sync::mpsc::channel();
+    model.app.images = mbv_images::cache::ImageCache::new(
+        50,
+        None,
+        true,
+        card_tx,
+        card_rx,
+        register_tx,
+        response_rx,
+    );
+    assert!(matches!(
+        model.app.images.try_recv_resize_response(),
+        Err(std::sync::mpsc::TryRecvError::Disconnected)
+    ));
+
+    assert!(
+        model.drain_resize_responses(),
+        "the disconnected worker must be reported as drain work"
+    );
+    assert!(
+        matches!(
+            model.app.images.try_recv_resize_response(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ),
+        "the drain must respawn a live worker after the old one exited"
+    );
+}

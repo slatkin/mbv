@@ -281,21 +281,36 @@ impl Model {
     /// dropped here; `update_resized_protocol` also guards on
     /// `ThreadProtocol`'s internal id, so a stale response racing a newer
     /// resize request for the same (still-present) key is a no-op too.
+    ///
+    /// A disconnected response channel is the only owner-visible sign that
+    /// the worker exited after a caught `resize_encode` panic
+    /// (M-PANIC-CONTINUATION, issue #895); the drain respawns the worker
+    /// and drops cached protocols so entries re-register with it lazily.
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok((key, response)) = self.app.images.try_recv_resize_response() {
-            had_events = true;
-            // Responses are tagged with the per-suffix mem-key
-            // ("bare@suffix"); route them into the matching protocol of
-            // the bare-key cache entry.
-            let Some((bare_key, suffix)) = key.rsplit_once('@') else {
-                continue;
-            };
-            let Some(entry) = self.app.images.image_mut(bare_key) else {
-                continue;
-            };
-            if let Some(state) = entry.protocols.get_mut(suffix) {
-                state.update_resized_protocol(response);
+        loop {
+            match self.app.images.try_recv_resize_response() {
+                Ok((key, response)) => {
+                    had_events = true;
+                    // Responses are tagged with the per-suffix mem-key
+                    // ("bare@suffix"); route them into the matching protocol of
+                    // the bare-key cache entry.
+                    let Some((bare_key, suffix)) = key.rsplit_once('@') else {
+                        continue;
+                    };
+                    let Some(entry) = self.app.images.image_mut(bare_key) else {
+                        continue;
+                    };
+                    if let Some(state) = entry.protocols.get_mut(suffix) {
+                        state.update_resized_protocol(response);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.app.images.respawn_resize_worker();
+                    had_events = true;
+                    break;
+                }
             }
         }
         had_events
