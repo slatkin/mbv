@@ -127,11 +127,20 @@ the title.
 
 #### Scenario: Playing on a remote target
 
-- **WHEN** a movie plays on a watched remote Emby session with no local queue slot, and
+- **WHEN** an item plays on a watched remote Emby session with no local queue slot, and
   the card shows that item's artwork
-- **THEN** the title is drawn onto the artwork as a one-part title from the session's now-playing
-  name
+- **THEN** the title is drawn onto the artwork with the same part split local playback draws:
+  an episode whose session payload carries a series name draws the show name as the context part
+  and the episode name as the title part, and any other item draws a one-part title from the
+  session's now-playing name
 - **AND** the header row reads `Now Playing` once it has been painted
+
+#### Scenario: Remote session payload lacks the series name
+
+- **WHEN** an episode plays on a watched remote Emby session with no local queue slot and its
+  session payload carries no series name
+- **THEN** the title is drawn onto the artwork as a one-part title from the session's
+  now-playing name
 
 #### Scenario: Dimmed backdrop does not flip the site
 
@@ -146,8 +155,11 @@ logo SHALL be drawn in the upper-left corner of the artwork in place of the top 
 its scrim. A movie uses its own logo; an episode uses its show's logo. A two-part title SHALL keep
 its bottom title row; a one-part title SHALL then be drawn as the logo alone. The logo SHALL be
 scaled to fit, preserving its aspect ratio, within a box inset from the artwork's top-left and
-sized relative to the terminal cell, not the artwork. An item with no logo, a logo still loading
-or failed, and items that are not Emby movies or episodes SHALL keep the text row.
+sized relative to the terminal cell, not the artwork. The same rule SHALL apply to a watched
+remote Emby session's now-playing item: an episode resolves its show's logo from the session's
+series id, and a movie resolves its own logo when the session payload advertises a logo image.
+An item with no logo, a logo still loading or failed, an item whose session payload carries no
+resolvable logo reference, and items that are not Emby movies or episodes SHALL keep the text row.
 
 #### Scenario: Episode with a show logo
 
@@ -168,6 +180,26 @@ or failed, and items that are not Emby movies or episodes SHALL keep the text ro
 #### Scenario: No logo
 
 - **WHEN** the item has no logo, or the logo fails to load
+- **THEN** the text overlay is unchanged
+
+#### Scenario: Remote episode uses its show's logo
+
+- **WHEN** an episode plays on a watched remote Emby session with no local queue slot and its
+  session payload carries a series id
+- **THEN** the show's logo is fetched and drawn in the upper-left corner in place of the top
+  text row, exactly as local playback draws it
+- **AND** the episode title is drawn in the bottom row
+
+#### Scenario: Remote movie with an advertised logo
+
+- **WHEN** a movie plays on a watched remote Emby session with no local queue slot and its
+  session payload advertises a logo image
+- **THEN** only that logo is drawn, in the upper-left corner, and no title text is drawn
+
+#### Scenario: Remote item without a resolvable logo reference
+
+- **WHEN** the now-playing item of a watched remote Emby session carries no series id (episode)
+  or no advertised logo image (movie), or the logo fetch fails
 - **THEN** the text overlay is unchanged
 
 ### Requirement: The queue card key and fetch chain are item-type specific
