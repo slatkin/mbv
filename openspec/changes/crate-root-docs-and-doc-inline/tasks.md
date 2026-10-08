@@ -20,9 +20,9 @@ Each task: read the crate's `src/lib.rs` `mod` list and `Cargo.toml`, add the `/
 
 ## 4. UI crates
 
-- [ ] 4.1 `mbv-render` (root plus nested `components/*` re-exports; its `mbv_ui_model::sort_filter` re-exports are workspace items and get the attribute)
-- [ ] 4.2 `#[doc(inline)]` only in `mbv-components` (`lib.rs`, `queue.rs`, `tv_content.rs`, `list.rs`, `media_list.rs`, `library_panel.rs`, `list/tree_browser.rs`, `library_panel/hero_header.rs`) and `mbv-ui-msg`, `mbv-keybinds` (root docs already exist; leave them as they are)
-- [ ] 4.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
+- [x] 4.1 `mbv-render` (root plus nested `components/*` re-exports; its `mbv_ui_model::sort_filter` re-exports are workspace items and get the attribute)
+- [x] 4.2 `#[doc(inline)]` only in `mbv-components` (`lib.rs`, `queue.rs`, `tv_content.rs`, `list.rs`, `media_list.rs`, `library_panel.rs`, `list/tree_browser.rs`, `library_panel/hero_header.rs`) and `mbv-ui-msg`, `mbv-keybinds` (root docs already exist; leave them as they are)
+- [x] 4.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
 
 ## 5. Finish
 
