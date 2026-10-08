@@ -93,6 +93,26 @@ pub fn queue_list_content(placement: Rect) -> Rect {
     queue_list_rows(queue_list_box(placement))
 }
 
+/// The empty-queue placeholder's box inside the list content area: the one
+/// text row plus one row of padding above and below and two columns of
+/// padding on each side, centered both vertically and horizontally.
+/// `text_width` is the display width of the placeholder text. A content area
+/// too small to fit the box keeps every row and column it has.
+#[must_use]
+pub fn empty_queue_box(content: Rect, text_width: u16) -> Rect {
+    if content.width == 0 || content.height == 0 {
+        return content;
+    }
+    let box_width = text_width.saturating_add(4).min(content.width);
+    let box_height = 3u16.min(content.height);
+    Rect {
+        x: content.x + (content.width - box_width) / 2,
+        y: content.y + (content.height - box_height) / 2,
+        width: box_width,
+        height: box_height,
+    }
+}
+
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {

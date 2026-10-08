@@ -256,6 +256,11 @@ pub const PROGRESS_PERCENT: Color = Palette::Orange.color();
 /// (`TEXT_METADATA`): equal today and independently editable, so a
 /// metadata-colour edit moves the metadata alone.
 pub const GROUP_HEADING_FG: Color = Palette::Foam.color();
+/// The empty-queue placeholder (`¯\_(ツ)_/¯`). Its own role over the audio
+/// indicator's `Palette::Mauve` value it shares today
+/// (`INDICATOR_AUDIO_FG`): the two are equal today and independently
+/// editable, so an indicator edit moves the indicator alone.
+pub const EMPTY_QUEUE_FG: Color = Palette::Mauve.color();
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft

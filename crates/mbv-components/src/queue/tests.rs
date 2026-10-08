@@ -4,6 +4,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use mbv_queue::QueueItem;
+use mbv_theme as palette;
 use mbv_theme::Surface;
 use mbv_theme::surface_colors;
 

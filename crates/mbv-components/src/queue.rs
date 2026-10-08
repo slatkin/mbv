@@ -1,8 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::Event;
@@ -17,9 +15,8 @@ use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
 use mbv_render::components::media_list::{WideMediaListPaintPolicy, queue_row_zebra_stripe};
-use mbv_render::components::queue::render_queue_status;
+use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
-use mbv_theme as palette;
 use mbv_ui_model::playback::{PlaybackState, QueueScope};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, QueueRequest};
@@ -321,11 +318,7 @@ impl Component for QueueComponent {
             return;
         }
         if self.carrier.is_empty() {
-            frame.render_widget(
-                Paragraph::new(self.empty_text.clone())
-                    .style(Style::default().fg(palette::TEXT_EMPHASIS)),
-                content_area,
-            );
+            render_empty_queue(frame, content_area, self.focused, &self.empty_text);
         }
         // The persistent canonical child is the sole Queue body painter and
         // retains the current painted row geometry for later point resolution.
