@@ -36,8 +36,8 @@
 
 ## 3. Panel presentation (design D5)
 
-- [ ] 3.1 In `crates/mbv-render/src/components/playlists.rs`, make the hint bars read `[↵]play [s]shuffle [a]add [→]browse [n]rename [d]delete [r]refresh [Esc]close` in the list view and `[↵]play [s]shuffle [a]add [←]back [Esc]close` in the open view. Verify with `cargo check -p mbv-render`.
-- [ ] 3.2 Replace `render_open_playlist_row` and the open view's variable-height scroll and scrollbar code with the list-row painter, generalised over its leading and trailing spans:
+- [x] 3.1 In `crates/mbv-render/src/components/playlists.rs`, make the hint bars read `[↵]play [s]shuffle [a]add [→]browse [n]rename [d]delete [r]refresh [Esc]close` in the list view and `[↵]play [s]shuffle [a]add [←]back [Esc]close` in the open view. Verify with `cargo check -p mbv-render`.
+- [x] 3.2 Replace `render_open_playlist_row` and the open view's variable-height scroll and scrollbar code with the list-row painter, generalised over its leading and trailing spans:
   - List rows: bold title + muted `(count)`.
   - Open rows: muted `NN. ` + title.
   - One shared bg/fg rule (selected → `SELECTED_ROW_BG`/`SELECTED_ROW_FG`, odd absolute index → `PLAYLIST_STRIPE_BG`), one-line rows with truncated names, and the same scroll clamp and `render_sidebar_scrollbar` call.
