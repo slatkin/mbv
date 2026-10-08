@@ -29,7 +29,7 @@ impl crate::app::App {
         let context = (session.now_playing_item_type.as_deref() == Some("Episode"))
             .then(|| session.now_playing_series_name.clone())
             .flatten()
-            .filter(|name| !name.is_empty())
+            .filter(|name| !name.trim().is_empty())
             .map(|text| mbv_queue::PlaybackTitlePart {
                 role: mbv_queue::PlaybackTitlePartRole::Context,
                 text,
