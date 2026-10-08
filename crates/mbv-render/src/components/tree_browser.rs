@@ -4,6 +4,7 @@
 //! roles, selected and aggregate bars, zebra fills, trailing metadata, and
 //! the selected-title marquee.
 
+use std::borrow::Cow;
 use std::time::Instant;
 
 use ratatui::Frame;
@@ -131,14 +132,12 @@ fn render_tree_browser_row(
         Rect::new(context.content_rect.x, y, context.content_rect.width, 1)
     };
     let fill = tree_row_fill(row, full_width, context.zebra, context.base);
-    let (prefix, title) = tree_row_title(row);
+    let (prefix_width, title) = tree_row_title(row);
     let gutter = row
         .trailing
         .as_deref()
         .map_or(0, tree_metadata_gutter_width);
-    let budget = context
-        .content_width
-        .saturating_sub(prefix.width() + gutter);
+    let budget = context.content_width.saturating_sub(prefix_width + gutter);
     let title_color = if full_width {
         palette::SELECTED_ROW_FG
     } else if row.kind == TreePaintRowKind::Heading {
@@ -149,8 +148,8 @@ fn render_tree_browser_row(
     let spans = tree_row_spans(
         TreeRowSpans {
             row,
-            prefix,
-            title: &title,
+            prefix_width,
+            title,
             title_color,
             budget,
             gutter,
@@ -181,18 +180,41 @@ fn tree_row_fill(
     }
 }
 
-fn tree_row_title(row: &TreePaintRow) -> (String, String) {
+/// Borrowed indent and right-pad run: pad spans borrow a slice while the
+/// width fits, and fall back to an owned repeat past the end of the run.
+/// Sized past the widest usual terminal so the per-row fill rarely owns.
+static TREE_PAD: &str = concat!(
+    "                                                                ",
+    "                                                                ",
+    "                                                                ",
+    "                                                                ",
+);
+
+/// A pad span borrowing the shared spaces run when it fits, owning a repeat
+/// past the end of the run. Zero widths yield the empty span, as before.
+fn pad_span(width: usize) -> Span<'static> {
+    if width <= TREE_PAD.len() {
+        Span::raw(&TREE_PAD[..width])
+    } else {
+        Span::raw(" ".repeat(width))
+    }
+}
+
+fn tree_row_title(row: &TreePaintRow) -> (usize, Cow<'_, str>) {
     match row.kind {
-        TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),
-        TreePaintRowKind::Heading => (String::new(), row.title.to_uppercase()),
-        TreePaintRowKind::Spacer => (String::new(), String::new()),
+        TreePaintRowKind::Node => (
+            row.depth.saturating_mul(2),
+            Cow::Borrowed(row.title.as_str()),
+        ),
+        TreePaintRowKind::Heading => (0, Cow::Owned(row.title.to_uppercase())),
+        TreePaintRowKind::Spacer => (0, Cow::Borrowed("")),
     }
 }
 
 struct TreeRowSpans<'a> {
     row: &'a TreePaintRow,
-    prefix: String,
-    title: &'a str,
+    prefix_width: usize,
+    title: Cow<'a, str>,
     title_color: ratatui::style::Color,
     budget: usize,
     gutter: usize,
@@ -205,7 +227,7 @@ fn tree_row_spans(
 ) -> Vec<Span<'static>> {
     let TreeRowSpans {
         row,
-        prefix,
+        prefix_width,
         title,
         title_color,
         budget,
@@ -213,15 +235,16 @@ fn tree_row_spans(
         full_width,
     } = row;
     let mut spans = if full_width && context.left_inset > 0 {
-        vec![Span::raw(" ".repeat(context.left_inset))]
+        vec![pad_span(context.left_inset)]
     } else {
         Vec::new()
     };
-    spans.push(Span::raw(prefix));
+    spans.push(pad_span(prefix_width));
+    let title_ref: &str = &title;
     if context.focused && row.selected {
         spans.extend(marquee_spans(
-            title,
-            &[(title, title_color)],
+            title_ref,
+            &[(title_ref, title_color)],
             budget,
             context.marquee_text,
             context.marquee_started_at,
@@ -233,7 +256,7 @@ fn tree_row_spans(
             title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
         }
         spans.push(Span::styled(
-            mbv_ui_model::ui_util::trunc_str(title, budget),
+            mbv_ui_model::ui_util::trunc_str(title_ref, budget),
             title_style,
         ));
     }
@@ -243,7 +266,7 @@ fn tree_row_spans(
         .saturating_sub(gutter)
         .saturating_add(if full_width { context.left_inset } else { 0 });
     if painted < target_width {
-        spans.push(Span::raw(" ".repeat(target_width - painted)));
+        spans.push(pad_span(target_width - painted));
     }
     if let Some(trailing) = &row.trailing {
         spans.push(Span::styled(
@@ -261,7 +284,7 @@ fn tree_row_spans(
         ));
     }
     if full_width && context.right_inset > 0 {
-        spans.push(Span::raw(" ".repeat(context.right_inset)));
+        spans.push(pad_span(context.right_inset));
     }
     spans
 }
@@ -334,3 +357,6 @@ pub enum TreeTitleRole {
     #[default]
     Standard,
 }
+
+#[cfg(test)]
+mod tests;
