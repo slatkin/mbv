@@ -32,7 +32,8 @@ pub use self::hit_regions::TvHit;
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
     ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, MusicTreeAction,
-    PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent, SettingsIntent,
+    PlaylistsTarget, PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent,
+    SettingsIntent,
 };
 #[doc(inline)]
 pub use self::playback::PlaybackRequest;

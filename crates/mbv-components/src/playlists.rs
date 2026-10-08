@@ -11,7 +11,9 @@ use super::mouse::hit::HitRegions;
 use mbv_emby_model::EmbyItem;
 use mbv_render::{PlaylistsRenderGeometry, PlaylistsViewState, render_playlists_content};
 use mbv_ui_msg::UserEvent;
-use mbv_ui_msg::{LeafKeyResult, Msg, MusicTreeAction, ShellRequest, TerminalObserverEvent};
+use mbv_ui_msg::{
+    LeafKeyResult, Msg, MusicTreeAction, PlaylistsTarget, ShellRequest, TerminalObserverEvent,
+};
 
 #[derive(Debug)]
 pub struct PlaylistsComponent {
@@ -232,14 +234,13 @@ impl PlaylistsComponent {
             Key::Char('a') => MusicTreeAction::Enqueue,
             _ => return None,
         };
-        let open = self.open.is_some();
-        let index = if open { self.open_cursor } else { self.cursor };
-        if !open && index >= self.playlists.len() {
-            return None;
-        }
+        let target = if self.open.is_some() {
+            PlaylistsTarget::Row(self.open_cursor)
+        } else {
+            PlaylistsTarget::Playlist(self.cursor)
+        };
         Some(Msg::Shell(Box::new(ShellRequest::PlaylistsAction {
-            open,
-            index,
+            target,
             action,
         })))
     }
@@ -320,15 +321,16 @@ impl PlaylistsComponent {
                     return Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)));
                 }
                 let &(open, index) = self.hit_rows.resolve(at)?;
-                if open {
+                let target = if open {
                     self.open_cursor = index;
+                    PlaylistsTarget::Row(index)
                 } else {
                     self.cursor = index;
-                }
+                    PlaylistsTarget::Playlist(index)
+                };
                 matches!(gesture, MouseGesture::DoubleClick(_)).then_some(Msg::Shell(Box::new(
                     ShellRequest::PlaylistsAction {
-                        open,
-                        index,
+                        target,
                         action: MusicTreeAction::Play,
                     },
                 )))
@@ -468,16 +470,36 @@ mod tests {
     // Contract: Enter/s/a on a row send Play/Shuffle/Enqueue for the current
     // view's cursor (playlist-management spec, D1).
     #[rstest::rstest]
-    #[case::list_enter(false, Key::Enter, 1, MusicTreeAction::Play)]
-    #[case::list_shuffle(false, Key::Char('s'), 1, MusicTreeAction::Shuffle)]
-    #[case::list_enqueue(false, Key::Char('a'), 1, MusicTreeAction::Enqueue)]
-    #[case::open_enter(true, Key::Enter, 2, MusicTreeAction::Play)]
-    #[case::open_shuffle(true, Key::Char('s'), 2, MusicTreeAction::Shuffle)]
-    #[case::open_enqueue(true, Key::Char('a'), 2, MusicTreeAction::Enqueue)]
+    #[case::list_enter(false, Key::Enter, PlaylistsTarget::Playlist(1), MusicTreeAction::Play)]
+    #[case::list_shuffle(
+        false,
+        Key::Char('s'),
+        PlaylistsTarget::Playlist(1),
+        MusicTreeAction::Shuffle
+    )]
+    #[case::list_enqueue(
+        false,
+        Key::Char('a'),
+        PlaylistsTarget::Playlist(1),
+        MusicTreeAction::Enqueue
+    )]
+    #[case::open_enter(true, Key::Enter, PlaylistsTarget::Row(2), MusicTreeAction::Play)]
+    #[case::open_shuffle(
+        true,
+        Key::Char('s'),
+        PlaylistsTarget::Row(2),
+        MusicTreeAction::Shuffle
+    )]
+    #[case::open_enqueue(
+        true,
+        Key::Char('a'),
+        PlaylistsTarget::Row(2),
+        MusicTreeAction::Enqueue
+    )]
     fn action_keys_send_playlists_action(
         #[case] open: bool,
         #[case] code: Key,
-        #[case] index: usize,
+        #[case] target: PlaylistsTarget,
         #[case] action: MusicTreeAction,
     ) {
         let mut component = component(open);
@@ -485,8 +507,7 @@ mod tests {
         assert_eq!(
             component.handle_key(&key(code)),
             Some(Msg::Shell(Box::new(ShellRequest::PlaylistsAction {
-                open,
-                index,
+                target,
                 action,
             })))
         );

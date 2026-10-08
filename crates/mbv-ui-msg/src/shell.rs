@@ -282,8 +282,7 @@ pub enum ShellRequest {
     PlaylistsOpen(usize),
     /// Play, shuffle, or enqueue the selected playlist or item.
     PlaylistsAction {
-        open: bool,
-        index: usize,
+        target: super::intents::PlaylistsTarget,
         action: super::intents::MusicTreeAction,
     },
     /// Open the rename dialog for the selected playlist.

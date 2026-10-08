@@ -88,12 +88,20 @@ pub enum AlbumCursorKind {
 /// Playlists panel. The Music tree owner resolves the focused artist root to
 /// ordered album items before the intent crosses the component boundary; the
 /// artist identity itself is never a target. The Playlists panel sends the
-/// action with the view and row index it applies to.
+/// action with the `PlaylistsTarget` it applies to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MusicTreeAction {
     Play,
     Enqueue,
     Shuffle,
+}
+
+/// What a Playlists panel action applies to: the saved playlist at an index in
+/// the list view, or the item row at an index inside the open playlist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaylistsTarget {
+    Playlist(usize),
+    Row(usize),
 }
 
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
