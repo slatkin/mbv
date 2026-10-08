@@ -138,12 +138,12 @@ The client SHALL also write a clear auto-reconnect record when no remote connect
 
 ### Requirement: Every local Client shows the owner's accepted queue
 
-A Client attached to the local daemon SHALL use that owner's Bound queue, queue source, and playback status as its displayed Local queue state in every state, including while an attached Session or cast receiver is the playback target. An attached Session or cast is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist without starting playback, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
+A Client attached to the local daemon SHALL use that owner's Bound queue, queue source, and playback status as its displayed Local queue state in every state, including while an attached Session or cast receiver is the playback target. An attached Session or cast is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
 
 #### Scenario: Two Clients see a load
 
-- **WHEN** Client A loads a playlist into the local daemon without starting it while Client B is attached
-- **THEN** both Clients SHALL show the owner's new playlist contents and source with no now-playing row
+- **WHEN** Client A loads a playlist into the local daemon while Client B is attached
+- **THEN** both Clients SHALL show the owner's new playlist contents and source
 - **AND** neither Client SHALL retain the previous owner queue as its active Local queue
 
 #### Scenario: Concurrent Clients replace the queue
