@@ -70,7 +70,6 @@ pub use self::mouse::{mouse_event_clause, mouse_sub};
 #[doc(inline)]
 pub use self::multiselect::MultiselectComponent;
 #[cfg(test)]
-#[doc(inline)]
 pub use self::music_content::MusicContent;
 #[doc(inline)]
 pub use self::playlists::PlaylistsComponent;

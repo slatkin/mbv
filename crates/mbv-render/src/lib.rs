@@ -105,11 +105,9 @@ pub use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 #[doc(inline)]
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
-#[doc(inline)]
 pub use mbv_ui_model::sort_filter::{
     LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, initial_group_artist_sort_key,
 };
-#[doc(inline)]
 pub use mbv_ui_model::sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
 };

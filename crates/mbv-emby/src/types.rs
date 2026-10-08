@@ -148,7 +148,6 @@ pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
 
 pub(crate) use crate::types_parsing::load_cached_token;
 #[cfg(test)]
-#[doc(inline)]
 pub use crate::types_parsing::save_cached_token;
 #[doc(inline)]
 pub use crate::types_parsing::{

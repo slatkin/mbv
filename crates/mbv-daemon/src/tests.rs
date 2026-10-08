@@ -49,16 +49,13 @@ mod feed;
 mod playback_intent;
 mod service_independent;
 // Re-export helper from abs_queue
-#[doc(inline)]
 pub use abs_queue::abs_qi;
 
 mod abs_queue_progress;
 // Re-export helper from abs_queue_progress
-#[doc(inline)]
 pub use abs_queue_progress::book_qi;
 mod queue_ops;
 // Re-export helper from queue_ops
-#[doc(inline)]
 pub use queue_ops::owner_with;
 
 mod r#loop;
