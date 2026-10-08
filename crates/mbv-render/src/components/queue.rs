@@ -1,4 +1,3 @@
-use crate::arrangements::queue::empty_queue_box;
 use mbv_theme as palette;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -15,37 +14,26 @@ pub struct QueueTitleModel {
     pub remote_pill: Option<String>,
 }
 
-/// Paints the empty-queue placeholder centered in the list content area: the
-/// text row wrapped in one row of padding above and below and two columns of
-/// padding on each side, in bold mauve. The box fill is the `QueueColumn`
-/// surface (`#2e383c` while the queue holds focus, `#2b3238` while it does
-/// not); the placeholder's stored leading indent is dropped because the box
-/// already pads both sides.
-pub fn render_empty_queue(frame: &mut Frame, content: Rect, focused: bool, text: &str) {
+/// Paints the empty-queue placeholder centered in the list content area in
+/// bold mauve, over the panel's own fill. The placeholder's stored leading
+/// indent is dropped so the text centers exactly.
+pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
     if content.width == 0 || content.height == 0 {
         return;
     }
-    let label = text.trim_start();
-    let text_width = u16::try_from(label.width()).unwrap_or(u16::MAX);
-    let box_area = empty_queue_box(content, text_width);
-    if box_area.width == 0 || box_area.height == 0 {
-        return;
-    }
-    let bg = palette::surface_colors(palette::Surface::QueueColumn, focused).fill;
-    frame.render_widget(Block::default().style(Style::default().bg(bg)), box_area);
     let row = Rect {
-        x: box_area.x,
-        y: box_area.y + box_area.height / 2,
-        width: box_area.width,
+        y: content.y + content.height / 2,
         height: 1,
+        ..content
     };
     frame.render_widget(
-        Paragraph::new(label).alignment(Alignment::Center).style(
-            Style::default()
-                .fg(palette::EMPTY_QUEUE_FG)
-                .bg(bg)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Paragraph::new(text.trim_start())
+            .alignment(Alignment::Center)
+            .style(
+                Style::default()
+                    .fg(palette::EMPTY_QUEUE_FG)
+                    .add_modifier(Modifier::BOLD),
+            ),
         row,
     );
 }

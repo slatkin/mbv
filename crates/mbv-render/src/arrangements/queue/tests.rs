@@ -66,27 +66,6 @@ fn queue_list_rows_keep_the_box_top_pad_and_bottom_spacer() {
     );
 }
 
-/// The empty-queue box centers the one-row placeholder (plus its one-row
-/// top/bottom and two-column side padding) inside the list content area,
-/// and shrinks to the content area when the panel is too small to fit it.
-#[test]
-fn empty_queue_box_centers_the_placeholder_with_its_padding() {
-    // `¯\_(ツ)_/¯` is 10 columns wide, so the box is 14 wide and 3 high.
-    let content = Rect::new(0, 0, 40, 20);
-    let shrug = empty_queue_box(content, 10);
-    assert_eq!(
-        shrug,
-        Rect::new((40 - 14) / 2, (20 - 3) / 2, 14, 3),
-        "the box centers horizontally and vertically with its padding"
-    );
-    let tiny = empty_queue_box(Rect::new(5, 5, 6, 2), 10);
-    assert_eq!(
-        tiny,
-        Rect::new(5, 5, 6, 2),
-        "a content area smaller than the box keeps every row and column"
-    );
-}
-
 /// The gap row between the playback band and the queue panel rides only
 /// with the slot/transport rows: while they paint the queue panel starts
 /// one row below them (the gap row is the playback placement's last row,

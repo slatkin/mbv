@@ -318,7 +318,7 @@ impl Component for QueueComponent {
             return;
         }
         if self.carrier.is_empty() {
-            render_empty_queue(frame, content_area, self.focused, &self.empty_text);
+            render_empty_queue(frame, content_area, &self.empty_text);
         }
         // The persistent canonical child is the sole Queue body painter and
         // retains the current painted row geometry for later point resolution.
