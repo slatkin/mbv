@@ -8,10 +8,10 @@
 
 ## 2. Miri scoped gate
 
-- [ ] 2.1 Audit all ~45 `unsafe` sites (11 files: `run_shutdown.rs`, `signals.rs`, `single_instance.rs`, `pin.rs`, `test_support.rs`, `mbv-player` runtime/controller/run-loop, `local_daemon.rs`, `main.rs`, `mbvd`) into miri-runnable set (a) vs. excluded-with-reason set (b) (signals/threads/FFI/pty/libmpv cannot execute under miri) and verify the classification is recorded as a comment block in the workflow (or short doc if it outgrows comments).
-- [ ] 2.2 For each set-(a) site lacking executable coverage, add the minimal miri-runnable test that exercises it (no coverage for coverage's sake; excluded code gets no tests) and verify `cargo +nightly miri test -p <crate...>` passes over set (a).
-- [ ] 2.3 Fix any real UB miri flags in set (a) (or document-and-defer on issue #888 per the findings policy if it falls in excluded territory) and verify the miri run is green.
-- [ ] 2.4 Add the miri job to `.github/workflows/build.yml` (own nightly toolchain install in-job, `rust-toolchain.toml` untouched, parallel job off the release critical path, exclusion list recorded per 2.1) and verify the workflow YAML parses and the job's commands pass locally as written.
+- [x] 2.1 Audit all ~45 `unsafe` sites (11 files: `run_shutdown.rs`, `signals.rs`, `single_instance.rs`, `pin.rs`, `test_support.rs`, `mbv-player` runtime/controller/run-loop, `local_daemon.rs`, `main.rs`, `mbvd`) into miri-runnable set (a) vs. excluded-with-reason set (b) (signals/threads/FFI/pty/libmpv cannot execute under miri) and verify the classification is recorded as a comment block in the workflow (or short doc if it outgrows comments).
+- [x] 2.2 For each set-(a) site lacking executable coverage, add the minimal miri-runnable test that exercises it (no coverage for coverage's sake; excluded code gets no tests) and verify `cargo +nightly miri test -p <crate...>` passes over set (a).
+- [x] 2.3 Fix any real UB miri flags in set (a) (or document-and-defer on issue #888 per the findings policy if it falls in excluded territory) and verify the miri run is green.
+- [x] 2.4 Add the miri job to `.github/workflows/build.yml` (own nightly toolchain install in-job, `rust-toolchain.toml` untouched, parallel job off the release critical path, exclusion list recorded per 2.1) and verify the workflow YAML parses and the job's commands pass locally as written.
 
 ## 3. Integration verification
 
