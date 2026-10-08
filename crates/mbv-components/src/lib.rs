@@ -49,30 +49,53 @@ pub(crate) fn mini_palette_suppressed(mini_view: bool, frame_focused: bool) -> b
     mini_view && !frame_focused
 }
 
+#[doc(inline)]
 pub use self::confirm::ConfirmComponent;
+#[doc(inline)]
 pub use self::context_menu::ContextMenuComponent;
+#[doc(inline)]
 pub use self::daemon_lost::DaemonLostComponent;
+#[doc(inline)]
 pub use self::feeds_manage::FeedsManageComponent;
+#[doc(inline)]
 pub use self::help::HelpComponent;
+#[doc(inline)]
 pub use self::inline_search::SearchPool;
+#[doc(inline)]
 pub use self::library_playback_panel::{LibraryPlaybackPanel, PlaybackProjection};
+#[doc(inline)]
 pub use self::library_routes::LibraryRoutesComponent;
+#[doc(inline)]
 pub use self::mouse::{mouse_event_clause, mouse_sub};
+#[doc(inline)]
 pub use self::multiselect::MultiselectComponent;
 #[cfg(test)]
 pub use self::music_content::MusicContent;
+#[doc(inline)]
 pub use self::playlists::PlaylistsComponent;
+#[doc(inline)]
 pub use self::playlists::PlaylistsContent;
+#[doc(inline)]
 pub use self::queue::QueueComponent;
+#[doc(inline)]
 pub use self::queue::QueueCursorUpdate;
+#[doc(inline)]
 pub use self::queue_boundary::QueueBoundaryComponent;
+#[doc(inline)]
 pub use self::queue_playback_panel::QueuePlaybackPanel;
+#[doc(inline)]
 pub use self::root::UiRootComponent;
+#[doc(inline)]
 pub use self::save_playlist::SavePlaylistComponent;
+#[doc(inline)]
 pub use self::search_sidebar::SearchSidebarComponent;
+#[doc(inline)]
 pub use self::sessions::SessionsComponent;
+#[doc(inline)]
 pub use self::settings::{SettingsComponent, SettingsSnapshot};
+#[doc(inline)]
 pub use self::status_bar_panel::StatusBarPanel;
+#[doc(inline)]
 pub use self::tab_panel::TabPanel;
 
 #[cfg(test)]

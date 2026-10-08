@@ -21,15 +21,19 @@ mod tests;
 mod types;
 mod wide;
 
+#[doc(inline)]
 pub use carrier::MediaListCarrier;
+#[doc(inline)]
 pub use grouping::letter_grouped_rows;
 use mbv_render::components::media_list::{
     MediaListRow, MediaListTitleReveal, WideMediaListPaintPolicy,
 };
+#[doc(inline)]
 pub use types::{
     MediaListDisposition, MediaListOperation, MediaListSurfaceInput, MediaListTransition,
     RowIntent, WideViewport,
 };
+#[doc(inline)]
 pub use wide::WideMediaList;
 
 /// The single canonical owner for one logical provider-neutral media-row flow.

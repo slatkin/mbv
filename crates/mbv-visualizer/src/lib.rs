@@ -1,3 +1,9 @@
+//! `PipeWire` stereo audio capture for the playback visualizer.
+//!
+//! `PipeWireWorker` captures interleaved stereo frames into rolling `StereoSampleWindow`
+//! snapshots on its own thread. It captures samples only; the Queue playback panel owns
+//! how they paint.
+
 use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex, TryLockError};
@@ -12,6 +18,7 @@ use pw::spa::param::format::{MediaSubtype, MediaType};
 use pw::spa::pod::Pod;
 
 mod error;
+#[doc(inline)]
 pub use error::VisualizerError;
 
 const STARTUP_TIMEOUT: Duration = Duration::from_millis(500);

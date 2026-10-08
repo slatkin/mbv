@@ -1,3 +1,9 @@
+//! Semantic theme roles and palette values for every painted surface.
+//!
+//! Callers name what a colour means (`TEXT_METADATA`, `SURFACE_FOCUSED`), never the
+//! hue; the closed `Palette` enum stays private. Layout and painting live in
+//! `mbv-render`, which consumes these roles.
+
 mod palette;
 mod surface;
 mod surface_resolve;
@@ -16,7 +22,9 @@ mod palette_json;
 // names a `Surface` and calls the resolver; the `Level`/`Row`/`FocusSource`
 // machinery stays private to the theme. Re-exported here so `render.rs` and
 // `palette.rs` can bridge the names to production call sites.
+#[doc(inline)]
 pub use surface::Surface;
+#[doc(inline)]
 pub use surface_resolve::surface_colors;
 
 use ratatui::style::Color;

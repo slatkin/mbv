@@ -1,8 +1,15 @@
+//! `Audiobookshelf` Service client: catalog, playback, and socket protocol.
+//!
+//! Podcast and book catalogs, playback sessions, the socket worker, and setup
+//! validation live here. Queue snapshots live in `mbv-queue`; shared HTTP and
+//! retry primitives live in `mbv-net`.
+
 use serde::Deserialize;
 use std::backtrace::Backtrace;
 use std::time::Duration;
 
 mod catalog;
+#[doc(inline)]
 pub use catalog::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShelf, AudiobookshelfShelfEntry, AudiobookshelfShow, AudiobookshelfShowPage,
@@ -13,6 +20,7 @@ pub(crate) use catalog::{
     ShowWire, published_at_secs, shelf_entry_from_wire,
 };
 mod catalog_books;
+#[doc(inline)]
 pub use catalog_books::{
     AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage,
     AudiobookshelfBookProgress, AudiobookshelfChapter, AuthorWire, BookMediaWire, BookMetadataWire,
@@ -20,6 +28,7 @@ pub use catalog_books::{
     first_listed_author_sort_key,
 };
 mod playback;
+#[doc(inline)]
 pub use playback::{
     AudiobookshelfAudioSource, AudiobookshelfBookPlaybackSession, AudiobookshelfPlaybackProgress,
     AudiobookshelfPlaybackSession, AudiobookshelfSourceMethod,

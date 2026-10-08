@@ -46,6 +46,7 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
+#[doc(inline)]
 pub use episode_rows::upcoming_episode_target;
 use episode_rows::{build_latest_episode_rows, upcoming_episode_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]

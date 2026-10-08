@@ -7,7 +7,9 @@ use mbv_theme as palette;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
+#[doc(inline)]
 pub use wide::WideMediaListPaintInput;
+#[doc(inline)]
 pub use wide::render_wide_media_list_component;
 /// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

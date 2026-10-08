@@ -1,16 +1,25 @@
+//! Player-owner protocol vocabulary for Client-to-owner communication over ctrl.
+//!
+//! Commands, events, capability negotiation, and the unified queue snapshot travel
+//! here. The canonical queue itself lives in `mbv-queue` and is held by the Player
+//! owner; this crate defines the vocabulary and never drives playback.
+
 mod commands;
 mod events;
 mod protocol;
 
+#[doc(inline)]
 pub use commands::{
     CtrlCmd, Direction, OwnerGate, OwnerGateRejection, PlaybackIntent, PlaybackIntentAction,
     TransportCommand, WireCommand,
 };
+#[doc(inline)]
 pub use events::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlEvent, DisconnectReason,
     PipePlaybackPhase, PipePlaybackStatus, PlaybackIntentEvent, PlaybackIntentOutcome,
     PlaybackIntentRejection, QueueLoadResult, QueueOpOutcome, ServiceSetupRejection,
 };
+#[doc(inline)]
 pub use protocol::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
@@ -23,7 +32,9 @@ pub use protocol::{
 
 mod error;
 mod hello;
+#[doc(inline)]
 pub use error::CtrlError;
+#[doc(inline)]
 pub use hello::{CtrlAudiobookshelfCapabilities, CtrlCompatibility, CtrlHello};
 
 pub mod player;

@@ -29,6 +29,7 @@ const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 mod endpoint;
 
+#[doc(inline)]
 pub use endpoint::{DaemonEndpoint, resolve_library_route};
 
 /// Whether the handshake must reject an Owner built from a different version.

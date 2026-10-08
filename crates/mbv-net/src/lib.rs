@@ -1,3 +1,9 @@
+//! Shared HTTP, TLS-agent, socket, and retry primitives.
+//!
+//! The native-TLS agent builder, per-Service request logging, path encoding, hard
+//! bounds, and the reconnect backoff shared by the websocket loops live here. It
+//! carries traffic for every Service and owns no Service logic itself.
+
 use rand::RngExt;
 use std::fmt;
 
