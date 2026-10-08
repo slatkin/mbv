@@ -115,14 +115,25 @@ impl Model {
     /// Shuffle replace the queue (gated by the populated-queue confirmation);
     /// Enqueue appends once and leaves the sidebar open.
     fn handle_playlists_action(&mut self, open: bool, index: usize, action: MusicTreeAction) {
-        // `cursor` is the open-view item under the cursor; `None` in the list view.
-        let (playlist_id, name, items, cursor) = if open {
-            let Some(cursor) = self.app.playlists_open_items.get(index).cloned() else {
+        // `cursor_id` is the open-view item under the cursor; `None` in the list view.
+        let (playlist_id, name, items, cursor_id) = if open {
+            let Some(cursor) = self.app.playlists_open_items.get(index) else {
                 return;
             };
             let Some(playlist) = self.app.playlists_open.as_ref() else {
                 return;
             };
+            if matches!(action, MusicTreeAction::Enqueue) {
+                // An open-view row enqueues just itself.
+                if cursor.is_folder {
+                    return;
+                }
+                let items = vec![QueueItem::Emby(Box::new(cursor.clone()))];
+                let scope = self.app.viewed_queue_scope();
+                self.app.append_on_owner(scope, items);
+                return;
+            }
+            let cursor_id = cursor.id.clone();
             let items: Vec<_> = self
                 .app
                 .playlists_open_items
@@ -134,63 +145,56 @@ impl Model {
                 playlist.id.clone(),
                 playlist.name.clone(),
                 items,
-                Some(cursor),
+                Some(cursor_id),
             )
         } else {
-            let Some(playlist) = self.app.playlists.get(index).cloned() else {
+            let Some(playlist) = self.app.playlists.get(index) else {
                 return;
             };
-            let Some(items) = self.app.playlist_playable_items(&playlist.id) else {
+            let (playlist_id, name) = (playlist.id.clone(), playlist.name.clone());
+            let Some(items) = self.app.playlist_playable_items(&playlist_id) else {
                 return;
             };
-            (playlist.id, playlist.name, items, None)
+            (playlist_id, name, items, None)
         };
         if items.is_empty() {
             return;
         }
-        match action {
+        let (items, start_idx, source) = match action {
             MusicTreeAction::Play => {
-                let start_idx = cursor
-                    .and_then(|cursor| items.iter().position(|item| item.id == cursor.id))
+                let start_idx = cursor_id
+                    .and_then(|id| items.iter().position(|item| item.id == id))
                     .unwrap_or(0);
-                self.app.request_queue_replacement(
-                    PendingQueueAction::PlayItems {
-                        items,
-                        start_idx,
-                        source: QueueSource::Playlist {
-                            id: Some(playlist_id),
-                            name,
-                        },
-                    },
-                    ReplacementExecutor::PlaylistsSidebar,
-                );
+                let source = QueueSource::Playlist {
+                    id: Some(playlist_id),
+                    name,
+                };
+                (items, start_idx, source)
             }
             MusicTreeAction::Shuffle => {
                 let mut items = items;
                 items.shuffle(&mut rand::rng());
-                self.app.request_queue_replacement(
-                    PendingQueueAction::PlayItems {
-                        items,
-                        start_idx: 0,
-                        source: QueueSource::Shuffle,
-                    },
-                    ReplacementExecutor::PlaylistsSidebar,
-                );
+                (items, 0, QueueSource::Shuffle)
             }
             MusicTreeAction::Enqueue => {
-                let items = match cursor {
-                    Some(cursor) if cursor.is_folder => return,
-                    Some(cursor) => vec![cursor],
-                    None => items,
-                };
+                // List view only: the whole playlist, appended once.
                 let items = items
                     .into_iter()
                     .map(|item| QueueItem::Emby(Box::new(item)))
                     .collect();
                 let scope = self.app.viewed_queue_scope();
                 self.app.append_on_owner(scope, items);
+                return;
             }
-        }
+        };
+        self.app.request_queue_replacement(
+            PendingQueueAction::PlayItems {
+                items,
+                start_idx,
+                source,
+            },
+            ReplacementExecutor::PlaylistsSidebar,
+        );
     }
 }
 
