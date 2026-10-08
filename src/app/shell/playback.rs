@@ -111,7 +111,7 @@ impl Model {
                 self.dispatch_playback(&Command::AdjustVolume(*delta));
             }
             PlaybackRequest::CycleAudio => {
-                self.dispatch_playback(&Command::ToggleMuteOrCycleAudio);
+                self.dispatch_playback(&Command::CycleAudio);
             }
             PlaybackRequest::CycleSubtitle => {
                 self.dispatch_playback(&Command::CycleOrToggleSubtitle);

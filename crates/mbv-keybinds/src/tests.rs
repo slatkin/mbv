@@ -43,7 +43,7 @@ const TRANSPORT_ACTION_IDS: &[&str] = &[
     "volume_down",
     "volume_up",
     "toggle_mute",
-    "toggle_mute_or_cycle_audio",
+    "cycle_audio",
     "cycle_subtitle",
     "open_idle_feed_link",
 ];
@@ -295,7 +295,7 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("volume_down", &["-"]),
     ("volume_up", &["+", "="]),
     ("toggle_mute", &["m"]),
-    ("toggle_mute_or_cycle_audio", &["a"]),
+    ("cycle_audio", &["#"]),
     ("cycle_subtitle", &["z"]),
     ("open_idle_feed_link", &["o"]),
     ("panel_mode_cycle_x", &["x"]),
