@@ -15,8 +15,7 @@ pub struct QueueTitleModel {
 }
 
 /// Paints the empty-queue placeholder centered in the list content area in
-/// bold mauve, over the panel's own fill. The placeholder's stored leading
-/// indent is dropped so the text centers exactly.
+/// bold mauve, over the panel's own fill.
 pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
     if content.width == 0 || content.height == 0 {
         return;
@@ -27,13 +26,11 @@ pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
         ..content
     };
     frame.render_widget(
-        Paragraph::new(text.trim_start())
-            .alignment(Alignment::Center)
-            .style(
-                Style::default()
-                    .fg(palette::EMPTY_QUEUE_FG)
-                    .add_modifier(Modifier::BOLD),
-            ),
+        Paragraph::new(text).alignment(Alignment::Center).style(
+            Style::default()
+                .fg(palette::EMPTY_QUEUE_FG)
+                .add_modifier(Modifier::BOLD),
+        ),
         row,
     );
 }

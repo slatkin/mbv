@@ -27,10 +27,7 @@ pub struct QueuePanelInputs {
     pub left_content: Rect,
     /// Rows the Queue playback panel's header row always spends above the
     /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The panel starts one row below the playback rows: the band's
-    /// gap row always separates the header from the panel, idle included, and
-    /// keeps the `QueueColumn` surface (the shell's playback placement's last
-    /// row, the shell's `QueueColumn` fill).
+    /// task 3.2).
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -104,15 +101,10 @@ pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
     // header never sits flush on the recessed panel, idle included. Inside the
     // panel, the box's own top pad is the second space row above the list
     // rows.
-    let playback_rows = input.header_height + input.card_height;
-    let gap = 1_u16;
+    let rows_above = input.header_height + input.card_height + 1;
     let panel_area = Rect {
-        y: input.left_content.y + playback_rows + gap,
-        height: input
-            .left_content
-            .height
-            .saturating_sub(playback_rows)
-            .saturating_sub(gap),
+        y: input.left_content.y + rows_above,
+        height: input.left_content.height.saturating_sub(rows_above),
         ..input.left_content
     };
     let (content_area, footer_row) = (queue_list_content(panel_area), queue_footer_row(panel_area));

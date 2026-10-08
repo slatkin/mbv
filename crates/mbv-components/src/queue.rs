@@ -164,9 +164,9 @@ impl QueueComponent {
         }
         self.scope = scope;
         self.empty_text = if scope == QueueScope::Local {
-            "  ¯\\_(ツ)_/¯".into()
+            "¯\\_(ツ)_/¯".into()
         } else {
-            "  Remote queue is empty".into()
+            "Remote queue is empty".into()
         };
     }
 
