@@ -157,43 +157,30 @@ pub(super) fn render_transport_glyphs(
 /// (`queue_indicator_spans`) instead.
 fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
-    let mut codec_value_next = false;
-    let mut right = ctx
-        .status_indicators
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|span| Span::styled(span.content.to_uppercase(), span.style))
-        .map(|span| {
-            let is_caption = matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
-            let is_codec_caption = span.content.as_ref() == "CODEC ";
-            if is_codec_caption {
-                codec_value_next = true;
-                Span::styled(
-                    span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG),
-                )
-            } else if codec_value_next {
-                codec_value_next = false;
-                Span::styled(
-                    span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_VALUE_FG),
-                )
-            } else if is_caption {
-                Span::styled(
-                    span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG),
-                )
-            } else {
-                span
-            }
-        })
-        .collect::<Vec<_>>();
-    for span in &mut right {
-        *span = Span::styled(span.content.to_string(), span.style.bg(pill_bg));
+    let indicators = ctx.status_indicators.as_deref().unwrap_or_default();
+    if indicators.is_empty() {
+        return Vec::new();
     }
-    if !right.is_empty() {
-        right.insert(0, Span::styled(" ", Style::default().bg(pill_bg)));
+    // One pass over the borrowed indicator slice: uppercase the content and
+    // resolve the caption/value fg with the pill bg together, building each
+    // output span once. Output equals the old three-pass spans exactly.
+    let mut right = Vec::with_capacity(indicators.len() + 1);
+    right.push(Span::styled(" ", Style::default().bg(pill_bg)));
+    let mut codec_value_next = false;
+    for span in indicators {
+        let content = span.content.to_uppercase();
+        let style = if content == "CODEC " {
+            codec_value_next = true;
+            span.style.fg(palette::PLAYBACK_META_FG).bg(pill_bg)
+        } else if codec_value_next {
+            codec_value_next = false;
+            span.style.fg(palette::PLAYBACK_VALUE_FG).bg(pill_bg)
+        } else if matches!(content.as_str(), "RES " | "AUD " | "SUB ") {
+            span.style.fg(palette::PLAYBACK_META_FG).bg(pill_bg)
+        } else {
+            span.style.bg(pill_bg)
+        };
+        right.push(Span::styled(content, style));
     }
     right
 }
@@ -280,3 +267,6 @@ pub(super) fn render_transport_controls_row(
         inner,
     );
 }
+
+#[cfg(test)]
+mod tests;
