@@ -22,6 +22,6 @@
 
 ## 5. Finish
 
-- [ ] 5.1 Ask the user to rerun the benches; compare with the baseline. Revert any fix from groups 2–4 that shows no gain beyond noise. List kept and dropped fixes in the PR description.
-- [ ] 5.2 `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings` → verify: clean
-- [ ] 5.3 Commit. Do not push.
+- [x] 5.1 (3.1 status-pill rewrite reverted: -0.5%, within noise; kept: 2.1 capacity, 3.2, 4.2) Ask the user to rerun the benches; compare with the baseline. Revert any fix from groups 2–4 that shows no gain beyond noise. List kept and dropped fixes in the PR description.
+- [x] 5.2 `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings` → verify: clean
+- [x] 5.3 Commit. Do not push.
