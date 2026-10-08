@@ -10,7 +10,7 @@ pub enum FeedDisplayRow {
 
 #[must_use]
 pub fn feed_display_rows(entries: &[mbv_queue::FeedEntry], now_secs: u64) -> Vec<FeedDisplayRow> {
-    let mut rows = Vec::new();
+    let mut rows = Vec::with_capacity(entries.len() + 8);
     let mut last_group = None;
 
     for (idx, entry) in entries.iter().enumerate() {

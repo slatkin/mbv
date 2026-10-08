@@ -99,7 +99,7 @@ pub fn upcoming_episode_target(episode: &EmbyItem) -> String {
 }
 
 pub fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow<String>> {
-    let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::new();
+    let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::with_capacity(episodes.len());
     for episode in episodes {
         let date = parse_premiere_date(&episode.premiere_date);
         if let Some((_, rows)) = groups
