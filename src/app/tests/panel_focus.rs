@@ -104,13 +104,21 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     // paints the focused tone, and the resting stripe did paint. The
     // selected row is the exception: it keeps the canonical cursor bar.
     let box_area = mbv_render::arrangements::queue::queue_list_box(panel);
+    let rows = mbv_render::arrangements::queue::queue_list_rows(box_area);
+    // The box's top pad row keeps the recessed box's own fill; the list
+    // begins one row below it.
     assert_eq!(
         buf[(box_area.x, box_area.y)].style().bg,
+        Some(mbv_theme::surface_colors(mbv_theme::Surface::QueuePanel, false).fill),
+        "mini view keeps the box's top pad on the recessed panel's fill"
+    );
+    assert_eq!(
+        buf[(rows.x, rows.y)].style().bg,
         Some(mbv_theme::SELECTED_ROW_BG),
         "mini view keeps the cursor bar on the first row"
     );
     let mut striped = 0;
-    for y in box_area.y..box_area.bottom() {
+    for y in rows.y..rows.bottom() {
         for x in box_area.x..box_area.right() {
             let bg = buf[(x, y)].style().bg;
             if bg == Some(mbv_theme::SELECTED_ROW_BG) {

@@ -81,8 +81,8 @@ impl Model {
         } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing (the user's hide toggle): the
             // artwork can no longer carry the title, so the header is its
-            // only home again — the carried-over site must not keep the
-            // header hidden over a slot that paints nothing.
+            // only home again — the carried-over site must not leave the
+            // header on its brand row over a slot that paints nothing.
             self.app.queue_card_projection.title_site =
                 mbv_ui_model::playback::NowPlayingTitleSite::Header;
         }

@@ -10,7 +10,7 @@ use tuirealm::event::KeyModifiers;
 #[test]
 fn transport_clicks_resolve_against_retained_geometry() {
     let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing);
+    panel.set_header(NowPlayingStatus::Playing, String::new(), false);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.transport.show_controls = true;
     // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
@@ -66,15 +66,15 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
-/// The hidden-header paint gate: while playing with the title site
-/// `Artwork`, the panel paints nothing on the header row (its rows belong to
-/// the slot region then, and the title lives on the artwork); with the
-/// `Header` site the same projection paints the title there — the title is
-/// never absent from both sites.
+/// The header row's two sites: while the title lives on the artwork (the
+/// `Artwork` site) the header paints the playing brand row — ` [mbv]` left,
+/// `PLAYING:<host>` right — so the header panel stays visible and the title
+/// is not duplicated; with the `Header` site the same projection paints the
+/// title there.
 #[test]
-fn header_row_paints_the_title_only_while_it_is_the_title_site() {
+fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
     let mut panel = QueuePlaybackPanel::new();
-    panel.set_header(NowPlayingStatus::Playing);
+    panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), false);
     panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 6)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -93,13 +93,19 @@ fn header_row_paints_the_title_only_while_it_is_the_title_site() {
         "the Header site paints the title on the header row"
     );
 
-    // Artwork site: the header row's cells stay untouched.
+    // Artwork site: the header row carries the playing brand row, host
+    // included, and never the title (the artwork carries it).
     panel.transport.title_site = NowPlayingTitleSite::Artwork;
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
+    let row = header_row(&terminal);
     assert!(
-        header_row(&terminal).chars().all(|c| c == ' '),
-        "the Artwork site leaves the header row unpainted"
+        row.contains("[mbv]") && row.contains("PLAYING:Living Room"),
+        "the Artwork site paints the playing brand row: {row}"
+    );
+    assert!(
+        !row.contains("Example"),
+        "the title lives on the artwork alone: {row}"
     );
 }

@@ -2,8 +2,6 @@ use super::queue::{QueuePanelInputs, queue_panel_geometry};
 use crate::components::widgets::{COLUMN_GAP, queue_panel_inset};
 use crate::layout::FrameChromeGeometry;
 use crate::layout::TABBAR_LEFT_RESERVE;
-use mbv_ui_model::playback::NowPlayingTitleSite;
-use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use ratatui::layout::Rect;
 
@@ -14,53 +12,28 @@ const TAB_BAR_BOX_HEIGHT: u16 = 3;
 /// blank trailing row).
 pub const PLAYER_BOX_HEIGHT: u16 = 3;
 
-/// Rows the Queue playback panel's header band spends while the header
-/// paints (design D10): the header text row plus the `queue_panel_inset`
-/// row of column padding above it, which recesses the header from the
-/// column's top edge. While the header is hidden — playback active and the
-/// title painted on the artwork (`queue_playback_header_visible`) — only
-/// the text row collapses: the recess row stays as the blank row above the
-/// image (`queue_playback_header_rows`).
+/// Rows the Queue playback panel always spends on its header in every
+/// queue-visible layout, idle included (design D10; the painted row lands
+/// with task 3.2). The root placement reserves it now so the Queue panel's
+/// placement already starts below the Queue playback panel's header. Two
+/// rows: the header text row plus the `queue_panel_inset` row of column
+/// padding above it, which recesses the header from the column's top edge.
 pub const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
-/// Whether the queue playback panel's header row paints this frame. The
-/// header is the now-playing title's home whenever the artwork is not
-/// carrying it: idle, or any frame whose title site is `Header`. While
-/// playback is active and the title site is `Artwork` — which only resolves
-/// once the kitty/sixel overlay variant has actually painted (invariant 16)
-/// — the header has nothing to show and its rows collapse into the visual
-/// slot. One definition of the rule: the root placements, the shell's sync
-/// and paint passes, and the panel's own paint gate all read it.
-#[must_use]
-pub fn queue_playback_header_visible(
-    status: NowPlayingStatus,
-    title_site: NowPlayingTitleSite,
-) -> bool {
-    !(status != NowPlayingStatus::Idle && title_site == NowPlayingTitleSite::Artwork)
-}
-
-/// Rows the header band reserves for one `queue_playback_header_visible`
-/// verdict: the full band while the header paints, the recess row alone
-/// while it is hidden (the blank row above the image stays).
-#[must_use]
-pub fn queue_playback_header_rows(header_visible: bool) -> u16 {
-    if header_visible {
-        QUEUE_PLAYBACK_HEADER_ROWS
-    } else {
-        QUEUE_PLAYBACK_HEADER_ROWS - 1
-    }
-}
-
 /// The visual slot's region within a queue playback placement: below the
-/// header band (`queue_playback_header_rows`), with the queue panel's shared
-/// horizontal inset. The one place the sync, paint and card-reservation
-/// passes derive it.
+/// always-reserved header band, with the queue panel's shared horizontal
+/// inset, ending above the band's bottom gap row. The gap row — the row
+/// between the playback band and the Queue panel — exists exactly when the
+/// placement is taller than the header band (the slot/transport paint), and
+/// it stays on the shell's `QueueColumn` fill, so the slot region excludes
+/// it. The one place the sync, paint and card-reservation passes derive it.
 #[must_use]
-pub fn queue_playback_slot_region(placement: Rect, header_visible: bool) -> Rect {
-    let header_rows = queue_playback_header_rows(header_visible);
+pub fn queue_playback_slot_region(placement: Rect) -> Rect {
     Rect {
-        y: placement.y + header_rows,
-        height: placement.height.saturating_sub(header_rows),
+        y: placement.y + QUEUE_PLAYBACK_HEADER_ROWS,
+        height: placement
+            .height
+            .saturating_sub(QUEUE_PLAYBACK_HEADER_ROWS + 1),
         ..queue_panel_inset(placement)
     }
 }
@@ -110,11 +83,6 @@ pub struct ChromeGeometryInput {
     /// transport to zero rows (task 3.6): the connected-idle exception is
     /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
-    /// Whether the queue playback panel's header row paints this frame
-    /// (`queue_playback_header_visible`). Hidden while playback is active
-    /// and the title is painted on the artwork; the two header rows then
-    /// collapse into the visual slot instead of staying reserved.
-    pub header_visible: bool,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -372,14 +340,12 @@ fn queue_column_geometry(
 ) -> (Rect, Rect, Rect) {
     // Root panel placements (D1, task 1.3): the queue column splits into the
     // Queue playback panel's region (header row plus the visual
-    // slot/transport rows) and the Queue panel directly below it, bordering
-    // the transport band's bottom gap row; while idle only the header row is
-    // reserved, and while the title lives on the artwork none is. Both
-    // placements come from the shared
+    // slot/transport rows, plus the band's gap row while they paint) and the
+    // Queue panel directly below it; while idle only the header row is
+    // reserved. Both placements come from the shared
     // `queue_panel_geometry` (task 3.2: the header row is one input alongside
     // the visual-slot and transport heights, single source), so they tile
     // the queue column's content exactly.
-    let header_rows = queue_playback_header_rows(input.header_visible);
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
         input.card_height,
@@ -387,7 +353,7 @@ fn queue_column_geometry(
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,
-        header_height: header_rows,
+        header_height: QUEUE_PLAYBACK_HEADER_ROWS,
         card_height: playback_rows,
     });
     let queue_playback_area = Rect {

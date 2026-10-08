@@ -12,7 +12,7 @@ use tuirealm::state::State;
 use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
 use super::mouse::gesture::MouseGestureState;
 use mbv_queue::{QueueSlot, QueueSlotId};
-use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box};
+use mbv_render::arrangements::queue::{queue_footer_row, queue_list_box, queue_list_rows};
 use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
@@ -283,9 +283,10 @@ impl Component for QueueComponent {
         // derives from the placement through the shared arrangement
         // helpers, replacing the legacy queue geometry mirror. The list
         // begins on the box's first row (right below the playback band) and
-        // runs to the footer status row.
+        // ends one row above the box's bottom edge, whose spacer row keeps
+        // the box's own fill.
         let footer_row = queue_footer_row(area);
-        let content_area = queue_list_box(area);
+        let content_area = queue_list_rows(queue_list_box(area));
         self.content_area = content_area;
         // The panel fills its own placement: the frame painter covers the
         // whole placement with the QueueColumn surface and the recessed box

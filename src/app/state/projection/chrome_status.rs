@@ -144,6 +144,26 @@ impl App {
         (icon, label)
     }
 
+    /// The playback target's host label plus whether it names a remote target
+    /// (a cast attachment, an attached session, or a direct-remote
+    /// route/label): the connected session's device name (falling back to
+    /// its host), the direct-remote route/label, or this machine's device
+    /// name when playback is local — computed together from one
+    /// `remote_slot_state()` resolution for callers (the queue header sync)
+    /// that need both every tick. Callers style the returned label and the
+    /// header row shows it verbatim.
+    pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
+        let remote_state = self.remote_slot_state();
+        let is_remote = self.cast_attachment.is_some()
+            || matches!(
+                remote_state,
+                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+            );
+        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
+        let (_, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        (label.trim_start().to_string(), is_remote)
+    }
+
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match self.playback_queue().source() {

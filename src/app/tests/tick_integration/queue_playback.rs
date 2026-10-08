@@ -224,13 +224,17 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
         let queue = root.queue.expect("queue placed");
         assert_eq!(
             playback.height,
-            QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS,
-            "header and transport remain at width {width}"
+            QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS + 1,
+            "header, transport, and the band's gap row remain at width {width}"
         );
         assert_eq!(
             queue.y,
-            playback.y + QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + QUEUE_TRANSPORT_GAP_ROWS,
-            "queue starts below the header and transport at width {width}"
+            playback.y
+                + QUEUE_PLAYBACK_HEADER_ROWS
+                + PLAYER_BOX_HEIGHT
+                + QUEUE_TRANSPORT_GAP_ROWS
+                + 1,
+            "queue starts below the header, transport, and gap row at width {width}"
         );
 
         harness.model_mut().app.visual_slot_hidden = false;
@@ -245,20 +249,12 @@ fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints(
     }
 }
 
-/// The hidden-header rule's geometry: while playback is active and the title
-/// site is `Artwork` (the kitty/sixel overlay owns the title), the header
-/// text row collapses into the slot region — the queue playback placement
-/// shrinks by one row and the queue panel starts that much higher, while the
-/// recess row stays as the blank row above the image. With the title still
-/// on the header (`Header`, e.g. images off or no art to carry it), the full
-/// two-row band remains: the header is the title's only home then.
-#[rstest::rstest]
-#[case::title_on_artwork_collapses(NowPlayingTitleSite::Artwork, QUEUE_PLAYBACK_HEADER_ROWS - 1)]
-#[case::title_on_header_remains(NowPlayingTitleSite::Header, QUEUE_PLAYBACK_HEADER_ROWS)]
-fn header_rows_collapse_only_while_the_title_lives_on_the_artwork(
-    #[case] title_site: NowPlayingTitleSite,
-    #[case] reserved_header_rows: u16,
-) {
+/// The header band's geometry while the title lives on the artwork: the
+/// full two-row band stays reserved (the recess row and the brand row) —
+/// the header panel is always visible, and the image begins directly below
+/// the header text row.
+#[test]
+fn header_rows_are_always_reserved_while_the_title_lives_on_the_artwork() {
     use mbv_render::arrangements::chrome::{queue_playback_column_wide, queue_playback_rows};
 
     let mut app = active_app(PanelMode::Both);
@@ -268,9 +264,9 @@ fn header_rows_collapse_only_while_the_title_lives_on_the_artwork(
     let mut harness = TickHarness::new(app);
 
     harness.model_mut().sync_queue_card_geometry();
-    // Set after the geometry sync so the projected fact this rule reads is
+    // Set after the geometry sync so the projected fact the header reads is
     // exactly the one under test.
-    harness.model_mut().app.queue_card_projection.title_site = title_site;
+    harness.model_mut().app.queue_card_projection.title_site = NowPlayingTitleSite::Artwork;
     let card_height = harness.model().app.layout.card.height;
     assert!(card_height > 0, "the slot has a reservation while playing");
 
@@ -290,14 +286,55 @@ fn header_rows_collapse_only_while_the_title_lives_on_the_artwork(
     );
     assert_eq!(
         playback.height,
-        reserved_header_rows + slot_transport_rows,
-        "only the header rows vary with the title site"
+        QUEUE_PLAYBACK_HEADER_ROWS + slot_transport_rows + 1,
+        "the full header band, the slot/transport rows, and the band's gap row stay reserved"
     );
     assert_eq!(
         queue.y,
-        playback.y + reserved_header_rows + slot_transport_rows,
-        "the queue panel sits directly below the collapsed-or-full playback region"
+        playback.y + QUEUE_PLAYBACK_HEADER_ROWS + slot_transport_rows + 1,
+        "the queue panel sits below the gap row that follows the playback band"
     );
+}
+
+/// The gap row between the playback band and the queue panel keeps the
+/// queue column's surface while the slot/transport paint, so the two panels
+/// are separated by a blank row.
+#[test]
+fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
+    let mut app = active_app(PanelMode::Both);
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    let root = harness
+        .model()
+        .app
+        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
+        .root;
+    let playback = root
+        .queue_playback
+        .expect("queue playback placed while playing");
+    let queue = root.queue.expect("queue placed");
+    assert_eq!(
+        queue.y,
+        playback.bottom(),
+        "the queue panel starts directly below the playback placement: the gap row is its last row"
+    );
+    // The queue holds focus in the wide view, so its column paints the
+    // focused fill.
+    let expected_bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true).fill;
+    for column in playback.x + 2..playback.right() - 2 {
+        let cell = &terminal.backend().buffer()[(column, queue.y - 1)];
+        assert_eq!(
+            cell.style().bg,
+            Some(expected_bg),
+            "the gap row keeps the queue column's surface at column {column}"
+        );
+    }
 }
 
 #[test]
@@ -614,13 +651,7 @@ fn queue_card_checkpoint_reaches_its_target_and_holds_across_frames() {
         .root
         .queue_playback
         .expect("queue playback placed while playing");
-    let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(
-        placement,
-        mbv_render::arrangements::chrome::queue_playback_header_visible(
-            reference.now_playing_status(),
-            reference.queue_card_projection.title_site,
-        ),
-    );
+    let slot = mbv_render::arrangements::chrome::queue_playback_slot_region(placement);
     let target_area = ratatui::layout::Rect {
         height: mbv_render::components::card::queue_card_height_cap(40),
         ..slot

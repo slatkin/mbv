@@ -1,7 +1,7 @@
 //! The Queue playback panel (task 3.5, design D10): the queue column's
 //! playback surface, mounted in every queue-visible layout, idle included.
-//! It owns the header row (`[mbv]` left, the status word or the now-playing
-//! title right; hidden while the title lives on the artwork),
+//! It owns the always-painted header row (`[mbv]` left, the status word or
+//! the now-playing title right),
 //! the visual slot's region (painted by the shell's App-side slot adapter on
 //! the panel's behalf — the ABS `paint_home_image` seam) and the queue-column
 //! transport presentation, which routes through the shared width-driven
@@ -28,7 +28,6 @@ use tuirealm::state::State;
 use super::library_playback_panel::PlaybackProjection;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
-use mbv_render::arrangements::chrome::queue_playback_header_visible;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
@@ -47,8 +46,13 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
-    /// The header's projected status word (idle's right-anchored `IDLE`).
+    /// The header's projected facts: the status word (idle's right-anchored
+    /// `IDLE`) and the playback target (`App::playback_host_label_and_remote`,
+    /// no tracking suffix) with its remote flag — the target and flag feed
+    /// only the artwork-site playing brand row's `PLAYING:<host>`.
     status: NowPlayingStatus,
+    host: String,
+    host_is_remote: bool,
     /// The transport's projected facts (the shared transport projection).
     transport: PlaybackProjection,
     /// The transport rect the shell computes in the sync pass from the
@@ -75,6 +79,8 @@ impl QueuePlaybackPanel {
     pub fn new() -> Self {
         Self {
             status: NowPlayingStatus::Idle,
+            host: String::new(),
+            host_is_remote: false,
             transport: PlaybackProjection {
                 state: mbv_ui_model::playback::PlaybackState::default(),
                 show_controls: false,
@@ -100,9 +106,12 @@ impl QueuePlaybackPanel {
         }
     }
 
-    /// Project the header row's status word.
-    pub fn set_header(&mut self, status: NowPlayingStatus) {
+    /// Project the header row's facts (status word, playback target and
+    /// its remote flag for the hostname colour).
+    pub fn set_header(&mut self, status: NowPlayingStatus, host: String, host_is_remote: bool) {
         self.status = status;
+        self.host = host;
+        self.host_is_remote = host_is_remote;
     }
 
     /// Project the transport's facts (the shared transport projection, with
@@ -207,16 +216,12 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        // While the title lives on the artwork (the kitty/sixel overlay
-        // variant actually painted) and playback is active, the header row
-        // is hidden: the geometry no longer reserves its rows and the panel
-        // paints nothing there. Otherwise the header carries the now-playing
+        // While a target plays, the header row carries the now-playing
         // title (moved up from the band's former title row — two-part
         // titles keep their context-left/title-right split, a lone title
-        // paints yellow); idle paints the brand row, `[mbv] ... IDLE`.
-        let header_visible = queue_playback_header_visible(self.status, self.transport.title_site);
-        if header_visible
-            && self.status != NowPlayingStatus::Idle
+        // paints yellow) or, while the title lives on the artwork, the
+        // playing brand row; idle paints the brand row, `[mbv] ... IDLE`.
+        if self.status != NowPlayingStatus::Idle
             && let Some((title, _)) = &self.transport.now_playing_title
         {
             render_header_title(
@@ -232,9 +237,12 @@ impl Component for QueuePlaybackPanel {
                         self.transport.use_nerd_fonts,
                         self.transport.state.paused,
                     ),
+                    title_site: self.transport.title_site,
+                    host: &self.host,
+                    host_is_remote: self.host_is_remote,
                 },
             );
-        } else if header_visible {
+        } else {
             render_playback_header(frame, header, self.status);
         }
         // While idle — or whenever the shell hands no transport rect — the

@@ -25,11 +25,11 @@ pub struct QueuePanelGeometry {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct QueuePanelInputs {
     pub left_content: Rect,
-    /// Rows the Queue playback panel's header row spends above the
-    /// Queue panel while the header paints (design D10; task 3.2). The panel
-    /// starts directly below the playback rows and borders the transport
-    /// band's bottom gap row. Only the recess row while the header is hidden
-    /// (the title lives on the artwork).
+    /// Rows the Queue playback panel's header row always spends above the
+    /// Queue panel in every queue-visible layout, idle included (design D10;
+    /// task 3.2). The panel starts one row below the playback rows while the
+    /// slot/transport paint (the band's gap row); while idle it borders the
+    /// header band directly.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -51,8 +51,10 @@ pub fn queue_footer_row(placement: Rect) -> Option<Rect> {
 
 /// The recessed queue-list box inside the placement: the column's canonical
 /// side insets, starting directly below the playback band (the two panels
-/// border one another) and ending at the footer row (no gap row above the
-/// status bar). When no footer fits, the box runs to the placement's bottom.
+/// border one another) and ending just above the gap row that precedes the
+/// footer. The footer band's rows keep the `QueueColumn` surface; the row
+/// below the footer is the placement's own bottom padding. When no footer
+/// fits, the box runs to the placement's bottom.
 #[must_use]
 pub fn queue_list_box(placement: Rect) -> Rect {
     let mut box_area = Rect {
@@ -61,22 +63,46 @@ pub fn queue_list_box(placement: Rect) -> Rect {
         ..placement
     };
     if let Some(footer) = queue_footer_row(placement) {
-        box_area.height = footer.y.saturating_sub(box_area.y);
+        // The box's last row is the one above the footer's gap row.
+        box_area.height = (footer.y - 1).saturating_sub(box_area.y);
     }
     box_area
+}
+
+/// The queue list's rows inside the recessed box: the box minus its one-row
+/// top pad and one-row bottom spacer. Both rows keep the box's own
+/// `QueuePanel` fill (the recessed panel's surface), so the rows never touch
+/// the box's edges; the frame painter fills them, the list just does not
+/// paint there. A degenerate box (under three rows) reserves everything.
+#[must_use]
+pub fn queue_list_rows(box_area: Rect) -> Rect {
+    let padding = u16::from(box_area.height >= 3);
+    Rect {
+        y: box_area.y + padding,
+        height: box_area.height.saturating_sub(padding * 2),
+        ..box_area
+    }
 }
 
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
-    // The header row (present while the header paints — idle, or any frame
-    // whose title site is `Header`) plus the visual-slot and transport rows
-    // sit directly above the panel: no separator row between the playback
-    // region and the queue list.
+    // The header row (always present, idle included) plus the visual-slot and
+    // transport rows sit above the panel, separated from it by one gap row
+    // while the slot/transport paint. The gap belongs to the slot/transport
+    // band: while idle nothing renders between the header and the panel, and
+    // the box's own top pad is the single space row below the header. The
+    // gap row is the playback region placement's last row (the placement
+    // runs to the panel's first row), so the shell's QueueColumn fill owns it.
     let playback_rows = input.header_height + input.card_height;
+    let gap = u16::from(input.card_height > 0);
     let panel_area = Rect {
-        y: input.left_content.y + playback_rows,
-        height: input.left_content.height.saturating_sub(playback_rows),
+        y: input.left_content.y + playback_rows + gap,
+        height: input
+            .left_content
+            .height
+            .saturating_sub(playback_rows)
+            .saturating_sub(gap),
         ..input.left_content
     };
     let (content_area, footer_row) = (queue_list_box(panel_area), queue_footer_row(panel_area));

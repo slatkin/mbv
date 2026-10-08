@@ -669,12 +669,11 @@ impl App {
             return;
         }
         // The site is decided here, in the sync pass, before the panel first
-        // displays: the header hides from the first frame of eligible
-        // playback instead of flashing the title for the art-fetch/encode
-        // window and collapsing once the overlay paints (invariant 16's
-        // 2026-10-03 revision). A variant that is not encoded yet (art still
-        // fetching, encode in flight) paints plain art for those frames —
-        // the accepted gap the header no longer papers over.
+        // displays, so the header's brand row and the artwork's overlay agree
+        // from the first frame of eligible playback (invariant 16). A variant
+        // that is not encoded yet (art still fetching, encode in flight)
+        // paints plain art for those frames while the header already shows
+        // the playing brand row.
         projection.title_site = NowPlayingTitleSite::Artwork;
         if let Some(variant_key) = self.ensure_title_overlay_protocol(
             &key,

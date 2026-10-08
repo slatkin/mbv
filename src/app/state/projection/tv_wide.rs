@@ -28,10 +28,6 @@ impl App {
                 terminal_width: self.terminal_width,
                 card_height: self.layout.card.height,
                 playback_active: self.effective_playback_state().active,
-                header_visible: mbv_render::arrangements::chrome::queue_playback_header_visible(
-                    self.now_playing_status(),
-                    self.queue_card_projection.title_site,
-                ),
             },
         );
         if !chrome.right_visible {
