@@ -31,18 +31,6 @@ impl RemotePlaybackTarget {
         app.session_toggle_mute();
     }
 
-    pub(in crate::app) fn is_audio_item(app: &App) -> bool {
-        app.connected_session_state
-            .as_ref()
-            .is_some_and(|s| s.media_info.audio_only)
-    }
-
-    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
-        // No session-level mute primitive exists for `a`, so keep routing the
-        // remote path through the audio-track cycle behavior.
-        self.cycle_audio(app);
-    }
-
     pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         let remote_indexes = app.remote_audio_indexes();
         let cur = app

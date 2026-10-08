@@ -65,22 +65,6 @@ impl PlaybackTarget {
         }
     }
 
-    pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::is_audio_item(app),
-            Self::Remote(_) => RemotePlaybackTarget::is_audio_item(app),
-            Self::Cast(_) => CastPlaybackTarget::is_audio_item(app),
-        }
-    }
-
-    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::toggle_soft_mute(app),
-            Self::Remote(target) => target.toggle_soft_mute(app),
-            Self::Cast(_) => CastPlaybackTarget::toggle_soft_mute(app),
-        }
-    }
-
     pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         match self {
             Self::Local(_) => LocalPlaybackTarget::cycle_audio(app),
