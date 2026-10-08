@@ -1,4 +1,4 @@
-use super::super::*;
+use super::*;
 use mbv_queue::{QueueItem, QueueLineage, QueueSource};
 
 fn stub_media_item() -> mbv_emby_model::EmbyItem {
@@ -126,12 +126,12 @@ fn unified_queue_state_data_round_trips() {
         revision: 5,
         source: QueueSource::Unknown,
         lineage: QueueLineage(42),
-        in_flight_transition: Some(crate::TransitionSummary {
+        in_flight_transition: Some(mbv_ctrl::TransitionSummary {
             request_id: 7,
             generation: 3,
             target_slot: 2,
         }),
-        queued_latest_transition: Some(crate::TransitionSummary {
+        queued_latest_transition: Some(mbv_ctrl::TransitionSummary {
             request_id: 8,
             generation: 3,
             target_slot: 1,

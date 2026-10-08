@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn same_owner_queue_replacements_mint_distinct_revisions() {
-    let mint = std::sync::Arc::new(crate::QueueRevisionMint::default());
+    let mint = std::sync::Arc::new(mbv_queue::QueueRevisionMint::default());
     let first = PlaybackQueue::from_queue_items(Vec::new(), None, std::sync::Arc::clone(&mint));
     let second = PlaybackQueue::from_queue_items(Vec::new(), None, mint);
 

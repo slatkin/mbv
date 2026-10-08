@@ -644,6 +644,3 @@ fn group_fetched_items_by_item_id(
 fn should_protect_missing_slot(slot: &QueueSlot, active_slot_id: Option<QueueSlotId>) -> bool {
     active_slot_id == Some(slot.slot_id)
 }
-
-#[cfg(test)]
-mod tests;

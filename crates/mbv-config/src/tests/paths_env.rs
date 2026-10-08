@@ -50,13 +50,6 @@ fn home_latest_launch_state_missing_or_malformed_has_no_baseline_and_round_trips
 }
 
 #[test]
-fn home_latest_launch_rejects_zero_timestamp_as_launch_error() {
-    let error = crate::save_home_latest_launch(0).unwrap_err();
-
-    assert!(error.is_launch());
-}
-
-#[test]
 fn is_system_instance_false_without_env_var() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
     crate::remove_test_env_var("MBV_SYSTEM");

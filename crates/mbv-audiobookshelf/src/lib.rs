@@ -289,8 +289,8 @@ impl AudiobookshelfClient {
     }
 
     /// Install an in-memory mock transport (see `mock_http`).
-    #[cfg(test)]
-    pub(crate) fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
+    #[must_use]
+    pub fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
         self.agent = agent;
         self
     }

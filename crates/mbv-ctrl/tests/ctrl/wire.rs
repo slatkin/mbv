@@ -1,4 +1,4 @@
-use super::super::*;
+use super::*;
 
 // The wire tags below are pinned via `#[serde(rename = "...")]` on
 // `WireCommand` and must not change without a deliberate, explicit
@@ -77,7 +77,7 @@ fn wire_command_tags_are_pinned() {
 // wire briefly carried the scalar still work.
 #[test]
 fn stopped_player_event_wire_keeps_the_protocol_10_run_identity_pair() {
-    let event = CtrlEvent::Player(crate::player::PlayerEvent::Stopped {
+    let event = CtrlEvent::Player(mbv_ctrl::player::PlayerEvent::Stopped {
         slot_id: Some(mbv_queue::QueueSlotId::from_raw(7)),
         run_identity: 42,
         position_ticks: 123,
@@ -93,7 +93,7 @@ fn stopped_player_event_wire_keeps_the_protocol_10_run_identity_pair() {
 
     let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlEvent::Player(crate::player::PlayerEvent::Stopped { run_identity, .. }) => {
+        CtrlEvent::Player(mbv_ctrl::player::PlayerEvent::Stopped { run_identity, .. }) => {
             assert_eq!(run_identity, 42);
         }
         _ => panic!("expected stopped player event"),
@@ -108,7 +108,7 @@ fn stopped_player_event_accepts_the_bare_scalar_run_identity() {
     .unwrap();
 
     match event {
-        CtrlEvent::Player(crate::player::PlayerEvent::Stopped { run_identity, .. }) => {
+        CtrlEvent::Player(mbv_ctrl::player::PlayerEvent::Stopped { run_identity, .. }) => {
             assert_eq!(run_identity, 9);
         }
         _ => panic!("expected stopped player event"),
@@ -123,7 +123,9 @@ fn track_completed_player_event_accepts_the_protocol_10_run_identity_pair() {
     .unwrap();
 
     match event {
-        CtrlEvent::Player(crate::player::PlayerEvent::TrackCompleted { run_identity, .. }) => {
+        CtrlEvent::Player(mbv_ctrl::player::PlayerEvent::TrackCompleted {
+            run_identity, ..
+        }) => {
             assert_eq!(run_identity, 5);
         }
         _ => panic!("expected track completed player event"),

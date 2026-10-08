@@ -2,8 +2,8 @@ use crate::launch_state::{
     load_tui_launch_state_at, save_tui_launch_state_at, tui_launch_state_tmp_path,
 };
 use crate::{
-    AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
-    FeedsSelectorKey, HomeSelectorKey, LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity,
+    AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey, FeedsSelectorKey,
+    HomeSelectorKey, LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity,
     TUI_LAUNCH_STATE_VERSION, TabIdentity, TestTempDir, TuiLaunchState,
 };
 use mbv_queue::ServiceKind;
@@ -41,25 +41,6 @@ fn launch_state_queue_focus_sample() -> TuiLaunchState {
         }),
         item: None,
     }
-}
-
-#[test]
-fn tui_launch_state_audiobookshelf_book_bucket_from_index_matches_fixed_table() {
-    let expected = vec![
-        AudiobookshelfBookBucket::AToC,
-        AudiobookshelfBookBucket::DToF,
-        AudiobookshelfBookBucket::GToI,
-        AudiobookshelfBookBucket::JToL,
-        AudiobookshelfBookBucket::MToO,
-        AudiobookshelfBookBucket::PToR,
-        AudiobookshelfBookBucket::SToU,
-        AudiobookshelfBookBucket::VToZ,
-    ];
-    let actual: Vec<_> = (0..8)
-        .map(|index| AudiobookshelfBookBucket::from_bucket_index(index).unwrap())
-        .collect();
-    assert_eq!(actual, expected);
-    assert_eq!(AudiobookshelfBookBucket::from_bucket_index(8), None);
 }
 
 #[test]

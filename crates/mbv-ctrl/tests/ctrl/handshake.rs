@@ -1,4 +1,4 @@
-use super::super::*;
+use super::*;
 
 #[test]
 fn current_hello_validates() {

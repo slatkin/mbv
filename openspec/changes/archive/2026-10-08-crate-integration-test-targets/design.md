@@ -6,11 +6,11 @@ See proposal.md, Why. Findings from the code (2026-10-08):
 
 | Crate | `src/tests` tree | Private / `cfg(test)`-only items used | Expected to move |
 |---|---|---|---|
-| `mbv-queue` | 7 files, 40 tests | none found | all of `src/tests*` |
-| `mbv-ctrl` | 4 files, 38 tests | none (`lib.rs` has a `#[cfg(test)]` import of `PlayerCommand`/`PlayerStatus` only for the tests) | all |
-| `mbv-emby` | 4 files, 49 tests | `auth_header` (`pub(super)`), `save_cached_token` (`#[cfg(test)] pub use`) | `parsing.rs`, `failure.rs`, most of `client.rs` |
-| `mbv-audiobookshelf` | 4 files, 30 tests | `with_test_agent` (`#[cfg(test)] pub(crate)`); catalog wire types (`ShelfWire`, `ItemsResponse`, …, `#[cfg(test)] pub(crate) use`) | `tests.rs` root tests, `failure.rs`, `playback.rs`; `catalog.rs` stays |
-| `mbv-config` | 12 files, 126 tests | `*_at` path-injected functions, `parse_config`, `checkout_*`, `SYS_ENV_LOCK`, `TEST_DEFAULT_STATE_DIR` | `emby_admin.rs`, `paths_migration.rs`, `ui_state_reset.rs`, plus anything else that compiles |
+| `mbv-queue` | 7 files, 78 tests | none found | all of `src/tests*` |
+| `mbv-ctrl` | 4 files, 48 tests | none (`lib.rs` has a `#[cfg(test)]` import of `PlayerCommand`/`PlayerStatus` only for the tests) | all |
+| `mbv-emby` | 4 files, 67 tests | `auth_header` (`pub(super)`), `save_cached_token` (`#[cfg(test)] pub use`) | `parsing.rs`, `failure.rs`, most of `client.rs` |
+| `mbv-audiobookshelf` | 4 files, 69 tests | `with_test_agent` (`#[cfg(test)] pub(crate)`); catalog wire types (`ShelfWire`, `ItemsResponse`, …, `#[cfg(test)] pub(crate) use`) | `tests.rs` root tests, `failure.rs`, `playback.rs`; `catalog.rs` stays |
+| `mbv-config` | 12 files, 139 tests | `*_at` path-injected functions, `parse_config`, `checkout_*`, `SYS_ENV_LOCK`, `TEST_DEFAULT_STATE_DIR` | seven files split (public-API fragments moved, `cfg(test)`-only remainder stayed); `paths_migration.rs`, `ui_state_reset.rs`, `paths.rs`, `credentials.rs` stayed whole |
 
 Inline `mod tests {}` blocks inside production files (`execution_sequence.rs`, `client_library.rs`,
 `socket.rs`, …) test private helpers. They stay.
@@ -32,9 +32,11 @@ Inline `mod tests {}` blocks inside production files (`execution_sequence.rs`, `
 ## Decisions
 
 1. **One binary per crate: `tests/<short>.rs` + `tests/<short>/*.rs`.** Every top-level file in
-   `tests/` is its own linked binary. One binary per crate keeps link time flat. Subdirectories of
-   `tests/` are not auto-discovered as targets, so the `foo.rs` + `foo/` layout from AGENTS.md
-   works unchanged (no `mod.rs`). Names: `tests/queue.rs`, `tests/ctrl.rs`, `tests/emby.rs`,
+   `tests/` is its own linked binary. One binary per crate keeps link time flat. A crate-root
+   test binary resolves `mod` children against `tests/`, not `tests/<short>/`, so the whole
+   file content (helpers, root tests, `mod` lines) is wrapped in an inline `mod <short> { ... }`
+   and the children resolve to `tests/<short>/*.rs` (precedent: `crates/mbv-queue/tests/queue.rs`).
+   Child files keep `use super::*` for the shared helpers. Names: `tests/queue.rs`, `tests/ctrl.rs`, `tests/emby.rs`,
    `tests/audiobookshelf.rs`, `tests/config.rs`. The existing `tests/fixtures/` directories in
    `mbv-audiobookshelf` and `mbv-config` stay where they are. Use `env!("CARGO_MANIFEST_DIR")`
    paths when a moved test reads fixtures.
@@ -58,8 +60,11 @@ Inline `mod tests {}` blocks inside production files (`execution_sequence.rs`, `
 
 5. **Test-support features.** Moved Emby tests reach `mbv_config::TestStateDirGuard` and
    `mbv_net::mock_http` through the existing `features = ["test"]` dev-dependencies. ABS has
-   the same dev-dependencies. No crate adds a self dev-dependency. An `mbv-config` test that
-   needs `test_support`, `SYS_ENV_LOCK` or `TEST_DEFAULT_STATE_DIR` stays in `src/`.
+   the same dev-dependencies. No crate adds a self dev-dependency. `mbv_config::TestStateDirGuard`,
+   `TestTempDir` and `SYS_ENV_LOCK` are `cfg(any(test, feature = "test"))`-gated and unreachable
+   from the crate's own integration binary, so an `mbv-config` test that needs them stays in
+   `src/`. Actual outcome: seven files had public-API fragments split out into `tests/config/`
+   (55 tests); `paths_migration`, `ui_state_reset`, `paths` and `credentials` stayed whole.
 
 6. **Drift prevention is documentation in the two places agents read before they write a test,
    plus copyable examples.**

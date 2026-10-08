@@ -23,7 +23,7 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
         };
         assert_eq!(
             failure.class,
-            crate::EmbyFailureClass::AuthenticationRejected
+            mbv_emby::EmbyFailureClass::AuthenticationRejected
         );
     }
 }
@@ -40,7 +40,7 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     ) else {
         panic!("availability failure unexpectedly succeeded");
     };
-    assert_eq!(failure.class, crate::EmbyFailureClass::Unavailable);
+    assert_eq!(failure.class, mbv_emby::EmbyFailureClass::Unavailable);
 
     let http = MockHttp::new();
     http.respond(200, "not-json");
@@ -48,7 +48,7 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let Err(failure) = client.get_views_classified() else {
         panic!("malformed availability response unexpectedly succeeded");
     };
-    assert_eq!(failure.class, crate::EmbyFailureClass::Unavailable);
+    assert_eq!(failure.class, mbv_emby::EmbyFailureClass::Unavailable);
 
     let http = MockHttp::new();
     http.fail(std::io::ErrorKind::ConnectionRefused);
@@ -60,5 +60,5 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     ) else {
         panic!("dead endpoint unexpectedly authenticated");
     };
-    assert_eq!(failure.class, crate::EmbyFailureClass::Unavailable);
+    assert_eq!(failure.class, mbv_emby::EmbyFailureClass::Unavailable);
 }

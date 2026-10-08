@@ -16,7 +16,13 @@ and every plan, review, or agent instruction that causes tests to be written.
    semantic requests, viewport, and retained hit resolution; shell tick
    integration owns mount/focus/routing, latest-frame delivery, projection,
    and cross-boundary effects. Outside the TUI the same rule applies
-   without the matrix: narrowest owning layer, one owner.
+   without the matrix: narrowest owning layer, one owner. For a library
+   crate, "narrowest layer" means the narrowest layer that can observe the
+   contract: a test whose contract is the crate's public API is owned by the
+   crate's `tests/` integration binary, not by a unit test in `src/`. Adding
+   `#[cfg(test)] pub(crate) use` (or any other visibility widening) so that a
+   public-contract test can stay in `src/` violates this invariant (#889,
+   `docs/standards/rules/M-INTEGRATION-TESTS.md`).
 3. A regression test carries its provenance — the issue or commit it guards,
    in its name or a comment. Provenance is what makes "delete by default,
    keep by exception" auditable: an uncited test asserting the same thing as
@@ -76,3 +82,10 @@ authoring and review time.
   helpers in production files. Delete them with the tests (AGENTS.md
   forbids `allow`/`expect`, so they surface as `dead_code` — that warning
   is the sweep mechanism, not a nuisance).
+- **`mbv-daemon` has no public-contract test target yet.** Its tests drive
+  private loop internals, so they are real unit tests; a public-contract test
+  (through `run_with_options` or the ctrl socket) is still missing (#889).
+- **`mbv-config` public-API tests that need `TestStateDirGuard`,
+  `TestTempDir`, or `SYS_ENV_LOCK` still live in `src/`.** Those helpers are
+  `cfg(any(test, feature = "test"))`-gated and unreachable from the crate's own
+  integration binary, which cannot take a self dev-dependency.

@@ -8,14 +8,6 @@ use crate::{
 use mbv_queue::{FeedKind, QueueSource, QueueState, ServiceKind};
 
 #[test]
-fn emby_setup_normalizes_server_and_starts_at_revision_one() {
-    let setup = EmbySetup::new("  https://emby.example/// ", " user-1 ");
-    assert_eq!(setup.server_url, "https://emby.example");
-    assert_eq!(setup.user_id, "user-1");
-    assert_eq!(setup.revision, 1);
-}
-
-#[test]
 fn different_server_replacement_clears_only_emby_owned_state() {
     let _guard = TestStateDirGuard::new();
     let mut config = Config {
