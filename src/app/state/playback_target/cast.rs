@@ -53,17 +53,6 @@ impl CastPlaybackTarget {
         app.send_cast_command(move |t| t.set_muted(muted));
     }
 
-    /// No local audio-track cycling exists for a cast target (`cycle_audio`
-    /// below flashes "not supported"), so treating every item as audio
-    /// routes the `a` key to mute-toggle, which cast does support.
-    pub(in crate::app) fn is_audio_item(_app: &App) -> bool {
-        true
-    }
-
-    pub(in crate::app) fn toggle_soft_mute(app: &mut App) {
-        CastPlaybackTarget::toggle_command_mute(app);
-    }
-
     pub(in crate::app) fn cycle_audio(app: &mut App) {
         app.flash(
             "Audio-track cycling is not supported for cast targets".to_string(),

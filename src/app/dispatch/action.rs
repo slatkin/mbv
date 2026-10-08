@@ -45,22 +45,9 @@ pub(in crate::app) enum Command {
     CycleOrToggleSubtitle,
     AdjustVolume(i64),
     /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
-    /// **Not** the same mechanism as `ToggleMuteOrCycleAudio`'s mute path
-    /// below, which instead flips `ui_volume`/`pre_mute_volume` via
-    /// `SetVolume` — these are two separate, pre-existing "mute" code paths
-    /// with no cross-reference in the original code; not unified here since
-    /// that would be a behavior change (see issue #78 follow-up, #84).
     ToggleMute,
-    /// The `a` key: `dispatch` replicates the `is_audio_item()` branch,
-    /// calling `toggle_mute()` (the `ui_volume`/`pre_mute_volume`/`SetVolume`
-    /// mechanism, *not* `Command::ToggleMute`'s `mute_on`/`SetMute`) if the
-    /// current item is audio-only, otherwise `cycle_audio()`. Gated the same
-    /// way as the other transport keys (`active OR has_remote_session`) —
-    /// see #88. The shared `PlaybackTarget` seam owns the local-vs-remote
-    /// split underneath `is_audio_item()`, `toggle_mute()`, and
-    /// `cycle_audio()`, so this action layer no longer re-derives it in each
-    /// helper.
-    ToggleMuteOrCycleAudio,
+    /// The `#` key: cycles the audio track.
+    CycleAudio,
 
     // ── queue activation (issue #134) ───────────────────────────────────
     /// Activate the item at the given queue index: `Enter` on the queue
@@ -205,7 +192,7 @@ impl App {
             | Command::CycleOrToggleSubtitle
             | Command::AdjustVolume(_)
             | Command::ToggleMute
-            | Command::ToggleMuteOrCycleAudio => self.dispatch_playback_command(command),
+            | Command::CycleAudio => self.dispatch_playback_command(command),
             Command::QueuePlayCursor(t) => self.dispatch_queue_play_cursor(t),
             Command::Quit => return self.try_quit(),
             Command::NextLibraryTab
@@ -257,13 +244,7 @@ impl App {
                 self.adjust_volume(delta);
             }
             Command::ToggleMute => self.playback_target().toggle_command_mute(self),
-            Command::ToggleMuteOrCycleAudio => {
-                if self.is_audio_item() {
-                    self.toggle_mute();
-                } else {
-                    self.cycle_audio();
-                }
-            }
+            Command::CycleAudio => self.cycle_audio(),
             _ => unreachable!("dispatch_playback_command only accepts playback commands"),
         }
     }

@@ -1,7 +1,6 @@
 use crate::app::state::playback::HomeContent;
 use crate::app::{
-    App, BrowseLevel, FeedHomeVideoState, LibEvent, PendingQueueAction, ReplacementExecutor,
-    TabSelection, dispatch::notify::ToastSeverity,
+    App, BrowseLevel, FeedHomeVideoState, LibEvent, TabSelection, dispatch::notify::ToastSeverity,
 };
 use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
@@ -208,47 +207,34 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn load_and_play_playlist(&mut self, playlist_id: String) {
-        let playlist_name = self
-            .playlists
-            .iter()
-            .find(|p| p.id == playlist_id)
-            .map(|p| p.name.clone())
-            .unwrap_or_default();
+    /// Fetches a playlist's items synchronously and returns the playable
+    /// (non-folder) ones. Flashes and returns `None` when Emby is unavailable,
+    /// the fetch fails, the playlist is empty, or nothing in it is playable.
+    pub(in crate::app) fn playlist_playable_items(
+        &mut self,
+        playlist_id: &str,
+    ) -> Option<Vec<EmbyItem>> {
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
+            return None;
         };
-        let items = match client.get_playlist_items(&playlist_id) {
+        let items = match client.get_playlist_items(playlist_id) {
             Ok(r) => r,
             Err(e) => {
                 self.flash(format!("Playlist load failed: {e}"), ToastSeverity::Error);
-                return;
+                return None;
             }
         };
         if items.is_empty() {
             self.flash("Playlist is empty".into(), ToastSeverity::Error);
-            return;
+            return None;
         }
         let playable: Vec<EmbyItem> = items.into_iter().filter(|i| !i.is_folder).collect();
         if playable.is_empty() {
             self.flash("No playable items in playlist".into(), ToastSeverity::Error);
-            return;
+            return None;
         }
-        let action = PendingQueueAction::PlayItems {
-            items: playable,
-            start_idx: 0,
-            source: mbv_queue::QueueSource::Playlist {
-                id: Some(playlist_id),
-                name: playlist_name,
-            },
-            autostart: false,
-        };
-        // The populated-queue gate defers the replacement; `run_replacement`
-        // raises the Playlists sidebar dismiss (and Queue focus) once it runs
-        // — immediately on an empty queue, after confirmation on a populated
-        // one — so a cancelled load leaves the sidebar open.
-        self.request_queue_replacement(action, ReplacementExecutor::Pending);
+        Some(playable)
     }
 
     pub(in crate::app) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {

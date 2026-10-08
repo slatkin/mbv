@@ -300,13 +300,8 @@ fn defaults_reproduce_todays_resolution() {
                 "panel_left" => snap.panel_focus = PanelFocus::Library,
                 // Gated transport keys: one opener (an active player) is
                 // enough to prove the default chord still routes.
-                "toggle_play_pause"
-                | "stop"
-                | "seek_back"
-                | "seek_forward"
-                | "next_track"
-                | "previous_track"
-                | "toggle_mute_or_cycle_audio" => {
+                "toggle_play_pause" | "stop" | "seek_back" | "seek_forward" | "next_track"
+                | "previous_track" | "cycle_audio" => {
                     snap.playback.player_active = true;
                 }
                 "open_idle_feed_link" => snap.playback.idle_feed_link_available = true,

@@ -74,28 +74,24 @@ impl App {
     /// Runs one already-confirmed (or gate-free) queue replacement through the
     /// executor its entry point selected. Both the empty-queue path and the
     /// `ReplacePopulatedQueue` confirmation arm call this, so a gated payload
-    /// replays exactly what an ungated one would have.
+    /// replays exactly what an ungated one would have. `Pending` only replaces
+    /// the queue; `PlaylistsSidebar` also closes the Playlists sidebar and
+    /// focuses the Queue when no overlay was raised.
     pub(in crate::app) fn run_replacement(
         &mut self,
         action: PendingQueueAction,
         via: &ReplacementExecutor,
     ) {
         match via {
-            ReplacementExecutor::Pending => {
-                let playlist_load = matches!(
-                    &action,
-                    PendingQueueAction::PlayItems {
-                        source: mbv_queue::QueueSource::Playlist { .. },
-                        ..
-                    }
-                );
+            ReplacementExecutor::Pending => self.execute_queue_replacement(action),
+            ReplacementExecutor::PlaylistsSidebar => {
                 self.execute_queue_replacement(action);
-                // A playlist load from the Playlists sidebar closes it so the
-                // queue it just loaded is visible. Done here rather than at
-                // the call site so a gated load still dismisses on confirm
-                // while a cancelled one leaves the sidebar alone. A raised
-                // save/discard prompt keeps the sidebar (existing behaviour).
-                if playlist_load && self.pending_overlay.is_none() {
+                // The Playlists sidebar closes so the replaced queue is
+                // visible. Done here rather than at the call site so a gated
+                // replacement still dismisses on confirm while a cancelled one
+                // leaves the sidebar alone. A raised save/discard prompt keeps
+                // the sidebar.
+                if self.pending_overlay.is_none() {
                     self.request_sidebar_dismiss(SidebarId::Playlists);
                     self.set_panel_focus(PanelFocus::Queue);
                 }
@@ -150,8 +146,7 @@ impl App {
                 items,
                 start_idx,
                 source,
-                autostart,
-            } => self.execute_pending_play_items(items, start_idx, source, autostart),
+            } => self.execute_pending_play_items(items, start_idx, source),
             PendingQueueAction::ClearQueue => self.execute_pending_queue_clear(),
         }
     }

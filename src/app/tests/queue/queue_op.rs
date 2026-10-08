@@ -10,7 +10,7 @@ use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, PendingQueueAction, QueueScope};
+use crate::app::{App, QueueScope};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::{QueueItem, QueueSource};
@@ -470,8 +470,8 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
 #[test]
 fn idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result() {
     // unified-playback-queue "Queue edits are answered before the next input",
-    // scenario "Idle load while an item plays": loading a playlist without
-    // starting playback keeps its own load result — the Client does not wait
+    // scenario "Idle load while an item plays": a populate-only load (no
+    // playback start) keeps its own load result — the Client does not wait
     // for it before handling input, and does not show the load as applied
     // until the owner's accepted state contains it.
     let (mut app, cmd_rx) = owner_queue_load_local_daemon_app();
@@ -482,15 +482,19 @@ fn idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result() {
         .unwrap();
     app.local_view.adopt_items(make_items(2), 0);
 
-    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
-        items: make_items(3),
-        start_idx: 0,
-        source: QueueSource::Playlist {
-            id: None,
-            name: "p".into(),
-        },
-        autostart: false,
-    });
+    assert!(
+        app.load_idle_queue_on_owner(
+            make_items(3)
+                .into_iter()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect(),
+            0,
+            QueueSource::Playlist {
+                id: None,
+                name: "p".into(),
+            },
+        )
+    );
 
     assert!(
         matches!(

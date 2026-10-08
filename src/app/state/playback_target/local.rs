@@ -51,29 +51,6 @@ impl LocalPlaybackTarget {
         app.save_prefs();
     }
 
-    pub(in crate::app) fn is_audio_item(app: &App) -> bool {
-        let idx = app.local_view.cursor();
-        app.local_view
-            .emby_item_at(idx)
-            .is_some_and(|i| i.media_type == "Audio" || i.item_type == "Audio")
-    }
-
-    pub(in crate::app) fn toggle_soft_mute(app: &mut App) {
-        if app.ui_volume == 0 {
-            if let Some(v) = app.pre_mute_volume.take() {
-                let _ = app
-                    .player
-                    .send_command(PlayerCommand::SetVolume(i64::from(v)));
-                app.ui_volume = v;
-            }
-        } else {
-            app.pre_mute_volume = Some(app.ui_volume);
-            let _ = app.player.send_command(PlayerCommand::SetVolume(0));
-            app.ui_volume = 0;
-        }
-        app.save_prefs();
-    }
-
     pub(in crate::app) fn cycle_audio(app: &mut App) {
         let (tracks, current_id) = {
             let s = app.player.status_snapshot();

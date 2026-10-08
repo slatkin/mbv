@@ -2,10 +2,6 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 
 impl App {
-    pub(in crate::app) fn toggle_mute(&mut self) {
-        self.playback_target().toggle_soft_mute(self);
-    }
-
     /// Session-aware mute toggle for `Action::ToggleMute` (the `m` key) when
     /// attached to a remote session. Mirrors `cycle_audio()`/`cycle_sub()`:
     /// computes an explicit target state (not a blind server-side toggle),

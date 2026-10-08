@@ -5,7 +5,7 @@ use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyCode;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 #[test]
@@ -77,16 +77,16 @@ fn playback_policy_preserves_per_key_eligibility() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            key(KeyCode::Char('a')),
+            key(KeyCode::Char('#')),
             &active,
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::ToggleMuteOrCycleAudio)
+        RouterOutcome::Command(Command::CycleAudio)
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            key(KeyCode::Char('a')),
             &active,
             None,
             &default_keybinds()

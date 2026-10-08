@@ -13,7 +13,6 @@ fn play_action(ids: &[&str]) -> PendingQueueAction {
         items: ids.iter().map(|id| audio(id)).collect(),
         start_idx: 0,
         source: mbv_queue::QueueSource::Album,
-        autostart: true,
     }
 }
 
@@ -51,29 +50,6 @@ fn pending_confirm_action(app: &App) -> Option<ConfirmAction> {
 /// Client's view follows the owner's answer, not an optimistic write).
 fn gate_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     make_local_daemon_app_stub_with_cmd_rx(Vec::new())
-}
-
-/// A local-daemon stub whose owner advertises the owner-queue-load
-/// capability, so an idle playlist load is accepted and observable on the
-/// wire.
-fn idle_load_app() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
-    let (remote, player_rx, cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(Vec::new(), 0);
-    let config = crate::config::Config {
-        stay_alive: true,
-        ..crate::config::Config::default()
-    };
-    let mut app = App::new_remote_with_config(
-        mbv_emby::EmbyClient::new(config.clone()),
-        remote,
-        player_rx,
-        &mbv_remote_player::DaemonEndpoint::Local,
-        config,
-    );
-    app.close_settings();
-    app.pending_overlay = None;
-    while cmd_rx.try_recv().is_ok() {}
-    (app, cmd_rx)
 }
 
 /// The item ids of the most recent `UnifiedQueueReplace` sent to the owner;
@@ -383,10 +359,10 @@ fn cancelling_context_menu_play_leaves_the_populated_queue_unchanged() {
     assert!(!app.player.status_snapshot().active);
 }
 
-/// Row 3.4: an empty target queue runs a routed shuffle and a playlist load
+/// Row 3.4: an empty target queue runs a routed shuffle and a playlist replace
 /// immediately, with no confirmation and no stored payload.
 #[test]
-fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
+fn empty_queue_runs_a_shuffle_and_a_playlist_replace_without_a_modal() {
     let _guard = crate::config::TestStateDirGuard::new();
 
     let (mut app, cmd_rx) = gate_app();
@@ -396,7 +372,6 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
             items: vec![audio("shuffle-1")],
             start_idx: 0,
             source: mbv_queue::QueueSource::Shuffle,
-            autostart: true,
         },
         ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),
     );
@@ -408,7 +383,7 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
         "the routed shuffle reached the owner as one answered op"
     );
 
-    let (mut app, cmd_rx) = idle_load_app();
+    let (mut app, cmd_rx) = gate_app();
     app.request_queue_replacement(
         PendingQueueAction::PlayItems {
             items: vec![audio("playlist-1")],
@@ -417,21 +392,15 @@ fn empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal() {
                 id: Some("playlist-1".into()),
                 name: "Playlist".into(),
             },
-            autostart: false,
         },
-        ReplacementExecutor::Pending,
+        ReplacementExecutor::PlaylistsSidebar,
     );
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
     assert!(!app.queue_deferrals.has_gated_replacement());
-    assert!(
-        cmd_rx
-            .try_iter()
-            .any(|command| matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueLoadIdle { .. }))
-    );
     assert_eq!(
-        queue_ids(&app),
-        Vec::<String>::new(),
-        "the idle load shows only through the owner's accepted state"
+        sent_replace_ids(&cmd_rx),
+        ["playlist-1"],
+        "the playlist replace reached the owner as one answered op"
     );
 }
 
@@ -455,7 +424,6 @@ fn confirming_a_wholly_unplayable_replacement_then_raises_the_local_play_prompt(
             items: vec![video],
             start_idx: 0,
             source: mbv_queue::QueueSource::Album,
-            autostart: true,
         },
         ReplacementExecutor::Routed(RoutedReplacementPrep::Album),
     );

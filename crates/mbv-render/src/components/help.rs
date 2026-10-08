@@ -115,7 +115,7 @@ fn playback_label(action_id: &str) -> &'static str {
         "volume_down" => "Volume down",
         "volume_up" => "Volume up",
         "toggle_mute" => "Mute",
-        "toggle_mute_or_cycle_audio" => "Cycle audio track",
+        "cycle_audio" => "Cycle audio track",
         "cycle_subtitle" => "Cycle subtitles",
         "open_idle_feed_link" => "Open idle feed link",
         other => panic!("declared Playback action `{other}` has no help label"),

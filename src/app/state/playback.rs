@@ -153,23 +153,22 @@ pub(in crate::app) enum PendingQueueAction {
         items: Vec<EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
-        /// False replaces the queue without starting playback (playlist
-        /// Enter populates the queue; Space/Enter on the queue starts it).
-        autostart: bool,
     },
     ClearQueue,
 }
 
-/// Which of the two existing queue-replacement executors runs once the
-/// populated-queue gate is confirmed. `Pending` is the existing
-/// `execute_queue_replacement` path; `Routed` carries its entry point's
-/// pre-play prep, because `play_items_routed` never replaces the playback
-/// queue itself — every routed caller does its own mutation around it, and
-/// they differ.
+/// Which queue-replacement executor runs once the populated-queue gate is
+/// confirmed. `Pending` is the plain `execute_queue_replacement` path.
+/// `PlaylistsSidebar` runs it, then closes the Playlists sidebar and focuses
+/// the Queue so the replaced queue is visible. `Routed` carries its entry
+/// point's pre-play prep, because `play_items_routed` never replaces the
+/// playback queue itself — every routed caller does its own mutation around
+/// it, and they differ.
 #[derive(Debug)]
 pub(in crate::app) enum ReplacementExecutor {
     Routed(RoutedReplacementPrep),
     Pending,
+    PlaylistsSidebar,
 }
 
 /// The per-entry-point pre-play prep a `Routed` replacement replays before

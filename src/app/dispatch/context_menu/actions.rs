@@ -37,7 +37,6 @@ impl App {
                         items,
                         start_idx: 0,
                         source: mbv_queue::QueueSource::Unknown,
-                        autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
                 );
@@ -50,7 +49,6 @@ impl App {
                         items,
                         start_idx: 0,
                         source: mbv_queue::QueueSource::Shuffle,
-                        autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
                 );

@@ -394,9 +394,9 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         prefix_addressable: true,
     },
     KeybindAction {
-        id: "toggle_mute_or_cycle_audio",
+        id: "cycle_audio",
         section: KeySection::Playback,
-        default_chords: &["a"],
+        default_chords: &["#"],
         gate: KeyGate::Playback,
         policy: "playback",
         rebindable: true,

@@ -548,17 +548,6 @@ impl App {
         );
     }
 
-    /// Whether the item currently playing is audio-only, used to decide
-    /// `a`'s mute-vs-cycle branch (`Action::ToggleMuteOrCycleAudio`). When a
-    /// remote session is connected, reads the same `media_info.audio_only`
-    /// flag the render layer already uses to pick audio-only vs. video
-    /// indicators for that session (see #88), rather than the local
-    /// playlist/cursor state, which doesn't reflect what the session is
-    /// playing.
-    pub(in crate::app) fn is_audio_item(&self) -> bool {
-        self.playback_target().is_audio_item(self)
-    }
-
     // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
     pub(in crate::app) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
