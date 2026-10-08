@@ -11,7 +11,7 @@
 
 ## 3. Routing contract (spec: "`a` reaches the focused leaf during playback")
 
-- [ ] 3.1 In `src/app/tests/routing_matrix/playback.rs` `playback_policy_preserves_per_key_eligibility`, change the `a` assertion so that `#` with an active player resolves to `Command(Command::CycleAudio)`. Change the `Ctrl+a` assertion into a bare `a` with an active player resolving to `FallThrough`. In `src/app/input/key_policy/resolution_tests.rs`, rename the `"toggle_mute_or_cycle_audio"` match case to `"cycle_audio"`. Add no other tests: the registry default test and the routing matrix cover the remaining scenarios. Verify with `cargo nextest run -p mbv`.
+- [x] 3.1 In `src/app/tests/routing_matrix/playback.rs` `playback_policy_preserves_per_key_eligibility`, change the `a` assertion so that `#` with an active player resolves to `Command(Command::CycleAudio)`. Change the `Ctrl+a` assertion into a bare `a` with an active player resolving to `FallThrough`. In `src/app/input/key_policy/resolution_tests.rs`, rename the `"toggle_mute_or_cycle_audio"` match case to `"cycle_audio"`. Add no other tests: the registry default test and the routing matrix cover the remaining scenarios. Verify with `cargo nextest run -p mbv`.
 
 ## 4. Integration
 
