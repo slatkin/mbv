@@ -130,7 +130,6 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
             items,
             start_idx,
             source,
-            autostart,
         } => {
             assert_eq!(
                 items
@@ -141,7 +140,6 @@ fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_
                 "the cached album enters in disc/track order, not cache order"
             );
             assert_eq!(start_idx, 1, "the selected track is the start index");
-            assert!(autostart, "a track activation starts playback");
             assert!(matches!(source, mbv_queue::QueueSource::Album));
         }
         PendingQueueAction::ClearQueue => panic!("a track activation never clears the queue"),
