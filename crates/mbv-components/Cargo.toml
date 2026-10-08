@@ -33,12 +33,18 @@ time = { workspace = true, features = ["parsing"] }
 tuirealm.workspace = true
 ratatui.workspace = true
 unicode-width.workspace = true
+foldhash.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+criterion.workspace = true
 mbv-queue = { path = "../mbv-queue" }
 mbv-config = { path = "../mbv-config" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-emby-model = { path = "../mbv-emby-model", features = ["test"] }
 mbv-ui-msg = { path = "../mbv-ui-msg", features = ["test"] }
 mbv-render = { path = "../mbv-render", features = ["test"] }
+
+[[bench]]
+name = "show_targets"
+harness = false

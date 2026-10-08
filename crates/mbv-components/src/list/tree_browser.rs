@@ -122,7 +122,7 @@ struct ArenaNode<Target> {
 }
 
 struct RebuiltForest<Target> {
-    arena: HashMap<usize, ArenaNode<Target>>,
+    arena: foldhash::HashMap<usize, ArenaNode<Target>>,
     target_to_node: HashMap<Target, usize>,
     ordered_nodes: Vec<usize>,
     roots: Vec<usize>,
@@ -140,7 +140,7 @@ struct ReconciledSelection<Target> {
 /// only select, expand, mark, and resolve rows through destination targets.
 #[derive(Debug)]
 pub struct TreeBrowser<Target> {
-    arena: HashMap<usize, ArenaNode<Target>>,
+    arena: foldhash::HashMap<usize, ArenaNode<Target>>,
     target_to_node: HashMap<Target, usize>,
     ordered_nodes: Vec<usize>,
     roots: Vec<usize>,
@@ -237,7 +237,7 @@ impl<Target> TreeBrowser<Target> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            arena: HashMap::new(),
+            arena: foldhash::HashMap::default(),
             target_to_node: HashMap::new(),
             ordered_nodes: Vec::new(),
             roots: Vec::new(),
@@ -358,7 +358,7 @@ impl<Target> TreeBrowser<Target> {
         Target: Clone + Eq + Hash,
     {
         let mut forest = RebuiltForest {
-            arena: HashMap::with_capacity(nodes.len()),
+            arena: foldhash::HashMap::with_capacity_and_hasher(nodes.len(), Default::default()),
             target_to_node: HashMap::with_capacity(nodes.len()),
             ordered_nodes: Vec::with_capacity(nodes.len()),
             roots: Vec::new(),

@@ -8,9 +8,14 @@ pub enum FeedDisplayRow {
     Entry(usize),
 }
 
+// At most one heading per feed age group plus one spacer between groups
+// (5 groups today, so 9 extra rows max); adding a group without raising
+// this bound only costs a reallocation, never correctness.
+const MAX_GROUP_ROWS: usize = 9;
+
 #[must_use]
 pub fn feed_display_rows(entries: &[mbv_queue::FeedEntry], now_secs: u64) -> Vec<FeedDisplayRow> {
-    let mut rows = Vec::new();
+    let mut rows = Vec::with_capacity(entries.len() + MAX_GROUP_ROWS);
     let mut last_group = None;
 
     for (idx, entry) in entries.iter().enumerate() {

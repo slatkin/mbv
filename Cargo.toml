@@ -51,6 +51,8 @@ mdns-sd = { version = "0.21", default-features = false }
 flume = "0.12"
 ab_glyph = "0.2"
 num-traits = "0.2"
+criterion = "0.8"
+foldhash = "0.2"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
@@ -106,6 +108,11 @@ redundant_lifetimes = "warn"
 trivial_numeric_casts = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_lifetimes = "warn"
+
+[profile.bench]
+# Keep enough debuginfo for readable criterion profiles without paying for
+# full debug builds on manual bench runs (#896).
+debug = 1
 
 [package]
 name = "mbv"

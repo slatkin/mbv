@@ -42,11 +42,11 @@ impl TvContent {
     pub fn show_targets(items: &[EmbyItem]) -> Vec<(String, &EmbyItem)> {
         let mut shows: Vec<&EmbyItem> = items.iter().collect();
         shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let mut id_counts = std::collections::HashMap::new();
+        let mut id_counts = std::collections::HashMap::with_capacity(shows.len());
         for show in &shows {
             *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
         }
-        let mut occurrences = std::collections::HashMap::new();
+        let mut occurrences = std::collections::HashMap::with_capacity(shows.len());
         shows
             .into_iter()
             .map(|show| {
@@ -109,7 +109,8 @@ impl TvContent {
         season_occurrence: usize,
         season_target: &TvTreeTarget,
     ) {
-        let mut episode_occurrences = std::collections::HashMap::new();
+        entries.reserve(episodes.len());
+        let mut episode_occurrences = std::collections::HashMap::with_capacity(episodes.len());
         for (index, episode) in episodes.iter().enumerate() {
             let episode_id = if episode.id.is_empty() {
                 upcoming_episode_target(episode)
@@ -190,7 +191,8 @@ impl TvContent {
             if let TreeEntry::Node(root) = &mut entries[root_index] {
                 root.expandable = !detail.seasons.is_empty();
             }
-            let mut season_occurrences = std::collections::HashMap::new();
+            let mut season_occurrences =
+                std::collections::HashMap::with_capacity(detail.seasons.len());
             for season in &detail.seasons {
                 let occurrence = season_occurrences
                     .entry(season.id.clone())
