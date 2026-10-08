@@ -6,7 +6,7 @@ See proposal.md (Why) for the motivation and `specs/playlist-management/spec.md`
 
 - `PlaylistsComponent` (`crates/mbv-components/src/playlists.rs`) handles its keys directly and emits `ShellRequest::PlaylistsActivate { open, index }`.
 - `src/app/shell/playlists.rs` handles that request. On a playlist row it calls `App::load_and_play_playlist` (`src/app/dispatch/library/load.rs`), which fetches the items synchronously. In the open view it builds the action from the already-loaded `playlists_open_items`. Both paths build `PendingQueueAction::PlayItems { autostart: false }` with `ReplacementExecutor::Pending`.
-- `run_replacement` (`src/app/dispatch/queue/replacement.rs`) closes the Playlists sidebar and focuses the Queue after a `Pending` replacement, but only when the action's source is `QueueSource::Playlist`. The two F4 paths are the only production callers of `Pending`.
+- `run_replacement` (`src/app/dispatch/queue/replacement.rs`) closes the Playlists sidebar and focuses the Queue after a `Pending` replacement, but only when the action's source is `QueueSource::Playlist`. `Pending` has three production callers: the two F4 paths and `play_grouped_track` (`src/app/dispatch/navigation.rs`, Music tree track Enter and double-click, `source: Album`). The source check is what keeps the Music tree caller from closing the sidebar and moving focus to the Queue.
 - `execute_pending_play_items` (`src/app/dispatch/queue/pending_playback.rs`) branches on `autostart`. `false` goes to `load_idle_queue_on_owner`, and `true` goes to `start_pending_queue_playback`.
 - The Music tree already sends `MusicTreeAction { Play, Enqueue, Shuffle }` (`crates/mbv-ui-msg/src/intents.rs`) on the keys `p`/`a`/`s`.
 
@@ -18,7 +18,7 @@ See proposal.md (Why) for the motivation and `specs/playlist-management/spec.md`
 - One row presentation shared by the playlist list and the open-playlist view.
 
 **Non-Goals:**
-- Moving the panel keys into the configurable keybind registry. The panel's existing `n`/`d`/`r` keys are hardcoded the same way.
+- Moving the panel keys into the configurable keybind registry. The panel's existing `n`/`d`/`r` keys are hardcoded the same way. With the default configuration no router chord claims Enter or `s`. Today `a` is claimed during playback by `toggle_mute_or_cycle_audio`. Change `cycle-audio-hash-key` frees `a` and must land first. Without it, the panel's `a` never reaches the component while anything plays.
 - Making the playlist item fetch asynchronous. Play already blocks on it today. Shuffle and Enqueue reuse that path.
 - Changing the owner idle-load protocol (`UnifiedQueueLoadIdle`). Attached Session and cast playback still use it through `load_idle_queue_on_owner`.
 
@@ -42,11 +42,15 @@ The component emits Enter → `Play`, `s` → `Shuffle`, `a` → `Enqueue`. `ope
 
 Play and Shuffle go through `request_queue_replacement`, so the populated-queue confirmation and the dirty saved-playlist prompt behave as they do today. Shuffle uses `rand`'s `shuffle`, as `ContextAction::ShuffleSelection` does. Enqueue sends a single `append_on_owner` with every item instead of one `submit_queue_item` per item, so one owner answer covers the whole append. Enqueue leaves the sidebar open, so the user can add several playlists in a row.
 
-### D3. `ReplacementExecutor::Pending` becomes `ReplacementExecutor::PlaylistsSidebar`
+### D3. New `ReplacementExecutor::PlaylistsSidebar`; `Pending` loses its source check
 
-Today the sidebar dismissal checks for `source: Playlist`. A shuffled queue has `source: Shuffle`, so the Shuffle action would leave the sidebar open. Rather than add another source to that check, the executor variant states its own after-step. `Pending` already has only the Playlists sidebar as its production caller, so it is renamed. After the replacement runs and no overlay was raised, `PlaylistsSidebar` always closes the sidebar and focuses the Queue.
+Today the sidebar dismissal checks for `source: Playlist`. A shuffled queue has `source: Shuffle`, so the Shuffle action would leave the sidebar open. Rather than add another source to that check, a new executor variant states its own after-step. After the replacement runs and no overlay was raised, `PlaylistsSidebar` always closes the Playlists sidebar and focuses the Queue. Both F4 paths use it.
 
-*Alternative:* add `QueueSource::Shuffle` to the `matches!`. That is smaller, but it keeps inferring the caller from the data it carries.
+`Pending` stays, and `play_grouped_track` is its only production caller. Its arm only runs `execute_queue_replacement`. The `source: Playlist` `matches!` and the dismiss/focus step are deleted from it, because no Playlist-sourced action reaches `Pending` any more. Music tree track activation keeps its current behaviour: no sidebar dismiss and no focus change.
+
+*Alternatives:*
+- Add `QueueSource::Shuffle` to the `matches!`. That is smaller, but it keeps inferring the caller from the data it carries.
+- Rename `Pending` to `PlaylistsSidebar`. Rejected, because it would move focus to the Queue on every Music tree track Enter.
 
 ### D4. `PendingQueueAction` = `PlayItems { items, start_idx, source }` + `ClearQueue`
 

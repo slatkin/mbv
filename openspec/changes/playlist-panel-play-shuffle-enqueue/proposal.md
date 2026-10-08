@@ -34,3 +34,4 @@ None.
 - The test builders of `PlayItems` in `src/app/input/confirm_keys/tests.rs`, `src/app/tests/queue/queue_op.rs`, and `src/app/dispatch/actions/tests/album_artist_playback.rs`.
 - `crates/mbv-render/src/components/playlists.rs`: The open-view row painter and the hint strings.
 - No protocol, persistence, or config changes.
+- Depends on change `cycle-audio-hash-key`, which frees `a` from the router's playback binding. It must land first.
