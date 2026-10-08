@@ -17,8 +17,8 @@
 
 ## 4. Fast hasher (M-FAST-HASHER)
 
-- [ ] 4.1 Grep `.iter()`, `.keys()`, `.values()`, and `.drain()` on the arena and image-cache maps; confirm no ordering dependency. Add `foldhash` to `[workspace.dependencies]`, `mbv-components`, and `mbv-images`. → verify: `cargo check -p mbv-components -p mbv-images`
-- [ ] 4.2 Switch the arena fields in `list/tree_browser.rs` and `card_image_states` / `card_image_loading` in `mbv-images/src/cache.rs` to `foldhash` maps. → verify: `cargo nextest run -p mbv-components -p mbv-images`
+- [x] 4.1 Grep `.iter()`, `.keys()`, `.values()`, and `.drain()` on the arena and image-cache maps; confirm no ordering dependency. Add `foldhash` to `[workspace.dependencies]`, `mbv-components`, and `mbv-images`. → verify: `cargo check -p mbv-components -p mbv-images`
+- [x] 4.2 Switch the arena fields in `list/tree_browser.rs` and `card_image_states` / `card_image_loading` in `mbv-images/src/cache.rs` to `foldhash` maps. → verify: `cargo nextest run -p mbv-components -p mbv-images`
 
 ## 5. Finish
 
