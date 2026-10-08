@@ -1,3 +1,9 @@
+//! `Emby` websocket client transport.
+//!
+//! The reconnect loop, inbound `WsEvent` parsing, and the outbound `WsSender`
+//! handle live here. Session semantics belong to `mbv-emby`; reconnect timing
+//! comes from `mbv-net`.
+
 use std::io::ErrorKind;
 use std::sync::{
     Arc,

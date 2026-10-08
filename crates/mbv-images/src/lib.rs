@@ -1,3 +1,9 @@
+//! Image cache, loading, and terminal image protocol support.
+//!
+//! The `ImageCache`, resize worker, title-overlay composition, and per-Service
+//! cache-key helpers live here. It prepares pixels; the Library and Queue panels
+//! own placement and painting.
+
 pub mod cache;
 mod protocol;
 pub mod resize;
