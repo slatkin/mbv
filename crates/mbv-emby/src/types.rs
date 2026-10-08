@@ -87,6 +87,12 @@ pub struct SessionInfo {
     pub now_playing_item_id: Option<String>,
     pub now_playing_item_type: Option<String>,
     pub now_playing_series_id: Option<String>,
+    /// The now-playing episode's show name, when the session payload carries it.
+    pub now_playing_series_name: Option<String>,
+    /// The now-playing movie's own logo image tag, when the session payload
+    /// carries one. An episode's logo lives on its series and is keyed by the
+    /// series id alone, so it needs no etag.
+    pub now_playing_logo_etag: Option<String>,
     pub position_s: i64,
     pub runtime_s: i64,
     pub position_ticks: i64,

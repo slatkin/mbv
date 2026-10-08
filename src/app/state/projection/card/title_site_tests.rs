@@ -1,7 +1,7 @@
 //! Queue artwork ownership: movies fetch landscape art, episodes never show
 //! series art; overlay composition stays off the tick thread during a drag.
 
-use super::{card_cache_key, card_image_types};
+use super::{card_cache_key, card_cache_key_for_id, card_image_types};
 use crate::app::App;
 use crate::app::tests::render_fixtures::make_queue_app;
 use mbv_images::CachedImage;
@@ -188,5 +188,100 @@ fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
         app.queue_card_projection.title_site,
         mbv_ui_model::playback::NowPlayingTitleSite::Header,
         "a mode gate forces the header back from the artwork site"
+    );
+}
+
+/// A watched remote session's now-playing episode whose id is absent from the
+/// local queue holds the slotless path: playback follows the session and no
+/// queue slot addresses the item.
+fn slotless_session_app() -> App {
+    let mut app = overlay_app();
+    let mut session = mbv_emby::test_support::make_session("tv", "mbv");
+    session.now_playing = Some("Episode name".into());
+    session.now_playing_item_id = Some("remote-ep".into());
+    session.now_playing_item_type = Some("Episode".to_string());
+    session.now_playing_series_id = Some("remote-series".into());
+    session.now_playing_series_name = Some("Show".into());
+    app.connected_session_state = Some(session);
+    app
+}
+
+/// The slotless remote path must resolve the same logo owner the local queue
+/// item does: the episode's show logo, fetched under the series-id key
+/// (remote-session-overlay-parity, task 3.2; spec scenario "Remote episode
+/// uses its show's logo").
+#[test]
+fn slotless_session_episode_fetches_its_series_logo() {
+    let mut app = slotless_session_app();
+    let fetches_before = app.images.card_image_fetch_calls();
+
+    app.refresh_queue_card_image(false);
+
+    assert!(
+        app.images.is_loading("remote-series:Logo"),
+        "the slotless episode must start the series-logo fetch"
+    );
+    assert_eq!(
+        app.images.card_image_fetch_calls(),
+        fetches_before + 2,
+        "the card fetch and the logo fetch are separate reservations"
+    );
+}
+
+/// Once the base art and the series logo are both ready, the slotless overlay
+/// composes the same logo variant the local path composes: the ready logo key
+/// joins the variant key (design D7).
+#[test]
+fn slotless_session_episode_composes_the_logo_overlay_variant() {
+    let mut app = slotless_session_app();
+    let card_key = card_cache_key_for_id("remote-ep", Some("Episode"));
+    app.images
+        .insert_image(card_key.clone(), cached_colour_image(4, 2));
+    app.images
+        .insert_image("remote-series:Logo".to_string(), cached_colour_image(4, 2));
+
+    app.refresh_queue_card_image(false);
+
+    assert_eq!(
+        app.queue_card_projection.title_site,
+        mbv_ui_model::playback::NowPlayingTitleSite::Artwork
+    );
+    let expected = mbv_images::title_overlay::title_overlay_cache_key(
+        &card_key,
+        8,
+        2,
+        mbv_images::title_overlay::TitleOverlayText {
+            context: Some("Show"),
+            title: "Episode name",
+        },
+        Some("remote-series:Logo"),
+    );
+    assert_eq!(
+        app.queue_card_projection.cache_key.as_deref(),
+        Some(expected.as_str()),
+        "the overlay variant must carry the ready series logo"
+    );
+}
+
+/// A session payload without a resolvable logo reference — an episode with no
+/// series id, a movie with no advertised logo image — keeps the text overlay
+/// and starts no logo fetch (spec scenario "Remote item without a resolvable
+/// logo reference").
+#[test]
+fn slotless_session_without_logo_reference_keeps_the_text_overlay() {
+    let mut app = slotless_session_app();
+    let mut session = app.connected_session_state.take().expect("session set");
+    session.now_playing_series_id = None;
+    session.now_playing_series_name = None;
+    app.connected_session_state = Some(session);
+    let fetches_before = app.images.card_image_fetch_calls();
+
+    app.refresh_queue_card_image(false);
+
+    assert!(!app.images.is_loading("remote-series:Logo"));
+    assert_eq!(
+        app.images.card_image_fetch_calls(),
+        fetches_before + 1,
+        "only the card fetch is reserved; no logo fetch without a series id"
     );
 }

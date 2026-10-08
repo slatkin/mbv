@@ -164,18 +164,40 @@ struct OverlayLogoSource {
     series_id: String,
 }
 
-fn overlay_logo_source(item: &EmbyItem) -> Option<OverlayLogoSource> {
-    match item.item_type.as_str() {
-        "Movie" if !item.image_tags.logo.is_empty() => Some(OverlayLogoSource {
-            cache_key: format!("{}:Logo:{}", item.id, item.image_tags.logo),
-            item_id: item.id.clone(),
+/// The key rules both the queue-item path and the watched remote session's
+/// slotless path share (remote-session-overlay-parity, task 3.1): a Movie's
+/// logo key carries its image etag, an Episode's show logo keys on the series
+/// id alone. `logo_etag` is empty when the payload carries none, which leaves
+/// a Movie with no resolvable logo reference.
+fn overlay_logo_source_for(
+    item_type: &str,
+    item_id: &str,
+    series_id: &str,
+    logo_etag: &str,
+) -> Option<OverlayLogoSource> {
+    match item_type {
+        "Movie" if !logo_etag.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{item_id}:Logo:{logo_etag}"),
+            item_id: item_id.to_owned(),
             series_id: String::new(),
         }),
-        "Episode" if !item.series_id.is_empty() => Some(OverlayLogoSource {
-            cache_key: format!("{}:Logo", item.series_id),
-            item_id: item.id.clone(),
-            series_id: item.series_id.clone(),
+        "Episode" if !series_id.is_empty() => Some(OverlayLogoSource {
+            cache_key: format!("{series_id}:Logo"),
+            item_id: item_id.to_owned(),
+            series_id: series_id.to_owned(),
         }),
+        _ => None,
+    }
+}
+
+fn overlay_logo_source(item: &EmbyItem) -> Option<OverlayLogoSource> {
+    match item.item_type.as_str() {
+        "Movie" | "Episode" => overlay_logo_source_for(
+            item.item_type.as_str(),
+            &item.id,
+            &item.series_id,
+            &item.image_tags.logo,
+        ),
         _ => None,
     }
 }
@@ -611,21 +633,33 @@ impl App {
         };
         // The logo owner is resolved before the overlay builds so its fetch
         // starts as early as the overlay path itself (design D7); a pending
-        // or failed fetch simply leaves `ready_logo_key` empty below.
-        let logo_cache_key = item
-            .and_then(|item| match item {
+        // or failed fetch simply leaves `ready_logo_key` empty below. The
+        // slotless path derives the same owner from the watched session's
+        // now-playing payload (remote-session-overlay-parity, task 3.2).
+        let logo_owner = if slotless_active {
+            self.connected_session_state.as_ref().and_then(|session| {
+                overlay_logo_source_for(
+                    session.now_playing_item_type.as_deref().unwrap_or(""),
+                    session.now_playing_item_id.as_deref().unwrap_or(""),
+                    session.now_playing_series_id.as_deref().unwrap_or(""),
+                    session.now_playing_logo_etag.as_deref().unwrap_or(""),
+                )
+            })
+        } else {
+            item.and_then(|item| match item {
                 QueueItem::Emby(emby) => overlay_logo_source(emby),
                 _ => None,
             })
-            .map(|logo| {
-                self.fetch_card_image(
-                    logo.cache_key.clone(),
-                    logo.item_id,
-                    logo.series_id,
-                    &["Logo"],
-                );
-                logo.cache_key
-            });
+        };
+        let logo_cache_key = logo_owner.map(|logo| {
+            self.fetch_card_image(
+                logo.cache_key.clone(),
+                logo.item_id,
+                logo.series_id,
+                &["Logo"],
+            );
+            logo.cache_key
+        });
         self.queue_title_overlay(projection, &parts, &item_kind, logo_cache_key.as_deref());
     }
 

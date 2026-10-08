@@ -8,21 +8,38 @@ impl crate::app::App {
     pub(in crate::app) fn slotless_playback_title_parts(
         &self,
     ) -> Option<mbv_queue::PlaybackTitleParts> {
-        let title = self
+        let cast_title = self
             .cast_attachment
             .as_ref()
-            .and_then(crate::app::App::cast_now_playing_title)
-            .or_else(|| {
-                self.connected_session_state
-                    .as_ref()
-                    .and_then(|session| session.now_playing.clone())
-            })?;
+            .and_then(crate::app::App::cast_now_playing_title);
+        if let Some(title) = cast_title {
+            return Some(mbv_queue::PlaybackTitleParts {
+                title: mbv_queue::PlaybackTitlePart {
+                    role: mbv_queue::PlaybackTitlePartRole::Title,
+                    text: title,
+                },
+                context: None,
+            });
+        }
+        let session = self.connected_session_state.as_ref()?;
+        let title = session.now_playing.clone()?;
+        // An Emby session's now-playing payload names the show for an episode;
+        // with it, the slotless path draws the same two-part title the local
+        // queue item draws (remote-session-overlay-parity, task 2.1).
+        let context = (session.now_playing_item_type.as_deref() == Some("Episode"))
+            .then(|| session.now_playing_series_name.clone())
+            .flatten()
+            .filter(|name| !name.is_empty())
+            .map(|text| mbv_queue::PlaybackTitlePart {
+                role: mbv_queue::PlaybackTitlePartRole::Context,
+                text,
+            });
         Some(mbv_queue::PlaybackTitleParts {
             title: mbv_queue::PlaybackTitlePart {
                 role: mbv_queue::PlaybackTitlePartRole::Title,
                 text: title,
             },
-            context: None,
+            context,
         })
     }
 }
@@ -128,7 +145,38 @@ impl Model {
 mod tests {
     use super::*;
     use mbv_ui_msg::Msg;
+    use rstest::rstest;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    /// A watched Emby session's now-playing episode draws the same two-part
+    /// title local playback draws when the payload names the show; every
+    /// payload without that fact keeps the one-part session-name title
+    /// (remote-session-overlay-parity, task 2.1).
+    #[rstest]
+    #[case::episode_with_series_name("Episode", Some("Show"), Some("Show"))]
+    #[case::episode_without_series_name("Episode", None, None)]
+    #[case::movie_with_stray_series_name("Movie", Some("Show"), None)]
+    fn slotless_title_parts_split_only_episode_series_names(
+        #[case] item_type: &str,
+        #[case] series_name: Option<&str>,
+        #[case] expected_context: Option<&str>,
+    ) {
+        let app = crate::app::tests::make_app_stub();
+        let mut session = mbv_emby::test_support::make_session("tv", "mbv");
+        session.now_playing = Some("Episode name".into());
+        session.now_playing_item_type = Some(item_type.to_string());
+        session.now_playing_series_name = series_name.map(str::to_string);
+        let mut app = app;
+        app.connected_session_state = Some(session);
+
+        let parts = app.slotless_playback_title_parts().expect("title present");
+
+        assert_eq!(parts.title.text, "Episode name");
+        assert_eq!(
+            parts.context.map(|part| part.text).as_deref(),
+            expected_context
+        );
+    }
 
     #[test]
     fn playback_chrome_request_routes_through_shell_authority() {

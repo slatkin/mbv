@@ -132,6 +132,10 @@ impl EmbyClient {
                             now_playing_item_id: npi["Id"].as_str().map(str::to_string),
                             now_playing_item_type: npi["Type"].as_str().map(str::to_string),
                             now_playing_series_id: npi["SeriesId"].as_str().map(str::to_string),
+                            now_playing_series_name: npi["SeriesName"].as_str().map(str::to_string),
+                            now_playing_logo_etag: npi["ImageTags"]["Logo"]
+                                .as_str()
+                                .map(str::to_string),
                             position_ticks: ps["PositionTicks"].as_i64().unwrap_or(0),
                             runtime_ticks: npi["RunTimeTicks"].as_i64().unwrap_or(0),
                             position_s: ps["PositionTicks"].as_i64().unwrap_or(0)

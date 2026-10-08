@@ -103,6 +103,50 @@ fn sessions_retain_now_playing_item_artwork_identity(
     assert_eq!(session.now_playing_series_id.as_deref(), expected_series_id);
 }
 
+/// A session's now-playing payload carries the overlay facts only when the
+/// server includes them: the episode's show name (`SeriesName`) and a movie's
+/// own logo image tag (`ImageTags.Logo`). Both are optional reads — absence
+/// parses to `None` and the overlay degrades to today's text row
+/// (remote-session-overlay-parity, task 1.1).
+#[rstest]
+#[case::series_name_and_logo_present(true, Some("Series One"), Some("logo-etag"))]
+#[case::absent(false, None, None)]
+fn sessions_parse_now_playing_overlay_facts(
+    #[case] present: bool,
+    #[case] expected_series_name: Option<&str>,
+    #[case] expected_logo_etag: Option<&str>,
+) {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.device_id = "this-device".into();
+    let mut now_playing_item = json!({"Id": "item-id", "Name": "Item", "Type": "Episode"});
+    if present {
+        now_playing_item["SeriesName"] = json!("Series One");
+        now_playing_item["ImageTags"]["Logo"] = json!("logo-etag");
+    }
+    http.respond(
+        200,
+        &json!([{
+            "Id": "session-id",
+            "DeviceId": "other-device",
+            "SupportsRemoteControl": true,
+            "NowPlayingItem": now_playing_item,
+        }])
+        .to_string(),
+    );
+
+    let session = client
+        .get_sessions_unfiltered()
+        .unwrap()
+        .pop()
+        .expect("mock session must be retained");
+
+    assert_eq!(
+        session.now_playing_series_name.as_deref(),
+        expected_series_name
+    );
+    assert_eq!(session.now_playing_logo_etag.as_deref(), expected_logo_etag);
+}
+
 #[test]
 fn upcoming_request_scopes_to_library_and_parses_episodes() {
     let (mut client, http) = mock_client(TEST_URL);

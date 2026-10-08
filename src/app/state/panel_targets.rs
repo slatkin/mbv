@@ -105,6 +105,8 @@ mod tests {
             now_playing_item_id: None,
             now_playing_item_type: None,
             now_playing_series_id: None,
+            now_playing_series_name: None,
+            now_playing_logo_etag: None,
             position_s: 0,
             runtime_s: 0,
             position_ticks: 0,
