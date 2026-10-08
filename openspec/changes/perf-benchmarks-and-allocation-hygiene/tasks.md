@@ -8,7 +8,7 @@
 
 ## 2. Capacity (M-INITIAL-CAPACITY)
 
-- [ ] 2.1 Add `with_capacity` at the sites in design.md: `show_targets`, `append_episode_entries`, the season occurrence map in `tree_projection`, `feed_display_rows`, `music_content/tree_target.rs:193`, `tv_content/episode_rows.rs:102`. Skip a site where the bound is not known. → verify: `cargo nextest run -p mbv-render -p mbv-components`
+- [x] 2.1 Add `with_capacity` at the sites in design.md: `show_targets`, `append_episode_entries`, the season occurrence map in `tree_projection`, `feed_display_rows`, `music_content/tree_target.rs:193`, `tv_content/episode_rows.rs:102`. Skip a site where the bound is not known. → verify: `cargo nextest run -p mbv-render -p mbv-components`
 
 ## 3. Allocation reuse (M-MEM-REUSE)
 
