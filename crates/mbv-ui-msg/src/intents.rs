@@ -84,9 +84,11 @@ pub enum AlbumCursorKind {
     Page,
 }
 
-/// Direct actions over a focused Grouped Music artist. The tree owner resolves
-/// the artist root to ordered album items before this intent crosses the
-/// component boundary; the artist identity itself is never a target.
+/// Direct play, enqueue, and shuffle actions shared by the Music tree and the
+/// Playlists panel. The Music tree owner resolves the focused artist root to
+/// ordered album items before the intent crosses the component boundary; the
+/// artist identity itself is never a target. The Playlists panel sends the
+/// action with the view and row index it applies to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MusicTreeAction {
     Play,

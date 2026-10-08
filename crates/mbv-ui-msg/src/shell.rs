@@ -280,10 +280,11 @@ pub enum ShellRequest {
     PlaylistsBack,
     /// Load the selected playlist's items.
     PlaylistsOpen(usize),
-    /// Play the selected playlist or item.
-    PlaylistsActivate {
+    /// Play, shuffle, or enqueue the selected playlist or item.
+    PlaylistsAction {
         open: bool,
         index: usize,
+        action: super::intents::MusicTreeAction,
     },
     /// Open the rename dialog for the selected playlist.
     PlaylistsRename(usize),

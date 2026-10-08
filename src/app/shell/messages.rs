@@ -139,7 +139,7 @@ impl Model {
             | ShellRequest::TvHitDoubleClick { .. }
             | ShellRequest::PlaylistsBack
             | ShellRequest::PlaylistsOpen(_)
-            | ShellRequest::PlaylistsActivate { .. }
+            | ShellRequest::PlaylistsAction { .. }
             | ShellRequest::PlaylistsRename(_)
             | ShellRequest::PlaylistsDelete(_)
             | ShellRequest::PlaylistsRefresh
@@ -357,7 +357,7 @@ impl Model {
             }
             request @ (ShellRequest::PlaylistsBack
             | ShellRequest::PlaylistsOpen(_)
-            | ShellRequest::PlaylistsActivate { .. }
+            | ShellRequest::PlaylistsAction { .. }
             | ShellRequest::PlaylistsRename(_)
             | ShellRequest::PlaylistsDelete(_)
             | ShellRequest::PlaylistsRefresh
