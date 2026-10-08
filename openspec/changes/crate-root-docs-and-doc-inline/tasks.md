@@ -8,9 +8,9 @@ Each task: read the crate's `src/lib.rs` `mod` list and `Cargo.toml`, add the `/
 
 ## 2. Provider and transport crates
 
-- [ ] 2.1 `mbv-emby` (including `types.rs`), `mbv-audiobookshelf`, `mbv-cast`
-- [ ] 2.2 `mbv-net`, `mbv-ws`, `mbv-images`
-- [ ] 2.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
+- [x] 2.1 `mbv-emby` (including `types.rs`), `mbv-audiobookshelf`, `mbv-cast`
+- [x] 2.2 `mbv-net`, `mbv-ws`, `mbv-images`
+- [x] 2.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
 
 ## 3. Player, daemon, and desktop crates
 
