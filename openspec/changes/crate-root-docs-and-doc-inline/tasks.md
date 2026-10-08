@@ -14,9 +14,9 @@ Each task: read the crate's `src/lib.rs` `mod` list and `Cargo.toml`, add the `/
 
 ## 3. Player, daemon, and desktop crates
 
-- [ ] 3.1 `mbv-player`, `mbv-remote-player` (including `connect.rs`)
-- [ ] 3.2 `mbv-daemon`, `mbv-desktop`, `mbv-visualizer`. State the headless-versus-Local-process boundary from AGENTS.md in the daemon and desktop docs.
-- [ ] 3.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
+- [x] 3.1 `mbv-player`, `mbv-remote-player` (including `connect.rs`)
+- [x] 3.2 `mbv-daemon`, `mbv-desktop`, `mbv-visualizer`. State the headless-versus-Local-process boundary from AGENTS.md in the daemon and desktop docs.
+- [x] 3.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
 
 ## 4. UI crates
 
