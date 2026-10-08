@@ -46,11 +46,7 @@ pub(in crate::app) enum Command {
     AdjustVolume(i64),
     /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
     ToggleMute,
-    /// The `#` key: `dispatch` calls `cycle_audio()`, which cycles the
-    /// audio track. Gated the same way as the other transport keys
-    /// (`active OR has_remote_session`) — see #88. The shared
-    /// `PlaybackTarget` seam owns the local-vs-remote split underneath
-    /// `cycle_audio()`.
+    /// The `#` key: cycles the audio track.
     CycleAudio,
 
     // ── queue activation (issue #134) ───────────────────────────────────
