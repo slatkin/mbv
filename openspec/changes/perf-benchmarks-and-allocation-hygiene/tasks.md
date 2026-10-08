@@ -1,9 +1,9 @@
 ## 1. Benchmarks and baseline
 
-- [ ] 1.1 Add `criterion` to `[workspace.dependencies]` and as a dev-dependency of `mbv-render` and `mbv-components`. Add `[profile.bench] debug = 1` to the workspace `Cargo.toml`. → verify: `cargo check -p mbv-render -p mbv-components --benches`
-- [ ] 1.2 `crates/mbv-render/benches/`: bench `feed_display_rows` (entries spread across several age groups) and the status-pill title row through its public painter onto a `TestBackend` (see design.md for the fallback). → verify: `cargo bench -p mbv-render --no-run`
-- [ ] 1.3 `crates/mbv-components/benches/`: bench `TvContent::show_targets` with a catalog that includes duplicate ids. → verify: `cargo bench -p mbv-components --no-run`
-- [ ] 1.4 Write `docs/architecture/performance.md` (hot paths, bench commands). Commit 1.1–1.4. → verify: `cargo clippy --workspace --all-targets -- -D warnings` is clean
+- [x] 1.1 Add `criterion` to `[workspace.dependencies]` and as a dev-dependency of `mbv-render` and `mbv-components`. Add `[profile.bench] debug = 1` to the workspace `Cargo.toml`. → verify: `cargo check -p mbv-render -p mbv-components --benches`
+- [x] 1.2 `crates/mbv-render/benches/`: bench `feed_display_rows` (entries spread across several age groups) and the status-pill title row through its public painter onto a `TestBackend` (see design.md for the fallback). → verify: `cargo bench -p mbv-render --no-run`
+- [x] 1.3 `crates/mbv-components/benches/`: bench `TvContent::show_targets` with a catalog that includes duplicate ids. → verify: `cargo bench -p mbv-components --no-run`
+- [x] 1.4 Write `docs/architecture/performance.md` (hot paths, bench commands). Commit 1.1–1.4. → verify: `cargo clippy --workspace --all-targets -- -D warnings` is clean
 - [ ] 1.5 Ask the user to run the benches and paste the baseline medians (they run manual and live commands; do not run `cargo bench` unasked). Put the numbers in the PR description.
 
 ## 2. Capacity (M-INITIAL-CAPACITY)
