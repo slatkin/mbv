@@ -15,4 +15,4 @@
 
 ## 3. Integration verification
 
-- [ ] 3.1 Run the full local gate suite (`cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo audit`, the 1.2 hack command, the 2.3 miri command) and verify all green together with no `rust-toolchain.toml` or lockfile churn beyond what the change intends.
+- [x] 3.1 Run the full local gate suite (`cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo audit`, the 1.2 hack command, the 2.3 miri command) and verify all green together with no `rust-toolchain.toml` or lockfile churn beyond what the change intends.
