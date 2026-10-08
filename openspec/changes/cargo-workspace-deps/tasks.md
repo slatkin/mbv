@@ -12,5 +12,5 @@
 
 ## 3. Integration verification
 
-- [ ] 3.1 Compare post-change feature union and `Cargo.lock` against the section 1.1 baseline and verify no version changed and no enabled feature was added or dropped (only moved from workspace definition to member use-sites).
-- [ ] 3.2 Run the affected test suites (`cargo nextest run -p mbv-core,mbv-cast,mbv-images,mbv-daemon,mbv-net,mbv-player` at minimum, workspace-wide if cheap) and `cargo clippy --workspace --all-targets` and verify green; verify `mbv-desktop` manifests untouched.
+- [x] 3.1 Compare post-change feature union and `Cargo.lock` against the section 1.1 baseline and verify no version changed and no enabled feature was added or dropped (only moved from workspace definition to member use-sites).
+- [x] 3.2 Run the affected test suites (`cargo nextest run -p mbv-core,mbv-cast,mbv-images,mbv-daemon,mbv-net,mbv-player` at minimum, workspace-wide if cheap) and `cargo clippy --workspace --all-targets` and verify green; verify `mbv-desktop` manifests untouched.
