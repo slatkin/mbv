@@ -30,7 +30,14 @@ fn pending_emby_launch_at(library_id: &str, panel_focus: mbv_config::LaunchPanel
 }
 
 fn pending_emby_launch() -> App {
-    pending_emby_launch_at("lib-movies", mbv_config::LaunchPanelFocus::Queue)
+    // The saved focus is Queue, so the displayed queue must not be empty:
+    // with the empty-queue column hidden (change `hide-empty-queue-column`,
+    // D2) a sync moves the stored focus to Library and the expiry restore
+    // would be asserted against a state that no longer holds.
+    let mut app = pending_emby_launch_at("lib-movies", mbv_config::LaunchPanelFocus::Queue);
+    app.local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+    app
 }
 
 /// Rebuild the library tabs from the app's current libraries, as a catalog arrival does.
@@ -201,6 +208,14 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
     let mut model = Model::new(make_app_stub());
     model.app.panel_focus = PanelFocus::Queue;
     model.app.local_view.set_cursor(7);
+    // The saved focus is Queue, so the displayed queue must not be empty:
+    // with the empty-queue column hidden (change `hide-empty-queue-column`,
+    // D2) the teardown sync would move the stored focus to Library and the
+    // snapshot would record it.
+    model
+        .app
+        .local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
 
     let mut selected = make_item("Selected home item", "Movie");
     selected.id = "selected-home-item".into();

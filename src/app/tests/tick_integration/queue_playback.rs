@@ -7,6 +7,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
@@ -349,6 +350,16 @@ fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
     app.panel_focus = PanelFocus::Queue;
     app.terminal_width = 100;
     app.terminal_height = 40;
+    // The gap row sits inside the queue column: with the empty-queue column
+    // hidden (change `hide-empty-queue-column`, D1) an empty displayed queue
+    // would not place the queue panel at all.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
@@ -472,6 +483,16 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
     app.player.update_status(|status| status.active = false);
     app.terminal_width = 80;
     app.terminal_height = 40;
+    // The collapsed queue playback panel is part of the queue column: with
+    // the empty-queue column hidden (change `hide-empty-queue-column`, D1)
+    // an empty displayed queue would not mount it at all.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();

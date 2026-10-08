@@ -9,6 +9,17 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 fn pending_audiobookshelf_launch() -> App {
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;
+    // The saved focus is Queue, so the displayed queue must not be empty:
+    // with the empty-queue column hidden (change `hide-empty-queue-column`,
+    // D2) a sync moves the stored focus to Library and the expiry restore
+    // would be asserted against a state that no longer holds.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     app.launch_restore = crate::app::state::app_struct::LaunchRestore::Pending(launch_state(
         ServiceKind::Audiobookshelf,
         "abs-books",

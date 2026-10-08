@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::tab_selection::TabSelection;
@@ -11,6 +12,16 @@ fn eligibility_model() -> Model {
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
+    // The rung ladder is defined for the two-panel layout: with the
+    // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
+    // empty displayed queue would render library-only instead.
+    model.app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     // Task 6.1: the full sync pass mounts the migrated owner into the panel,
     // points the panel at it (`sync_library_panel`), and routes focus
     // (`sync_active_destination`); the two-call pair would leave the panel's

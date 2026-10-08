@@ -12,6 +12,7 @@ use tuirealm::event::{
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -44,6 +45,16 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.panel_focus = PanelFocus::Library;
+    // The restored launch focus is Queue, so the displayed queue must not be
+    // empty: with the empty-queue column hidden (change
+    // `hide-empty-queue-column`, D2) a sync moves the stored focus to Library.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     app.launch_restore =
         crate::app::state::app_struct::LaunchRestore::Pending(mbv_config::TuiLaunchState {
             version: mbv_config::TUI_LAUNCH_STATE_VERSION,
@@ -73,6 +84,16 @@ fn sync_pass_resolves_a_home_launch_snapshot_without_a_draw() {
 fn queue_focused_harness() -> TickHarness {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
+    // A focused queue needs a queue column: with the empty-queue column
+    // hidden (change `hide-empty-queue-column`, D2) an empty displayed queue
+    // would move the focus to the library on sync.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     TickHarness::new(app)
 }
 
@@ -356,6 +377,16 @@ fn tick_ctrl_arrows_switch_main_panels() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::Both;
+    // The switch targets the queue column, so it must exist: with the
+    // empty-queue column hidden (change `hide-empty-queue-column`, D2) the
+    // sync would move the focus straight back to the library.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut both = TickHarness::new(app);
     both.inject(ctrl_key(Key::Left));
     let outcome = both.step();
@@ -373,6 +404,13 @@ fn tick_ctrl_arrows_switch_main_panels() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::Both;
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut plain = TickHarness::new(app);
     plain.inject(key(Key::Left));
     let outcome = plain.step();
@@ -768,11 +806,23 @@ fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
 fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
+    // The saved focus is Queue, so the displayed queue must not be empty:
+    // with the empty-queue column hidden (change `hide-empty-queue-column`,
+    // D2) a sync moves the stored focus to Library.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut harness = TickHarness::new(app);
     harness.inject(Event::User(UserEvent::Clock(Instant::now())));
     harness.step();
     harness.model_mut().sync_mounted_surfaces();
 
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Queue);
-    assert!(harness.model().app.local_view.slots().is_empty());
+    // The tick adopts no queue content of its own: the queue still holds
+    // exactly the one seeded item.
+    assert_eq!(harness.model().app.local_view.slots().len(), 1);
 }
