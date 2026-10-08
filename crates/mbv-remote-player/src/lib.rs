@@ -1,3 +1,10 @@
+//! ctrl Client for a Player owner: connection, commands, and owner-state mirror.
+//!
+//! `RemotePlayer` dials a `DaemonEndpoint`, sends transport commands, queue operations,
+//! and guarded playback intents, and mirrors owner status and queue snapshots. Playback
+//! itself lives in `mbv-player`, queue authority in `mbv-queue`, and the wire vocabulary
+//! in `mbv-ctrl`; this crate only speaks for a Client attached to an owner.
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -89,14 +96,18 @@ pub struct RemotePlayer {
 
 pub(crate) mod connect;
 mod error;
+#[doc(inline)]
 pub use error::RemotePlayerError;
 
 #[cfg(test)]
 mod tests;
 
 #[cfg(any(test, feature = "test"))]
+#[doc(inline)]
 pub use connect::connect_stub_daemon_pair;
+#[doc(inline)]
 pub use connect::signal_local_daemon_service_setup;
+#[doc(inline)]
 pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 

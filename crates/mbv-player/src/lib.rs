@@ -1,4 +1,12 @@
+//! mpv-backed local playback: the playback run, controller, and progress reporting.
+//!
+//! `Player`, `PlayerProxy`, owner state, resume-position decisions, per-Service source
+//! preparation, and server progress reporting live here. The canonical queue lives in
+//! `mbv-queue` and the ctrl vocabulary in `mbv-ctrl`; this crate loads mpv with what the
+//! Player owner admits and never holds queue authority itself.
+
 mod error;
+#[doc(inline)]
 pub use error::PlayerError;
 
 use std::sync::{Arc, atomic::Ordering, mpsc};
@@ -321,12 +329,14 @@ fn send_ep_info(mpv: &Mpv, item: &mbv_emby_model::EmbyItem) {
 
 pub mod owner_state;
 pub mod transition;
+#[doc(inline)]
 pub use owner_state::{PlayerOwnerState, StepTarget};
 mod tracks;
 #[cfg(test)]
 use tracks::lang_code_to_name;
 use tracks::{auto_select_tracks, refresh_tracks};
 mod sources;
+#[doc(inline)]
 pub use sources::{
     AudiobookshelfBookProgressUpdate, AudiobookshelfPlayerContext, AudiobookshelfProgressUpdate,
 };
@@ -358,8 +368,10 @@ pub(crate) use run::{IntroState, PlaybackOrigin, PlaybackRun, RunInit, mpv_url_f
 mod controller;
 mod submit;
 pub(crate) use controller::make_wakeup_pipe;
+#[doc(inline)]
 pub use controller::{Player, QuitHandle};
 mod proxy;
+#[doc(inline)]
 pub use proxy::PlayerProxy;
 pub(crate) use proxy::{
     StopReportContext, end_file_stop_report_context, is_near_end, queue_completed_pos,
