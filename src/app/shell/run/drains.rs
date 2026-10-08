@@ -268,7 +268,7 @@ impl Model {
             idle_feed.current_index = 0;
         }
         // Re-fetch every 30 minutes
-        if idle_feed.last_fetch.elapsed() >= Duration::from_secs(1800) {
+        if idle_feed.last_fetch.elapsed() >= Duration::from_mins(30) {
             idle_feed.last_fetch = Instant::now();
             self.app.spawn_idle_feed_fetch();
         }

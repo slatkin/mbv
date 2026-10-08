@@ -19,7 +19,7 @@ use mbv_ui_model::tab_selection::TabSelection;
 /// reorganization on the Emby server self-heals without requiring an app
 /// restart (post-grilling revision item 5; candidate 15-30 minutes,
 /// chosen at the low end of that range as a session-lifetime TUI cache).
-const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_mins(15);
 /// Soft cap on `library_route_cache` size. The cache is otherwise
 /// unbounded (one entry per distinct item id ever played/enqueued from a
 /// cross-library aggregate view), which could grow without limit over a
