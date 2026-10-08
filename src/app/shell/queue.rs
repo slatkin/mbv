@@ -65,6 +65,15 @@ struct QueueProjectionUpdate {
 
 impl Model {
     pub(in crate::app) fn sync_queue(&mut self) {
+        // D2 (`hide-empty-queue-column`): when the queue column is hidden
+        // because the displayed queue emptied, the stored focus cannot stay
+        // on Queue -- it would resurface when the queue refills and yank
+        // focus away from the library the user is browsing. Assign the field
+        // directly: `set_panel_focus` would run the queue initial-item path
+        // for a queue that is about to be left.
+        if self.app.queue_column_hidden_empty() && self.app.panel_focus == PanelFocus::Queue {
+            self.app.panel_focus = PanelFocus::Library;
+        }
         self.mount_and_focus_queue();
         let update = self.prepare_queue_projection();
         if update.rows_changed {

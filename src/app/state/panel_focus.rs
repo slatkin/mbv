@@ -34,17 +34,31 @@ impl App {
         self.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
     }
 
+    /// Whether the two-panel layout's queue column is hidden this frame
+    /// because the displayed queue has no slots (design D1, change
+    /// `hide-empty-queue-column`). Mini view and queue-only keep the
+    /// empty-queue placeholder, so only the wide two-panel layout hides.
+    /// The stored `panel_mode` is never written: the `x` cycle reads the
+    /// stored mode and still advances `both -> queue-only` while hidden.
+    pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
+        !self.is_mini_view()
+            && self.panel_mode == PanelMode::Both
+            && self.displayed_queue().slots().is_empty()
+    }
+
     /// The panel mode actually in effect for rendering/input this frame.
     /// Below `MINI_VIEW_THRESHOLD` columns the Power View ignores the stored
     /// three-state `panel_mode` and derives a two-state mini view from the
-    /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used
-    /// unchanged.
+    /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used,
+    /// except that an empty displayed queue renders library-only (D1).
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
         if self.is_mini_view() {
             match self.mini_view_focus {
                 PanelFocus::Library => PanelMode::LibraryOnly,
                 PanelFocus::Queue => PanelMode::QueueOnly,
             }
+        } else if self.queue_column_hidden_empty() {
+            PanelMode::LibraryOnly
         } else {
             self.panel_mode
         }
@@ -52,10 +66,13 @@ impl App {
 
     /// The panel focus actually in effect for input routing this frame. Below
     /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
-    /// the stored `panel_focus` is returned unchanged.
+    /// the stored `panel_focus` is returned, except that a hidden empty queue
+    /// column never holds focus (D2).
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
         if self.is_mini_view() {
             self.mini_view_focus
+        } else if self.queue_column_hidden_empty() {
+            PanelFocus::Library
         } else {
             self.panel_focus
         }
