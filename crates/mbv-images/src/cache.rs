@@ -5,11 +5,10 @@ use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 
 pub struct ImageCache {
-    card_image_states:
-        std::collections::HashMap<String, CachedImage, foldhash::quality::RandomState>,
+    card_image_states: foldhash::HashMap<String, CachedImage>,
     image_lru: std::collections::VecDeque<String>,
     cache_size: usize,
-    card_image_loading: std::collections::HashSet<String, foldhash::quality::RandomState>,
+    card_image_loading: foldhash::HashSet<String>,
     last_card_height: u16,
     last_card_width: u16,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
@@ -55,10 +54,10 @@ impl ImageCache {
         resize_response_rx: ResizeResponseRx,
     ) -> Self {
         Self {
-            card_image_states: std::collections::HashMap::default(),
+            card_image_states: foldhash::HashMap::default(),
             image_lru: std::collections::VecDeque::new(),
             cache_size,
-            card_image_loading: std::collections::HashSet::default(),
+            card_image_loading: foldhash::HashSet::default(),
             last_card_height: 0,
             last_card_width: 0,
             pending_image_fetches: std::collections::VecDeque::new(),
@@ -136,13 +135,7 @@ impl ImageCache {
     }
 
     #[must_use]
-    pub fn fetch_work_snapshot(
-        &self,
-    ) -> (
-        std::collections::HashSet<String, foldhash::quality::RandomState>,
-        usize,
-        usize,
-    ) {
+    pub fn fetch_work_snapshot(&self) -> (foldhash::HashSet<String>, usize, usize) {
         (
             self.card_image_loading.clone(),
             self.image_fetches_active,

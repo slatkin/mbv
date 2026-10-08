@@ -357,10 +357,7 @@ impl<Target> TreeBrowser<Target> {
         Target: Clone + Eq + Hash,
     {
         let mut forest = RebuiltForest {
-            arena: foldhash::HashMap::with_capacity_and_hasher(
-                nodes.len(),
-                foldhash::fast::RandomState::default(),
-            ),
+            arena: foldhash::HashMap::with_capacity_and_hasher(nodes.len(), Default::default()),
             target_to_node: HashMap::with_capacity(nodes.len()),
             ordered_nodes: Vec::with_capacity(nodes.len()),
             roots: Vec::new(),
