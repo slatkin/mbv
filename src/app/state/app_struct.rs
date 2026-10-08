@@ -445,6 +445,10 @@ pub struct App {
     /// `panel-expand-toggle`, design D1); never persisted, so a launch always
     /// starts collapsed.
     pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
+    /// The configured `Accent color` when it lay outside the row's fixed
+    /// palette, held while Settings is open so cycling can return to it
+    /// (issue #875). Cleared each time Settings mounts; never persisted.
+    pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
     /// Set when a pinned panel accepted a layout (change
     /// `panel-expand-toggle`): the apply call resized the pty synchronously,
     /// so the shell adopts the new size in that same loop iteration instead of

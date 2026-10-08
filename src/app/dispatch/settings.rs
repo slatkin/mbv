@@ -61,7 +61,10 @@ impl App {
         let accent_row = mbv_ui_model::settings::is_panel_accent_row(key);
         let candidate = {
             let panel = self.config.lock().unwrap().panel;
-            mbv_ui_model::settings::changed_panel_config(key, panel, delta)
+            self.accent_custom = self
+                .accent_custom
+                .or_else(|| mbv_ui_model::settings::accent_color_outside_cycle(panel.accent_color));
+            mbv_ui_model::settings::changed_panel_config(key, panel, delta, self.accent_custom)
         };
         let Some(candidate) = candidate else {
             return;

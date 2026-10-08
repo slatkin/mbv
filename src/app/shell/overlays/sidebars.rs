@@ -44,6 +44,11 @@ impl Model {
             }
         }
         if !self.application.mounted(&id) {
+            if sidebar == SidebarId::Settings {
+                // Every dismissal path (Esc, F2, another sidebar, Help) ends
+                // in a fresh mount, so the held custom colour dies here.
+                self.app.accent_custom = None;
+            }
             self.application
                 .mount(id.clone(), Self::sidebar_component(sidebar), vec![])
                 .expect("mount sidebar");

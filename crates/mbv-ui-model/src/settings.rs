@@ -596,34 +596,52 @@ fn stepped_accent_width(width: std::num::NonZeroU16, delta: i32) -> std::num::No
         .expect("clamped to 1..=u16::MAX")
 }
 
-/// The next `Accent color` value in the row's fixed cycle palette (design
-/// D3); a custom colour outside the palette steps to the palette's first.
-fn next_accent_color(configured: mbv_config::PanelAccentColor) -> mbv_config::PanelAccentColor {
-    // The palette the `Accent color` row cycles: sand (the configured
-    // default), then frost, moss, ember and white.
-    const CYCLE: [mbv_config::PanelAccentColor; 5] = [
-        mbv_config::DEFAULT_PANEL_ACCENT_COLOR, // sand #dabc7f
-        mbv_config::PanelAccentColor([0x7f, 0xc8, 0xda]), // frost #7fc8da
-        mbv_config::PanelAccentColor([0xa3, 0xbe, 0x8c]), // moss #a3be8c
-        mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]), // ember #bf616a
-        mbv_config::PanelAccentColor([0xff, 0xff, 0xff]), // white #ffffff
-    ];
-    let next = CYCLE
+/// The palette the `Accent color` row cycles: sand (the configured default),
+/// then frost, moss, ember and white.
+const ACCENT_CYCLE: [mbv_config::PanelAccentColor; 5] = [
+    mbv_config::DEFAULT_PANEL_ACCENT_COLOR, // sand #dabc7f
+    mbv_config::PanelAccentColor([0x7f, 0xc8, 0xda]), // frost #7fc8da
+    mbv_config::PanelAccentColor([0xa3, 0xbe, 0x8c]), // moss #a3be8c
+    mbv_config::PanelAccentColor([0xbf, 0x61, 0x6a]), // ember #bf616a
+    mbv_config::PanelAccentColor([0xff, 0xff, 0xff]), // white #ffffff
+];
+
+/// `configured` when it lies outside the `Accent color` row's fixed palette.
+/// The shell holds that value while Settings is open and passes it back to
+/// [`changed_panel_config`], so cycling can return to it (issue #875).
+#[must_use]
+pub fn accent_color_outside_cycle(
+    configured: mbv_config::PanelAccentColor,
+) -> Option<mbv_config::PanelAccentColor> {
+    (!ACCENT_CYCLE.contains(&configured)).then_some(configured)
+}
+
+/// The next `Accent color` value (design D3): the fixed palette followed by
+/// the held custom colour, if any, then back to the palette's first. A
+/// colour in neither steps to the palette's first.
+fn next_accent_color(
+    configured: mbv_config::PanelAccentColor,
+    custom: Option<mbv_config::PanelAccentColor>,
+) -> mbv_config::PanelAccentColor {
+    let cycle: Vec<_> = ACCENT_CYCLE.iter().copied().chain(custom).collect();
+    let next = cycle
         .iter()
         .position(|candidate| *candidate == configured)
-        .map_or(0, |index| (index + 1) % CYCLE.len());
-    CYCLE[next]
+        .map_or(0, |index| (index + 1) % cycle.len());
+    cycle[next]
 }
 
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
 /// left/right, and each numeric row steps by `delta` (already scaled to
 /// ±1/±10 by the caller) clamped to its Rust range. `None` for any key that
-/// is not a Panel value row.
+/// is not a Panel value row. `accent_custom` is the colour the shell holds
+/// from [`accent_color_outside_cycle`]; it joins the `Accent color` cycle.
 #[must_use]
 pub fn changed_panel_config(
     key: SettingKey,
     panel: mbv_config::PanelConfig,
     delta: i32,
+    accent_custom: Option<mbv_config::PanelAccentColor>,
 ) -> Option<mbv_config::PanelConfig> {
     use mbv_config::PanelSide;
 
@@ -651,7 +669,7 @@ pub fn changed_panel_config(
         }
         SettingKey::PanelAccent => next.accent = !panel.accent,
         SettingKey::PanelAccentColor => {
-            next.accent_color = next_accent_color(panel.accent_color);
+            next.accent_color = next_accent_color(panel.accent_color, accent_custom);
         }
         SettingKey::PanelAccentWidth => {
             next.accent_width = stepped_accent_width(panel.accent_width, delta);

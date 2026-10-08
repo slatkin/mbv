@@ -110,8 +110,8 @@ an accent row SHALL NOT touch the running panel.
 - **THEN** the colour falls back to `#dabc7f` with a logged warning, and the other `[panel]` keys keep their values
 
 #### Scenario: Custom colour survives cycling
-- **WHEN** `accent_color` is `#123456`, which is not in the fixed list, and the user opens the `Accent color` row
-- **THEN** `#123456` is one of the values the row cycles through
+- **WHEN** `accent_color` is `#123456`, which is not in the fixed list, and the user steps the `Accent color` row through the whole fixed list
+- **THEN** the step after the last fixed entry returns to `#123456`, until the F2 settings screen is dismissed or mbv exits
 
 #### Scenario: Malformed cover value
 - **WHEN** `config.toml` still sets `cover = "yes"` or `cover = true` under `[panel]`
