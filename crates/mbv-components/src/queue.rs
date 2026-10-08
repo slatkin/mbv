@@ -28,6 +28,7 @@ mod keys;
 mod pointer;
 mod rows;
 
+#[doc(inline)]
 pub use self::rows::{queue_media_row, queue_media_rows};
 
 /// Why the shell is pushing a cursor. `Preserve` keeps the user's selection

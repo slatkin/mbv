@@ -19,5 +19,7 @@ mod title_meta;
 /// the header leaves room for text, overview, and Workspace beneath it. The
 /// measurement is the terminal, not pane, height, so panel chrome is excluded.
 pub const HERO_SHORT_PANE_MAX_HEIGHT: u16 = 50;
+#[doc(inline)]
 pub use artwork_box::{hero_artwork_box, short_pane};
+#[doc(inline)]
 pub use title_meta::paint_hero_pane_content;

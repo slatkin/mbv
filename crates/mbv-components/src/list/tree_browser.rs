@@ -17,6 +17,7 @@ use ratatui::layout::{Position, Rect};
 
 use crate::list::{MarkSelectionState, PaintRetainedState};
 
+#[doc(inline)]
 pub use types::{
     TreeConsumed, TreeEntry, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode,
     TreeOperation, TreeSelectionChange, TreeTransition,

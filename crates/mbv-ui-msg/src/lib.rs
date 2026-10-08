@@ -24,19 +24,29 @@ mod shell;
 mod tv_tree_target;
 mod user_event;
 
+#[doc(inline)]
 pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
+#[doc(inline)]
 pub use self::hit_regions::TvHit;
+#[doc(inline)]
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
     ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, MusicTreeAction,
     PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent, SettingsIntent,
 };
+#[doc(inline)]
 pub use self::playback::PlaybackRequest;
+#[doc(inline)]
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
+#[doc(inline)]
 pub use self::selection::SelectionSummary;
+#[doc(inline)]
 pub use self::service::ServiceRequest;
+#[doc(inline)]
 pub use self::shell::ShellRequest;
+#[doc(inline)]
 pub use self::tv_tree_target::TvTreeTarget;
+#[doc(inline)]
 pub use self::user_event::UserEvent;
 
 /// Result of handling a key at a leaf component.  The disposition is

@@ -16,11 +16,17 @@ pub mod three_line;
 pub mod tree_browser;
 mod viewport;
 
+#[doc(inline)]
 pub use self::cursor::Cursored;
+#[doc(inline)]
 pub use self::marks::{AggregateMarkState, MarkSelection, MarkSelectionState};
+#[doc(inline)]
 pub use self::paint::{PaintRetained, PaintRetainedState};
+#[doc(inline)]
 pub use self::row_flow::{Row, RowFlow};
+#[doc(inline)]
 pub use self::three_line::ThreeLineFlatList;
+#[doc(inline)]
 pub use self::viewport::{PagingPolicy, Viewported};
 
 #[cfg(test)]

@@ -24,12 +24,18 @@ pub mod slots;
 pub mod wide;
 
 #[cfg(test)]
+#[doc(inline)]
 pub use content::HeroLink;
+#[doc(inline)]
 pub use content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot,
     PanelHeroImagePaint, SelectorRow, Workspace,
 };
+#[doc(inline)]
 pub use hero::{HeroContentData, hero_content_emby, hero_content_series_with_episode};
+#[doc(inline)]
 pub use overview_box::sanitize_url;
+#[doc(inline)]
 pub use owner::{LibraryContentOwner, LibrarySlotEvent};
+#[doc(inline)]
 pub use panel::LibraryPanel;

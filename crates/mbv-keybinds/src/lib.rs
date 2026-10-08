@@ -9,8 +9,11 @@ mod chord;
 mod config;
 mod registry;
 
+#[doc(inline)]
 pub use chord::{Chord, ChordParseError, Key, KeyMods};
+#[doc(inline)]
 pub use config::{Keybinds, KeybindsError, RawKeybinds, RawSection, SectionBindings, load};
+#[doc(inline)]
 pub use registry::{
     KEY_SECTIONS, KEYBIND_ACTIONS, KeyGate, KeySection, KeybindAction, RESERVED_CHORDS,
     action_by_id,
