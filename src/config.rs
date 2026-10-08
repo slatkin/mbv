@@ -233,7 +233,7 @@ pub fn evict_old_image_cache() {
             return;
         };
         let cutoff = std::time::SystemTime::now()
-            .checked_sub(std::time::Duration::from_secs(30 * 24 * 3600))
+            .checked_sub(std::time::Duration::from_hours(720))
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         for entry in entries.flatten() {
             if let Ok(meta) = entry.metadata()
