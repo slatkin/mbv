@@ -22,7 +22,7 @@ mbv-images = { path = "../mbv-images" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 ratatui.workspace = true
 ratatui-image.workspace = true
-textwrap.workspace = true
+textwrap = { workspace = true, features = ["unicode-width"] }
 unicode-width.workspace = true
 tui-scrollbar.workspace = true
 mbv-queue = { path = "../mbv-queue" }

@@ -19,9 +19,9 @@ test = []
 [dependencies]
 log.workspace = true
 tracing.workspace = true
-tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
-tracing-log = "0.2"
-time.workspace = true
+tracing-subscriber.workspace = true
+tracing-log.workspace = true
+time = { workspace = true, features = ["formatting", "local-offset", "macros"] }
 
 [dev-dependencies]
 rstest.workspace = true
@@ -32,4 +32,4 @@ mbv-queue = { path = "../mbv-queue" }
 ureq.workspace = true
 serde_json.workspace = true
 libmpv2.workspace = true
-rust_cast = "0.21"
+rust_cast.workspace = true

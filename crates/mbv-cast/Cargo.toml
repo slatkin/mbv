@@ -17,13 +17,13 @@ workspace = true
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 mbv-queue = { path = "../mbv-queue" }
 serde_json.workspace = true
-rust_cast = "0.21"
-mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
+rust_cast.workspace = true
+mdns-sd = { workspace = true, features = ["log"] }
 tracing.workspace = true
 
 [dev-dependencies]
 # mdns-sd's `Receiver<ServiceEvent>` is a `flume` channel; tests construct one
 # directly to feed synthetic events into cast_discovery's pure collection
 # logic without a real mDNS browse.
-flume = "0.12"
+flume.workspace = true
 rstest.workspace = true

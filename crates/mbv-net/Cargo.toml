@@ -17,11 +17,11 @@ workspace = true
 test = []
 
 [dependencies]
-ureq.workspace = true
+ureq = { workspace = true, features = ["native-tls"] }
 percent-encoding.workspace = true
 rand.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 mbv-core = { path = "../mbv-core", features = ["test"] }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-subscriber.workspace = true

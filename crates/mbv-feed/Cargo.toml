@@ -20,8 +20,8 @@ mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-net = { path = "../mbv-net" }
 mbv-text = { path = "../mbv-text" }
 ureq.workspace = true
-time.workspace = true
-serde.workspace = true
+time = { workspace = true, features = ["parsing"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 tracing.workspace = true
 

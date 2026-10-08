@@ -1887,6 +1887,7 @@ dependencies = [
  "mbv-ui-model",
  "mbv-ui-msg",
  "ratatui",
+ "ratatui-image",
  "rstest",
  "textwrap",
  "time",

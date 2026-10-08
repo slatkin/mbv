@@ -19,12 +19,12 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-text = { path = "../mbv-text" }
 mbv-net = { path = "../mbv-net" }
-ureq.workspace = true
-serde.workspace = true
+ureq = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-tungstenite.workspace = true
+tungstenite = { workspace = true, features = ["handshake", "native-tls"] }
 tracing.workspace = true
-time.workspace = true
+time = { workspace = true, features = ["parsing"] }
 
 [dev-dependencies]
 rstest.workspace = true
