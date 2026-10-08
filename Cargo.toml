@@ -52,6 +52,7 @@ flume = "0.12"
 ab_glyph = "0.2"
 num-traits = "0.2"
 criterion = "0.8"
+foldhash = "0.2"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"

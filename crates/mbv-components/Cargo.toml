@@ -33,6 +33,7 @@ time = { workspace = true, features = ["parsing"] }
 tuirealm.workspace = true
 ratatui.workspace = true
 unicode-width.workspace = true
+foldhash.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

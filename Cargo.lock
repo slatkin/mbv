@@ -2001,6 +2001,7 @@ name = "mbv-components"
 version = "0.23.10"
 dependencies = [
  "criterion",
+ "foldhash 0.2.0",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-emby-model",
@@ -2162,6 +2163,7 @@ name = "mbv-images"
 version = "0.23.10"
 dependencies = [
  "ab_glyph",
+ "foldhash 0.2.0",
  "image",
  "num-traits",
  "ratatui",
