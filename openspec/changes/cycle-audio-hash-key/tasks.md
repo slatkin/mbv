@@ -16,7 +16,7 @@
 ## 4. Integration
 
 - [x] 4.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`. All must pass.
-- [ ] 4.2 The user tests live: `#` cycles audio on a video, `m` mutes, and `a` in the Music tree enqueues during playback. Mark this done only on the user's confirmation.
+- [x] 4.2 The user tests live: `#` cycles audio on a video, `m` mutes, and `a` in the Music tree enqueues during playback. Mark this done only on the user's confirmation.
 
 ## Workflow follow-up
 
