@@ -28,7 +28,7 @@ mbv-ids = { path = "../mbv-ids" }
 ureq = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v4"] }
 rand.workspace = true
 tracing.workspace = true
 
