@@ -1,6 +1,9 @@
 use super::Model;
+use crate::app::state::playback::{PendingQueueAction, ReplacementExecutor};
 use mbv_components::{PlaylistsComponent, PlaylistsContent};
-use mbv_ui_msg::{ComponentId, ModalId, OverlayId, ShellRequest};
+use mbv_queue::{QueueItem, QueueSource};
+use mbv_ui_msg::{ComponentId, ModalId, MusicTreeAction, OverlayId, ShellRequest};
+use rand::seq::SliceRandom;
 
 impl Model {
     pub(in crate::app) fn update_playlists_content(&mut self) {
@@ -57,52 +60,11 @@ impl Model {
                     self.app.spawn_open_playlist(&playlist);
                 }
             }
-            ShellRequest::PlaylistsActivate { open, index } => {
-                if *open {
-                    let Some(selected_id) = self
-                        .app
-                        .playlists_open_items
-                        .get(*index)
-                        .map(|item| item.id.clone())
-                    else {
-                        return;
-                    };
-                    let Some(playlist) = self.app.playlists_open.as_ref() else {
-                        return;
-                    };
-                    let items: Vec<_> = self
-                        .app
-                        .playlists_open_items
-                        .iter()
-                        .filter(|item| !item.is_folder)
-                        .cloned()
-                        .collect();
-                    if items.is_empty() {
-                        return;
-                    }
-                    let start_idx = items
-                        .iter()
-                        .position(|item| item.id == selected_id)
-                        .unwrap_or(0);
-                    self.app.request_queue_replacement(
-                        crate::app::state::playback::PendingQueueAction::PlayItems {
-                            items,
-                            start_idx,
-                            source: mbv_queue::QueueSource::Playlist {
-                                id: Some(playlist.id.clone()),
-                                name: playlist.name.clone(),
-                            },
-                        },
-                        crate::app::state::playback::ReplacementExecutor::PlaylistsSidebar,
-                    );
-                    // No sidebar dismiss here: `run_replacement` raises it once
-                    // the replacement actually runs (immediately on an empty
-                    // queue, after confirmation on a populated one), so a
-                    // cancelled load leaves the sidebar open.
-                } else if let Some(playlist) = self.app.playlists.get(*index).cloned() {
-                    self.app.load_and_play_playlist(playlist.id);
-                }
-            }
+            ShellRequest::PlaylistsAction {
+                open,
+                index,
+                action,
+            } => self.handle_playlists_action(*open, *index, *action),
             ShellRequest::PlaylistsRename(index) => {
                 if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app
@@ -143,9 +105,91 @@ impl Model {
                 self.dismiss_sidebar(super::SidebarId::Playlists);
             }
             // unreachable: shell/messages.rs routes only the Playlists* group
-            // (Back/Open/Activate/Rename/Delete/Refresh/DismissPlaylists) here;
+            // (Back/Open/Action/Rename/Delete/Refresh/DismissPlaylists) here;
             // every one has an arm above.
             _ => {}
+        }
+    }
+
+    /// Resolves one Enter/`s`/`a` on the Playlists panel (design D2). Play and
+    /// Shuffle replace the queue (gated by the populated-queue confirmation);
+    /// Enqueue appends once and leaves the sidebar open.
+    fn handle_playlists_action(&mut self, open: bool, index: usize, action: MusicTreeAction) {
+        // `cursor` is the open-view item under the cursor; `None` in the list view.
+        let (playlist_id, name, items, cursor) = if open {
+            let Some(cursor) = self.app.playlists_open_items.get(index).cloned() else {
+                return;
+            };
+            let Some(playlist) = self.app.playlists_open.as_ref() else {
+                return;
+            };
+            let items: Vec<_> = self
+                .app
+                .playlists_open_items
+                .iter()
+                .filter(|item| !item.is_folder)
+                .cloned()
+                .collect();
+            (
+                playlist.id.clone(),
+                playlist.name.clone(),
+                items,
+                Some(cursor),
+            )
+        } else {
+            let Some(playlist) = self.app.playlists.get(index).cloned() else {
+                return;
+            };
+            let Some(items) = self.app.playlist_playable_items(&playlist.id) else {
+                return;
+            };
+            (playlist.id, playlist.name, items, None)
+        };
+        if items.is_empty() {
+            return;
+        }
+        match action {
+            MusicTreeAction::Play => {
+                let start_idx = cursor
+                    .and_then(|cursor| items.iter().position(|item| item.id == cursor.id))
+                    .unwrap_or(0);
+                self.app.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx,
+                        source: QueueSource::Playlist {
+                            id: Some(playlist_id),
+                            name,
+                        },
+                    },
+                    ReplacementExecutor::PlaylistsSidebar,
+                );
+            }
+            MusicTreeAction::Shuffle => {
+                let mut items = items;
+                items.shuffle(&mut rand::rng());
+                self.app.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx: 0,
+                        source: QueueSource::Shuffle,
+                    },
+                    ReplacementExecutor::PlaylistsSidebar,
+                );
+            }
+            MusicTreeAction::Enqueue => {
+                let items = match cursor {
+                    Some(cursor) if cursor.is_folder => return,
+                    Some(cursor) => vec![cursor],
+                    None => items,
+                };
+                let items = items
+                    .into_iter()
+                    .map(|item| QueueItem::Emby(Box::new(item)))
+                    .collect();
+                let scope = self.app.viewed_queue_scope();
+                self.app.append_on_owner(scope, items);
+            }
         }
     }
 }
@@ -153,7 +197,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{make_app_stub, make_local_daemon_app_stub_with_cmd_rx};
+    use mbv_emby_model::test_support::make_item;
     use mbv_ui_msg::{Msg, TerminalObserverEvent};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -178,5 +223,80 @@ mod tests {
             message,
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
+    }
+
+    /// A model with playlist "pl" open over audio items a, b, c and an empty
+    /// queue, plus the owner command channel.
+    fn open_playlist_model() -> (Model, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+        let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(Vec::new());
+        let mut playlist = make_item("Playlist", "Playlist");
+        playlist.id = "pl".into();
+        app.playlists_open = Some(playlist);
+        app.playlists_open_items = ["a", "b", "c"]
+            .into_iter()
+            .map(|id| {
+                let mut item = make_item(id, "Audio");
+                item.id = id.into();
+                item.media_type = "Audio".into();
+                item
+            })
+            .collect();
+        (Model::new(app), cmd_rx)
+    }
+
+    fn open_action(index: usize, action: MusicTreeAction) -> ShellRequest {
+        ShellRequest::PlaylistsAction {
+            open: true,
+            index,
+            action,
+        }
+    }
+
+    /// Saved playlist order is untouched: Shuffle replaces the queue with
+    /// every playlist item under `QueueSource::Shuffle`, never the playlist.
+    #[test]
+    fn shuffle_replaces_the_queue_with_a_shuffle_source() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let (mut model, cmd_rx) = open_playlist_model();
+
+        model.handle_playlists_request(&open_action(1, MusicTreeAction::Shuffle));
+
+        let replaces: Vec<_> = cmd_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, source, .. } => {
+                    Some((items.len(), source))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(matches!(replaces.as_slice(), [(3, QueueSource::Shuffle)]));
+    }
+
+    /// Enqueue one item from an open playlist: one append holding only the
+    /// cursor item, and no replace.
+    #[test]
+    fn open_view_enqueue_appends_only_the_cursor_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let (mut model, cmd_rx) = open_playlist_model();
+
+        model.handle_playlists_request(&open_action(1, MusicTreeAction::Enqueue));
+
+        let commands: Vec<_> = cmd_rx.try_iter().collect();
+        let appended: Vec<Vec<String>> = commands
+            .iter()
+            .filter_map(|command| match command {
+                mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => {
+                    Some(items.iter().map(|item| item.id().to_string()).collect())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(appended, vec![vec!["b".to_string()]]);
+        assert!(
+            !commands
+                .iter()
+                .any(|command| matches!(command, mbv_ctrl::CtrlCmd::UnifiedQueueReplace { .. }))
+        );
     }
 }
