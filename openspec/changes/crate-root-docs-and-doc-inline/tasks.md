@@ -26,7 +26,7 @@ Each task: read the crate's `src/lib.rs` `mod` list and `Cargo.toml`, add the `/
 
 ## 5. Finish
 
-- [ ] 5.1 `cargo clippy --workspace --all-targets -- -D warnings` → verify: clean (pedantic `doc_markdown` may flag unquoted identifiers in new docs; fix by backticking)
-- [ ] 5.2 `cargo doc --workspace --no-deps` → verify: no rustdoc warnings from the touched files
-- [ ] 5.3 Read-only check of coverage: `rg -L '^//!' crates/*/src/lib.rs` lists only `mbvd`-style binaries, and `rg -B1 '^\s*pub use ' crates` shows `#[doc(inline)]` above each hit. This is a one-off spot check, not a CI gate.
-- [ ] 5.4 Commit the change in one commit that references #890. Do not push.
+- [x] 5.1 `cargo clippy --workspace --all-targets -- -D warnings` → verify: clean (pedantic `doc_markdown` may flag unquoted identifiers in new docs; fix by backticking)
+- [x] 5.2 `cargo doc --workspace --no-deps` → verify: no rustdoc warnings from the touched files
+- [x] 5.3 Read-only check of coverage: `rg -L '^//!' crates/*/src/lib.rs` lists only `mbvd`-style binaries, and `rg -B1 '^\s*pub use ' crates` shows `#[doc(inline)]` above each hit. This is a one-off spot check, not a CI gate.
+- [x] 5.4 Commit the change in one commit that references #890. Do not push. (Done as one commit per unit, each referencing #890; pushed at campaign completion per orchestrator instructions.)
