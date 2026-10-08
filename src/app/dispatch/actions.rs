@@ -93,7 +93,6 @@ impl App {
                 items,
                 start_idx,
                 source,
-                autostart: true,
             });
         self.ask_confirm(mbv_ui_model::confirm::ConfirmModal::two_button(
             format!("Play \"{label}\" on this machine instead?"),

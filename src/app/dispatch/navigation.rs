@@ -228,14 +228,12 @@ impl App {
                 items: tracks,
                 start_idx,
                 source: mbv_queue::QueueSource::Album,
-                autostart: true,
             })
         } else {
             Some(PendingQueueAction::PlayItems {
                 items: vec![tracks.remove(start_idx)],
                 start_idx: 0,
                 source: mbv_queue::QueueSource::Album,
-                autostart: true,
             })
         }
     }
@@ -252,7 +250,6 @@ impl App {
             items: tracks,
             start_idx,
             source: mbv_queue::QueueSource::Album,
-            autostart: true,
         };
         self.request_queue_replacement(
             action,

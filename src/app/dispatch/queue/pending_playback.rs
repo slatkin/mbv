@@ -9,26 +9,11 @@ impl App {
         items: Vec<EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
-        autostart: bool,
     ) {
-        if autostart && self.player.is_remote_disconnected() {
+        if self.player.is_remote_disconnected() {
             self.flash(
                 crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                 ToastSeverity::Warning,
-            );
-            return;
-        }
-        if !autostart {
-            // Loading without starting playback keeps the owner's idle-load
-            // request/result path (row 5.3, design D6): unblocked, and the
-            // loaded playlist shows only through the owner's accepted state.
-            self.load_idle_queue_on_owner(
-                items
-                    .into_iter()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect(),
-                start_idx,
-                source,
             );
             return;
         }

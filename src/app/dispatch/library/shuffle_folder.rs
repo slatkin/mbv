@@ -111,7 +111,6 @@ impl App {
                 items,
                 start_idx: 0,
                 source,
-                autostart: true,
             },
             ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
         );
@@ -145,7 +144,6 @@ impl App {
                         items,
                         start_idx: 0,
                         source: mbv_queue::QueueSource::Collection { collection_type },
-                        autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
                 );
@@ -206,7 +204,6 @@ impl App {
                         items,
                         start_idx: 0,
                         source: mbv_queue::QueueSource::Shuffle,
-                        autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),
                 );

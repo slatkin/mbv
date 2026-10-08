@@ -92,9 +92,8 @@ impl Model {
                                 id: Some(playlist.id.clone()),
                                 name: playlist.name.clone(),
                             },
-                            autostart: false,
                         },
-                        crate::app::state::playback::ReplacementExecutor::Pending,
+                        crate::app::state::playback::ReplacementExecutor::PlaylistsSidebar,
                     );
                     // No sidebar dismiss here: `run_replacement` raises it once
                     // the replacement actually runs (immediately on an empty
