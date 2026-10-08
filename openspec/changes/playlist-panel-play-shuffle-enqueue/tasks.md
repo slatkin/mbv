@@ -19,16 +19,16 @@
 
 ## 2. Panel actions: message, component keys, shell handling (design D1, D2)
 
-- [ ] 2.1 In `crates/mbv-ui-msg/src/shell.rs`, replace `ShellRequest::PlaylistsActivate { open, index }` with `PlaylistsAction { open, index, action: MusicTreeAction }`. Reword the doc comment on `MusicTreeAction` (`intents.rs`) so it covers both the Music tree and the Playlists panel. Update the two arms in `src/app/shell/messages.rs` that list it. Verify with `cargo check --workspace`.
-- [ ] 2.2 In `crates/mbv-components/src/playlists.rs`:
+- [x] 2.1 In `crates/mbv-ui-msg/src/shell.rs`, replace `ShellRequest::PlaylistsActivate { open, index }` with `PlaylistsAction { open, index, action: MusicTreeAction }`. Reword the doc comment on `MusicTreeAction` (`intents.rs`) so it covers both the Music tree and the Playlists panel. Update the two arms in `src/app/shell/messages.rs` that list it. Verify with `cargo check --workspace`.
+- [x] 2.2 In `crates/mbv-components/src/playlists.rs`:
   - Enter → `Play`, `s` → `Shuffle`, `a` → `Enqueue`, all with no modifiers.
   - Each sends `PlaylistsAction` with the current view's `open` and cursor `index`. In the list view, nothing is sent when the cursor is past the end.
   - The mouse double-click sends `Play`.
   - Replace the old activation test with one named `#[case]` table that covers the three keys in each view.
   
   Verify with `cargo nextest run -p mbv-components playlists`.
-- [ ] 2.3 In `src/app/dispatch/library/load.rs`, replace `load_and_play_playlist` with the resolver `playlist_playable_items(playlist_id) -> Option<Vec<EmbyItem>>`. It keeps the current fetch, the folder filter, and the unavailable/error/empty/nothing-playable flashes. Verify with `cargo check -p mbv`.
-- [ ] 2.4 In `src/app/shell/playlists.rs`, handle `PlaylistsAction` according to the design D2 table. Play and Shuffle go through `request_queue_replacement(..., ReplacementExecutor::PlaylistsSidebar)`. Shuffle uses `QueueSource::Shuffle` and `rand` shuffle. Enqueue sends one `append_on_owner(viewed_queue_scope(), items)` and leaves the sidebar open. Add two shell tests in the existing `src/app/shell/playlists.rs` tests module:
+- [x] 2.3 In `src/app/dispatch/library/load.rs`, replace `load_and_play_playlist` with the resolver `playlist_playable_items(playlist_id) -> Option<Vec<EmbyItem>>`. It keeps the current fetch, the folder filter, and the unavailable/error/empty/nothing-playable flashes. Verify with `cargo check -p mbv`.
+- [x] 2.4 In `src/app/shell/playlists.rs`, handle `PlaylistsAction` according to the design D2 table. Play and Shuffle go through `request_queue_replacement(..., ReplacementExecutor::PlaylistsSidebar)`. Shuffle uses `QueueSource::Shuffle` and `rand` shuffle. Enqueue sends one `append_on_owner(viewed_queue_scope(), items)` and leaves the sidebar open. Add two shell tests in the existing `src/app/shell/playlists.rs` tests module:
   - Shuffle replaces with `QueueSource::Shuffle` (contract: "Saved playlist order is untouched").
   - Open-view Enqueue sends one append holding only the cursor item and no replace (contract: "Enqueue one item from an open playlist").
   
