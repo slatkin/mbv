@@ -337,6 +337,56 @@ fn a_blank_row_separates_the_playback_band_from_the_queue_panel() {
     }
 }
 
+/// The idle layout keeps the same blank separator: while nothing plays, one
+/// row still separates the header band from the queue panel, and that row
+/// keeps the queue column's surface (user decision 2026-10-08: the
+/// now-playing header is always visible, so it never sits flush on the
+/// recessed panel idle either).
+#[test]
+fn while_idle_a_gap_row_separates_the_header_band_from_the_queue_panel() {
+    let mut app = make_app_stub();
+    app.player.update_status(|status| status.active = false);
+    app.panel_focus = PanelFocus::Queue;
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    let root = harness
+        .model()
+        .app
+        .compute_chrome_geometry(Rect::new(0, 0, 100, 40))
+        .root;
+    let playback = root
+        .queue_playback
+        .expect("queue playback placed while idle: the header band is always visible");
+    let queue = root.queue.expect("queue placed");
+    assert_eq!(
+        playback.height,
+        QUEUE_PLAYBACK_HEADER_ROWS + 1,
+        "the header band plus the gap row is the whole idle playback placement"
+    );
+    assert_eq!(
+        queue.y,
+        playback.bottom(),
+        "the queue panel starts below the gap row: the header never sits flush on the panel"
+    );
+    // The queue holds focus in the wide view, so its column paints the
+    // focused fill.
+    let expected_bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true).fill;
+    for column in playback.x + 2..playback.right() - 2 {
+        let cell = &terminal.backend().buffer()[(column, queue.y - 1)];
+        assert_eq!(
+            cell.style().bg,
+            Some(expected_bg),
+            "the idle gap row keeps the queue column's surface at column {column}"
+        );
+    }
+}
+
 #[test]
 fn sync_projects_queue_transport_area_before_draw() {
     let mut app = active_app(PanelMode::Both);

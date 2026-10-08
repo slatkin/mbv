@@ -279,9 +279,9 @@ impl Component for QueueComponent {
         // Component-retained geometry (task 3.1): the framed content area
         // derives from the placement through the shared arrangement
         // helpers, replacing the legacy queue geometry mirror. The list
-        // begins on the box's first row (right below the playback band) and
-        // ends one row above the box's bottom edge, whose spacer row keeps
-        // the box's own fill.
+        // begins one pad row below the box's first row (the box sits below
+        // the playback band's gap row) and ends one row above the box's
+        // bottom edge, whose spacer row keeps the box's own fill.
         let footer_row = queue_footer_row(area);
         let content_area = queue_list_content(area);
         self.content_area = content_area;

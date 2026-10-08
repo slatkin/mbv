@@ -318,7 +318,8 @@ impl Model {
     /// the header row and transport; the App-side slot adapter (the moved
     /// `render_card`, task 3.4) paints the visual slot below the header row.
     /// While idle the slot and transport collapse to zero rows (task 3.6) and
-    /// only the header row paints.
+    /// only the header band paints (its trailing gap row keeps the column's
+    /// surface below it).
     pub(in crate::app) fn render_queue_playback_panel(
         &mut self,
         frame: &mut Frame,

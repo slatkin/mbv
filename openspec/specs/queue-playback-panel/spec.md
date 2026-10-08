@@ -155,19 +155,20 @@ appear only when the glyph, the controls, the elapsed time, the pill and the tit
 
 ### Requirement: The queue panel opens directly with its rows
 
-The recessed queue panel inside the queue column SHALL NOT paint a title band: no `Queue` title, no
-block separator line, and no spacer row above the first queue row. The panel SHALL adjoin the
-playback region above it with no separator or inset row between them: while playback is active the
-first queue row starts on the row directly below the transport band's blank gap row, and while idle
-directly below the header row. The panel's list SHALL keep no inner top inset and no inner bottom
-padding: it runs from its first row to the footer status row, with no gap row above the status bar
-(when no footer fits, to the panel's last row).
+The recessed queue panel inside the queue column SHALL NOT paint a title band: no `Queue` title and
+no block separator line. One blank gap row SHALL always separate the playback region above the panel
+from the recessed box, playback active or idle; the gap row keeps the `QueueColumn` surface (it is
+the playback placement's last row), and the box's own one-row top pad and one-row bottom spacer keep
+the recessed box's fill above and below the list rows. The list runs from its first row to the row
+directly above the footer status row, with no gap row above the status bar (when no footer fits, to
+the panel's last row).
 
 #### Scenario: The panel has no title band
 
 - **WHEN** a queue-visible layout paints the recessed queue panel
 - **THEN** no `Queue` title and no block separator line are painted above the rows
-- **AND** the first queue row starts on the panel's first row, directly below the playback region
+- **AND** the first queue row starts one pad row below the box's first row, which sits below the
+  playback region's blank gap row
 
 #### Scenario: The list runs to the footer status row
 
@@ -247,9 +248,10 @@ content top-aligned and the panel background filling the rows below it.
 
 When the queue column is visible and no transport is active, the visual slot (artwork, placeholder,
 loading reservation, or empty visualizer box) and the playback panel SHALL NOT be rendered and SHALL
-reserve zero rows; the queue panel SHALL occupy those rows and begin directly below the header row,
-with no blank row between them. While the band renders, the queue panel begins directly below the
-band's blank gap row; no separator row exists in either state. Paused
+reserve zero rows; the queue panel SHALL occupy those rows and begin below the header band's blank
+gap row, the one-row separator that keeps the `QueueColumn` surface in every queue-visible layout,
+idle included. While the band renders, the queue panel begins directly below the band's blank gap
+row. Paused
 playback counts as active and SHALL keep both. The artwork/visualizer
 selection SHALL persist while idle and take effect on the next playback; pressing the artwork key
 while idle SHALL NOT create a visual slot rectangle. A connected transport that is not playing SHALL
@@ -258,8 +260,8 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 #### Scenario: Idle queue-visible layout reclaims the slot and panel rows
 
 - **WHEN** the queue column is visible and no transport is active
-- **THEN** no visual slot and no playback panel SHALL be rendered, and the queue panel SHALL begin on
-  the row directly below the header row
+- **THEN** no visual slot and no playback panel SHALL be rendered, and the queue panel SHALL begin
+  on the row below the header band's blank gap row
 
 #### Scenario: Idle collapse holds at every supported width
 

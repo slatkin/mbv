@@ -27,9 +27,10 @@ pub struct QueuePanelInputs {
     pub left_content: Rect,
     /// Rows the Queue playback panel's header row always spends above the
     /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The panel starts one row below the playback rows while the
-    /// slot/transport paint (the band's gap row); while idle it borders the
-    /// header band directly.
+    /// task 3.2). The panel starts one row below the playback rows: the band's
+    /// gap row always separates the header from the panel, idle included, and
+    /// keeps the `QueueColumn` surface (the shell's playback placement's last
+    /// row, the shell's `QueueColumn` fill).
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -50,9 +51,9 @@ pub fn queue_footer_row(placement: Rect) -> Option<Rect> {
 }
 
 /// The recessed queue-list box inside the placement: the column's canonical
-/// side insets, starting directly below the playback band (the two panels
-/// border one another) and ending just above the gap row that precedes the
-/// footer. The footer band's rows keep the `QueueColumn` surface; the row
+/// side insets, starting one row below the playback band (the band's gap row
+/// keeps the `QueueColumn` surface) and ending just above the gap row that
+/// precedes the footer. The footer band's rows keep the `QueueColumn` surface; the row
 /// below the footer is the placement's own bottom padding. When no footer
 /// fits, the box runs to the placement's bottom.
 #[must_use]
@@ -97,14 +98,14 @@ pub fn queue_list_content(placement: Rect) -> Rect {
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
     // The header row (always present, idle included) plus the visual-slot and
-    // transport rows sit above the panel, separated from it by one gap row
-    // while the slot/transport paint. The gap belongs to the slot/transport
-    // band: while idle nothing renders between the header and the panel, and
-    // the box's own top pad is the single space row below the header. The
-    // gap row is the playback region placement's last row (the placement
-    // runs to the panel's first row), so the shell's QueueColumn fill owns it.
+    // transport rows sit above the panel, separated from it by one gap row.
+    // The gap belongs to the playback region placement: its last row runs to
+    // the panel's first row, so the shell's `QueueColumn` fill owns it and the
+    // header never sits flush on the recessed panel, idle included. Inside the
+    // panel, the box's own top pad is the second space row above the list
+    // rows.
     let playback_rows = input.header_height + input.card_height;
-    let gap = u16::from(input.card_height > 0);
+    let gap = 1_u16;
     let panel_area = Rect {
         y: input.left_content.y + playback_rows + gap,
         height: input

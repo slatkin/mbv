@@ -3,7 +3,7 @@ use crate::arrangements::chrome::QUEUE_PLAYBACK_HEADER_ROWS;
 
 /// The header band's rows: the header text row sits one `queue_panel_inset`
 /// row below the column's top edge, and the queue panel starts below the
-/// playback rows plus the band's gap row (the slot/transport paint here).
+/// playback rows plus the band's gap row.
 #[test]
 fn header_rows_are_always_reserved_above_the_queue_panel() {
     let left_content = Rect::new(0, 0, 40, 30);
@@ -66,13 +66,12 @@ fn queue_list_rows_keep_the_box_top_pad_and_bottom_spacer() {
     );
 }
 
-/// The gap row between the playback band and the queue panel rides only
-/// with the slot/transport rows: while they paint the queue panel starts
-/// one row below them (the gap row is the playback placement's last row,
-/// the shell's `QueueColumn` fill), while idle the panel borders the header
-/// band directly and the box's own top pad is the single space row.
+/// The gap row between the header/playback band and the queue panel is
+/// always reserved, idle included: the row is the playback placement's last
+/// row and keeps the shell's `QueueColumn` fill, so the header never sits
+/// flush on the recessed panel.
 #[test]
-fn the_gap_row_rides_only_with_the_slot_and_transport_rows() {
+fn the_gap_row_always_separates_the_header_band_from_the_queue_panel() {
     let left_content = Rect::new(0, 0, 40, 30);
     let playing = queue_panel_geometry(QueuePanelInputs {
         left_content,
@@ -91,7 +90,7 @@ fn the_gap_row_rides_only_with_the_slot_and_transport_rows() {
     });
     assert_eq!(
         idle.panel_area.y,
-        left_content.y + QUEUE_PLAYBACK_HEADER_ROWS,
-        "idle borders the header band directly: no gap row"
+        left_content.y + QUEUE_PLAYBACK_HEADER_ROWS + 1,
+        "idle keeps the gap row below the header band"
     );
 }

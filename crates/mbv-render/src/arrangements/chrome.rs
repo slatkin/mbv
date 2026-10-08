@@ -340,9 +340,9 @@ fn queue_column_geometry(
 ) -> (Rect, Rect, Rect) {
     // Root panel placements (D1, task 1.3): the queue column splits into the
     // Queue playback panel's region (header row plus the visual
-    // slot/transport rows, plus the band's gap row while they paint) and the
-    // Queue panel directly below it; while idle only the header row is
-    // reserved. Both placements come from the shared
+    // slot/transport rows, plus the band's gap row) and the
+    // Queue panel directly below it; while idle only the header band and its
+    // gap row are reserved. Both placements come from the shared
     // `queue_panel_geometry` (task 3.2: the header row is one input alongside
     // the visual-slot and transport heights, single source), so they tile
     // the queue column's content exactly.
