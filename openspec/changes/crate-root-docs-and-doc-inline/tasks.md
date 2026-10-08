@@ -2,9 +2,9 @@
 
 Each task: read the crate's `src/lib.rs` `mod` list and `Cargo.toml`, add the `//!` block at the top of `lib.rs` (above any `mod`/`use`), then add `#[doc(inline)]` above every workspace-item `pub use` in that crate (root and nested files). Skip `std` and third-party paths.
 
-- [ ] 1.1 `mbv-ids`, `mbv-text`, `mbv-theme`, `mbv-ctrl`, `mbv-queue`
-- [ ] 1.2 `mbv-config`, `mbv-core`, `mbv-feed`, `mbv-ui-model`
-- [ ] 1.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
+- [x] 1.1 `mbv-ids`, `mbv-text`, `mbv-theme`, `mbv-ctrl`, `mbv-queue`
+- [x] 1.2 `mbv-config`, `mbv-core`, `mbv-feed`, `mbv-ui-model`
+- [x] 1.3 Gate: `cargo check -p` each crate above, then `cargo fmt` → verify: no errors
 
 ## 2. Provider and transport crates
 
