@@ -82,9 +82,6 @@ authoring and review time.
   helpers in production files. Delete them with the tests (AGENTS.md
   forbids `allow`/`expect`, so they surface as `dead_code` — that warning
   is the sweep mechanism, not a nuisance).
-- **`mbv-daemon` has no public-contract test target yet.** Its tests drive
-  private loop internals, so they are real unit tests; a public-contract test
-  (through `run_with_options` or the ctrl socket) is still missing (#889).
 - **`mbv-config` public-API tests that need `TestStateDirGuard`,
   `TestTempDir`, or `SYS_ENV_LOCK` still live in `src/`.** Those helpers are
   `cfg(any(test, feature = "test"))`-gated and unreachable from the crate's own
