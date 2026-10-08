@@ -2,15 +2,15 @@
 
 ## 1. Remove `autostart` from `PendingQueueAction` (design D4, D3)
 
-- [ ] 1.1 Delete the `autostart` field from `PendingQueueAction::PlayItems` (`src/app/state/playback.rs`). Delete the `if !autostart` branch and the parameter from `execute_pending_play_items` (`src/app/dispatch/queue/pending_playback.rs`), and make the remote-disconnected guard unconditional. Remove the field from every builder and from the `match` in `src/app/dispatch/queue/replacement.rs`. Leave `load_idle_queue_on_owner` and `send_idle_queue_load` in place (their other callers are in `src/app/dispatch/actions.rs`). Verify with `cargo check -p mbv`.
-- [ ] 1.2 Add `ReplacementExecutor::PlaylistsSidebar` (`src/app/state/playback.rs`). Keep `Pending` for `play_grouped_track` (`src/app/dispatch/navigation.rs`).
+- [x] 1.1 Delete the `autostart` field from `PendingQueueAction::PlayItems` (`src/app/state/playback.rs`). Delete the `if !autostart` branch and the parameter from `execute_pending_play_items` (`src/app/dispatch/queue/pending_playback.rs`), and make the remote-disconnected guard unconditional. Remove the field from every builder and from the `match` in `src/app/dispatch/queue/replacement.rs`. Leave `load_idle_queue_on_owner` and `send_idle_queue_load` in place (their other callers are in `src/app/dispatch/actions.rs`). Verify with `cargo check -p mbv`.
+- [x] 1.2 Add `ReplacementExecutor::PlaylistsSidebar` (`src/app/state/playback.rs`). Keep `Pending` for `play_grouped_track` (`src/app/dispatch/navigation.rs`).
   - In `run_replacement`, the `PlaylistsSidebar` arm runs `execute_queue_replacement`. Then, when no overlay was raised, it closes the Playlists sidebar and focuses the Queue, with no source check.
   - The `Pending` arm only runs `execute_queue_replacement`. Delete its `source: Playlist` `matches!` and its dismiss/focus step.
   - Switch the two F4 call sites (`src/app/shell/playlists.rs` open view, `load_and_play_playlist`) to `PlaylistsSidebar`. Task 2.3/2.4 rewrite them later.
   - Update the doc comments on the enum and on `run_replacement`.
   
   Verify with `cargo check -p mbv`.
-- [ ] 1.3 Update the tests that built `autostart`:
+- [x] 1.3 Update the tests that built `autostart`:
   - `src/app/dispatch/actions/tests/album_artist_playback.rs`: drop the `autostart` binding and its assert.
   - `src/app/input/confirm_keys/tests.rs`: drop the field. The playlist half of `empty_queue_runs_a_shuffle_and_a_playlist_load_without_a_modal` now asserts that a replace is sent, not an idle load. Rename the test to match.
   - `src/app/tests/queue/queue_op.rs` `idle_queue_load_does_not_block_input_and_leaves_the_view_until_the_result`: call `load_idle_queue_on_owner` directly instead of the deleted load-only `PlayItems`, and reword its comment around the populate-only load.
