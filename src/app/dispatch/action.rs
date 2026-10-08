@@ -45,7 +45,6 @@ pub(in crate::app) enum Command {
     CycleOrToggleSubtitle,
     AdjustVolume(i64),
     /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
-    /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
     ToggleMute,
     /// The `#` key: `dispatch` calls `cycle_audio()`, which cycles the
     /// audio track. Gated the same way as the other transport keys
