@@ -1,8 +1,6 @@
 use crate::app::App;
 use mbv_render::arrangements::chrome::{ChromeGeometryInput, chrome_geometry};
-use mbv_render::arrangements::queue::{
-    QueuePanelGeometry, queue_footer_row, queue_list_box, queue_list_rows,
-};
+use mbv_render::arrangements::queue::{QueuePanelGeometry, queue_footer_row, queue_list_content};
 use mbv_render::layout::{AppLayout, FrameChromeGeometry};
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -42,7 +40,7 @@ impl App {
         let panel_area = chrome.root.queue.unwrap_or_default();
         QueuePanelGeometry {
             panel_area,
-            content_area: queue_list_rows(queue_list_box(panel_area)),
+            content_area: queue_list_content(panel_area),
             footer_row: queue_footer_row(panel_area),
         }
     }

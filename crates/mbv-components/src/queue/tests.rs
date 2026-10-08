@@ -1,4 +1,5 @@
 use super::*;
+use mbv_render::arrangements::queue::queue_list_box;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 

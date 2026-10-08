@@ -24,6 +24,7 @@ use mbv_render::components::card::queue_card_reserved_rect;
 use mbv_render::components::widgets::fill_surface;
 use mbv_render::layout::CardGeometry;
 use mbv_render::{StatusBarModel, VisualModeIndicator};
+use mbv_ui_model::playback::NowPlayingTitleSite;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, Msg, UserEvent};
 
@@ -292,7 +293,18 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>()
         {
-            let (host, host_is_remote) = self.app.playback_host_label_and_remote();
+            // The host feeds only the artwork-site playing brand row
+            // (`PLAYING:<host>`); every other header (idle, or the title
+            // itself) never reads it, so skip the label resolution — its
+            // config lock and two allocations — unless that row will paint.
+            let needs_host = status != NowPlayingStatus::Idle
+                && transport.title_site == NowPlayingTitleSite::Artwork
+                && transport.now_playing_title.is_some();
+            let (host, host_is_remote) = if needs_host {
+                self.app.playback_host_label_and_remote()
+            } else {
+                (String::new(), false)
+            };
             panel.set_header(status, host, host_is_remote);
             panel.set_transport(transport);
             panel.set_transport_area(transport_area);

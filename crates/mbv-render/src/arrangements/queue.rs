@@ -84,6 +84,15 @@ pub fn queue_list_rows(box_area: Rect) -> Rect {
     }
 }
 
+/// The queue list's painted rows for one panel placement: the recessed box
+/// plus its inner pad/spacer inset. The one place the panel, the shell's
+/// placement projection, and the panel geometry derive the rows they paint
+/// or project, so the inset cannot drift between them.
+#[must_use]
+pub fn queue_list_content(placement: Rect) -> Rect {
+    queue_list_rows(queue_list_box(placement))
+}
+
 /// Places the complete queue panel and its framed sub-areas.
 #[must_use]
 pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
@@ -105,7 +114,7 @@ pub fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
             .saturating_sub(gap),
         ..input.left_content
     };
-    let (content_area, footer_row) = (queue_list_box(panel_area), queue_footer_row(panel_area));
+    let (content_area, footer_row) = (queue_list_content(panel_area), queue_footer_row(panel_area));
     QueuePanelGeometry {
         panel_area,
         content_area,
