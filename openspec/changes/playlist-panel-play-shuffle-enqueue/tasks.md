@@ -47,7 +47,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All must pass.
+- [x] 4.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All must pass.
 - [ ] 4.2 The user tests live in F4: Enter and `s` in both views, `a` in both views, the populated-queue confirmation, and the striped single-line open rows. Mark this done only on the user's confirmation.
 
 ## Workflow follow-up
