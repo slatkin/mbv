@@ -33,3 +33,12 @@ mbv-core = { path = "../mbv-core" }
 
 [dev-dependencies]
 rstest.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "feed_display_rows"
+harness = false
+
+[[bench]]
+name = "title_row"
+harness = false
