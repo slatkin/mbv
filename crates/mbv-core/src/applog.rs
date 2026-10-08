@@ -13,6 +13,7 @@ mod url_path;
 #[cfg(feature = "test")]
 pub mod test_support;
 
+#[doc(inline)]
 pub use url_path::UrlPath;
 
 use std::path::PathBuf;
@@ -20,6 +21,7 @@ use std::sync::OnceLock;
 use tracing_log::AsLog;
 use tracing_subscriber::prelude::*;
 
+#[doc(inline)]
 pub use spec::LogSpec;
 
 static INITIALIZED: OnceLock<()> = OnceLock::new();

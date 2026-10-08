@@ -1,5 +1,6 @@
 use mbv_emby_model::EmbyItem;
 
+#[doc(inline)]
 pub use super::audiobookshelf::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem,
 };

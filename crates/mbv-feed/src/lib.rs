@@ -1,3 +1,9 @@
+//! Feed fetching, parsing, and entry state for the Feeds Service.
+//!
+//! RSS/Atom fetch-and-parse, `YouTube` channel URL resolution, and the keyed
+//! `FeedEntryStore` live here. `FeedEntry` queue snapshots are defined in `mbv-queue`;
+//! playback of entries belongs to the Player owner, not this crate.
+
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::FeedEntry;
 use mbv_queue::FeedKind;
@@ -5,7 +11,9 @@ use mbv_text::html::decode_entities;
 
 mod date;
 mod error;
+#[doc(inline)]
 pub use self::date::parse_pub_date_secs;
+#[doc(inline)]
 pub use self::error::FeedError;
 
 fn fetch_feed_body(url: &str) -> Result<String, FeedError> {
@@ -392,6 +400,7 @@ pub struct IdleFeedItem {
 }
 
 mod entry_state;
+#[doc(inline)]
 pub use entry_state::{FeedEntryState, FeedEntryStore, feed_entry_state_path};
 
 #[cfg(test)]

@@ -1,3 +1,9 @@
+//! Plain presentation models shared by the UI crates.
+//!
+//! One module per surface (browse, playback, settings, search) holds display-ready
+//! state with no painting and no input handling. `mbv-render` paints these models;
+//! `mbv-components` keeps cursor, scroll, and selection locally, never here.
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiConfig {
     pub image_protocol: Option<String>,
@@ -25,6 +31,7 @@ pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
 mod error;
+#[doc(inline)]
 pub use error::UiModelError;
 pub mod feed;
 pub mod feed_age;

@@ -1,3 +1,9 @@
+//! Type-safe media identifiers shared by every crate that names library content.
+//!
+//! `ItemId`, `MediaSourceId`, and `EmbySessionId` keep bare strings from being
+//! silently crossed at call sites. Slot identity (`QueueSlotId`) is not owned here;
+//! it lives in `mbv-queue`, which addresses occurrences while these name content.
+
 use std::fmt;
 
 // Type-safe Emby identifiers. Bare strings for these can be silently crossed
