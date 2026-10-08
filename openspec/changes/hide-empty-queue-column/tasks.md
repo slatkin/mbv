@@ -8,8 +8,8 @@
 
 ## 2. Fix existing tests and verify
 
-- [ ] 2.1 Run `cargo nextest run -p mbv`. A failing test that sets up `Both` with an empty queue and needs the queue column gets one seeded queue item. A test that only asserts raw pane geometry is deleted. Verify that the full `mbv` nextest run passes.
-- [ ] 2.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`, and verify that both are clean.
+- [x] 2.1 Run `cargo nextest run -p mbv`. A failing test that sets up `Both` with an empty queue and needs the queue column gets one seeded queue item. A test that only asserts raw pane geometry is deleted. Verify that the full `mbv` nextest run passes.
+- [x] 2.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`, and verify that both are clean.
 
 ## Workflow follow-up
 
