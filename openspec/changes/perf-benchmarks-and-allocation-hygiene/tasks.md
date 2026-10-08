@@ -12,8 +12,8 @@
 
 ## 3. Allocation reuse (M-MEM-REUSE)
 
-- [ ] 3.1 Rewrite `status_pill_spans` in one pass with no `status_indicators` clone; output identical to the old spans. If no existing test pins content, fg, and bg of the pill, add one named for #896. → verify: `cargo nextest run -p mbv-render`
-- [ ] 3.2 Rewrite `tree_row_title` and the padding span in `components/tree_browser.rs` to avoid per-row owned strings (change `TreeRowSpans` first if the signature must change). → verify: `cargo nextest run -p mbv-render -p mbv-components`
+- [x] 3.1 Rewrite `status_pill_spans` in one pass with no `status_indicators` clone; output identical to the old spans. If no existing test pins content, fg, and bg of the pill, add one named for #896. → verify: `cargo nextest run -p mbv-render`
+- [x] 3.2 Rewrite `tree_row_title` and the padding span in `components/tree_browser.rs` to avoid per-row owned strings (change `TreeRowSpans` first if the signature must change). → verify: `cargo nextest run -p mbv-render -p mbv-components`
 
 ## 4. Fast hasher (M-FAST-HASHER)
 
