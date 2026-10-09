@@ -41,7 +41,7 @@ route to `mbv-components` / `screens/` / `components/` / `arrangements/` /
 | `screens/` | app state in, typed content model out | call Ratatui, construct a `Rect`, compute a hit target |
 | `arrangements/` | placement of components within a `Rect`, breakpoints | own painting or app state |
 | `components/` | painting, its own geometry within a `Rect` | take arbitrary `Color`/`Style` from a screen |
-| `crates/mbv-theme/` | semantic roles (public) | expose palette values (private) |
+| `crates/mbv-theme/` | roles and surface rows resolved through the active theme (public) | expose slots, the theme value, or colour literals (private) |
 
 Dependency order: `screens -> arrangements -> components -> Ratatui`.
 Rendering never performs Service/image/playback/persistence effects.
@@ -106,12 +106,16 @@ Examples:
 
 ## What the compiler does not catch
 
-Only one rule is compiler-enforced: the `Palette` enum is private to
-`crates/mbv-theme/`. Everything else is review's job, and a green build proves
+Only one rule is compiler-enforced: the `Slot` enum, the `Theme` value,
+and `active()` are crate-private to `crates/mbv-theme/` — consumers reach
+colour only through a `Role` or a surface row. Everything else is review's
+job, and a green build proves
 none of it:
 
 - a `screens/` module importing ratatui, building a `Rect`, calling
   `render_widget` or `buffer_mut()`, or a literal `Color::Rgb(..)` anywhere;
+- a background fill taken from a role instead of a surface row, or a second
+  role or surface row for a concept that already has one;
 - a second near-identical arrangement instead of extending the first;
 - a `sync_*`/push helper carrying component-local state back into `App`;
 - hit-test arithmetic that no longer matches painted geometry;
