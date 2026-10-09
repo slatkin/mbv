@@ -57,15 +57,15 @@
 
 ## 6. Audiobookshelf components open the menu
 
-- [ ] 6.1 In `PodcastContent` (`crates/mbv-components/src/podcast_content/panel.rs`), handle `.` (no modifiers, while focused) and right-click the way `FeedsContent` does in `open_selected_feed_context` and `on_context_click`:
+- [x] 6.1 In `PodcastContent` (`crates/mbv-components/src/podcast_content/panel.rs`), handle `.` (no modifiers, while focused) and right-click the way `FeedsContent` does in `open_selected_feed_context` and `on_context_click`:
   - Delegate `MediaListSurfaceInput::Context` to the carrier.
   - Take `RowIntent::ContextSelection(targets)` when present, otherwise the single selected or clicked target.
   - Map each `PodcastEpisodeTarget` to `AudiobookshelfMenuTarget::Episode`.
   - Emit `ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(..), anchor)`.
 
   The right-click arm must come before the `_ =>` delegate arm. Show pills open no menu. Verify with `cargo check -p mbv-components`.
-- [ ] 6.2 Do the same in `BookContent` (`crates/mbv-components/src/book_content.rs` and `book_content/events.rs`) for the book list, not the chapter list. Map each `String` key to `AudiobookshelfMenuTarget::Book`. `.` while chapter focus is active opens no menu. Verify with `cargo check -p mbv-components`.
-- [ ] 6.3 Contract (context-menu spec "Audiobookshelf row is selected", and media-list-multi-select "one entry path for every list"): one component test per owner, in the existing files `podcast_content/tests/interaction.rs` and `book_content/tests.rs`:
+- [x] 6.2 Do the same in `BookContent` (`crates/mbv-components/src/book_content.rs` and `book_content/events.rs`) for the book list, not the chapter list. Map each `String` key to `AudiobookshelfMenuTarget::Book`. `.` while chapter focus is active opens no menu. Verify with `cargo check -p mbv-components`.
+- [x] 6.3 Contract (context-menu spec "Audiobookshelf row is selected", and media-list-multi-select "one entry path for every list"): one component test per owner, in the existing files `podcast_content/tests/interaction.rs` and `book_content/tests.rs`:
   - `.` on a selected row emits `RowContextMenu` with one target and anchor `None`.
   - With a Visual multi-selection of two rows, it emits both targets in list order.
 
