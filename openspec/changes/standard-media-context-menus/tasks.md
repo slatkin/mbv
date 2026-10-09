@@ -103,8 +103,8 @@
 
 ## 8. Integration checks
 
-- [ ] 8.1 Run `cargo fmt --all`, then `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo nextest run --workspace`, and confirm all three pass with no new lint suppression.
-- [ ] 8.2 Run `openspec validate standard-media-context-menus --strict` and confirm it passes.
+- [x] 8.1 Run `cargo fmt --all`, then `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo nextest run --workspace`, and confirm all three pass with no new lint suppression.
+- [x] 8.2 Run `openspec validate standard-media-context-menus --strict` and confirm it passes.
 
 ## Workflow follow-up
 
