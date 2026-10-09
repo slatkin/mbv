@@ -261,26 +261,54 @@ impl App {
             return;
         }
         let mut menu_entries = Vec::new();
+        // Standard action set split on entry count (context-menu spec,
+        // standard-media-context-menus design D3): a leaf row offers Play,
+        // Add to Queue, then the one entry that changes its state; a
+        // multi-selection offers Play, Shuffle, Add to Queue, and both mark
+        // entries.
         Self::push_context_action(
             &mut menu_entries,
             "Play",
             ContextAction::FeedsPlay(entries.clone()),
         );
+        if entries.len() > 1 {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Shuffle",
+                ContextAction::FeedsShuffle(entries.clone()),
+            );
+        }
         Self::push_context_action(
             &mut menu_entries,
             "Add to Queue",
             ContextAction::FeedsEnqueue(entries.clone()),
         );
-        Self::push_context_action(
-            &mut menu_entries,
-            "Mark Played",
-            ContextAction::FeedsMarkPlayed(entries.clone()),
-        );
-        Self::push_context_action(
-            &mut menu_entries,
-            "Mark Unplayed",
-            ContextAction::FeedsMarkUnplayed(entries),
-        );
+        if let [entry] = entries.as_slice() {
+            if entry.played {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Unplayed",
+                    ContextAction::FeedsMarkUnplayed(entries),
+                );
+            } else {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Played",
+                    ContextAction::FeedsMarkPlayed(entries),
+                );
+            }
+        } else {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Played",
+                ContextAction::FeedsMarkPlayed(entries.clone()),
+            );
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Unplayed",
+                ContextAction::FeedsMarkUnplayed(entries),
+            );
+        }
         let menu = ContextMenu {
             anchor: anchor.map_or(
                 ContextMenuAnchor::SelectedItem(PanelFocus::Library),

@@ -187,6 +187,11 @@ impl App {
                 self.play_feed_entries(entries);
                 None
             }
+            Some(ContextAction::FeedsShuffle(mut entries)) => {
+                entries.shuffle(&mut rand::rng());
+                self.play_feed_entries(entries);
+                None
+            }
             Some(ContextAction::FeedsEnqueue(entries)) => {
                 self.enqueue_feed_entries(entries);
                 None
@@ -239,6 +244,7 @@ impl App {
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
                 | ContextAction::FeedsPlay(_)
+                | ContextAction::FeedsShuffle(_)
                 | ContextAction::FeedsEnqueue(_)
                 | ContextAction::FeedsMarkPlayed(_)
                 | ContextAction::FeedsMarkUnplayed(_),
