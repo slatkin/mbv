@@ -35,8 +35,8 @@
 
 ## 4. Feeds menu follows the standard
 
-- [ ] 4.1 In `crates/mbv-ui-model/src/context_menu.rs`, add `ContextAction::FeedsShuffle(Vec<FeedEntry>)`. Change `is_bulk_action` so any `Feeds*` action whose vector has more than one element counts as bulk (design D2). Add an exhaustive `FeedsShuffle` arm in `execute_context_queue_and_feed_action` (`src/app/dispatch/context_menu/actions.rs`) that shuffles the entries with `rand` and calls `play_feed_entries`. Add it to the no-op list in `execute_context_navigation_action`. Verify with `cargo check --workspace`.
-- [ ] 4.2 In `open_feeds_context_menu` (`menu.rs`), split on the entry count (design D3):
+- [x] 4.1 In `crates/mbv-ui-model/src/context_menu.rs`, add `ContextAction::FeedsShuffle(Vec<FeedEntry>)`. Change `is_bulk_action` so any `Feeds*` action whose vector has more than one element counts as bulk (design D2). Add an exhaustive `FeedsShuffle` arm in `execute_context_queue_and_feed_action` (`src/app/dispatch/context_menu/actions.rs`) that shuffles the entries with `rand` and calls `play_feed_entries`. Add it to the no-op list in `execute_context_navigation_action`. Verify with `cargo check --workspace`.
+- [x] 4.2 In `open_feeds_context_menu` (`menu.rs`), split on the entry count (design D3):
   - One entry: Play, Add to Queue, then "Mark Unplayed" when `entry.played`, otherwise "Mark Played".
   - More than one: Play, Shuffle, Add to Queue, Mark Played, Mark Unplayed.
 
