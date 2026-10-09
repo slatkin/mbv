@@ -170,7 +170,6 @@ fn paint_visible_tabs(
         .enumerate()
         .map(|(index, title)| {
             let position = visible_start + index;
-            let title_raw = title.as_str();
             let marked = model.markers.get(position).copied().unwrap_or(false);
             let marker_span = |style: Style| {
                 if marked {
@@ -186,7 +185,6 @@ fn paint_visible_tabs(
             // text, the theme role documented for the active tab. The
             // icon-only Home tab is the exception (2026-10-09 user rule):
             // it keeps the active colour but paints no block runs below.
-            let is_home_icon = mbv_ui_model::ui_util::is_home_icon_title(title_raw);
             let style = if index == selected_tab {
                 Style::default()
                     .fg(palette::ACCENT_ACTIVE)
@@ -210,7 +208,8 @@ fn paint_visible_tabs(
             };
             if index == selected_tab {
                 selected_rect = Some(hit);
-                selected_is_home_icon = is_home_icon;
+                selected_is_home_icon =
+                    mbv_ui_model::ui_util::is_home_icon_title(&model.titles[position]);
             }
             hits.push((hit, position));
             tab_x += width;
