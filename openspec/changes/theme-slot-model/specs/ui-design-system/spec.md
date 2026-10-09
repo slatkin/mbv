@@ -35,6 +35,61 @@ hand-written `uses` prose.
 - **THEN** every role and surface resolves to the new theme's colour for its slot
 - **AND** no role, surface row, screen, or component changes
 
+### Requirement: Palette primitives are not a public API
+
+Raw `Color` primitives SHALL be private to the theme module. Semantic roles and surface rows SHALL
+be the only public styling API. Components SHALL consume roles, surface rows, or component style
+policies; screens SHALL NOT pass arbitrary `Color` or `Style` values into shared components.
+
+#### Scenario: A component renders focused and unfocused states
+- **WHEN** the component receives its focus state
+- **THEN** it resolves the appropriate surface fill through a surface row and its text styles
+  through roles
+- **AND** the screen does not select independent foreground and background colours
+
+#### Scenario: No existing role fits a call site
+- **WHEN** a call site cannot be expressed with an existing role or surface row
+- **THEN** a named role or surface row carrying the visual meaning is added to the theme
+  vocabulary
+- **AND** the primitive is not re-exported and no screen-local colour alias is created
+
+### Requirement: Screen modules do not paint
+
+Screen modules SHALL NOT paint directly: no direct Ratatui painting, no
+layout-rect construction, and no buffer access. A screen supplies typed content;
+painting belongs to an owning component or arrangement.
+
+A call site SHALL state the styling role or surface row it sets explicitly. Supplying a bare
+colour value where a style is expected silently sets the foreground and leaves
+the intended background unpainted, so it is not conforming.
+
+Nothing enforces this set of rules mechanically. It is a review obligation
+carried by the module table and the frontend guide's completion checklist; a green
+build is not evidence that it holds.
+
+Duplicated arrangement geometry and hit targets that have drifted from their
+painting are review's responsibility for the same reason: they are not statically
+detectable. Buffer tests verify component behaviour and preserved output; they do
+not by themselves establish conformance.
+
+#### Scenario: A screen bypasses a canonical painter
+- **WHEN** a change adds direct rendering or rect construction in a screen module
+- **THEN** review rejects the change
+- **AND** the code moves to the component or arrangement that owns the geometry or
+  painting, or out of `screens/` because it was never screen code
+
+#### Scenario: A bare colour is supplied where a style is expected
+- **WHEN** a change paints a block or widget by supplying a bare colour value in place of a style
+- **THEN** the call site names the foreground role or background surface row it intends to set
+- **AND** the change is not conforming until it does
+
+#### Scenario: Painting code that is not screen code
+- **WHEN** code that owns geometry or painting sits in a screen module for
+  historical reasons
+- **THEN** it is rehomed to the arrangement, component, or shell module that its
+  signature identifies as its owner
+- **AND** the observable painted output is unchanged
+
 ## ADDED Requirements
 
 ### Requirement: Theme colours resolve at paint time
@@ -42,7 +97,8 @@ hand-written `uses` prose.
 Roles and surfaces SHALL resolve to a colour from the active theme when a frame is painted, not from
 values fixed at compile time. Code that branches on a colour SHALL compare role or surface
 identities, never resolved colour values, so that two identities a theme assigns the same slot stay
-distinguishable.
+distinguishable. The one exception is the queue band's indicator row, which recognises a
+reverse-video indicator span by its on-accent text over a fill, the mark that defines such a span.
 
 #### Scenario: The default theme is active
 

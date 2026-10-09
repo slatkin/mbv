@@ -1,5 +1,25 @@
 # Spec Delta
 
+## MODIFIED Requirements
+
+### Requirement: Colour roles have one definition
+
+The TUI SHALL define its colours as named roles and surface rows, and every surface, text run,
+rule, and indicator SHALL derive its colour from a role or a surface row rather than from a literal
+colour value. Changing a role's or surface row's definition SHALL change every place it is used,
+with no per-screen implementation of the same role or row.
+
+#### Scenario: A role definition changes
+
+- **WHEN** the definition of a colour role or surface row is changed
+- **THEN** every screen using that role or row renders the changed colour
+- **AND** no screen continues to render the previous colour
+
+#### Scenario: Two screens present the same concept
+
+- **WHEN** two screens display the same concept, such as a selected row or a resting panel
+- **THEN** both derive that colour from the same role or surface row and render identically
+
 ## REMOVED Requirements
 
 ### Requirement: One surface table maps a surface to its colour
@@ -19,7 +39,7 @@ The theme SHALL expose one closed set of rendered-surface identities and one fun
 surface plus a focus boolean to its fill. Every production paint site SHALL obtain a background fill
 from that function by naming the surface. Each surface entry SHALL state exactly two slots, resting
 and focused; a surface that does not react to focus states the same slot twice. Roles SHALL serve
-only as foregrounds: text, indicator, scrollbar, or rule colours.
+only as foregrounds, apart from the permitted inversions.
 
 #### Scenario: A surface row changes
 
@@ -31,15 +51,28 @@ only as foregrounds: text, indicator, scrollbar, or rule colours.
 #### Scenario: A background is painted from a role
 
 - **WHEN** a paint site would fill a background, stripe, bar, or chip from a role
+- **AND** the fill is not an inversion permitted by "Inverted spans swap a role and a fill"
 - **THEN** review rejects it
 - **AND** the site names a surface row instead, adding one if no row names the concept
 
-#### Scenario: A surface has no painter
+### Requirement: Inverted spans swap a role and a fill
 
-- **WHEN** a surface identity exists in the table but no painted rect matches it in a layout under
-  test
-- **THEN** the conformance test fails
-- **AND** the surface is either painted or removed from the table
+A reverse-video span MAY paint a foreground role as its fill when its text is the on-accent role;
+the indicator Chips and Powerline treatments paint the same status roles that the other treatments
+paint as text. An edge glyph that draws a surface's outline MAY paint that surface's fill as its
+foreground. No other site SHALL fill from a role or take a foreground from a surface.
+
+#### Scenario: An indicator chip is painted in reverse video
+
+- **WHEN** the Chips or Powerline indicator treatment paints a status indicator
+- **THEN** the chip fill is the same role the text treatments paint that indicator with
+- **AND** the chip text is the on-accent role
+- **AND** no surface row duplicates the indicator's role
+
+#### Scenario: A pill edge glyph is painted
+
+- **WHEN** a pill shell paints its slanted edge glyphs
+- **THEN** each glyph's foreground is the pill's surface fill
 
 ### Requirement: A surface follows its paint site's own focus condition
 
