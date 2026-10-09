@@ -3,9 +3,8 @@ use super::{
     AlbumCursorKind, EmbyItem, EmbySelectorKey, HeroContentData, InlineSearch, InlineSearchHost,
     Key, KeyEvent, KeyModifiers, LeafKeyResult, LibraryContentOwner, LibraryItemIdentity,
     LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent,
-    MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest, TreeOperation,
+    MusicTreeAction, RowIntent, SelectorIdentity, ShellRequest, TreeOperation,
 };
-use crate::list::tree_browser::TreeConsumed;
 use mbv_render::components::tv_wide::HeroImageState;
 
 impl InlineSearchHost for MusicContent {
@@ -120,55 +119,15 @@ impl LibraryContentOwner for MusicContent {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
-        let saved_latest = matches!(
-            state.selector.as_ref(),
-            Some(SelectorIdentity::Emby {
-                key: EmbySelectorKey::Latest,
-            })
-        );
         if !self.context.groups.is_empty() {
             self.context.group_cursor = self.group_cursor_for_launch_state(state);
         }
-        // Latest is not a Music selector. A legacy saved Latest selector
-        // falls back to the first normal group and its default item.
-        let selected = if saved_latest {
-            false
-        } else {
-            match state.item.as_ref() {
-                Some(LibraryItemIdentity::Emby { id }) => {
-                    // The saved id may name an album, a Service-backed artist
-                    // root, or a Fallback-keyed artist root's display name
-                    // (`launch_snapshot`'s artist fallback covers both artist
-                    // key shapes): try each in turn before giving up.
-                    [
-                        MusicTreeTarget::Album(id.clone()),
-                        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(
-                            id.clone(),
-                        )),
-                        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Fallback(
-                            id.clone(),
-                        )),
-                    ]
-                    .into_iter()
-                    .any(|target| {
-                        self.browser
-                            .apply(TreeOperation::AnchorSelection {
-                                target,
-                                flow_offset: 0,
-                            })
-                            .disposition
-                            == TreeConsumed::Consumed
-                    })
-                }
-                _ => false,
-            }
-        };
-        // Nothing resolved: select the first visible row rather than
-        // expanding into a default album (product rule: a programmatic
-        // selection never changes expansion).
-        if !selected {
-            self.browser.apply(TreeOperation::First);
-        }
+        // Latest is not a Music selector; a legacy saved Latest selector
+        // resolves to the first normal group through
+        // `group_cursor_for_launch_state`. A saved item never restores
+        // (spec: every restart lands on the first row), so a legacy
+        // snapshot's item is ignored here too.
+        self.browser.apply(TreeOperation::First);
         true
     }
 

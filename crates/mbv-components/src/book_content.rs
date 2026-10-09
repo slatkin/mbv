@@ -504,13 +504,9 @@ impl LibraryContentOwner for BookContent {
         .unwrap_or(0);
         self.selected_bucket = bucket.min(self.state.buckets.len().saturating_sub(1));
         self.set_book_rows();
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Audiobookshelf { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        // A saved book never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.carrier.select_first();
         true
     }
 

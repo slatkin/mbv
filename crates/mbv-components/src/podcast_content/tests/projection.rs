@@ -1,12 +1,28 @@
 use super::*;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
+fn latest_catalog(episode_id: &str) -> AudiobookshelfEpisodeCatalog {
+    AudiobookshelfEpisodeCatalog {
+        library_item_id: "alpha".into(),
+        episode_id: episode_id.into(),
+        title: episode_id.into(),
+        show_title: Some("Alpha Show".into()),
+        author: None,
+        description: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        cover_path: None,
+    }
+}
+
 #[test]
-fn reanchor_launch_state_resolves_a_legacy_show_key_to_the_default_scope() {
+fn reanchor_launch_state_resolves_a_legacy_show_key_to_the_latest_scope() {
     // A show/show-item snapshot written by an older version decodes but
-    // resolves to the destination default (spec: podcast restart starts on
-    // Latest); the legacy item rule still applies within that scope.
+    // resolves to the persisted scope (spec: podcast restart starts on
+    // Latest whether or not the podcast was the exit tab, and every
+    // restart lands on the first row).
     let mut owner = owner();
+    owner.set_latest_items(&[latest_catalog("latest-one")]);
     let state = mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_config::TabIdentity::Home,
@@ -19,13 +35,10 @@ fn reanchor_launch_state_resolves_a_legacy_show_key_to_the_default_scope() {
         }),
     };
     assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(owner.pill(), &PillSelection::Latest);
     assert_eq!(
-        owner.pill(),
-        &PillSelection::State(AudiobookshelfEpisodeFilter::All)
-    );
-    assert_eq!(
-        owner.selected_episode_target().unwrap().library_item_id(),
-        "alpha"
+        owner.selected_episode_target().unwrap().episode_id(),
+        "latest-one"
     );
 }
 

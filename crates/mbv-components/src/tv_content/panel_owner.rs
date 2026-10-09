@@ -251,20 +251,16 @@ impl LibraryContentOwner for TvContent {
         None
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
         // The shell applies the selector through App and pushes the resulting
         // content before this item-level re-anchor. Keep selector state
         // owned by that projection rather than mirroring it here.
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.carrier.select_first();
         true
     }
 

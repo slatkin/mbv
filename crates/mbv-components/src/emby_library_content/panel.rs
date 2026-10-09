@@ -211,7 +211,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         (!self.latest_mode).then_some(LaunchSelector::EmbyLatest)
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.items().is_empty() {
             return false;
         }
@@ -219,21 +219,17 @@ impl LibraryContentOwner for EmbyLibraryContent {
         // content before this item-level re-anchor. Do not rewrite the
         // component-local selector here; that brief mirror could disagree
         // with the shell projection until the next sync pass.
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.carrier.select_first();
         true
     }
 
     /// The persisted pill scope, not the live pill: every library with a
     /// painted selector row restarts on Latest, and any other pill choice is
     /// session memory. The selected item is never recorded, so restoration
-    /// always lands on the first row (legacy snapshots with an item still
-    /// decode through `reanchor_launch_state`).
+    /// always lands on the first row (a legacy snapshot's saved item decodes
+    /// but is ignored).
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = (self.selector_mode != super::EmbySelectorMode::None).then_some(
             SelectorIdentity::Emby {

@@ -2,7 +2,7 @@ use super::{
     AudiobookshelfEpisodeFilter, AudiobookshelfSelectorKey, LaunchSelector, LibraryContentOwner,
     LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, MediaListOperation,
     MediaListSurfaceInput, Msg, PillSelection, PodcastContent, PodcastEpisodeIntent,
-    PodcastEpisodeTarget, STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
+    STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
 };
 use crate::library_panel::HeroContentData;
 use mbv_render::components::tv_wide::HeroImageState;
@@ -28,41 +28,18 @@ impl LibraryContentOwner for PodcastContent {
             .then_some(LaunchSelector::AudiobookshelfLatest)
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         // The shell applies the selector through App before this item-level
         // re-anchor. Restore the persisted scope here so the component scopes
         // its rows before selecting the first row: every restart lands on
-        // Latest, and a legacy filter/show key in an old snapshot decodes but
-        // keeps the destination default.
-        if matches!(
-            state.selector.as_ref(),
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::Latest,
-            })
-        ) {
-            self.set_pill(PillSelection::Latest);
-        }
-        if let PillSelection::Show(id) = &self.pill
-            && !self.state.detail_cache.contains_key(id)
-        {
-            return false;
-        }
-        let selected = state
-            .item
-            .as_ref()
-            .and_then(|item| match item {
-                LibraryItemIdentity::Audiobookshelf { id } => id.split_once('\0'),
-                _ => None,
-            })
-            .is_some_and(|(library_item_id, episode_id)| {
-                self.episodes.select_target(&PodcastEpisodeTarget::new(
-                    library_item_id.to_owned(),
-                    episode_id.to_owned(),
-                ))
-            });
-        if !selected {
-            self.episodes.select_first();
-        }
+        // Latest whether or not the podcast library was the exit tab (the
+        // snapshot records the exit tab's scope only), and a legacy
+        // filter/show key in an old snapshot decodes but resolves to Latest
+        // too.
+        self.set_pill(PillSelection::Latest);
+        // A saved episode never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.episodes.select_first();
         self.sync_hero_scroll();
         true
     }

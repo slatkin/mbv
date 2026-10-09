@@ -80,12 +80,13 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
     );
 }
 
-// Companion restore side of the music-tree-reverts-on-restart regression: a
-// saved artist id (today only a legacy snapshot carries one) reselects the
-// artist root itself (collapsed, no album expanded), instead of the pre-fix
-// behaviour of falling through to the default first album.
+// Companion restore side of the music-tree-reverts-on-restart regression:
+// restore reselects the artist root itself (collapsed, no album expanded),
+// instead of the pre-fix behaviour of falling through to the default first
+// album. A legacy snapshot's saved artist item decodes but is ignored (spec:
+// every restart lands on the first row).
 #[test]
-fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album() {
+fn reanchor_launch_state_selects_the_first_artist_root_without_expanding() {
     let mut album = make_item("Album", "Folder");
     album.id = "album-stable".into();
     let mut group = make_item("Artist", "MusicArtist");
@@ -124,12 +125,13 @@ fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album
 
 // Startup regression (real repro): quit with the Jazz pill selected and its
 // first artist, a Fallback-keyed root (no stable Service id, the common case
-// for this library), selected but collapsed. A legacy snapshot that still
-// carries the saved artist item must restore exactly that: the artist
-// selected and still collapsed, and nothing else in the group expanded -- not
-// the saved artist's own first album, and not any other artist's.
+// for this library), selected but collapsed. Restore selects the first
+// artist root and still collapsed, and nothing in the group is expanded --
+// not the first artist's own first album, and not any other artist's. A
+// legacy snapshot's saved artist item decodes but is ignored (spec: every
+// restart lands on the first row).
 #[test]
-fn launch_restore_selects_the_saved_artist_collapsed_and_expands_nothing() {
+fn launch_restore_selects_the_first_artist_collapsed_and_expands_nothing() {
     let mut first_album = make_item("First Artist Album", "Folder");
     first_album.id = "first-artist-album".into();
     let mut second_album = make_item("Second Artist Album", "Folder");
@@ -176,7 +178,10 @@ fn launch_restore_selects_the_saved_artist_collapsed_and_expands_nothing() {
 
     assert!(owner.reanchor_launch_state(&state));
 
-    assert!(owner.selected_is_artist(), "the saved artist is selected");
+    assert!(
+        owner.selected_is_artist(),
+        "the first artist root is selected"
+    );
     assert_eq!(
         owner.browser.selected_target().cloned(),
         Some(MusicTreeTarget::Artist(

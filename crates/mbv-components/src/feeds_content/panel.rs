@@ -91,7 +91,7 @@ impl FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
             return false;
         }
@@ -104,13 +104,9 @@ impl LibraryContentOwner for FeedsContent {
             self.latest_selected = true;
             self.rebuild_visible_entries();
         }
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Feeds { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.carrier.select_first();
         true
     }
 

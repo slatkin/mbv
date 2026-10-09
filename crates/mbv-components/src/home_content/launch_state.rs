@@ -6,20 +6,16 @@ use mbv_config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity, TuiLaun
 use super::HomeContent;
 
 impl HomeContent {
-    pub fn reanchor_launch_state_impl(&mut self, state: &TuiLaunchState) -> bool {
+    pub fn reanchor_launch_state_impl(&mut self, _state: &TuiLaunchState) -> bool {
         if self.loading && self.carrier.rows().is_empty() {
             return false;
         }
         // Home's former Latest sections remain decodable in old launch
         // snapshots, but now resolve explicitly to Continue Watching.
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
         self.project_continue_rows();
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Home { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        self.carrier.select_first();
         true
     }
 

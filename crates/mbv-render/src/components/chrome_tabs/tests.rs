@@ -137,17 +137,9 @@ fn the_selected_tab_gets_an_eighth_block_run_around_its_title(
     }
 }
 
-/// 2026-10-09 user rule: the icon-only Home tab is the exception to the
-/// selected eighth-block runs — when it is selected, no block run is painted
-/// above or below, and the house icon keeps the normal active colour
-/// (`ACCENT_ACTIVE`), in either glyph variant (Nerd Font house, Unicode house
-/// fallback).
-#[rstest]
-#[case::nerd_house(continue_tab_title(true))]
-#[case::unicode_house(continue_tab_title(false))]
-fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour(
-    #[case] home_title: &str,
-) {
+/// Paint the two-tab bar with `home_title` first and selected; returns the
+/// painted buffer.
+fn rendered_home_selected(home_title: &str) -> ratatui::buffer::Buffer {
     let titles = vec![home_title.to_string(), "alpha".to_string()];
     let markers = [false, false];
     let model = TabBarModel {
@@ -162,7 +154,18 @@ fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour(
     terminal
         .draw(|f| render_tab_bar(f, Rect::new(0, 0, 40, 3), &model, &mut hits))
         .unwrap();
-    let buf = terminal.backend().buffer();
+    terminal.backend().buffer().clone()
+}
+
+/// 2026-10-09 user rule: the icon-only Home tab is the exception to the
+/// selected eighth-block runs — when it is selected, no block run is painted
+/// above or below, and the house icon keeps the normal active colour
+/// (`ACCENT_ACTIVE`). Which glyph variant the title carries is owned by
+/// `mbv_ui_model::ui_util`'s tests, so this test pins the rule on one
+/// rendered title.
+#[test]
+fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour() {
+    let buf = rendered_home_selected(continue_tab_title(true));
     for row in [0u16, 2u16] {
         for x in 0..40 {
             let symbol = buf[(x, row)].symbol().to_string();
@@ -172,9 +175,8 @@ fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour(
             );
         }
     }
-    let (home, _) = hits[0];
     assert_eq!(
-        buf[(home.x + 1, 1)].style().fg,
+        buf[(1, 1)].style().fg,
         Some(palette::ACCENT_ACTIVE),
         "the selected Home icon keeps the active colour"
     );
