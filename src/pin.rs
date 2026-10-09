@@ -13,6 +13,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
+use mbv_ctrl::SWAP_TOKEN_ENV;
 use pinwin::instance::{InstanceError, InstanceName, InstanceSocket, Request, SendError};
 use pinwin::layout::{Accent, Keyboard, Layout, Side};
 use pinwin::panel::Startup;
@@ -126,8 +127,6 @@ pub(crate) fn is_pinned() -> bool {
     HANDED_OVER.load(Ordering::Relaxed)
 }
 
-use mbv_ctrl::SWAP_TOKEN_ENV;
-
 /// The swap token this launch was started with, claimed once at startup.
 /// `None` for every launch the user started.
 static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
@@ -147,10 +146,7 @@ pub(crate) fn claim_swap_token() {
 /// The claimed swap token, `None` for every launch the user started.
 #[must_use]
 pub(crate) fn swap_token() -> Option<String> {
-    match SWAP_TOKEN.get() {
-        Some(Some(token)) => Some(token.clone()),
-        _ => None,
-    }
+    SWAP_TOKEN.get().cloned().flatten()
 }
 
 /// Start the pinned panel and hand this process's stdio to its pty (design

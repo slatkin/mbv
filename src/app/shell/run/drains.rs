@@ -110,10 +110,10 @@ impl Model {
                 }
                 // Pin-swap lifecycle is shell-owned (tray-pin-swap 4.4); the
                 // reply travels on this same home link.
-                mbv_ctrl::player::PlayerEvent::SwapPrepare
-                | mbv_ctrl::player::PlayerEvent::SwapQuit => {
-                    self.handle_pin_swap_event(&event, &PinSwapLink::Home);
+                mbv_ctrl::player::PlayerEvent::SwapPrepare => {
+                    self.prepare_pin_swap(&PinSwapLink::Home);
                 }
+                mbv_ctrl::player::PlayerEvent::SwapQuit => self.quit_swapped_out(),
                 _ => {}
             }
         }
@@ -136,12 +136,16 @@ impl Model {
         // Pin-swap lifecycle is shell-owned (tray-pin-swap 4.4): the launch
         // snapshot is a shell query and the exit kind lives on the shell, so
         // both events are handled here and never reach `App` dispatch.
-        if matches!(
-            ev,
-            mbv_ctrl::player::PlayerEvent::SwapPrepare | mbv_ctrl::player::PlayerEvent::SwapQuit
-        ) {
-            self.handle_pin_swap_event(&ev, &PinSwapLink::Active);
-            return false;
+        match ev {
+            mbv_ctrl::player::PlayerEvent::SwapPrepare => {
+                self.prepare_pin_swap(&PinSwapLink::Active);
+                return false;
+            }
+            mbv_ctrl::player::PlayerEvent::SwapQuit => {
+                self.quit_swapped_out();
+                return false;
+            }
+            _ => {}
         }
         let flow = self.app.handle_player_event(ev);
         // Playback completion refetches Home; re-project (task 5.3d, sync_home

@@ -142,9 +142,16 @@ fn swap_argv(
 fn detached_swap_command(argv: &[String]) -> Command {
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..]);
+    detach(&mut cmd, Stdio::null());
+    cmd
+}
+
+/// Null stdin and stdout, the given stderr, and a new session via `setsid`
+/// in `pre_exec`.
+fn detach(cmd: &mut Command, stderr: Stdio) {
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
+    cmd.stderr(stderr);
     // SAFETY: The child-side hook only creates a new session before exec.
     unsafe {
         cmd.pre_exec(|| {
@@ -152,7 +159,6 @@ fn detached_swap_command(argv: &[String]) -> Command {
             Ok(())
         })
     };
-    cmd
 }
 
 pub fn spawn_detached(
@@ -169,19 +175,10 @@ pub fn spawn_detached(
         }
         cmd.envs(display_env);
     }
-    cmd.stdin(Stdio::null());
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::piped());
     // Detach into its own session (equivalent to `setsid <cmd>`), and
     // ignore SIGHUP so closing the launching terminal can't kill it --
     // belt-and-suspenders with the daemon's own SIGHUP-ignore below.
-    // SAFETY: The child-side hook only creates a new session before exec.
-    unsafe {
-        cmd.pre_exec(|| {
-            nix::unistd::setsid().map_err(to_io)?;
-            Ok(())
-        })
-    };
+    detach(&mut cmd, Stdio::piped());
     let mut child = cmd
         .spawn()
         .map_err(|e| io::Error::new(e.kind(), format!("failed to start local daemon: {e}")))?;
@@ -370,42 +367,30 @@ mod tests {
         mbv_daemon::SwapDirection::Pin,
         Some(vec!["wezterm".to_string(), "start".to_string(), "--".to_string()]),
         Some("ghostty"),
-        Ok(vec!["/usr/bin/mbv".to_string(), "--pin".to_string()])
+        vec!["/usr/bin/mbv".to_string(), "--pin".to_string()]
     )]
     #[case::unpin_uses_panel_terminal(
         mbv_daemon::SwapDirection::Unpin,
         Some(vec!["wezterm".to_string(), "start".to_string(), "--".to_string()]),
         Some("ghostty"),
-        Ok(vec![
+        vec![
             "wezterm".to_string(),
             "start".to_string(),
             "--".to_string(),
             "/usr/bin/mbv".to_string(),
-        ])
+        ]
     )]
     #[case::unpin_falls_back_to_terminal_env(
         mbv_daemon::SwapDirection::Unpin,
         None,
         Some("ghostty"),
-        Ok(vec!["ghostty".to_string(), "-e".to_string(), "/usr/bin/mbv".to_string()])
-    )]
-    #[case::unpin_with_neither_set_names_both(
-        mbv_daemon::SwapDirection::Unpin,
-        None,
-        None,
-        Err("[panel] terminal".to_string())
-    )]
-    #[case::unpin_with_empty_terminal_env_counts_as_unset(
-        mbv_daemon::SwapDirection::Unpin,
-        None,
-        Some(""),
-        Err("TERMINAL".to_string())
+        vec!["ghostty".to_string(), "-e".to_string(), "/usr/bin/mbv".to_string()]
     )]
     fn swap_argv_resolves_the_replacement_client_command(
         #[case] direction: mbv_daemon::SwapDirection,
         #[case] panel_terminal: Option<Vec<String>>,
         #[case] terminal_env: Option<&str>,
-        #[case] expected: Result<Vec<String>, String>,
+        #[case] expected: Vec<String>,
     ) {
         let resolved = swap_argv(
             direction,
@@ -413,12 +398,24 @@ mod tests {
             panel_terminal.as_deref(),
             terminal_env,
         );
-        match (resolved, expected) {
-            (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
-            (Err(actual), Err(expected)) => {
-                assert!(actual.contains(&expected), "error must name the source");
-            }
-            (actual, expected) => panic!("mismatch: {actual:?} vs {expected:?}"),
-        }
+        assert_eq!(resolved, Ok(expected));
+    }
+
+    #[rstest]
+    #[case::neither_set_names_both(None, None, "[panel] terminal")]
+    #[case::empty_terminal_env_counts_as_unset(None, Some(""), "TERMINAL")]
+    fn swap_argv_without_a_terminal_names_the_missing_source(
+        #[case] panel_terminal: Option<Vec<String>>,
+        #[case] terminal_env: Option<&str>,
+        #[case] named: &str,
+    ) {
+        let error = swap_argv(
+            mbv_daemon::SwapDirection::Unpin,
+            OsStr::new("/usr/bin/mbv"),
+            panel_terminal.as_deref(),
+            terminal_env,
+        )
+        .expect_err("Unpin without a terminal must fail");
+        assert!(error.contains(named), "error must name the source");
     }
 }
