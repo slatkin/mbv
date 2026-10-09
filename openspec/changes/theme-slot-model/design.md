@@ -6,7 +6,7 @@ See proposal.md (Why). The current shape of `crates/mbv-theme`:
 
 - `palette.rs`: the private `Palette` enum, 19 hue-named variants, with `color()` holding the only
   `Color::Rgb` literals.
-- `lib.rs`: 55 `pub const ROLE: Color` constants and two `[Color; 3]` role sets
+- `lib.rs`: 57 `pub const ROLE: Color` constants (42 text/foreground roles, 15 fill roles) and two `[Color; 3]` role sets
   (`HERO_META_ROLES`, `HINT_PILL_FILLS`).
 - `surface.rs`, `surface_table.rs`, `surface_resolve.rs`: the closed `Surface` enum (25 rows)
   plus `Level`, `FocusSource`, a `soft` flag, `RESTING_DEVIATIONS` and a `debug_assert` in
@@ -104,8 +104,7 @@ pub(crate) fn active() -> &'static Theme { &Theme::DEFAULT }
 `Slot`, `Theme` and `active()` stay crate-private: no consumer needs them until a theming change
 adds selection, and that change decides set-once (`OnceLock`) versus live switching behind
 `active()` without touching any consumer. A `Theme` stores its colours in a fixed array indexed by
-`Slot as usize` or as named fields; either way `get` is the only accessor, so the spec's "no
-indexable table outside the theme" holds.
+`Slot as usize` or as named fields; either way `get` is the only accessor.
 
 Alternatives considered: a global `OnceLock<Theme>` now (rejected: nothing sets it yet, so it is
 speculative); passing `&Theme` through every painter (rejected: hundreds of signatures for no
@@ -129,7 +128,7 @@ Variants are the old constant names in `UpperCamelCase` (`TEXT_PRIMARY` -> `Text
 `palette::TEXT_MUTED` to `palette::Role::TextMuted.color()`. The enum is generated with an `ALL`
 list (as `declare_surfaces!` does today) so the generator iterates it.
 
-Roles that survive (40): every current constant except the fill roles listed in D5. Their slot is
+Roles that survive (42): every current constant except the fill roles listed in D5. Their slot is
 the slot of their current `Palette` variant via D1. `bar_role_fg` stays, taking and returning
 `Color`, with `SELECTED_ROW_FG` resolved through `Role::SelectedRowFg`.
 
@@ -145,7 +144,12 @@ role, and the constants cannot be iterated for the generator.
 pub enum Surface { ... }                         // still generated with ALL
 const fn slots(surface: Surface) -> (Slot, Slot) // (resting, focused); the one fill table
 pub fn surface_colors(surface: Surface, focused: bool) -> SurfaceColors  // signature unchanged
+pub(crate) fn surface_colors_in(theme: &Theme, surface: Surface, focused: bool) -> SurfaceColors
 ```
+
+`surface_colors` is `surface_colors_in(active(), ..)`, mirroring `Role::color` and
+`Role::color_in`, so the swap test (D7.3) resolves a surface against a test theme through the
+real resolver.
 
 A fixed row states the same slot twice. `Level`, `FocusSource`, `Row`, `soft`,
 `RESTING_DEVIATIONS`, the `debug_assert`, `Surface::level()` and the three row helper
@@ -200,12 +204,18 @@ stays so. A future theme author sees it in the table.
 | `HINT_PILL_FILLS` | `HintChip0..2` via `pub const HINT_CHIPS: [Surface; 3]` | `widgets.rs:627` |
 | `SURFACE_BACKDROP`, `SURFACE_CHROME`, `SURFACE_FOCUSED`, `SURFACE_RESTING`, `SURFACE_SIDEBAR`, `PILL_ROW_BG`, `PILL_BG`, `PILL_SELECTED_BG` | the slot directly in the Surface table | theme-internal only |
 
-`ZebraStripe` changes from a `Color` pair to a `Surface`: `zebra_bg()` returns
-`surface_colors(surface, self.palette_focused).fill`. `queue_row_zebra_stripe()` returns
-`Surface::QueueColumn`; the Workspace policy uses `Surface::WorkspaceStripe` in both focus states.
-That is equivalent because today's unfocused Workspace policy is built with
-`for_library_workspace(false)`, so its `palette_focused` is false and it resolves the resting
-`Bg1` either way.
+`ZebraStripe` is deleted: it is a hand-rolled surface pair. `WideMediaListPaintPolicy` stores
+`zebra: Option<Surface>`, `with_zebra` takes a `Surface`, and `zebra_bg()` returns
+`surface_colors(surface, self.palette_focused).fill`. Callers change with it in one task, so
+every commit builds:
+
+- `queue_row_zebra_stripe()` is deleted; `queue.rs` passes `Surface::QueueColumn`.
+- `panel_list.rs`'s `zebra_stripe()` helper is deleted; the `Wide` policy passes
+  `Surface::LibraryColumn` (the helper resolved exactly that surface's two fills).
+- `ZebraStripe::fixed` is deleted; both `WideWorkspace` branches pass
+  `Surface::WorkspaceStripe`. That is equivalent because today's unfocused Workspace policy is
+  built with `for_library_workspace(false)`, so its `palette_focused` is false and it resolves
+  the resting `Bg1` either way.
 
 The selection-bar foreground decision in `row.rs` drops the colour comparison: since every
 `selected_bg` is the selection bar, `selected_row_foreground` always returns
@@ -213,7 +223,21 @@ The selection-bar foreground decision in `row.rs` drops the colour comparison: s
 passed through `wide.rs`/`row.rs` keep their `Color` type; they come from
 `surface_colors(Surface::SelectedRow, false).fill`.
 
-Merges follow the spec's "one concept takes one identity". The rows a reviewer could argue
+Two inversions are not fills and stay as they are (spec "Inverted spans swap a role and a
+fill"). The indicator Chips and Powerline treatments (`indicators.rs` `chip`, `powerline`) fill
+with the indicator's status role (`IndicatorResolutionFg`, `IndicatorAudioFg`, `TextMetadata`,
+`TextMuted`) under `TextOnAccent` text; the other five treatments paint the same roles as text,
+so a chip surface would give one concept two identities. The pill shell's `◢`/`◤` edge glyphs
+(`widgets.rs` `push_pill_shell`) take the pill's surface fill as foreground. The queue band's
+`queue_indicator_spans` (`queue_band.rs:80`) keeps recognising a reverse-video span by
+`fg == TextOnAccent` with a fill set, converting the constant to `Role::TextOnAccent.color()`;
+this is the spec's one named colour-comparison exception. Carrying a chip identity through the
+projected `Vec<Span>` would change the projection type in three crates for no theming gain. The
+only misfire is a theme giving `OnAccent` the same RGB as an indicator role, where a Powerline
+arrow would take the next segment's colour: cosmetic.
+
+This list, with these two inversions, is closed. Merges follow the spec's "one concept takes
+one identity". The rows a reviewer could argue
 about: `TransportRow`, `ModalButton` and `PopupBorder` are new rows rather than reuse of
 `PlaybackPanel`, `PillChip` and `QueueColumn`, because they are different concepts that share a
 value today.
@@ -227,6 +251,13 @@ reports `resting`/`focused` hexes plus slot names. Role and surface `name`s beco
 `Debug` names. `uses` prose is still carried over by name, so `docs/palette.json`'s existing
 prose keys are renamed once by hand in the same task (constant case to `UpperCamelCase`), and the
 prose of merged identities is combined.
+
+`docs/palette.html` does not read `palette.json`: it embeds a hand-pasted `DATA` snapshot
+(line 49, stale since 2026-09-19) and a `ROLE_REFS` count map keyed by constant name, because a
+page opened from `file://` cannot `fetch` a sibling file. It stays a snapshot: the task pastes
+the regenerated `palette.json` in as `DATA`, renames `ROLE_REFS` keys to the `Role` names
+(dropping the removed fill roles), and switches the JS to the renamed keys (`variants` ->
+`slots`, `variant` -> `slot`, `HINT_PILL_FILLS` -> `HINT_CHIPS`).
 
 ### D7. Proving no colour changed
 
@@ -247,11 +278,13 @@ There is no screenshot gate. The evidence is:
 
 - [The workspace does not build mid-migration] -> Task 1 keeps the old `pub const` role names
   as transitional aliases (`pub const TEXT_MUTED: Color = Theme::DEFAULT.get(Slot::FgMuted)`)
-  so each crate migrates with a green build; the last task deletes them.
+  so each crate migrates with a green build; the last task deletes them. Public API changes
+  that cross a crate (`ZebraStripe`) land in the same task as their callers.
 - [Mis-mapping `Iris`/`Green` during the rename] -> Slots are mapped from D1's hex column; the
   palette.json hex comparison (D7.1) catches any slip.
 - [A merged identity hides a deliberate difference] -> Only rows with identical resolved colours
-  in both focus states merge (D5); the merge list is closed in this design.
+  in both focus states merge (D5); the merge list, with its two named inversions, is closed in
+  this design.
 - [`.color()` resolves per call instead of being a const] -> One match and one array read per
   call, negligible against painting.
 - [Call-site verbosity: `palette::Role::TextMuted.color()`] -> Accepted; consumers may

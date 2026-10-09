@@ -21,12 +21,15 @@ reshapes the model so a theme is one defined slot set. No colour changes.
 - Roles and surfaces resolve through the active theme at paint time. `active()` returns
   `&Theme::DEFAULT`; selecting another theme is out of scope.
 - **BREAKING (internal API)**: the 57 `pub const ROLE: Color` constants become a closed
-  `Role` enum resolved with `.color()`. The two role arrays (`HERO_META_ROLES`,
+  `Role` enum of 42 variants resolved with `.color()`; the other 15 are fill roles that
+  become surface rows. The two role arrays (`HERO_META_ROLES`,
   `HINT_PILL_FILLS`) become functions or slices of identities. About 420 references
   across `mbv-render`, `mbv-components` and the `mbv` binary change mechanically.
 - One authority per kind: every background fill is a `Surface`, and every foreground
   (text, indicator, scrollbar, underline) is a `Role`. Background-role uses move into the
-  Surface table.
+  Surface table. Two inversions stay as stated exceptions: the reverse-video indicator
+  treatments (Chips, Powerline) fill with the indicator's own role under on-accent text, and
+  pill edge glyphs take their pill's surface fill as foreground.
 - The Surface table becomes one `(resting, focused)` slot pair per surface. `Level`,
   `FocusSource`, the `soft` flag, `RESTING_DEVIATIONS` and the resolver's `debug_assert`
   are deleted.
@@ -47,9 +50,13 @@ None.
 ### Modified Capabilities
 
 - `ui-design-system`: the closed palette requirement becomes a closed slot set plus a
-  theme value, with roles and surfaces as fixed mappings over slots.
-- `ui-design-language`: the surface table drops nesting levels; fills resolve only
-  through surfaces and foregrounds only through roles; one concept takes one identity.
+  theme value, with roles and surfaces as fixed mappings over slots; surface rows join
+  roles as the public styling API ("Palette primitives are not a public API", "Screen
+  modules do not paint").
+- `ui-design-language`: colours come from a role or a surface row ("Colour roles have one
+  definition"); the surface table drops nesting levels; fills resolve only through
+  surfaces and foregrounds only through roles, apart from two named inversions; one
+  concept takes one identity.
 
 ## Impact
 
