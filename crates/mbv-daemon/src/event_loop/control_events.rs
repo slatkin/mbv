@@ -94,6 +94,17 @@ impl DaemonLoop {
             }
             return EventOutcome::CONTINUE;
         }
+        if let CtrlCmd::RunOwnerAction(action) = cmd {
+            // Owner actions run through the one owner-action handler
+            // (tray-pin-swap design D7); the reply goes to this connection
+            // only.
+            let result = super::owner_action::run(self, action);
+            match result {
+                Ok(()) => send_to(reply_tx, &CtrlEvent::OwnerActionAccepted),
+                Err(reason) => send_to(reply_tx, &CtrlEvent::OwnerActionRefused { reason }),
+            }
+            return EventOutcome::CONTINUE;
+        }
         let persist_after_command = cmd.mutates_owner_queue();
         handle_ctrl_for_role(
             cmd,

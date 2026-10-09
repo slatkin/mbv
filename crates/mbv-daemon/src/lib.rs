@@ -49,7 +49,7 @@ pub(crate) use run::{
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
 };
 mod event_loop;
-pub(crate) use event_loop::{DaemonLoop, LoopFlow, PinSwapState, TrayState};
+pub(crate) use event_loop::{DaemonLoop, LoopFlow, PendingSwapToken, PinSwapState, TrayState};
 mod audiobookshelf;
 pub(crate) use audiobookshelf::{
     apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,

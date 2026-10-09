@@ -38,6 +38,22 @@ pub(crate) struct CtrlClients {
     /// the Tray label can read "pinned Client attached" without touching the
     /// registry. Refreshed on connect and disconnect (design D3).
     pinned_client_attached: Arc<AtomicBool>,
+    /// The one-shot admission token of a Pin swap waiting for its
+    /// replacement (tray-pin-swap design D4), shared with the
+    /// [`PinSwapState`](crate::event_loop::PinSwapState) machine, which
+    /// publishes and clears it; the admission path consumes it.
+    pending_swap: Arc<crate::PendingSwapToken>,
+}
+
+/// Which role a ctrl connection plays, classified from its Hello
+/// (tray-pin-swap design D7). `Client` is a full TUI; the two admin roles
+/// are restricted single-command connections that keep the admin admission
+/// and registry rules — never a driver, never held, never a Pin target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CtrlConnectionRole {
+    Client,
+    ServiceSetupAdmin,
+    OwnerAction,
 }
 
 /// Transport identity for a ctrl client connection.
@@ -66,7 +82,7 @@ struct CtrlClient {
     /// Capabilities advertised by this peer at Hello.
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
-    admin_only: bool,
+    role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
 
@@ -90,12 +106,21 @@ impl CtrlClients {
     pub(crate) fn new(
         merged_tx: mpsc::Sender<crate::DaemonEvent>,
         pinned_client_attached: Arc<AtomicBool>,
+        pending_swap: Arc<crate::PendingSwapToken>,
     ) -> Self {
         Self {
             merged_tx: Some(merged_tx),
             pinned_client_attached,
+            pending_swap,
             ..Self::default()
         }
+    }
+
+    /// The pending Pin-swap admission token (design D4). The registry only
+    /// carries it: the machine publishes and clears it, the admission path
+    /// consumes it.
+    pub(crate) fn pending_swap(&self) -> &crate::PendingSwapToken {
+        &self.pending_swap
     }
 
     fn notify_last_client_gone(&self, was_nonempty: bool) {
@@ -118,65 +143,37 @@ impl CtrlClients {
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
-    /// authority returns to `Ctrl`.
-    pub(crate) fn connect(
+    /// authority returns to `Ctrl`. A non-Client role keeps the admin
+    /// registry rules (design D7): never a driver, never held, never a Pin
+    /// target.
+    pub(crate) fn connect_with_role(
         &mut self,
         tx: CtrlSender,
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
         swap_surface: Option<SwapSurface>,
-    ) -> CtrlClientId {
-        self.connect_with_kind(
-            tx,
-            transport,
-            audiobookshelf,
-            supports_owner_queue_load,
-            swap_surface,
-            false,
-        )
-    }
-
-    pub(crate) fn connect_admin(
-        &mut self,
-        tx: CtrlSender,
-        transport: CtrlTransport,
-        audiobookshelf: CtrlAudiobookshelfCapabilities,
-        supports_owner_queue_load: bool,
-        swap_surface: Option<SwapSurface>,
-    ) -> CtrlClientId {
-        self.connect_with_kind(
-            tx,
-            transport,
-            audiobookshelf,
-            supports_owner_queue_load,
-            swap_surface,
-            true,
-        )
-    }
-
-    fn connect_with_kind(
-        &mut self,
-        tx: CtrlSender,
-        transport: CtrlTransport,
-        audiobookshelf: CtrlAudiobookshelfCapabilities,
-        supports_owner_queue_load: bool,
-        swap_surface: Option<SwapSurface>,
-        admin_only: bool,
+        role: CtrlConnectionRole,
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
-        self.held_client |= !admin_only;
+        self.held_client |= role == CtrlConnectionRole::Client;
+        // A non-Client role is never a Pin target (design D7), whatever its
+        // Hello advertised.
+        let swap_surface = match role {
+            CtrlConnectionRole::Client => swap_surface,
+            CtrlConnectionRole::ServiceSetupAdmin | CtrlConnectionRole::OwnerAction => None,
+        };
         self.connection.push(CtrlClient {
             id,
             tx,
             transport,
             audiobookshelf,
             supports_owner_queue_load,
-            admin_only,
+            role,
             swap_surface,
         });
-        if !admin_only && self.authority == AuthorityHolder::None {
+        if role == CtrlConnectionRole::Client && self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
         self.refresh_pinned_client_attached();
@@ -267,7 +264,9 @@ impl CtrlClients {
     }
 
     pub(crate) fn has_driver(&self) -> bool {
-        self.connection.iter().any(|client| !client.admin_only)
+        self.connection
+            .iter()
+            .any(|client| client.role == CtrlConnectionRole::Client)
     }
 
     /// Broadcast `json` to all connected ctrl clients. Removes any client
@@ -403,7 +402,11 @@ mod tests {
 
     fn clients() -> CtrlClients {
         let (tx, _rx) = mpsc::channel();
-        CtrlClients::new(tx, Arc::new(AtomicBool::new(false)))
+        CtrlClients::new(
+            tx,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(crate::PendingSwapToken::default()),
+        )
     }
 
     fn connect_surface(
@@ -412,12 +415,13 @@ mod tests {
         surface: Option<SwapSurface>,
     ) -> CtrlClientId {
         let (tx, _rx) = mpsc::channel();
-        clients.connect(
+        clients.connect_with_role(
             tx,
             transport,
             CtrlAudiobookshelfCapabilities::default(),
             false,
             surface,
+            CtrlConnectionRole::Client,
         )
     }
 
@@ -471,6 +475,35 @@ mod tests {
                 .pinned_client_attached
                 .load(std::sync::atomic::Ordering::SeqCst)
         );
+    }
+
+    /// Contract: spec owner-actions "An Owner action request is not a
+    /// Client" / design D7 — the two admin roles keep the admin registry
+    /// rules: never a driver, never the authority holder.
+    #[test]
+    fn non_client_roles_are_never_drivers_or_authority_holders() {
+        let mut clients = clients();
+        let (tx, _rx) = mpsc::channel();
+        clients.connect_with_role(
+            tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            None,
+            CtrlConnectionRole::OwnerAction,
+        );
+        let (tx, _rx) = mpsc::channel();
+        clients.connect_with_role(
+            tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            None,
+            CtrlConnectionRole::ServiceSetupAdmin,
+        );
+
+        assert!(!clients.has_driver());
+        assert_eq!(clients.authority, AuthorityHolder::None);
     }
 
     /// Contract: task 3.1 — the shared flag is set while a pinned Client is

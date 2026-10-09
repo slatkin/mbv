@@ -43,6 +43,7 @@ enum AdmissionShutdown {
 enum AdmissionKind {
     Player,
     ServiceSetupAdmin,
+    OwnerAction,
 }
 
 fn admission_result(
@@ -52,6 +53,20 @@ fn admission_result(
     shutdown: AdmissionShutdown,
     kind: AdmissionKind,
 ) -> CtrlEvent {
+    admission_session(role, stay_alive, clients_state, shutdown, kind).0
+}
+
+/// [`admission_result`] plus the registry's `has_driver` after the exchange.
+/// The first event is written before the session registers the connection,
+/// but `has_driver` only ever counts the pre-existing attached Client here,
+/// so the value is stable whatever the exchange's timing.
+fn admission_session(
+    role: DaemonRole,
+    stay_alive: bool,
+    clients_state: AdmissionClients,
+    shutdown: AdmissionShutdown,
+    kind: AdmissionKind,
+) -> (CtrlEvent, bool) {
     let (client, peer) = UnixStream::pair().unwrap();
     client
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
@@ -60,12 +75,13 @@ fn admission_result(
     let clients = std::sync::Arc::new(std::sync::Mutex::new(test_clients(merged_tx.clone())));
     if matches!(clients_state, AdmissionClients::PlayerAttached) {
         let (existing_tx, _existing_rx) = std::sync::mpsc::channel();
-        clients.lock().unwrap().connect(
+        clients.lock().unwrap().connect_with_role(
             existing_tx,
             CtrlTransport::Local,
             mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
             false,
             None,
+            crate::ctrl::CtrlConnectionRole::Client,
         );
     }
     clients.lock().unwrap().shutting_down = matches!(shutdown, AdmissionShutdown::ShuttingDown);
@@ -74,7 +90,7 @@ fn admission_result(
         SocketStream::Unix(peer),
         CtrlTransport::Local,
         merged_tx,
-        clients,
+        std::sync::Arc::clone(&clients),
         None,
         player.status,
         shared_queue_state(),
@@ -90,17 +106,27 @@ fn admission_result(
         "{}",
         serde_json::to_string(&CtrlCmd::Hello({
             let mut hello = CtrlHello::current();
-            if matches!(kind, AdmissionKind::ServiceSetupAdmin) {
-                hello
-                    .capabilities
-                    .push(mbv_ctrl::CTRL_CAP_SERVICE_SETUP_ADMIN.to_string());
+            match kind {
+                AdmissionKind::ServiceSetupAdmin => {
+                    hello
+                        .capabilities
+                        .push(mbv_ctrl::CTRL_CAP_SERVICE_SETUP_ADMIN.to_string());
+                }
+                AdmissionKind::OwnerAction => {
+                    hello
+                        .capabilities
+                        .push(mbv_ctrl::CTRL_CAP_OWNER_ACTION.to_string());
+                }
+                AdmissionKind::Player => {}
             }
             hello
         }))
         .unwrap()
     )
     .unwrap();
-    read_ctrl_event(&mut reader)
+    let event = read_ctrl_event(&mut reader);
+    let driver = clients.lock().unwrap().has_driver();
+    (event, driver)
 }
 
 fn read_ctrl_event(reader: &mut BufReader<UnixStream>) -> CtrlEvent {
@@ -167,6 +193,22 @@ fn service_setup_admin_connection_is_admitted_while_local_owner_is_exclusive() {
         ),
         CtrlEvent::UnifiedQueueState(_)
     ));
+}
+
+/// Contract: spec owner-actions "Stay-alive off with a Client attached" —
+/// an Owner action request is not a Client: it is admitted while the
+/// exclusive owner is attached, and the attached Client stays the driver.
+#[test]
+fn owner_action_connection_is_admitted_while_stay_alive_is_off_and_leaves_has_driver_unchanged() {
+    let (event, driver) = admission_session(
+        DaemonRole::Local,
+        false,
+        AdmissionClients::PlayerAttached,
+        AdmissionShutdown::Running,
+        AdmissionKind::OwnerAction,
+    );
+    assert!(matches!(event, CtrlEvent::UnifiedQueueState(_)));
+    assert!(driver, "the attached Client is still the driver");
 }
 
 #[test]

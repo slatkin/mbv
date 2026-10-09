@@ -66,7 +66,7 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(
+    let id = clients.connect_with_role(
         tx,
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities {
@@ -77,6 +77,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
         },
         true,
         None,
+        crate::ctrl::CtrlConnectionRole::Client,
     );
     (id, rx)
 }
@@ -87,6 +88,7 @@ pub fn test_clients(merged_tx: mpsc::Sender<crate::DaemonEvent>) -> CtrlClients 
     CtrlClients::new(
         merged_tx,
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(crate::PendingSwapToken::default()),
     )
 }
 

@@ -436,10 +436,11 @@ fn dispatch_ctrl_command(
         CtrlCmd::SwapPrepared => {
             tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
         }
-        // Owner actions run through the owner-action handler (tray-pin-swap
-        // task 3.5); an `owner-action` connection is not admitted yet.
+        // Owner actions run through the event-loop owner-action handler
+        // (tray-pin-swap task 3.5); this arm only covers direct
+        // `handle_ctrl_for_role` callers.
         CtrlCmd::RunOwnerAction(_) => {
-            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction (owner-action connections not admitted yet)");
+            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
         }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,

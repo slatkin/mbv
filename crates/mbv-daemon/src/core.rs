@@ -91,6 +91,13 @@ pub(super) enum DaemonEvent {
         token: String,
         success: bool,
     },
+    /// The ctrl admission path consumed the pending swap token: the
+    /// replacement Client attached (tray-pin-swap design D4). The loop tells
+    /// the machine, which sends `SwapQuit` to the replaced target if it is
+    /// still attached and returns to `Idle`.
+    PinSwapAdmitted {
+        token: String,
+    },
     LastClientGone,
     Shutdown,
 }

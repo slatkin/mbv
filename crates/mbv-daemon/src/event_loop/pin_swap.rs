@@ -12,6 +12,7 @@ use crate::ctrl::{ClientRegistry, CtrlClientId, SwapSurface};
 use mbv_ctrl::CtrlEvent;
 use std::process::Command;
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// A swap must complete — the replacement Client attached — within this
@@ -26,6 +27,40 @@ const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 /// The reason a second start returns while a swap is in flight (spec
 /// pin-swap "Second click during a swap").
 const BUSY_MESSAGE: &str = "a panel swap is already running";
+
+/// The one-shot admission token of the swap currently `Awaiting` its
+/// replacement (tray-pin-swap design D4). The machine publishes it when it
+/// spawns the replacement and clears it whenever the swap leaves `Awaiting`;
+/// the ctrl admission path consumes it when a Hello presents it, so it works
+/// for one connection only. Shared behind an `Arc` because admission runs on
+/// the per-connection ctrl threads, not on the event loop.
+#[derive(Default)]
+pub(crate) struct PendingSwapToken {
+    token: Mutex<Option<String>>,
+}
+
+impl PendingSwapToken {
+    pub(crate) fn publish(&self, token: String) {
+        *self.token.lock().unwrap() = Some(token);
+    }
+
+    /// Consumes the pending token when `candidate` matches it. `Some` means
+    /// this Hello is the replacement Client attaching; the token is spent —
+    /// a second presenting Hello finds nothing pending.
+    pub(crate) fn take_matching(&self, candidate: Option<&str>) -> Option<String> {
+        let mut pending = self.token.lock().unwrap();
+        let matched = match (&*pending, candidate) {
+            (Some(pending), Some(candidate)) if pending == candidate => candidate.to_string(),
+            _ => return None,
+        };
+        *pending = None;
+        Some(matched)
+    }
+
+    fn clear(&self) {
+        *self.token.lock().unwrap() = None;
+    }
+}
 
 /// One swap in flight, from the click to the replacement Client's attach or
 /// the abandon (design D3).
@@ -54,6 +89,8 @@ pub(crate) struct PinSwapState {
     swap_command: SwapCommandHook,
     notify: NotifyHook,
     merged_tx: mpsc::Sender<DaemonEvent>,
+    /// Shared with the ctrl admission path (design D4).
+    pending_token: Arc<PendingSwapToken>,
 }
 
 impl PinSwapState {
@@ -61,12 +98,14 @@ impl PinSwapState {
         swap_command: SwapCommandHook,
         notify: NotifyHook,
         merged_tx: mpsc::Sender<DaemonEvent>,
+        pending_token: Arc<PendingSwapToken>,
     ) -> Self {
         Self {
             phase: Phase::Idle,
             swap_command,
             notify,
             merged_tx,
+            pending_token,
         }
     }
 
@@ -149,6 +188,7 @@ impl PinSwapState {
             let reason = "panel swap abandoned: the client being replaced left";
             tracing::warn!(name: "daemon.pin_swap.target_left", target: "pin_swap", client = %client_id, reason);
             (self.notify)(reason);
+            self.pending_token.clear();
             self.phase = Phase::Idle;
         }
     }
@@ -166,6 +206,7 @@ impl PinSwapState {
         let reason = "panel swap abandoned: the new client exited before attaching";
         tracing::warn!(name: "daemon.pin_swap.child_failed", target: "pin_swap", reason);
         (self.notify)(reason);
+        self.pending_token.clear();
         self.phase = Phase::Idle;
     }
 
@@ -182,7 +223,34 @@ impl PinSwapState {
         let reason = "panel swap timed out; the old client stays attached";
         tracing::warn!(name: "daemon.pin_swap.timeout", target: "pin_swap", reason);
         (self.notify)(reason);
+        self.pending_token.clear();
         self.phase = Phase::Idle;
+    }
+
+    /// The ctrl admission path consumed the pending token: the replacement
+    /// Client attached (tray-pin-swap design D4). The swap completes — the
+    /// replaced target is told to quit if it is still attached, and the
+    /// machine returns to `Idle`. Any other phase, or a token that does not
+    /// match the phase's, is ignored.
+    pub(crate) fn on_swap_admitted(&mut self, token: &str, ctrl_clients: &ClientRegistry) {
+        let phase = std::mem::replace(&mut self.phase, Phase::Idle);
+        self.pending_token.clear();
+        match phase {
+            Phase::Awaiting {
+                target,
+                token: pending,
+                ..
+            } if pending == token => {
+                let clients = ctrl_clients.lock().unwrap();
+                if let Some(target) = target
+                    && clients.has_client(target)
+                {
+                    clients.send_to_client(target, &CtrlEvent::SwapQuit);
+                    tracing::info!(name: "daemon.pin_swap.replaced", target: "pin_swap", client = %target, "replacement client attached; SwapQuit sent to the replaced client");
+                }
+            }
+            other => self.phase = other,
+        }
     }
 
     /// Spawns the replacement with the one-shot token in its environment and
@@ -208,6 +276,7 @@ impl PinSwapState {
                     });
                 });
                 tracing::info!(name: "daemon.pin_swap.spawned", target: "pin_swap", "panel swap replacement client spawned");
+                self.pending_token.publish(token.clone());
                 self.phase = Phase::Awaiting {
                     target,
                     token,
@@ -228,9 +297,8 @@ impl PinSwapState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ctrl::{CtrlClients, CtrlOutbound, CtrlTransport};
+    use crate::ctrl::{CtrlClients, CtrlConnectionRole, CtrlOutbound, CtrlTransport};
     use mbv_ctrl::CtrlAudiobookshelfCapabilities;
-    use std::sync::{Arc, Mutex};
 
     type NotifyCalls = Arc<Mutex<Vec<String>>>;
 
@@ -254,6 +322,10 @@ mod tests {
         (hook, calls)
     }
 
+    fn pending_token() -> Arc<PendingSwapToken> {
+        Arc::new(PendingSwapToken::default())
+    }
+
     fn notified(calls: &NotifyCalls) -> Vec<String> {
         calls.lock().unwrap().clone()
     }
@@ -265,25 +337,18 @@ mod tests {
         let clients = Arc::new(Mutex::new(CtrlClients::new(
             merged_tx,
             Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Arc::new(PendingSwapToken::default()),
         )));
         let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();
-        clients.lock().unwrap().connect(
+        clients.lock().unwrap().connect_with_role(
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
             false,
             Some(SwapSurface::Terminal),
+            CtrlConnectionRole::Client,
         );
         (clients, client_rx)
-    }
-
-    fn state(swap_command: SwapCommandHook) -> (PinSwapState, mpsc::Receiver<DaemonEvent>) {
-        let (notify, _calls) = notify_recorder();
-        let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
-        (
-            PinSwapState::new(swap_command, notify, merged_tx),
-            merged_rx,
-        )
     }
 
     /// The first event the Client received, decoded back to a `CtrlEvent`.
@@ -303,7 +368,7 @@ mod tests {
         let (clients, client_rx) = registry_with_terminal_client();
         let (notify, calls) = notify_recorder();
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx);
+        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx, pending_token());
         let start = Instant::now();
 
         swap.start(start, &clients).unwrap();
@@ -322,7 +387,7 @@ mod tests {
         assert!(matches!(swap.phase, Phase::Idle));
         // Not busy any more: a later click starts a swap instead of being
         // refused.
-        assert!(swap.start(start + SWAP_DEADLINE, &clients).is_ok());
+        swap.start(start + SWAP_DEADLINE, &clients).unwrap();
     }
 
     /// Contract: spec pin-swap "Second click during a swap" — a request while
@@ -332,7 +397,7 @@ mod tests {
         let (clients, client_rx) = registry_with_terminal_client();
         let (notify, calls) = notify_recorder();
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx);
+        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx, pending_token());
         let now = Instant::now();
 
         swap.start(now, &clients).unwrap();
@@ -345,7 +410,7 @@ mod tests {
             Some(CtrlEvent::SwapPrepare)
         ));
         assert!(client_rx.try_recv().is_err());
-        assert!(notified(&calls).is_empty());
+        assert_eq!(notified(&calls), Vec::<String>::new());
         assert!(matches!(swap.phase, Phase::Preparing { .. }));
     }
 
@@ -357,7 +422,8 @@ mod tests {
         let (clients, client_rx) = registry_with_terminal_client();
         let (notify, calls) = notify_recorder();
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let mut swap = PinSwapState::new(unresolvable_command(), notify, merged_tx);
+        let mut swap =
+            PinSwapState::new(unresolvable_command(), notify, merged_tx, pending_token());
         let now = Instant::now();
 
         let result = swap.start(now, &clients);
@@ -369,5 +435,35 @@ mod tests {
         );
         assert!(client_rx.try_recv().is_err());
         assert!(matches!(swap.phase, Phase::Idle));
+    }
+
+    /// Contract: tray-pin-swap design D4 / task 3.4 — when the replacement
+    /// Client attaches (the admission path consumed the pending token), the
+    /// replaced target is told to quit and the machine returns to `Idle`, so
+    /// a later click can start a new swap.
+    #[test]
+    fn swap_admitted_sends_swap_quit_to_the_target_and_returns_to_idle() {
+        let (clients, client_rx) = registry_with_terminal_client();
+        let (notify, calls) = notify_recorder();
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx, pending_token());
+        let target = clients
+            .lock()
+            .unwrap()
+            .newest_swap_client(SwapSurface::Terminal);
+        swap.phase = Phase::Awaiting {
+            target,
+            token: "token-1".to_string(),
+            deadline: Instant::now(),
+        };
+
+        swap.on_swap_admitted("token-1", &clients);
+
+        assert!(matches!(
+            last_client_event(&client_rx),
+            Some(CtrlEvent::SwapQuit)
+        ));
+        assert!(matches!(swap.phase, Phase::Idle));
+        assert_eq!(notified(&calls), Vec::<String>::new());
     }
 }

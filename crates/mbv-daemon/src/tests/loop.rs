@@ -107,6 +107,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         Box::new(|_direction| Err("no swap command in tests".to_string())),
         Box::new(|_message| ()),
         merged_tx.clone(),
+        std::sync::Arc::new(crate::PendingSwapToken::default()),
     );
     let event_loop = DaemonLoop {
         owner: owner_with(items, active),
@@ -115,6 +116,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(
             merged_tx.clone(),
             Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Arc::new(crate::PendingSwapToken::default()),
         ))),
         client: Arc::new(Mutex::new(EmbyClient::new(Config::default()))),
         emby_runtime: None,
