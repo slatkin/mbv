@@ -196,6 +196,16 @@ impl EmbyLibraryContent {
         }
     }
 
+    /// The painted items for resolved row targets, in target order, dropping
+    /// a target that resolves to nothing (design D7: the list's menu targets
+    /// come from the rows the list paints, not a shell-side re-derivation).
+    fn items_for_targets(&self, targets: &[String]) -> Vec<EmbyItem> {
+        targets
+            .iter()
+            .filter_map(|target| self.items().iter().find(|item| &item.id == target).cloned())
+            .collect()
+    }
+
     /// Replace the shell-owned position-free content snapshot: the shared
     /// owner's `set_content` preserves the selected target and locally
     /// clamps otherwise (design D3); position re-seeds only through the

@@ -23,7 +23,6 @@ pub struct ContextActionSnapshot<T> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextMenuTargets {
     Home(Vec<HomeRowTarget>),
-    Browser(Vec<String>),
     Emby(Vec<EmbyItem>),
     Queue(Vec<QueueSlotId>),
     Feeds(Vec<FeedEntry>),

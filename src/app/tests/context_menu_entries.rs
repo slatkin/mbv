@@ -1,9 +1,11 @@
 //! The standard action set for Emby context menus (context-menu spec,
 //! "Library lists share one standard action set", the Played label, and the
 //! music rule). Standard-media-context-menus tasks 2.1-2.3.
+use super::podcast::add_emby_movie_library;
 use super::*;
 use crate::app::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
 use mbv_ui_model::overlay::OverlayRequest;
+use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
 
 fn emby_library_app() -> App {
@@ -97,4 +99,36 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
         labels.iter().all(|label| !label.starts_with("Mark ")),
         "music in the selection must drop both mark entries: {labels:?}"
     );
+}
+
+/// Context-menu spec, "Every painted library row resolves its own menu"
+/// (standard-media-context-menus task 3.3, design D7): a `RowContextMenu`
+/// whose Emby item is absent from `nav_stack.last().items` — a homevideos
+/// feed row or a Latest row — still opens its menu, because the component
+/// already resolved the painted item and the shell must not gate the menu
+/// on the nav-level lookup.
+#[test]
+fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    add_emby_movie_library(&mut app);
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+
+    let mut latest_row = make_item("Latest row", "Movie");
+    latest_row.id = "latest-row".into();
+    let mut model = Model::new(app);
+    model.handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![latest_row]),
+            None,
+        ))),
+        &mut false,
+        &mut false,
+    );
+
+    assert!(matches!(
+        model.app.pending_overlay,
+        Some(OverlayRequest::ContextMenu(_))
+    ));
 }

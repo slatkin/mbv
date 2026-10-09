@@ -10,16 +10,6 @@ use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use std::time::Instant;
 
-fn matching_context_items(
-    items: &[mbv_emby_model::EmbyItem],
-    targets: &[String],
-) -> Vec<mbv_emby_model::EmbyItem> {
-    targets
-        .iter()
-        .filter_map(|target| items.iter().find(|item| item.id == *target).cloned())
-        .collect()
-}
-
 impl Model {
     pub(crate) fn handle_terminal_message(
         &mut self,
@@ -568,32 +558,6 @@ impl Model {
                     );
                 } else if let Some(item) = items.pop() {
                     self.open_emby_context_item(item, anchor);
-                }
-            }
-            mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    let items = self
-                        .app
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .map(|level| matching_context_items(&level.items, &targets))
-                        .unwrap_or_default();
-                    if items.len() > 1 {
-                        let capabilities = items
-                            .iter()
-                            .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
-                            .collect();
-                        self.app.open_context_menu_for_selection(
-                            &items,
-                            anchor,
-                            mbv_ui_model::settings::PanelFocus::Library,
-                            capabilities,
-                            Vec::new(),
-                        );
-                    } else if let Some(item) = items.into_iter().next() {
-                        self.open_emby_context_item(item, anchor);
-                    }
                 }
             }
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {

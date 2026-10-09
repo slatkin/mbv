@@ -12,6 +12,15 @@ use mbv_config::{
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_model::sort_filter::{LetterFilter, LetterFilterKind};
+use mbv_ui_msg::{Msg, ShellRequest};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+
+fn key(code: Key) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    }
+}
 
 fn push_with_letters() -> BrowserOwnerPush {
     let mut item = make_item("Item", "Movie");
@@ -107,5 +116,36 @@ fn restore_applies_only_a_latest_selector() {
             key: EmbySelectorKey::Letter(EmbyLetterBucket::from_index(0).expect("bucket 0")),
         }))),
         None
+    );
+}
+
+/// Context-menu spec, "Every painted library row resolves its own menu"
+/// (standard-media-context-menus task 3.3, design D7): a homevideos
+/// feed-group row's menu targets the video the row paints, though the nav
+/// level holds only the channel folders.
+#[test]
+fn feed_group_video_row_menu_key_emits_the_painted_item() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::HomeVideos);
+    let mut video = make_item("Video", "Movie");
+    video.id = "video-a".into();
+    owner.set_content(BrowserOwnerPush {
+        items: vec![video.clone()],
+        latest_items: Vec::new(),
+        total_count: 1,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::FeedGroups,
+        feed_groups: vec!["Group A".into()],
+        feed_group_ids: vec!["group-a".into()],
+        feed_group_cursor: 0,
+    });
+
+    assert_eq!(
+        owner.handle_key(&key(Key::Char('.'))),
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![video]),
+            None,
+        ))))
     );
 }
