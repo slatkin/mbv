@@ -1,5 +1,6 @@
 //! Ctrl transport registry shared by the daemon event-loop modules.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -33,6 +34,10 @@ pub(crate) struct CtrlClients {
     merged_tx: Option<mpsc::Sender<crate::DaemonEvent>>,
     pub(crate) shutting_down: bool,
     pub(crate) authority: AuthorityHolder,
+    /// Shared with the [`DaemonPlayerHandle`](crate::DaemonPlayerHandle) so
+    /// the Tray label can read "pinned Client attached" without touching the
+    /// registry. Refreshed on connect and disconnect (design D3).
+    pinned_client_attached: Arc<AtomicBool>,
 }
 
 /// Transport identity for a ctrl client connection.
@@ -44,6 +49,16 @@ pub enum CtrlTransport {
     Tcp,
 }
 
+/// Which swap-capable surface a ctrl client runs on, derived at Hello from
+/// the `pin-swap` and `pinned-surface` capabilities (tray-pin-swap design
+/// D2). A client without `pin-swap` has no swap surface: it is never a swap
+/// target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SwapSurface {
+    Terminal,
+    Pinned,
+}
+
 struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
@@ -52,6 +67,7 @@ struct CtrlClient {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
     admin_only: bool,
+    swap_surface: Option<SwapSurface>,
 }
 
 pub(crate) type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -71,9 +87,13 @@ pub(crate) fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
 }
 
 impl CtrlClients {
-    pub(crate) fn new(merged_tx: mpsc::Sender<crate::DaemonEvent>) -> Self {
+    pub(crate) fn new(
+        merged_tx: mpsc::Sender<crate::DaemonEvent>,
+        pinned_client_attached: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             merged_tx: Some(merged_tx),
+            pinned_client_attached,
             ..Self::default()
         }
     }
@@ -92,6 +112,7 @@ impl CtrlClients {
         let was_nonempty = !self.connection.is_empty();
         self.connection.retain(keep);
         self.notify_last_client_gone(was_nonempty);
+        self.refresh_pinned_client_attached();
     }
 
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
@@ -104,12 +125,14 @@ impl CtrlClients {
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
+        swap_surface: Option<SwapSurface>,
     ) -> CtrlClientId {
         self.connect_with_kind(
             tx,
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+            swap_surface,
             false,
         )
     }
@@ -120,12 +143,14 @@ impl CtrlClients {
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
+        swap_surface: Option<SwapSurface>,
     ) -> CtrlClientId {
         self.connect_with_kind(
             tx,
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+            swap_surface,
             true,
         )
     }
@@ -136,6 +161,7 @@ impl CtrlClients {
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
+        swap_surface: Option<SwapSurface>,
         admin_only: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
@@ -148,11 +174,40 @@ impl CtrlClients {
             audiobookshelf,
             supports_owner_queue_load,
             admin_only,
+            swap_surface,
         });
         if !admin_only && self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
+        self.refresh_pinned_client_attached();
         id
+    }
+
+    /// Recomputes the shared "pinned Client attached" flag from the current
+    /// connection set. Called on connect and on every disconnect path
+    /// (`remove` and dropped-peer pruning both funnel through
+    /// `retain_clients`).
+    fn refresh_pinned_client_attached(&mut self) {
+        let attached = self.newest_swap_client(SwapSurface::Pinned).is_some();
+        self.pinned_client_attached
+            .store(attached, Ordering::SeqCst);
+    }
+
+    /// The newest local-transport Client whose swap surface is `surface`
+    /// (design D3): with [`SwapSurface::Pinned`] this is the pinned Client
+    /// the Unpin direction replaces; with [`SwapSurface::Terminal`] it is
+    /// the last-connected unpinned Client the Pin direction replaces (spec
+    /// pin-swap "Pin replaces the newest unpinned Client"). Only
+    /// local-transport Clients count (spec pin-swap "The Tray offers one Pin
+    /// swap action").
+    pub(crate) fn newest_swap_client(&self, surface: SwapSurface) -> Option<CtrlClientId> {
+        self.connection
+            .iter()
+            .rev()
+            .find(|client| {
+                client.transport == CtrlTransport::Local && client.swap_surface == Some(surface)
+            })
+            .map(|client| client.id)
     }
 
     pub(crate) fn remove(&mut self, id: CtrlClientId) {
@@ -340,4 +395,100 @@ pub(crate) fn take_authority_for_emby_remote(ctrl_clients: &ClientRegistry) {
         .lock()
         .unwrap()
         .take_authority_for_emby_remote();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn clients() -> CtrlClients {
+        let (tx, _rx) = mpsc::channel();
+        CtrlClients::new(tx, Arc::new(AtomicBool::new(false)))
+    }
+
+    fn connect_surface(
+        clients: &mut CtrlClients,
+        transport: CtrlTransport,
+        surface: Option<SwapSurface>,
+    ) -> CtrlClientId {
+        let (tx, _rx) = mpsc::channel();
+        clients.connect(
+            tx,
+            transport,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            surface,
+        )
+    }
+
+    /// Contract: spec pin-swap "Pin replaces the newest unpinned Client",
+    /// two-Client scenario — the Pin target is the terminal Client that
+    /// attached last, and falls back to the older one when it leaves.
+    #[test]
+    fn pin_targets_the_newest_attached_terminal_client() {
+        let mut clients = clients();
+        let first = connect_surface(
+            &mut clients,
+            CtrlTransport::Local,
+            Some(SwapSurface::Terminal),
+        );
+        let second = connect_surface(
+            &mut clients,
+            CtrlTransport::Local,
+            Some(SwapSurface::Terminal),
+        );
+
+        assert_eq!(
+            clients.newest_swap_client(SwapSurface::Terminal),
+            Some(second)
+        );
+
+        clients.remove(second);
+
+        assert_eq!(
+            clients.newest_swap_client(SwapSurface::Terminal),
+            Some(first)
+        );
+    }
+
+    /// Contract: spec pin-swap "The Tray offers one Pin swap action" — only
+    /// Clients attached over the local transport count as swap targets, and
+    /// a TCP pinned Client never sets the shared flag.
+    #[test]
+    fn tcp_clients_are_never_swap_clients() {
+        let mut clients = clients();
+        connect_surface(
+            &mut clients,
+            CtrlTransport::Tcp,
+            Some(SwapSurface::Terminal),
+        );
+        connect_surface(&mut clients, CtrlTransport::Tcp, Some(SwapSurface::Pinned));
+
+        assert_eq!(clients.newest_swap_client(SwapSurface::Terminal), None);
+        assert_eq!(clients.newest_swap_client(SwapSurface::Pinned), None);
+        assert!(
+            !clients
+                .pinned_client_attached
+                .load(std::sync::atomic::Ordering::SeqCst)
+        );
+    }
+
+    /// Contract: task 3.1 — the shared flag is set while a pinned Client is
+    /// attached and cleared when it leaves (spec pin-swap "The Tray offers
+    /// one Pin swap action": the label flips back to **Pin**).
+    #[test]
+    fn pinned_flag_clears_when_the_pinned_client_leaves() {
+        let mut clients = clients();
+        let pinned = connect_surface(
+            &mut clients,
+            CtrlTransport::Local,
+            Some(SwapSurface::Pinned),
+        );
+
+        assert!(clients.pinned_client_attached.load(Ordering::SeqCst));
+
+        clients.remove(pinned);
+
+        assert!(!clients.pinned_client_attached.load(Ordering::SeqCst));
+    }
 }

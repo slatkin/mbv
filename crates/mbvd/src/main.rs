@@ -640,6 +640,13 @@ fn run() -> Result<(), DaemonError> {
             // Deliberately a stub: mbvd runs as a system service with no
             // user session, so there's no tray to spawn into.
             on_tray_ready: Box::new(|_| None),
+            // mbvd is a headless server daemon with no desktop session, so
+            // it never starts a Pin swap (design D5): the hook reports that
+            // and no notification could ever reach a user.
+            swap_command: Box::new(|_| {
+                Err("mbvd has no desktop session and cannot swap panels".to_string())
+            }),
+            notify: Box::new(|_| {}),
         },
     )
 }

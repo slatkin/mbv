@@ -39,7 +39,7 @@ mod basic;
 // Re-export helper functions from basic so all test modules can use them
 pub(super) use basic::{
     cold_player, connect_client, emby_qi, empty_queue, item, recv_event, revision_mint,
-    shared_queue_state, video_feed_qi,
+    shared_queue_state, test_clients, video_feed_qi,
 };
 
 mod abs_queue;

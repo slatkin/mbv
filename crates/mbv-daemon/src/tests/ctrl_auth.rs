@@ -57,7 +57,7 @@ fn admission_result(
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
         .unwrap();
     let (merged_tx, _merged_rx) = std::sync::mpsc::channel();
-    let clients = std::sync::Arc::new(std::sync::Mutex::new(CtrlClients::new(merged_tx.clone())));
+    let clients = std::sync::Arc::new(std::sync::Mutex::new(test_clients(merged_tx.clone())));
     if matches!(clients_state, AdmissionClients::PlayerAttached) {
         let (existing_tx, _existing_rx) = std::sync::mpsc::channel();
         clients.lock().unwrap().connect(
@@ -65,6 +65,7 @@ fn admission_result(
             CtrlTransport::Local,
             mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
             false,
+            None,
         );
     }
     clients.lock().unwrap().shutting_down = matches!(shutdown, AdmissionShutdown::ShuttingDown);

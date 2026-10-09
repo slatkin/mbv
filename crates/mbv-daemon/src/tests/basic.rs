@@ -76,8 +76,18 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
             book_progress: true,
         },
         true,
+        None,
     );
     (id, rx)
+}
+
+/// A registry with its own shared "pinned Client attached" flag, for tests
+/// that do not go through `run_with_options`.
+pub fn test_clients(merged_tx: mpsc::Sender<crate::DaemonEvent>) -> CtrlClients {
+    CtrlClients::new(
+        merged_tx,
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    )
 }
 
 pub fn revision_mint() -> Arc<mbv_queue::QueueRevisionMint> {

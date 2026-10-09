@@ -15,6 +15,7 @@ use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
 use std::net::TcpListener;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -142,6 +143,8 @@ struct DaemonStarted {
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
     tray: TrayState,
+    /// Shared with the ctrl registry, which keeps it current (design D3).
+    pinned_client_attached: Arc<AtomicBool>,
 }
 
 fn spawn_queue_persistence_worker(
@@ -247,9 +250,13 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let player_status = Arc::clone(&player.status);
     let (transport_tx, transport_rx) = mpsc::channel();
+    // Created here, before the registry exists, so the handle and the
+    // registry share one flag (design D3).
+    let pinned_client_attached = Arc::new(AtomicBool::new(false));
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
         transport_tx,
+        pinned_client_attached: Arc::clone(&pinned_client_attached),
     });
 
     // Tray ownership lives in the loop (design D4): one startup reconcile in
@@ -302,6 +309,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         ws_send_tx,
         owner_settings,
         tray,
+        pinned_client_attached,
     }
 }
 
@@ -532,6 +540,7 @@ pub fn run_with_options(
         ws_send_tx,
         owner_settings,
         tray,
+        pinned_client_attached,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     // Owner restore runs the same progress refresh as cold adoption and a
@@ -544,7 +553,10 @@ pub fn run_with_options(
         audiobookshelf_runtime.as_ref(),
         &merged_tx,
     );
-    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(
+        merged_tx.clone(),
+        pinned_client_attached,
+    )));
     start_local_control_server(
         role,
         audio_only,

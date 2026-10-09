@@ -241,6 +241,11 @@ pub fn run_local_daemon_main() -> ! {
                 let handle = player_handle_for_tray.lock().unwrap().clone()?;
                 mbv_desktop::tray::spawn(shutdown_tx, handle.status, handle.transport_tx)
             }),
+            // Placeholder until tray-pin-swap task 4.1 implements the real
+            // hooks (design D5): nothing invokes them before the swap state
+            // machine (task 3.3) exists.
+            swap_command: Box::new(|_| Err("pin swap is not implemented yet".to_string())),
+            notify: Box::new(|_| {}),
         },
     )
 }

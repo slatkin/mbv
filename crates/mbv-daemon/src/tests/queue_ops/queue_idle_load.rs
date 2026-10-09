@@ -98,6 +98,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
             book_progress: true,
         },
         false,
+        None,
     );
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("kept", "Video", "Movie")], 0);

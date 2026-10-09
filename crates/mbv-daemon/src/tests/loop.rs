@@ -107,7 +107,10 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         owner: owner_with(items, active),
         player: cold_player(),
         shared_queue: shared_queue_state(),
-        ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone()))),
+        ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(
+            merged_tx.clone(),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        ))),
         client: Arc::new(Mutex::new(EmbyClient::new(Config::default()))),
         emby_runtime: None,
         audiobookshelf_runtime: None,

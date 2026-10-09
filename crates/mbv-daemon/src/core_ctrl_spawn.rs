@@ -1,6 +1,6 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
-use crate::ctrl::{ClientRegistry, CtrlClients, CtrlOutbound, CtrlTransport};
+use crate::ctrl::{ClientRegistry, CtrlClients, CtrlOutbound, CtrlTransport, SwapSurface};
 use crate::{DaemonRole, OwnerSettingsReader};
 use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use mbv_net::stream::SocketStream;
@@ -11,7 +11,12 @@ use std::sync::{Arc, Mutex};
 fn ctrl_client_capabilities(
     line: &str,
     control_credential: Option<&str>,
-) -> Option<(CtrlAudiobookshelfCapabilities, bool, bool)> {
+) -> Option<(
+    CtrlAudiobookshelfCapabilities,
+    bool,
+    bool,
+    Option<SwapSurface>,
+)> {
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if !hello_credentials_valid(&info, control_credential) {
@@ -26,6 +31,7 @@ fn ctrl_client_capabilities(
                 },
                 info.supports_owner_queue_load(),
                 info.supports_service_setup_admin(),
+                swap_surface_from_hello(&info),
             ))
         }
         Ok(_) => {
@@ -62,6 +68,21 @@ fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bo
         return false;
     }
     true
+}
+
+/// Which swap surface the Hello advertises, per tray-pin-swap design D2:
+/// `Some` only when `pin-swap` is present, `Pinned` only then when
+/// `pinned-surface` is also present.
+fn swap_surface_from_hello(info: &CtrlHello) -> Option<SwapSurface> {
+    let supports = |cap: &str| info.capabilities.iter().any(|advertised| advertised == cap);
+    if !supports(mbv_ctrl::CTRL_CAP_PIN_SWAP) {
+        return None;
+    }
+    Some(if supports(mbv_ctrl::CTRL_CAP_PINNED_SURFACE) {
+        SwapSurface::Pinned
+    } else {
+        SwapSurface::Terminal
+    })
 }
 
 fn send_admission_refusal(
@@ -172,7 +193,7 @@ impl CtrlClientSession {
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let Some((audiobookshelf, supports_owner_queue_load, service_setup_admin)) =
+        let Some((audiobookshelf, supports_owner_queue_load, service_setup_admin, swap_surface)) =
             ctrl_client_capabilities(&line, control_credential.as_deref())
         else {
             return;
@@ -211,6 +232,7 @@ impl CtrlClientSession {
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+            swap_surface,
         );
         drop(clients);
         log_ctrl_client_connected(client_id, peer);
