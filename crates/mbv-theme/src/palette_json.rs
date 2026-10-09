@@ -1,71 +1,32 @@
-//! TEMPORARY migration bridge (theme-slot-model group 1; task 1.5 replaces
-//! this module).
-//!
-//! The legacy generator rebuilt `docs/palette.json` by parsing this crate's
-//! source text — `palette.rs` and the `Level`/`Row` surface machinery, both of
-//! which the slot model deleted. Until task 1.5 rebuilds the generator over
-//! `Slot::ALL`/`Role::ALL`/`HINT_CHIPS`/`Surface::ALL` and rewrites the file's
-//! keys, this test pins the legacy file's recorded values against the new
-//! model without writing anything: the slot, role and surface tables must
-//! resolve exactly the colours the legacy palette recorded.
+//! Keeps `docs/palette.json` a live reference (design D6). Every test run
+//! regenerates its mechanical fields from the theme's enums — the slots, each
+//! role's slot and value, the role-set members, and each surface's resting and
+//! focused slot and fill — and rewrites the file when they changed. The
+//! hand-written `uses` prose and the `specials` section are carried over.
+//! This is a generator, not a guard: it never fails because the file was
+//! stale. It walks `Slot::ALL`, `Role::ALL`, `HERO_META_ROLES`, `HINT_CHIPS`
+//! and `Surface::ALL`; there is no source-text parsing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use ratatui::style::Color;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::slot::{Slot, active};
-use super::{HERO_META_ROLES, HINT_CHIPS, Role, Surface, surface_colors};
+use super::surface::Surface;
+use super::surface_resolve::surface_colors;
+use super::surface_table::slots;
+use super::{HERO_META_ROLES, HINT_CHIPS, Role};
 
 const PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/palette.json");
 
-/// The fill roles design D5 folds into surfaces. The legacy file records them
-/// as roles; the new model does not, so this is the closed set of legacy role
-/// names with no `Role` variant.
-const FILL_ROLES: [&str; 15] = [
-    "HERO_CREDITS_STRIPE",
-    "PILL_BG",
-    "PILL_ROW_BG",
-    "PILL_SELECTED_BG",
-    "PLAYLIST_STRIPE_BG",
-    "SELECTED_ROW_BG",
-    "SESSIONS_STRIPE_BG",
-    "SETTINGS_STRIPE_BG",
-    "SURFACE_BACKDROP",
-    "SURFACE_CHROME",
-    "SURFACE_FOCUSED",
-    "SURFACE_RESTING",
-    "SURFACE_SIDEBAR",
-    "WORKSPACE_FOCUSED_FILL",
-    "WORKSPACE_FOCUSED_STRIPE",
-];
-
-/// The new surfaces whose fills design D5 pins to the legacy identity they
-/// replaced: `(surface, resting legacy role, focused legacy role)`.
-const REPLACED_BY_ROLES: [(Surface, &str, &str); 7] = [
-    (Surface::SelectedRow, "SELECTED_ROW_BG", "SELECTED_ROW_BG"),
-    (
-        Surface::ListStripe,
-        "PLAYLIST_STRIPE_BG",
-        "PLAYLIST_STRIPE_BG",
-    ),
-    (
-        Surface::WorkspaceStripe,
-        "SURFACE_RESTING",
-        "WORKSPACE_FOCUSED_STRIPE",
-    ),
-    (
-        Surface::CreditsStripe,
-        "HERO_CREDITS_STRIPE",
-        "HERO_CREDITS_STRIPE",
-    ),
-    (Surface::PopupBorder, "SURFACE_RESTING", "SURFACE_RESTING"),
-    (Surface::ModalButton, "SURFACE_CHROME", "SURFACE_CHROME"),
-    (
-        Surface::TransportRow,
-        "SURFACE_BACKDROP",
-        "SURFACE_BACKDROP",
-    ),
+/// The files that hold the theme's tables, recorded for the reader.
+const SOURCES: [&str; 5] = [
+    "crates/mbv-theme/src/slot.rs",
+    "crates/mbv-theme/src/role.rs",
+    "crates/mbv-theme/src/surface.rs",
+    "crates/mbv-theme/src/surface_table.rs",
+    "crates/mbv-theme/src/surface_resolve.rs",
 ];
 
 /// The `#rrggbb` spelling of a theme colour.
@@ -76,173 +37,127 @@ fn hex(color: Color) -> String {
     }
 }
 
-/// The legacy `SCREAMING_CASE` constant name of a role's `UpperCamelCase` name.
-fn screaming(name: &str) -> String {
-    let mut out = String::with_capacity(name.len() + 4);
-    for (index, ch) in name.char_indices() {
-        if index > 0 && ch.is_ascii_uppercase() {
-            out.push('_');
-        }
-        out.push(ch.to_ascii_uppercase());
+/// The `[r, g, b]` spelling of a theme colour.
+fn rgb(color: Color) -> [u8; 3] {
+    match color {
+        Color::Rgb(r, g, b) => [r, g, b],
+        other => panic!("theme colour is not an Rgb colour: {other:?}"),
     }
-    out
 }
 
-/// The legacy file as `(value, document)`.
-fn read_legacy() -> Value {
-    let text = std::fs::read_to_string(PATH).expect("read docs/palette.json");
-    serde_json::from_str(&text).expect("docs/palette.json is valid JSON")
-}
-
-/// The legacy `variants` hexes, sorted (slot names differ; values must not).
-fn check_slots(doc: &Value) {
-    let mut slot_hexes: Vec<String> = Slot::ALL
-        .iter()
-        .map(|&slot| hex(active().get(slot)))
-        .collect();
-    slot_hexes.sort();
-    let mut variant_hexes: Vec<String> = doc["variants"]
+/// The existing `uses` prose of one array section, keyed by name.
+fn prose(section: &Value) -> BTreeMap<String, String> {
+    section
         .as_array()
-        .expect("legacy variants array")
-        .iter()
-        .map(|variant| variant["hex"].as_str().expect("variant hex").to_string())
-        .collect();
-    variant_hexes.sort();
-    assert_eq!(
-        slot_hexes, variant_hexes,
-        "slot values must match the legacy variant hexes"
-    );
-}
-
-/// Every surviving role keeps its legacy hex; the legacy roles outside
-/// `Role` are exactly design D5's fill roles.
-fn check_roles(doc: &Value) {
-    let legacy_roles = legacy_role_hexes(doc);
-    let mut survivor_names = BTreeSet::new();
-    for &role in Role::ALL {
-        let name = screaming(&format!("{role:?}"));
-        let value = hex(role.color());
-        assert_eq!(
-            legacy_roles.get(&name).map(String::as_str),
-            Some(value.as_str()),
-            "role {name} changed value"
-        );
-        survivor_names.insert(name);
-    }
-    let uncovered: BTreeSet<String> = legacy_roles
-        .keys()
-        .filter(|name| !survivor_names.contains(*name))
-        .cloned()
-        .collect();
-    let fills: BTreeSet<String> = FILL_ROLES.iter().map(|name| (*name).to_string()).collect();
-    assert_eq!(
-        uncovered, fills,
-        "legacy roles outside Role must be exactly design D5's fill roles"
-    );
-}
-
-/// Pre-existing surfaces keep their resting/focused hexes; the new surfaces'
-/// fills equal the legacy identities design D5 replaced them with.
-fn check_surfaces(doc: &Value) {
-    let legacy_surfaces: BTreeMap<String, (String, String)> = doc["surfaces"]
-        .as_array()
-        .expect("legacy surfaces array")
-        .iter()
-        .map(|surface| {
-            let name = surface["name"].as_str().expect("surface name").to_string();
-            let resting = surface["resting"]
-                .as_str()
-                .expect("surface resting")
-                .to_string();
-            let focused = surface["focused"]
-                .as_str()
-                .expect("surface focused")
-                .to_string();
-            (name, (resting, focused))
-        })
-        .collect();
-    let legacy_roles = legacy_role_hexes(doc);
-    for &surface in Surface::ALL {
-        let name = format!("{surface:?}");
-        if let Some((resting, focused)) = legacy_surfaces.get(&name) {
-            assert_eq!(
-                hex(surface_colors(surface, false).fill),
-                *resting,
-                "{name} resting changed"
-            );
-            assert_eq!(
-                hex(surface_colors(surface, true).fill),
-                *focused,
-                "{name} focused changed"
-            );
-        }
-    }
-    for (surface, resting_from, focused_from) in REPLACED_BY_ROLES {
-        let name = format!("{surface:?}");
-        assert_eq!(
-            hex(surface_colors(surface, false).fill),
-            legacy_roles[resting_from],
-            "{name} resting changed"
-        );
-        assert_eq!(
-            hex(surface_colors(surface, true).fill),
-            legacy_roles[focused_from],
-            "{name} focused changed"
-        );
-    }
-}
-
-/// The legacy role hexes by constant name.
-fn legacy_role_hexes(doc: &Value) -> BTreeMap<String, String> {
-    doc["roles"]
-        .as_array()
-        .expect("legacy roles array")
-        .iter()
-        .map(|role| {
-            (
-                role["name"].as_str().expect("role name").to_string(),
-                role["hex"].as_str().expect("role hex").to_string(),
-            )
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            Some((
+                entry["name"].as_str()?.to_string(),
+                entry["uses"].as_str()?.to_string(),
+            ))
         })
         .collect()
 }
 
-/// The role sets keep their members: `HERO_META_ROLES` by role name,
-/// `HINT_CHIPS` by resolved hex against the legacy `HINT_PILL_FILLS`.
-fn check_role_sets(doc: &Value) {
-    let meta: Vec<String> = HERO_META_ROLES
-        .iter()
-        .map(|role| screaming(&format!("{role:?}")))
-        .collect();
-    let legacy_meta: Vec<String> = doc["role_sets"]["HERO_META_ROLES"]["members"]
-        .as_array()
-        .expect("legacy HERO_META_ROLES members")
-        .iter()
-        .map(|member| member.as_str().expect("member name").to_string())
-        .collect();
-    assert_eq!(meta, legacy_meta, "HERO_META_ROLES members changed");
-
-    let chip_hexes: Vec<String> = HINT_CHIPS
-        .iter()
-        .map(|&surface| hex(surface_colors(surface, false).fill))
-        .collect();
-    let legacy_chips: Vec<String> = doc["role_sets"]["HINT_PILL_FILLS"]["members"]
-        .as_array()
-        .expect("legacy HINT_PILL_FILLS members")
-        .iter()
-        .map(|member| member.as_str().expect("member hex").to_string())
-        .collect();
-    assert_eq!(chip_hexes, legacy_chips, "HINT_CHIPS fills changed");
+/// A carried-over `uses`, or an empty one (named on stderr) for a new entry.
+fn uses(prose: &BTreeMap<String, String>, kind: &str, name: &str) -> String {
+    prose.get(name).cloned().unwrap_or_else(|| {
+        eprintln!("docs/palette.json: new {kind} {name} — add its `uses` prose");
+        String::new()
+    })
 }
 
-/// Contract: during the slot migration the new model resolves every colour
-/// the legacy `docs/palette.json` recorded to the same hex. Temporary —
-/// task 1.5 replaces this module with the enum-driven regenerator.
+/// The whole document rebuilt from the theme, keeping `old`'s prose.
+fn regenerate(old: &Value) -> Value {
+    let role_prose = prose(&old["roles"]);
+    let surface_prose = prose(&old["surfaces"]);
+    let role_set_uses = |name: &str| match old["role_sets"][name]["uses"].as_str() {
+        Some(text) => text.to_string(),
+        None => uses(&BTreeMap::new(), "role set", name),
+    };
+
+    let slot_entries: Vec<Value> = Slot::ALL
+        .iter()
+        .map(|&slot| {
+            let color = active().get(slot);
+            json!({
+                "hex": hex(color),
+                "name": format!("{slot:?}"),
+                "rgb": rgb(color),
+            })
+        })
+        .collect();
+
+    let roles: Vec<Value> = Role::ALL
+        .iter()
+        .map(|&role| {
+            let color = role.color();
+            json!({
+                "hex": hex(color),
+                "name": format!("{role:?}"),
+                "rgb": rgb(color),
+                "slot": format!("{:?}", role.slot()),
+                "uses": uses(&role_prose, "role", &format!("{role:?}")),
+            })
+        })
+        .collect();
+
+    let role_sets = json!({
+        "HERO_META_ROLES": {
+            "members": HERO_META_ROLES
+                .iter()
+                .map(|&role| format!("{role:?}"))
+                .collect::<Vec<_>>(),
+            "uses": role_set_uses("HERO_META_ROLES"),
+        },
+        "HINT_CHIPS": {
+            "members": HINT_CHIPS
+                .iter()
+                .map(|&surface| hex(surface_colors(surface, false).fill))
+                .collect::<Vec<_>>(),
+            "uses": role_set_uses("HINT_CHIPS"),
+        },
+    });
+
+    let mut surface_entries: Vec<Value> = Surface::ALL
+        .iter()
+        .map(|&surface| {
+            let (resting, focused) = slots(surface);
+            json!({
+                "focused": hex(surface_colors(surface, true).fill),
+                "focusedSlot": format!("{focused:?}"),
+                "name": format!("{surface:?}"),
+                "resting": hex(surface_colors(surface, false).fill),
+                "restingSlot": format!("{resting:?}"),
+                "uses": uses(&surface_prose, "surface", &format!("{surface:?}")),
+            })
+        })
+        .collect();
+    surface_entries.sort_by_key(|entry| entry["name"].as_str().unwrap_or_default().to_string());
+
+    json!({
+        "role_sets": role_sets,
+        "roles": roles,
+        "slots": slot_entries,
+        "source": SOURCES,
+        "specials": old["specials"],
+        "surfaces": surface_entries,
+    })
+}
+
+fn write_if_changed(old_text: &str, new_text: &str) {
+    if old_text != new_text {
+        std::fs::write(PATH, new_text).expect("write docs/palette.json");
+    }
+}
+
+/// Contract: `docs/palette.json`'s mechanical fields match this crate after
+/// any test run (the file is the maintainer's live colour reference).
 #[test]
-fn legacy_palette_json_values_survive_the_slot_migration() {
-    let doc = read_legacy();
-    check_slots(&doc);
-    check_roles(&doc);
-    check_surfaces(&doc);
-    check_role_sets(&doc);
+fn docs_palette_json_is_regenerated_from_the_theme() {
+    let old_text = std::fs::read_to_string(PATH).expect("read docs/palette.json");
+    let old: Value = serde_json::from_str(&old_text).expect("docs/palette.json is valid JSON");
+    let new_text = serde_json::to_string(&regenerate(&old)).expect("serialize palette.json");
+    write_if_changed(&old_text, &new_text);
 }
