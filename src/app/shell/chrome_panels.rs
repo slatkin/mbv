@@ -294,7 +294,7 @@ impl Model {
             && let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>()
         {
             // The host feeds only the artwork-site playing brand row
-            // (`PLAYING:<host>`); every other header (idle, or the title
+            // (`PLAYING::[host]`); every other header (idle, or the title
             // itself) never reads it, so skip the label resolution — its
             // config lock and two allocations — unless that row will paint.
             let needs_host = status != NowPlayingStatus::Idle

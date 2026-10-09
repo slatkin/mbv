@@ -57,12 +57,8 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
     let panel_bg = palette::surface_colors(header.panel, false).fill;
     if header.title_site == NowPlayingTitleSite::Artwork {
         frame.render_widget(
-            Paragraph::new(Line::from(artwork_brand_spans(
-                header,
-                panel_bg,
-                row.width as usize,
-            )))
-            .style(Style::default().bg(panel_bg)),
+            Paragraph::new(Line::from(artwork_brand_spans(header, panel_bg)))
+                .style(Style::default().bg(panel_bg)),
             row,
         );
         return;
@@ -83,54 +79,29 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
     }
 }
 
-/// The shared queue-header brand anchor: ` [mbv]` left-anchored (cream
-/// brackets, foam `mbv`), `right` right-anchored, one trailing space outside
-/// the right edge. The artwork-site playing row and the idle row both paint
-/// through this so the left anchor cannot drift.
-pub(crate) fn brand_row_spans(
-    panel_bg: Color,
-    row_width: usize,
-    right: Vec<Span<'static>>,
-) -> Vec<Span<'static>> {
-    let cream = Style::default()
-        .fg(palette::Role::TextEmphasis.color())
-        .bg(panel_bg);
-    let mut spans = vec![
-        Span::styled(" ", Style::default().bg(panel_bg)),
-        Span::styled("[", cream),
-        Span::styled(
-            "mbv",
-            Style::default()
-                .fg(palette::Role::TextMetadata.color())
-                .bg(panel_bg),
-        ),
-        Span::styled("]", cream),
-    ];
-    let left_w: usize = spans.iter().map(|span| span.content.width()).sum();
-    let right_w: usize = right.iter().map(|span| span.content.width()).sum();
-    let gap = row_width.saturating_sub(left_w + right_w + 1);
-    if gap > 0 {
-        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
-    }
-    spans.extend(right);
+/// The shared queue-header status anchor: one leading indent cell, then the
+/// status content left-anchored, then one trailing indent cell. The idle row
+/// and the artwork-site playing row both paint through this so the left
+/// anchor cannot drift.
+pub(crate) fn brand_row_spans(panel_bg: Color, status: Vec<Span<'static>>) -> Vec<Span<'static>> {
+    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+    spans.extend(status);
     spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
     spans
 }
 
-/// The artwork title site's header row: ` [mbv]` left-anchored and
-/// `PLAYING:<host>` right-anchored. The icon is dropped (the word carries
-/// the state), the brackets and the colon are cream, `mbv` is foam,
-/// `PLAYING` is aqua and bold, and the host is cream when local /
-/// `PLAYBACK_HOST_REMOTE_FG` when remote.
-fn artwork_brand_spans(
-    header: &HeaderTitle<'_>,
-    panel_bg: Color,
-    row_width: usize,
-) -> Vec<Span<'static>> {
+/// The artwork title site's header row: ` PLAYING::[host] ` left-anchored.
+/// The icon is dropped (the word carries the state), the colons are cream,
+/// `PLAYING` is aqua and bold, the brackets are foam, and the host is mauve
+/// when remote / cream when local.
+fn artwork_brand_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>> {
     let cream = Style::default()
         .fg(palette::Role::TextEmphasis.color())
         .bg(panel_bg);
-    let mut right = vec![Span::styled(
+    let foam = Style::default()
+        .fg(palette::Role::TextMetadata.color())
+        .bg(panel_bg);
+    let mut status = vec![Span::styled(
         "PLAYING",
         Style::default()
             .fg(palette::Role::Accent.color())
@@ -143,13 +114,15 @@ fn artwork_brand_spans(
         } else {
             palette::Role::TextEmphasis.color()
         };
-        right.push(Span::styled(":", cream));
-        right.push(Span::styled(
+        status.push(Span::styled("::", cream));
+        status.push(Span::styled("[", foam));
+        status.push(Span::styled(
             header.host.to_string(),
             Style::default().fg(host_fg).bg(panel_bg),
         ));
+        status.push(Span::styled("]", foam));
     }
-    brand_row_spans(panel_bg, row_width, right)
+    brand_row_spans(panel_bg, status)
 }
 
 /// The ` <icon> ` prefix every header title row starts with.

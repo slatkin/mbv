@@ -68,10 +68,9 @@ fn transport_clicks_resolve_against_retained_geometry() {
 }
 
 /// The header row's two sites: while the title lives on the artwork (the
-/// `Artwork` site) the header paints the playing brand row — ` [mbv]` left,
-/// `PLAYING:<host>` right — so the header panel stays visible and the title
-/// is not duplicated; with the `Header` site the same projection paints the
-/// title there.
+/// `Artwork` site) the header paints the playing brand row — `PLAYING::[host]`
+/// left — so the header panel stays visible and the title is not duplicated;
+/// with the `Header` site the same projection paints the title there.
 #[test]
 fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
     let mut panel = QueuePlaybackPanel::new();
@@ -103,11 +102,30 @@ fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.contains("[mbv]") && row.contains("PLAYING:Living Room"),
-        "the Artwork site paints the playing brand row: {row}"
+        row.starts_with(" PLAYING::[Living Room]"),
+        "the Artwork site paints the playing brand row, left-anchored: {row}"
+    );
+    assert!(
+        !row.contains("[mbv]"),
+        "the brand anchor is gone from the header row: {row}"
     );
     assert!(
         !row.contains("Example"),
         "the title lives on the artwork alone: {row}"
+    );
+
+    // The brackets paint foam and the local host cream (row index i is
+    // buffer column i + 2: the header row is inset two columns).
+    let bracket_at = row.find('[').expect("the host is bracketed");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(u16::try_from(bracket_at + 2).unwrap(), 1)].fg,
+        palette::Role::TextMetadata.color(),
+        "the host brackets paint foam"
+    );
+    assert_eq!(
+        buffer[(u16::try_from(bracket_at + 3).unwrap(), 1)].fg,
+        palette::Role::TextEmphasis.color(),
+        "the local host paints cream"
     );
 }

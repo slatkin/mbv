@@ -1,6 +1,6 @@
 //! The Queue playback panel (task 3.5, design D10): the queue column's
 //! playback surface, mounted in every queue-visible layout, idle included.
-//! It owns the always-painted header row (`[mbv]` left, the status word or
+//! It owns the always-painted header row (the status word left,
 //! the now-playing title right),
 //! the visual slot's region (painted by the shell's App-side slot adapter on
 //! the panel's behalf — the ABS `paint_home_image` seam) and the queue-column
@@ -49,7 +49,7 @@ pub struct QueuePlaybackPanel {
     /// The header's projected facts: the status word (idle's right-anchored
     /// `IDLE`) and the playback target (`App::playback_host_label_and_remote`,
     /// no tracking suffix) with its remote flag — the target and flag feed
-    /// only the artwork-site playing brand row's `PLAYING:<host>`.
+    /// only the artwork-site playing brand row's `PLAYING::[host]`.
     status: NowPlayingStatus,
     host: String,
     host_is_remote: bool,
@@ -220,7 +220,7 @@ impl Component for QueuePlaybackPanel {
         // title (moved up from the band's former title row — two-part
         // titles keep their context-left/title-right split, a lone title
         // paints yellow) or, while the title lives on the artwork, the
-        // playing brand row; idle paints the brand row, `[mbv] ... IDLE`.
+        // playing brand row; idle paints the brand row, ` IDLE` left.
         if self.status != NowPlayingStatus::Idle
             && let Some((title, _)) = &self.transport.now_playing_title
         {

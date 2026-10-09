@@ -1,9 +1,8 @@
 //! The Queue playback panel's header row (task 3.5, design D10): one row
 //! at the top of the queue column's content whenever the header paints —
-//! idle included. ` [mbv]` left, the status word
-//! right (`[mbv] ... IDLE`), on the chrome band. It never
-//! carries progress: the transport below owns the throbber, percent, and
-//! seekbar.
+//! idle included. The status word left (` IDLE`), on the chrome band. It
+//! never carries progress: the transport below owns the throbber, percent,
+//! and seekbar.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -35,8 +34,8 @@ fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
     }
 }
 
-/// Paints the header row into `area`: ` [mbv]` left-anchored (the shared
-/// brand anchor), the status word right-anchored. The idle `IDLE` paints
+/// Paints the header row into `area`: the status word left-anchored (the
+/// shared status anchor, one indent cell each side). The idle `IDLE` paints
 /// muted grey; playing/paused keep their semantic colours. Pure painter over
 /// projected state.
 pub fn render_playback_header(f: &mut Frame, area: Rect, status: NowPlayingStatus) {
@@ -44,14 +43,14 @@ pub fn render_playback_header(f: &mut Frame, area: Rect, status: NowPlayingStatu
         return;
     }
     let bg = palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
-    let right = vec![Span::styled(
+    let status_spans = vec![Span::styled(
         header_status_word(status),
         Style::default()
             .fg(status_color(status))
             .bg(bg)
             .add_modifier(Modifier::BOLD),
     )];
-    let spans = brand_row_spans(bg, area.width as usize, right);
+    let spans = brand_row_spans(bg, status_spans);
     f.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(bg)),
         area,
