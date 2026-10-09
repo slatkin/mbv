@@ -28,7 +28,7 @@ pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
     frame.render_widget(
         Paragraph::new(text).alignment(Alignment::Center).style(
             Style::default()
-                .fg(palette::EMPTY_QUEUE_FG)
+                .fg(palette::Role::EmptyQueueFg.color())
                 .add_modifier(Modifier::BOLD),
         ),
         row,
@@ -55,7 +55,7 @@ pub fn render_queue_status(
     let pill = remote_pill.map(|content| {
         Span::styled(
             content.to_string(),
-            Style::default().fg(palette::TEXT_FOCUS_ACCENT),
+            Style::default().fg(palette::Role::TextFocusAccent.color()),
         )
     });
     let pill_w = pill

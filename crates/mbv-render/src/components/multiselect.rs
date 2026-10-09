@@ -57,7 +57,10 @@ pub fn render_multiselect_content(
 
     let hint = "Space toggle  ·  Esc / Enter close";
     f.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
+        Paragraph::new(Span::styled(
+            hint,
+            Style::default().fg(palette::Role::TextMuted.color()),
+        )),
         Rect {
             x: inner.x,
             y: inner.y,
@@ -111,14 +114,14 @@ pub fn render_multiselect_content(
             let arrow = if focused { "▸ " } else { "  " };
             let check = if *is_hidden { "[x]" } else { "[ ]" };
             let check_style = if focused {
-                Style::default().fg(palette::TEXT_ACCENT_MUTED)
+                Style::default().fg(palette::Role::TextAccentMuted.color())
             } else {
-                Style::default().fg(palette::TEXT_MUTED)
+                Style::default().fg(palette::Role::TextMuted.color())
             };
             let name_style = if focused {
-                Style::default().fg(palette::TEXT_PRIMARY)
+                Style::default().fg(palette::Role::TextPrimary.color())
             } else {
-                Style::default().fg(palette::TEXT_SECONDARY)
+                Style::default().fg(palette::Role::TextSecondary.color())
             };
             Line::from(vec![
                 Span::raw(arrow),

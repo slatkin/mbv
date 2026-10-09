@@ -46,7 +46,7 @@ pub fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             message,
-            Style::default().fg(mbv_theme::TEXT_STRONG),
+            Style::default().fg(mbv_theme::Role::TextStrong.color()),
         ))
         .alignment(Alignment::Center),
         Rect {
@@ -72,8 +72,8 @@ fn button_width(button: &ConfirmButton) -> u16 {
 
 fn button_fg(tone: ConfirmButtonTone) -> Color {
     match tone {
-        ConfirmButtonTone::Affirmative => palette::ACCENT_ACTIVE,
-        ConfirmButtonTone::Cancel => palette::STATUS_ERROR,
+        ConfirmButtonTone::Affirmative => palette::Role::AccentActive.color(),
+        ConfirmButtonTone::Cancel => palette::Role::StatusError.color(),
     }
 }
 

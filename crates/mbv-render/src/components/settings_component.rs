@@ -89,19 +89,19 @@ fn render_services(frame: &mut Frame, content: Rect, services: &[ServiceRow], cu
                     row.name.clone(),
                     if focused {
                         Style::default()
-                            .fg(palette::TEXT_PRIMARY)
+                            .fg(palette::Role::TextPrimary.color())
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(palette::TEXT_SECONDARY)
+                        Style::default().fg(palette::Role::TextSecondary.color())
                     },
                 ),
                 Span::raw("  "),
                 Span::styled(
                     row.detail.clone(),
                     Style::default().fg(if row.muted {
-                        palette::TEXT_MUTED
+                        palette::Role::TextMuted.color()
                     } else {
-                        palette::ACCENT
+                        palette::Role::Accent.color()
                     }),
                 ),
             ])
@@ -140,7 +140,7 @@ fn render_settings_rows(
                 Span::styled(
                     row.label.clone(),
                     Style::default()
-                        .fg(palette::TEXT_METADATA)
+                        .fg(palette::Role::TextMetadata.color())
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -151,14 +151,14 @@ fn render_settings_rows(
                 Span::styled(
                     row.label.clone(),
                     if focused {
-                        Style::default().fg(palette::TEXT_PRIMARY)
+                        Style::default().fg(palette::Role::TextPrimary.color())
                     } else {
-                        Style::default().fg(palette::PLAYBACK_META_FG)
+                        Style::default().fg(palette::Role::PlaybackMetaFg.color())
                     },
                 ),
                 Span::styled(
                     format!("{:>width$}", row.value, width = value_width),
-                    Style::default().fg(palette::ACCENT),
+                    Style::default().fg(palette::Role::Accent.color()),
                 ),
             ];
             // A Paragraph line style leaves trailing cells on the
@@ -228,9 +228,9 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
             *label,
             Style::default()
                 .fg(if focused {
-                    palette::TEXT_METADATA
+                    palette::Role::TextMetadata.color()
                 } else {
-                    palette::TEXT_SECONDARY
+                    palette::Role::TextSecondary.color()
                 })
                 .add_modifier(if focused {
                     Modifier::BOLD
@@ -245,16 +245,16 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
         };
         lines.push(Line::from(Span::styled(
             format!("  {value}{}", if focused && !busy { "▏" } else { "" }),
-            Style::default().fg(palette::TEXT_PRIMARY),
+            Style::default().fg(palette::Role::TextPrimary.color()),
         )));
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         if busy { "Working…" } else { error },
         Style::default().fg(if busy {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         } else {
-            palette::STATUS_ERROR
+            palette::Role::StatusError.color()
         }),
     )));
     frame.render_widget(Paragraph::new(lines), content);

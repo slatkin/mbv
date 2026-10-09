@@ -35,16 +35,19 @@ fn route_lines(stage: &LibraryRouteStage, cursor: usize) -> (&'static str, Vec<L
                     let focused = i == cursor;
                     let arrow = if focused { "▸ " } else { "  " };
                     let name_style = if focused {
-                        Style::default().fg(palette::TEXT_PRIMARY)
+                        Style::default().fg(palette::Role::TextPrimary.color())
                     } else {
-                        Style::default().fg(palette::TEXT_SECONDARY)
+                        Style::default().fg(palette::Role::TextSecondary.color())
                     };
                     let value = assigned.clone().unwrap_or_else(|| "none".to_string());
                     Line::from(vec![
                         Span::raw(arrow),
                         Span::styled(name.clone(), name_style),
                         Span::raw(" -> "),
-                        Span::styled(value, Style::default().fg(palette::TEXT_ACCENT_MUTED)),
+                        Span::styled(
+                            value,
+                            Style::default().fg(palette::Role::TextAccentMuted.color()),
+                        ),
                     ])
                 })
                 .collect();
@@ -55,11 +58,11 @@ fn route_lines(stage: &LibraryRouteStage, cursor: usize) -> (&'static str, Vec<L
             if devices.is_empty() {
                 lines.push(Line::from(Span::styled(
                     "No other mbv devices found right now -- make sure the",
-                    Style::default().fg(palette::TEXT_MUTED),
+                    Style::default().fg(palette::Role::TextMuted.color()),
                 )));
                 lines.push(Line::from(Span::styled(
                     "target is running and connected.",
-                    Style::default().fg(palette::TEXT_MUTED),
+                    Style::default().fg(palette::Role::TextMuted.color()),
                 )));
             }
             // A device without a resolvable endpoint stays visible, but is not selectable.
@@ -75,11 +78,11 @@ fn route_lines(stage: &LibraryRouteStage, cursor: usize) -> (&'static str, Vec<L
                 let focused = i == cursor;
                 let arrow = if focused { "▸ " } else { "  " };
                 let name_style = if !routable {
-                    Style::default().fg(palette::TEXT_MUTED)
+                    Style::default().fg(palette::Role::TextMuted.color())
                 } else if focused {
-                    Style::default().fg(palette::TEXT_PRIMARY)
+                    Style::default().fg(palette::Role::TextPrimary.color())
                 } else {
-                    Style::default().fg(palette::TEXT_SECONDARY)
+                    Style::default().fg(palette::Role::TextSecondary.color())
                 };
                 lines.push(Line::from(vec![
                     Span::raw(arrow),
@@ -122,7 +125,10 @@ pub fn render_library_routes_content(
 
     let hint = "Enter select  ·  Esc back/close";
     f.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
+        Paragraph::new(Span::styled(
+            hint,
+            Style::default().fg(palette::Role::TextMuted.color()),
+        )),
         Rect {
             x: inner.x,
             y: inner.y,

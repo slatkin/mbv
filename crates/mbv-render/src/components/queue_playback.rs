@@ -29,9 +29,9 @@ pub fn header_status_word(status: NowPlayingStatus) -> &'static str {
 /// paused, muted while idle.
 fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
     match status {
-        NowPlayingStatus::Playing => palette::TEXT_METADATA,
-        NowPlayingStatus::Paused => palette::TEXT_FOCUS_ACCENT,
-        NowPlayingStatus::Idle => palette::TEXT_MUTED,
+        NowPlayingStatus::Playing => palette::Role::TextMetadata.color(),
+        NowPlayingStatus::Paused => palette::Role::TextFocusAccent.color(),
+        NowPlayingStatus::Idle => palette::Role::TextMuted.color(),
     }
 }
 
