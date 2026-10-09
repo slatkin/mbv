@@ -187,6 +187,18 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_OWNER_ACTION)
     }
 
+    #[must_use]
+    pub fn supports_pin_swap(&self) -> bool {
+        self.capabilities.iter().any(|cap| cap == CTRL_CAP_PIN_SWAP)
+    }
+
+    #[must_use]
+    pub fn supports_pinned_surface(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_PINNED_SURFACE)
+    }
+
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), CtrlError> {
         let Some(presented) = self.control_token.as_deref() else {
             return Err(CtrlError::invalid_credential());

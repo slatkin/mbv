@@ -99,11 +99,10 @@ fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bo
 /// `Some` only when `pin-swap` is present, `Pinned` only then when
 /// `pinned-surface` is also present.
 fn swap_surface_from_hello(info: &CtrlHello) -> Option<SwapSurface> {
-    let supports = |cap: &str| info.capabilities.iter().any(|advertised| advertised == cap);
-    if !supports(mbv_ctrl::CTRL_CAP_PIN_SWAP) {
+    if !info.supports_pin_swap() {
         return None;
     }
-    Some(if supports(mbv_ctrl::CTRL_CAP_PINNED_SURFACE) {
+    Some(if info.supports_pinned_surface() {
         SwapSurface::Pinned
     } else {
         SwapSurface::Terminal
@@ -141,17 +140,22 @@ fn send_admission_refusal(
         );
         return AdmissionOutcome::Refused;
     }
+    // A Hello carrying the pending one-shot token is the replacement Client
+    // the Owner itself started for a Pin swap (design D4): it is admitted
+    // despite `ExclusiveOwner`, and the token is spent whatever the
+    // admission outcome — a second Hello presenting it finds nothing
+    // pending. Under Stay-alive on, or with no Client attached, nothing
+    // refuses the replacement, but the swap still completes when it
+    // attaches. The token travels only through the child's environment and
+    // the local Unix socket.
+    if transport == CtrlTransport::Local
+        && connection_role == CtrlConnectionRole::Client
+        && clients.pending_swap().take_matching(hello_swap_token)
+        && let Some(token) = hello_swap_token
+    {
+        return AdmissionOutcome::AdmittedReplacement(token.to_string());
+    }
     if role == DaemonRole::Local && !stay_alive && clients.has_driver() && !admin_connection {
-        // A Hello carrying the pending one-shot token is the replacement
-        // Client the Owner itself started for a Pin swap (design D4): it is
-        // admitted despite `ExclusiveOwner`, and the token is spent — a
-        // second Hello presenting it finds nothing pending.
-        if transport == CtrlTransport::Local
-            && connection_role == CtrlConnectionRole::Client
-            && let Some(token) = clients.pending_swap().take_matching(hello_swap_token)
-        {
-            return AdmissionOutcome::AdmittedReplacement(token);
-        }
         crate::send_to(
             ev_tx,
             &CtrlEvent::Disconnected {
@@ -161,17 +165,6 @@ fn send_admission_refusal(
             },
         );
         return AdmissionOutcome::Refused;
-    }
-    // The token must be consumed whatever the admission outcome: under
-    // Stay-alive on, or with no Client attached, nothing refuses the
-    // replacement, but the swap still completes when it attaches (design
-    // D4). The token travels only through the child's environment and the
-    // local Unix socket.
-    if transport == CtrlTransport::Local
-        && connection_role == CtrlConnectionRole::Client
-        && let Some(token) = clients.pending_swap().take_matching(hello_swap_token)
-    {
-        return AdmissionOutcome::AdmittedReplacement(token);
     }
     AdmissionOutcome::Admitted
 }
@@ -550,9 +543,8 @@ mod tests {
         );
 
         assert!(matches!(outcome, AdmissionOutcome::AdmittedReplacement(_)));
-        assert_eq!(
-            clients.pending_swap().take_matching(Some("token-1")),
-            None,
+        assert!(
+            !clients.pending_swap().take_matching(Some("token-1")),
             "the first Hello spent the token"
         );
     }
@@ -580,9 +572,6 @@ mod tests {
         // The shutting-down refusal event was sent to the Hello.
         ev_rx.try_recv().unwrap();
         // The token stays pending: a refused Hello does not spend it.
-        assert_eq!(
-            clients.pending_swap().take_matching(Some("token-1")),
-            Some("token-1".to_string())
-        );
+        assert!(clients.pending_swap().take_matching(Some("token-1")));
     }
 }

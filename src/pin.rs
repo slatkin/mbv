@@ -126,9 +126,7 @@ pub(crate) fn is_pinned() -> bool {
     HANDED_OVER.load(Ordering::Relaxed)
 }
 
-/// The environment variable the Owner sets on a Client it started for a Pin
-/// swap (tray-pin-swap design D2).
-const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
+use mbv_ctrl::SWAP_TOKEN_ENV;
 
 /// The swap token this launch was started with, claimed once at startup.
 /// `None` for every launch the user started.

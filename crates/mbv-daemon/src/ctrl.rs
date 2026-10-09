@@ -134,10 +134,12 @@ impl CtrlClients {
     }
 
     fn retain_clients(&mut self, keep: impl FnMut(&CtrlClient) -> bool) {
-        let was_nonempty = !self.connection.is_empty();
+        let before = self.connection.len();
         self.connection.retain(keep);
-        self.notify_last_client_gone(was_nonempty);
-        self.refresh_pinned_client_attached();
+        self.notify_last_client_gone(before > 0);
+        if self.connection.len() != before {
+            self.refresh_pinned_client_attached();
+        }
     }
 
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.

@@ -9,7 +9,7 @@
 use crate::DaemonEvent;
 use crate::core::{NotifyHook, SwapCommandHook, SwapDirection};
 use crate::ctrl::{ClientRegistry, CtrlClientId, SwapSurface};
-use mbv_ctrl::CtrlEvent;
+use mbv_ctrl::{CtrlEvent, SWAP_TOKEN_ENV};
 use std::process::Command;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -19,10 +19,6 @@ use std::time::{Duration, Instant};
 /// window of the click (design D3). One deadline covers both the Prepare
 /// phase and the wait for the replacement to attach.
 const SWAP_DEADLINE: Duration = Duration::from_secs(10);
-
-/// The environment variable that carries the one-shot swap token to the
-/// replacement Client (design D2).
-const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 
 /// The reason a second start returns while a swap is in flight (spec
 /// pin-swap "Second click during a swap").
@@ -44,17 +40,16 @@ impl PendingSwapToken {
         *self.token.lock().unwrap() = Some(token);
     }
 
-    /// Consumes the pending token when `candidate` matches it. `Some` means
+    /// Consumes the pending token when `candidate` matches it. `true` means
     /// this Hello is the replacement Client attaching; the token is spent —
     /// a second presenting Hello finds nothing pending.
-    pub(crate) fn take_matching(&self, candidate: Option<&str>) -> Option<String> {
+    pub(crate) fn take_matching(&self, candidate: Option<&str>) -> bool {
         let mut pending = self.token.lock().unwrap();
-        let matched = match (&*pending, candidate) {
-            (Some(pending), Some(candidate)) if pending == candidate => candidate.to_string(),
-            _ => return None,
-        };
-        *pending = None;
-        Some(matched)
+        let matched = candidate.is_some() && pending.as_deref() == candidate;
+        if matched {
+            *pending = None;
+        }
+        matched
     }
 
     fn clear(&self) {
@@ -187,10 +182,15 @@ impl PinSwapState {
         {
             let reason = "panel swap abandoned: the client being replaced left";
             tracing::warn!(name: "daemon.pin_swap.target_left", target: "pin_swap", client = %client_id, reason);
-            (self.notify)(reason);
-            self.pending_token.clear();
-            self.phase = Phase::Idle;
+            self.abandon(reason);
         }
+    }
+
+    /// Notifies the user, spends any published token, and returns to `Idle`.
+    fn abandon(&mut self, reason: &str) {
+        (self.notify)(reason);
+        self.pending_token.clear();
+        self.phase = Phase::Idle;
     }
 
     /// The child-waiter thread reports the replacement process's exit. Only
@@ -205,9 +205,7 @@ impl PinSwapState {
         }
         let reason = "panel swap abandoned: the new client exited before attaching";
         tracing::warn!(name: "daemon.pin_swap.child_failed", target: "pin_swap", reason);
-        (self.notify)(reason);
-        self.pending_token.clear();
-        self.phase = Phase::Idle;
+        self.abandon(reason);
     }
 
     /// Abandons the swap when the deadline passes without the replacement
@@ -222,9 +220,7 @@ impl PinSwapState {
         }
         let reason = "panel swap timed out; the old client stays attached";
         tracing::warn!(name: "daemon.pin_swap.timeout", target: "pin_swap", reason);
-        (self.notify)(reason);
-        self.pending_token.clear();
-        self.phase = Phase::Idle;
+        self.abandon(reason);
     }
 
     /// The ctrl admission path consumed the pending token: the replacement
@@ -291,8 +287,7 @@ impl PinSwapState {
                 let program = command.get_program().to_string_lossy();
                 let reason = format!("panel swap could not start {program}: {error}");
                 tracing::warn!(name: "daemon.pin_swap.spawn_failed", target: "pin_swap", program = %program, error = %error, "panel swap spawn failed");
-                (self.notify)(&reason);
-                self.phase = Phase::Idle;
+                self.abandon(&reason);
             }
         }
     }
@@ -499,10 +494,7 @@ mod tests {
             matches!(&swap.phase, Phase::Awaiting { token, .. } if token == "token-live"),
             "stale admit disturbed the live swap"
         );
-        assert_eq!(
-            pending.take_matching(Some("token-live")),
-            Some("token-live".to_string())
-        );
+        assert!(pending.take_matching(Some("token-live")));
         assert!(client_rx.try_recv().is_err());
         assert_eq!(notified(&calls), Vec::<String>::new());
     }
