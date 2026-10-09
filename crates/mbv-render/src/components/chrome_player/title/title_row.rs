@@ -38,7 +38,10 @@ pub fn render_title_row(
     right.insert(0, Span::raw(" "));
     right.insert(
         0,
-        Span::styled(pos_str, Style::default().fg(palette::PLAYBACK_META_FG)),
+        Span::styled(
+            pos_str,
+            Style::default().fg(palette::Role::PlaybackMetaFg.color()),
+        ),
     );
     let right_w: u16 = right
         .iter()

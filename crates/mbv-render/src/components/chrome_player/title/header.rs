@@ -18,9 +18,12 @@ use unicode_width::UnicodeWidthStr;
 #[must_use]
 pub fn playback_state_icon(use_nerd_fonts: bool, paused: bool) -> (&'static str, Color) {
     if paused {
-        (pause_icon(use_nerd_fonts), palette::TEXT_FOCUS_ACCENT)
+        (
+            pause_icon(use_nerd_fonts),
+            palette::Role::TextFocusAccent.color(),
+        )
     } else {
-        (play_icon(use_nerd_fonts), palette::ACCENT)
+        (play_icon(use_nerd_fonts), palette::Role::Accent.color())
     }
 }
 
@@ -89,13 +92,17 @@ pub(crate) fn brand_row_spans(
     row_width: usize,
     right: Vec<Span<'static>>,
 ) -> Vec<Span<'static>> {
-    let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
+    let cream = Style::default()
+        .fg(palette::Role::TextEmphasis.color())
+        .bg(panel_bg);
     let mut spans = vec![
         Span::styled(" ", Style::default().bg(panel_bg)),
         Span::styled("[", cream),
         Span::styled(
             "mbv",
-            Style::default().fg(palette::TEXT_METADATA).bg(panel_bg),
+            Style::default()
+                .fg(palette::Role::TextMetadata.color())
+                .bg(panel_bg),
         ),
         Span::styled("]", cream),
     ];
@@ -120,19 +127,21 @@ fn artwork_brand_spans(
     panel_bg: Color,
     row_width: usize,
 ) -> Vec<Span<'static>> {
-    let cream = Style::default().fg(palette::TEXT_EMPHASIS).bg(panel_bg);
+    let cream = Style::default()
+        .fg(palette::Role::TextEmphasis.color())
+        .bg(panel_bg);
     let mut right = vec![Span::styled(
         "PLAYING",
         Style::default()
-            .fg(palette::ACCENT)
+            .fg(palette::Role::Accent.color())
             .bg(panel_bg)
             .add_modifier(Modifier::BOLD),
     )];
     if !header.host.is_empty() {
         let host_fg = if header.host_is_remote {
-            palette::PLAYBACK_HOST_REMOTE_FG
+            palette::Role::PlaybackHostRemoteFg.color()
         } else {
-            palette::TEXT_EMPHASIS
+            palette::Role::TextEmphasis.color()
         };
         right.push(Span::styled(":", cream));
         right.push(Span::styled(
@@ -166,7 +175,7 @@ fn render_queue_header_title_only(
     let icon_w = width_u16(header.icon.0.width());
     let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
     spans.extend(marquee_spans_at(
-        &[(text, palette::PLAYBACK_CONTEXT_FG)],
+        &[(text, palette::Role::PlaybackContextFg.color())],
         (row.width.saturating_sub(2 + icon_w + 1)) as usize,
         header.marquee_text,
         header.marquee_started_at,

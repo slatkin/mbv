@@ -174,7 +174,7 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
             Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
+                .fg(palette::Role::TextFocusAccent.color())
                 .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
         )]
     });

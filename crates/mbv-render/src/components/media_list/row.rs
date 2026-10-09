@@ -60,7 +60,7 @@ pub fn media_list_row<Target>(
                 Span::raw("  "),
                 Span::styled(
                     text.to_uppercase(),
-                    Style::default().fg(palette::GROUP_HEADING_FG),
+                    Style::default().fg(palette::Role::GroupHeadingFg.color()),
                 ),
             ],
             alternate_bg,
@@ -236,22 +236,22 @@ fn semantic_paint(semantic_state: &MediaSemanticState) -> SemanticPaint {
     // below never applies to one.
     match semantic_state {
         MediaSemanticState::Ordinary => SemanticPaint {
-            fg: palette::TEXT_EMPHASIS,
+            fg: palette::Role::TextEmphasis.color(),
             progress: None,
             live_icon: None,
         },
         MediaSemanticState::Played => SemanticPaint {
-            fg: palette::TEXT_MUTED,
+            fg: palette::Role::TextMuted.color(),
             progress: None,
             live_icon: None,
         },
         MediaSemanticState::Active { progress } => SemanticPaint {
-            fg: palette::TEXT_EMPHASIS,
+            fg: palette::Role::TextEmphasis.color(),
             progress: progress_text(*progress),
             live_icon: None,
         },
         MediaSemanticState::NowPlaying { progress } => SemanticPaint {
-            fg: palette::TEXT_EMPHASIS,
+            fg: palette::Role::TextEmphasis.color(),
             progress: progress_text(*progress),
             live_icon: Some("▶ "),
         },
@@ -274,7 +274,7 @@ fn effective_duration(duration: Option<&str>, kind: MediaKind) -> Option<&str> {
 fn inline_trailing(progress: Option<&String>) -> Vec<(String, Color)> {
     let mut pieces = Vec::new();
     if let Some(pct) = progress {
-        pieces.push((pct.clone(), palette::PROGRESS_PERCENT));
+        pieces.push((pct.clone(), palette::Role::ProgressPercent.color()));
     }
     pieces
 }
@@ -313,8 +313,8 @@ fn title_budget(inputs: &BudgetInputs) -> Budget {
 
 fn secondary_title_color(semantic_state: &MediaSemanticState) -> Color {
     match semantic_state {
-        MediaSemanticState::Played => palette::TEXT_MUTED,
-        _ => palette::SPLIT_ROW_TITLE_FG,
+        MediaSemanticState::Played => palette::Role::TextMuted.color(),
+        _ => palette::Role::SplitRowTitleFg.color(),
     }
 }
 
@@ -326,8 +326,8 @@ fn title_parts(
 ) -> Vec<(String, Color)> {
     match secondary.filter(|sec| !sec.is_empty()) {
         Some(sec) => vec![
-            (primary.to_owned(), palette::SPLIT_ROW_CONTEXT_FG),
-            (" ".into(), palette::SPLIT_ROW_CONTEXT_FG),
+            (primary.to_owned(), palette::Role::SplitRowContextFg.color()),
+            (" ".into(), palette::Role::SplitRowContextFg.color()),
             (sec.to_owned(), secondary_color),
         ],
         None => vec![(primary.to_owned(), title_color)],
@@ -417,7 +417,10 @@ fn truncated_title_spans(painted: &[(String, Color)], title_width: usize) -> Vec
 fn leading_spans(live_icon: Option<&'static str>, title: Vec<Span<'static>>) -> Vec<Span<'static>> {
     let mut spans = vec![Span::raw("  ")];
     if let Some(icon) = live_icon {
-        spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
+        spans.push(Span::styled(
+            icon,
+            Style::default().fg(palette::Role::Accent.color()),
+        ));
     }
     spans.extend(title);
     spans
@@ -463,7 +466,7 @@ fn push_gutter_column(
             trunc_str(gutter, DATE_GUTTER_W),
             width = DATE_GUTTER_W
         ),
-        Style::default().fg(palette::STATUS_AVAILABLE),
+        Style::default().fg(palette::Role::StatusAvailable.color()),
     ));
 }
 
@@ -476,7 +479,7 @@ fn push_duration_column(spans: &mut Vec<Span<'static>>, duration: Option<&str>, 
     spans.push(Span::raw(" ".repeat(pad)));
     spans.push(Span::styled(
         dur.to_owned(),
-        Style::default().fg(palette::DURATION),
+        Style::default().fg(palette::Role::Duration.color()),
     ));
 }
 
@@ -516,7 +519,7 @@ fn recolor_selected_bar(spans: &mut [Span<'static>], progress_index: Option<usiz
     let fg = selected_row_foreground();
     for (index, span) in spans.iter_mut().enumerate() {
         span.style.fg = Some(if progress_index == Some(index) {
-            palette::SELECTED_ROW_PROGRESS_FG
+            palette::Role::SelectedRowProgressFg.color()
         } else {
             fg
         });

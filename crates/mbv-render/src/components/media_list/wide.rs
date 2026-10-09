@@ -126,7 +126,7 @@ pub fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
             row_paint_area,
             total_rows.saturating_sub(content_area.height as usize),
             offset,
-            palette::SCROLLBAR,
+            palette::Role::Scrollbar.color(),
         );
     }
 

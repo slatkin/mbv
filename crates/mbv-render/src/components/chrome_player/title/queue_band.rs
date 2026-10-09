@@ -77,7 +77,7 @@ fn queue_indicator_spans(
             continue;
         }
         let mut style = span.style;
-        if style.fg == Some(palette::TEXT_ON_ACCENT) && style.bg.is_some() {
+        if style.fg == Some(palette::Role::TextOnAccent.color()) && style.bg.is_some() {
             style.fg = style.bg;
         }
         style.bg = Some(row_bg);
@@ -120,7 +120,7 @@ fn render_queue_seek_row(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 bar,
-                Style::default().fg(palette::PROGRESS_TRACK),
+                Style::default().fg(palette::Role::ProgressTrack.color()),
             ))
             .style(Style::default().bg(panel_bg)),
             row,
@@ -144,7 +144,9 @@ fn render_queue_seek_row(
             Paragraph::new(Line::from(vec![
                 Span::styled(
                     clipped.to_string(),
-                    Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                    Style::default()
+                        .fg(palette::Role::PlaybackMetaFg.color())
+                        .bg(panel_bg),
                 ),
                 Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
             ]))
@@ -167,14 +169,18 @@ fn render_queue_seek_row(
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(
                 pos_str,
-                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                Style::default()
+                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(" ".repeat(bar_w as usize), Style::default().bg(panel_bg)),
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(
                 dur_str,
-                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                Style::default()
+                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
         ]))
@@ -191,7 +197,7 @@ fn render_queue_seek_row(
             .label("")
             .gauge_style(
                 Style::default()
-                    .fg(palette::ACCENT)
+                    .fg(palette::Role::Accent.color())
                     .bg(palette::surface_colors(palette::Surface::TransportRow, false).fill),
             ),
         ctx.playback.seekbar,

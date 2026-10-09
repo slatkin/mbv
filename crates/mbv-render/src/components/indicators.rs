@@ -65,23 +65,23 @@ pub struct IndicatorData {
 impl IndicatorData {
     fn res_color(&self) -> Color {
         if self.flags.res_dim {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         } else {
-            palette::INDICATOR_RESOLUTION_FG
+            palette::Role::IndicatorResolutionFg.color()
         }
     }
     fn audio_color(&self) -> Color {
         if self.flags.audio_dim {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         } else {
-            palette::INDICATOR_AUDIO_FG
+            palette::Role::IndicatorAudioFg.color()
         }
     }
     fn sub_color(&self) -> Color {
         if self.flags.sub_on {
-            palette::TEXT_METADATA
+            palette::Role::TextMetadata.color()
         } else {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         }
     }
 }
@@ -140,7 +140,7 @@ fn chip(label: &str, bg: Color) -> Span<'static> {
         format!(" {label} "),
         Style::default()
             .bg(bg)
-            .fg(palette::TEXT_ON_ACCENT)
+            .fg(palette::Role::TextOnAccent.color())
             .add_modifier(Modifier::BOLD),
     )
 }
@@ -157,7 +157,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
                 format!(" {} ", d.sub_label),
-                bold(palette::TEXT_MUTED),
+                bold(palette::Role::TextMuted.color()),
             ));
         }
     }
@@ -166,7 +166,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Legacy brackets: [FHD] [en] [CC] -----------------------------------
 fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
-    let b = bold(palette::TEXT_STRONG);
+    let b = bold(palette::Role::TextStrong.color());
     out.push(Span::styled("[", b));
     out.push(Span::styled(label.to_string(), bold(color)));
     out.push(Span::styled("]", b));
@@ -209,7 +209,7 @@ fn dot_group(dot: &str, color: Color, label: &str, out: &mut Vec<Span<'static>>)
     out.push(Span::styled(dot.to_string(), Style::default().fg(color)));
     out.push(Span::styled(
         format!(" {label}"),
-        Style::default().fg(palette::TEXT_SECONDARY),
+        Style::default().fg(palette::Role::TextSecondary.color()),
     ));
 }
 
@@ -232,7 +232,12 @@ fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Pipe statusline: FHD │ en │ CC --------------------------------------
 fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
-    let sep = || Span::styled(" \u{2502} ", Style::default().fg(palette::TEXT_MUTED));
+    let sep = || {
+        Span::styled(
+            " \u{2502} ",
+            Style::default().fg(palette::Role::TextMuted.color()),
+        )
+    };
     let mut out = vec![Span::styled(
         d.res_label.clone(),
         Style::default().fg(d.res_color()),
@@ -263,12 +268,12 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     if !d.flags.audio_only {
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(palette::Role::TextMuted.color()),
         ));
         out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(palette::Role::TextMuted.color()),
         ));
         out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
     }
@@ -289,7 +294,7 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
             format!(" {label} "),
             Style::default()
                 .bg(color)
-                .fg(palette::TEXT_ON_ACCENT)
+                .fg(palette::Role::TextOnAccent.color())
                 .add_modifier(Modifier::BOLD),
         ));
         // Arrow: foreground = this segment's color, background = next segment's (or none).
