@@ -31,8 +31,8 @@ map by hex (design D1), never by name. Every group ends with `cargo fmt` and a c
 
 ## 4. Role call sites in mbv-render, part A
 
-- [ ] 4.1 Convert every `palette::ROLE_NAME` reference to `palette::Role::RoleName.color()` (or `Role::RoleName.color()` with a `use`) in `crates/mbv-render/src/components/`: `chrome_player.rs`, `chrome_player/title/*.rs`, `chrome.rs`, `chrome_status_bar.rs`, `chrome_tabs.rs`, `chrome_tabs/tests.rs`, `indicators.rs`, `media_list/row.rs`, `media_list/wide.rs`, `tree_browser.rs`, `widgets.rs`. In `queue_band.rs`, the reverse-video check becomes `style.fg == Some(Role::TextOnAccent.color())`, unchanged in logic (design D5). Test assertions keep their expected roles. Verify: `cargo nextest run -p mbv-render`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" <those files>` finds nothing.
-- [ ] 4.2 Run `cargo fmt` and commit group 4.
+- [x] 4.1 Convert every `palette::ROLE_NAME` reference to `palette::Role::RoleName.color()` (or `Role::RoleName.color()` with a `use`) in `crates/mbv-render/src/components/`: `chrome_player.rs`, `chrome_player/title/*.rs`, `chrome.rs`, `chrome_status_bar.rs`, `chrome_tabs.rs`, `chrome_tabs/tests.rs`, `indicators.rs`, `media_list/row.rs`, `media_list/wide.rs`, `tree_browser.rs`, `widgets.rs`. In `queue_band.rs`, the reverse-video check becomes `style.fg == Some(Role::TextOnAccent.color())`, unchanged in logic (design D5). Test assertions keep their expected roles. Verify: `cargo nextest run -p mbv-render`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" <those files>` finds nothing.
+- [x] 4.2 Run `cargo fmt` and commit group 4.
 
 ## 5. Role call sites in mbv-render, part B
 
