@@ -82,7 +82,7 @@ impl std::fmt::Display for PanelAccentColor {
 /// (flag, colour, width in pixels). Every value is already validated; an
 /// out-of-range or malformed TOML value was replaced with its default while
 /// parsing (design D6).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PanelConfig {
     /// The edge the panel docks to.
     pub side: PanelSide,
@@ -105,6 +105,12 @@ pub struct PanelConfig {
     pub accent_color: PanelAccentColor,
     /// The focus accent stroke's width in pixels.
     pub accent_width: NonZeroU16,
+    /// Terminal emulator argv prefix used to relaunch the TUI when the Owner
+    /// process swaps the pinned panel for a terminal Client (`tray-pin-swap`,
+    /// design D5): the Owner appends `mbv` and runs the argv. `None` when the
+    /// key is absent, empty, or malformed; callers fall back to `$TERMINAL -e`.
+    /// Not a F2 Panel row: it is edited in `config.toml` only.
+    pub terminal: Option<Vec<String>>,
 }
 
 impl Default for PanelConfig {
@@ -120,6 +126,7 @@ impl Default for PanelConfig {
             accent: true,
             accent_color: DEFAULT_PANEL_ACCENT_COLOR,
             accent_width: DEFAULT_PANEL_ACCENT_WIDTH,
+            terminal: None,
         }
     }
 }

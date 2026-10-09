@@ -330,7 +330,7 @@ impl App {
     /// Resize the pinned panel to `width`; `None` when not pinned. The panic-free
     /// `map` keeps the `pinned_panel` borrow local so callers can mutate `self`.
     fn apply_pinned_layout(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
-        let config = self.config.lock().unwrap().panel;
+        let config = self.config.lock().unwrap().panel.clone();
         self.pinned_panel
             .as_ref()
             .map(|panel| crate::pin::apply_layout(panel, &config, width))

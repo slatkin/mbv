@@ -6,6 +6,8 @@ use crate::{
     save_config_settings,
 };
 #[cfg(test)]
+use rstest::rstest;
+#[cfg(test)]
 use std::num::NonZeroU16;
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -281,9 +283,10 @@ accent_width = 0
         accent: false,
         accent_color: PanelAccentColor([0x12, 0x34, 0x56]),
         accent_width: NonZeroU16::new(2).unwrap(),
+        terminal: Some(vec!["foot".to_string(), "-e".to_string()]),
     };
     save_config_settings(&Config {
-        panel: expected,
+        panel: expected.clone(),
         ..Default::default()
     })
     .unwrap();
@@ -297,4 +300,35 @@ accent_width = 0
 
     crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Contract (task 2.1 of `tray-pin-swap`): `[panel] terminal` parses a
+/// non-empty array of strings into the argv prefix; an absent, empty, or
+/// otherwise malformed key gives `None` without disturbing the other
+/// `[panel]` keys.
+#[cfg(test)]
+#[rstest]
+#[case::set(
+    "terminal = [\"foot\", \"-e\"]",
+    Some(vec!["foot".to_string(), "-e".to_string()])
+)]
+#[case::absent("", None)]
+#[case::malformed_element("terminal = [\"foot\", 5]", None)]
+#[case::malformed_empty("terminal = []", None)]
+fn panel_terminal_parses_set_absent_and_malformed(
+    #[case] terminal_line: &str,
+    #[case] expected: Option<Vec<String>>,
+) {
+    let text = if terminal_line.is_empty() {
+        String::from("[panel]\nside = \"right\"\n")
+    } else {
+        format!("[panel]\nside = \"right\"\n{terminal_line}\n")
+    };
+    let cfg = parse_config(&text).unwrap();
+    assert_eq!(cfg.panel.terminal, expected);
+    assert_eq!(
+        cfg.panel.side,
+        PanelSide::Right,
+        "other [panel] keys keep their values"
+    );
 }
