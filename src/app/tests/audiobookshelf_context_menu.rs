@@ -28,25 +28,49 @@ fn menu_labels(app: &mut App, targets: Vec<AudiobookshelfMenuTarget>) -> Vec<&'s
 }
 
 /// One case per target shape: a single row offers the leaf set with no
-/// Shuffle (a book is a leaf, and a single episode is a leaf); a
-/// multi-selection adds Shuffle before Add to Queue.
+/// Shuffle (a book is a leaf, and a single episode is a leaf) plus the one
+/// mark entry its cached progress state chooses (a missing entry counts as
+/// unfinished); a multi-selection adds Shuffle and both mark entries.
+/// `seed_finished` writes the cached progress entry for episode-a before the
+/// menu opens.
 #[rstest]
-#[case::one_episode(vec![episode_target("episode-a")], &["Play", "Add to Queue"])]
+#[case::one_episode(
+    vec![episode_target("episode-a")],
+    false,
+    &["Play", "Add to Queue", "Mark Played"],
+)]
+#[case::one_finished_episode(
+    vec![episode_target("episode-a")],
+    true,
+    &["Play", "Add to Queue", "Mark Unplayed"],
+)]
 #[case::one_book(
     vec![AudiobookshelfMenuTarget::Book {
         library_item_id: "book-a".into(),
     }],
-    &["Play", "Add to Queue"],
+    false,
+    &["Play", "Add to Queue", "Mark Played"],
 )]
 #[case::two_episodes(
     vec![episode_target("episode-a"), episode_target("episode-b")],
-    &["Play", "Shuffle", "Add to Queue"],
+    false,
+    &["Play", "Shuffle", "Add to Queue", "Mark Played", "Mark Unplayed"],
 )]
 fn audiobookshelf_menu_follows_the_standard_action_set_for(
     #[case] targets: Vec<AudiobookshelfMenuTarget>,
+    #[case] seed_finished: bool,
     #[case] expected: &[&str],
 ) {
-    let mut app = make_app_stub();
+    let mut app = super::podcast::audiobookshelf_app();
+    app.audiobookshelf_browse[0].progress.insert(
+        ("show-a".into(), "episode-a".into()),
+        mbv_audiobookshelf::AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 0.0,
+            is_finished: seed_finished,
+        },
+    );
     assert_eq!(menu_labels(&mut app, targets), expected);
 }
 

@@ -268,8 +268,51 @@ impl App {
                 }
                 None
             }
+            Some(ContextAction::AudiobookshelfMarkPlayed(targets)) => {
+                self.start_audiobookshelf_mark(targets, true);
+                None
+            }
+            Some(ContextAction::AudiobookshelfMarkUnplayed(targets)) => {
+                self.start_audiobookshelf_mark(targets, false);
+                None
+            }
             action => action,
         }
+    }
+
+    /// Start the finished-state mark worker for `targets` (design D5). A
+    /// Service that is not Ready, or a missing setup or credential, flashes
+    /// the unavailable toast and changes nothing; otherwise the worker runs
+    /// on a thread and reports through the generation-gated mark completion.
+    fn start_audiobookshelf_mark(
+        &mut self,
+        targets: Vec<AudiobookshelfMenuTarget>,
+        finished: bool,
+    ) {
+        if self.audiobookshelf_runtime.state != mbv_core::service_runtime::ServiceState::Ready {
+            self.flash(
+                "Audiobookshelf is unavailable".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        }
+        let generation = self.audiobookshelf_runtime.generation();
+        let Some((setup, api_key)) =
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(
+                &self.config.lock().unwrap(),
+            )
+        else {
+            self.flash(
+                "Audiobookshelf is unavailable".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        };
+        self.setup.audiobookshelf_mark_rx = Some(
+            crate::app::dispatch::session::service_startup::start_audiobookshelf_mark(
+                setup, api_key, generation, targets, finished,
+            ),
+        );
     }
 
     fn execute_context_navigation_action(&mut self, action: Option<ContextAction>) {
@@ -314,7 +357,9 @@ impl App {
                 | ContextAction::FeedsMarkUnplayed(_)
                 | ContextAction::AudiobookshelfPlay(_)
                 | ContextAction::AudiobookshelfShuffle(_)
-                | ContextAction::AudiobookshelfEnqueue(_),
+                | ContextAction::AudiobookshelfEnqueue(_)
+                | ContextAction::AudiobookshelfMarkPlayed(_)
+                | ContextAction::AudiobookshelfMarkUnplayed(_),
             ) => {}
         }
     }

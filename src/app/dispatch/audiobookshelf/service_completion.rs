@@ -20,6 +20,7 @@ impl App {
 
     pub(in crate::app) fn clear_audiobookshelf_catalog(&mut self) {
         self.setup.audiobookshelf_catalog_rx = None;
+        self.setup.audiobookshelf_mark_rx = None;
         self.audiobookshelf_libraries.clear();
         self.audiobookshelf_browse.clear();
         self.audiobookshelf_book_browse.clear();

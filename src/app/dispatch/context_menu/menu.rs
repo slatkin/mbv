@@ -323,8 +323,9 @@ impl App {
 
     /// Build the Audiobookshelf row menu from component-resolved targets
     /// (standard-media-context-menus design D3). The standard action set
-    /// splits on target count: a leaf row offers Play and Add to Queue; a
-    /// multi-selection adds Shuffle before Add to Queue. Group 7 adds the
+    /// splits on target count: a leaf row offers Play, Add to Queue, then the
+    /// one mark entry its cached progress state chooses (a missing entry
+    /// counts as unfinished); a multi-selection adds Shuffle and offers both
     /// mark entries.
     pub(in crate::app) fn open_audiobookshelf_context_menu(
         &mut self,
@@ -350,8 +351,34 @@ impl App {
         Self::push_context_action(
             &mut menu_entries,
             "Add to Queue",
-            ContextAction::AudiobookshelfEnqueue(targets),
+            ContextAction::AudiobookshelfEnqueue(targets.clone()),
         );
+        if let [target] = targets.as_slice() {
+            if self.audiobookshelf_target_finished(target) {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Unplayed",
+                    ContextAction::AudiobookshelfMarkUnplayed(targets),
+                );
+            } else {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Played",
+                    ContextAction::AudiobookshelfMarkPlayed(targets),
+                );
+            }
+        } else {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Played",
+                ContextAction::AudiobookshelfMarkPlayed(targets.clone()),
+            );
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Unplayed",
+                ContextAction::AudiobookshelfMarkUnplayed(targets),
+            );
+        }
         let menu = ContextMenu {
             anchor: anchor.map_or(
                 ContextMenuAnchor::SelectedItem(PanelFocus::Library),
@@ -361,6 +388,30 @@ impl App {
             entries: menu_entries,
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// Cached finished state for one menu target across every Audiobookshelf
+    /// browse state. A missing progress entry counts as unfinished (design
+    /// D3), matching how the server reports items without listening progress.
+    fn audiobookshelf_target_finished(&self, target: &AudiobookshelfMenuTarget) -> bool {
+        match target {
+            AudiobookshelfMenuTarget::Episode {
+                library_item_id,
+                episode_id,
+            } => self.audiobookshelf_browse.iter().any(|state| {
+                state.progress.iter().any(|((item, episode), progress)| {
+                    item == library_item_id && episode == episode_id && progress.is_finished
+                })
+            }),
+            AudiobookshelfMenuTarget::Book { library_item_id } => {
+                self.audiobookshelf_book_browse.iter().any(|state| {
+                    state
+                        .progress
+                        .get(library_item_id)
+                        .is_some_and(|progress| progress.is_finished)
+                })
+            }
+        }
     }
 
     /// Keyboard '.' entry (the shared `handle_global_view_key` front door

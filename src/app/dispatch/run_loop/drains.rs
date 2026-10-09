@@ -1,3 +1,4 @@
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PendingQueueAction;
 
 use crate::app::App;
@@ -7,7 +8,81 @@ impl App {
         let mut produced = self.drain_audiobookshelf_worker_events();
         produced |= self.drain_audiobookshelf_setup_event();
         produced |= self.drain_audiobookshelf_catalog_event();
+        produced |= self.drain_audiobookshelf_mark_event();
         produced
+    }
+
+    /// Drain the finished-state mark worker's completion (design D5). A
+    /// completion from a superseded setup generation is dropped whole, the
+    /// same gate the shows completion applies on arrival.
+    fn drain_audiobookshelf_mark_event(&mut self) -> bool {
+        let Some(receiver) = self.setup.audiobookshelf_mark_rx.take() else {
+            return false;
+        };
+        match receiver.rx.try_recv() {
+            Ok(completion) if self.audiobookshelf_runtime.accepts(completion.generation) => {
+                self.apply_audiobookshelf_mark_completion(completion);
+                true
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                self.setup.audiobookshelf_mark_rx = Some(receiver);
+                false
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                // The mark worker always sends one completion before exiting;
+                // a missing message means it died early. Classify it like the
+                // other Audiobookshelf worker disconnects.
+                self.handle_audiobookshelf_worker_disconnect(receiver.generation);
+                true
+            }
+            Ok(_) => false,
+        }
+    }
+
+    fn apply_audiobookshelf_mark_completion(
+        &mut self,
+        completion: crate::app::dispatch::session::service_startup::AudiobookshelfMarkCompletion,
+    ) {
+        match completion.result {
+            Ok(()) => {
+                // Row 7.3 (standard-media-context-menus) applies the accepted
+                // mark to cached browse progress and inactive queue slots at
+                // this hand-off point; until it lands the accepted mark only
+                // lives on the server.
+                tracing::debug!(
+                    name: "audiobookshelf.mark.accepted",
+                    target: "audiobookshelf",
+                    { finished = completion.finished, targets = completion.targets.len() },
+                    "Audiobookshelf finished-state mark accepted"
+                );
+            }
+            Err(error)
+                if matches!(
+                    error.class,
+                    mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected
+                ) =>
+            {
+                // The existing Audiobookshelf authentication failure
+                // classification: fail the Service into NeedsAuthentication
+                // and clear the saved credential (the catalog completion's
+                // credential-rejection path).
+                self.fail_audiobookshelf_service(
+                    completion.generation,
+                    mbv_core::service_runtime::ServiceState::NeedsAuthentication,
+                );
+                let _ = self.clear_audiobookshelf_authentication();
+                self.flash(
+                    format!("Couldn't update Audiobookshelf play state: {error}"),
+                    ToastSeverity::Error,
+                );
+            }
+            Err(error) => {
+                self.flash(
+                    format!("Couldn't update Audiobookshelf play state: {error}"),
+                    ToastSeverity::Error,
+                );
+            }
+        }
     }
 
     fn drain_audiobookshelf_worker_events(&mut self) -> bool {

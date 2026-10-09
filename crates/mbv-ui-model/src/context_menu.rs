@@ -91,6 +91,8 @@ pub enum ContextAction {
     AudiobookshelfPlay(Vec<AudiobookshelfMenuTarget>),
     AudiobookshelfShuffle(Vec<AudiobookshelfMenuTarget>),
     AudiobookshelfEnqueue(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfMarkPlayed(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfMarkUnplayed(Vec<AudiobookshelfMenuTarget>),
 }
 
 #[derive(Clone, Debug)]
@@ -122,7 +124,9 @@ pub fn is_bulk_action(action: Option<&ContextAction>) -> bool {
         Some(
             ContextAction::AudiobookshelfPlay(targets)
             | ContextAction::AudiobookshelfShuffle(targets)
-            | ContextAction::AudiobookshelfEnqueue(targets),
+            | ContextAction::AudiobookshelfEnqueue(targets)
+            | ContextAction::AudiobookshelfMarkPlayed(targets)
+            | ContextAction::AudiobookshelfMarkUnplayed(targets),
         ) => targets.len() > 1,
         _ => false,
     }
