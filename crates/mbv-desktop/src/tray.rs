@@ -4,8 +4,14 @@ use mbv_ctrl::{Direction, OwnerAction, TransportCommand};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray_icon.bin");
+
+/// How often the pinned-flag watcher re-reads the shared "pinned Client
+/// attached" flag to push a menu rebuild, mirroring the daemon event loop's
+/// 1 s `TrayState::poll` cadence for tray reconciliation.
+const PINNED_FLAG_WATCH_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Whether the now-playing rows (`Playing` / `<Title>`) should be shown.
 ///
@@ -212,6 +218,7 @@ pub fn spawn(
     transport_tx: Sender<TransportCommand>,
     pinned_client_attached: Arc<AtomicBool>,
 ) -> Option<Box<dyn Send>> {
+    let flag_for_watcher = Arc::clone(&pinned_client_attached);
     MbvTray {
         shutdown_tx,
         status,
@@ -219,7 +226,10 @@ pub fn spawn(
         pinned_client_attached,
     }
     .spawn()
-    .map(|tray| Box::new(RunningTray(Some(tray))) as Box<dyn Send>)
+    .map(|handle| {
+        spawn_pinned_flag_watcher(handle.clone(), flag_for_watcher);
+        Box::new(RunningTray(Some(handle))) as Box<dyn Send>
+    })
     .map_err(|e| {
         tracing::warn!(
             name: "tray.availability.failed",
@@ -229,6 +239,44 @@ pub fn spawn(
         );
     })
     .ok()
+}
+
+/// Pushes a menu rebuild shortly after the shared "pinned Client attached"
+/// flag changes, so the Pin swap label is correct the next time the menu
+/// opens (spec pin-swap: "The label SHALL reflect the attached Clients each
+/// time the menu opens").
+///
+/// ksni serves the menu from a cache and re-runs `Tray::menu` only when
+/// something asks for an update: a click, an `AboutToShow` from hosts that
+/// signal one, or [`ksni::blocking::Handle::update`]. Nothing here can rely
+/// on the host signaling `AboutToShow`, so the change is pushed instead: a
+/// watcher thread polls the shared flag -- the same shape as the daemon
+/// event loop's 1 s `TrayState::poll`, but with its real clock, because the
+/// injected-instant test seam cannot cross the ksni service boundary. The
+/// rebuild diffs against the cached items, so a poll that finds no change
+/// emits no D-Bus traffic. The thread ends within one interval of the tray
+/// service stopping (`RunningTray` drop), and process exit reclaims it
+/// regardless.
+fn spawn_pinned_flag_watcher(
+    handle: ksni::blocking::Handle<MbvTray>,
+    pinned_client_attached: Arc<AtomicBool>,
+) {
+    let _ = std::thread::Builder::new()
+        .name("mbv-tray-flag-watch".into())
+        .spawn(move || {
+            let mut attached = pinned_client_attached.load(Ordering::SeqCst);
+            loop {
+                if handle.is_closed() {
+                    return;
+                }
+                let now = pinned_client_attached.load(Ordering::SeqCst);
+                if now != attached {
+                    attached = now;
+                    handle.update(|_| {});
+                }
+                std::thread::sleep(PINNED_FLAG_WATCH_INTERVAL);
+            }
+        });
 }
 
 /// Owning wrapper around the ksni handle: dropping it stops the tray
@@ -287,13 +335,22 @@ mod tests {
         st: PlayerStatus,
         pinned_client_attached: bool,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
+        spy_tray_with_flag(Arc::new(AtomicBool::new(pinned_client_attached)), st)
+    }
+
+    /// Like [`spy_tray`], but the caller keeps the shared flag `Arc`, so a
+    /// test can flip it after construction.
+    fn spy_tray_with_flag(
+        pinned_client_attached: Arc<AtomicBool>,
+        st: PlayerStatus,
+    ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
         let (transport_tx, cmd_rx) = std::sync::mpsc::channel();
         let (shutdown_tx, _shutdown_rx) = std::sync::mpsc::sync_channel(1);
         let tray = MbvTray {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
             transport_tx,
-            pinned_client_attached: Arc::new(AtomicBool::new(pinned_client_attached)),
+            pinned_client_attached,
         };
         (tray, cmd_rx)
     }
@@ -375,5 +432,30 @@ mod tests {
             rx.try_recv(),
             Ok(TransportCommand::OwnerAction(OwnerAction::SwapPanel))
         ));
+    }
+
+    /// Contract: tray-pin-swap spec "The label SHALL reflect the attached
+    /// Clients each time the menu opens" -- the label is computed from the
+    /// shared flag at each menu build, not captured at construction. This
+    /// pins the read side of the fix; the write side (pushing a rebuild when
+    /// the flag flips) is `spawn_pinned_flag_watcher`, whose polling loop
+    /// needs the real ksni service and is exercised only live.
+    #[test]
+    fn pin_swap_label_follows_a_flag_flip_after_construction() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let (tray, _rx) = spy_tray_with_flag(Arc::clone(&flag), status(true, false, "A Song"));
+
+        assert_eq!(pin_swap_label_of(&tray), "Pin");
+        flag.store(true, Ordering::SeqCst);
+        assert_eq!(pin_swap_label_of(&tray), "Unpin");
+        flag.store(false, Ordering::SeqCst);
+        assert_eq!(pin_swap_label_of(&tray), "Pin");
+    }
+
+    /// The Pin swap item's label of the current menu build (the item sits
+    /// before the Quit separator, hence second to last).
+    fn pin_swap_label_of(tray: &MbvTray) -> String {
+        let labels = menu_labels(tray);
+        labels[labels.len() - 2].clone()
     }
 }
