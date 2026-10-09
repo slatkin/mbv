@@ -381,6 +381,67 @@ fn failed_mark_completion_leaves_progress_unchanged() {
     );
 }
 
+/// A second mark while one is in flight is refused; PR 914 review. With a
+/// completion channel already pending, the refusal flash shows a Warning
+/// toast, no worker starts (the pending receiver is untouched, so its
+/// completion still drains and applies), and the queue owner receives only
+/// the original mark's update.
+#[test]
+fn a_second_mark_while_one_is_in_flight_is_refused() {
+    let (mut app, cmd_rx) = mark_ready_app();
+    app.audiobookshelf_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+    app.config.lock().unwrap().audiobookshelf_setup = Some(mbv_config::AudiobookshelfSetup::new(
+        "https://podcasts.example",
+    ));
+    mbv_config::save_service_secret(mbv_queue::ServiceKind::Audiobookshelf, "saved-token")
+        .expect("secret is written under the test state dir");
+    seed_episode_progress(&mut app, "episode-a", 2400.0, true);
+
+    // An in-flight mark whose completion the drain has not read yet.
+    let generation = app.audiobookshelf_runtime.generation();
+    feed_mark_completion(
+        &mut app,
+        generation,
+        vec![episode_target("episode-a")],
+        false,
+        Ok(()),
+    );
+
+    app.execute_context_action(
+        Some(ContextAction::AudiobookshelfMarkUnplayed(vec![
+            episode_target("episode-b"),
+        ])),
+        None,
+    );
+
+    assert_eq!(app.status, "Audiobookshelf mark already in progress");
+    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert!(
+        app.setup.audiobookshelf_mark_rx.is_some(),
+        "the pending receiver is untouched"
+    );
+
+    assert!(
+        app.drain_audiobookshelf_events(),
+        "the original mark's completion still applies"
+    );
+    let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
+    assert!(!progress.is_finished, "the original mark was applied");
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(mbv_ctrl::CtrlCmd::UnifiedQueueApplyProgress { updates, .. })
+        if updates == vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+            },
+            position_ticks: 0,
+            finished: false,
+        }]),
+        "the owner receives only the original mark's update"
+    );
+    assert!(cmd_rx.try_recv().is_err(), "the refused mark sends nothing");
+}
+
 /// A credential rejection routes through the existing Audiobookshelf
 /// authentication classification: the Service fails into `NeedsAuthentication`
 /// and the saved credential is cleared (progress is covered by the plain

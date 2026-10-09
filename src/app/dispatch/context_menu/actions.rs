@@ -281,14 +281,24 @@ impl App {
     }
 
     /// Start the finished-state mark worker for `targets` (design D5). A
-    /// Service that is not Ready, or a missing setup or credential, flashes
-    /// the unavailable toast and changes nothing; otherwise the worker runs
-    /// on a thread and reports through the generation-gated mark completion.
+    /// Service that is not Ready, a missing setup or credential, or a mark
+    /// still in flight flashes a toast and changes nothing; otherwise the
+    /// worker runs on a thread and reports through the generation-gated mark
+    /// completion. A mark already in flight holds the only completion
+    /// channel: starting a second worker would orphan the first one's result
+    /// (PR 914 review), so the request is refused outright.
     fn start_audiobookshelf_mark(
         &mut self,
         targets: Vec<AudiobookshelfMenuTarget>,
         finished: bool,
     ) {
+        if self.setup.audiobookshelf_mark_rx.is_some() {
+            self.flash(
+                "Audiobookshelf mark already in progress".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        }
         if self.audiobookshelf_runtime.state != mbv_core::service_runtime::ServiceState::Ready {
             self.flash(
                 "Audiobookshelf is unavailable".into(),
