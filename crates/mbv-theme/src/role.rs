@@ -163,7 +163,7 @@ impl Role {
     ];
 }
 
-/// Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
+/// Hero header metadata cycling roles (task 1.2, design D3): the one title/meta
 /// painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
 /// the Emby hero headers already used, defined once so destinations cannot style
 /// metadata. The caller resolves the indexed role with `.color()`.

@@ -9,8 +9,8 @@
 //! crate-visible, so a screen cannot resolve anything but a named surface
 //! through the resolver.
 //!
-//! The identity names are the archived `unify-surface-colour` change's,
-//! verbatim (D7): they are the reviewed vocabulary.
+//! The identity names are the `theme-slot-model` change's reviewed
+//! vocabulary, kept verbatim from review.
 
 /// Declares the closed `Surface` set from one variant list, so a new variant
 /// cannot be added without the table's `slots` failing to compile until it is
