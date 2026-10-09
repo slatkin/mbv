@@ -116,12 +116,21 @@ fn render_feeds_manage_list(
         })
         .collect();
 
-    let lines: Vec<Line> = model
-        .feeds
+    let lines = feed_row_lines(model.feeds, model.cursor, list_area.width);
+    f.render_widget(Paragraph::new(lines), list_area);
+    FeedsManageRenderGeometry {
+        frame: inner,
+        rows,
+        fields: Vec::new(),
+    }
+}
+
+fn feed_row_lines(feeds: &[FeedSubscription], cursor: usize, list_width: u16) -> Vec<Line<'_>> {
+    feeds
         .iter()
         .enumerate()
         .map(|(i, sub)| {
-            let focused = i == model.cursor;
+            let focused = i == cursor;
             let arrow = if focused { "▸ " } else { "  " };
             let name_style = if focused {
                 Style::default()
@@ -134,7 +143,7 @@ fn render_feeds_manage_list(
                 FeedKind::Audio => "[audio]",
                 FeedKind::Video => "[video]",
             };
-            let url_max = (list_area.width as usize)
+            let url_max = (list_width as usize)
                 .saturating_sub(arrow.len() + sub.name.len() + kind_label.len() + 3);
             Line::from(vec![
                 Span::raw(arrow),
@@ -151,13 +160,7 @@ fn render_feeds_manage_list(
                 ),
             ])
         })
-        .collect();
-    f.render_widget(Paragraph::new(lines), list_area);
-    FeedsManageRenderGeometry {
-        frame: inner,
-        rows,
-        fields: Vec::new(),
-    }
+        .collect()
 }
 
 fn render_feeds_manage_form(
