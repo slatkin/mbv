@@ -173,6 +173,11 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // Music keeps its persisted pill: the selected group restores across
+        // a restart (no Latest pill exists here). The selected album/artist
+        // is never recorded, so restoration always lands on the first row;
+        // the former artist fallback existed only so a saved item could
+        // restore.
         let selector = self
             .context
             .groups
@@ -181,16 +186,7 @@ impl LibraryContentOwner for MusicContent {
             .map(|group| SelectorIdentity::Emby {
                 key: EmbySelectorKey::Group(group.id),
             });
-        // An artist root never writes the ordinary album-persistence request
-        // (task 2.2), so without this fallback a teardown while an artist
-        // row is focused would save no item at all and restore would revert
-        // to the default first album instead of the artist the user left
-        // selected.
-        let item = self
-            .selected_album_target()
-            .or_else(|| self.selected_artist_launch_id())
-            .map(|id| LibraryItemIdentity::Emby { id });
-        (selector, item)
+        (selector, None)
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {

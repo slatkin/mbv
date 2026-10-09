@@ -7,8 +7,7 @@
 use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryPanel};
 use mbv_config::{
-    FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
-    SelectorIdentity,
+    FeedGroupKey, FeedSubscription, FeedsSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
 use mbv_queue::FeedEntry;
 use mbv_queue::FeedKind;
@@ -146,7 +145,9 @@ fn down(owner: &mut FeedsContent, code: Key) -> Option<Msg> {
 }
 
 #[test]
-fn launch_snapshot_uses_feed_filter_and_selected_entry_identity() {
+fn launch_snapshot_records_latest_and_no_item_regardless_of_filter_or_entry() {
+    // The persisted pill scope is Latest whenever subscriptions exist; a
+    // watched-filter choice and the selected entry are session memory.
     let mut owner = component();
     down(&mut owner, Key::Char('w'));
     down(&mut owner, Key::Down);
@@ -155,11 +156,9 @@ fn launch_snapshot_uses_feed_filter_and_selected_entry_identity() {
         owner.launch_snapshot(),
         (
             Some(SelectorIdentity::Feeds {
-                key: FeedsSelectorKey::Filter(FeedsFilter::Played),
+                key: FeedsSelectorKey::Latest,
             }),
-            Some(LibraryItemIdentity::Feeds {
-                id: "Second".into(),
-            }),
+            None,
         )
     );
 }
@@ -188,14 +187,14 @@ fn feeds_owner_reanchors_missing_group_and_item_to_first_choices() {
 }
 
 #[test]
-fn launch_snapshot_uses_feed_url_for_group_identity() {
+fn launch_snapshot_records_latest_even_with_a_group_selected() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Char(']'));
 
     assert_eq!(
         owner.launch_snapshot().0,
         Some(SelectorIdentity::Feeds {
-            key: FeedsSelectorKey::Group(FeedGroupKey::Feed("https://example.test/A".into(),)),
+            key: FeedsSelectorKey::Latest,
         })
     );
 }

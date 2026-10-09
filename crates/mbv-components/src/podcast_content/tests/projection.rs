@@ -2,7 +2,10 @@ use super::*;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 #[test]
-fn reanchor_launch_state_falls_back_to_first_show_scope_and_episode() {
+fn reanchor_launch_state_resolves_a_legacy_show_key_to_the_default_scope() {
+    // A show/show-item snapshot written by an older version decodes but
+    // resolves to the destination default (spec: podcast restart starts on
+    // Latest); the legacy item rule still applies within that scope.
     let mut owner = owner();
     let state = mbv_config::TuiLaunchState {
         version: mbv_config::TUI_LAUNCH_STATE_VERSION,
@@ -27,27 +30,9 @@ fn reanchor_launch_state_falls_back_to_first_show_scope_and_episode() {
 }
 
 #[test]
-fn launch_snapshot_uses_filter_and_episode_identity() {
-    let mut owner = owner();
-    owner.set_pill(PillSelection::State(AudiobookshelfEpisodeFilter::Played));
-
-    let (selector, item) = owner.launch_snapshot();
-    assert_eq!(
-        selector,
-        Some(SelectorIdentity::Audiobookshelf {
-            key: AudiobookshelfSelectorKey::PodcastFilter(AudiobookshelfPodcastFilter::Played,),
-        })
-    );
-    assert_eq!(
-        item,
-        Some(LibraryItemIdentity::Audiobookshelf {
-            id: "alpha\0dated".into(),
-        })
-    );
-}
-
-#[test]
-fn launch_snapshot_uses_show_id_and_selected_episode_identity() {
+fn launch_snapshot_records_latest_and_no_item_regardless_of_the_live_pill() {
+    // The persisted pill scope is always Latest; a show or state pill is
+    // session memory, and the selected episode never persists.
     let mut owner = owner();
     owner.set_pill(PillSelection::Show("beta".into()));
 
@@ -55,11 +40,9 @@ fn launch_snapshot_uses_show_id_and_selected_episode_identity() {
         owner.launch_snapshot(),
         (
             Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastShow("beta".into()),
+                key: AudiobookshelfSelectorKey::Latest,
             }),
-            Some(LibraryItemIdentity::Audiobookshelf {
-                id: "beta\0beta-one".into(),
-            }),
+            None,
         )
     );
 }

@@ -6,9 +6,9 @@ use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::super::media_list::MediaListOperation;
 use super::{
-    FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, Key, KeyEvent, LeafKeyResult,
-    LibraryItemIdentity, MAX_GROUP_LABEL, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity,
-    ShellRequest, TerminalObserverEvent, WatchedFilter, trunc_str,
+    FeedsContent, FeedsSelectorKey, Key, KeyEvent, LeafKeyResult, LibraryItemIdentity,
+    MAX_GROUP_LABEL, MediaListSurfaceInput, Msg, RowIntent, SelectorIdentity, ShellRequest,
+    TerminalObserverEvent, WatchedFilter, trunc_str,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 
@@ -99,40 +99,9 @@ impl LibraryContentOwner for FeedsContent {
             self.latest_selected = false;
             self.rebuild_visible_entries();
         } else {
-            match state.selector.as_ref() {
-                Some(SelectorIdentity::Feeds {
-                    key: FeedsSelectorKey::Latest,
-                }) => {
-                    self.latest_selected = true;
-                }
-                Some(SelectorIdentity::Feeds {
-                    key: FeedsSelectorKey::Filter(filter),
-                }) => {
-                    self.latest_selected = false;
-                    self.selected_group = 0;
-                    self.watched_filter = match filter {
-                        FeedsFilter::All => WatchedFilter::All,
-                        FeedsFilter::Played => WatchedFilter::Watched,
-                        FeedsFilter::Unplayed => WatchedFilter::Unwatched,
-                    };
-                }
-                Some(SelectorIdentity::Feeds {
-                    key: FeedsSelectorKey::Group(FeedGroupKey::Feed(url)),
-                }) => {
-                    self.latest_selected = false;
-                    self.selected_group = self
-                        .subscriptions
-                        .iter()
-                        .position(|subscription| &subscription.url == url)
-                        .map_or(0, |index| index + 1);
-                    self.watched_filter = WatchedFilter::All;
-                }
-                _ => {
-                    self.latest_selected = false;
-                    self.selected_group = 0;
-                    self.watched_filter = WatchedFilter::All;
-                }
-            }
+            // The persisted scope is always Latest; a legacy filter/group
+            // key in an old snapshot decodes but resolves to Latest too.
+            self.latest_selected = true;
             self.rebuild_visible_entries();
         }
         let selected = match state.item.as_ref() {
@@ -146,40 +115,13 @@ impl LibraryContentOwner for FeedsContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let selector = if self.subscriptions.is_empty() {
-            None
-        } else if self.latest_selected {
-            Some(SelectorIdentity::Feeds {
-                key: FeedsSelectorKey::Latest,
-            })
-        } else if self.selected_group == 0 && self.watched_filter != WatchedFilter::All {
-            // The combined row's active pill is the filter block or the
-            // selected Feed group. A non-default filter is the only stable
-            // identity for the filter state in the current group.
-            Some(SelectorIdentity::Feeds {
-                key: FeedsSelectorKey::Filter(match self.watched_filter {
-                    WatchedFilter::All => FeedsFilter::All,
-                    WatchedFilter::Watched => FeedsFilter::Played,
-                    WatchedFilter::Unwatched => FeedsFilter::Unplayed,
-                }),
-            })
-        } else if self.selected_group == 0 {
-            Some(SelectorIdentity::Feeds {
-                key: FeedsSelectorKey::Group(FeedGroupKey::All),
-            })
-        } else {
-            self.subscriptions
-                .get(self.selected_group - 1)
-                .map(|subscription| SelectorIdentity::Feeds {
-                    key: FeedsSelectorKey::Group(FeedGroupKey::Feed(subscription.url.clone())),
-                })
-        };
-        let item = self
-            .carrier
-            .selected_target()
-            .cloned()
-            .map(|id| LibraryItemIdentity::Feeds { id });
-        (selector, item)
+        // The persisted pill scope is Latest whenever subscriptions exist;
+        // a filter or group choice is session memory. The selected entry is
+        // never recorded, so restoration always lands on the first row.
+        let selector = (!self.subscriptions.is_empty()).then_some(SelectorIdentity::Feeds {
+            key: FeedsSelectorKey::Latest,
+        });
+        (selector, None)
     }
 
     /// Forwards to the inherent content-preserving reset (design D3).

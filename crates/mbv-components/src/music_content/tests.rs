@@ -68,74 +68,22 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         TreeConsumed::Consumed
     );
 
+    // The group pill persists; the selected tree node never does.
     assert_eq!(
         owner.launch_snapshot(),
         (
             Some(mbv_config::SelectorIdentity::Emby {
                 key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
             }),
-            Some(mbv_config::LibraryItemIdentity::Emby {
-                id: "album-stable".into(),
-            }),
+            None,
         )
     );
 }
 
-// Regression for the music-tree-reverts-on-restart bug: an artist root
-// never writes the ordinary album-persistence request (task 2.2), so
-// without the artist fallback in `launch_snapshot`, quitting while an
-// artist row is focused saved no item at all, and the next launch's
-// `reanchor_launch_state` fell back to the group's default first album
-// instead of the artist the user actually left selected.
-#[test]
-fn grouped_music_launch_snapshot_falls_back_to_focused_artist_when_no_album_selected() {
-    let mut album = make_item("Album", "Folder");
-    album.id = "album-stable".into();
-    let mut group = make_item("Artist", "MusicArtist");
-    group.id = "group-stable".into();
-    let mut owner = MusicContent::new();
-    owner.set_content(MusicWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![album], 0),
-        None,
-        String::new(),
-        vec![group],
-        0,
-        vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![mbv_ui_model::music_grouping::ArtistKey::Service(
-            "artist-service-id".into(),
-        )],
-        vec![0],
-        None,
-    ));
-    assert_eq!(
-        owner
-            .browser
-            .apply(TreeOperation::AnchorSelection {
-                target: MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(
-                    "artist-service-id".into(),
-                )),
-                flow_offset: 0,
-            })
-            .disposition,
-        TreeConsumed::Consumed
-    );
-
-    assert_eq!(
-        owner.launch_snapshot(),
-        (
-            Some(mbv_config::SelectorIdentity::Emby {
-                key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
-            }),
-            Some(mbv_config::LibraryItemIdentity::Emby {
-                id: "artist-service-id".into(),
-            }),
-        )
-    );
-}
-
-// Companion restore side of the regression above: a saved artist id
-// reselects the artist root itself (collapsed, no album expanded), instead
-// of the pre-fix behaviour of falling through to the default first album.
+// Companion restore side of the music-tree-reverts-on-restart regression: a
+// saved artist id (today only a legacy snapshot carries one) reselects the
+// artist root itself (collapsed, no album expanded), instead of the pre-fix
+// behaviour of falling through to the default first album.
 #[test]
 fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album() {
     let mut album = make_item("Album", "Folder");
@@ -176,10 +124,10 @@ fn reanchor_launch_state_restores_focused_artist_without_expanding_default_album
 
 // Startup regression (real repro): quit with the Jazz pill selected and its
 // first artist, a Fallback-keyed root (no stable Service id, the common case
-// for this library), selected but collapsed. On relaunch the saved pill plus
-// saved artist item must restore exactly that: the artist selected and still
-// collapsed, and nothing else in the group expanded -- not the saved
-// artist's own first album, and not any other artist's.
+// for this library), selected but collapsed. A legacy snapshot that still
+// carries the saved artist item must restore exactly that: the artist
+// selected and still collapsed, and nothing else in the group expanded -- not
+// the saved artist's own first album, and not any other artist's.
 #[test]
 fn launch_restore_selects_the_saved_artist_collapsed_and_expands_nothing() {
     let mut first_album = make_item("First Artist Album", "Folder");
@@ -279,17 +227,15 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
     assert!(owner.reanchor_launch_state(&state));
     // The default fallback selects the first visible row (the collapsed
     // artist root) rather than expanding into its first album (product
-    // rule: a programmatic selection never changes expansion), so the
-    // snapshot carries the artist's own fallback-name identity.
+    // rule: a programmatic selection never changes expansion). The snapshot
+    // carries the group pill and never an item.
     assert_eq!(
         owner.launch_snapshot(),
         (
             Some(mbv_config::SelectorIdentity::Emby {
                 key: mbv_config::EmbySelectorKey::Group("group-stable".into()),
             }),
-            Some(mbv_config::LibraryItemIdentity::Emby {
-                id: "Artist".into(),
-            }),
+            None,
         )
     );
     assert!(owner.launch_selector(&state).is_none());

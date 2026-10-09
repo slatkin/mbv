@@ -8,9 +8,7 @@
 //! pill bar.
 
 use mbv_audiobookshelf::AudiobookshelfDownloadedEpisode;
-use mbv_config::{
-    AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
-};
+use mbv_config::{AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_seconds};
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 

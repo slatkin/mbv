@@ -1,0 +1,111 @@
+//! Launch-state contract tests for the Emby library owner: the persisted
+//! pill scope is always Latest for a pill-bearing library, other pill
+//! choices and the selected item are session memory (change
+//! `latest-pill-restart-default`).
+
+use super::{BrowserOwnerPush, EmbyLibraryContent, EmbySelectorMode};
+use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner};
+use mbv_config::{
+    EmbyLetterBucket, EmbySelectorKey, LaunchPanelFocus, SelectorIdentity,
+    TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState,
+};
+use mbv_emby_model::test_support::make_item;
+use mbv_ui_model::library::LibraryKind;
+use mbv_ui_model::sort_filter::{LetterFilter, LetterFilterKind};
+
+fn push_with_letters() -> BrowserOwnerPush {
+    let mut item = make_item("Item", "Movie");
+    item.id = "item-a".into();
+    BrowserOwnerPush {
+        items: vec![item],
+        latest_items: Vec::new(),
+        total_count: 1,
+        library_total: Some(400),
+        letter_filter: Some(
+            LetterFilter::for_index_for_kind(0, LetterFilterKind::Movie)
+                .expect("movie letter index 0"),
+        ),
+        loading: false,
+        selector_mode: EmbySelectorMode::Letters,
+        feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
+        feed_group_cursor: 0,
+    }
+}
+
+fn launch_state(selector: Option<mbv_config::SelectorIdentity>) -> TuiLaunchState {
+    TuiLaunchState {
+        version: TUI_LAUNCH_STATE_VERSION,
+        tab: TabIdentity::Home,
+        panel_focus: LaunchPanelFocus::Library,
+        selector,
+        item: None,
+    }
+}
+
+#[test]
+fn launch_snapshot_records_latest_and_no_item_despite_an_active_letter_pill() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    owner.set_content(push_with_letters());
+
+    assert_eq!(
+        owner.launch_snapshot(),
+        (
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            }),
+            None,
+        )
+    );
+}
+
+#[test]
+fn launch_snapshot_records_latest_for_a_feed_group_library() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::HomeVideos);
+    let mut push = push_with_letters();
+    push.selector_mode = EmbySelectorMode::FeedGroups;
+    push.letter_filter = None;
+    push.feed_groups = vec!["Group A".into()];
+    push.feed_group_ids = vec!["group-a".into()];
+    push.feed_group_cursor = 1;
+    owner.set_content(push);
+
+    assert_eq!(
+        owner.launch_snapshot().0,
+        Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Latest,
+        })
+    );
+}
+
+#[test]
+fn a_pill_less_library_records_no_selector() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    let mut push = push_with_letters();
+    push.selector_mode = EmbySelectorMode::None;
+    push.letter_filter = None;
+    owner.set_content(push);
+
+    assert_eq!(owner.launch_snapshot().0, None);
+}
+
+#[test]
+fn restore_applies_only_a_latest_selector() {
+    // Latest applies while the owner is not already in Latest mode...
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    owner.set_content(push_with_letters());
+    assert_eq!(
+        owner.launch_selector(&launch_state(Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Latest,
+        }))),
+        Some(LaunchSelector::EmbyLatest)
+    );
+    // ...and a legacy letter selector in an old snapshot applies nothing,
+    // leaving the library default.
+    assert_eq!(
+        owner.launch_selector(&launch_state(Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Letter(EmbyLetterBucket::from_index(0).expect("bucket 0")),
+        }))),
+        None
+    );
+}

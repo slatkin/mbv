@@ -20,6 +20,23 @@ fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
+/// Load the legacy per-library position document with its pill fields
+/// cleared. The document is a startup migration reader only — it is never
+/// written — so its letter-filter, TV content mode, and feed-group fields
+/// would otherwise resurrect a pill from an old run forever. Pill choices
+/// are session memory; restart always resolves the destination's default.
+fn load_position_state_without_pills() -> mbv_queue::LibraryPositionState {
+    let mut state = crate::config::load_library_position_state();
+    for position in state.libraries.values_mut() {
+        position.feed_selected_group = 0;
+        for level in &mut position.levels {
+            level.letter_filter_index = None;
+            level.tv_content_mode = None;
+        }
+    }
+    state
+}
+
 fn independent_emby_runtime(configured: bool, credential_present: bool) -> EmbyRuntime {
     let mut runtime = EmbyRuntime::new(configured);
     runtime.state = crate::app::dispatch::session::service_startup::initial_state(
@@ -99,7 +116,7 @@ impl App {
                 resize_register_tx,
                 resize_response_rx,
             ),
-            library_position_state: crate::config::load_library_position_state(),
+            library_position_state: load_position_state_without_pills(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
             home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow {
@@ -256,5 +273,47 @@ impl App {
     /// Initialize terminal image pickers before the TUI listener starts.
     pub(crate) fn init_image_pickers(&mut self) {
         self.images.init_image_pickers();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use mbv_queue::{LibraryPosition, LibraryPositionLevel, LibraryPositionState, TvContentMode};
+
+    use super::load_position_state_without_pills;
+
+    /// Owns the spec rule that the legacy position document cannot
+    /// resurrect a pill: its letter-filter, TV mode, and feed-group fields
+    /// are cleared at load, while the rest of the position survives.
+    #[test]
+    fn loading_the_legacy_position_document_clears_its_pill_fields() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        mbv_config::save_library_position_state(&LibraryPositionState {
+            libraries: HashMap::from([(
+                "lib-movies".to_string(),
+                LibraryPosition {
+                    feed_selected_group: 2,
+                    levels: vec![LibraryPositionLevel {
+                        focused_item_id: Some("kept-item".into()),
+                        cursor_index: 4,
+                        letter_filter_index: Some(3),
+                        tv_content_mode: Some(TvContentMode::Range(2)),
+                        ..LibraryPositionLevel::default()
+                    }],
+                    ..LibraryPosition::default()
+                },
+            )]),
+        });
+
+        let loaded = load_position_state_without_pills();
+        let position = loaded.libraries.get("lib-movies").expect("entry");
+        assert_eq!(position.feed_selected_group, 0);
+        let level = &position.levels[0];
+        assert_eq!(level.letter_filter_index, None);
+        assert_eq!(level.tv_content_mode, None);
+        assert_eq!(level.focused_item_id.as_deref(), Some("kept-item"));
+        assert_eq!(level.cursor_index, 4);
     }
 }

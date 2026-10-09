@@ -373,3 +373,6 @@ impl EmbyLibraryContent {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests;

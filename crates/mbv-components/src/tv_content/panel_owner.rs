@@ -1,9 +1,9 @@
 use super::{
-    EmbyItem, EmbyLetterBucket, EmbySelectorKey, HeroContent, HeroContentData, InlineSearch,
-    InlineSearchHost, KeyEvent, LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner,
-    LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane,
-    SelectorIdentity, SelectorRow, TvContent, TvDisplayMode, TvTreeTarget, Workspace,
-    hero_content_emby, hero_content_series_with_episode,
+    EmbyItem, HeroContent, HeroContentData, InlineSearch, InlineSearchHost, KeyEvent,
+    LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner, LibraryItemIdentity,
+    LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
+    TvContent, TvDisplayMode, TvTreeTarget, Workspace, hero_content_emby,
+    hero_content_series_with_episode,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 
@@ -243,33 +243,12 @@ impl LibraryContentOwner for TvContent {
 
     fn launch_selector(
         &self,
-        state: &mbv_config::TuiLaunchState,
+        _state: &mbv_config::TuiLaunchState,
     ) -> Option<super::super::library_panel::owner::LaunchSelector> {
-        if !self.context.show_letter_pills {
-            return None;
-        }
-        let current = self
-            .context
-            .list
-            .letter_filter
-            .as_ref()
-            .map(|filter| filter.index);
-        match state.selector.as_ref() {
-            Some(SelectorIdentity::Emby {
-                key: EmbySelectorKey::Letter(bucket),
-            }) => {
-                let target = bucket.to_index();
-                (current != Some(target)).then_some(
-                    super::super::library_panel::owner::LaunchSelector::Emby { index: target },
-                )
-            }
-            // No letter pill is represented by an index. The shell uses
-            // this out-of-band value for the distinct clear intent.
-            _ if current.is_some() => {
-                Some(super::super::library_panel::owner::LaunchSelector::Emby { index: usize::MAX })
-            }
-            _ => None,
-        }
+        // TV's mode and letter pill are session memory: a restart resolves
+        // the count-dependent default through the load path, and a legacy
+        // letter selector in an old snapshot applies nothing.
+        None
     }
 
     fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
@@ -290,25 +269,11 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        // TV's season pills live in the Hero Workspace and are deliberately
-        // excluded from the bounded launch snapshot. Only the main letter
-        // Selector and the selected series belong here.
-        let selector = self.context.show_letter_pills.then(|| {
-            let key = self
-                .context
-                .list
-                .letter_filter
-                .as_ref()
-                .and_then(|filter| EmbyLetterBucket::from_index(filter.index))
-                .map_or(EmbySelectorKey::Unfiltered, EmbySelectorKey::Letter);
-            SelectorIdentity::Emby { key }
-        });
-        let item = self
-            .carrier
-            .selected_target()
-            .cloned()
-            .map(|id| LibraryItemIdentity::Emby { id });
-        (selector, item)
+        // TV's mode, letter pill, and season pills are all session memory:
+        // restart resolves the count-dependent default mode through the load
+        // path, so the snapshot records no selector and no item (restoration
+        // always lands on the first row).
+        (None, None)
     }
 
     fn focus_hero_workspace(&mut self) -> bool {

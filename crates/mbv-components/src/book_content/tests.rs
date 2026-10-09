@@ -135,7 +135,9 @@ fn tab_focuses_chapters_when_the_selected_book_has_chapters() {
 }
 
 #[test]
-fn launch_snapshot_uses_surname_bucket_identity_and_book_id() {
+fn launch_snapshot_uses_surname_bucket_identity_and_no_item() {
+    // Books keep their persisted pill (the surname bucket) but never record
+    // the selected book: restoration always lands on the first row.
     let mut owner = BookContent::new();
     owner.set_content(
         &state_with_books(vec![book("book-a", "Adams"), book("book-d", "Dover")]),
@@ -147,9 +149,7 @@ fn launch_snapshot_uses_surname_bucket_identity_and_book_id() {
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::AToC),
             }),
-            Some(LibraryItemIdentity::Audiobookshelf {
-                id: "book-a".into(),
-            }),
+            None,
         )
     );
 
@@ -158,12 +158,6 @@ fn launch_snapshot_uses_surname_bucket_identity_and_book_id() {
         owner.launch_snapshot().0,
         Some(SelectorIdentity::Audiobookshelf {
             key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::DToF),
-        })
-    );
-    assert_eq!(
-        owner.launch_snapshot().1,
-        Some(LibraryItemIdentity::Audiobookshelf {
-            id: "book-d".into(),
         })
     );
 

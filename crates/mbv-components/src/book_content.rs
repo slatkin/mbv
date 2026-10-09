@@ -515,6 +515,10 @@ impl LibraryContentOwner for BookContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // Books keep their persisted pill: the selected surname bucket
+        // restores across a restart (no Latest pill exists here). The
+        // selected book is never recorded, so restoration always lands on
+        // the first row.
         let selector = self
             .state
             .buckets
@@ -523,12 +527,7 @@ impl LibraryContentOwner for BookContent {
             .map(|bucket| SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::BookBucket(bucket),
             });
-        let item = self
-            .carrier
-            .selected_target()
-            .cloned()
-            .map(|id| LibraryItemIdentity::Audiobookshelf { id });
-        (selector, item)
+        (selector, None)
     }
 
     fn clear_selection(&mut self) {

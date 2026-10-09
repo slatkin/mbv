@@ -270,12 +270,9 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
             key: mbv_config::HomeSelectorKey::Continue,
         })
     );
-    assert_eq!(
-        state.item,
-        Some(mbv_config::LibraryItemIdentity::Home {
-            id: "selected-home-item".into(),
-        })
-    );
+    // The selected item never persists: restoration always lands on the
+    // first row of the restored scope.
+    assert_eq!(state.item, None);
 
     let serialized = std::fs::read_to_string(mbv_config::tui_launch_state_path())
         .expect("serialized launch snapshot");
