@@ -6,6 +6,7 @@ use super::{
     pid_file, project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
     start_queue_enrichment,
 };
+use crate::event_loop::PinSwapState;
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
@@ -143,6 +144,7 @@ struct DaemonStarted {
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
     tray: TrayState,
+    pin_swap: PinSwapState,
     /// Shared with the ctrl registry, which keeps it current (design D3).
     pinned_client_attached: Arc<AtomicBool>,
 }
@@ -264,6 +266,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // it in step with the live settings.
     let mut tray = TrayState::new(hooks.on_tray_ready, shutdown_signal_tx.clone());
     tray.reconcile(owner_settings().tray_enabled);
+    let pin_swap = PinSwapState::new(hooks.swap_command, hooks.notify, merged_tx.clone());
     forward_transport(transport_rx, merged_tx.clone());
 
     let tx = merged_tx.clone();
@@ -309,6 +312,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         ws_send_tx,
         owner_settings,
         tray,
+        pin_swap,
         pinned_client_attached,
     }
 }
@@ -540,6 +544,7 @@ pub fn run_with_options(
         ws_send_tx,
         owner_settings,
         tray,
+        pin_swap,
         pinned_client_attached,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
@@ -607,6 +612,7 @@ pub fn run_with_options(
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
         queue_persist_tx: Some(queue_persist_tx),
         tray,
+        pin_swap,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

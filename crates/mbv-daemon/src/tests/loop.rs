@@ -103,6 +103,11 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let settings = Arc::new(Mutex::new(OwnerSettings::default()));
     let current_settings = Arc::clone(&settings);
+    let pin_swap = PinSwapState::new(
+        Box::new(|_direction| Err("no swap command in tests".to_string())),
+        Box::new(|_message| ()),
+        merged_tx.clone(),
+    );
     let event_loop = DaemonLoop {
         owner: owner_with(items, active),
         player: cold_player(),
@@ -128,6 +133,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         }),
         queue_persist_tx: None,
         tray: null_tray(),
+        pin_swap,
     };
     TestLoop {
         event_loop,

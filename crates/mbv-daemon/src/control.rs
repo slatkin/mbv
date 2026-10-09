@@ -430,11 +430,11 @@ fn dispatch_ctrl_command(
             let _ = ctx.merged_tx.send(DaemonEvent::Shutdown);
         }
         CtrlCmd::ApplyServiceSetup { .. } => {}
-        // Pin-swap control messages are consumed by the swap state machine
-        // (tray-pin-swap task 3.3); no machine is running yet, so no daemon
-        // sends `SwapPrepare` and no Client answers `SwapPrepared`.
+        // The Pin-swap state machine consumes its target's `SwapPrepared` in
+        // the event loop (tray-pin-swap task 3.3) before role dispatch; this
+        // arm only covers direct `handle_ctrl_for_role` callers.
         CtrlCmd::SwapPrepared => {
-            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared (no swap state machine yet)");
+            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
         }
         // Owner actions run through the owner-action handler (tray-pin-swap
         // task 3.5); an `owner-action` connection is not admitted yet.

@@ -13,9 +13,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 mod control_events;
+mod pin_swap;
 mod player_events;
 mod service_events;
 mod tray;
+pub(crate) use pin_swap::PinSwapState;
 pub(crate) use tray::TrayState;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,6 +81,8 @@ pub(crate) struct DaemonLoop {
     pub(super) queue_persist_tx: Option<mpsc::Sender<super::QueuePersistenceRequest>>,
     /// Tray ownership reconciled against the live owner settings (design D4).
     pub(super) tray: TrayState,
+    /// Pin-swap state machine (tray-pin-swap design D3).
+    pub(super) pin_swap: PinSwapState,
 }
 
 impl DaemonLoop {
@@ -102,6 +106,7 @@ impl DaemonLoop {
             self.last_capabilities = now;
         }
         self.tray.poll(now, &self.owner_settings);
+        self.pin_swap.poll(now);
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
@@ -193,6 +198,10 @@ impl DaemonLoop {
                 fetched,
             ),
             DaemonEvent::CtrlDisconnected(client_id) => self.handle_ctrl_disconnected(client_id),
+            DaemonEvent::PinSwapChildExited { token, success } => {
+                self.pin_swap.on_child_exited(&token, success);
+                EventOutcome::CONTINUE
+            }
             DaemonEvent::LastClientGone => {
                 if self.role == DaemonRole::Local
                     && !(self.owner_settings)().stay_alive

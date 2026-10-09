@@ -85,6 +85,12 @@ pub(super) enum DaemonEvent {
         fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     },
     CtrlDisconnected(CtrlClientId),
+    /// A Pin-swap waiter thread reports the replacement process's exit
+    /// status, keyed by the one-shot swap token (tray-pin-swap design D3).
+    PinSwapChildExited {
+        token: String,
+        success: bool,
+    },
     LastClientGone,
     Shutdown,
 }
