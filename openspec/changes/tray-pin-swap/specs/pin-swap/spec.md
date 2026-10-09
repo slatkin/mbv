@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Lets the user move their mbv session between the pinned panel and a normal terminal from the Tray,
-by replacing one Client with a new Client in the other mode while the Owner process keeps playing.
+Lets the user move their mbv session between the pinned panel and a normal terminal from the Tray
+or `mbv --swap-panel`, by replacing one Client with a new Client in the other mode while the Owner
+process keeps playing.
 
 ## ADDED Requirements
 
@@ -22,6 +23,32 @@ opens. Only Clients attached over the local transport SHALL count.
 
 - **WHEN** the user opens the Tray menu while no pinned Client is attached
 - **THEN** the menu SHALL show **Pin** and no **Unpin** item
+
+### Requirement: `mbv --swap-panel` runs the Pin swap
+
+`mbv --swap-panel` SHALL run the Pin swap that the Tray item would run at that moment: **Unpin**
+while a pinned Client is attached, otherwise **Pin**, with the same target Client and the same
+behavior. It SHALL work whether or not the Tray is shown. When the Owner process refuses to start
+the swap, the CLI SHALL report the reason and exit 1.
+
+#### Scenario: Pin from a shell
+
+- **WHEN** one unpinned Client is attached and the user runs `mbv --swap-panel` in another terminal
+- **THEN** a pinned Client SHALL start and the unpinned Client SHALL exit after it attaches
+- **THEN** the CLI SHALL exit 0
+
+#### Scenario: Swap already running
+
+- **WHEN** a Pin swap is in progress and the user runs `mbv --swap-panel`
+- **THEN** no second process SHALL start
+- **THEN** the CLI SHALL say a panel swap is already running and exit 1
+
+#### Scenario: Unpin with no terminal command
+
+- **WHEN** a pinned Client is attached, `[panel] terminal` and `TERMINAL` are both unset, and the
+  user runs `mbv --swap-panel`
+- **THEN** the pinned Client SHALL stay attached and the desktop notification SHALL be sent
+- **THEN** the CLI SHALL name `[panel] terminal` and `TERMINAL` on stderr and exit 1
 
 ### Requirement: Pin replaces the newest unpinned Client
 
@@ -80,8 +107,8 @@ position SHALL be unaffected by the swap.
 
 If the new Client cannot be started, or does not attach within 10 seconds, the Owner process SHALL
 abandon the swap, leave the old Client attached and running, and send a desktop notification
-naming the reason. Only one Pin swap SHALL run at a time; choosing the Tray item while one runs
-SHALL do nothing.
+naming the reason. Only one Pin swap SHALL run at a time; a second request from the Tray or the
+CLI while one runs SHALL start nothing.
 
 #### Scenario: Terminal command does not exist
 

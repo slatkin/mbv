@@ -61,8 +61,9 @@ While `stay_alive` is false, the local daemon SHALL admit at most one attached c
 attempt made while a client is already attached SHALL be refused with a reason identifying the
 exclusive owner, before any queue or playback state is sent, and the refused connection SHALL NOT
 affect the attached client. Clients already attached when Stay Alive is turned off SHALL remain
-attached. The one exception is the Client the daemon itself started for a Pin swap in progress,
-which SHALL be admitted once; any other connection during the swap SHALL still be refused.
+attached. Two exceptions apply. The Client the daemon itself started for a Pin swap in progress
+SHALL be admitted once; any other Client connection during the swap SHALL still be refused. A
+local Owner action request (`owner-actions`) is not a client and SHALL be admitted.
 
 #### Scenario: Second terminal with Stay Alive off
 
@@ -88,3 +89,9 @@ which SHALL be admitted once; any other connection during the swap SHALL still b
 - **THEN** the daemon SHALL admit the pinned Client it started
 - **THEN** a terminal mbv started by the user during the swap SHALL be refused with the
   exclusive-owner reason
+
+#### Scenario: `mbv --swap-panel` with Stay Alive off
+
+- **WHEN** `stay_alive` is false, one TUI is attached, and the user runs `mbv --swap-panel`
+- **THEN** the daemon SHALL admit the request and start the Pin swap
+- **THEN** the request SHALL NOT count as a second attached client

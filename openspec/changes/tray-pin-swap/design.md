@@ -33,7 +33,11 @@ See proposal.md for the motivation. The constraints that shape the approach:
 - Moving a live TUI process between terminals (see D1).
 - Carrying state beyond `TuiLaunchState`.
 - Any pinwin change.
-- A keybinding or CLI form of the swap. The Tray is the only trigger in this change.
+- A keybinding form of the swap. The Tray and `mbv --swap-panel` are the only triggers.
+- Moving the other Tray items (Play/Pause, Next, Previous, Quit) onto Owner actions. D7 makes that
+  a later, mechanical change.
+- The Tray starting `mbv --swap-panel` as a child process. The Tray lives in the Owner process and
+  sends the same `OwnerAction` in-process (D7).
 - Swapping Clients attached over TCP, or Clients of `mbvd`.
 
 ## Decisions
@@ -62,7 +66,7 @@ All of it is additive and negotiated by capability. No protocol version bump.
   for a swap. The value comes from the `MBV_SWAP_TOKEN` environment variable. The Client removes
   the variable from its own environment once it has read it, before it spawns any worker.
 - `CtrlEvent::SwapPrepare` (Owner to target): save launch state now.
-- `CtrlCommand::SwapPrepared` (target to Owner): saved.
+- `CtrlCmd::SwapPrepared` (target to Owner): saved.
 - `CtrlEvent::SwapQuit` (Owner to target): exit now as swapped out.
 
 The Owner's registry stores one value per Client, derived at Hello:
@@ -87,11 +91,15 @@ follows that module's shape: owned state, and a `poll(now)` that the loop calls 
  any --deadline / spawn error / child exit != 0 / T gone while Preparing--> notify --> Idle
 ```
 
-- The tray sends a new `TransportCommand::PinSwap`. The loop picks the direction from the
-  registry, not from the label the Tray showed, so a stale menu cannot act on the wrong Client.
+- A swap starts from `OwnerAction::SwapPanel` (D7), whether the Tray or the CLI sent it. The loop
+  picks the direction from the registry, not from the label the Tray showed, so a stale menu
+  cannot act on the wrong Client.
+- Starting returns `Result<(), String>`. The `Err` reason is "a panel swap is already running" or
+  the unresolvable-command message (D5). The CLI reports it; the Tray drops it, because the
+  unresolvable case already notifies and a busy click stays silent.
   Pinned Client attached: Unpin, and the target is that Client. Otherwise: Pin, and the target is
   the last Client in connection order with `Some(Terminal)`, or none.
-- A click while the machine is not `Idle` does nothing.
+- A request while the machine is not `Idle` starts nothing and returns the busy refusal.
 - The deadline is 10 s from the click and covers both phases.
 - If the target leaves during `Awaiting`, the swap still completes when the new Client attaches.
 - The Tray label reads a shared `Arc<AtomicBool>` ("pinned Client attached"). It is added to
@@ -144,6 +152,50 @@ implements it with the existing `notify-send` helper from `src/pin.rs`, made `pu
   both the launch-state save and the coordinated shutdown request. Everything else in teardown
   still runs. A bool flag is not used: the exit kind decides two behaviours together.
 
+### D7: Owner actions, one vocabulary for the Tray and the CLI
+
+The swap is the first Owner action. The goal: a later Tray item becomes an Owner action, with a
+CLI flag, by adding one variant, one flag row and one handler arm. No new ctrl command, capability
+or connection kind.
+
+- `mbv-ctrl` owns `enum OwnerAction { SwapPanel }`, each variant with a fixed
+  `serde(rename)` (`"swap-panel"`). `OwnerAction::ALL` lists every variant. `cli_flag(self)`
+  (`"--swap-panel"`) and `help(self)` are exhaustive matches, and `from_cli_flag(&str)` searches
+  `ALL`. These are the only places a flag string lives.
+- Ctrl vocabulary: capability `owner-action`, `CtrlHello::current_owner_action(control_token)`,
+  `CtrlCmd::RunOwnerAction(OwnerAction)`, and the replies `CtrlEvent::OwnerActionAccepted` and
+  `CtrlEvent::OwnerActionRefused { reason: String }`. `TransportCommand::OwnerAction(OwnerAction)`
+  carries the same value from the Tray.
+- Connection role. The Owner classifies each Hello into one
+  `enum CtrlConnectionRole { Client, ServiceSetupAdmin, OwnerAction }`. It replaces the
+  `service_setup_admin` bool in `core_ctrl_spawn.rs` and `admin_only` in the registry, so the two
+  non-Client kinds are not two flags. A Hello that advertises both admin capabilities is rejected.
+  Both non-Client roles keep today's admin rules: let in from the local transport while Stay-alive
+  is off, never a driver, never held, never a Pin target. The shutting-down refusal still wins. An
+  `OwnerAction` connection is refused outright on TCP, and any command other than `RunOwnerAction`
+  gets `CommandRejected`, the same as the admin role's check.
+- One handler. `event_loop/owner_action.rs` has `run(action) -> Result<(), String>`, an exhaustive
+  match (`SwapPanel` => the D3 start). The loop calls it for `CtrlCmd::RunOwnerAction`, replies
+  accepted or refused on the connection's `reply_tx`, and calls it for
+  `TransportCommand::OwnerAction` with the result dropped.
+- Client. `mbv-remote-player::run_local_owner_action(action)` follows
+  `signal_local_daemon_service_setup`. It connects to `control_socket_path()`, does the handshake
+  with the `OwnerAction` role, sends the command and waits for the reply under a 6 s read timeout.
+  The handshake's `service_setup_admin: bool` becomes a role enum with the same three meanings. No
+  socket gives "no running mbv". A server Hello without `owner-action` gives "the running mbv is too
+  old for --swap-panel; restart it", and nothing is sent.
+- CLI. `main.rs` has one dispatch site, placed beside `--toggle` before applog and config. The
+  first argument that `from_cli_flag` accepts selects the action. mbv runs it, prints the error to
+  stderr and exits 1 on `Err`, and exits 0 on `Ok`. The other arguments are ignored, the same as
+  `-q`. `print_usage` prints one row per `ALL` entry from `cli_flag` and `help`.
+
+Alternative considered: a dedicated `CtrlCmd::PinSwap` and a `--swap-panel`-only path. It is fewer
+lines today, but each later Tray item would add a command, a capability and a CLI branch. Rejected.
+
+Alternative considered: have the Tray start `mbv --swap-panel`. The Tray is already inside the
+Owner, so that adds a process and a socket round trip back to itself to deliver the same value.
+Rejected. The shared `OwnerAction` and handler are the single entry point.
+
 ## Risks / Trade-offs
 
 - [`$TERMINAL` comes from the TUI that started the Owner. With Stay-alive on, a long-lived Owner
@@ -159,3 +211,8 @@ implements it with the existing `notify-send` helper from `src/pin.rs`, made `pu
 - [Pin while another pinned mbv already runs on the display.] → Not reachable through the menu,
   because a pinned Client attached makes it Unpin. A pinned mbv attached to a different Owner
   exits 0 with `ShownExisting`. The swap then times out and notifies, and the old Client stays.
+- [`OwnerAction::ALL` is a hand-kept list, and the compiler does not force a new variant into it.]
+  → A variant missing from `ALL` has no flag and no help row. The `mbv-ctrl` flag round-trip test
+  covers every listed variant. Adding a variant to `cli_flag` without `ALL` is a review catch.
+- [`mbv --swap-panel` exits 0 before the swap finishes.] → The exit status means "accepted", not
+  "swapped". A later failure arrives as the desktop notification.
