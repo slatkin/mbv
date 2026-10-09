@@ -406,6 +406,10 @@ Queue artwork title overlay:
 The static title and optional context composed onto the queue card artwork for the active item. It differs from the plain cached artwork. It holds no time-varying playback information. It carries the title only after its composed artwork painted, as shown by the Now-playing title site.
 _Avoid_: overlay (bare), artwork label, logo
 
+Resize drag hold:
+The rule that no image composes or re-encodes on the sync thread while a pointer drag moves panel geometry. The two drags are the queue-column boundary drag and the Library wide-split drag. The Interactive Component that owns each gesture holds the live bit (`is_resizing`); the shell never mirrors it. The shell resolves the two bits into one hold flag (`refresh_resize_drag_hold`) and passes it to every image projection keyed on panel geometry. While the hold is on, a changed artwork box shows the loading placeholder and builds nothing. The settle window (150 ms) debounces the re-encode: it runs once, after the drag has been quiet, at the settled box. Invariant 20 owns the rule and names the tests.
+_Avoid_: debounce (names the settle window only, not the rule), throttle, freeze, drag lock, image pause
+
 Selector row:
 The Library panel slot for one browse pill bar. A letter range, group, bucket, section, or the Feeds watched-filter pills followed by feed groups are examples.
 _Avoid_: selector bar
