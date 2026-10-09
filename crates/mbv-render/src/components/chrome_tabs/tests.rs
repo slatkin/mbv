@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ui_model::ui_util::continue_tab_title;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use rstest::rstest;
@@ -98,7 +99,9 @@ fn rendered(selected: usize) -> (Terminal<TestBackend>, Vec<(Rect, usize)>) {
 
 /// 2026-10-05 user rule: the selected tab carries an eighth-block run in
 /// the underline role's colour, spanning exactly its title run — its lead
-/// and marker cells and every unselected tab's columns stay bare.
+/// and marker cells and every unselected tab's columns stay bare. The
+/// icon-only Home tab is the exception to this rule (2026-10-09 user rule);
+/// see `the_selected_home_icon_tab_paints_no_block_runs_and_a_mauve_icon`.
 #[rstest]
 #[case::below_the_title("▔", 2)]
 #[case::above_the_title("▁", 0)]
@@ -132,4 +135,45 @@ fn the_selected_tab_gets_an_eighth_block_run_around_its_title(
             "an unselected tab is not underlined (column {x})"
         );
     }
+}
+
+/// 2026-10-09 user rule: the icon-only Home tab is the exception to the
+/// selected eighth-block runs — when it is selected, no block run is painted
+/// above or below, and the house icon itself carries the underline role's
+/// Mauve as its active colour, in either glyph variant (Nerd Font house,
+/// Unicode house fallback).
+#[rstest]
+#[case::nerd_house(continue_tab_title(true))]
+#[case::unicode_house(continue_tab_title(false))]
+fn the_selected_home_icon_tab_paints_no_block_runs_and_a_mauve_icon(#[case] home_title: &str) {
+    let titles = vec![home_title.to_string(), "alpha".to_string()];
+    let markers = [false, false];
+    let model = TabBarModel {
+        titles: &titles,
+        markers: &markers,
+        selected: 0,
+        scroll: 0,
+        hovered: None,
+    };
+    let mut hits = Vec::new();
+    let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
+    terminal
+        .draw(|f| render_tab_bar(f, Rect::new(0, 0, 40, 3), &model, &mut hits))
+        .unwrap();
+    let buf = terminal.backend().buffer();
+    for row in [0u16, 2u16] {
+        for x in 0..40 {
+            let symbol = buf[(x, row)].symbol().to_string();
+            assert!(
+                symbol != "▁" && symbol != "▔",
+                "the selected Home icon tab paints no block runs (row {row}, column {x})"
+            );
+        }
+    }
+    let (home, _) = hits[0];
+    assert_eq!(
+        buf[(home.x + 1, 1)].style().fg,
+        Some(palette::TAB_SELECTED_UNDERLINE),
+        "the selected Home icon's active colour is the Mauve underline role"
+    );
 }

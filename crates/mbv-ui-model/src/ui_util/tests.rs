@@ -1,6 +1,18 @@
 use crate::ui_util::{
-    fmt_duration_gutter, fmt_duration_hms, fmt_duration_short, fmt_publish_date_short,
+    continue_tab_title, fmt_duration_gutter, fmt_duration_hms, fmt_duration_short,
+    fmt_publish_date_short, is_home_icon_title,
 };
+
+/// The predicate recognises exactly the two labels `continue_tab_title`
+/// emits, so the tab painter's Home exception can never fire on a library
+/// name (2026-10-09 user rule).
+#[test]
+fn home_icon_title_matches_only_the_continue_tab_labels() {
+    assert!(is_home_icon_title(continue_tab_title(true)));
+    assert!(is_home_icon_title(continue_tab_title(false)));
+    assert!(!is_home_icon_title("alpha"));
+    assert!(!is_home_icon_title(""));
+}
 
 // ── fmt_duration_short ───────────────────────────────────────────────────
 

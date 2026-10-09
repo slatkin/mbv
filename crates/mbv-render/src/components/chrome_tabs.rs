@@ -164,11 +164,13 @@ fn paint_visible_tabs(
 ) {
     let mut tab_x = area.x;
     let mut selected_rect: Option<Rect> = None;
+    let mut selected_is_home_icon = false;
     let titles: Vec<Line<'_>> = model.titles[visible_start..visible_end]
         .iter()
         .enumerate()
         .map(|(index, title)| {
             let position = visible_start + index;
+            let title_raw = title.as_str();
             let marked = model.markers.get(position).copied().unwrap_or(false);
             let marker_span = |style: Style| {
                 if marked {
@@ -181,11 +183,22 @@ fn paint_visible_tabs(
             // Every tab paints exactly `title + 2` cells (lead space, title,
             // marker), so a selection change moves no title and shifts no tab;
             // selection shows through the text style alone — ACCENT_ACTIVE
-            // text, the theme role documented for the active tab.
+            // text, the theme role documented for the active tab. The
+            // icon-only Home tab is the exception (2026-10-09 user rule):
+            // when its house icon is showing, the active colour is the same
+            // Mauve as the other tabs' block runs, and the run painting
+            // below skips it.
+            let is_home_icon = mbv_ui_model::ui_util::is_home_icon_title(title_raw);
             let style = if index == selected_tab {
-                Style::default()
-                    .fg(palette::ACCENT_ACTIVE)
-                    .add_modifier(Modifier::BOLD)
+                if is_home_icon {
+                    Style::default()
+                        .fg(palette::TAB_SELECTED_UNDERLINE)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(palette::ACCENT_ACTIVE)
+                        .add_modifier(Modifier::BOLD)
+                }
             } else if model.hovered == Some(position) {
                 Style::default().fg(palette::TEXT_STRONG)
             } else {
@@ -205,6 +218,7 @@ fn paint_visible_tabs(
             };
             if index == selected_tab {
                 selected_rect = Some(hit);
+                selected_is_home_icon = is_home_icon;
             }
             hits.push((hit, position));
             tab_x += width;
@@ -227,14 +241,16 @@ fn paint_visible_tabs(
     // tab bar box reserves one padding row on each side of the text row, so
     // both runs land inside the placement. The recorded hit rect is the
     // whole painted tab (lead, title, marker), so the run is the title cells
-    // between its first and last column.
+    // between its first and last column. The icon-only Home tab is the
+    // exception (2026-10-09 user rule): its selected look is the Mauve icon
+    // colour alone, so it paints no runs.
     if let Some(selected) = selected_rect {
         let run = Rect {
             x: selected.x + 1,
             width: selected.width.saturating_sub(2),
             ..selected
         };
-        if run.width > 0 {
+        if run.width > 0 && !selected_is_home_icon {
             let mut paint_run = |glyph: &str, y: u16| {
                 f.render_widget(
                     Paragraph::new(glyph.repeat(run.width as usize))
