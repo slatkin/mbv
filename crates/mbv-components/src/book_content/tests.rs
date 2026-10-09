@@ -79,6 +79,60 @@ fn book_keys_emit_play_activate_and_ctrl_a_select_all_intents() {
     ));
 }
 
+/// Context-menu spec, "Audiobookshelf row is selected": `.` on the selected
+/// book row opens the menu anchored to the selection (no pointer anchor),
+/// targeting exactly that book.
+#[test]
+fn dot_opens_the_selected_book_context_menu_anchored_to_the_selection() {
+    let mut owner = BookContent::new();
+    owner.set_content(
+        &state_with_books(vec![book("book-a", "Abbey"), book("book-b", "Adams")]),
+        false,
+    );
+
+    assert!(matches!(
+        owner.on_key(&key(Key::Char('.'), KeyModifiers::NONE)),
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                    if targets.as_slice() == [AudiobookshelfMenuTarget::Book {
+                        library_item_id: "book-a".into(),
+                    }]
+            )
+    ));
+}
+
+/// Media-list-multi-select, "one entry path for every list": the same `.`
+/// gesture over a Visual multi-selection emits every marked book in display
+/// order.
+#[test]
+fn dot_over_a_visual_selection_emits_every_marked_book_in_list_order() {
+    let mut owner = BookContent::new();
+    // Both books share one surname bucket, so both rows paint together.
+    owner.set_content(
+        &state_with_books(vec![book("book-a", "Abbey"), book("book-b", "Adams")]),
+        false,
+    );
+
+    // Shift+V begins Visual mode anchored on the selected book; one Down
+    // extends the marked range to the next book.
+    owner.on_key(&key(Key::Char('V'), KeyModifiers::SHIFT));
+    owner.on_key(&key(Key::Down, KeyModifiers::NONE));
+    assert!(matches!(
+        owner.on_key(&key(Key::Char('.'), KeyModifiers::NONE)),
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                    if targets.as_slice() == [
+                        AudiobookshelfMenuTarget::Book { library_item_id: "book-a".into() },
+                        AudiobookshelfMenuTarget::Book { library_item_id: "book-b".into() },
+                    ]
+            )
+    ));
+}
+
 #[test]
 fn enter_plays_the_book_even_when_chapters_are_loaded() {
     // Enter on a selected book plays it — the global Enter-replaces-queue

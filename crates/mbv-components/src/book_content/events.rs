@@ -1,7 +1,8 @@
 use super::{
-    AudiobookshelfBookIntent, BookContent, LibrarySlotEvent, MediaListSurfaceInput, Msg,
-    ShellRequest,
+    AudiobookshelfBookIntent, BookContent, LibrarySlotEvent, MediaListOperation,
+    MediaListSurfaceInput, Msg, ShellRequest,
 };
+use crate::media_list::RowIntent;
 
 impl BookContent {
     pub fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
@@ -53,6 +54,22 @@ impl BookContent {
                 Some(Msg::Shell(Box::new(
                     ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
                 )))
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                // Right-click resolves through the shared owner the way the
+                // `.` keyboard gesture does: a Visual multi-selection
+                // supplies every marked row in display order, otherwise the
+                // clicked row.
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                let outcome = self
+                    .carrier
+                    .delegate_operation(MediaListOperation::Context(target.clone()));
+                let targets = match outcome.external_intent {
+                    Some(RowIntent::ContextSelection(targets)) => targets,
+                    Some(RowIntent::Context(target)) => vec![target],
+                    _ => vec![target],
+                };
+                Some(Self::book_context_msg(targets, Some((at.x, at.y))))
             }
             _ => None,
         }

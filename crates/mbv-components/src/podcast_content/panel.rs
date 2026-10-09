@@ -5,6 +5,7 @@ use super::{
     STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
 };
 use crate::library_panel::HeroContentData;
+use crate::media_list::RowIntent;
 use mbv_render::components::tv_wide::HeroImageState;
 use tuirealm::event::{Key, KeyEvent};
 
@@ -134,8 +135,7 @@ impl LibraryContentOwner for PodcastContent {
                 }
                 MediaListSurfaceInput::Click(at)
                 | MediaListSurfaceInput::ToggleClick(at)
-                | MediaListSurfaceInput::RangeClick(at)
-                | MediaListSurfaceInput::ContextClick(at) => {
+                | MediaListSurfaceInput::RangeClick(at) => {
                     let target = self.episodes.resolve_current_point(at)?.clone();
                     self.delegate_episodes(
                         input
@@ -146,6 +146,23 @@ impl LibraryContentOwner for PodcastContent {
                     // Library and persist the tab's slot, as the Feeds row
                     // click does.
                     self.move_effect()
+                }
+                MediaListSurfaceInput::ContextClick(at) => {
+                    // Right-click resolves through the shared owner the way
+                    // the `.` keyboard gesture does: a Visual multi-selection
+                    // supplies every marked row in display order, otherwise
+                    // the clicked row. Selector pills never reach this arm —
+                    // the panel resolves them to `SelectorPicked` first, so
+                    // a show pill opens no menu.
+                    let target = self.episodes.resolve_current_point(at)?.clone();
+                    let outcome =
+                        self.delegate_episodes(MediaListOperation::Context(target.clone()));
+                    let targets = match outcome.external_intent {
+                        Some(RowIntent::ContextSelection(targets)) => targets,
+                        Some(RowIntent::Context(target)) => vec![target],
+                        _ => vec![target],
+                    };
+                    Some(Self::episode_context_msg(targets, Some((at.x, at.y))))
                 }
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.
@@ -246,6 +263,7 @@ impl LibraryContentOwner for PodcastContent {
                     PodcastEpisodeIntent::FocusOrPlay(self.episodes.selected_target().cloned()),
                 ),
             ))),
+            Key::Char('.') if key.modifiers.is_empty() => self.open_selected_episode_context(),
             // Ctrl+A multi-selects the list via `handle_visual_key`; enqueue
             // stays on the context menu here.
             _ => None,

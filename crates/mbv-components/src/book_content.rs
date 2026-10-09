@@ -21,13 +21,14 @@ use super::library_panel::content::{
 };
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::media_list::{MediaListCarrier, MediaListSurfaceInput};
+use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
+use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use mbv_ui_msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -470,10 +471,49 @@ impl BookContent {
             Key::Enter => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
             ))),
+            // `.` opens the book row's context menu (chapter focus never
+            // does); chapter rows keep their own activation.
+            Key::Char('.') if key.modifiers.is_empty() && !self.chapter_focused => {
+                self.open_selected_book_context()
+            }
             // Ctrl+A multi-selects the list via `handle_visual_key`; enqueue
             // stays on the context menu here.
             _ => None,
         }
+    }
+
+    /// `.` opens the selected book's context menu through the shared book
+    /// owner (context-menu spec: an Audiobookshelf row is selected;
+    /// media-list-multi-select: one entry path for every list): a Visual
+    /// multi-selection supplies every marked row in display order, otherwise
+    /// the single selected book. Targets map to the provider-native menu
+    /// identity (design D1) and a keyboard opening anchors to the selection.
+    fn open_selected_book_context(&mut self) -> Option<Msg> {
+        let target = self.carrier.selected_target()?.clone();
+        // The `.` keyboard gesture resolves like the pointer context path:
+        // one current-row context operation through the shared owner.
+        let outcome = self
+            .carrier
+            .delegate_operation(MediaListOperation::ContextCurrent);
+        let targets = match outcome.external_intent {
+            Some(RowIntent::ContextSelection(targets)) => targets,
+            _ => vec![target],
+        };
+        Some(Self::book_context_msg(targets, None))
+    }
+
+    /// The typed shell request one resolved context gesture emits (design
+    /// D1): provider-native book targets, with the pointer anchor kept for
+    /// right-click openings.
+    fn book_context_msg(targets: Vec<String>, anchor: Option<(u16, u16)>) -> Msg {
+        let targets = targets
+            .into_iter()
+            .map(|library_item_id| AudiobookshelfMenuTarget::Book { library_item_id })
+            .collect();
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            ContextMenuTargets::Audiobookshelf(targets),
+            anchor,
+        )))
     }
 }
 
