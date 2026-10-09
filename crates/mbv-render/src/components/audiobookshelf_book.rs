@@ -11,7 +11,7 @@ use mbv_ui_model::ui_util::fmt_duration_gutter;
 /// total runtime occupies the shared green gutter.
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    reason = "fractional seconds truncate to whole seconds for the duration gutter; sub-second display is not wanted (approved, issue #804)"
 )]
 #[must_use]
 pub fn book_rows(

@@ -31,7 +31,7 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
             };
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                reason = "fractional seconds truncate to whole seconds for the duration gutter; sub-second display is not wanted (approved, issue #804)"
             )]
             let trailing = (duration_seconds > 0.0)
                 .then(|| fmt_duration_gutter(duration_seconds as i64))

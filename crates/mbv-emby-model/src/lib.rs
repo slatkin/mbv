@@ -8,11 +8,11 @@ pub const TICKS_PER_SECOND: i64 = 10_000_000;
 pub const TICKS_PER_SECOND_F64: f64 = 10_000_000.0;
 
 /// Convert ticks to seconds. The i64-to-f64 conversion is exact for |ticks| < 2^53
-/// (about 28,500 years of media).
+/// (about 28.5 years of media at 100 ns per tick).
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
-    reason = "i64 ticks to f64 seconds is exact for |ticks| < 2^53 (about 28,500 years of media)"
+    reason = "i64 ticks to f64 seconds is exact for |ticks| < 2^53 (about 28.5 years of media at 100 ns per tick)"
 )]
 pub fn ticks_to_seconds(ticks: i64) -> f64 {
     ticks as f64 / TICKS_PER_SECOND_F64

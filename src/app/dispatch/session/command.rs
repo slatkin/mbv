@@ -90,7 +90,7 @@ impl App {
     pub(in crate::app) fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            reason = "fractional seconds in the seek delta truncate to whole seconds; sub-second seek precision is not representable here (approved, issue #804)"
         )]
         let moved = pos_s + delta as i64;
         let target = if delta < 0.0 { moved.max(0) } else { moved };
