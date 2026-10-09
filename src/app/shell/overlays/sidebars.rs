@@ -130,7 +130,7 @@ impl Model {
                 self.app.use_nerd_fonts,
                 mbv_render::components::widgets::service_state_color(
                     self.app.emby_runtime.state,
-                    mbv_theme::ACCENT,
+                    mbv_theme::Role::Accent.color(),
                 ),
             );
             sessions.set_content(

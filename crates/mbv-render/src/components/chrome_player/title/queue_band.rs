@@ -40,9 +40,9 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
-    // The top row's own fill (the slate backdrop role) plus its plain
+    // The top row's own fill (the transport row surface) plus its plain
     // indicator text, measured for the buttons-fit rule below.
-    let row_bg = palette::SURFACE_BACKDROP;
+    let row_bg = palette::surface_colors(palette::Surface::TransportRow, false).fill;
     let (indicators, indicators_w) = queue_indicator_spans(ctx, row_bg);
     render_transport_controls_row(
         ctx,
@@ -77,7 +77,7 @@ fn queue_indicator_spans(
             continue;
         }
         let mut style = span.style;
-        if style.fg == Some(palette::TEXT_ON_ACCENT) && style.bg.is_some() {
+        if style.fg == Some(palette::Role::TextOnAccent.color()) && style.bg.is_some() {
             style.fg = style.bg;
         }
         style.bg = Some(row_bg);
@@ -120,7 +120,7 @@ fn render_queue_seek_row(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 bar,
-                Style::default().fg(palette::PROGRESS_TRACK),
+                Style::default().fg(palette::Role::ProgressTrack.color()),
             ))
             .style(Style::default().bg(panel_bg)),
             row,
@@ -144,7 +144,9 @@ fn render_queue_seek_row(
             Paragraph::new(Line::from(vec![
                 Span::styled(
                     clipped.to_string(),
-                    Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                    Style::default()
+                        .fg(palette::Role::PlaybackMetaFg.color())
+                        .bg(panel_bg),
                 ),
                 Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
             ]))
@@ -167,14 +169,18 @@ fn render_queue_seek_row(
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(
                 pos_str,
-                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                Style::default()
+                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(" ".repeat(bar_w as usize), Style::default().bg(panel_bg)),
             Span::styled(" ", Style::default().bg(panel_bg)),
             Span::styled(
                 dur_str,
-                Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+                Style::default()
+                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
         ]))
@@ -191,8 +197,8 @@ fn render_queue_seek_row(
             .label("")
             .gauge_style(
                 Style::default()
-                    .fg(palette::ACCENT)
-                    .bg(palette::SURFACE_BACKDROP),
+                    .fg(palette::Role::Accent.color())
+                    .bg(palette::surface_colors(palette::Surface::TransportRow, false).fill),
             ),
         ctx.playback.seekbar,
     );

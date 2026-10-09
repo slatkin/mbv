@@ -113,7 +113,7 @@ pub fn render_tab_bar(
     let (vis_start, vis_end) = visible_tab_range(&widths, model.scroll, tabs_w);
     let has_left = vis_start > 0;
     let has_right = vis_end < widths.len();
-    let ind_style = Style::default().fg(palette::TEXT_STRONG);
+    let ind_style = Style::default().fg(palette::Role::TextStrong.color());
     let left_w: u16 = if has_left { 2 } else { 0 };
     let right_w: u16 = if has_right { 2 } else { 0 };
     if has_left {
@@ -173,7 +173,10 @@ fn paint_visible_tabs(
             let marked = model.markers.get(position).copied().unwrap_or(false);
             let marker_span = |style: Style| {
                 if marked {
-                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
+                    Span::styled(
+                        "•",
+                        Style::default().fg(palette::Role::AccentActive.color()),
+                    )
                 } else {
                     Span::styled(" ", style)
                 }
@@ -187,12 +190,12 @@ fn paint_visible_tabs(
             // it keeps the active colour but paints no block runs below.
             let style = if index == selected_tab {
                 Style::default()
-                    .fg(palette::ACCENT_ACTIVE)
+                    .fg(palette::Role::AccentActive.color())
                     .add_modifier(Modifier::BOLD)
             } else if model.hovered == Some(position) {
-                Style::default().fg(palette::TEXT_STRONG)
+                Style::default().fg(palette::Role::TextStrong.color())
             } else {
-                Style::default().fg(palette::TEXT_MUTED)
+                Style::default().fg(palette::Role::TextMuted.color())
             };
             let line = Line::from(vec![
                 Span::styled(" ", style),
@@ -219,7 +222,7 @@ fn paint_visible_tabs(
     f.render_widget(
         Tabs::new(titles)
             .select(usize::MAX)
-            .style(Style::default().fg(palette::TEXT_SECONDARY))
+            .style(Style::default().fg(palette::Role::TextSecondary.color()))
             .highlight_style(Style::default())
             .divider(Span::raw(""))
             .padding("", ""),
@@ -245,7 +248,7 @@ fn paint_visible_tabs(
             let mut paint_run = |glyph: &str, y: u16| {
                 f.render_widget(
                     Paragraph::new(glyph.repeat(run.width as usize))
-                        .style(Style::default().fg(palette::TAB_SELECTED_UNDERLINE)),
+                        .style(Style::default().fg(palette::Role::TabSelectedUnderline.color())),
                     Rect { y, ..run },
                 );
             };

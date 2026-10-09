@@ -96,7 +96,7 @@ pub fn render_tree_browser(
             total_rows,
             usize::from(content_rect.height),
             viewport_offset,
-            palette::SCROLLBAR,
+            palette::Role::Scrollbar.color(),
         );
     }
 }
@@ -139,9 +139,9 @@ fn render_tree_browser_row(
         .map_or(0, tree_metadata_gutter_width);
     let budget = context.content_width.saturating_sub(prefix_width + gutter);
     let title_color = if full_width {
-        palette::SELECTED_ROW_FG
+        palette::Role::SelectedRowFg.color()
     } else if row.kind == TreePaintRowKind::Heading {
-        palette::TEXT_METADATA
+        palette::Role::TextMetadata.color()
     } else {
         title_color(row)
     };
@@ -159,7 +159,7 @@ fn render_tree_browser_row(
     );
     let mut style = Style::default().bg(fill);
     if full_width {
-        style = style.fg(palette::SELECTED_ROW_FG);
+        style = style.fg(palette::Role::SelectedRowFg.color());
     }
     frame.render_widget(Paragraph::new(Line::from(spans)).style(style), row_area);
 }
@@ -171,7 +171,7 @@ fn tree_row_fill(
     base: ratatui::style::Color,
 ) -> ratatui::style::Color {
     if full_width {
-        palette::SELECTED_ROW_BG
+        palette::surface_colors(palette::Surface::SelectedRow, false).fill
     } else {
         match row.kind {
             TreePaintRowKind::Node if row.zebra_striped => zebra,
@@ -277,9 +277,9 @@ fn tree_row_spans(
                 width = trailing.width().max(TREE_METADATA_SLOT_WIDTH)
             ),
             Style::default().fg(if full_width {
-                palette::SELECTED_ROW_FG
+                palette::Role::SelectedRowFg.color()
             } else {
-                palette::STATUS_AVAILABLE
+                palette::Role::StatusAvailable.color()
             }),
         ));
     }
@@ -293,20 +293,20 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     // Directly marked rows paint the full-width bar and never reach this
     // role; aggregate states keep their own title roles (design D5).
     match row.aggregate_mark {
-        TreeAggregateMark::Partial => palette::TEXT_ACCENT_MUTED,
-        TreeAggregateMark::Full => palette::STATUS_AVAILABLE,
+        TreeAggregateMark::Partial => palette::Role::TextAccentMuted.color(),
+        TreeAggregateMark::Full => palette::Role::StatusAvailable.color(),
         TreeAggregateMark::None => match row.semantic_state {
-            MediaSemanticState::Played => palette::TEXT_MUTED,
+            MediaSemanticState::Played => palette::Role::TextMuted.color(),
             MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
-                palette::TEXT_EMPHASIS
+                palette::Role::TextEmphasis.color()
             }
             MediaSemanticState::Ordinary => match row.title_role {
-                TreeTitleRole::Heading => palette::TEXT_EMPHASIS,
-                TreeTitleRole::Secondary => palette::TEXT_FOCUS_ACCENT,
+                TreeTitleRole::Heading => palette::Role::TextEmphasis.color(),
+                TreeTitleRole::Secondary => palette::Role::TextFocusAccent.color(),
                 TreeTitleRole::Standard => match row.depth {
-                    0 => palette::TEXT_EMPHASIS,
-                    1 => palette::TEXT_FOCUS_ACCENT,
-                    _ => palette::ACCENT,
+                    0 => palette::Role::TextEmphasis.color(),
+                    1 => palette::Role::TextFocusAccent.color(),
+                    _ => palette::Role::Accent.color(),
                 },
             },
         },

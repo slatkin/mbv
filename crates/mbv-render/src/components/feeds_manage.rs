@@ -64,7 +64,10 @@ fn render_feeds_manage_list(
     );
 
     f.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
+        Paragraph::new(Span::styled(
+            hint,
+            Style::default().fg(palette::Role::TextMuted.color()),
+        )),
         Rect {
             x: inner.x,
             y: inner.y,
@@ -84,7 +87,7 @@ fn render_feeds_manage_list(
         f.render_widget(
             Paragraph::new(Span::styled(
                 "No feed subscriptions yet -- press a to add",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             list_area,
         );
@@ -113,45 +116,51 @@ fn render_feeds_manage_list(
         })
         .collect();
 
-    let lines: Vec<Line> = model
-        .feeds
-        .iter()
-        .enumerate()
-        .map(|(i, sub)| {
-            let focused = i == model.cursor;
-            let arrow = if focused { "▸ " } else { "  " };
-            let name_style = if focused {
-                Style::default()
-                    .fg(palette::TEXT_PRIMARY)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::TEXT_SECONDARY)
-            };
-            let kind_label = match sub.kind {
-                FeedKind::Audio => "[audio]",
-                FeedKind::Video => "[video]",
-            };
-            let url_max = (list_area.width as usize)
-                .saturating_sub(arrow.len() + sub.name.len() + kind_label.len() + 3);
-            Line::from(vec![
-                Span::raw(arrow),
-                Span::styled(sub.name.clone(), name_style),
-                Span::raw(" "),
-                Span::styled(kind_label, Style::default().fg(palette::ACCENT)),
-                Span::raw(" "),
-                Span::styled(
-                    trunc_str(&sub.url, url_max),
-                    Style::default().fg(palette::TEXT_MUTED),
-                ),
-            ])
-        })
-        .collect();
+    let lines = feed_row_lines(model.feeds, model.cursor, list_area.width);
     f.render_widget(Paragraph::new(lines), list_area);
     FeedsManageRenderGeometry {
         frame: inner,
         rows,
         fields: Vec::new(),
     }
+}
+
+fn feed_row_lines(feeds: &[FeedSubscription], cursor: usize, list_width: u16) -> Vec<Line<'_>> {
+    feeds
+        .iter()
+        .enumerate()
+        .map(|(i, sub)| {
+            let focused = i == cursor;
+            let arrow = if focused { "▸ " } else { "  " };
+            let name_style = if focused {
+                Style::default()
+                    .fg(palette::Role::TextPrimary.color())
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::Role::TextSecondary.color())
+            };
+            let kind_label = match sub.kind {
+                FeedKind::Audio => "[audio]",
+                FeedKind::Video => "[video]",
+            };
+            let url_max = (list_width as usize)
+                .saturating_sub(arrow.len() + sub.name.len() + kind_label.len() + 3);
+            Line::from(vec![
+                Span::raw(arrow),
+                Span::styled(sub.name.clone(), name_style),
+                Span::raw(" "),
+                Span::styled(
+                    kind_label,
+                    Style::default().fg(palette::Role::Accent.color()),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    trunc_str(&sub.url, url_max),
+                    Style::default().fg(palette::Role::TextMuted.color()),
+                ),
+            ])
+        })
+        .collect()
 }
 
 fn render_feeds_manage_form(
@@ -175,9 +184,9 @@ fn render_feeds_manage_form(
 
     let field_style = |focused: bool| {
         if focused {
-            Style::default().fg(palette::TEXT_STRONG)
+            Style::default().fg(palette::Role::TextStrong.color())
         } else {
-            Style::default().fg(palette::TEXT_SECONDARY)
+            Style::default().fg(palette::Role::TextSecondary.color())
         }
     };
     let cursor_glyph = "▏";
@@ -249,7 +258,7 @@ fn render_feeds_manage_form(
     f.render_widget(
         Paragraph::new(Span::styled(
             status,
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(palette::Role::TextMuted.color()),
         )),
         Rect {
             x: inner.x + 1,

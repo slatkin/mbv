@@ -12,19 +12,10 @@ use tuirealm::component::Component;
 
 use crate::inline_search::InlineSearch;
 use crate::media_list::MediaListCarrier;
-use mbv_render::components::media_list::{WideMediaListPaintPolicy, ZebraStripe};
-use mbv_theme as palette;
+use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_theme::Surface;
 
 use super::content::{PanelList, PanelListPaintPolicy};
-
-/// The zebra pair a surface resolves to for its focused and unfocused fills.
-fn zebra_stripe(surface: Surface) -> ZebraStripe {
-    ZebraStripe {
-        focused: palette::surface_colors(surface, true).fill,
-        unfocused: palette::surface_colors(surface, false).fill,
-    }
-}
 
 impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
     fn clamp_viewport(&mut self, viewport_height: usize) {
@@ -42,7 +33,8 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 // Every library browser list stripes again (7038e430 dropped
                 // it; restored 2026-09-20), in the Grouped Music tree's style:
                 // the stripe is the library column's own fill for the
-                // palette bit — focused `SURFACE_FOCUSED`, the same tone the
+                // palette bit — focused the `LibraryColumn` surface's
+                // focused fill, the same tone the
                 // music tree's rows alternate with, resting the app backdrop.
                 // The policy keys the stripe tone on the palette bit, so a
                 // mini view panel keeps its selected-row bar on the resting
@@ -50,24 +42,18 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 self.wide_mut().set_paint_policy(
                     WideMediaListPaintPolicy::new(focused)
                         .with_palette_focus(palette_focused)
-                        .with_zebra(zebra_stripe(Surface::LibraryColumn)),
+                        .with_zebra(Surface::LibraryColumn),
                 );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                // Focused, the rows stripe against the focused box fill
-                // (`WORKSPACE_FOCUSED_STRIPE` on `WORKSPACE_FOCUSED_FILL`,
-                // painted by the workspace box); unfocused keeps the fixed
-                // resting stripe. The focused selection paints the Iris bar.
-                let zebra = if focused {
-                    ZebraStripe {
-                        focused: palette::WORKSPACE_FOCUSED_STRIPE,
-                        unfocused: palette::SURFACE_RESTING,
-                    }
-                } else {
-                    ZebraStripe::fixed(palette::SURFACE_RESTING)
-                };
+                // Focused, the rows stripe against the focused box fill (the
+                // `WorkspaceStripe` surface on the `MainContentBox` fill,
+                // painted by the workspace box); unfocused the policy's
+                // palette bit rests and resolves the same stripe's resting
+                // fill. The focused selection paints the Iris bar.
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(zebra),
+                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                        .with_zebra(Surface::WorkspaceStripe),
                 );
             }
         }
@@ -155,6 +141,7 @@ impl PanelList for InlineSearch {
 mod panel_list_tests {
     use super::*;
     use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use mbv_theme as palette;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
@@ -250,7 +237,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG
+            palette::surface_colors(palette::Surface::SelectedRow, false).fill
         );
 
         terminal
@@ -264,15 +251,15 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG,
+            palette::surface_colors(palette::Surface::SelectedRow, false).fill,
             "the focused Workspace uses the canonical Iris selected-row bar"
         );
     }
 
     /// The Workspace's zebra stripe follows the box fill: unfocused rests at
-    /// the fixed resting content Storm; focused the rows stripe
-    /// `WORKSPACE_FOCUSED_STRIPE` against `WORKSPACE_FOCUSED_FILL`. The
-    /// stripe painter itself is owned by the media-list regressions.
+    /// the fixed resting content Storm; focused the rows stripe the focused
+    /// `WorkspaceStripe` tone against the focused box fill. The stripe
+    /// painter itself is owned by the media-list regressions.
     #[test]
     fn workspace_stripes_zebra_rows_with_the_resting_storm() {
         let mut carrier = MediaListCarrier::new();
@@ -281,8 +268,14 @@ mod panel_list_tests {
         let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
 
         for (focused, expected) in [
-            (true, palette::WORKSPACE_FOCUSED_STRIPE),
-            (false, palette::SURFACE_RESTING),
+            (
+                true,
+                palette::surface_colors(palette::Surface::WorkspaceStripe, true).fill,
+            ),
+            (
+                false,
+                palette::surface_colors(palette::Surface::WorkspaceStripe, false).fill,
+            ),
         ] {
             terminal
                 .draw(|f| {
@@ -307,8 +300,8 @@ mod panel_list_tests {
 
     /// The browser-list stripe pair, pinned to the Grouped Music tree's own
     /// alternation: the second row carries the library column's fill for the
-    /// paint's focus bit, so a focused browser list alternates `SURFACE_FOCUSED`
-    /// against the `LibraryPanel` box fill exactly as the music rows do.
+    /// paint's focus bit, so a focused browser list alternates the
+    /// `LibraryColumn` surface's focused fill against the `LibraryPanel` box fill exactly as the music rows do.
     #[test]
     fn browser_stripes_zebra_rows_like_the_music_tree() {
         let mut carrier = MediaListCarrier::new();
@@ -379,7 +372,7 @@ mod panel_list_tests {
         );
         assert_eq!(
             buf[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG,
+            palette::surface_colors(palette::Surface::SelectedRow, false).fill,
             "the focused row keeps its bar on the resting palette"
         );
         assert_eq!(
@@ -478,7 +471,7 @@ mod panel_list_tests {
                 // including on the resting mini-view palette.
                 assert_eq!(
                     buf[(claim.x, 4)].bg,
-                    palette::SELECTED_ROW_BG,
+                    palette::surface_colors(palette::Surface::SelectedRow, false).fill,
                     "the selected row keeps its bar, {case}"
                 );
             }

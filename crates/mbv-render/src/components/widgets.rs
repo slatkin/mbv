@@ -2,6 +2,7 @@ use super::chrome::thin_vertical_thumb;
 use crate::components::media_list::queue_row_background;
 use mbv_core::service_runtime::ServiceState;
 use mbv_theme as palette;
+use mbv_theme::{HINT_CHIPS, Role};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -19,8 +20,8 @@ pub const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 pub fn service_state_color(state: ServiceState, ready: Color) -> Color {
     match state {
         ServiceState::Ready => ready,
-        ServiceState::NotConfigured => palette::TEXT_MUTED,
-        _ => palette::STATUS_ERROR,
+        ServiceState::NotConfigured => Role::TextMuted.color(),
+        _ => Role::StatusError.color(),
     }
 }
 
@@ -168,7 +169,7 @@ pub fn render_block_separator(f: &mut Frame, area: Rect) {
     }
     f.render_widget(
         Paragraph::new("\u{2581}".repeat(area.width as usize))
-            .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
+            .style(Style::default().fg(Role::HeroOverviewSeparator.color())),
         Rect { height: 1, ..area },
     );
 }
@@ -205,11 +206,11 @@ pub fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rec
 /// letter filters, and series seasons).
 fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     if selected {
-        palette::PILL_SELECTED_FG
+        Role::PillSelectedFg.color()
     } else if hovered {
-        palette::TEXT_EMPHASIS
+        Role::TextEmphasis.color()
     } else {
-        palette::TEXT_MUTED
+        Role::TextMuted.color()
     }
 }
 
@@ -253,7 +254,7 @@ fn push_pill_shell(
         // dedicated marker role.
         spans.push(Span::styled(
             "•",
-            Style::default().fg(palette::ACCENT_ACTIVE).bg(fill),
+            Style::default().fg(Role::AccentActive.color()).bg(fill),
         ));
     }
     spans.push(Span::styled(
@@ -558,13 +559,13 @@ pub fn render_pill_bar(
             spans.push(Span::styled(
                 "  ",
                 Style::default()
-                    .fg(palette::STATUS_AVAILABLE)
+                    .fg(Role::StatusAvailable.color())
                     .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
             ));
         } else {
             spans.push(Span::styled(
                 prefix.to_string(),
-                Style::default().fg(palette::TEXT_METADATA),
+                Style::default().fg(Role::TextMetadata.color()),
             ));
         }
         x_cursor += u16::try_from(prefix_w).unwrap_or(u16::MAX);
@@ -573,7 +574,7 @@ pub fn render_pill_bar(
         let chunk = "\u{2039} ";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(palette::PILL_OVERFLOW_FG),
+            Style::default().fg(Role::PillOverflowFg.color()),
         ));
         x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
@@ -586,7 +587,7 @@ pub fn render_pill_bar(
         let chunk = " \u{203a}";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(palette::PILL_OVERFLOW_FG),
+            Style::default().fg(Role::PillOverflowFg.color()),
         ));
         x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
@@ -608,7 +609,7 @@ pub fn render_pill_bar(
 
 /// Paints the display-only hint row used by the Library Hero overlay: the
 /// canonical pill bar's row surface and joined chip shell (`◢ label[•] ◤`), with
-/// every chip filled from `palette::HINT_PILL_FILLS` in rotation (foam,
+/// every chip filled from `HINT_CHIPS` in rotation (foam,
 /// yellow, orange, repeating) and soft-white text over the fill. Nothing here
 /// is interactive — no hitboxes, no sticky window, no chevrons, no selection —
 /// so a hint never depends on cursor, focus, or pointer state. The chip shell
@@ -624,7 +625,8 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
     if hints.is_empty() {
         return;
     }
-    let fill_of = |idx: usize| palette::HINT_PILL_FILLS[idx % palette::HINT_PILL_FILLS.len()];
+    let fill_of =
+        |idx: usize| palette::surface_colors(HINT_CHIPS[idx % HINT_CHIPS.len()], false).fill;
     let widths: Vec<usize> = hints
         .iter()
         .enumerate()
@@ -661,7 +663,7 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
             &mut spans,
             hint,
             false,
-            palette::TEXT_ON_ACCENT,
+            Role::TextOnAccent.color(),
             fill,
             0,
             leading,
@@ -691,7 +693,7 @@ pub fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
     f.render_widget(
         Paragraph::new(Span::styled(
             msg.to_string(),
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(Role::TextMuted.color()),
         )),
         area,
     );

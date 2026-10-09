@@ -126,7 +126,7 @@ pub fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
             row_paint_area,
             total_rows.saturating_sub(content_area.height as usize),
             offset,
-            palette::SCROLLBAR,
+            palette::Role::Scrollbar.color(),
         );
     }
 
@@ -161,10 +161,10 @@ fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> 
 }
 
 fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> Color {
-    // Every selected row paints the same opaque Iris bar, regardless of the
+    // Every selected row paints the same opaque bar, regardless of the
     // owning tab or whether the selected row is a focused cursor or a
     // multi-selected row.
-    palette::SELECTED_ROW_BG
+    palette::surface_colors(palette::Surface::SelectedRow, false).fill
 }
 
 /// Borrowed data needed to paint a wide media list.

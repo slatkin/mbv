@@ -108,7 +108,7 @@ pub fn render_panel_shell_at(f: &mut Frame, sidebar: Rect, title: &str, hints: &
     let inner_w = sidebar.width.saturating_sub(4);
     let ix = sidebar.x + 2;
     let header_style = Style::default()
-        .fg(palette::TEXT_PRIMARY)
+        .fg(palette::Role::TextPrimary.color())
         .bg(band_bg)
         .add_modifier(Modifier::BOLD);
     f.render_widget(
@@ -128,7 +128,7 @@ pub fn render_panel_shell_at(f: &mut Frame, sidebar: Rect, title: &str, hints: &
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
-            Style::default().fg(palette::TEXT_PRIMARY),
+            Style::default().fg(palette::Role::TextPrimary.color()),
         )]))
         .style(Style::default().bg(band_bg)),
         Rect {
@@ -166,7 +166,7 @@ pub fn render_sidebar_scrollbar(f: &mut Frame, content: Rect, total: usize, scro
         scroll,
         content.x.saturating_add(content.width),
         thin_vertical_thumb(GlyphSet::minimal()),
-        palette::SIDEBAR_SCROLLBAR,
+        palette::Role::SidebarScrollbar.color(),
     );
 }
 
@@ -195,7 +195,7 @@ pub fn render_panel_row(
     } else {
         (
             if selected { "\u{258c}" } else { " " },
-            Some(palette::ACCENT),
+            Some(palette::Role::Accent.color()),
         )
     };
     let mut mark_style = Style::default();

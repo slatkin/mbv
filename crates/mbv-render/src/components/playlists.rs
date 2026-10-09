@@ -58,7 +58,7 @@ pub fn render_save_playlist_content(
         Paragraph::new(Span::styled(
             title,
             Style::default()
-                .fg(palette::TEXT_HERO_TITLE)
+                .fg(palette::Role::TextHeroTitle.color())
                 .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
@@ -72,7 +72,7 @@ pub fn render_save_playlist_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             input_line,
-            Style::default().fg(palette::TEXT_STRONG),
+            Style::default().fg(palette::Role::TextStrong.color()),
         ))
         .alignment(Alignment::Center),
         Rect {
@@ -170,7 +170,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );
@@ -180,7 +180,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " No playlists found",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );
@@ -229,17 +229,20 @@ fn paint_rows(
         let selected = index == cursor;
         // Keep zebra parity tied to the absolute row so bands hold still under scroll.
         let bg = if selected {
-            Some(palette::SELECTED_ROW_BG)
+            Some(palette::surface_colors(palette::Surface::SelectedRow, false).fill)
         } else if index % 2 == 1 {
-            Some(palette::PLAYLIST_STRIPE_BG)
+            Some(palette::surface_colors(palette::Surface::ListStripe, false).fill)
         } else {
             None
         };
         let row = row_content(index);
         let (fg, muted_fg) = if selected {
-            (palette::SELECTED_ROW_FG, palette::SELECTED_ROW_FG)
+            (
+                palette::Role::SelectedRowFg.color(),
+                palette::Role::SelectedRowFg.color(),
+            )
         } else {
-            (row.title_fg, palette::TEXT_MUTED)
+            (row.title_fg, palette::Role::TextMuted.color())
         };
         let title_style = if row.bold_title && !selected {
             Style::default().fg(fg).add_modifier(Modifier::BOLD)
@@ -296,9 +299,9 @@ fn render_playlist_rows(
                 String::new()
             },
             title_fg: if loaded {
-                palette::PLAYLIST_LOADED_FG
+                palette::Role::PlaylistLoadedFg.color()
             } else {
-                palette::TEXT_PRIMARY
+                palette::Role::TextPrimary.color()
             },
         }
     });
@@ -317,7 +320,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );
@@ -327,7 +330,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Playlist is empty",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );
@@ -340,7 +343,7 @@ fn render_open_playlist_content(
             title: items[i].display_name(),
             bold_title: false,
             trail: String::new(),
-            title_fg: palette::TEXT_PRIMARY,
+            title_fg: palette::Role::TextPrimary.color(),
         }
     });
 }

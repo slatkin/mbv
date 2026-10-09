@@ -114,14 +114,14 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     );
     assert_eq!(
         buf[(rows.x, rows.y)].style().bg,
-        Some(mbv_theme::SELECTED_ROW_BG),
+        Some(mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false).fill),
         "mini view keeps the cursor bar on the first row"
     );
     let mut striped = 0;
     for y in rows.y..rows.bottom() {
         for x in box_area.x..box_area.right() {
             let bg = buf[(x, y)].style().bg;
-            if bg == Some(mbv_theme::SELECTED_ROW_BG) {
+            if bg == Some(mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false).fill) {
                 continue;
             }
             assert_ne!(

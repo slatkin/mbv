@@ -60,9 +60,9 @@ pub fn render_three_line_flat_list<Target: Clone + Eq>(
         };
         let rect = Rect::new(row_x, y, row_width, 3);
         let bg = if selected {
-            palette::SELECTED_ROW_BG
+            palette::surface_colors(palette::Surface::SelectedRow, false).fill
         } else if index % 2 == 1 {
-            palette::SESSIONS_STRIPE_BG
+            palette::surface_colors(palette::Surface::ListStripe, false).fill
         } else {
             surface
         };
@@ -79,14 +79,14 @@ pub fn render_three_line_flat_list<Target: Clone + Eq>(
                         let fg = if selected
                             && !matches!(span.role, ThreeLineRole::Accent | ThreeLineRole::Badge(_))
                         {
-                            palette::SELECTED_ROW_FG
+                            palette::Role::SelectedRowFg.color()
                         } else {
                             match span.role {
-                                ThreeLineRole::Name => palette::TEXT_PRIMARY,
-                                ThreeLineRole::Kind => palette::TEXT_EMPHASIS,
-                                ThreeLineRole::Detail => palette::TEXT_MUTED,
-                                ThreeLineRole::Status => palette::STATUS_AVAILABLE,
-                                ThreeLineRole::Accent => palette::ACCENT_ACTIVE,
+                                ThreeLineRole::Name => palette::Role::TextPrimary.color(),
+                                ThreeLineRole::Kind => palette::Role::TextEmphasis.color(),
+                                ThreeLineRole::Detail => palette::Role::TextMuted.color(),
+                                ThreeLineRole::Status => palette::Role::StatusAvailable.color(),
+                                ThreeLineRole::Accent => palette::Role::AccentActive.color(),
                                 ThreeLineRole::Badge(color) => color,
                             }
                         };

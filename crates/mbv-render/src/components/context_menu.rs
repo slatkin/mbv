@@ -31,16 +31,13 @@ pub fn render_context_menu_content(
         .enumerate()
         .map(|(i, (label, is_selectable))| {
             let style = if !is_selectable {
-                Style::default().fg(palette::TEXT_SECONDARY)
+                Style::default().fg(palette::Role::TextSecondary.color())
             } else if i == cursor {
                 Style::default()
-                    .fg(palette::TEXT_ON_ACCENT)
-                    .bg(
-                        palette::surface_colors(palette::Surface::ContextMenuSelectedRow, false)
-                            .fill,
-                    )
+                    .fg(palette::Role::TextOnAccent.color())
+                    .bg(palette::surface_colors(palette::Surface::SelectedRow, false).fill)
             } else {
-                Style::default().fg(palette::TEXT_PRIMARY)
+                Style::default().fg(palette::Role::TextPrimary.color())
             };
             ListItem::new(format!(" {label} ")).style(style)
         })

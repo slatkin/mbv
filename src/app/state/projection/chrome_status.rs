@@ -69,7 +69,7 @@ impl App {
         };
         let label_style = Style::default()
             .fg(if remote_on {
-                mbv_theme::ACCENT
+                mbv_theme::Role::Accent.color()
             } else {
                 ratatui::style::Color::Black
             })
@@ -172,12 +172,12 @@ impl App {
         };
         let glyph_style = Style::default()
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(mbv_theme::TEXT_METADATA);
+            .fg(mbv_theme::Role::TextMetadata.color());
         let label_style = Style::default()
             .fg(if on {
-                mbv_theme::TEXT_FOCUS_ACCENT
+                mbv_theme::Role::TextFocusAccent.color()
             } else {
-                mbv_theme::TEXT_SECONDARY
+                mbv_theme::Role::TextSecondary.color()
             })
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
 
@@ -222,14 +222,14 @@ impl App {
                 " UNSAVED ",
                 "\u{f0f42}",
                 Style::default()
-                    .fg(mbv_theme::TEXT_FOCUS_ACCENT)
+                    .fg(mbv_theme::Role::TextFocusAccent.color())
                     .add_modifier(Modifier::BOLD),
             )
         } else if autosave_on {
             (
                 " AUTOSAVE ",
                 "\u{f18ea}",
-                Style::default().fg(mbv_theme::ACCENT),
+                Style::default().fg(mbv_theme::Role::Accent.color()),
             )
         } else {
             return None;
@@ -261,7 +261,7 @@ impl App {
                     Span::styled(
                         "muted",
                         Style::default()
-                            .fg(mbv_theme::STATUS_ERROR)
+                            .fg(mbv_theme::Role::StatusError.color())
                             .bg(
                                 mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
                                     .fill,
@@ -298,7 +298,7 @@ impl App {
                 Span::styled(
                     " PREFIX ",
                     Style::default()
-                        .fg(mbv_theme::ACCENT)
+                        .fg(mbv_theme::Role::Accent.color())
                         .bg(
                             mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
                                 .fill,
@@ -341,13 +341,13 @@ impl App {
             Span::styled(
                 icon,
                 Style::default()
-                    .fg(mbv_theme::PLAYBACK_META_FG)
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
-                    .fg(mbv_theme::ACCENT)
+                    .fg(mbv_theme::Role::Accent.color())
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
                     .add_modifier(Modifier::BOLD),
             ),
@@ -369,11 +369,11 @@ impl App {
         // current player target: a stay-alive client that routes playback to
         // another daemon is still in stay-alive mode.
         let alive_color = if !stay_alive {
-            mbv_theme::TEXT_MUTED
+            mbv_theme::Role::TextMuted.color()
         } else if self.player.is_remote_disconnected() {
-            mbv_theme::TEXT_FOCUS_ACCENT
+            mbv_theme::Role::TextFocusAccent.color()
         } else {
-            mbv_theme::STATUS_ERROR
+            mbv_theme::Role::StatusError.color()
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label = queue_source_status_label(
@@ -406,13 +406,13 @@ impl App {
             right_spans.push(Span::styled(
                 " 🯅",
                 Style::default()
-                    .fg(mbv_theme::TEXT_METADATA)
+                    .fg(mbv_theme::Role::TextMetadata.color())
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
             right_spans.push(Span::styled(
                 format!(" {username} "),
                 Style::default()
-                    .fg(mbv_theme::PLAYBACK_META_FG)
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
         }
@@ -426,13 +426,13 @@ impl App {
                 "\u{F06B4}",
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
-                    mbv_theme::ACCENT,
+                    mbv_theme::Role::Accent.color(),
                 )),
             ),
             Span::raw(" "),
             Span::styled(
                 "\u{EDE2}",
-                Style::default().fg(mbv_theme::ACCENT_AUDIOBOOKSHELF),
+                Style::default().fg(mbv_theme::Role::AccentAudiobookshelf.color()),
             ),
             Span::raw(" "),
             Span::styled(
@@ -470,5 +470,5 @@ fn queue_source_status_label(
             return None;
         }
     };
-    Some((label, mbv_theme::TEXT_MUTED))
+    Some((label, mbv_theme::Role::TextMuted.color()))
 }

@@ -27,7 +27,7 @@ pub fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );
@@ -37,7 +37,7 @@ pub fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " No sessions or cast receivers found",
-                Style::default().fg(palette::TEXT_SECONDARY),
+                Style::default().fg(palette::Role::TextSecondary.color()),
             )),
             content,
         );

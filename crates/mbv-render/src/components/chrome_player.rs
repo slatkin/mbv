@@ -108,7 +108,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
             frame.render_widget(
                 Paragraph::new(Span::styled(
                     bar,
-                    Style::default().fg(palette::PROGRESS_TRACK),
+                    Style::default().fg(palette::Role::ProgressTrack.color()),
                 ))
                 .style(Style::default().bg(panel_bg)),
                 seek_area,
@@ -134,7 +134,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
         {
             let spans = marquee_spans(
                 &mut ctx,
-                &[(title, palette::IDLE_FEED_TITLE_FG)],
+                &[(title, palette::Role::IdleFeedTitleFg.color())],
                 title_area.width as usize,
             );
             frame.render_widget(
@@ -235,11 +235,11 @@ fn render_seekbar(
         Paragraph::new(Line::from(vec![
             Span::styled(
                 "\u{2594}".repeat(filled),
-                Style::default().fg(palette::ACCENT),
+                Style::default().fg(palette::Role::Accent.color()),
             ),
             Span::styled(
                 "\u{2594}".repeat(width - filled),
-                Style::default().fg(palette::PROGRESS_TRACK),
+                Style::default().fg(palette::Role::ProgressTrack.color()),
             ),
         ]))
         .style(Style::default().bg(panel_bg)),
@@ -251,8 +251,8 @@ fn render_seekbar(
 #[must_use]
 pub fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
     match role {
-        PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
-        PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG,
+        PlaybackTitlePartRole::Title => palette::Role::PlaybackTitleFg.color(),
+        PlaybackTitlePartRole::Context => palette::Role::PlaybackContextFg.color(),
     }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

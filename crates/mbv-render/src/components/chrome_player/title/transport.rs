@@ -23,11 +23,14 @@ pub(super) fn width_u16(width: usize) -> u16 {
 
 pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGlyphs {
     let play = if paused {
-        (play_icon(ctx.controls.use_nerd_fonts), palette::ACCENT)
+        (
+            play_icon(ctx.controls.use_nerd_fonts),
+            palette::Role::Accent.color(),
+        )
     } else {
         (
             pause_icon(ctx.controls.use_nerd_fonts),
-            palette::TEXT_FOCUS_ACCENT,
+            palette::Role::TextFocusAccent.color(),
         )
     };
     let stop = (
@@ -37,9 +40,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             "X"
         },
         if ctx.controls.availability.stop {
-            palette::STATUS_ERROR
+            palette::Role::StatusError.color()
         } else {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         },
     );
     let prev = (
@@ -49,9 +52,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             "<<"
         },
         if ctx.controls.availability.previous {
-            palette::TEXT_STRONG
+            palette::Role::TextStrong.color()
         } else {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         },
     );
     let next = (
@@ -61,9 +64,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             ">>"
         },
         if ctx.controls.availability.next {
-            palette::TEXT_STRONG
+            palette::Role::TextStrong.color()
         } else {
-            palette::TEXT_MUTED
+            palette::Role::TextMuted.color()
         },
     );
     TransportGlyphs {
@@ -171,18 +174,18 @@ fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
                 codec_value_next = true;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG),
+                    span.style.fg(palette::Role::PlaybackMetaFg.color()),
                 )
             } else if codec_value_next {
                 codec_value_next = false;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_VALUE_FG),
+                    span.style.fg(palette::Role::PlaybackValueFg.color()),
                 )
             } else if is_caption {
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG),
+                    span.style.fg(palette::Role::PlaybackMetaFg.color()),
                 )
             } else {
                 span

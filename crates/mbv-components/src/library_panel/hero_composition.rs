@@ -116,7 +116,7 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader)
     let (label, style) = match header {
         WorkspaceHeader::Tracklist => (
             header.label(),
-            Style::default().fg(palette::WORKSPACE_HEADER_FG),
+            Style::default().fg(palette::Role::WorkspaceHeaderFg.color()),
         ),
     };
     f.render_widget(
@@ -184,14 +184,11 @@ fn paint_workspace_box(
         };
     }
     let panel = box_area;
-    // The Workspace box rests at the hero boxes' own Slate unfocused; focused
-    // it lightens one step (`WORKSPACE_FOCUSED_FILL`) and its rows stripe
-    // against it (`WORKSPACE_FOCUSED_STRIPE`, set on the list's paint policy).
-    let background = if box_focused {
-        palette::WORKSPACE_FOCUSED_FILL
-    } else {
-        palette::surface_colors(palette::Surface::MainContentBox, false).fill
-    };
+    // The Workspace box is the `MainContentBox` surface: it rests at the
+    // hero boxes' own Slate unfocused and focused it lightens one step; its
+    // rows stripe against it (`WorkspaceStripe`, set on the list's paint
+    // policy).
+    let background = palette::surface_colors(palette::Surface::MainContentBox, box_focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,

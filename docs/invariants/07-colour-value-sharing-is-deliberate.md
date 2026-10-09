@@ -1,140 +1,157 @@
-# Invariant 7 — A shared colour value is a deliberate split; an alias is a deliberate bond
+# Invariant 7 — A shared slot is a deliberate split; one concept takes one identity
 
-**Scope:** `crates/mbv-theme/src/` — the value tier (the `Palette` enum in
-`palette.rs`, landed by `palette-enum`), the role tier (`lib.rs`, 51 role
-consts), and the surface tier (`surface.rs` level fills, `surface_table.rs`
-rows, `surface_resolve.rs`) — plus every `palette::` consumer.
+**Scope:** `crates/mbv-theme/src/` — the slot tier (the `Slot` enum and the
+`Theme` value in `slot.rs`), the role tier (the `Role` enum in `role.rs`),
+and the surface tier (the `surface_table.rs` rows, each one (resting,
+focused) slot pair, resolved in `surface_resolve.rs`) — plus every consumer.
 
 ## The invariant
 
-Two symbols in the theme can hold the same colour in two opposite ways, and
-the distinction is what the symbols are:
+Two theme symbols can hold the same colour in two opposite ways, and the
+distinction is what the symbols are:
 
-- **Two independent roles naming one `Palette` variant** assert that the two
-  are *independently editable*. They are equal today and either may move
-  alone, by repointing to a different variant. Until one moves, both follow
-  the variant's one literal.
-- **An alias (`const X: Color = Y;`)** asserts that the two *must match*. An
-  edit to `Y` is meant to reach `X`. Theme code currently holds no alias:
-  `palette-enum` deleted the two that existed, and their former bonds survive
-  only as the comments recording them.
+- **Two independent roles naming one slot** assert that the two are
+  *independently editable*. They are equal today and either may move alone,
+  by repointing to a different slot. Until one moves, both follow the slot's
+  one colour in the active theme.
+- **Two symbols naming one concept** assert a bond that must not exist: one
+  concept takes one identity (`ui-design-language` "One concept takes one
+  colour identity"). A second identity created only so a concept's colour can
+  be edited separately is the failure this file records — in both
+  directions. Collapsing two concepts into one symbol silently repaints
+  screens nobody was looking at; splitting one concept across two symbols
+  lets the two drift until two screens paint "the same" thing in two
+  colours.
 
-The value tier is the closed `Palette` enum: 29 variants, one `Rgb` literal
-each in `const fn color()`, with a uniqueness test forbidding two variants at
-one hex — the tier can no longer hold a duplicate. The deliberate splits live
-one tier up, as independent roles and surface values naming the same variant.
-The eight shared values the primitive tier carried over, and where each
-group's rationale lives now:
+The slot tier is the closed `Slot` enum: 19 variants named by tier or hue,
+with exactly one `Rgb` literal each in `Theme::DEFAULT` — the only place a
+palette literal lives. The deliberate splits live one tier up, as
+independent roles and surface rows naming the same slot. Slots that host more
+than one role today (re-derive; roles move):
 
-| Value | Variant | Symbols | Split rationale in code |
-|---|---|---|---|
-| `#1e2326` | `Ink` | `SURFACE_CHROME`, `PILL_ROW_BG`, `PILL_BG`, `PILL_SELECTED_FG` | **none — independence unstated** |
-| `#2d353b` | `Slate` | `SURFACE_BACKDROP`, `SELECTED_ROW_BG` | yes, on `SELECTED_ROW_BG` |
-| `#3c4841` | `Green1` | `SURFACE_FOCUSED`, `TEXT_ACCENT_MUTED`, `PILL_OVERFLOW_FG` *(former alias of the text green)* | yes, on both split halves |
-| `#48584e` | `Green2` | `SCROLLBAR` *(former alias of the soft fill)*, the soft content-body fill (`surface_resolve.rs`) | yes, on both |
-| `#3f3f3f` | `Grey2` | `BORDER_UNFOCUSED`, the `ArtworkLoadingPlaceholder` row (`surface_table.rs`) | yes, on the row |
-| `#35a77c` | `Aqua` | `ACCENT`, `PLAYBACK_TITLE_FG` | yes (`now-playing-media-type-titles` D2) |
-| `#dbbc7f` | `Yellow` | `TEXT_FOCUS_ACCENT`, `TEXT_HERO_TITLE`, `HERO_CREDITS_NAME`, `PLAYBACK_CONTEXT_FG` | yes, on `PLAYBACK_CONTEXT_FG` (`now-playing-media-type-titles` D2) |
-| `#3a94c5` | `Foam` | `TEXT_METADATA`, `PILL_SELECTED_BG` | yes, on `PILL_SELECTED_BG` |
+| Slot | Roles sharing it |
+|---|---|
+| `FgMuted` | `TextSecondary`, `TextMuted`, `SplitRowTitleFg`, `ProgressTrack`, `SidebarScrollbar` |
+| `Yellow` | `TextFocusAccent`, `TextHeroTitle`, `PlaybackContextFg`, `HeroCreditsName`, `AccentAudiobookshelf` |
+| `Green` | `Duration`, `PlaybackValueFg`, `PlaybackMetaFg`, `IdleFeedTitleFg`, `HeroOverviewSeparator`, `AccentActive` |
+| `Blue` | `WorkspaceHeaderFg`, `TextMetadata`, `GroupHeadingFg` |
+| `Purple` | `TabSelectedUnderline`, `IndicatorAudioFg`, `PlaybackHostRemoteFg`, `EmptyQueueFg` |
+| `Orange` | `PlaylistLoadedFg`, `IndicatorResolutionFg`, `ProgressPercent` |
+| `Aqua` | `PlaybackTitleFg`, `Accent` |
+| `FgWarm` | `TextEmphasis`, `SplitRowContextFg` |
+| `BgDim` | `SelectedRowFg`, `PillSelectedFg` |
+| `Bg2` | `TextAccentMuted`, `PillOverflowFg` |
 
-(`ROW_DATE_FG` — formerly in the Yellow group — was deleted by
-`unify-row-metadata-gutter`; its split rationale collapsed into
-`STATUS_AVAILABLE`, which now carries the media-row date/year gutter.)
+Each group asserts independence: `Accent` and `PlaybackTitleFg` share `Aqua`
+today, and a brand-accent edit must move the accent alone — the exact split
+`now-playing-media-type-titles` D2 recorded. Read the role's intent, not the
+hex.
 
-Seven of the eight carry the rationale in a comment naming the *other*
-symbol and the change that split them:
+The reverse direction — one concept, one identity — is what the slot-model
+migration enforced by merging. Each merge below joined symbols that named the
+same concept in the same colours, so the merge changed no pixel:
 
-```rust
-/// The now-playing title row's title part: the item's own name (episode,
-/// track, entry, ...). Its own role rather than `ACCENT`/`TEXT_FOCUS_ACCENT`,
-/// whose `Palette::Aqua` value it shares today: the two are equal today and
-/// independently editable, so a focus-accent or brand edit moves the accent
-/// alone (now-playing-media-type-titles D2).
-pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
-```
+- the list selected-row fill and the context-menu selected row are one
+  `Surface::SelectedRow`;
+- the playlists, settings, and sessions stripes are one
+  `Surface::ListStripe`;
+- the workspace focused fill is `Surface::MainContentBox` resolved with the
+  site's own focus bit.
 
-Note both former aliases sat *inside* a split group: `PILL_OVERFLOW_FG` was
-bonded to the text green while `SURFACE_FOCUSED` was split from it. Same
-value, three symbols, two different recorded contracts — and since
-`palette-enum` removed the alias tier, both are independent roles over
-`Palette::Green1` whose comments carry the difference. Read the comment, not
-the hex.
+And the merges stop where the concepts differ: `TransportRow`,
+`ModalButton`, and `PopupBorder` are their own surface rows rather than
+reuses of `PlaybackPanel`, `PillChip`, or `QueueColumn`, because they are
+different concepts that share a value today. A future theme may move any of
+them alone.
 
-Regenerate the table rather than trusting it:
+Re-derive the shared-slot table rather than trusting it:
 
 ```bash
-rg -o 'Palette::(\w+) => Color::Rgb\(\s*0x(..),\s*0x(..),\s*0x(..)' \
-   crates/mbv-theme/src/palette.rs
+rg -n "=> Slot::" crates/mbv-theme/src/role.rs
 ```
 
 ## Why it matters
 
-The role tier exists so an edit reaches exactly the places the editor intended.
-A shared value whose contract is unstated is indistinguishable from one that
-must stay shared, so the next editor guesses — and guessing wrong is invisible:
-the build passes, the tests pass, and a colour moves on a screen nobody was
-looking at.
+The role tier exists so an edit reaches exactly the places the editor
+intended. A shared slot whose contract is unstated is indistinguishable from
+one that must stay shared, so the next editor guesses — and guessing wrong is
+invisible: the build passes, the tests pass, and a colour moves on a screen
+nobody was looking at. The same invisibility covers the reverse: two symbols
+for one concept drift apart one edit at a time, and no build or test names
+the drift.
 
 ## What breaks if it is violated
 
-- **Collapsing a split.** Merging `ACCENT` and `PLAYBACK_TITLE_FG` into one
+- **Collapsing a split.** Merging `Accent` and `PlaybackTitleFg` into one
   symbol makes a brand-accent edit silently repaint the now-playing title —
   the exact regression `now-playing-media-type-titles` D2 was written to
   prevent.
-- **Orphaning a recorded split.** Repointing one half of a documented share
-  (giving it a new variant) without deleting that group's rationale in the
-  same commit leaves a comment asserting a share that no longer exists — the
-  divergence becomes invisible again.
+- **Splitting a concept.** Adding a second identity for an existing concept
+  so its colour can be edited separately lets the two drift: two screens
+  paint "the same" stripe, bar, or box in two colours, and no test
+  distinguishes the drift from intent.
+- **Orphaning a recorded split.** Repointing one half of a shared slot to a
+  new slot without checking the other half's intent leaves the remaining
+  symbol asserting a share that no longer exists — the divergence becomes
+  invisible again.
 - **Misreading a split as the defect.** This has happened. The `palette-enum`
-  change's original proposal named the duplicate literals and their comments as
-  the problem — "duplicate `Rgb` literals and primitive-to-primitive aliases
-  that defeat the edit-isolation the code comments claim" — and its task 4.1
-  deleted the comments. The work was built, gated, reviewed clean, and reverted
-  (`861a83fe`) once the premise was checked against the code. The duplicates
-  *were* the isolation mechanism.
+  change's original proposal named the duplicate literals and their comments
+  as the problem — "duplicate `Rgb` literals and primitive-to-primitive
+  aliases that defeat the edit-isolation the code comments claim" — and its
+  task 4.1 deleted the comments. The work was built, gated, reviewed clean,
+  and reverted (`861a83fe`) once the premise was checked against the code.
+  The duplicates *were* the isolation mechanism.
 
-A consequence worth stating: the uniqueness test over the closed palette
-(`assert_ne!(a.color(), b.color())`) forbids two variants at one hex. That is
-correct — real divergence means a new hex — but it means a "same value today,
-different tomorrow" placeholder cannot live in the value tier. It lives in
-the role tier, as two roles naming one variant plus the comment above.
+A consequence worth stating: the slot tier holds exactly one literal per
+slot, so a "same value today, different tomorrow" placeholder cannot live
+there. It lives in the role tier, as two roles naming one slot plus the
+intent above.
 
 ## How the code maintains it today
 
-By comment and review only. There is no test that a split stays split, and one
-is not easily written: the two symbols are equal by construction, so no
-assertion distinguishes "still deliberately equal" from "accidentally merged".
-The enforcement that does exist is narrower:
+By review only. There is no test that a split stays split, and one is not
+easily written: the two symbols are equal by construction, so no assertion
+distinguishes "still deliberately equal" from "accidentally merged". The
+enforcement that does exist is narrower:
 
-- `ui-design-language` req 2 keeps raw values private to the theme, so a
-  consumer cannot bypass the role tier.
-- The one closed surface resolver (`surface_colors`) keeps paint sites from
-  naming roles for surfaces at all.
-
-`#1e2326`'s four symbols are the live gap: nothing records whether the tab-bar
-background and the three pill-selector symbols are independent or bonded.
+- `ui-design-language` keeps raw values private to the theme (`Slot`,
+  `Theme`, and `active()` are crate-private), so a consumer cannot bypass
+  the role tier.
+- Roles serve only as foregrounds and fills resolve only through the one
+  surface resolver (`surface_colors`): a background painted from a role is a
+  review reject, not a build break.
+- The `docs/palette.json` generator iterates `Slot::ALL`, `Role::ALL`, and
+  `Surface::ALL`, so a new role or surface without a slot mapping breaks the
+  snapshot instead of slipping through silently.
+- The theme-swap test (`a_swapped_theme_recolors_roles_and_surfaces` in
+  `slot.rs`) proves every role and surface resolves through the active theme
+  — but it cannot tell a deliberate share from a merge. Splits stay review's
+  job.
 
 ## Cheapest strengthening (not done here)
 
-1. Keep each rationale adjacent to its symbol, naming the *other* symbol and the
-   change that split them, so a reader landing on either half finds the rule.
-   This is the only mechanism that has worked — treat deleting one as a
-   behavioural change, not a comment cleanup.
-2. When a split genuinely diverges, give the moving symbol its new variant and
-   delete that group's rationale in the same commit; the comment's
-   disappearance is then the record that the split became real.
-3. Document `#1e2326`'s four symbols (`SURFACE_CHROME`, `PILL_ROW_BG`,
-   `PILL_BG`, `PILL_SELECTED_FG`) one way or the other, next time someone is
-   in that file for another reason.
-4. Do not attempt a "these two must differ" test. It asserts nothing while the
-   values are equal, which is their entire declared state.
+1. Keep each split's intent findable from either half, naming the *other*
+   symbol and the change that split them, so a reader landing on either half
+   finds the rule. This is the only mechanism that has worked — treat
+   deleting one as a behavioural change, not a comment cleanup.
+2. When a split genuinely diverges, give the moving symbol its new slot; the
+   move itself is then the record that the split became real.
+3. When a merge is proposed, check the concepts first: same concept in the
+   same colours merges; different concepts sharing a value today keep their
+   own rows, as `TransportRow`, `ModalButton`, and `PopupBorder` do.
+4. Do not attempt a "these two must differ" test. It asserts nothing while
+   the values are equal, which is their entire declared state.
 
 ## For an agent touching theme colours
 
-- Read this file and `openspec/specs/ui-design-language/spec.md` before changing
-  any symbol under `crates/mbv-theme/src/`.
-- A shared-variant pair's comment is load-bearing. Verify the comment against
-  the change it cites before treating the share as cleanup.
+- Read this file and `openspec/specs/ui-design-language/spec.md` before
+  changing any symbol under `crates/mbv-theme/src/`.
+- A shared-slot pair is load-bearing. Verify the intent against the change
+  it cites before treating the share as cleanup.
+- A new fill needs a surface row; a new foreground needs a role. Check first
+  whether an existing identity already names the concept — adding a second
+  one is the defect, not the fix.
 - Line numbers in colour plans go stale fast — every migration inserts or
-  removes lines above the literals, and a revert moves them back. Re-derive with
-  `rg` against HEAD rather than trusting a plan, a handoff, or this file.
+  removes lines above the literals, and a revert moves them back. Re-derive
+  with `rg` against HEAD rather than trusting a plan, a handoff, or this
+  file.

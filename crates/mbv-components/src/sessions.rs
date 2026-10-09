@@ -64,7 +64,7 @@ impl SessionsComponent {
             can_disconnect: false,
             display: SessionsDisplayContext {
                 use_nerd_fonts: false,
-                emby_color: palette::TEXT_MUTED,
+                emby_color: palette::Role::TextMuted.color(),
             },
             requested_panel_area: None,
             painted_panel_area: None,
@@ -295,8 +295,11 @@ impl SessionsComponent {
                         } else {
                             "\u{f0118} "
                         };
-                        let (kind, kind_w) =
-                            self.kind_span("[CAST] ", glyph, palette::TEXT_FOCUS_ACCENT);
+                        let (kind, kind_w) = self.kind_span(
+                            "[CAST] ",
+                            glyph,
+                            palette::Role::TextFocusAccent.color(),
+                        );
                         [
                             vec![
                                 kind,

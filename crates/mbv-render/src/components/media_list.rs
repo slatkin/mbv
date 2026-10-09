@@ -4,6 +4,7 @@ mod wide;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_theme as palette;
+use mbv_theme::Surface;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
@@ -154,23 +155,6 @@ pub enum SelectedRowSurface {
 
 /// Semantic paint policy for one `WideMediaList` view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ZebraStripe {
-    pub focused: Color,
-    pub unfocused: Color,
-}
-
-impl ZebraStripe {
-    /// One fill in both focus states.
-    #[must_use]
-    pub const fn fixed(fill: Color) -> Self {
-        Self {
-            focused: fill,
-            unfocused: fill,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
     /// The appearance bit for the zebra fill. Mini view rests the palette
@@ -179,7 +163,7 @@ pub struct WideMediaListPaintPolicy {
     /// every constructor; only callers that split the bits set it.
     palette_focused: bool,
     selected_surface: SelectedRowSurface,
-    zebra: Option<ZebraStripe>,
+    zebra: Option<Surface>,
 }
 
 impl WideMediaListPaintPolicy {
@@ -224,20 +208,15 @@ impl WideMediaListPaintPolicy {
     }
 
     #[must_use]
-    pub const fn with_zebra(mut self, zebra: ZebraStripe) -> Self {
+    pub const fn with_zebra(mut self, zebra: Surface) -> Self {
         self.zebra = Some(zebra);
         self
     }
 
     #[must_use]
     pub fn zebra_bg(self) -> Option<Color> {
-        self.zebra.map(|zebra| {
-            if self.palette_focused {
-                zebra.focused
-            } else {
-                zebra.unfocused
-            }
-        })
+        self.zebra
+            .map(|surface| palette::surface_colors(surface, self.palette_focused).fill)
     }
 
     #[must_use]
@@ -414,21 +393,6 @@ impl<Target: Clone> RowGeometry<Target> {
 #[must_use]
 pub fn queue_row_background(focused: bool) -> Color {
     palette::surface_colors(palette::Surface::QueuePanel, focused).fill
-}
-
-/// The Queue's zebra tone at one focus state. Internal to
-/// `queue_row_zebra_stripe`; callers take the pair, never one tone.
-#[must_use]
-fn queue_row_zebra(focused: bool) -> Color {
-    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
-}
-
-#[must_use]
-pub fn queue_row_zebra_stripe() -> ZebraStripe {
-    ZebraStripe {
-        focused: queue_row_zebra(true),
-        unfocused: queue_row_zebra(false),
-    }
 }
 
 /// The text a list's marquee clock keys on for one row: the full title text the

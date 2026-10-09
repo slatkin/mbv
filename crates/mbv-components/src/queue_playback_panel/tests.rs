@@ -11,7 +11,8 @@ use tuirealm::event::KeyModifiers;
 fn transport_clicks_resolve_against_retained_geometry() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, String::new(), false);
-    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    panel.transport.now_playing_title =
+        Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
     panel.transport.show_controls = true;
     // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
     // like any other column.
@@ -75,7 +76,8 @@ fn transport_clicks_resolve_against_retained_geometry() {
 fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), false);
-    panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
+    panel.transport.now_playing_title =
+        Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 6)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     let header_row = |terminal: &Terminal<TestBackend>| {

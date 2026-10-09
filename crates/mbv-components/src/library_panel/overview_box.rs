@@ -135,7 +135,7 @@ pub fn paint_overview_box(
             inner_rows,
             viewport,
             offset,
-            palette::SCROLLBAR,
+            palette::Role::Scrollbar.color(),
         );
     }
     Some(OverviewPaint {
@@ -197,7 +197,7 @@ fn paint_overview_flow(
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 title,
-                Style::default().fg(palette::TEXT_HERO_TITLE),
+                Style::default().fg(palette::Role::TextHeroTitle.color()),
             ))),
             Rect {
                 x: inner.x,
@@ -249,7 +249,7 @@ fn paint_overview_text(
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 line.as_ref(),
-                Style::default().fg(palette::TEXT_EMPHASIS),
+                Style::default().fg(palette::Role::TextEmphasis.color()),
             ))),
             Rect {
                 x: inner.x,
@@ -308,7 +308,13 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         }
         if (row_offset + i) % 2 == 1 {
             f.render_widget(
-                Paragraph::new("").style(Style::default().bg(palette::HERO_CREDITS_STRIPE)),
+                Paragraph::new("").style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::CreditsStripe,
+                        false,
+                    )
+                    .fill),
+                ),
                 Rect {
                     x: area.x,
                     y,
@@ -320,7 +326,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         let name_width = role_start.saturating_sub(area.x).saturating_sub(2);
         f.render_widget(
             Paragraph::new(credit.name.as_str())
-                .style(Style::default().fg(palette::HERO_CREDITS_NAME)),
+                .style(Style::default().fg(palette::Role::HeroCreditsName.color())),
             Rect {
                 x: area.x,
                 y,
@@ -335,7 +341,8 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
                 u16::try_from(UnicodeWidthStr::width(role.as_str())).unwrap_or(u16::MAX);
             let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
-                Paragraph::new(role).style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                Paragraph::new(role)
+                    .style(Style::default().fg(palette::Role::TextEmphasis.color())),
                 Rect {
                     x: role_x,
                     y,
@@ -374,7 +381,7 @@ fn underline_link_cells(f: &mut Frame, cell: Rect, offset: usize, label_width: u
         };
         cell.set_style(
             cell.style()
-                .fg(palette::TEXT_METADATA)
+                .fg(palette::Role::TextMetadata.color())
                 .add_modifier(ratatui::style::Modifier::UNDERLINED),
         );
     }

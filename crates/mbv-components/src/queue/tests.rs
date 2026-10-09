@@ -4,8 +4,6 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use mbv_queue::QueueItem;
-use mbv_theme as palette;
-use mbv_theme::Surface;
 use mbv_theme::surface_colors;
 
 fn feed_slot(id: u64, title: &str) -> QueueSlot {
@@ -74,7 +72,11 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
         "the focused zebra stripe painted"
     );
     assert!(
-        count_bg(&buf, row_area, palette::SELECTED_ROW_BG) > 0,
+        count_bg(
+            &buf,
+            row_area,
+            surface_colors(Surface::SelectedRow, false).fill
+        ) > 0,
         "the selected row bar painted"
     );
 }
@@ -97,7 +99,11 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
         "focused zebra tone while resting"
     );
     assert!(
-        count_bg(&buf, row_area, palette::SELECTED_ROW_BG) > 0,
+        count_bg(
+            &buf,
+            row_area,
+            surface_colors(Surface::SelectedRow, false).fill
+        ) > 0,
         "the cursor bar stayed on the resting stripe"
     );
 }

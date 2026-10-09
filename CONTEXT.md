@@ -435,11 +435,11 @@ The sole Wide arrangement for hero-bearing browse surfaces. The one-column Libra
 _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left, hero-on-right
 
 Hero pane:
-The fixed `#1e2326` `Palette::Ink` dark sheet of the Wide hero right pane. It is the container surface itself, apart from what paints inside it. The sheet is fixed in both focus states. It does not lighten with the focus bit of the panel. It is the same dark chrome that the Library Hero overlay paints when it shows the same hero over a non-Wide browser.
+The fixed `#1e2326` slot `BgDim` dark sheet of the Wide hero right pane. It is the container surface itself, apart from what paints inside it. The sheet is fixed in both focus states. It does not lighten with the focus bit of the panel. It is the same dark chrome that the Library Hero overlay paints when it shows the same hero over a non-Wide browser.
 _Avoid_: recessed box, hero panel, detail panel
 
 Main content box:
-The `#2d353b` `SURFACE_BACKDROP` inset in a Hero pane or Library Hero overlay. It holds kind-dependent body content at one shared padding value. It holds overview text and, for a Movie in the Wide Hero pane, the Cast and crew table in the same box. It differs from the fixed dark Hero pane sheet it sits in. The pane is the outer container fill. The box is the inner content inset.
+The `#272e33` `Surface::MainContentBox` resting slot `Bg0` inset in a Hero pane or Library Hero overlay. It holds kind-dependent body content at one shared padding value. It holds overview text and, for a Movie in the Wide Hero pane, the Cast and crew table in the same box. It differs from the fixed dark Hero pane sheet it sits in. The pane is the outer container fill. The box is the inner content inset.
 _Avoid_: overview box, recessed box
 
 Provider-link row:

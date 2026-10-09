@@ -14,9 +14,10 @@ use mbv_render::arrangements::queue::{queue_footer_row, queue_list_content};
 use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
-use mbv_render::components::media_list::{WideMediaListPaintPolicy, queue_row_zebra_stripe};
+use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
+use mbv_theme::Surface;
 use mbv_ui_model::playback::{PlaybackState, QueueScope};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, QueueRequest};
@@ -311,7 +312,7 @@ impl Component for QueueComponent {
                     self.focused
                         && !crate::mini_palette_suppressed(self.mini_view, self.frame_focused),
                 )
-                .with_zebra(queue_row_zebra_stripe()),
+                .with_zebra(Surface::QueueColumn),
         );
         Component::view(list, frame, content_area);
         if content_area.height < 1 {

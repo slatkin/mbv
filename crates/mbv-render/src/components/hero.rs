@@ -21,7 +21,7 @@ pub fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) 
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             format!(" SEARCH: {input}"),
-            Style::default().fg(palette::TEXT_PRIMARY),
+            Style::default().fg(palette::Role::TextPrimary.color()),
         ))),
         area,
     );
