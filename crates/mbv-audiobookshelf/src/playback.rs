@@ -606,12 +606,11 @@ impl AudiobookshelfClient {
         path: &str,
         body: &T,
     ) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
-        self.agent
-            .post(&format!("{}{}", self.server_url, path))
-            .header("Authorization", &format!("Bearer {api_key}"))
-            .header("Content-Type", "application/json")
-            .send_json(body)
-            .map_err(|error| super::catalog::map_error(&error))
+        send_json(
+            self.agent.post(&format!("{}{}", self.server_url, path)),
+            api_key,
+            body,
+        )
     }
 
     fn patch_json<T: Serialize>(
@@ -620,12 +619,11 @@ impl AudiobookshelfClient {
         path: &str,
         body: &T,
     ) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
-        self.agent
-            .patch(&format!("{}{}", self.server_url, path))
-            .header("Authorization", &format!("Bearer {api_key}"))
-            .header("Content-Type", "application/json")
-            .send_json(body)
-            .map_err(|error| super::catalog::map_error(&error))
+        send_json(
+            self.agent.patch(&format!("{}{}", self.server_url, path)),
+            api_key,
+            body,
+        )
     }
 
     /// `/api/me/progress/{libraryItemId}[/{episodeId}]` with every dynamic
@@ -674,4 +672,16 @@ impl AudiobookshelfClient {
             AudiobookshelfFailureClass::Unavailable,
         ))
     }
+}
+
+fn send_json<T: Serialize>(
+    request: ureq::RequestBuilder<ureq::typestate::WithBody>,
+    api_key: &str,
+    body: &T,
+) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
+    request
+        .header("Authorization", &format!("Bearer {api_key}"))
+        .header("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|error| super::catalog::map_error(&error))
 }

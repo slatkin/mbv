@@ -159,7 +159,6 @@ impl LibraryContentOwner for PodcastContent {
                         self.delegate_episodes(MediaListOperation::Context(target.clone()));
                     let targets = match outcome.external_intent {
                         Some(RowIntent::ContextSelection(targets)) => targets,
-                        Some(RowIntent::Context(target)) => vec![target],
                         _ => vec![target],
                     };
                     Some(Self::episode_context_msg(targets, Some((at.x, at.y))))
