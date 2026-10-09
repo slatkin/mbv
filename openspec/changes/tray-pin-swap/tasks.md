@@ -29,7 +29,7 @@
 
 ## 5. Integration check
 
-- [ ] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `cargo nextest run --workspace`. All pass.
+- [x] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check` and `cargo nextest run --workspace`. All pass.
 - [ ] 5.2 Ask the user for a manual live check (do not run mbv yourself): Pin from a terminal Client and Unpin back, each with Stay-alive on and off, while audio plays; Unpin with `TERMINAL` unset and no `[panel] terminal`. Then `mbv --swap-panel` from another terminal: Pin and Unpin with Stay-alive off, a second run while a swap is in progress (exit 1), and a run with no Owner process (exit 1, nothing starts). Verify: the user confirms each case.
 
 ## Workflow follow-up
