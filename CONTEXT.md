@@ -116,8 +116,16 @@ Any mbv process on the user machine. It is a Client or the Owner process. Contro
 _Avoid_: client side (of mbvd), frontend, desktop daemon
 
 Tray:
-The desktop status icon shown by a Local process. It gives playback controls and a stop action while no Client is on screen. It is never the property of mbvd. mbvd is headless. For the local Owner process, it appears while Stay-alive is enabled or the `Show systray icon` preference is on. It follows those settings live.
+The desktop status icon shown by a Local process. It gives playback controls and a stop action while no Client is on screen. It carries one Pin or Unpin item that requests a Pin swap. It is never the property of mbvd. mbvd is headless. For the local Owner process, it appears while Stay-alive is enabled or the `Show systray icon` preference is on. It follows those settings live.
 _Avoid_: systray, status icon, indicator, mbvd tray
+
+Pin swap:
+The Owner action that moves the session between the pinned panel and a terminal Client. The Owner process starts a new Client in the other mode, then ends the old one. Playback continues throughout. The Tray shows it as one Pin or Unpin item. The `--swap-panel` flag requests it.
+_Avoid_: pin toggle, repin, re-home
+
+Owner action:
+A user action the Owner process runs on request. The request comes from the Tray or from the one CLI flag of that action. The request is not a Client. It attaches to no queue and holds no playback. Pin swap is the first Owner action.
+_Avoid_: owner command, daemon action, admin action
 
 Player endpoint:
 The address used to reach a Player owner control socket. Local means the Owner process on this machine. A network address points at a remote owner. A remote owner is another machine Player owner or an mbvd. The user reaches it from the F3 Sessions sidebar or a Library route of a running mbv. mbvd is a daemon. The Owner process is not a daemon, on this machine or any other.
