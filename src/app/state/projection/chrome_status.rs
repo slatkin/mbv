@@ -461,7 +461,9 @@ fn queue_source_status_label(
     let label = match source {
         mbv_queue::QueueSource::Album => "ALBUM".to_string(),
         mbv_queue::QueueSource::Series => "SERIES".to_string(),
-        mbv_queue::QueueSource::Shuffle => "SHUFFLE".to_string(),
+        // Shuffle is no pill (2026-10-09 user rule): the shuffle-sourced
+        // queue's pill was never requested, so it reads as no label at all.
+        mbv_queue::QueueSource::Shuffle => return None,
         mbv_queue::QueueSource::Remote => "REMOTE Q".to_string(),
         mbv_queue::QueueSource::Collection { collection_type } => collection_type.to_uppercase(),
         mbv_queue::QueueSource::Playlist { .. } | mbv_queue::QueueSource::Unknown => {
