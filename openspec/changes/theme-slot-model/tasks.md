@@ -41,9 +41,9 @@ map by hex (design D1), never by name. Every group ends with `cargo fmt` and a c
 
 ## 6. Role call sites in mbv-components and the mbv binary
 
-- [ ] 6.1 Same conversion in `crates/mbv-components` (`hero_header/title_meta.rs`, `overview_box.rs`, `panel_list.rs`, `library_playback_panel.rs`, `sessions.rs`, `status_bar_panel.rs` and their tests), including `HERO_META_ROLES` callers resolving with `.color()`. Verify: `cargo nextest run -p mbv-components`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" crates/mbv-components` finds nothing.
-- [ ] 6.2 Same conversion in `src/` (`state/projection/chrome_status.rs`, `state/projection/visualizer.rs`, `shell/playback.rs`, `shell/overlays/sidebars.rs`, `infra/image_fetch/protocol.rs`, `tests/panel_focus.rs`, `tests/tick_integration/queue_playback.rs`). Verify: `cargo nextest run -p mbv`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" src` finds nothing.
-- [ ] 6.3 Run `cargo fmt` and commit group 6.
+- [x] 6.1 Same conversion in `crates/mbv-components` (`hero_header/title_meta.rs`, `overview_box.rs`, `panel_list.rs`, `library_playback_panel.rs`, `sessions.rs`, `status_bar_panel.rs` and their tests), including `HERO_META_ROLES` callers resolving with `.color()`. Verify: `cargo nextest run -p mbv-components`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" crates/mbv-components` finds nothing.
+- [x] 6.2 Same conversion in `src/` (`state/projection/chrome_status.rs`, `state/projection/visualizer.rs`, `shell/playback.rs`, `shell/overlays/sidebars.rs`, `infra/image_fetch/protocol.rs`, `tests/panel_focus.rs`, `tests/tick_integration/queue_playback.rs`). Verify: `cargo nextest run -p mbv`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" src` finds nothing.
+- [x] 6.3 Run `cargo fmt` and commit group 6.
 
 ## 7. Remove the transitional aliases
 
