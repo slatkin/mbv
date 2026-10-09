@@ -130,7 +130,7 @@ fn paint_title_and_meta(
         } else if facts.progress_row == Some(index) {
             palette::PROGRESS_PERCENT
         } else {
-            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()];
+            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()].color();
             cycle += 1;
             fg
         };
