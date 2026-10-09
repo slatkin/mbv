@@ -49,6 +49,23 @@ pub struct AudiobookshelfPlaybackProgress {
     pub duration: f64,
 }
 
+/// One finished-state entry for `PATCH /api/me/progress/batch/update`.
+/// A book leaves `episode_id` out of the JSON entirely.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressFinishedUpdate {
+    pub library_item_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub episode_id: Option<String>,
+    pub is_finished: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IsFinishedBody {
+    is_finished: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceInfo<'a> {
@@ -210,6 +227,77 @@ impl AudiobookshelfClient {
         hard_bound: Duration,
     ) -> Result<(), AudiobookshelfError> {
         self.session_action_bounded(api_key, session_id, "sync", progress, hard_bound)
+    }
+
+    /// Set one item's finished state (`PATCH /api/me/progress/{id}[/{ep}]`).
+    /// Episodes name their `episode_id`; books pass `None`.
+    pub fn set_finished_bounded(
+        &self,
+        api_key: &str,
+        library_item_id: &str,
+        episode_id: Option<&str>,
+        finished: bool,
+        hard_bound: Duration,
+    ) -> Result<(), AudiobookshelfError> {
+        if api_key.trim().is_empty()
+            || library_item_id.trim().is_empty()
+            || episode_id.is_some_and(|id| id.trim().is_empty())
+        {
+            return Err(AudiobookshelfError::protocol());
+        }
+        let client = self.clone();
+        let api_key = api_key.to_owned();
+        let library_item_id = library_item_id.to_owned();
+        let episode_id = episode_id.map(str::to_owned);
+        mbv_net::bounded::run_with_hard_bound_or_error(
+            move || {
+                client
+                    .patch_json(
+                        &api_key,
+                        &Self::progress_path(&library_item_id, episode_id.as_deref()),
+                        &IsFinishedBody {
+                            is_finished: finished,
+                        },
+                    )
+                    .map(|_| ())
+            },
+            AudiobookshelfError::timeout,
+            hard_bound,
+        )
+    }
+
+    /// Set the finished state of several items in one request
+    /// (`PATCH /api/me/progress/batch/update`). The server reports 200 even
+    /// when individual entries fail, so a `200` treats every target as done.
+    pub fn batch_set_finished_bounded(
+        &self,
+        api_key: &str,
+        updates: &[ProgressFinishedUpdate],
+        hard_bound: Duration,
+    ) -> Result<(), AudiobookshelfError> {
+        if api_key.trim().is_empty()
+            || updates.iter().any(|update| {
+                update.library_item_id.trim().is_empty()
+                    || update
+                        .episode_id
+                        .as_deref()
+                        .is_some_and(|id| id.trim().is_empty())
+            })
+        {
+            return Err(AudiobookshelfError::protocol());
+        }
+        let client = self.clone();
+        let api_key = api_key.to_owned();
+        let updates = updates.to_vec();
+        mbv_net::bounded::run_with_hard_bound_or_error(
+            move || {
+                client
+                    .patch_json(&api_key, "/api/me/progress/batch/update", &updates)
+                    .map(|_| ())
+            },
+            AudiobookshelfError::timeout,
+            hard_bound,
+        )
     }
 
     pub fn close_playback_session_bounded(
@@ -524,6 +612,33 @@ impl AudiobookshelfClient {
             .header("Content-Type", "application/json")
             .send_json(body)
             .map_err(|error| super::catalog::map_error(&error))
+    }
+
+    fn patch_json<T: Serialize>(
+        &self,
+        api_key: &str,
+        path: &str,
+        body: &T,
+    ) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
+        self.agent
+            .patch(&format!("{}{}", self.server_url, path))
+            .header("Authorization", &format!("Bearer {api_key}"))
+            .header("Content-Type", "application/json")
+            .send_json(body)
+            .map_err(|error| super::catalog::map_error(&error))
+    }
+
+    /// `/api/me/progress/{libraryItemId}[/{episodeId}]` with every dynamic
+    /// segment percent-encoded.
+    fn progress_path(library_item_id: &str, episode_id: Option<&str>) -> String {
+        let item = mbv_net::encode_path_segment(library_item_id);
+        match episode_id {
+            Some(episode_id) => format!(
+                "/api/me/progress/{item}/{}",
+                mbv_net::encode_path_segment(episode_id)
+            ),
+            None => format!("/api/me/progress/{item}"),
+        }
     }
 
     fn wait_for_hls_ready(

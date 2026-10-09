@@ -66,4 +66,5 @@ mod audiobookshelf {
 
     mod failure;
     mod playback;
+    mod progress;
 }
