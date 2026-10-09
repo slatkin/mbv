@@ -112,10 +112,17 @@ pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {
+    /// Connect to `endpoint` as a control Client. `pinned` advertises the
+    /// `pinned-surface` capability (this TUI runs in a pinned panel) and
+    /// `swap_token` marks this Client as one the Owner itself started for a
+    /// Pin swap (tray-pin-swap design D2/D6); every TUI Client advertises
+    /// `pin-swap`.
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
+        pinned: bool,
+        swap_token: Option<String>,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-        connect::connect_endpoint(endpoint)
+        connect::connect_endpoint(endpoint, pinned, swap_token)
     }
 
     #[must_use]

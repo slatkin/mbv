@@ -67,7 +67,11 @@ impl App {
             return connect(endpoint);
         }
 
-        mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
+        mbv_remote_player::RemotePlayer::connect_endpoint(
+            endpoint,
+            crate::pin::is_pinned(),
+            crate::pin::swap_token(),
+        )
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -92,7 +96,11 @@ impl App {
         }
 
         tracing::info!(name: "daemon_route.connect.started", target: "daemon_route", endpoint = %endpoint, "connecting to daemon route; existing clients are retained");
-        mbv_remote_player::RemotePlayer::connect_endpoint(endpoint)
+        mbv_remote_player::RemotePlayer::connect_endpoint(
+            endpoint,
+            crate::pin::is_pinned(),
+            crate::pin::swap_token(),
+        )
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named

@@ -95,7 +95,8 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
     });
-    let (remote, events) = connect_stream(SocketStream::Unix(client), PeerBuild::Any).unwrap();
+    let (remote, events) =
+        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
     let daemon = daemon_rx.recv().unwrap();
     peer.join().unwrap();
     (remote, events, daemon)
@@ -284,6 +285,8 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
         || Ok("unused".to_string()),
         false,
         PeerBuild::MustMatch,
+        false,
+        None,
     )
     .unwrap_err();
 
@@ -334,6 +337,8 @@ fn local_handshake_accepts_identical_owner_build() {
         || Ok("unused".to_string()),
         false,
         PeerBuild::MustMatch,
+        false,
+        None,
     )
     .unwrap();
     peer.join().unwrap();

@@ -55,7 +55,14 @@ pub(crate) fn perform_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    perform_handshake_with_role(stream, load_control_token, false, PeerBuild::Any)
+    perform_handshake_with_role(
+        stream,
+        load_control_token,
+        false,
+        PeerBuild::Any,
+        false,
+        None,
+    )
 }
 
 fn perform_service_setup_admin_handshake<F>(
@@ -65,7 +72,14 @@ fn perform_service_setup_admin_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    perform_handshake_with_role(stream, load_control_token, true, PeerBuild::Any)
+    perform_handshake_with_role(
+        stream,
+        load_control_token,
+        true,
+        PeerBuild::Any,
+        false,
+        None,
+    )
 }
 
 fn perform_handshake_with_role<F>(
@@ -73,6 +87,8 @@ fn perform_handshake_with_role<F>(
     load_control_token: F,
     service_setup_admin: bool,
     peer_build: PeerBuild,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -84,6 +100,8 @@ where
         &ctrl_compatibility,
         load_control_token,
         service_setup_admin,
+        pinned,
+        swap_token,
     )?;
     let state_event = read_initial_state(&mut reader)?;
 
@@ -138,6 +156,8 @@ fn send_client_hello<F>(
     compatibility: &CtrlCompatibility,
     load_control_token: F,
     service_setup_admin: bool,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -146,12 +166,14 @@ where
         .supports_control_auth
         .then(load_control_token)
         .transpose()?;
+    // The Pin-swap capabilities and token belong to a Client connection only
+    // (tray-pin-swap D2/D6); the admin handshakes stay plain.
     let mut client_hello = if service_setup_admin {
         CtrlHello::current_service_setup_admin(control_token)
     } else if let Some(control_token) = control_token {
-        CtrlHello::current_control_client(control_token)
+        CtrlHello::current_control_client(control_token).with_pin_swap(pinned, swap_token)
     } else {
-        CtrlHello::current()
+        CtrlHello::current().with_pin_swap(pinned, swap_token)
     };
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
@@ -302,9 +324,12 @@ fn apply_ctrl_event(
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
             log_ignored_service_setup_event();
         }
-        // Pin-swap events are forwarded to the shell by a later tray-pin-swap
-        // task (4.3); today no connected daemon sends them to a Client.
-        CtrlEvent::SwapPrepare | CtrlEvent::SwapQuit => log_ignored_pin_swap_event(),
+        CtrlEvent::SwapPrepare => {
+            send_if_notifying(notify, event_tx, PlayerEvent::SwapPrepare);
+        }
+        CtrlEvent::SwapQuit => {
+            send_if_notifying(notify, event_tx, PlayerEvent::SwapQuit);
+        }
         // Owner-action replies travel only on a dedicated owner-action
         // connection's reply path (tray-pin-swap task 4.5), never on a
         // Client connection.
@@ -340,13 +365,6 @@ fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: 
     if notify {
         let _ = event_tx.send(event);
     }
-}
-
-/// Documented no-op for `CtrlEvent::SwapPrepare`/`SwapQuit` (tray-pin-swap
-/// task 1.2): forwarding to the shell is task 4.3, and no connected daemon
-/// sends them to a Client before that.
-fn log_ignored_pin_swap_event() {
-    tracing::debug!(name: "remote.pin_swap_event.ignored", target: "remote", "ignoring pin-swap event (forwarding not implemented yet)");
 }
 
 /// Documented no-op for `CtrlEvent::OwnerActionAccepted`/`OwnerActionRefused`
@@ -487,6 +505,8 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let peer_build = if matches!(endpoint, DaemonEndpoint::Local) {
         PeerBuild::MustMatch
@@ -495,7 +515,7 @@ pub(crate) fn connect_endpoint(
     };
     let stream = endpoint.connect_stream()?;
     tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
-    connect_stream(stream, peer_build)
+    connect_stream(stream, peer_build, pinned, swap_token)
 }
 
 struct ReaderThreadState {
@@ -517,6 +537,8 @@ struct ReaderThreadState {
 fn connect_stream(
     stream: SocketStream,
     peer_build: PeerBuild,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
@@ -563,6 +585,8 @@ fn connect_stream(
                 || Ok(mbv_config::load_or_create_control_credential()?),
                 false,
                 peer_build,
+                pinned,
+                swap_token,
             )
         },
         || {
@@ -813,7 +837,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             }
         }
     });
-    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any)
+    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None)
         .map_err(|error| error.to_string())?;
     Ok((player, rx, peer))
 }

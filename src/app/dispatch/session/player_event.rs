@@ -146,6 +146,13 @@ impl App {
                 self.handle_audiobookshelf_book_progress(&ev);
                 PlayerEventFlow::Proceed
             }
+            PlayerEvent::SwapPrepare | PlayerEvent::SwapQuit => {
+                // The shell drain intercepts both pin-swap events before they
+                // reach App dispatch (tray-pin-swap 4.4): the launch snapshot
+                // is a shell query and the exit kind is shell-owned. This arm
+                // only keeps the match exhaustive.
+                PlayerEventFlow::Proceed
+            }
         }
     }
 

@@ -329,6 +329,10 @@ fn stop_running_instance() {
 }
 
 fn main() {
+    // Claim the Pin-swap token before anything else spawns a worker or child
+    // process (tray-pin-swap design D2).
+    pin::claim_swap_token();
+
     let Some(startup) = pre_config_startup() else {
         return;
     };
@@ -419,7 +423,11 @@ fn run_configured_startup(
             "connecting to explicit daemon endpoint"
         );
         println!("Connecting to daemon at {endpoint}...");
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+        match remote_player::RemotePlayer::connect_endpoint(
+            &endpoint,
+            pin::is_pinned(),
+            pin::swap_token(),
+        ) {
             Ok((remote, player_rx)) => {
                 tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
                 run_remote_app(
@@ -543,8 +551,11 @@ fn attach_owner_process(
     pinned_panel: &mut Option<PinnedPanel>,
 ) -> Result<(), remote_player::RemotePlayerError> {
     let client = cached_emby_client(config);
-    let (remote, player_rx) =
-        remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;
+    let (remote, player_rx) = remote_player::RemotePlayer::connect_endpoint(
+        &remote_player::DaemonEndpoint::Local,
+        pin::is_pinned(),
+        pin::swap_token(),
+    )?;
     run_remote_app(
         client,
         remote,

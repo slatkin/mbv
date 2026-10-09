@@ -9,6 +9,7 @@ use std::fmt;
 use std::io::IsTerminal;
 use std::num::NonZeroU16;
 use std::os::fd::{AsRawFd, FromRawFd};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mbv_config::PanelConfig;
@@ -123,6 +124,35 @@ static HANDED_OVER: AtomicBool = AtomicBool::new(false);
 #[must_use]
 pub(crate) fn is_pinned() -> bool {
     HANDED_OVER.load(Ordering::Relaxed)
+}
+
+/// The environment variable the Owner sets on a Client it started for a Pin
+/// swap (tray-pin-swap design D2).
+const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
+
+/// The swap token this launch was started with, claimed once at startup.
+/// `None` for every launch the user started.
+static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
+
+/// Read `MBV_SWAP_TOKEN` and remove it from this process's environment
+/// (tray-pin-swap design D2). Called once, before any worker or child process
+/// spawns, so the token is neither read twice nor inherited by a spawned
+/// daemon.
+pub(crate) fn claim_swap_token() {
+    let token = std::env::var(SWAP_TOKEN_ENV).ok();
+    // SAFETY: this runs on the main thread before any thread exists, so no
+    // other thread can observe the environment mid-update.
+    unsafe { std::env::remove_var(SWAP_TOKEN_ENV) };
+    let _ = SWAP_TOKEN.set(token);
+}
+
+/// The claimed swap token, `None` for every launch the user started.
+#[must_use]
+pub(crate) fn swap_token() -> Option<String> {
+    match SWAP_TOKEN.get() {
+        Some(Some(token)) => Some(token.clone()),
+        _ => None,
+    }
 }
 
 /// Start the pinned panel and hand this process's stdio to its pty (design

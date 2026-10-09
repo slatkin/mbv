@@ -378,6 +378,14 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
+    /// The Owner asks this Client to prepare for a Pin swap: save the launch
+    /// snapshot now and answer `CtrlCmd::SwapPrepared` (tray-pin-swap design
+    /// D2). Sent only to a Client that advertised `pin-swap`.
+    SwapPrepare,
+    /// The Owner tells this Client to exit now as swapped out: skip the
+    /// launch-state save and the coordinated shutdown request (tray-pin-swap
+    /// design D2/D6). Sent only to a Client that advertised `pin-swap`.
+    SwapQuit,
     /// Emitted by `RemotePlayer` when the daemon sends redacted Audiobookshelf
     /// progress. Dormant: delivered for a future browse-reconciliation
     /// consumer, but nothing applies it to queue or browse state yet.
