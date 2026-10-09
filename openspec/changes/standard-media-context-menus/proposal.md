@@ -2,64 +2,88 @@
 
 ## Why
 
-Audiobookshelf book and podcast rows have no context menu. The context-menu
-target resolver returns no menu for them, so Add to Queue cannot be reached.
-The `AudiobookshelfBookIntent::Enqueue` and `PodcastEpisodeIntent::Enqueue`
-handlers exist, but nothing sends to them. Feeds has a menu, but it differs
-from Emby without a reason: it always shows both Mark Played and Mark
-Unplayed, and its multi-selection menu has no Shuffle. Every library media row
-should offer the same standard actions.
+Library right-click menus differ from screen to screen for no reason.
+
+- **Audiobookshelf:** podcast episodes and books have no menu at all.
+- **YouTube:** rows in the Emby homevideos feed view, for example a YouTube
+  tab, look up their targets in a different item set than the one they
+  paint. A right-click or `.` there resolves no item.
+- **Labels:** single Emby rows say "Watched", while multi-selections and Feeds
+  say "Played".
+- **Feeds:** a single row shows both mark entries, its multi-selection menu
+  has no Shuffle, and a Feeds bulk action never clears its selection.
+- **Music:** albums and artists offer "Mark Watched", but tracks offer no mark
+  entry.
+
+This change sets one standard for library menus. Each exception is written
+down with its reason.
 
 ## What Changes
 
-- Every library leaf row offers Play, Add to Queue, and one played-state entry
-  chosen by state. A finished item shows "Mark Unplayed"; any other item shows
-  "Mark Played". This covers Audiobookshelf podcast episodes, Audiobookshelf
-  books, Feeds entries, and the existing non-audio Emby leaves.
-- Shuffle appears only on rows that have a collection under them (Emby
-  folders, as today) and on multi-selections. Episodes, books, and feed
-  entries get no single-row Shuffle. A book's chapters are positions in one
-  queue item, not a collection.
-- Audiobookshelf podcast and book lists open a context menu from the menu key
-  (`.`) and from right-click. With a multi-selection active, they show the
-  shared multi-selection menu: Play, Shuffle, Add to Queue, Mark Played, Mark
-  Unplayed.
-- The Feeds single-row menu replaces its two mark entries with the single
-  entry chosen by state. The Feeds multi-selection menu gains Shuffle.
-- Audiobookshelf played state becomes writable. mbv sends `isFinished` through
-  `PATCH /api/me/progress/:libraryItemId/:episodeId?`, or through
-  `PATCH /api/me/progress/batch/update` for a multi-selection. After the
-  server accepts, mbv applies the new state to browse and queue progress
-  itself, because the server sends no `user_item_progress_updated` for a
-  manual change.
-- The `context-menu` scenario that says Audiobookshelf and Feeds open no menu
-  is removed.
+- **One standard action set for every library list.** Entries appear in this
+  fixed order:
+  - Leaf row: Play, Add to Queue, then one played-state entry.
+  - Collection row: Play All, Shuffle, Add to Queue, then one played-state
+    entry.
+  - Multi-selection: Play, Shuffle, Add to Queue, Mark Played, Mark Unplayed.
+
+  A list-specific removal goes after the mark entries. Examples are Remove
+  from Continue Watching and the bulk Remove.
+- **One label set.** "Mark Played" and "Mark Unplayed" are used everywhere.
+  "Mark Watched" and "Mark Unwatched" are retired. A single row shows only the
+  entry that changes its current state.
+- **Documented exceptions:**
+  - Audiobookshelf books are leaves. Their chapters are positions inside one
+    queue item, so a book gets no Shuffle.
+  - Music tracks, albums, and artists offer no played-state entry. mbv never
+    resumes music, and it ignores music played state everywhere. This covers
+    multi-selections too.
+  - Continue Watching adds Remove from Continue Watching.
+  - Selector pills open no menu. These include podcast shows, feed
+    subscriptions, YouTube channel groups, and letters.
+  - Inline search results keep their single-row-only menu.
+- **YouTube and Latest rows:** the Emby library list sends the items it
+  paints, so menus open on homevideos feed view rows and on Latest rows. The
+  separate shell lookup, `ContextMenuTargets::Browser`, is removed.
+- **Feeds:** the single-row menu matches the standard, the multi-selection
+  menu gets Shuffle, and a bulk action clears the selection.
+- **Audiobookshelf:** podcast episode and book lists open the standard menu
+  from `.` and from right-click. Played state becomes writable through
+  `PATCH /api/me/progress/...` and `/batch/update`. After the server accepts,
+  mbv applies the change to local browse and queue progress itself, because
+  the server sends no `user_item_progress_updated` for a manual change.
+- **Out of scope:** the Queue panel, the Playlists sidebar, and the Search
+  sidebar. They are not library lists and keep their current menus.
 
 ## Capabilities
 
 ### New Capabilities
-- `audiobookshelf-played-state`: marks Audiobookshelf episodes and books as
+- `audiobookshelf-played-state`: marks Audiobookshelf episodes and books
   finished or unfinished on the server, and applies the result to local
   browse and queue progress.
 
 ### Modified Capabilities
-- `context-menu`: the keyboard-anchoring requirement no longer excludes
-  Audiobookshelf and Feeds. A new requirement fixes the standard entry set for
-  library rows: which rows get Shuffle, and the single state-chosen
-  played-state entry.
+- `context-menu`: the keyboard-anchoring requirement covers every library
+  list. New requirements define the standard action set, the entry order, the
+  played-state label and its choice by state, where Shuffle appears, and each
+  documented exception.
 
 ## Impact
 
-- `crates/mbv-audiobookshelf`: new bounded client calls for single and batch
-  progress PATCH.
-- `crates/mbv-ui-model/src/context_menu.rs`: a new Audiobookshelf target type,
-  a new `ContextMenuTargets` variant, and new `ContextAction` variants for
-  Audiobookshelf play, shuffle, enqueue, and mark, plus a Feeds shuffle.
-- `crates/mbv-components`: `PodcastContent` and `BookContent` handle `.` and
-  right-click and emit `ShellRequest::RowContextMenu`, as Feeds does.
-- `src/app/dispatch/context_menu/`: build the Audiobookshelf menu, change the
-  Feeds menu, and add dispatch arms. Every new `ContextAction` variant gets an
-  exhaustive arm.
-- `src/app/shell/messages.rs`: route the new `ContextMenuTargets` variant.
-- No ctrl protocol, persistence, or daemon change. Queue progress for queued
-  Audiobookshelf slots uses the existing `QueueOp::ApplyProgress` relay.
+- `crates/mbv-audiobookshelf`: bounded single and batch progress PATCH calls.
+- `crates/mbv-ui-model/src/context_menu.rs`:
+  - Add an Audiobookshelf target type and a `ContextMenuTargets::Audiobookshelf` variant.
+  - Remove `ContextMenuTargets::Browser`.
+  - Add Audiobookshelf and Feeds-shuffle `ContextAction` variants.
+  - Add a length rule to `is_bulk_action`.
+- `crates/mbv-components`:
+  - `EmbyLibraryContent` sends `ContextMenuTargets::Emby` with its painted items.
+  - `PodcastContent` and `BookContent` open menus.
+- `src/app/dispatch/context_menu/`: Emby label and music changes, new entry
+  order, the Feeds menu split, the Audiobookshelf builder and actions, and
+  played-state writes.
+- `src/app/state/context_menu_capabilities.rs`: music items are not
+  played-state capable.
+- `src/app/shell/messages.rs`: route the Audiobookshelf targets, drop the
+  Browser arm, and give each target variant an explicit arm.
+- No ctrl protocol, persistence, or daemon change.
