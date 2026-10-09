@@ -282,6 +282,16 @@ impl LibraryPanel {
         paint.map(|paint| (paint.area.width, paint.area.height))
     }
 
+    /// Whether the wide-split drag is in progress: a `Drag` moved the width
+    /// and the matching `DragEnd` has not arrived. The shell reads this to skip
+    /// per-drag-tick work (the hero's cover-fit re-encode waits for the
+    /// drag's final width); the raw gesture stays private. Mirrors
+    /// `QueueBoundaryComponent::is_resizing`.
+    #[must_use]
+    pub fn is_resizing(&self) -> bool {
+        self.split_changed
+    }
+
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
     /// the split gesture state before the next delivery — the same reset
     /// the former boundary applied while it owned the gesture —

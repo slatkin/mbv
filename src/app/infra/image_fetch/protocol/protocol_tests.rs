@@ -187,3 +187,54 @@ fn building_title_overlay_leaves_shared_plain_card_bitmap_unchanged() {
     assert_ne!(variant, plain_key);
     assert_eq!(app.images.image(plain_key).unwrap().img, plain_before);
 }
+
+/// User-reported regression (2026-10-09): a queue-column or wide-split drag
+/// changes the hero's artwork box on every mouse event, and each changed box
+/// rebuilt the cover-fit protocol with a synchronous Lanczos3 resize on the
+/// sync thread — dragging either boundary crawled while a landscape
+/// (overlaid) hero was up, while portrait heroes took the plain-protocol
+/// path and dragged fine. While a drag is live an existing encoding is kept
+/// (the painter scales it into the moving box off-thread); the drag's final
+/// box re-encodes exactly once.
+#[test]
+fn resize_drag_keeps_the_hero_encoding_until_it_ends() {
+    let mut app = app_with_base();
+    assert!(
+        app.ensure_hero_cover_protocol(BASE_KEY, (10, 5), None, false),
+        "the first paint builds the cover-fit protocol"
+    );
+    let baseline = build_count(&app);
+    assert_eq!(app.images.image(BASE_KEY).unwrap().cover_box, Some((10, 5)));
+
+    // Drag ticks: the box moves with every event; the encoding must not.
+    for box_cells in [(11, 5), (12, 6), (13, 6)] {
+        assert!(
+            app.ensure_hero_cover_protocol(BASE_KEY, box_cells, None, true),
+            "the kept encoding keeps painting through the drag"
+        );
+        assert_eq!(
+            build_count(&app),
+            baseline,
+            "a resize drag must not rebuild the cover-fit protocol at box {box_cells:?}"
+        );
+        assert_eq!(
+            app.images.image(BASE_KEY).unwrap().cover_box,
+            Some((10, 5)),
+            "the kept encoding holds the drag-start box"
+        );
+    }
+
+    // DragEnd: the next sync pass re-encodes exactly once at the final box.
+    assert!(app.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, false));
+    assert_eq!(
+        build_count(&app),
+        baseline + 1,
+        "the ended drag re-encodes exactly once"
+    );
+    assert_eq!(app.images.image(BASE_KEY).unwrap().cover_box, Some((13, 6)));
+    assert!(
+        app.ensure_hero_cover_protocol(BASE_KEY, (13, 6), None, false),
+        "the settled box is reused on later ticks"
+    );
+    assert_eq!(build_count(&app), baseline + 1);
+}

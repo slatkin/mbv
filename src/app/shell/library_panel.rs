@@ -523,6 +523,30 @@ impl Model {
         }
     }
 
+    /// Whether a resize drag that moves panel geometry is live: the queue
+    /// column's boundary gesture or the Library panel's wide-split gesture.
+    /// Each gesture's component owns the bit; the shell asks rather than
+    /// mirrors it. The image projections read the resolved value as an input
+    /// so a drag never triggers synchronous re-encodes (see
+    /// `ensure_hero_cover_protocol`).
+    pub(in crate::app) fn resize_drag_active(&self) -> bool {
+        let boundary_resizing = self
+            .application
+            .get_component(&ComponentId::QueueBoundary)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<mbv_components::QueueBoundaryComponent>()
+            })
+            .is_some_and(mbv_components::QueueBoundaryComponent::is_resizing);
+        let split_resizing = self
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .is_some_and(LibraryPanel::is_resizing);
+        boundary_resizing || split_resizing
+    }
+
     /// The library heroes' image projection (task 5.10, design D9, TV's
     /// `push_tv_workspace_content` shape generalized): for the active
     /// migrated owner's current hero, run the artwork policy's source and the
@@ -571,6 +595,7 @@ impl Model {
             area,
             list_pane_width,
             overlay_box,
+            self.resize_drag_active(),
         );
         if let Some(panel) = self
             .application

@@ -57,6 +57,7 @@ impl App {
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
         overlay_box: Option<(u16, u16)>,
+        resizing: bool,
     ) -> mbv_render::components::tv_wide::HeroImageState {
         use mbv_components::library_panel::content::ArtworkSource;
         use mbv_render::components::tv_wide::HeroImageState as State;
@@ -152,6 +153,7 @@ impl App {
                     &cache_key,
                     (box_cells.width, box_cells.height),
                     logo_cache_key.as_deref(),
+                    resizing,
                 ) {
                     return State::Loading;
                 }
@@ -160,7 +162,7 @@ impl App {
             // The Library Hero overlay paints the same reserved-box flow; a
             // Landscape hero there is cover-fit for the overlay's own box
             // (its provider-link row stays plain, so no Logo).
-            if !self.ensure_hero_cover_protocol(&cache_key, box_cells, None) {
+            if !self.ensure_hero_cover_protocol(&cache_key, box_cells, None, resizing) {
                 return State::Loading;
             }
         }

@@ -371,11 +371,22 @@ impl App {
     /// next sync pass's "re-encode request keyed by the new box size"), and
     /// the painters show the placeholder for at most that one frame.
     /// Returns whether a ready protocol is available.
+    ///
+    /// `resizing` is the shell-resolved "a resize drag is in progress" input
+    /// (queue-column boundary or wide split). A drag changes the box on
+    /// every mouse event, and each rebuild cover-fills the source with a
+    /// Lanczos3 resize synchronously on the sync thread (user-reported
+    /// regression, 2026-10-09: dragging either boundary was super slow while
+    /// a landscape hero was up, while non-overlaid heroes dragged fine).
+    /// While the drag is live an existing encoding is kept — the painter
+    /// scales it into the moving box off-thread — and the drag's final box
+    /// re-encodes once the drag ends.
     pub(in crate::app) fn ensure_hero_cover_protocol(
         &mut self,
         cache_key: &str,
         box_cells: (u16, u16),
         logo_cache_key: Option<&str>,
+        resizing: bool,
     ) -> bool {
         let Some(entry) = self.images.image(cache_key) else {
             return false;
@@ -388,6 +399,12 @@ impl App {
             && entry.applied_logo_key == desired_logo_key
             && !entry.protocols.is_empty()
         {
+            return true;
+        }
+        // No encoding yet: the first paint during a drag must still build.
+        // An existing encoding is kept across the drag and re-encodes once at
+        // the drag's final box.
+        if resizing && !entry.protocols.is_empty() {
             return true;
         }
         let Some((picker, suffix)) = self
