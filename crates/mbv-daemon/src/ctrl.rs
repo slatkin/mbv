@@ -67,8 +67,8 @@ pub enum CtrlTransport {
 
 /// Which swap-capable surface a ctrl client runs on, derived at Hello from
 /// the `pin-swap` and `pinned-surface` capabilities (tray-pin-swap design
-/// D2). A client without `pin-swap` has no swap surface: it is never a swap
-/// target.
+/// D2, as amended: a pinned Client is a Pinned target even without
+/// `pin-swap`). Only a Terminal target requires `pin-swap`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SwapSurface {
     Terminal,

@@ -95,18 +95,21 @@ fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bo
     true
 }
 
-/// Which swap surface the Hello advertises, per tray-pin-swap design D2:
-/// `Some` only when `pin-swap` is present, `Pinned` only then when
-/// `pinned-surface` is also present.
+/// Which swap surface the Hello advertises. `Pinned` comes from the
+/// `pinned-surface` capability alone: a pinned Client that does not
+/// advertise `pin-swap` (a pre-upgrade pinned Client) is still an Unpin
+/// target — it never answers `SwapPrepared`, so the swap abandons at the
+/// deadline (spec pin-swap "Attached pinned Client does not support Pin
+/// swap"). A Terminal surface requires `pin-swap`, so an old terminal Client
+/// is never a Pin target.
 fn swap_surface_from_hello(info: &CtrlHello) -> Option<SwapSurface> {
-    if !info.supports_pin_swap() {
-        return None;
-    }
-    Some(if info.supports_pinned_surface() {
-        SwapSurface::Pinned
+    if info.supports_pinned_surface() {
+        Some(SwapSurface::Pinned)
+    } else if info.supports_pin_swap() {
+        Some(SwapSurface::Terminal)
     } else {
-        SwapSurface::Terminal
-    })
+        None
+    }
 }
 
 /// What `send_admission_refusal` decided about one Hello.
@@ -442,6 +445,68 @@ mod tests {
     use super::*;
     use crate::ctrl::CtrlClients;
     use std::sync::atomic::AtomicBool;
+
+    /// Contract: spec pin-swap "Attached pinned Client does not support Pin
+    /// swap" — a pinned-surface-only Hello (a pre-upgrade pinned Client) is
+    /// a Pinned swap target, so the shared flag flips and Unpin targets it;
+    /// the swap then abandons at the deadline. A Terminal surface still
+    /// requires `pin-swap`, and a Client with neither capability has no
+    /// surface.
+    #[test]
+    fn a_pinned_surface_only_hello_is_a_pinned_swap_target() {
+        let pinned_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE]);
+        let pinned_and_swap = hello_with_caps(&[
+            mbv_ctrl::CTRL_CAP_PIN_SWAP,
+            mbv_ctrl::CTRL_CAP_PINNED_SURFACE,
+        ]);
+        let swap_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PIN_SWAP]);
+        let neither = hello_with_caps(&[]);
+
+        assert_eq!(
+            swap_surface_from_hello(&pinned_only),
+            Some(SwapSurface::Pinned)
+        );
+        assert_eq!(
+            swap_surface_from_hello(&pinned_and_swap),
+            Some(SwapSurface::Pinned)
+        );
+        assert_eq!(
+            swap_surface_from_hello(&swap_only),
+            Some(SwapSurface::Terminal)
+        );
+        assert_eq!(swap_surface_from_hello(&neither), None);
+    }
+
+    /// A pinned-surface-only Hello registered as a Client sets the shared
+    /// "pinned Client attached" flag, so the Tray shows **Unpin** while that
+    /// pre-upgrade Client is attached.
+    #[test]
+    fn a_pinned_surface_only_client_sets_the_pinned_flag() {
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut clients = CtrlClients::new(
+            merged_tx,
+            Arc::clone(&flag),
+            Arc::new(crate::PendingSwapToken::default()),
+        );
+        let (client_tx, _client_rx) = mpsc::channel::<CtrlOutbound>();
+        clients.connect_with_role(
+            client_tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
+            CtrlConnectionRole::Client,
+        );
+
+        assert!(flag.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    fn hello_with_caps(caps: &[&str]) -> CtrlHello {
+        let mut hello = CtrlHello::current();
+        hello.capabilities = caps.iter().map(|cap| (*cap).to_string()).collect();
+        hello
+    }
 
     /// A registry with one local Client attached, so `has_driver` is true and
     /// the `ExclusiveOwner` refusal fires under Stay-alive off.
