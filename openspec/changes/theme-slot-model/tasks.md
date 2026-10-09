@@ -47,8 +47,8 @@ map by hex (design D1), never by name. Every group ends with `cargo fmt` and a c
 
 ## 7. Remove the transitional aliases
 
-- [ ] 7.1 Delete the transitional alias block from `crates/mbv-theme/src/lib.rs` (task 1.1) and update the crate doc comment to describe slots, theme, roles and surfaces. Verify: `cargo clippy --workspace --all-targets -- -D warnings` passes, which proves no consumer still names an old constant.
-- [ ] 7.2 Integration check: run `cargo nextest run --workspace` and `cargo fmt --all -- --check`. Confirm `docs/palette.json` did not change after the run, so the theme is the same as at 1.5. Commit.
+- [x] 7.1 Delete the transitional alias block from `crates/mbv-theme/src/lib.rs` (task 1.1) and update the crate doc comment to describe slots, theme, roles and surfaces. Verify: `cargo clippy --workspace --all-targets -- -D warnings` passes, which proves no consumer still names an old constant.
+- [x] 7.2 Integration check: run `cargo nextest run --workspace` and `cargo fmt --all -- --check`. Confirm `docs/palette.json` did not change after the run, so the theme is the same as at 1.5. Commit.
 
 ## Workflow follow-up
 
