@@ -73,12 +73,12 @@
 
 ## 7. Audiobookshelf Mark Played / Mark Unplayed
 
-- [ ] 7.1 Add `ContextAction::AudiobookshelfMarkPlayed` and `AudiobookshelfMarkUnplayed`, each holding `Vec<AudiobookshelfMenuTarget>`, and include them in the `is_bulk_action` length rule. Extend `open_audiobookshelf_context_menu`:
+- [x] 7.1 Add `ContextAction::AudiobookshelfMarkPlayed` and `AudiobookshelfMarkUnplayed`, each holding `Vec<AudiobookshelfMenuTarget>`, and include them in the `is_bulk_action` length rule. Extend `open_audiobookshelf_context_menu`:
   - One target: one entry chosen from the cached `is_finished`. A missing progress entry counts as unfinished.
   - More than one target: both entries.
 
   Extend the 5.6 case table with an expected label list for a finished episode. Verify with `cargo nextest run -p mbv`.
-- [ ] 7.2 Add the worker path (design D5):
+- [x] 7.2 Add the worker path (design D5):
   - If the Audiobookshelf Service is not Ready, or `audiobookshelf_setup_and_key` returns `None`, show the existing unavailable-style toast and change nothing.
   - Otherwise start a thread modeled on `start_audiobookshelf_shows` (`src/app/dispatch/session/service_startup.rs`). Use `set_finished_bounded` for one target and `batch_set_finished_bounded` for more.
   - The thread sends a new `LibEvent` completion carrying the setup generation, the targets, the finished flag, and the result.
@@ -86,14 +86,14 @@
   - On `Err`, show an error toast, and route a credential rejection through the existing ABS authentication failure classification.
 
   Verify with `cargo check -p mbv`.
-- [ ] 7.3 On `Ok`, apply locally (design D6):
+- [x] 7.3 On `Ok`, apply locally (design D6):
   - Mark Played: call `reconcile_audiobookshelf_progress` or `reconcile_audiobookshelf_book_progress` with `is_finished = true` and the cached time.
   - Mark Unplayed: reset only targets cached as finished, to time 0 with `is_finished = false`. Leave the others unchanged.
   - Send one `QueueOp::ApplyProgress` with the matching `ProgressUpdate`s through `queue_link(QueueScope::Local)`, leaving out the active Player-owned slot. Refactor `player_owns_active_match` into an identity-based check that the socket path and this path share.
   - Push the active Audiobookshelf owner's content.
 
   Verify with `cargo check -p mbv`.
-- [ ] 7.4 Contract (audiobookshelf-played-state, "An accepted mark updates local progress" and "The actively owned session is not modified"): App-level tests that feed the completion event directly, with no network and no thread:
+- [x] 7.4 Contract (audiobookshelf-played-state, "An accepted mark updates local progress" and "The actively owned session is not modified"): App-level tests that feed the completion event directly, with no network and no thread:
   - Mark Unplayed on a finished episode resets it to unplayed at 0.
   - A bulk Mark Unplayed leaves an in-progress episode's position alone.
   - Mark Played on the active slot's episode updates browse progress and leaves that slot out of the `ApplyProgress` updates.
