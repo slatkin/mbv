@@ -7,14 +7,14 @@
 
 ## 2. Emby builders follow the standard (design D8)
 
-- [ ] 2.1 In `src/app/dispatch/context_menu/menu.rs`:
+- [x] 2.1 In `src/app/dispatch/context_menu/menu.rs`:
   - `push_play_state_context_action`: change the labels to "Mark Played" and "Mark Unplayed", and return without pushing when `item.is_music()`.
   - `push_leaf_context_actions`: remove the inline `media_type != "Audio" && item_type != "Audio"` guard, since `is_music()` now covers it.
   - `open_context_menu_for_selection`: move the Remove entry after Mark Unplayed.
 
   Keep "Play All" on folder rows. Verify with `cargo check -p mbv`.
-- [ ] 2.2 In `src/app/state/context_menu_capabilities.rs`, set `emby_item_capabilities`' `played_state_capable` to `!item.is_music()`. Verify with `cargo check -p mbv`.
-- [ ] 2.3 Contract (context-menu spec: the standard action set, the Played label, and the music rule): one App-level `#[case]` test over `build_context_menu_for`, asserting the ordered label list for:
+- [x] 2.2 In `src/app/state/context_menu_capabilities.rs`, set `emby_item_capabilities`' `played_state_capable` to `!item.is_music()`. Verify with `cargo check -p mbv`.
+- [x] 2.3 Contract (context-menu spec: the standard action set, the Played label, and the music rule): one App-level `#[case]` test over `build_context_menu_for`, asserting the ordered label list for:
   - an unplayed movie: Play, Add to Queue, Mark Played
   - a played movie: Mark Unplayed, with no "Watched" anywhere
   - a TV season with unplayed children: Play All, Shuffle, Add to Queue, Mark Played
