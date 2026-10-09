@@ -267,7 +267,9 @@ impl App {
             Command::OpenSessions => {
                 self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Sessions);
             }
-            Command::OpenPlaylists => self.open_playlists_panel(),
+            Command::OpenPlaylists => {
+                self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Playlists);
+            }
             Command::OpenSearch => self.open_search_sidebar(),
             // Model handles this shell-only command before delegating the
             // remaining commands to App::dispatch.

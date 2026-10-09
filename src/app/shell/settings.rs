@@ -333,7 +333,6 @@ impl Model {
             SettingsIntent::OpenPlaylists => {
                 self.app.close_settings();
                 self.mount_sidebar(super::SidebarId::Playlists);
-                self.app.open_playlists_panel();
                 false
             }
             SettingsIntent::Quit => self.app.try_quit(),

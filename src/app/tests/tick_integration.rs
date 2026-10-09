@@ -665,6 +665,45 @@ fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
     }
 }
 
+/// The key that mounts a non-blocking sidebar toggles it (the F2/F3 rule):
+/// a second press of the same key dismisses the sidebar the first one
+/// mounted. F4/Playlists used to be open-only (`open_playlists_panel`), so
+/// F4 could never dismiss its own panel.
+#[test]
+fn f4_playlists_sidebar_toggles_open_and_closed() {
+    let step_with_key = |harness: &mut TickHarness, code: Key| {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        assert!(matches!(
+            outcome.router,
+            RouterOutcome::Command(Command::OpenPlaylists)
+        ));
+        harness
+            .model_mut()
+            .dispatch_router_command(&Command::OpenPlaylists);
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+        harness.model_mut().sync_mounted_surfaces();
+    };
+
+    let mut harness = TickHarness::new(make_app_stub());
+    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
+
+    step_with_key(&mut harness, Key::Function(4));
+    assert!(harness.model().application.mounted(&playlists_id));
+    assert_eq!(harness.model().application.focus(), Some(&playlists_id));
+
+    step_with_key(&mut harness, Key::Function(4));
+    assert!(
+        !harness.model().application.mounted(&playlists_id),
+        "the key that mounted Playlists must dismiss it"
+    );
+}
+
 #[test]
 fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
     let mut app = make_app_stub();

@@ -81,9 +81,7 @@ impl super::super::Model {
                 self.mount_sidebar(super::super::SidebarId::Sessions);
             }
             ShellRequest::OpenPlaylists => {
-                self.umount_help();
-                self.mount_sidebar(super::super::SidebarId::Playlists);
-                self.app.open_playlists_panel();
+                self.toggle_sidebar(super::super::SidebarId::Playlists);
             }
             ShellRequest::ConfirmIntent(intent) => {
                 self.handle_confirm_intent(intent);

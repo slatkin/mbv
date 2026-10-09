@@ -58,6 +58,9 @@ impl Model {
             self.app.spawn_sessions_load();
             self.app.spawn_cast_discovery();
         }
+        if sidebar == SidebarId::Playlists && self.app.playlists.is_empty() {
+            self.app.spawn_load_playlists();
+        }
     }
 
     pub(in crate::app) fn dismiss_sidebar(&mut self, sidebar: SidebarId) {
