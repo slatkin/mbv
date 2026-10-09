@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::tests::QueueViewTestExt;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::SeriesDetail;
 
@@ -7,6 +8,13 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
+    // The narrow TV layout needs the queue column: with the empty-queue
+    // column hidden (change `hide-empty-queue-column`, D1) an empty
+    // displayed queue would widen the library into the wide breakpoint.
+    model
+        .app
+        .local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_tv_content();
     model.sync_active_destination();
 
@@ -96,6 +104,13 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
+    // The narrow TV layout needs the queue column: with the empty-queue
+    // column hidden (change `hide-empty-queue-column`, D1) an empty
+    // displayed queue would widen the library into the wide breakpoint.
+    model
+        .app
+        .local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.push_tv_workspace_content();
     model.sync_library_panel();
 

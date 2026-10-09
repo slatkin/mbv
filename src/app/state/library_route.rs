@@ -307,6 +307,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::LibraryTab;
+    use crate::app::tests::QueueViewTestExt;
     use crate::app::tests::make_app_stub;
 
     #[test]
@@ -367,6 +368,11 @@ mod tests {
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab::new(lib_item));
         app.panel_focus = PanelFocus::Queue;
+        // The queue-side contract needs the queue column: with the
+        // empty-queue column hidden (change `hide-empty-queue-column`, D2)
+        // an empty displayed queue would resolve the library side instead.
+        app.local_view
+            .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
         app.tab = TabSelection::EmbyLibrary(0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
@@ -426,6 +432,11 @@ mod tests {
         // wrongly resolving a nav-scoped library.
         let mut app = make_app_stub();
         app.panel_focus = PanelFocus::Queue;
+        // The queue-side contract needs the queue column: with the
+        // empty-queue column hidden (change `hide-empty-queue-column`, D2)
+        // an empty displayed queue would resolve the library side instead.
+        app.local_view
+            .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 

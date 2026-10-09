@@ -6,6 +6,7 @@
 //! tick-integration or render tests.
 
 use super::*;
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::{LibraryTab, PanelFocus};
 use mbv_components::library_panel::LibraryPanel;
@@ -75,6 +76,13 @@ fn painted_music_offset(model: &mut Model) -> usize {
 fn narrow_enter_requests_album_activation() {
     let mut model = Model::new(make_music_group_app());
     model.app.panel_focus = PanelFocus::Library;
+    // The narrow breakpoint needs the queue column: with the empty-queue
+    // column hidden (change `hide-empty-queue-column`, D1) an empty
+    // displayed queue would widen the library into the wide breakpoint.
+    model
+        .app
+        .local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!model.app.is_right_panel_wide());
     expand_and_descend_to_first_album(&mut model);
@@ -149,6 +157,13 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
     model.app.panel_focus = PanelFocus::Library;
+    // The narrow breakpoint needs the queue column: with the empty-queue
+    // column hidden (change `hide-empty-queue-column`, D1) an empty
+    // displayed queue would widen the library into the wide breakpoint.
+    model
+        .app
+        .local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
     model.sync_mounted_surfaces();
     assert!(!model.app.is_right_panel_wide());
     expand_and_descend_to_first_album(&mut model);

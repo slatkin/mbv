@@ -288,3 +288,64 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
 
     assert_eq!(app.local_view.cursor(), 0);
 }
+
+/// Contract: "Two-panel layout hides an empty queue column" (change
+/// `hide-empty-queue-column`, D1). At 80+ columns with `both` and an empty
+/// displayed queue, the effective mode is library-only while the stored mode
+/// stays `both` -- the `x` cycle reads the stored mode, so it still advances
+/// from `both`.
+#[test]
+fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
+    let mut app = make_app_stub();
+    app.terminal_width = 100;
+    app.panel_mode = PanelMode::Both;
+
+    assert_eq!(app.effective_panel_mode(), PanelMode::LibraryOnly);
+    assert_eq!(app.panel_mode, PanelMode::Both);
+}
+
+/// Contract: "Cycle continues from both" (change `hide-empty-queue-column`,
+/// D1). With the queue column hidden because the displayed queue is empty,
+/// the `x` cycle still reads the stored `both` and advances to queue-only.
+#[test]
+fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
+    let mut app = make_app_stub();
+    app.terminal_width = 100;
+    app.panel_mode = PanelMode::Both;
+
+    app.dispatch(&crate::app::dispatch::action::Command::CyclePanelMode);
+
+    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
+}
+
+/// Contract: "Hidden empty queue moves focus to the library" and "Focus
+/// stays on the library on refill" (change `hide-empty-queue-column`, D2).
+/// The queue held focus; emptying it and syncing moves the stored focus to
+/// the library, and a later slot adoption leaves it there.
+#[test]
+fn emptied_queue_moves_stored_focus_to_library_and_refill_leaves_it_there() {
+    let mut app = make_app_stub();
+    app.terminal_width = 100;
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Queue;
+    app.local_view.adopt_items(make_items(2), 0);
+    let mut model = Model::new(app);
+    model.sync_queue();
+    assert_eq!(model.app.panel_focus, PanelFocus::Queue);
+
+    let empty = emby_unified_state(&[], 0);
+    model.app.local_view.adopt(
+        &empty,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    model.sync_queue();
+    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+
+    let refilled = emby_unified_state(&make_items(1), 0);
+    model.app.local_view.adopt(
+        &refilled,
+        crate::app::state::queue_view::AdoptCause::Replacement,
+    );
+    model.sync_queue();
+    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+}

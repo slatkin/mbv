@@ -3,6 +3,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::render_fixtures::make_music_group_app;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
@@ -169,6 +170,16 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
 fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::tests::render_fixtures::make_movie_app();
     app.tab = TabSelection::Home;
+    // The tab-bar geometry under test is the two-panel layout: with the
+    // empty-queue column hidden (change `hide-empty-queue-column`, D1) an
+    // empty displayed queue would render library-only and move the tab bar.
+    app.local_view.adopt_items(
+        vec![mbv_emby_model::test_support::make_item(
+            "Queue Item",
+            "Movie",
+        )],
+        0,
+    );
     let mut harness = TickHarness::new(app);
     // The sync pass mounts the panels from paint-free chrome geometry; draw
     // once with them mounted, then sync + draw again with the placements
