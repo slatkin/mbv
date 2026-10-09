@@ -25,11 +25,17 @@ name the item by its provider-native identity: `libraryItemId` and
 ### Requirement: Marking a multi-selection uses one batch request
 Mark Played or Mark Unplayed on a multi-selection of Audiobookshelf items
 SHALL send one batch request that sets the same finished state for every
-selected item.
+selected item. The server may report success for a batch even when an
+individual item fails, and mbv SHALL treat a successful batch response as
+success for every selected item.
 
 #### Scenario: Three episodes marked played
 - **WHEN** three podcast episodes are selected and the user chooses Mark Played
 - **THEN** mbv sends one batch request that sets finished to true for all three episodes
+
+#### Scenario: Batch accepted with a hidden per-item failure
+- **WHEN** the server accepts a batch request
+- **THEN** every selected item shows the new played state locally, even if the server did not apply it to one of them
 
 ### Requirement: An accepted mark updates local progress
 When the server accepts a mark, mbv SHALL apply it to cached browse progress
@@ -73,3 +79,12 @@ failure classification.
 #### Scenario: Credential rejected
 - **WHEN** the server rejects the API key on a mark request
 - **THEN** mbv classifies it as an Audiobookshelf authentication failure and changes no progress
+
+### Requirement: Only one mark is in flight at a time
+While an Audiobookshelf mark request is waiting for the server, a further
+Mark Played or Mark Unplayed SHALL be refused with a warning toast and SHALL
+start no request and change no progress.
+
+#### Scenario: Second mark while one is pending
+- **WHEN** the user chooses Mark Unplayed while an earlier mark has not finished
+- **THEN** a warning toast says a mark is already in progress and the earlier mark still completes normally
