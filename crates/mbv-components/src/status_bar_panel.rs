@@ -176,7 +176,7 @@ mod tests {
     /// anywhere else on the row does not.
     #[test]
     fn scroll_on_the_volume_pill_emits_the_volume_intent() {
-        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::ACCENT), None);
+        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::Role::Accent.color()), None);
         let vol = panel.regions().volume.expect("volume region");
         let mouse = |kind, column, row| {
             Event::Mouse(tuirealm::event::MouseEvent {
@@ -208,8 +208,8 @@ mod tests {
     fn click_on_the_mute_pill_emits_the_mute_intent() {
         let (mut panel, _) = drawn_panel(
             60,
-            pill(" 60", palette::ACCENT),
-            Some(pill("muted", palette::STATUS_ERROR)),
+            pill(" 60", palette::Role::Accent.color()),
+            Some(pill("muted", palette::Role::StatusError.color())),
         );
         let mute = panel.regions().mute.expect("mute region");
         let mouse = Event::Mouse(tuirealm::event::MouseEvent {

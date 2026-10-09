@@ -290,7 +290,7 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
+            now_playing_title: Some(("Example".into(), palette::Role::PlaybackValueFg.color())),
             title_parts: None,
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -334,7 +334,7 @@ mod tests {
             panel_focused: false,
             // The painter paints the typed parts only over an attached
             // target's plain title; the parts replace it when present.
-            now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG)),
+            now_playing_title: Some(("Fallback".into(), palette::Role::PlaybackValueFg.color())),
             title_parts: Some(parts),
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -396,7 +396,7 @@ mod tests {
             &text,
             &fgs,
             title,
-            palette::PLAYBACK_TITLE_FG,
+            palette::Role::PlaybackTitleFg.color(),
             "the title part",
         );
         if let Some(context) = context {
@@ -424,7 +424,7 @@ mod tests {
             for i in 0..=context.chars().count() {
                 assert_eq!(
                     fgs[start + i],
-                    palette::PLAYBACK_CONTEXT_FG,
+                    palette::Role::PlaybackContextFg.color(),
                     "the context part and the space paint in the context role: {text:?}"
                 );
             }
@@ -436,14 +436,14 @@ mod tests {
             if title_start > 0 {
                 assert_ne!(
                     fgs[title_start - 1],
-                    palette::PLAYBACK_CONTEXT_FG,
+                    palette::Role::PlaybackContextFg.color(),
                     "no context part before the title: {text:?}"
                 );
             }
             let after = title_start + title.chars().count();
             assert_ne!(
                 fgs[after],
-                palette::PLAYBACK_CONTEXT_FG,
+                palette::Role::PlaybackContextFg.color(),
                 "no context part after the title: {text:?}"
             );
         }

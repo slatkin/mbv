@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 use mbv_render::{WrappedHeroLine, paint_wide_hero_text, render_artwork_placeholder};
 use mbv_theme as palette;
+use mbv_theme::HERO_META_ROLES;
 use mbv_ui_model::ui_util::trunc_str;
 
 use super::super::content::{HeroContent, HeroFacts, HeroHeader};
@@ -101,11 +102,11 @@ pub fn paint_hero_pane_content(
 }
 
 /// The one title/meta painter for all three arms: the title in
-/// [`palette::TEXT_HERO_TITLE`], then each meta row in
+/// `palette::Role::TextHeroTitle.color()`, then each meta row in
 /// `HERO_META_ROLES[cycle % 3]` — except the duration row
 /// (`HeroFacts::duration_row`) and the resume-percentage row
-/// (`HeroFacts::progress_row`), painted the `DURATION` and `PROGRESS_PERCENT`
-/// roles and skipped by the cycle — wrapped to the text block's width
+/// (`HeroFacts::progress_row`), painted the `Role::Duration` and
+/// `Role::ProgressPercent` roles and skipped by the cycle — wrapped to the text block's width
 /// (truncation and wrapping owned here, design D5). The Landscape arm instead
 /// packs the entries
 /// into [`paint_title_and_meta_grid`]'s two columns when `grid` carries
@@ -121,16 +122,16 @@ fn paint_title_and_meta(
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
-        style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE),
+        style: ratatui::style::Style::default().fg(palette::Role::TextHeroTitle.color()),
     });
     let mut cycle = 0usize;
     for (index, row) in facts.meta_rows.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
-            palette::DURATION
+            palette::Role::Duration.color()
         } else if facts.progress_row == Some(index) {
-            palette::PROGRESS_PERCENT
+            palette::Role::ProgressPercent.color()
         } else {
-            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()].color();
+            let fg = HERO_META_ROLES[cycle % HERO_META_ROLES.len()].color();
             cycle += 1;
             fg
         };

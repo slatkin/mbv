@@ -21,8 +21,8 @@ fn color_rgb(color: ratatui::style::Color) -> [u8; 3] {
 /// `PLAYBACK_CONTEXT_FG`.
 fn title_overlay_colours() -> mbv_images::title_overlay::TitleOverlayColours {
     mbv_images::title_overlay::TitleOverlayColours {
-        context: color_rgb(mbv_theme::PLAYBACK_CONTEXT_FG),
-        title: color_rgb(mbv_theme::TEXT_EMPHASIS),
+        context: color_rgb(mbv_theme::Role::PlaybackContextFg.color()),
+        title: color_rgb(mbv_theme::Role::TextEmphasis.color()),
     }
 }
 

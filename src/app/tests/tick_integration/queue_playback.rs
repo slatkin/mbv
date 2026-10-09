@@ -608,7 +608,9 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if (is_seek_fill(cell.symbol())) && cell.style().fg == Some(mbv_theme::ACCENT) {
+                if (is_seek_fill(cell.symbol()))
+                    && cell.style().fg == Some(mbv_theme::Role::Accent.color())
+                {
                     painted += 1;
                     assert!(
                         owner.contains((x, y).into()),

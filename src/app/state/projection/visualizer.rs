@@ -97,9 +97,9 @@ fn rounded_coordinate(value: f32, max: u16) -> u16 {
 
 fn point_color(sample: StereoSample) -> Color {
     match sample.left.abs().max(sample.right.abs()) * DISPLAY_GAIN {
-        amplitude if amplitude < 0.25 => mbv_theme::ACCENT,
-        amplitude if amplitude < 0.5 => mbv_theme::TEXT_METADATA,
-        amplitude if amplitude < 0.75 => mbv_theme::TEXT_FOCUS_ACCENT,
-        _ => mbv_theme::STATUS_ERROR,
+        amplitude if amplitude < 0.25 => mbv_theme::Role::Accent.color(),
+        amplitude if amplitude < 0.5 => mbv_theme::Role::TextMetadata.color(),
+        amplitude if amplitude < 0.75 => mbv_theme::Role::TextFocusAccent.color(),
+        _ => mbv_theme::Role::StatusError.color(),
     }
 }

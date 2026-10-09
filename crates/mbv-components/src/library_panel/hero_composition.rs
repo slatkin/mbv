@@ -116,7 +116,7 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader)
     let (label, style) = match header {
         WorkspaceHeader::Tracklist => (
             header.label(),
-            Style::default().fg(palette::WORKSPACE_HEADER_FG),
+            Style::default().fg(palette::Role::WorkspaceHeaderFg.color()),
         ),
     };
     f.render_widget(
