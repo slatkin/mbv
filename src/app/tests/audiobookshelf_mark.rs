@@ -172,6 +172,63 @@ fn bulk_mark_unplayed_leaves_an_in_progress_episode_position_alone() {
     );
 }
 
+/// Unit 7 review: zip misalignment. A bulk Mark Unplayed whose first target
+/// is the unfinished one must reconcile each remaining target with its own
+/// apply: the finished episode resets to 0/unplayed in browse, the in-progress
+/// episode keeps its position, and the single queue update names only the
+/// finished episode.
+#[test]
+fn bulk_mark_unplayed_with_a_leading_in_progress_target_reconciles_each_target_with_its_own_apply()
+{
+    let (mut app, cmd_rx) = mark_ready_app();
+    seed_episode_progress(&mut app, "episode-b", 600.0, false);
+    seed_episode_progress(&mut app, "episode-a", 2400.0, true);
+
+    let generation = app.audiobookshelf_runtime.generation();
+    feed_mark_completion(
+        &mut app,
+        generation,
+        vec![episode_target("episode-b"), episode_target("episode-a")],
+        false,
+        Ok(()),
+    );
+    assert!(app.drain_audiobookshelf_events());
+
+    let progress_b = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-b".into())];
+    assert!(
+        (progress_b.current_time_seconds - 600.0).abs() < f64::EPSILON,
+        "the in-progress episode keeps its saved position"
+    );
+    assert!(
+        !progress_b.is_finished,
+        "the in-progress episode stays unplayed"
+    );
+
+    let progress_a = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
+    assert!(
+        !progress_a.is_finished,
+        "the finished episode resets to unplayed"
+    );
+    assert!(
+        progress_a.current_time_seconds == 0.0,
+        "the finished episode's position resets to zero"
+    );
+
+    assert!(
+        matches!(cmd_rx.try_recv(), Ok(mbv_ctrl::CtrlCmd::UnifiedQueueApplyProgress { updates, .. })
+        if updates == vec![mbv_ctrl::ProgressUpdate {
+            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+            },
+            position_ticks: 0,
+            finished: false,
+        }]),
+        "the single queue update names only the finished episode"
+    );
+    assert!(cmd_rx.try_recv().is_err(), "only one update batch is sent");
+}
+
 /// Mark Played on the actively owned session's episode updates browse progress
 /// but leaves that slot out of the `ApplyProgress` updates.
 #[test]

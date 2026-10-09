@@ -139,13 +139,20 @@ impl App {
         finished: bool,
     ) {
         // Resolve every target against the cached progress first: the browse
-        // reconcile below mutates the same maps this read walks.
-        let applies: Vec<(mbv_queue::QueueItemContentId, f64)> = targets
-            .iter()
-            .filter_map(|target| audiobookshelf_mark_apply_target(self, target, finished))
-            .collect();
+        // reconcile below mutates the same maps this read walks. Each resolved
+        // apply keeps its own target, so a target dropped by the resolve (an
+        // unfinished Mark Unplayed no-op) cannot shift the pairing between the
+        // remaining targets and their applies (unit 7 review: zip misalignment).
+        let mut applies = Vec::with_capacity(targets.len());
+        for target in targets {
+            if let Some((content_id, seconds)) =
+                audiobookshelf_mark_apply_target(self, target, finished)
+            {
+                applies.push((target, content_id, seconds));
+            }
+        }
         let mut updates = Vec::with_capacity(applies.len());
-        for (target, (content_id, seconds)) in targets.iter().zip(applies) {
+        for (target, content_id, seconds) in applies {
             match target {
                 AudiobookshelfMenuTarget::Episode {
                     library_item_id,
