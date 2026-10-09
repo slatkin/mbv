@@ -1,6 +1,7 @@
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::overlay::OverlayRequest;
@@ -315,6 +316,48 @@ impl App {
                 |(x, y)| ContextMenuAnchor::Pointer { x, y },
             ),
             cursor: 0,
+            entries: menu_entries,
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// Build the Audiobookshelf row menu from component-resolved targets
+    /// (standard-media-context-menus design D3). The standard action set
+    /// splits on target count: a leaf row offers Play and Add to Queue; a
+    /// multi-selection adds Shuffle before Add to Queue. Group 7 adds the
+    /// mark entries.
+    pub(in crate::app) fn open_audiobookshelf_context_menu(
+        &mut self,
+        targets: Vec<AudiobookshelfMenuTarget>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        if targets.is_empty() {
+            return;
+        }
+        let mut menu_entries = Vec::new();
+        Self::push_context_action(
+            &mut menu_entries,
+            "Play",
+            ContextAction::AudiobookshelfPlay(targets.clone()),
+        );
+        if targets.len() > 1 {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Shuffle",
+                ContextAction::AudiobookshelfShuffle(targets.clone()),
+            );
+        }
+        Self::push_context_action(
+            &mut menu_entries,
+            "Add to Queue",
+            ContextAction::AudiobookshelfEnqueue(targets),
+        );
+        let menu = ContextMenu {
+            anchor: anchor.map_or(
+                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+                |(x, y)| ContextMenuAnchor::Pointer { x, y },
+            ),
+            cursor: ContextMenu::first_selectable(&menu_entries),
             entries: menu_entries,
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));

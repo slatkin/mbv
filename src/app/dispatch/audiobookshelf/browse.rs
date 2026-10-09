@@ -374,26 +374,6 @@ impl App {
         self.submit_queue_item(item, true);
     }
 
-    pub(in crate::app) fn enqueue_selected_audiobookshelf_episode_target(
-        &mut self,
-        index: usize,
-        target: &mbv_ui_msg::PodcastEpisodeTarget,
-    ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
-            return;
-        };
-        let scope = self.viewed_queue_scope();
-        let bound = scope == self.playing_queue_scope();
-        if bound && !self.player.can_admit_audiobookshelf() {
-            self.flash(
-                "Audiobookshelf playback owner is unavailable".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.submit_queue_item(item, false);
-    }
-
     /// Ordinary play for the downloaded episode at `episode_index`. The shell
     /// resolves the target from the mounted component's selection (task
     #[cfg(test)]

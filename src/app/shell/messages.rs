@@ -563,7 +563,18 @@ impl Model {
             mbv_ui_model::context_menu::ContextMenuTargets::Feeds(entries) => {
                 self.app.open_feeds_context_menu(entries, anchor);
             }
-            _ => {}
+            mbv_ui_model::context_menu::ContextMenuTargets::Audiobookshelf(targets) => {
+                self.app.open_audiobookshelf_context_menu(targets, anchor);
+                // Re-project the active Audiobookshelf owner (task 5.4): both
+                // pushes self-guard on the active tab being their owner.
+                self.push_audiobookshelf_podcast_content();
+                self.push_audiobookshelf_book_content();
+            }
+            // Home and Queue targets never reach this resolver: both are
+            // intercepted earlier in `handle_row_context_menu_request` and
+            // routed to their own handlers.
+            mbv_ui_model::context_menu::ContextMenuTargets::Home(_)
+            | mbv_ui_model::context_menu::ContextMenuTargets::Queue(_) => {}
         }
         self.reproject_all_owners();
     }

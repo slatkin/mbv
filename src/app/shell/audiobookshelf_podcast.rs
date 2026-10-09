@@ -106,15 +106,7 @@ impl Model {
             // exist; a selectionless activation is a no-op (the episode
             // selection / hero-overlay paths left with the show browser,
             // reorganize-podcast-pill-navigation 3.1).
-            PodcastEpisodeIntent::FocusOrPlay(None)
-            | PodcastEpisodeIntent::OpenOrPlay(None)
-            | PodcastEpisodeIntent::Enqueue(None) => {}
-            PodcastEpisodeIntent::Enqueue(Some(target)) => {
-                if let Some(index) = index {
-                    self.app
-                        .enqueue_selected_audiobookshelf_episode_target(index, &target);
-                }
-            }
+            PodcastEpisodeIntent::FocusOrPlay(None) | PodcastEpisodeIntent::OpenOrPlay(None) => {}
         }
     }
 }

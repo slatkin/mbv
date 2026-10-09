@@ -90,11 +90,6 @@ impl Model {
                         self.open_library_hero_overlay();
                     }
                 }
-                AudiobookshelfBookIntent::Enqueue => {
-                    if let Some(index) = self.app.tab.audiobookshelf_index() {
-                        self.app.enqueue_selected_audiobookshelf_book(index);
-                    }
-                }
                 AudiobookshelfBookIntent::FocusChapters => {
                     if self.app.is_right_panel_wide() {
                         self.update_abs_book_owner(

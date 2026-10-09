@@ -251,9 +251,9 @@ impl App {
                 None
             }
             Some(ContextAction::AudiobookshelfEnqueue(targets)) => {
-                // The same bound-scope admission check as
-                // `enqueue_selected_audiobookshelf_episode_target`: the
-                // owner capability gates only a queue the Player owns.
+                // The bound-scope admission check the deleted single-row
+                // enqueue held: the owner capability gates only a queue the
+                // Player owns.
                 let scope = self.viewed_queue_scope();
                 let bound = scope == self.playing_queue_scope();
                 if bound && !self.player.can_admit_audiobookshelf() {

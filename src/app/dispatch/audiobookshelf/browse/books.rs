@@ -255,18 +255,4 @@ impl App {
 
         let _ = self.submit_queue_item(item, true);
     }
-
-    pub(in crate::app) fn enqueue_selected_audiobookshelf_book(&mut self, index: usize) {
-        let Some(item) = self.selected_audiobookshelf_book_queue_item(index) else {
-            return;
-        };
-        if !self.player.can_admit_audiobookshelf() {
-            self.flash(
-                "Audiobookshelf playback owner is unavailable".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        let _ = self.submit_queue_item(item, false);
-    }
 }
