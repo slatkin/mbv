@@ -58,11 +58,12 @@ pub fn render_modal_frame_bounds(
 
     f.render_widget(Clear, rect);
     // The modal is a storm frame around a content body: the whole modal is
-    // filled with the border color (`SURFACE_RESTING`, `#2b3238`), then the
+    // filled with the border color (`Surface::PopupBorder`, `#2b3238`), then the
     // content body (`bg`) is cut out of it — the same pixels as painting the
     // two 2-column sides, the top band, and the bottom row individually, in
     // two widgets instead of four.
-    let border = Style::default().bg(palette::SURFACE_RESTING);
+    let border =
+        Style::default().bg(palette::surface_colors(palette::Surface::PopupBorder, false).fill);
     f.render_widget(Block::default().style(border), rect);
     let top_h = 1_u16.min(rect.height);
     let bottom_h = 1_u16.min(rect.height.saturating_sub(top_h));

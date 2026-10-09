@@ -166,14 +166,20 @@ fn render_settings_rows(
             // out to the content edge instead.
             if striped {
                 for span in &mut spans {
-                    span.style = span.style.bg(palette::SETTINGS_STRIPE_BG);
+                    span.style =
+                        span.style
+                            .bg(palette::surface_colors(palette::Surface::ListStripe, false).fill);
                 }
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 let pad = (content.width as usize).saturating_sub(used);
                 if pad > 0 {
                     spans.push(Span::styled(
                         " ".repeat(pad),
-                        Style::default().bg(palette::SETTINGS_STRIPE_BG),
+                        Style::default().bg(palette::surface_colors(
+                            palette::Surface::ListStripe,
+                            false,
+                        )
+                        .fill),
                     ));
                 }
             }

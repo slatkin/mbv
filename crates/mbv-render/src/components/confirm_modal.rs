@@ -105,7 +105,7 @@ pub(crate) fn render_button_row(
             Paragraph::new(Span::styled(
                 format!(" {} {} ", button.keys, button.label),
                 Style::default()
-                    .bg(palette::SURFACE_CHROME)
+                    .bg(palette::surface_colors(palette::Surface::ModalButton, false).fill)
                     .fg(button_fg(button.tone)),
             )),
             rect,

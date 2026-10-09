@@ -21,8 +21,8 @@ use unicode_width::UnicodeWidthStr;
 ///
 /// `selected_bg` is the selected-row bar fill. Every selected row on a
 /// focused list paints it across the whole row, overriding its zebra stripe
-/// and the two-column gutters; callers resolve it to the `SELECTED_ROW_BG`
-/// role, and the surface table's owning-surface identity no longer changes the
+/// and the two-column gutters; callers resolve it to the `Surface::SelectedRow`
+/// fill, and the surface table's owning-surface identity no longer changes the
 /// row's appearance. Canonical Iris bars use the selected-row Ink foreground,
 /// so the bar introduces no bold title or ordinary title-role colour; a
 /// now-playing marker retains its live-playback accent.
@@ -201,7 +201,6 @@ fn paint_item_row(item: &ItemRow<'_>, mut paint: RowPaint<'_>) -> ListItem<'stat
             inner_width: paint.inner_width,
             content_w: widths.content_w,
             paint_selected,
-            selected_bg: paint.selected_bg,
             alternate_bg: paint.alternate_bg,
             progress_index,
         },
@@ -488,7 +487,6 @@ struct BarFinish {
     inner_width: usize,
     content_w: usize,
     paint_selected: bool,
-    selected_bg: Color,
     alternate_bg: Option<Color>,
     progress_index: Option<usize>,
 }
@@ -503,25 +501,19 @@ fn finish_row_bar(spans: &mut Vec<Span<'static>>, finish: &BarFinish) {
         spans.push(Span::raw(
             " ".repeat(finish.inner_width.saturating_sub(used)),
         ));
-        recolor_selected_bar(spans, finish.selected_bg, finish.progress_index);
+        recolor_selected_bar(spans, finish.progress_index);
     } else {
         *spans = stripe_spans(std::mem::take(spans), finish.alternate_bg, finish.content_w);
     }
 }
 
-fn recolor_selected_bar(
-    spans: &mut [Span<'static>],
-    selected_bg: Color,
-    progress_index: Option<usize>,
-) {
-    // Canonical selected bars are Iris: use the dedicated Ink
+fn recolor_selected_bar(spans: &mut [Span<'static>], progress_index: Option<usize>) {
+    // Canonical selected bars use the dedicated Ink
     // foreground rather than allowing ordinary title/metadata roles
     // to compete with the selection. The progress percentage keeps a
     // role of its own, but the bar's own variant of it — the orange
     // does not read on the light bar.
-    let Some(fg) = selected_row_foreground(selected_bg) else {
-        return;
-    };
+    let fg = selected_row_foreground();
     for (index, span) in spans.iter_mut().enumerate() {
         span.style.fg = Some(if progress_index == Some(index) {
             palette::SELECTED_ROW_PROGRESS_FG
@@ -531,9 +523,11 @@ fn recolor_selected_bar(
     }
 }
 
-fn selected_row_foreground(selected_bg: Color) -> Option<Color> {
-    let on_bar = selected_bg == palette::SELECTED_ROW_BG;
-    on_bar.then(|| palette::bar_role_fg(palette::SELECTED_ROW_FG, on_bar))
+fn selected_row_foreground() -> Color {
+    // Every `selected_bg` is the selection bar itself, so the bar's
+    // foreground is always the selected-row role; no colour comparison
+    // against the fill is needed.
+    palette::Role::SelectedRowFg.color()
 }
 
 /// Columns the row's right inset reserves inside `inner_width`.

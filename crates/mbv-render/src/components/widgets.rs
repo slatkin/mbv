@@ -608,7 +608,7 @@ pub fn render_pill_bar(
 
 /// Paints the display-only hint row used by the Library Hero overlay: the
 /// canonical pill bar's row surface and joined chip shell (`◢ label[•] ◤`), with
-/// every chip filled from `palette::HINT_PILL_FILLS` in rotation (foam,
+/// every chip filled from `palette::HINT_CHIPS` in rotation (foam,
 /// yellow, orange, repeating) and soft-white text over the fill. Nothing here
 /// is interactive — no hitboxes, no sticky window, no chevrons, no selection —
 /// so a hint never depends on cursor, focus, or pointer state. The chip shell
@@ -624,7 +624,9 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
     if hints.is_empty() {
         return;
     }
-    let fill_of = |idx: usize| palette::HINT_PILL_FILLS[idx % palette::HINT_PILL_FILLS.len()];
+    let fill_of = |idx: usize| {
+        palette::surface_colors(palette::HINT_CHIPS[idx % palette::HINT_CHIPS.len()], false).fill
+    };
     let widths: Vec<usize> = hints
         .iter()
         .enumerate()

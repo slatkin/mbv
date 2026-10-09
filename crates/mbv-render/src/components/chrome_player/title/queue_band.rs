@@ -40,9 +40,9 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
     let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
-    // The top row's own fill (the slate backdrop role) plus its plain
+    // The top row's own fill (the transport row surface) plus its plain
     // indicator text, measured for the buttons-fit rule below.
-    let row_bg = palette::SURFACE_BACKDROP;
+    let row_bg = palette::surface_colors(palette::Surface::TransportRow, false).fill;
     let (indicators, indicators_w) = queue_indicator_spans(ctx, row_bg);
     render_transport_controls_row(
         ctx,
@@ -192,7 +192,7 @@ fn render_queue_seek_row(
             .gauge_style(
                 Style::default()
                     .fg(palette::ACCENT)
-                    .bg(palette::SURFACE_BACKDROP),
+                    .bg(palette::surface_colors(palette::Surface::TransportRow, false).fill),
             ),
         ctx.playback.seekbar,
     );

@@ -171,7 +171,7 @@ fn tree_row_fill(
     base: ratatui::style::Color,
 ) -> ratatui::style::Color {
     if full_width {
-        palette::SELECTED_ROW_BG
+        palette::surface_colors(palette::Surface::SelectedRow, false).fill
     } else {
         match row.kind {
             TreePaintRowKind::Node if row.zebra_striped => zebra,

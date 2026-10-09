@@ -229,9 +229,9 @@ fn paint_rows(
         let selected = index == cursor;
         // Keep zebra parity tied to the absolute row so bands hold still under scroll.
         let bg = if selected {
-            Some(palette::SELECTED_ROW_BG)
+            Some(palette::surface_colors(palette::Surface::SelectedRow, false).fill)
         } else if index % 2 == 1 {
-            Some(palette::PLAYLIST_STRIPE_BG)
+            Some(palette::surface_colors(palette::Surface::ListStripe, false).fill)
         } else {
             None
         };
