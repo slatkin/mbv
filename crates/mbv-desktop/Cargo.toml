@@ -21,3 +21,6 @@ tracing.workspace = true
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }
+
+[dev-dependencies]
+rstest.workspace = true

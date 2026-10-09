@@ -13,6 +13,7 @@
 //! - The **local daemon** is `mbv --__local-daemon`, entered via
 //!   [`run_local_daemon_main`], which never returns.
 
+use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -96,6 +97,62 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
         );
     }
     env
+}
+
+/// Pure argv resolution for the swap-launch command (tray-pin-swap D5).
+///
+/// Pin runs `exe --pin` (a new pinned panel Client, no terminal involved).
+/// Unpin prefixes `exe` with the `[panel] terminal` argv prefix when set,
+/// otherwise `TERMINAL -e`; with neither set the swap cannot run, and the
+/// error names both sources so the desktop notification does too
+/// (spec pin-swap "Neither set").
+fn swap_argv(
+    direction: mbv_daemon::SwapDirection,
+    exe: &OsStr,
+    panel_terminal: Option<&[String]>,
+    terminal_env: Option<&str>,
+) -> Result<Vec<String>, String> {
+    let exe = exe.to_string_lossy().into_owned();
+    match direction {
+        mbv_daemon::SwapDirection::Pin => Ok(vec![exe, "--pin".to_string()]),
+        mbv_daemon::SwapDirection::Unpin => {
+            let prefix = panel_terminal.filter(|argv| !argv.is_empty());
+            let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
+            match (prefix, terminal) {
+                (Some(prefix), _) => {
+                    let mut argv = prefix.to_vec();
+                    argv.push(exe);
+                    Ok(argv)
+                }
+                (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string(), exe]),
+                (None, None) => Err(
+                    "cannot start a terminal Client to unpin: neither [panel] terminal \
+                     (config) nor TERMINAL (environment) is set"
+                        .to_string(),
+                ),
+            }
+        }
+    }
+}
+
+/// Detached launch of the replacement Client (tray-pin-swap D5): stdin,
+/// stdout and stderr null, and `setsid` in `pre_exec`, the same as
+/// [`spawn_detached`]. The Owner's environment already carries the session
+/// display variables.
+fn detached_swap_command(argv: &[String]) -> Command {
+    let mut cmd = Command::new(&argv[0]);
+    cmd.args(&argv[1..]);
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::null());
+    cmd.stderr(Stdio::null());
+    // SAFETY: The child-side hook only creates a new session before exec.
+    unsafe {
+        cmd.pre_exec(|| {
+            nix::unistd::setsid().map_err(to_io)?;
+            Ok(())
+        })
+    };
+    cmd
 }
 
 pub fn spawn_detached(
@@ -239,13 +296,33 @@ pub fn run_local_daemon_main() -> ! {
             }),
             on_tray_ready: Box::new(move |shutdown_tx| {
                 let handle = player_handle_for_tray.lock().unwrap().clone()?;
-                mbv_desktop::tray::spawn(shutdown_tx, handle.status, handle.transport_tx)
+                mbv_desktop::tray::spawn(
+                    shutdown_tx,
+                    handle.status,
+                    handle.transport_tx,
+                    handle.pinned_client_attached,
+                )
             }),
-            // Placeholder until tray-pin-swap task 4.1 implements the real
-            // hooks (design D5): nothing invokes them before the swap state
-            // machine (task 3.3) exists.
-            swap_command: Box::new(|_| Err("pin swap is not implemented yet".to_string())),
-            notify: Box::new(|_| {}),
+            swap_command: Box::new(move |direction| {
+                let exe = std::env::current_exe()
+                    .map_err(|e| format!("cannot locate the mbv binary: {e}"))?;
+                // The `[panel] terminal` value is re-read from the config file
+                // on every swap (design D5), like `owner_settings::reader`:
+                // a config edit reaches the next Unpin without a restart.
+                let panel_terminal = std::fs::read_to_string(mbv_config::config_path())
+                    .ok()
+                    .and_then(|text| mbv_config::parse_config(&text).ok())
+                    .and_then(|config| config.panel.terminal);
+                let terminal_env = std::env::var("TERMINAL").ok();
+                let command_argv = swap_argv(
+                    direction,
+                    exe.as_os_str(),
+                    panel_terminal.as_deref(),
+                    terminal_env.as_deref(),
+                )?;
+                Ok(detached_swap_command(&command_argv))
+            }),
+            notify: Box::new(crate::pin::notify),
         },
     )
 }
@@ -282,5 +359,66 @@ mod tests {
             )),
             ["--__local-daemon", "--log-level", "debug,player=trace"]
         );
+    }
+
+    /// tray-pin-swap spec pin-swap "Config value set" / "Only TERMINAL set" /
+    /// "Neither set", and the Pin direction: the replacement-Client argv is
+    /// `[panel] terminal` + exe, else `TERMINAL -e` + exe, else an error
+    /// naming both; Pin never consults either source.
+    #[rstest]
+    #[case::pin_runs_exe_with_pin_flag(
+        mbv_daemon::SwapDirection::Pin,
+        Some(vec!["wezterm".to_string(), "start".to_string(), "--".to_string()]),
+        Some("ghostty"),
+        Ok(vec!["/usr/bin/mbv".to_string(), "--pin".to_string()])
+    )]
+    #[case::unpin_uses_panel_terminal(
+        mbv_daemon::SwapDirection::Unpin,
+        Some(vec!["wezterm".to_string(), "start".to_string(), "--".to_string()]),
+        Some("ghostty"),
+        Ok(vec![
+            "wezterm".to_string(),
+            "start".to_string(),
+            "--".to_string(),
+            "/usr/bin/mbv".to_string(),
+        ])
+    )]
+    #[case::unpin_falls_back_to_terminal_env(
+        mbv_daemon::SwapDirection::Unpin,
+        None,
+        Some("ghostty"),
+        Ok(vec!["ghostty".to_string(), "-e".to_string(), "/usr/bin/mbv".to_string()])
+    )]
+    #[case::unpin_with_neither_set_names_both(
+        mbv_daemon::SwapDirection::Unpin,
+        None,
+        None,
+        Err("[panel] terminal".to_string())
+    )]
+    #[case::unpin_with_empty_terminal_env_counts_as_unset(
+        mbv_daemon::SwapDirection::Unpin,
+        None,
+        Some(""),
+        Err("TERMINAL".to_string())
+    )]
+    fn swap_argv_resolves_the_replacement_client_command(
+        #[case] direction: mbv_daemon::SwapDirection,
+        #[case] panel_terminal: Option<Vec<String>>,
+        #[case] terminal_env: Option<&str>,
+        #[case] expected: Result<Vec<String>, String>,
+    ) {
+        let resolved = swap_argv(
+            direction,
+            OsStr::new("/usr/bin/mbv"),
+            panel_terminal.as_deref(),
+            terminal_env,
+        );
+        match (resolved, expected) {
+            (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
+            (Err(actual), Err(expected)) => {
+                assert!(actual.contains(&expected), "error must name the source");
+            }
+            (actual, expected) => panic!("mismatch: {actual:?} vs {expected:?}"),
+        }
     }
 }

@@ -27,19 +27,7 @@ fn ctrl_client_capabilities(
             if !hello_credentials_valid(&info, control_credential) {
                 return None;
             }
-            let service_setup_admin = info.supports_service_setup_admin();
-            let owner_action = info.supports_owner_action();
-            if service_setup_admin && owner_action {
-                tracing::warn!(name: "daemon.ctrl_client.hello_conflicting_admin_roles", target: "daemon", "ctrl client rejected: hello advertises both admin capabilities");
-                return None;
-            }
-            let role = if service_setup_admin {
-                CtrlConnectionRole::ServiceSetupAdmin
-            } else if owner_action {
-                CtrlConnectionRole::OwnerAction
-            } else {
-                CtrlConnectionRole::Client
-            };
+            let role = connection_role_from_hello(&info)?;
             Some(HelloClassification {
                 audiobookshelf: CtrlAudiobookshelfCapabilities {
                     queue: info.supports_abs_queue(),
@@ -75,6 +63,24 @@ fn hello_credentials_valid(info: &CtrlHello, control_credential: Option<&str>) -
         None => true,
         Some(control_credential) => control_credential_is_valid(info, control_credential),
     }
+}
+
+/// The connection role a Hello advertises; a Hello claiming both admin
+/// capabilities is rejected (tray-pin-swap design D7).
+fn connection_role_from_hello(info: &CtrlHello) -> Option<CtrlConnectionRole> {
+    let service_setup_admin = info.supports_service_setup_admin();
+    let owner_action = info.supports_owner_action();
+    if service_setup_admin && owner_action {
+        tracing::warn!(name: "daemon.ctrl_client.hello_conflicting_admin_roles", target: "daemon", "ctrl client rejected: hello advertises both admin capabilities");
+        return None;
+    }
+    Some(if service_setup_admin {
+        CtrlConnectionRole::ServiceSetupAdmin
+    } else if owner_action {
+        CtrlConnectionRole::OwnerAction
+    } else {
+        CtrlConnectionRole::Client
+    })
 }
 
 fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bool {

@@ -451,8 +451,10 @@ pub(crate) fn fatal(message: impl fmt::Display) -> ! {
 }
 
 /// Best-effort `notify-send`, matching the TUI's system notifications; a
-/// missing binary is only logged (design D5).
-fn notify(message: &str) {
+/// missing binary is only logged (design D5). Also the swap-failure
+/// notification path for the daemon's `notify` hook (`local_daemon.rs`,
+/// tray-pin-swap D5).
+pub(crate) fn notify(message: &str) {
     let result = std::process::Command::new("notify-send")
         .arg("--app-name=mbv")
         .arg("mbv")

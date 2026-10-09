@@ -1,6 +1,7 @@
 use ksni::blocking::TrayMethods;
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
-use mbv_ctrl::{Direction, TransportCommand};
+use mbv_ctrl::{Direction, OwnerAction, TransportCommand};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 
@@ -24,6 +25,17 @@ fn play_pause_label(status: &PlayerStatus) -> &'static str {
     }
 }
 
+/// Label for the one Pin swap item: the direction the Owner's swap machine
+/// will pick is derived from the registry at click time; this label only
+/// mirrors the shared "pinned Client attached" flag (tray-pin-swap D3).
+fn pin_swap_label(pinned_client_attached: bool) -> &'static str {
+    if pinned_client_attached {
+        "Unpin"
+    } else {
+        "Pin"
+    }
+}
+
 struct MbvTray {
     shutdown_tx: SyncSender<()>,
     /// Snapshot of the in-process `Player`'s status, shared with the app's
@@ -31,6 +43,10 @@ struct MbvTray {
     status: Arc<Mutex<PlayerStatus>>,
     /// Owner transport channel; relative steps are resolved by the daemon owner.
     transport_tx: Sender<TransportCommand>,
+    /// "A pinned Client is attached", refreshed by the ctrl registry on
+    /// connect and disconnect (tray-pin-swap D3) -- read fresh each time the
+    /// menu is opened, like `status`.
+    pinned_client_attached: Arc<AtomicBool>,
 }
 
 impl MbvTray {
@@ -140,6 +156,24 @@ impl ksni::Tray for MbvTray {
         items.push(MenuItem::Separator);
         items.push(
             StandardItem {
+                label: pin_swap_label(self.pinned_client_attached.load(Ordering::SeqCst)).into(),
+                activate: Box::new(|tray: &mut Self| {
+                    // Owner actions route through the same transport channel
+                    // as the player commands; the daemon owner resolves the
+                    // swap direction and target from its registry, not from
+                    // this label (tray-pin-swap D3/D7).
+                    let _ = tray
+                        .transport_tx
+                        .send(TransportCommand::OwnerAction(OwnerAction::SwapPanel));
+                }),
+                ..Default::default()
+            }
+            .into(),
+        );
+
+        items.push(MenuItem::Separator);
+        items.push(
+            StandardItem {
                 label: "Quit".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| {
@@ -176,11 +210,13 @@ pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,
     transport_tx: Sender<TransportCommand>,
+    pinned_client_attached: Arc<AtomicBool>,
 ) -> Option<Box<dyn Send>> {
     MbvTray {
         shutdown_tx,
         status,
         transport_tx,
+        pinned_client_attached,
     }
     .spawn()
     .map(|tray| Box::new(RunningTray(Some(tray))) as Box<dyn Send>)
@@ -223,6 +259,8 @@ impl Drop for RunningTray {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ksni::Tray as _;
+    use rstest::rstest;
 
     fn status(active: bool, paused: bool, title: &str) -> PlayerStatus {
         PlayerStatus {
@@ -245,15 +283,41 @@ mod tests {
     /// on what `toggle_play_pause`/`next`/`previous` actually send without a
     /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
     /// (crates/mbv-player/src/proxy.rs).
-    fn spy_tray(st: PlayerStatus) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
+    fn spy_tray(
+        st: PlayerStatus,
+        pinned_client_attached: bool,
+    ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
         let (transport_tx, cmd_rx) = std::sync::mpsc::channel();
         let (shutdown_tx, _shutdown_rx) = std::sync::mpsc::sync_channel(1);
         let tray = MbvTray {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
             transport_tx,
+            pinned_client_attached: Arc::new(AtomicBool::new(pinned_client_attached)),
         };
         (tray, cmd_rx)
+    }
+
+    /// Labels of the menu's enabled standard items, in order.
+    fn menu_labels(tray: &MbvTray) -> Vec<String> {
+        tray.menu()
+            .into_iter()
+            .filter_map(|item| match item {
+                ksni::menu::MenuItem::Standard(item) if item.enabled => Some(item.label),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Activates the menu's Pin swap item (matched by label) on `tray`.
+    fn activate_pin_swap_item(tray: &mut MbvTray) {
+        for item in tray.menu() {
+            if let ksni::menu::MenuItem::Standard(item) = item
+                && (item.label == "Pin" || item.label == "Unpin")
+            {
+                (item.activate)(tray);
+            }
+        }
     }
 
     // Regression test for a bug caught in review: toggle_play_pause used to
@@ -263,7 +327,7 @@ mod tests {
     // "paused" cases -- the only two states a user would ever click it in.
     #[test]
     fn toggle_play_pause_sends_toggle_pause_while_playing() {
-        let (tray, rx) = spy_tray(status(true, false, "A Song"));
+        let (tray, rx) = spy_tray(status(true, false, "A Song"), false);
         tray.toggle_play_pause();
         assert!(matches!(
             rx.try_recv(),
@@ -273,11 +337,43 @@ mod tests {
 
     #[test]
     fn next_emits_relative_next_command() {
-        let (tray, rx) = spy_tray(status(true, false, "A Song"));
+        let (tray, rx) = spy_tray(status(true, false, "A Song"), false);
         tray.next();
         assert!(matches!(
             rx.try_recv(),
             Ok(TransportCommand::Step(Direction::Next))
+        ));
+    }
+
+    /// tray-pin-swap spec "Pinned Client attached" / "No pinned Client
+    /// attached": exactly one Pin swap item, labelled from the shared flag,
+    /// sitting before the Quit separator; activating it sends
+    /// `OwnerAction(SwapPanel)`, the same Owner action the CLI flag runs.
+    #[rstest]
+    #[case::no_pinned_client(false, "Pin")]
+    #[case::pinned_client_attached(true, "Unpin")]
+    fn pin_swap_item_label_and_activation_follow_the_pinned_flag(
+        #[case] pinned_client_attached: bool,
+        #[case] expected_label: &str,
+    ) {
+        let (mut tray, rx) = spy_tray(status(true, false, "A Song"), pinned_client_attached);
+
+        let labels = menu_labels(&tray);
+        assert_eq!(labels.last().map(String::as_str), Some("Quit"));
+        assert_eq!(
+            labels.get(labels.len() - 2).map(String::as_str),
+            Some(expected_label)
+        );
+        assert!(
+            !labels
+                .iter()
+                .any(|label| (label == "Pin" || label == "Unpin") && label != expected_label)
+        );
+
+        activate_pin_swap_item(&mut tray);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(TransportCommand::OwnerAction(OwnerAction::SwapPanel))
         ));
     }
 }
