@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
-    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
-    PlaybackIntentEvent, QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
+    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, OwnerAction,
+    PlaybackIntent, PlaybackIntentEvent, QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
 };
 use mbv_net::stream::SocketStream;
 
@@ -43,6 +43,18 @@ pub(crate) enum PeerBuild {
     MustMatch,
 }
 
+/// Which non-Client role a handshake plays, mirroring the daemon's
+/// `CtrlConnectionRole` (`mbv-daemon/src/ctrl.rs`): a Client connects as a
+/// full control peer; the two restricted roles each allow only their own
+/// command (`ApplyServiceSetup` / `RunOwnerAction`) and are never counted as
+/// a Client by the Owner (tray-pin-swap design D7).
+#[derive(Clone, Copy)]
+enum HandshakeRole {
+    Client,
+    ServiceSetupAdmin,
+    OwnerAction,
+}
+
 /// Test-only entry point to the handshake, on `stream`, with
 /// [`PeerBuild::Any`]. Production goes through [`connect_endpoint`], which
 /// runs [`perform_handshake_with_role`] on a worker thread bounded by
@@ -58,7 +70,7 @@ where
     perform_handshake_with_role(
         stream,
         load_control_token,
-        false,
+        HandshakeRole::Client,
         PeerBuild::Any,
         false,
         None,
@@ -75,7 +87,7 @@ where
     perform_handshake_with_role(
         stream,
         load_control_token,
-        true,
+        HandshakeRole::ServiceSetupAdmin,
         PeerBuild::Any,
         false,
         None,
@@ -85,7 +97,7 @@ where
 fn perform_handshake_with_role<F>(
     stream: SocketStream,
     load_control_token: F,
-    service_setup_admin: bool,
+    role: HandshakeRole,
     peer_build: PeerBuild,
     pinned: bool,
     swap_token: Option<String>,
@@ -99,7 +111,7 @@ where
         &mut reader,
         &ctrl_compatibility,
         load_control_token,
-        service_setup_admin,
+        role,
         pinned,
         swap_token,
     )?;
@@ -147,6 +159,7 @@ fn read_server_hello(
     compatibility.supports_control_auth = info.supports_control_auth();
     compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
+    compatibility.supports_owner_action = info.supports_owner_action();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }
@@ -155,7 +168,7 @@ fn send_client_hello<F>(
     reader: &mut BufReader<SocketStream>,
     compatibility: &CtrlCompatibility,
     load_control_token: F,
-    service_setup_admin: bool,
+    role: HandshakeRole,
     pinned: bool,
     swap_token: Option<String>,
 ) -> Result<(), crate::RemotePlayerError>
@@ -167,13 +180,23 @@ where
         .then(load_control_token)
         .transpose()?;
     // The Pin-swap capabilities and token belong to a Client connection only
-    // (tray-pin-swap D2/D6); the admin handshakes stay plain.
-    let mut client_hello = if service_setup_admin {
-        CtrlHello::current_service_setup_admin(control_token)
-    } else if let Some(control_token) = control_token {
-        CtrlHello::current_control_client(control_token).with_pin_swap(pinned, swap_token)
-    } else {
-        CtrlHello::current().with_pin_swap(pinned, swap_token)
+    // (tray-pin-swap D2/D6); the restricted-role handshakes stay plain.
+    let mut client_hello = match role {
+        HandshakeRole::ServiceSetupAdmin => CtrlHello::current_service_setup_admin(control_token),
+        HandshakeRole::OwnerAction => {
+            CtrlHello::current_owner_action(control_token.ok_or_else(|| {
+                crate::RemotePlayerError::protocol(
+                    "owner-action handshake requires a Control credential",
+                )
+            })?)
+        }
+        HandshakeRole::Client => {
+            if let Some(control_token) = control_token {
+                CtrlHello::current_control_client(control_token).with_pin_swap(pinned, swap_token)
+            } else {
+                CtrlHello::current().with_pin_swap(pinned, swap_token)
+            }
+        }
     };
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
@@ -287,6 +310,105 @@ fn await_service_setup_acknowledgement(
     }
     Err(crate::RemotePlayerError::restart_required(
         "restart required (setup acknowledgement unavailable)",
+    ))
+}
+
+/// Runs one Owner action on this machine's running Local Owner process
+/// (tray-pin-swap design D7): the same path the Tray uses. Connects to
+/// `control_socket_path()`, handshakes with the [`HandshakeRole::OwnerAction`
+/// role][HandshakeRole], sends `RunOwnerAction`, and awaits the reply under a
+/// 6 s read timeout. No socket reports that no mbv runs; a server Hello
+/// without the `owner-action` capability reports a restart requirement before
+/// anything is sent, so an Owner that predates Owner actions receives no
+/// action.
+pub fn run_local_owner_action(action: OwnerAction) -> Result<(), crate::RemotePlayerError> {
+    let path = PathBuf::from(mbv_config::control_socket_path());
+    let Ok(stream) = UnixStream::connect(&path) else {
+        return Err(crate::RemotePlayerError::connection("no running mbv"));
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(6)))
+        .map_err(|error| {
+            crate::RemotePlayerError::connection(format!(
+                "cannot set the local daemon read timeout: {error}"
+            ))
+        })?;
+    let mut reader = BufReader::new(SocketStream::Unix(stream));
+    run_owner_action_handshake(&mut reader, action, || {
+        Ok(mbv_config::load_or_create_control_credential()?)
+    })?;
+    send_owner_action(&mut reader, action)
+}
+
+/// The Owner-action handshake: reads the server Hello, refuses an Owner
+/// without the `owner-action` capability before anything is sent, sends the
+/// Client Hello with the [`HandshakeRole::OwnerAction`] role, and consumes
+/// the initial state event the Owner sends on admission.
+fn run_owner_action_handshake<F>(
+    reader: &mut BufReader<SocketStream>,
+    action: OwnerAction,
+    load_control_token: F,
+) -> Result<(), crate::RemotePlayerError>
+where
+    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
+{
+    let compatibility = read_server_hello(reader, PeerBuild::Any)?;
+    if !compatibility.supports_owner_action {
+        return Err(crate::RemotePlayerError::restart_required(format!(
+            "the running mbv is too old for {}; restart it",
+            action.cli_flag()
+        )));
+    }
+    send_client_hello(
+        reader,
+        &compatibility,
+        load_control_token,
+        HandshakeRole::OwnerAction,
+        false,
+        None,
+    )?;
+    read_initial_state(reader).map(|_| ())
+}
+
+fn send_owner_action(
+    reader: &mut BufReader<SocketStream>,
+    action: OwnerAction,
+) -> Result<(), crate::RemotePlayerError> {
+    let request = serde_json::to_string(&CtrlCmd::RunOwnerAction(action))
+        .map_err(|error| crate::RemotePlayerError::protocol(error.to_string()))?;
+    writeln!(reader.get_mut(), "{request}")
+        .and_then(|()| reader.get_mut().flush())
+        .map_err(|error| {
+            crate::RemotePlayerError::connection(format!("cannot send the owner action: {error}"))
+        })?;
+    await_owner_action_reply(reader)
+}
+
+/// Awaits `OwnerActionAccepted` / `OwnerActionRefused` on the reply path,
+/// under the 6 s read timeout `run_local_owner_action` set on the stream.
+/// Other events (an Owner pushing state between the handshake and the reply)
+/// are skipped, mirroring `await_service_setup_acknowledgement`.
+fn await_owner_action_reply(
+    reader: &mut BufReader<SocketStream>,
+) -> Result<(), crate::RemotePlayerError> {
+    for next in reader.lines() {
+        let line = next.map_err(|_error| {
+            crate::RemotePlayerError::connection("owner-action reply unavailable")
+        })?;
+        let event = serde_json::from_str::<CtrlEvent>(&line)
+            .map_err(|_error| crate::RemotePlayerError::connection("invalid owner-action reply"))?;
+        match event {
+            CtrlEvent::OwnerActionAccepted => return Ok(()),
+            CtrlEvent::OwnerActionRefused { reason } => {
+                return Err(crate::RemotePlayerError::connection(format!(
+                    "the Owner refused the action: {reason}"
+                )));
+            }
+            _ => {}
+        }
+    }
+    Err(crate::RemotePlayerError::connection(
+        "owner-action reply unavailable",
     ))
 }
 
@@ -583,7 +705,7 @@ fn connect_stream(
             perform_handshake_with_role(
                 handshake_stream,
                 || Ok(mbv_config::load_or_create_control_credential()?),
-                false,
+                HandshakeRole::Client,
                 peer_build,
                 pinned,
                 swap_token,

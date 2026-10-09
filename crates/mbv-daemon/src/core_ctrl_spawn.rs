@@ -393,6 +393,12 @@ pub(crate) fn spawn_ctrl_client(
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
     let mut daemon_hello = CtrlHello::current();
+    // The Owner runs Owner actions (tray-pin-swap design D7); a Client reads
+    // this capability off the server Hello to report a restart requirement
+    // instead of sending `RunOwnerAction` at an Owner that cannot run it.
+    daemon_hello
+        .capabilities
+        .push(mbv_ctrl::CTRL_CAP_OWNER_ACTION.to_string());
     if control_credential.is_none() {
         daemon_hello
             .capabilities

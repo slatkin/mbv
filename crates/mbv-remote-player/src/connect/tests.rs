@@ -177,6 +177,77 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
     assert!(matches!(state, CtrlEvent::UnifiedQueueState(_)));
 }
 
+/// Spec `owner-actions` "Owner refuses": the CLI shows the Owner's reason on
+/// stderr and exits 1, so the error text must carry that reason through
+/// (tray-pin-swap task 4.5).
+#[test]
+fn owner_action_refused_reply_surfaces_the_owner_reason() {
+    use mbv_ctrl::CTRL_CAP_OWNER_ACTION;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (request_tx, request_rx) = mpsc::channel();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.capabilities.push(CTRL_CAP_OWNER_ACTION.to_string());
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+        let mut request = String::new();
+        reader.read_line(&mut request).unwrap();
+        request_tx
+            .send(serde_json::from_str::<CtrlCmd>(&request).unwrap())
+            .unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::OwnerActionRefused {
+                reason: "a panel swap is already running".to_string()
+            })
+            .unwrap()
+        )
+        .unwrap();
+    });
+    let mut reader = BufReader::new(SocketStream::Unix(client));
+    run_owner_action_handshake(&mut reader, OwnerAction::SwapPanel, || {
+        Ok("owner-action-token".to_string())
+    })
+    .unwrap();
+    let error = send_owner_action(&mut reader, OwnerAction::SwapPanel).unwrap_err();
+    peer.join().unwrap();
+    assert!(matches!(
+        request_rx.recv().unwrap(),
+        CtrlCmd::RunOwnerAction(OwnerAction::SwapPanel)
+    ));
+    assert!(
+        error
+            .to_string()
+            .contains("a panel swap is already running")
+    );
+}
+
 #[test]
 fn connect_endpoint_maps_owner_admission_refusals() {
     let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
@@ -283,7 +354,7 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
     let error = perform_handshake_with_role(
         SocketStream::Unix(client),
         || Ok("unused".to_string()),
-        false,
+        HandshakeRole::Client,
         PeerBuild::MustMatch,
         false,
         None,
@@ -335,7 +406,7 @@ fn local_handshake_accepts_identical_owner_build() {
     perform_handshake_with_role(
         SocketStream::Unix(client),
         || Ok("unused".to_string()),
-        false,
+        HandshakeRole::Client,
         PeerBuild::MustMatch,
         false,
         None,

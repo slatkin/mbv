@@ -30,6 +30,7 @@ use crate::pin::PinnedPanel;
 use app::{App, Model};
 use config::load_config;
 use mbv_core::applog;
+use mbv_ctrl::OwnerAction;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_remote_player as remote_player;
@@ -235,6 +236,9 @@ fn print_usage() {
     println!("                             panel instead of this terminal.");
     println!("      --toggle               Show or hide the running pinned panel");
     println!("                             (bind this to a compositor key).");
+    for action in OwnerAction::ALL {
+        println!("      {:<23}{}", action.cli_flag(), action.help());
+    }
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
 }
@@ -295,6 +299,19 @@ fn pre_config_startup() -> Option<StartupArgs> {
     // D3). It exits 1 itself when the request fails.
     if has_flag(&args, "--toggle") {
         pin::toggle_running();
+        return None;
+    }
+
+    // An Owner-action flag asks the running Owner process to run the action
+    // through the same path the Tray uses (design D7); like `--toggle`, it is
+    // handled before applog, config migration and `load_config`, and no TUI
+    // starts. The first argument `from_cli_flag` accepts selects the action;
+    // other arguments are ignored, the same as `-q`.
+    if let Some(action) = args.iter().find_map(|arg| OwnerAction::from_cli_flag(arg)) {
+        if let Err(error) = remote_player::run_local_owner_action(action) {
+            eprintln!("mbv: {error}");
+            std::process::exit(1);
+        }
         return None;
     }
 

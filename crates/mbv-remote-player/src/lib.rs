@@ -106,6 +106,8 @@ mod tests;
 #[doc(inline)]
 pub use connect::connect_stub_daemon_pair;
 #[doc(inline)]
+pub use connect::run_local_owner_action;
+#[doc(inline)]
 pub use connect::signal_local_daemon_service_setup;
 #[doc(inline)]
 pub use connect::{DaemonEndpoint, resolve_library_route};

@@ -235,6 +235,9 @@ pub struct CtrlCompatibility {
     pub audiobookshelf: CtrlAudiobookshelfCapabilities,
     pub supports_owner_queue_load: bool,
     pub supports_answered_queue_ops: bool,
+    /// The peer runs Owner actions (`CtrlCmd::RunOwnerAction`); set from the
+    /// peer Hello's `owner-action` capability by the Client's handshake.
+    pub supports_owner_action: bool,
 }
 
 impl CtrlCompatibility {
@@ -255,6 +258,7 @@ impl CtrlCompatibility {
                 },
                 supports_owner_queue_load: false,
                 supports_answered_queue_ops: false,
+                supports_owner_action: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }
