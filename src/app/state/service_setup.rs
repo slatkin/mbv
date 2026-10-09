@@ -1,6 +1,7 @@
 use crate::app::dispatch::session::service_startup::{
-    AudiobookshelfCatalogReceiver, AudiobookshelfPendingReplacement, AudiobookshelfSetupCompletion,
-    AudiobookshelfStartupReceiver, SetupCompletion, Startup, StartupReceiver,
+    AudiobookshelfCatalogReceiver, AudiobookshelfMarkReceiver, AudiobookshelfPendingReplacement,
+    AudiobookshelfSetupCompletion, AudiobookshelfStartupReceiver, SetupCompletion, Startup,
+    StartupReceiver,
 };
 use crate::app::dispatch::session::services_settings::{AudiobookshelfSetupForm, EmbySetupForm};
 use std::sync::mpsc;
@@ -23,6 +24,8 @@ pub(in crate::app) struct ServiceSetup {
     pub(in crate::app) audiobookshelf_startup_request: Option<StartupRequest>,
     /// Result channel for loading the Audiobookshelf catalog.
     pub(in crate::app) audiobookshelf_catalog_rx: Option<AudiobookshelfCatalogReceiver>,
+    /// Result channel for a finished-state mark worker (design D5).
+    pub(in crate::app) audiobookshelf_mark_rx: Option<AudiobookshelfMarkReceiver>,
     /// Result channel for testing Audiobookshelf credentials.
     pub(in crate::app) audiobookshelf_test_rx: Option<AudiobookshelfStartupReceiver>,
     /// Result channel for saving Audiobookshelf setup.
@@ -48,6 +51,7 @@ impl ServiceSetup {
             audiobookshelf_startup_rx: None,
             audiobookshelf_startup_request: None,
             audiobookshelf_catalog_rx: None,
+            audiobookshelf_mark_rx: None,
             audiobookshelf_test_rx: None,
             audiobookshelf_setup_rx: None,
             emby_setup_form: None,

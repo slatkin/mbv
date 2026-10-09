@@ -315,7 +315,11 @@ impl App {
         }
 
         // Task 3.2: never touch the actively Player-owned slot.
-        if self.player_owns_active_match(progress) {
+        let content_id = mbv_queue::QueueItemContentId::Audiobookshelf {
+            library_item_id: progress.library_item_id.clone(),
+            episode_id: progress.episode_id.clone(),
+        };
+        if self.player_owns_active_match(&content_id) {
             return;
         }
 
@@ -348,10 +352,7 @@ impl App {
         // Task 3.1: merge in place (no REST call) via the existing
         // shared reconcile path that the daemon-route ack also uses.
         let update = mbv_ctrl::ProgressUpdate {
-            content_id: mbv_queue::QueueItemContentId::Audiobookshelf {
-                library_item_id: progress.library_item_id.clone(),
-                episode_id: progress.episode_id.clone(),
-            },
+            content_id,
             position_ticks: crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
                 progress.current_time_seconds,
             ),
@@ -376,19 +377,17 @@ impl App {
         );
     }
 
-    /// Returns `true` when the active slot in the Player owner's queue
-    /// matches the given progress event's identity.
-    fn player_owns_active_match(
+    /// Returns `true` when the active slot in the Player owner's queue matches
+    /// the given provider-qualified content identity. Shared by the socket
+    /// merge and the accepted-mark local apply (standard-media-context-menus
+    /// design D6): both paths must leave the actively owned session untouched.
+    pub(in crate::app) fn player_owns_active_match(
         &self,
-        progress: &mbv_audiobookshelf::socket::AudiobookshelfProgress,
+        content_id: &mbv_queue::QueueItemContentId,
     ) -> bool {
         let active_index = self.player.status_snapshot().current_idx;
         self.playback_queue()
             .item_at(active_index)
-            .and_then(mbv_queue::QueueItem::as_audiobookshelf)
-            .is_some_and(|episode| {
-                episode.library_item_id == progress.library_item_id
-                    && episode.episode_id == progress.episode_id
-            })
+            .is_some_and(|item| item.content_id() == *content_id)
     }
 }

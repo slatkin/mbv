@@ -23,10 +23,25 @@ pub struct ContextActionSnapshot<T> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextMenuTargets {
     Home(Vec<HomeRowTarget>),
-    Browser(Vec<String>),
     Emby(Vec<EmbyItem>),
     Queue(Vec<QueueSlotId>),
     Feeds(Vec<FeedEntry>),
+    Audiobookshelf(Vec<AudiobookshelfMenuTarget>),
+}
+
+/// One Audiobookshelf row a context menu targets, resolved to its
+/// provider-native identity (standard-media-context-menus design D1). A
+/// dedicated type keeps Emby or Feed identities from reaching an
+/// Audiobookshelf action; `QueueItemContentId` would allow that mixture.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AudiobookshelfMenuTarget {
+    Episode {
+        library_item_id: String,
+        episode_id: String,
+    },
+    Book {
+        library_item_id: String,
+    },
 }
 use unicode_width::UnicodeWidthStr;
 
@@ -69,9 +84,15 @@ pub enum ContextAction {
     RemoveFromQueue(usize),
     GoToLibrary(String, String), // (item_id, item_type)
     FeedsPlay(Vec<FeedEntry>),
+    FeedsShuffle(Vec<FeedEntry>),
     FeedsEnqueue(Vec<FeedEntry>),
     FeedsMarkPlayed(Vec<FeedEntry>),
     FeedsMarkUnplayed(Vec<FeedEntry>),
+    AudiobookshelfPlay(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfShuffle(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfEnqueue(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfMarkPlayed(Vec<AudiobookshelfMenuTarget>),
+    AudiobookshelfMarkUnplayed(Vec<AudiobookshelfMenuTarget>),
 }
 
 #[derive(Clone, Debug)]
@@ -82,17 +103,33 @@ pub struct ContextMenuEntry {
 
 #[must_use]
 pub fn is_bulk_action(action: Option<&ContextAction>) -> bool {
-    matches!(
-        action,
+    match action {
         Some(
             ContextAction::PlaySelection(_)
-                | ContextAction::ShuffleSelection(_)
-                | ContextAction::EnqueueSelection(_)
-                | ContextAction::RemoveSelection(_)
-                | ContextAction::MarkPlayedSelection(_)
-                | ContextAction::MarkUnplayedSelection(_)
-        )
-    )
+            | ContextAction::ShuffleSelection(_)
+            | ContextAction::EnqueueSelection(_)
+            | ContextAction::RemoveSelection(_)
+            | ContextAction::MarkPlayedSelection(_)
+            | ContextAction::MarkUnplayedSelection(_),
+        ) => true,
+        // A Feeds or Audiobookshelf action is bulk when it carries more
+        // than one entry (standard-media-context-menus design D2).
+        Some(
+            ContextAction::FeedsPlay(entries)
+            | ContextAction::FeedsShuffle(entries)
+            | ContextAction::FeedsEnqueue(entries)
+            | ContextAction::FeedsMarkPlayed(entries)
+            | ContextAction::FeedsMarkUnplayed(entries),
+        ) => entries.len() > 1,
+        Some(
+            ContextAction::AudiobookshelfPlay(targets)
+            | ContextAction::AudiobookshelfShuffle(targets)
+            | ContextAction::AudiobookshelfEnqueue(targets)
+            | ContextAction::AudiobookshelfMarkPlayed(targets)
+            | ContextAction::AudiobookshelfMarkUnplayed(targets),
+        ) => targets.len() > 1,
+        _ => false,
+    }
 }
 
 /// One multiselect row: `(name_lower, display_name, is_hidden)`.

@@ -1,6 +1,7 @@
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::overlay::OverlayRequest;
@@ -165,16 +166,22 @@ impl App {
     }
 
     fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        // Music is fire-and-forget in mbv: its played state is ignored
+        // everywhere, so a mark entry would have no visible effect (context-menu
+        // spec, music rule). `is_music` covers tracks, albums, and artists.
+        if item.is_music() {
+            return;
+        }
         if App::context_menu_play_state(item) {
             Self::push_context_action(
                 entries,
-                "Mark Unwatched",
+                "Mark Unplayed",
                 ContextAction::MarkUnplayed(item.id.clone()),
             );
         } else {
             Self::push_context_action(
                 entries,
-                "Mark Watched",
+                "Mark Played",
                 ContextAction::MarkPlayed(item.id.clone()),
             );
         }
@@ -203,10 +210,9 @@ impl App {
         {
             Self::push_context_action(entries, "Add to Queue", ContextAction::Enqueue);
         }
-        // Audio items (music tracks) don't get mark-played.
-        if item.media_type != "Audio" && item.item_type != "Audio" {
-            Self::push_play_state_context_action(entries, item);
-        }
+        // Music items (tracks, albums, artists) don't get a mark entry;
+        // `push_play_state_context_action` enforces the music rule itself.
+        Self::push_play_state_context_action(entries, item);
         // `home_cw_selected` is the component-derived authoritative
         // fact (resolved at the Model boundary), replacing the deleted
         // numeric `App.home.section == 0` read. `cw_focused` (Library
@@ -256,26 +262,54 @@ impl App {
             return;
         }
         let mut menu_entries = Vec::new();
+        // Standard action set split on entry count (context-menu spec,
+        // standard-media-context-menus design D3): a leaf row offers Play,
+        // Add to Queue, then the one entry that changes its state; a
+        // multi-selection offers Play, Shuffle, Add to Queue, and both mark
+        // entries.
         Self::push_context_action(
             &mut menu_entries,
             "Play",
             ContextAction::FeedsPlay(entries.clone()),
         );
+        if entries.len() > 1 {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Shuffle",
+                ContextAction::FeedsShuffle(entries.clone()),
+            );
+        }
         Self::push_context_action(
             &mut menu_entries,
             "Add to Queue",
             ContextAction::FeedsEnqueue(entries.clone()),
         );
-        Self::push_context_action(
-            &mut menu_entries,
-            "Mark Played",
-            ContextAction::FeedsMarkPlayed(entries.clone()),
-        );
-        Self::push_context_action(
-            &mut menu_entries,
-            "Mark Unplayed",
-            ContextAction::FeedsMarkUnplayed(entries),
-        );
+        if let [entry] = entries.as_slice() {
+            if entry.played {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Unplayed",
+                    ContextAction::FeedsMarkUnplayed(entries),
+                );
+            } else {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Played",
+                    ContextAction::FeedsMarkPlayed(entries),
+                );
+            }
+        } else {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Played",
+                ContextAction::FeedsMarkPlayed(entries.clone()),
+            );
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Unplayed",
+                ContextAction::FeedsMarkUnplayed(entries),
+            );
+        }
         let menu = ContextMenu {
             anchor: anchor.map_or(
                 ContextMenuAnchor::SelectedItem(PanelFocus::Library),
@@ -285,6 +319,92 @@ impl App {
             entries: menu_entries,
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// Build the Audiobookshelf row menu from component-resolved targets
+    /// (standard-media-context-menus design D3). The standard action set
+    /// splits on target count: a leaf row offers Play, Add to Queue, then the
+    /// one mark entry its cached progress state chooses (a missing entry
+    /// counts as unfinished); a multi-selection adds Shuffle and offers both
+    /// mark entries.
+    pub(in crate::app) fn open_audiobookshelf_context_menu(
+        &mut self,
+        targets: Vec<AudiobookshelfMenuTarget>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        if targets.is_empty() {
+            return;
+        }
+        let mut menu_entries = Vec::new();
+        Self::push_context_action(
+            &mut menu_entries,
+            "Play",
+            ContextAction::AudiobookshelfPlay(targets.clone()),
+        );
+        if targets.len() > 1 {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Shuffle",
+                ContextAction::AudiobookshelfShuffle(targets.clone()),
+            );
+        }
+        Self::push_context_action(
+            &mut menu_entries,
+            "Add to Queue",
+            ContextAction::AudiobookshelfEnqueue(targets.clone()),
+        );
+        if let [target] = targets.as_slice() {
+            if self.audiobookshelf_target_finished(target) {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Unplayed",
+                    ContextAction::AudiobookshelfMarkUnplayed(targets),
+                );
+            } else {
+                Self::push_context_action(
+                    &mut menu_entries,
+                    "Mark Played",
+                    ContextAction::AudiobookshelfMarkPlayed(targets),
+                );
+            }
+        } else {
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Played",
+                ContextAction::AudiobookshelfMarkPlayed(targets.clone()),
+            );
+            Self::push_context_action(
+                &mut menu_entries,
+                "Mark Unplayed",
+                ContextAction::AudiobookshelfMarkUnplayed(targets),
+            );
+        }
+        let menu = ContextMenu {
+            anchor: anchor.map_or(
+                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+                |(x, y)| ContextMenuAnchor::Pointer { x, y },
+            ),
+            cursor: ContextMenu::first_selectable(&menu_entries),
+            entries: menu_entries,
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// Cached finished state for one menu target across every Audiobookshelf
+    /// browse state. A missing progress entry counts as unfinished (design
+    /// D3), matching how the server reports items without listening progress.
+    fn audiobookshelf_target_finished(&self, target: &AudiobookshelfMenuTarget) -> bool {
+        match target {
+            AudiobookshelfMenuTarget::Episode {
+                library_item_id,
+                episode_id,
+            } => self
+                .audiobookshelf_cached_episode_progress(library_item_id, episode_id)
+                .is_some_and(|progress| progress.is_finished),
+            AudiobookshelfMenuTarget::Book { library_item_id } => self
+                .audiobookshelf_cached_book_progress(library_item_id)
+                .is_some_and(|progress| progress.is_finished),
+        }
     }
 
     /// Keyboard '.' entry (the shared `handle_global_view_key` front door
@@ -354,13 +474,6 @@ impl App {
                 ContextAction::EnqueueSelection(items.to_vec()),
             );
         }
-        if capabilities.removable && !remove_targets.is_empty() {
-            Self::push_context_action(
-                &mut entries,
-                "Remove",
-                ContextAction::RemoveSelection(remove_targets),
-            );
-        }
         let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
         if !ids.is_empty() && capabilities.played_state_capable {
             Self::push_context_action(
@@ -372,6 +485,15 @@ impl App {
                 &mut entries,
                 "Mark Unplayed",
                 ContextAction::MarkUnplayedSelection(ids),
+            );
+        }
+        // List-specific removals always come last (context-menu spec,
+        // removals follow the standard entries).
+        if capabilities.removable && !remove_targets.is_empty() {
+            Self::push_context_action(
+                &mut entries,
+                "Remove",
+                ContextAction::RemoveSelection(remove_targets),
             );
         }
         if entries.is_empty() {

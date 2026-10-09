@@ -326,10 +326,16 @@ impl EmbyLibraryContent {
                     Some(RowIntent::ContextSelection(targets)) => targets,
                     _ => vec![target],
                 };
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets),
-                    Some((at.x, at.y)),
-                ))))
+                // Design D7: the menu targets the items this list paints,
+                // resolved here rather than re-derived by the shell; a
+                // target that resolves to nothing is dropped.
+                let items = self.items_for_targets(&targets);
+                (!items.is_empty()).then(|| {
+                    Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+                        mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
+                        Some((at.x, at.y)),
+                    )))
+                })
             }
             _ => None,
         }

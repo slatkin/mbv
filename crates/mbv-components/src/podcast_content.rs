@@ -16,7 +16,9 @@ use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
 use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
-use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput};
+use super::media_list::{
+    MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
+};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
@@ -26,6 +28,7 @@ use mbv_ui_model::audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection, PodcastDisplayRow,
     podcast_display_rows,
 };
+use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
 use mbv_ui_model::ui_util::{fmt_publish_date_short, trunc_str};
 use mbv_ui_msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
@@ -319,9 +322,13 @@ impl PodcastContent {
 
     /// Offer one operation to the shared list owner, then re-anchor the
     /// hero's overview scroll (selection movement is owner-local here).
-    fn delegate_episodes(&mut self, operation: MediaListOperation<PodcastEpisodeTarget>) {
-        self.episodes.delegate_operation(operation);
+    fn delegate_episodes(
+        &mut self,
+        operation: MediaListOperation<PodcastEpisodeTarget>,
+    ) -> MediaListTransition<PodcastEpisodeTarget> {
+        let outcome = self.episodes.delegate_operation(operation);
         self.sync_hero_scroll();
+        outcome
     }
 
     /// Drop the retained hero overview scroll when the selected episode
@@ -412,6 +419,41 @@ impl PodcastContent {
                     PillSelection::Latest => unreachable!(),
                 },
             },
+        )))
+    }
+
+    /// `.` opens the selected episode's context menu through the shared list
+    /// owner (context-menu spec: an Audiobookshelf row is selected;
+    /// media-list-multi-select: one entry path for every list): a Visual
+    /// multi-selection supplies every marked row in display order, otherwise
+    /// the single selected row. Targets map to the provider-native menu
+    /// identity (design D1) and a keyboard opening anchors to the selection.
+    fn open_selected_episode_context(&mut self) -> Option<Msg> {
+        let target = self.episodes.selected_target()?.clone();
+        // The `.` keyboard gesture resolves like the pointer context path:
+        // one current-row context operation through the shared owner.
+        let outcome = self.delegate_episodes(MediaListOperation::ContextCurrent);
+        let targets = match outcome.external_intent {
+            Some(RowIntent::ContextSelection(targets)) => targets,
+            _ => vec![target],
+        };
+        Some(Self::episode_context_msg(targets, None))
+    }
+
+    /// The typed shell request one resolved context gesture emits (design
+    /// D1): provider-native episode targets, with the pointer anchor kept
+    /// for right-click openings.
+    fn episode_context_msg(targets: Vec<PodcastEpisodeTarget>, anchor: Option<(u16, u16)>) -> Msg {
+        let targets = targets
+            .into_iter()
+            .map(|target| AudiobookshelfMenuTarget::Episode {
+                library_item_id: target.library_item_id().to_string(),
+                episode_id: target.episode_id().to_string(),
+            })
+            .collect();
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            ContextMenuTargets::Audiobookshelf(targets),
+            anchor,
         )))
     }
 

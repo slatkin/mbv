@@ -5,10 +5,32 @@ use crate::app::{
     RoutedReplacementPrep,
 };
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::context_menu::BulkRemoveTarget;
+use mbv_queue::QueueItem;
+use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, BulkRemoveTarget};
 use rand::seq::SliceRandom;
 
 impl App {
+    /// Play the resolved queue items in list order: the first replaces the
+    /// queue and starts, the rest append (standard-media-context-menus task
+    /// 5.3, design D4). Shuffle callers randomize before calling.
+    fn play_audiobookshelf_menu_targets_in_order(&mut self, targets: &[AudiobookshelfMenuTarget]) {
+        let items = self.audiobookshelf_menu_targets_queue_items(targets);
+        self.submit_audiobookshelf_queue_items(items);
+    }
+
+    /// `submit_queue_item(first, true)` runs, then each remaining item
+    /// appends; a target that no longer resolves was already skipped.
+    fn submit_audiobookshelf_queue_items(&mut self, items: Vec<QueueItem>) {
+        let mut items = items.into_iter();
+        let Some(first) = items.next() else {
+            return;
+        };
+        self.submit_queue_item(first, true);
+        for item in items {
+            self.submit_queue_item(item, false);
+        }
+    }
+
     pub(in crate::app) fn execute_context_action(
         &mut self,
         action: Option<ContextAction>,
@@ -187,6 +209,11 @@ impl App {
                 self.play_feed_entries(entries);
                 None
             }
+            Some(ContextAction::FeedsShuffle(mut entries)) => {
+                entries.shuffle(&mut rand::rng());
+                self.play_feed_entries(entries);
+                None
+            }
             Some(ContextAction::FeedsEnqueue(entries)) => {
                 self.enqueue_feed_entries(entries);
                 None
@@ -199,8 +226,103 @@ impl App {
                 self.set_feed_entries_played(&entries, false);
                 None
             }
+            Some(ContextAction::AudiobookshelfPlay(targets)) => {
+                if self.player.can_admit_audiobookshelf() {
+                    self.play_audiobookshelf_menu_targets_in_order(&targets);
+                } else {
+                    self.flash(
+                        "Audiobookshelf playback owner is unavailable".into(),
+                        ToastSeverity::Error,
+                    );
+                }
+                None
+            }
+            Some(ContextAction::AudiobookshelfShuffle(targets)) => {
+                if self.player.can_admit_audiobookshelf() {
+                    let mut items = self.audiobookshelf_menu_targets_queue_items(&targets);
+                    items.shuffle(&mut rand::rng());
+                    self.submit_audiobookshelf_queue_items(items);
+                } else {
+                    self.flash(
+                        "Audiobookshelf playback owner is unavailable".into(),
+                        ToastSeverity::Error,
+                    );
+                }
+                None
+            }
+            Some(ContextAction::AudiobookshelfEnqueue(targets)) => {
+                // The bound-scope admission check the deleted single-row
+                // enqueue held: the owner capability gates only a queue the
+                // Player owns.
+                let scope = self.viewed_queue_scope();
+                let bound = scope == self.playing_queue_scope();
+                if bound && !self.player.can_admit_audiobookshelf() {
+                    self.flash(
+                        "Audiobookshelf playback owner is unavailable".into(),
+                        ToastSeverity::Error,
+                    );
+                    return None;
+                }
+                for item in self.audiobookshelf_menu_targets_queue_items(&targets) {
+                    self.submit_queue_item(item, false);
+                }
+                None
+            }
+            Some(ContextAction::AudiobookshelfMarkPlayed(targets)) => {
+                self.start_audiobookshelf_mark(targets, true);
+                None
+            }
+            Some(ContextAction::AudiobookshelfMarkUnplayed(targets)) => {
+                self.start_audiobookshelf_mark(targets, false);
+                None
+            }
             action => action,
         }
+    }
+
+    /// Start the finished-state mark worker for `targets` (design D5). A
+    /// Service that is not Ready, a missing setup or credential, or a mark
+    /// still in flight flashes a toast and changes nothing; otherwise the
+    /// worker runs on a thread and reports through the generation-gated mark
+    /// completion. A mark already in flight holds the only completion
+    /// channel: starting a second worker would orphan the first one's result
+    /// (PR 914 review), so the request is refused outright.
+    fn start_audiobookshelf_mark(
+        &mut self,
+        targets: Vec<AudiobookshelfMenuTarget>,
+        finished: bool,
+    ) {
+        if self.setup.audiobookshelf_mark_rx.is_some() {
+            self.flash(
+                "Audiobookshelf mark already in progress".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        }
+        if self.audiobookshelf_runtime.state != mbv_core::service_runtime::ServiceState::Ready {
+            self.flash(
+                "Audiobookshelf is unavailable".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        }
+        let generation = self.audiobookshelf_runtime.generation();
+        let Some((setup, api_key)) =
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(
+                &self.config.lock().unwrap(),
+            )
+        else {
+            self.flash(
+                "Audiobookshelf is unavailable".into(),
+                ToastSeverity::Warning,
+            );
+            return;
+        };
+        self.setup.audiobookshelf_mark_rx = Some(
+            crate::app::dispatch::session::service_startup::start_audiobookshelf_mark(
+                setup, api_key, generation, targets, finished,
+            ),
+        );
     }
 
     fn execute_context_navigation_action(&mut self, action: Option<ContextAction>) {
@@ -239,9 +361,15 @@ impl App {
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
                 | ContextAction::FeedsPlay(_)
+                | ContextAction::FeedsShuffle(_)
                 | ContextAction::FeedsEnqueue(_)
                 | ContextAction::FeedsMarkPlayed(_)
-                | ContextAction::FeedsMarkUnplayed(_),
+                | ContextAction::FeedsMarkUnplayed(_)
+                | ContextAction::AudiobookshelfPlay(_)
+                | ContextAction::AudiobookshelfShuffle(_)
+                | ContextAction::AudiobookshelfEnqueue(_)
+                | ContextAction::AudiobookshelfMarkPlayed(_)
+                | ContextAction::AudiobookshelfMarkUnplayed(_),
             ) => {}
         }
     }

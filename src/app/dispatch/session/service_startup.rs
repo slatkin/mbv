@@ -1,10 +1,11 @@
 use crate::app::AudiobookshelfEvent;
-use mbv_audiobookshelf::AudiobookshelfClient;
+use mbv_audiobookshelf::{AudiobookshelfClient, ProgressFinishedUpdate};
 use mbv_config::{EmbySetup, load_service_secret};
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 use mbv_emby::EmbyClient;
 use mbv_emby::{EmbyFailure, EmbyFailureClass};
 use mbv_queue::ServiceKind;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use std::sync::mpsc;
 
 pub(in crate::app) enum AudiobookshelfCompletionKind {
@@ -65,6 +66,21 @@ pub(in crate::app) struct AudiobookshelfCatalogReceiver {
     pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
 }
 
+/// One finished-state mark worker's completion (standard-media-context-menus
+/// design D5): the setup generation it was issued under, the resolved menu
+/// targets it covered, the finished flag it wrote, and the request result.
+pub(in crate::app) struct AudiobookshelfMarkCompletion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) targets: Vec<AudiobookshelfMenuTarget>,
+    pub(in crate::app) finished: bool,
+    pub(in crate::app) result: Result<(), mbv_audiobookshelf::AudiobookshelfError>,
+}
+
+pub(in crate::app) struct AudiobookshelfMarkReceiver {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfMarkCompletion>,
+}
+
 /// Resolves the configured Audiobookshelf setup, loads its Bearer secret,
 /// and constructs a client. Shared by the startup paths below; the missing-
 /// setup and missing-secret error classes match `start_audiobookshelf`'s
@@ -115,6 +131,79 @@ pub(in crate::app) fn start_audiobookshelf_catalog(
         let _ = tx.send(AudiobookshelfCatalogCompletion { generation, result });
     });
     AudiobookshelfCatalogReceiver { generation, rx }
+}
+
+/// Mark worker (standard-media-context-menus design D5): one target sends a
+/// single `set_finished_bounded` call, more than one sends one batch call.
+/// The worker always sends one completion before exiting; the drain
+/// generation-gates it.
+pub(in crate::app) fn start_audiobookshelf_mark(
+    setup: mbv_config::AudiobookshelfSetup,
+    api_key: String,
+    generation: SetupGeneration,
+    targets: Vec<AudiobookshelfMenuTarget>,
+    finished: bool,
+) -> AudiobookshelfMarkReceiver {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = AudiobookshelfClient::new(&setup.server_url).and_then(|client| {
+            if let [target] = targets.as_slice() {
+                match target {
+                    AudiobookshelfMenuTarget::Episode {
+                        library_item_id,
+                        episode_id,
+                    } => client.set_finished_bounded(
+                        &api_key,
+                        library_item_id,
+                        Some(episode_id),
+                        finished,
+                        AudiobookshelfClient::REQUEST_HARD_BOUND,
+                    ),
+                    AudiobookshelfMenuTarget::Book { library_item_id } => client
+                        .set_finished_bounded(
+                            &api_key,
+                            library_item_id,
+                            None,
+                            finished,
+                            AudiobookshelfClient::REQUEST_HARD_BOUND,
+                        ),
+                }
+            } else {
+                let updates = targets
+                    .iter()
+                    .map(|target| match target {
+                        AudiobookshelfMenuTarget::Episode {
+                            library_item_id,
+                            episode_id,
+                        } => ProgressFinishedUpdate {
+                            library_item_id: library_item_id.clone(),
+                            episode_id: Some(episode_id.clone()),
+                            is_finished: finished,
+                        },
+                        AudiobookshelfMenuTarget::Book { library_item_id } => {
+                            ProgressFinishedUpdate {
+                                library_item_id: library_item_id.clone(),
+                                episode_id: None,
+                                is_finished: finished,
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                client.batch_set_finished_bounded(
+                    &api_key,
+                    &updates,
+                    AudiobookshelfClient::REQUEST_HARD_BOUND,
+                )
+            }
+        });
+        let _ = tx.send(AudiobookshelfMarkCompletion {
+            generation,
+            targets,
+            finished,
+            result,
+        });
+    });
+    AudiobookshelfMarkReceiver { generation, rx }
 }
 
 pub(in crate::app) fn start_audiobookshelf_shows(

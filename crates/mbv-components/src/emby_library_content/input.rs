@@ -93,12 +93,17 @@ impl EmbyLibraryContent {
                         .expect("resolved media-list pointer target"),
                 );
                 match outcome.external_intent {
-                    Some(RowIntent::Context(target)) => {
-                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                            mbv_ui_model::context_menu::ContextMenuTargets::Browser(vec![target]),
-                            None,
-                        ))))
-                    }
+                    Some(RowIntent::Context(target)) => self
+                        .inline_search
+                        // Design D7: the search session resolves its own
+                        // painted row, not the ordinary browse cursor.
+                        .item_for_target(&target)
+                        .map(|item| {
+                            Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+                                mbv_ui_model::context_menu::ContextMenuTargets::Emby(vec![item]),
+                                None,
+                            )))
+                        }),
                     // A context click never resolves an activate intent, a
                     // search session has no Visual-mode multi-selection so a
                     // `ContextSelection` cannot arise (D4 non-goal), and no
@@ -211,8 +216,12 @@ impl EmbyLibraryContent {
                     Some(RowIntent::Context(target)) => vec![target],
                     _ => return None,
                 };
-                Some(ShellRequest::RowContextMenu(
-                    mbv_ui_model::context_menu::ContextMenuTargets::Browser(targets),
+                // Design D7: the menu targets the items this list paints,
+                // resolved here rather than re-derived by the shell; a
+                // target that resolves to nothing is dropped.
+                let items = self.items_for_targets(&targets);
+                (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
+                    mbv_ui_model::context_menu::ContextMenuTargets::Emby(items),
                     None,
                 ))
             }

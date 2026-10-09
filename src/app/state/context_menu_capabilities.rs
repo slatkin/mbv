@@ -35,7 +35,9 @@ pub(crate) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
 
 pub(crate) fn emby_item_capabilities(item: &mbv_emby_model::EmbyItem) -> ItemCapabilities {
     let playable = mbv_ui_model::ui_util::is_playable(item) && !item.is_folder;
-    let played_state_capable = item.media_type != "Audio" && item.item_type != "Audio";
+    // Music is fire-and-forget in mbv (no resume, played state ignored), so a
+    // mixed selection containing any music item loses the played-state entry.
+    let played_state_capable = !item.is_music();
     ItemCapabilities {
         playable,
         queue_admissible: playable,

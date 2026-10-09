@@ -14,6 +14,19 @@ use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
 #[must_use]
 pub fn audiobookshelf_book_queue_item(state: &AudiobookshelfBookBrowseState) -> Option<QueueItem> {
     let book_id = state.selected_id.as_deref()?;
+    audiobookshelf_book_queue_item_for_id(state, book_id)
+}
+
+/// Resolve one book by `library_item_id` as a queue item without mutating
+/// playback state (standard-media-context-menus task 5.2): context-menu
+/// targets carry a book id, which may differ from the browse selection.
+/// Queue-item construction lives here alone; the selected-book form resolves
+/// on top of it.
+#[must_use]
+pub fn audiobookshelf_book_queue_item_for_id(
+    state: &AudiobookshelfBookBrowseState,
+    book_id: &str,
+) -> Option<QueueItem> {
     Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
         audiobookshelf_book_item(state, book_id)?,
     )))

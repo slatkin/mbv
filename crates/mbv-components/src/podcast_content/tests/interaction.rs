@@ -58,6 +58,58 @@ fn scoped_loading_projection_follows_the_active_pill() {
     ));
 }
 
+/// Context-menu spec, "Audiobookshelf row is selected": `.` on the selected
+/// podcast episode row opens the menu anchored to the selection (no pointer
+/// anchor), targeting exactly that episode.
+#[test]
+fn dot_opens_the_selected_episode_context_menu_anchored_to_the_selection() {
+    let mut owner = owner();
+    owner.set_focused(true);
+    assert!(matches!(
+        owner.on_key(&KeyEvent::new(Key::Char('.'), KeyModifiers::NONE)),
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                    if targets.as_slice() == [AudiobookshelfMenuTarget::Episode {
+                        library_item_id: "alpha".into(),
+                        episode_id: "dated".into(),
+                    }]
+            )
+    ));
+}
+
+/// Media-list-multi-select, "one entry path for every list": the same `.`
+/// gesture over a Visual multi-selection emits every marked row in display
+/// order.
+#[test]
+fn dot_over_a_visual_selection_emits_every_marked_episode_in_list_order() {
+    let mut owner = owner();
+    owner.set_focused(true);
+    // Shift+V begins Visual mode anchored on the selected row; one Down
+    // extends the marked range to the next row.
+    owner.on_key(&KeyEvent::new(Key::Char('V'), KeyModifiers::SHIFT));
+    owner.on_key(&KeyEvent::new(Key::Down, KeyModifiers::NONE));
+    assert!(matches!(
+        owner.on_key(&KeyEvent::new(Key::Char('.'), KeyModifiers::NONE)),
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::RowContextMenu(ContextMenuTargets::Audiobookshelf(targets), None)
+                    if targets.as_slice() == [
+                        AudiobookshelfMenuTarget::Episode {
+                            library_item_id: "alpha".into(),
+                            episode_id: "dated".into(),
+                        },
+                        AudiobookshelfMenuTarget::Episode {
+                            library_item_id: "alpha".into(),
+                            episode_id: "undated".into(),
+                        },
+                    ]
+            )
+    ));
+}
+
 #[test]
 fn enter_emits_open_or_play_with_the_selected_episode_target() {
     let mut owner = owner();

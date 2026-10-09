@@ -31,7 +31,7 @@ mod playback;
 #[doc(inline)]
 pub use playback::{
     AudiobookshelfAudioSource, AudiobookshelfBookPlaybackSession, AudiobookshelfPlaybackProgress,
-    AudiobookshelfPlaybackSession, AudiobookshelfSourceMethod,
+    AudiobookshelfPlaybackSession, AudiobookshelfSourceMethod, ProgressFinishedUpdate,
 };
 pub mod socket;
 

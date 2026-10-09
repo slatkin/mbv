@@ -105,10 +105,10 @@ pub enum PlaylistsTarget {
 }
 
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
-/// emits the intent matched from Space/Enter/Ctrl+A; the shell runs the App
-/// play/enqueue effect directly — episodes are the tab's leaf rows, so there
-/// is no episode-selection or overlay stage (reorganize-podcast-pill-
-/// navigation D6).
+/// emits the intent matched from Space/Enter; the shell runs the App play
+/// effect directly — episodes are the tab's leaf rows, so there is no
+/// episode-selection or overlay stage (reorganize-podcast-pill-navigation
+/// D6). Enqueue lives on the context menu (standard-media-context-menus 5.5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PodcastEpisodeIntent {
     /// Space: App plays the carried target; a selectionless activation is a
@@ -120,9 +120,6 @@ pub enum PodcastEpisodeIntent {
     /// hero-bearing rows and no overlay or inline detail opens (design D6).
     /// A selectionless activation is a no-op.
     OpenOrPlay(Option<PodcastEpisodeTarget>),
-    /// Ctrl+A: enqueue the carried target; a selectionless activation is a
-    /// no-op.
-    Enqueue(Option<PodcastEpisodeTarget>),
 }
 
 /// Resolved-value Audiobookshelf book browser movements
@@ -151,7 +148,6 @@ pub enum AudiobookshelfBookMove {
 pub enum AudiobookshelfBookIntent {
     Play,
     Activate,
-    Enqueue,
     /// Tab on a selected book: the shell focuses the wide chapter
     /// workspace (the media-selection list in the hero pane). Narrow keeps
     /// the Library Hero overlay, mirroring `PodcastEpisodeIntent::OpenOrPlay(None)`.
