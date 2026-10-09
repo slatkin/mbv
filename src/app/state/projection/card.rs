@@ -95,12 +95,12 @@ fn title_site_skip_reason(
     } else if !projection.images_enabled {
         Some(TitleSiteGate::ForceHeader("ImagesOff"))
     } else if column_resizing {
-        // User-reported regression: a queue-column resize drag builds a new
-        // Lanczos3 overlay variant for every fitted width on the tick thread.
-        // While the drag is active the card paints plain base art; the drag's
-        // final width composes the overlay once the `DragEnd` clears the gate.
-        // The header stays hidden across the drag.
-        Some(TitleSiteGate::Transient("ColumnResizing"))
+        // Invariant 20: a resize drag would build a new Lanczos3 overlay
+        // variant for every fitted width on the tick thread. While the hold
+        // is on the card paints plain base art; the settled width composes
+        // the overlay once the hold lifts. The header stays hidden across
+        // the drag.
+        Some(TitleSiteGate::Transient("ResizeDragHold"))
     } else if app.images.is_halfblock_configured() {
         Some(TitleSiteGate::ForceHeader("HalfblockConfigured"))
     } else if !app.visual_slot_shown() || projection.cache_key.is_none() {

@@ -372,17 +372,9 @@ impl App {
     /// the painters show the placeholder for at most that one frame.
     /// Returns whether a ready protocol is available.
     ///
-    /// `resizing` is the shell-resolved hold input: a resize drag (queue
-    /// column or wide split) is live or inside its settle window
-    /// (`Model::refresh_resize_drag_hold`). A drag changes the box on every
-    /// mouse event, and each rebuild cover-fills the source with a Lanczos3
-    /// resize synchronously on the sync thread (user-reported regression,
-    /// 2026-10-09: dragging either boundary was super slow while a landscape
-    /// hero was up, while non-overlaid heroes dragged fine). While the hold
-    /// is on the projection reports not ready, so the painter shows the
-    /// loading placeholder instead of re-encoding or stretching a stale
-    /// crop; the drag's settled box re-encodes exactly once after the
-    /// window.
+    /// `resizing` is the resize drag hold (`Model::refresh_resize_drag_hold`,
+    /// invariant 20): while it is on, a changed box reports not ready (the
+    /// painter shows the placeholder) instead of re-encoding inline.
     pub(in crate::app) fn ensure_hero_cover_protocol(
         &mut self,
         cache_key: &str,

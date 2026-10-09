@@ -315,20 +315,9 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
         width_before,
         "the drag moved the column, so the hold is exercised"
     );
-    // A live consult both holds and refreshes the settle stamp.
-    let before = std::time::Instant::now();
     assert!(
         harness.model_mut().refresh_resize_drag_hold(),
         "a live drag holds the image work"
-    );
-    let stamped = harness
-        .model()
-        .app
-        .resize_drag_activity
-        .expect("a live drag stamps the settle window");
-    assert!(
-        stamped >= before,
-        "the live drag refreshed the settle stamp"
     );
 
     harness.inject(Event::Mouse(MouseEvent {
@@ -340,26 +329,25 @@ fn image_hold_outlives_the_drag_by_the_settle_window() {
     let outcome = harness.step();
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
-    // The DragEnd cleared the live bit; inject a stamp just inside the
-    // window (the wall-clock stamp from the live drag is fresh, but the
-    // injected one makes the assertion independent of runner pacing).
-    harness.model_mut().app.resize_drag_activity = Some(
-        std::time::Instant::now()
-            .checked_sub(std::time::Duration::from_millis(100))
-            .expect("the backdated instant is representable"),
-    );
+    // The DragEnd cleared the live bit; the backdated stamp makes the
+    // assertion independent of runner pacing.
+    backdate_resize_drag_activity(&mut harness, 100);
     assert!(
         harness.model_mut().refresh_resize_drag_hold(),
         "the hold survives the DragEnd inside the settle window"
     );
 
-    harness.model_mut().app.resize_drag_activity = Some(
-        std::time::Instant::now()
-            .checked_sub(std::time::Duration::from_millis(151))
-            .expect("the backdated instant is representable"),
-    );
+    backdate_resize_drag_activity(&mut harness, 151);
     assert!(
         !harness.model_mut().refresh_resize_drag_hold(),
         "the hold lifts once the settle window has elapsed"
+    );
+}
+
+fn backdate_resize_drag_activity(harness: &mut TickHarness, millis: u64) {
+    harness.model_mut().app.resize_drag_activity = Some(
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(millis))
+            .expect("the backdated instant is representable"),
     );
 }

@@ -85,8 +85,8 @@ impl Model {
         // playback is active (idle collapse), so the projection follows the
         // same gate the card's render used.
         if self.app.visual_slot_shown() {
-            let column_resizing = self.queue_column_resizing();
-            self.app.refresh_queue_card_image(column_resizing);
+            let resizing = self.refresh_resize_drag_hold();
+            self.app.refresh_queue_card_image(resizing);
         } else if self.app.now_playing_status() != NowPlayingStatus::Idle {
             // The slot is hidden while playing (the user's hide toggle): the
             // artwork can no longer carry the title, so the header is its
@@ -96,21 +96,6 @@ impl Model {
                 mbv_ui_model::playback::NowPlayingTitleSite::Header;
         }
         self.push_queue_projection(update);
-    }
-
-    /// Whether the queue column's resize drag is in progress. The boundary
-    /// component owns the gesture (`changed` persists across ticks until
-    /// `DragEnd`), so the shell asks it rather than mirroring the bit into
-    /// `App`; the projection reads the resolved value as an input.
-    fn queue_column_resizing(&self) -> bool {
-        self.application
-            .get_component(&ComponentId::QueueBoundary)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<mbv_components::QueueBoundaryComponent>()
-            })
-            .is_some_and(mbv_components::QueueBoundaryComponent::is_resizing)
     }
 
     fn mount_and_focus_queue(&mut self) {

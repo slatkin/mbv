@@ -46,8 +46,9 @@ variant on the tick thread.
 
 ## How the code maintains it today
 
-- The queue card: `title_site_skip_reason`'s `ColumnResizing` transient gate
-  stops the variant compose while the drag is live; the site carries over so
+- The queue card: `sync_queue` passes the same `refresh_resize_drag_hold`
+  value to `title_site_skip_reason`, whose `ResizeDragHold` transient gate
+  stops the variant compose while the hold is on; the site carries over so
   the header does not resurrect. Owned by
   `title_site_tests::column_resize_drag_builds_no_overlay_variant_until_it_ends`.
 - The hero: `ensure_hero_cover_protocol` takes the shell-resolved `resizing`
