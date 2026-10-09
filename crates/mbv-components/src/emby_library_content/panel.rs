@@ -9,7 +9,7 @@ use crate::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, 
 use crate::library_panel::hero::hero_content_emby;
 use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::sort_filter::LetterFilter;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
@@ -192,50 +192,26 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
-        if matches!(
+        // Only the persisted scope applies: every library with a painted
+        // selector row restarts on Latest. Legacy letter/group/unfiltered
+        // selectors in an old snapshot decode but resolve to the library
+        // default (the Home precedent), and a pill-less owner (no selector
+        // row at this position) is never forced into Latest mode.
+        if !matches!(
             state.selector.as_ref(),
             Some(SelectorIdentity::Emby {
                 key: EmbySelectorKey::Latest
             })
         ) {
-            return (!self.latest_mode).then_some(LaunchSelector::EmbyLatest);
+            return None;
         }
-        if self.selector_mode == super::EmbySelectorMode::FeedGroups {
-            let target = match state.selector.as_ref() {
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Group(id),
-                }) => self
-                    .feed_group_ids
-                    .iter()
-                    .position(|candidate| candidate == id)
-                    .map_or(0, |index| index + 1),
-                _ => 0,
-            };
-            return (self.latest_mode || self.feed_group_cursor != target)
-                .then_some(LaunchSelector::Emby { index: target });
+        if self.selector_mode == super::EmbySelectorMode::None {
+            return None;
         }
-        if self.selector_mode == super::EmbySelectorMode::Letters {
-            let current = self.letter_filter.as_ref().map(|filter| filter.index);
-            return match state.selector.as_ref() {
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Letter(bucket),
-                }) => {
-                    let target = bucket.to_index();
-                    (self.latest_mode || current != Some(target))
-                        .then_some(LaunchSelector::Emby { index: target })
-                }
-                // No letter pill is represented by an index. The shell uses
-                // this out-of-band value for the distinct clear intent.
-                _ if current.is_some() || self.latest_mode => {
-                    Some(LaunchSelector::Emby { index: usize::MAX })
-                }
-                _ => None,
-            };
-        }
-        None
+        (!self.latest_mode).then_some(LaunchSelector::EmbyLatest)
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.items().is_empty() {
             return false;
         }
@@ -243,56 +219,24 @@ impl LibraryContentOwner for EmbyLibraryContent {
         // content before this item-level re-anchor. Do not rewrite the
         // component-local selector here; that brief mirror could disagree
         // with the shell projection until the next sync pass.
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.carrier.select_first();
         true
     }
 
+    /// The persisted pill scope, not the live pill: every library with a
+    /// painted selector row restarts on Latest, and any other pill choice is
+    /// session memory. The selected item is never recorded, so restoration
+    /// always lands on the first row (a legacy snapshot's saved item decodes
+    /// but is ignored).
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let selector = if self.latest_mode {
-            Some(SelectorIdentity::Emby {
+        let selector = (self.selector_mode != super::EmbySelectorMode::None).then_some(
+            SelectorIdentity::Emby {
                 key: EmbySelectorKey::Latest,
-            })
-        } else if self.selector_mode == super::EmbySelectorMode::FeedGroups {
-            if self.feed_group_cursor == 0 {
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Unfiltered,
-                })
-            } else {
-                self.feed_group_cursor.checked_sub(1).and_then(|group| {
-                    self.feed_group_ids
-                        .get(group)
-                        .cloned()
-                        .map(|id| SelectorIdentity::Emby {
-                            key: EmbySelectorKey::Group(id),
-                        })
-                })
-            }
-        } else if self.selector_mode == super::EmbySelectorMode::Letters {
-            Some(SelectorIdentity::Emby {
-                key: self
-                    .letter_filter
-                    .as_ref()
-                    .map(|filter| {
-                        EmbyLetterBucket::from_index(filter.index)
-                            .expect("LetterFilter index comes from LETTER_FILTER_BUCKETS")
-                    })
-                    .map_or(EmbySelectorKey::Unfiltered, EmbySelectorKey::Letter),
-            })
-        } else {
-            None
-        };
-        let item = self
-            .carrier
-            .selected_target()
-            .cloned()
-            .map(|id| LibraryItemIdentity::Emby { id });
-        (selector, item)
+            },
+        );
+        (selector, None)
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

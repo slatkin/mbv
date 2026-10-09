@@ -270,12 +270,9 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
             key: mbv_config::HomeSelectorKey::Continue,
         })
     );
-    assert_eq!(
-        state.item,
-        Some(mbv_config::LibraryItemIdentity::Home {
-            id: "selected-home-item".into(),
-        })
-    );
+    // The selected item never persists: restoration always lands on the
+    // first row of the restored scope.
+    assert_eq!(state.item, None);
 
     let serialized = std::fs::read_to_string(mbv_config::tui_launch_state_path())
         .expect("serialized launch snapshot");
@@ -348,4 +345,49 @@ fn pinned_launch_without_snapshot_still_starts_on_queue() {
         app.launch_restore,
         crate::app::state::app_struct::LaunchRestore::Done
     );
+}
+
+/// Spec `destination-latest-modes`, scenario "Restart selects Latest"
+/// (change `latest-pill-restart-default`): a restart after a session that
+/// exited a Latest-bearing library with a letter range selected opens that
+/// library on Latest — the snapshot records the Latest scope instead of the
+/// live letter pill, and restoration applies it.
+#[test]
+fn restart_after_a_letter_pill_session_selects_latest() {
+    // Exit with a letter pill active on a large movie library.
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.libs[0].library_total = Some(400);
+    app.libs[0].nav_stack[0].letter_filter = Some(
+        mbv_ui_model::sort_filter::LetterFilter::default_filter_for_kind(
+            mbv_ui_model::sort_filter::LetterFilterKind::Movie,
+        ),
+    );
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    model.teardown(Duration::from_secs(1));
+
+    let saved = mbv_config::load_tui_launch_state().expect("launch snapshot after teardown");
+    assert_eq!(
+        saved.selector,
+        Some(mbv_config::SelectorIdentity::Emby {
+            key: mbv_config::EmbySelectorKey::Latest,
+        }),
+        "the live letter pill never persists; the snapshot records the Latest scope"
+    );
+
+    // Restart on the same library: the selector opens on Latest and the
+    // letter pill does not reappear.
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.libs[0].library_total = Some(400);
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::TabSettled {
+        state: saved,
+        tab: TabSelection::EmbyLibrary(0),
+    };
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    assert!(
+        model.active_emby_library_owner_is_latest(),
+        "the restored library opens on Latest"
+    );
+    assert!(model.app.libs[0].nav_stack[0].letter_filter.is_none());
 }

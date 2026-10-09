@@ -6,34 +6,28 @@ use mbv_config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity, TuiLaun
 use super::HomeContent;
 
 impl HomeContent {
-    pub fn reanchor_launch_state_impl(&mut self, state: &TuiLaunchState) -> bool {
+    pub fn reanchor_launch_state_impl(&mut self, _state: &TuiLaunchState) -> bool {
         if self.loading && self.carrier.rows().is_empty() {
             return false;
         }
         // Home's former Latest sections remain decodable in old launch
         // snapshots, but now resolve explicitly to Continue Watching.
+        // A saved item never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
         self.project_continue_rows();
-        let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Home { id }) => self.carrier.select_target(id),
-            _ => false,
-        };
-        if !selected {
-            self.carrier.select_first();
-        }
+        self.carrier.select_first();
         true
     }
 
     #[must_use]
     pub fn launch_snapshot_impl(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // Home's persisted scope is fixed at Continue Watching; the selected
+        // row is never recorded, so restoration always lands on the first
+        // row.
         let selector = Some(SelectorIdentity::Home {
             key: HomeSelectorKey::Continue,
         });
-        let item = self
-            .carrier
-            .selected_target()
-            .cloned()
-            .map(|id| LibraryItemIdentity::Home { id });
-        (selector, item)
+        (selector, None)
     }
 }
 
@@ -62,7 +56,9 @@ mod tests {
     }
 
     #[test]
-    fn continue_section_reports_the_fixed_scope_and_first_item_target() {
+    fn continue_section_reports_the_fixed_scope_and_no_item() {
+        // The persisted scope is fixed at Continue Watching and the selected
+        // row is never recorded: restoration always lands on the first row.
         let owner = continue_owner(&["cw-1", "cw-2"]);
         assert_eq!(
             owner.launch_snapshot_impl(),
@@ -70,9 +66,7 @@ mod tests {
                 Some(SelectorIdentity::Home {
                     key: HomeSelectorKey::Continue,
                 }),
-                Some(LibraryItemIdentity::Home {
-                    id: "cw-1".to_string(),
-                })
+                None,
             )
         );
     }
@@ -92,10 +86,8 @@ mod tests {
 
         assert!(owner.reanchor_launch_state_impl(&state));
         assert_eq!(
-            owner.launch_snapshot_impl().1,
-            Some(LibraryItemIdentity::Home {
-                id: "continue-1".into()
-            })
+            owner.carrier.selected_target(),
+            Some(&"continue-1".to_string())
         );
     }
 }

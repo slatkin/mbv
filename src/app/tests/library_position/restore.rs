@@ -161,3 +161,69 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             .contains_key("lib-movies")
     );
 }
+
+/// Spec `destination-latest-modes`, scenario "TV keeps its established
+/// default" (change `latest-pill-restart-default`): a restart no longer
+/// carries a saved TV mode (the position document's mode is cleared on
+/// load), so the restored TV library resolves its count-dependent default
+/// from the library's total — Latest above the pill threshold, All at or
+/// below it.
+#[rstest]
+#[case::large_library_opens_on_latest(673, mbv_queue::TvContentMode::Latest)]
+#[case::small_library_opens_on_all(12, mbv_queue::TvContentMode::All)]
+fn restoring_a_tv_position_without_a_saved_mode_resolves_the_count_dependent_default(
+    #[case] total: usize,
+    #[case] expected: mbv_queue::TvContentMode,
+) {
+    let mut app = make_app_stub();
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-shows".into();
+    library.collection_type = "tvshows".into();
+    app.libs.push(LibraryTab::new(library));
+    let position = mbv_queue::LibraryPosition {
+        levels: vec![mbv_queue::LibraryPositionLevel {
+            fetched_rows: None,
+            parent_id: "lib-shows".into(),
+            title: "Shows".into(),
+            focused_item_id: None,
+            cursor_index: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            letter_filter_index: None,
+            tv_content_mode: None,
+            library_total: None,
+        }],
+        ..Default::default()
+    };
+    app.replace_saved_library_position(0, position.clone());
+    app.panel_focus = PanelFocus::Queue;
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
+        lib_idx: 0,
+        requested_position: position.clone(),
+        position,
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(total),
+            parent_id: "lib-shows".into(),
+            title: "Shows".into(),
+            items: make_items(2),
+
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+    }));
+
+    assert_eq!(app.libs[0].tv_content_mode, Some(expected.clone()));
+    assert_eq!(app.libs[0].nav_stack[0].tv_content_mode, Some(expected));
+}

@@ -1,9 +1,8 @@
 use super::{
-    AudiobookshelfEpisodeFilter, AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey,
-    LaunchSelector, LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent,
-    LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, PillSelection,
-    PodcastContent, PodcastEpisodeIntent, PodcastEpisodeTarget, STATE_PILL_COUNT, SelectorIdentity,
-    ShellRequest, TerminalObserverEvent,
+    AudiobookshelfEpisodeFilter, AudiobookshelfSelectorKey, LaunchSelector, LibraryContentOwner,
+    LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, MediaListOperation,
+    MediaListSurfaceInput, Msg, PillSelection, PodcastContent, PodcastEpisodeIntent,
+    STATE_PILL_COUNT, SelectorIdentity, ShellRequest, TerminalObserverEvent,
 };
 use crate::library_panel::HeroContentData;
 use mbv_render::components::tv_wide::HeroImageState;
@@ -16,99 +15,43 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
-        let target = match state.selector.as_ref() {
+        // Only the persisted scope applies: a podcast library restarts on
+        // Latest. Legacy filter/show selectors in an old snapshot decode but
+        // resolve to the destination default.
+        let is_latest = matches!(
+            state.selector.as_ref(),
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::Latest,
-            }) => LaunchSelector::AudiobookshelfLatest,
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastShow(id),
-            }) if self.show_exists(id) => LaunchSelector::AudiobookshelfShow(id.clone()),
-            _ => LaunchSelector::AudiobookshelfState,
-        };
-        let same = match (&self.pill, &target) {
-            (PillSelection::Latest, LaunchSelector::AudiobookshelfLatest)
-            | (PillSelection::State(_), LaunchSelector::AudiobookshelfState) => true,
-            (PillSelection::Show(current), LaunchSelector::AudiobookshelfShow(target)) => {
-                current == target
-            }
-            _ => false,
-        };
-        (!same).then_some(target)
+            })
+        );
+        (is_latest && self.pill != PillSelection::Latest)
+            .then_some(LaunchSelector::AudiobookshelfLatest)
     }
 
-    fn reanchor_launch_state(&mut self, state: &mbv_config::TuiLaunchState) -> bool {
+    fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         // The shell applies the selector through App before this item-level
-        // re-anchor. Restore the saved pill here so the component scopes its
-        // rows before selecting the saved item.
-        match state.selector.as_ref() {
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::Latest,
-            }) => self.set_pill(PillSelection::Latest),
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastFilter(filter),
-            }) => {
-                self.set_pill(PillSelection::State(match filter {
-                    AudiobookshelfPodcastFilter::All => AudiobookshelfEpisodeFilter::All,
-                    AudiobookshelfPodcastFilter::Unplayed => AudiobookshelfEpisodeFilter::Unplayed,
-                    AudiobookshelfPodcastFilter::Played => AudiobookshelfEpisodeFilter::Played,
-                }));
-            }
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastShow(id),
-            }) if self.show_exists(id) => {
-                self.set_pill(PillSelection::Show(id.clone()));
-            }
-            _ => {}
-        }
-        if let PillSelection::Show(id) = &self.pill
-            && !self.state.detail_cache.contains_key(id)
-        {
-            return false;
-        }
-        let selected = state
-            .item
-            .as_ref()
-            .and_then(|item| match item {
-                LibraryItemIdentity::Audiobookshelf { id } => id.split_once('\0'),
-                _ => None,
-            })
-            .is_some_and(|(library_item_id, episode_id)| {
-                self.episodes.select_target(&PodcastEpisodeTarget::new(
-                    library_item_id.to_owned(),
-                    episode_id.to_owned(),
-                ))
-            });
-        if !selected {
-            self.episodes.select_first();
-        }
+        // re-anchor. Restore the persisted scope here so the component scopes
+        // its rows before selecting the first row: every restart lands on
+        // Latest whether or not the podcast library was the exit tab (the
+        // snapshot records the exit tab's scope only), and a legacy
+        // filter/show key in an old snapshot decodes but resolves to Latest
+        // too.
+        self.set_pill(PillSelection::Latest);
+        // A saved episode never restores (spec: every restart lands on the
+        // first row), so a legacy snapshot's item is ignored here too.
+        self.episodes.select_first();
         self.sync_hero_scroll();
         true
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let selector = {
-            let key = match &self.pill {
-                PillSelection::Latest => AudiobookshelfSelectorKey::Latest,
-                PillSelection::State(filter) => {
-                    AudiobookshelfSelectorKey::PodcastFilter(match filter {
-                        AudiobookshelfEpisodeFilter::All => AudiobookshelfPodcastFilter::All,
-                        AudiobookshelfEpisodeFilter::Unplayed => {
-                            AudiobookshelfPodcastFilter::Unplayed
-                        }
-                        AudiobookshelfEpisodeFilter::Played => AudiobookshelfPodcastFilter::Played,
-                    })
-                }
-                PillSelection::Show(id) => AudiobookshelfSelectorKey::PodcastShow(id.clone()),
-            };
-            Some(SelectorIdentity::Audiobookshelf { key })
-        };
-        let item =
-            self.episodes
-                .selected_target()
-                .map(|target| LibraryItemIdentity::Audiobookshelf {
-                    id: format!("{}\0{}", target.library_item_id(), target.episode_id()),
-                });
-        (selector, item)
+        // The persisted pill scope is always Latest; a state/show pill is
+        // session memory. The selected episode is never recorded, so
+        // restoration always lands on the first row.
+        let selector = Some(SelectorIdentity::Audiobookshelf {
+            key: AudiobookshelfSelectorKey::Latest,
+        });
+        (selector, None)
     }
 
     fn clear_selection(&mut self) {

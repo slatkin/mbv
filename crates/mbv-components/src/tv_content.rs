@@ -21,7 +21,7 @@ use super::library_panel::{
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
-use mbv_config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 use mbv_queue::QueueItem;
 use mbv_render::components::media_list::{

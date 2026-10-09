@@ -20,10 +20,7 @@
 
 use ratatui::layout::Position;
 
-use mbv_config::{
-    FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
-    SelectorIdentity,
-};
+use mbv_config::{FeedSubscription, FeedsSelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::{FeedEntry, QueueItem};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 

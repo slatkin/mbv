@@ -120,7 +120,7 @@ combine in one view. `Unplayed` SHALL include episodes with missing or incomplet
 `Played` SHALL include only completed progress. Pills SHALL use the shared `render_pill_bar` widget, follow
 its label truncation and overflow contract, and SHALL write `layout.selector_tabs`. `[` and `]` SHALL move
 through the pill bar as one uniform gesture — there is one pill kind, with no per-kind key, ordering, or
-behaviour. The last active pill SHALL be remembered in session memory across tab switches. On restart, a podcast library not selected at orderly exit SHALL start on `All`; if it was the selected destination at exit, the saved main Selector pill (including `Latest`) SHALL restore through the TUI launch snapshot.
+behaviour. The last active pill SHALL be remembered in session memory across tab switches. On every restart, a podcast library SHALL start on `Latest`, whether or not it was the selected destination at orderly exit; no podcast pill selection SHALL persist across a restart.
 
 #### Scenario: Podcast tab renders state-and-show pills
 - **WHEN** the Audiobookshelf podcast tab is displayed with shows available
@@ -160,10 +160,9 @@ behaviour. The last active pill SHALL be remembered in session memory across tab
 #### Scenario: Last pill remembered in session
 - **WHEN** the user leaves the podcast tab and returns without restarting mbv
 - **THEN** the remembered pill is active again
-- **WHEN** mbv restarts after exiting from a different tab
-- **THEN** the `All` pill is active
-- **WHEN** mbv restarts after exiting with this podcast library's `Latest` pill selected
-- **THEN** the saved `Latest` pill is restored
+- **WHEN** mbv restarts, whether it exited on this podcast library or on a different tab
+- **THEN** the `Latest` pill is active
+- **THEN** a show or state pill selected in the previous session SHALL NOT restore
 
 #### Scenario: Pills use the shared widget
 

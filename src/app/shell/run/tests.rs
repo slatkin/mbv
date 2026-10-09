@@ -501,13 +501,15 @@ fn deliver_music_stale_pf_restore(model: &mut Model) {
 }
 
 #[test]
-fn music_launch_state_artist_survives_a_stale_saved_position_restore() {
+fn music_launch_state_first_artist_root_survives_a_stale_saved_position_restore() {
     let mut app = music_two_artist_stale_pf();
     app.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
     app.launch_restore =
         crate::app::state::app_struct::LaunchRestore::Pending(music_launch_state_aaliyah());
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
+    // The snapshot's saved item is legacy (a launch snapshot no longer
+    // records one): restore lands on the group's first artist root.
     assert_eq!(
         model
             .test_music_owner()
@@ -524,7 +526,7 @@ fn music_launch_state_artist_survives_a_stale_saved_position_restore() {
             .selected_artist_launch_id()
             .as_deref(),
         Some("Aaliyah"),
-        "a stale saved album cursor (bug: Pizzicato Five) must not override the launch-state artist"
+        "a stale saved album cursor (bug: Pizzicato Five) must not override the restored first artist root"
     );
 }
 
@@ -550,7 +552,7 @@ fn music_owner_artist_survives_a_stale_restore_after_a_tab_round_trip() {
             .selected_artist_launch_id()
             .as_deref(),
         Some("Aaliyah"),
-        "the retained owner keeps its artist across a tab round trip",
+        "the retained owner keeps its selection across a tab round trip",
     );
 
     deliver_music_stale_pf_restore(&mut model);
