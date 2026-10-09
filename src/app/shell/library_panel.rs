@@ -474,8 +474,8 @@ impl Model {
     }
 
     /// The Library column's body fill: the placement's own back, painted with
-    /// the panel's appearance-focus bit. Focused it takes the column level's
-    /// `SURFACE_FOCUSED` fill, resting the column's app backdrop; one named
+    /// the panel's appearance-focus bit. Focused it takes the `LibraryColumn` surface's focused
+    /// fill, resting the app backdrop; one named
     /// authority both the placement fill and the status band's padding rows
     /// read, so both follow the same bit in every geometry. Unpinned mini
     /// view always rests, a pinned mini view follows the window focus, and

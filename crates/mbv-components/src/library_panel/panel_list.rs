@@ -33,7 +33,8 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 // Every library browser list stripes again (7038e430 dropped
                 // it; restored 2026-09-20), in the Grouped Music tree's style:
                 // the stripe is the library column's own fill for the
-                // palette bit — focused `SURFACE_FOCUSED`, the same tone the
+                // palette bit — focused the `LibraryColumn` surface's
+                // focused fill, the same tone the
                 // music tree's rows alternate with, resting the app backdrop.
                 // The policy keys the stripe tone on the palette bit, so a
                 // mini view panel keeps its selected-row bar on the resting
@@ -299,8 +300,8 @@ mod panel_list_tests {
 
     /// The browser-list stripe pair, pinned to the Grouped Music tree's own
     /// alternation: the second row carries the library column's fill for the
-    /// paint's focus bit, so a focused browser list alternates `SURFACE_FOCUSED`
-    /// against the `LibraryPanel` box fill exactly as the music rows do.
+    /// paint's focus bit, so a focused browser list alternates the
+    /// `LibraryColumn` surface's focused fill against the `LibraryPanel` box fill exactly as the music rows do.
     #[test]
     fn browser_stripes_zebra_rows_like_the_music_tree() {
         let mut carrier = MediaListCarrier::new();
