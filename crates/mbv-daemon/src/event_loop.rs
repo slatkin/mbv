@@ -218,6 +218,9 @@ impl DaemonLoop {
             mbv_ctrl::TransportCommand::Player(command) => {
                 self.player.send_command(command);
             }
+            // Owner actions run through the owner-action handler (tray-pin-swap
+            // task 3.5); nothing starts them yet.
+            mbv_ctrl::TransportCommand::OwnerAction(_) => {}
             mbv_ctrl::TransportCommand::Step(direction) => {
                 let target = self.owner.core.relative_step_target(direction);
                 if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {

@@ -74,6 +74,49 @@ fn capable_client_hello_uses_control_credential_field() {
     assert_eq!(hello.control_token.as_deref(), Some("control-123"));
 }
 
+// tray-pin-swap 1.1: older Clients never send `swap_token`; the field must
+// stay optional so they remain admissible.
+#[test]
+fn hello_without_swap_token_parses_to_none() {
+    let mut json = serde_json::to_value(CtrlHello::current()).unwrap();
+    json.as_object_mut()
+        .unwrap()
+        .remove("swap_token")
+        .expect("current hello serializes swap_token");
+    let hello: CtrlHello = serde_json::from_value(json).unwrap();
+    assert_eq!(hello.swap_token, None);
+}
+
+#[test]
+fn pin_swap_builder_advertises_swap_capabilities_and_token() {
+    let hello = CtrlHello::current_control_client("control-123".into())
+        .with_pin_swap(true, Some("t".into()));
+    assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_PIN_SWAP));
+    assert!(
+        hello
+            .capabilities
+            .iter()
+            .any(|c| c == CTRL_CAP_PINNED_SURFACE)
+    );
+    assert_eq!(hello.swap_token.as_deref(), Some("t"));
+}
+
+// tray-pin-swap 1.3: each Owner action has exactly one CLI flag (spec
+// `owner-actions`).
+#[test]
+fn owner_action_cli_flags_round_trip() {
+    for action in OwnerAction::ALL {
+        assert_eq!(OwnerAction::from_cli_flag(action.cli_flag()), Some(*action));
+    }
+}
+
+#[test]
+fn owner_action_hello_advertises_owner_action_capability() {
+    let hello = CtrlHello::current_owner_action("control-123".into());
+    assert!(hello.supports_owner_action());
+    assert!(!hello.supports_service_setup_admin());
+}
+
 #[test]
 fn audio_only_capability_is_optional_and_unknown_capabilities_are_accepted() {
     let mut hello = CtrlHello::current();

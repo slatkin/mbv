@@ -12,7 +12,7 @@ use std::time::Duration;
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
-    UnifiedQueueStateData,
+    PlaybackIntentEvent, QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
 };
 use mbv_net::stream::SocketStream;
 
@@ -280,23 +280,13 @@ fn apply_ctrl_event(
         CtrlEvent::Hello(_) => {
             tracing::warn!(name: "remote.daemon_protocol_hello.unexpected", target: "remote", "unexpected daemon protocol hello after negotiation");
         }
-        CtrlEvent::StatusOnly(s) => {
-            let mut current = status.lock().unwrap();
-            let current_idx = current.current_idx;
-            let queue_len = current.queue_len;
-            *current = s;
-            current.current_idx = current_idx;
-            current.queue_len = queue_len;
-        }
+        CtrlEvent::StatusOnly(s) => apply_status_only(s, status),
         CtrlEvent::Player(pe) => apply_player_event(pe, status, event_tx, notify),
         CtrlEvent::CommandRejected(reason) => {
             send_if_notifying(notify, event_tx, PlayerEvent::CommandRejected(reason));
         }
         CtrlEvent::PlaybackIntent(event) => {
-            // A coalesced request is terminal for that request identity too;
-            // the canonical request remains tracked separately by the daemon.
-            pending_playback.lock().unwrap().remove(&event.request_id);
-            send_if_notifying(notify, event_tx, PlayerEvent::PlaybackIntent(event));
+            apply_playback_intent_event(event, pending_playback, event_tx, notify);
         }
         CtrlEvent::PipePlaybackStatus(status_event) => send_if_notifying(
             notify,
@@ -304,22 +294,22 @@ fn apply_ctrl_event(
             PlayerEvent::PipePlaybackStatus(status_event),
         ),
         CtrlEvent::QueueOpResult { op, outcome } => {
-            if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
-                apply_unified_queue_state(
-                    (**state).clone(),
-                    status,
-                    unified_queue,
-                    event_tx,
-                    notify,
-                );
-            }
-            send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
+            apply_queue_op_result(op, outcome, status, unified_queue, event_tx, notify);
         }
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
             // Shutdown replies are handled by RemotePlayer's request-completion path.
         }
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
-            tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
+            log_ignored_service_setup_event();
+        }
+        // Pin-swap events are forwarded to the shell by a later tray-pin-swap
+        // task (4.3); today no connected daemon sends them to a Client.
+        CtrlEvent::SwapPrepare | CtrlEvent::SwapQuit => log_ignored_pin_swap_event(),
+        // Owner-action replies travel only on a dedicated owner-action
+        // connection's reply path (tray-pin-swap task 4.5), never on a
+        // Client connection.
+        CtrlEvent::OwnerActionAccepted | CtrlEvent::OwnerActionRefused { .. } => {
+            log_ignored_owner_action_reply();
         }
         CtrlEvent::Disconnected { reason } => {
             apply_disconnected_event(reason, event_tx, notify);
@@ -350,6 +340,60 @@ fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: 
     if notify {
         let _ = event_tx.send(event);
     }
+}
+
+/// Documented no-op for `CtrlEvent::SwapPrepare`/`SwapQuit` (tray-pin-swap
+/// task 1.2): forwarding to the shell is task 4.3, and no connected daemon
+/// sends them to a Client before that.
+fn log_ignored_pin_swap_event() {
+    tracing::debug!(name: "remote.pin_swap_event.ignored", target: "remote", "ignoring pin-swap event (forwarding not implemented yet)");
+}
+
+/// Documented no-op for `CtrlEvent::OwnerActionAccepted`/`OwnerActionRefused`
+/// (tray-pin-swap task 1.2): the replies travel only on a dedicated
+/// owner-action connection's reply path (task 4.5), never on a Client
+/// connection.
+fn log_ignored_owner_action_reply() {
+    tracing::debug!(name: "remote.owner_action_reply.ignored", target: "remote", "ignoring owner-action reply on a Client connection");
+}
+
+fn log_ignored_service_setup_event() {
+    tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
+}
+
+fn apply_status_only(s: PlayerStatus, status: &Arc<Mutex<PlayerStatus>>) {
+    let mut current = status.lock().unwrap();
+    let current_idx = current.current_idx;
+    let queue_len = current.queue_len;
+    *current = s;
+    current.current_idx = current_idx;
+    current.queue_len = queue_len;
+}
+
+fn apply_playback_intent_event(
+    event: PlaybackIntentEvent,
+    pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    // A coalesced request is terminal for that request identity too;
+    // the canonical request remains tracked separately by the daemon.
+    pending_playback.lock().unwrap().remove(&event.request_id);
+    send_if_notifying(notify, event_tx, PlayerEvent::PlaybackIntent(event));
+}
+
+fn apply_queue_op_result(
+    op: QueueOpId,
+    outcome: QueueOpOutcome,
+    status: &Arc<Mutex<PlayerStatus>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
+        apply_unified_queue_state((**state).clone(), status, unified_queue, event_tx, notify);
+    }
+    send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
 }
 
 fn apply_player_event(

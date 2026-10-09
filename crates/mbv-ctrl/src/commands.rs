@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::owner_action::OwnerAction;
 use crate::player::PlayerCommand;
 use crate::{
     CtrlHello, PlaybackGeneration, PlaybackRequestId, ProgressUpdate, QueueLoadRequestId,
@@ -30,6 +31,16 @@ pub enum CtrlCmd {
         kind: ServiceKind,
         revision: u64,
     },
+
+    /// The Pin-swap target saved its launch state; the Owner may start the
+    /// replacement Client.
+    #[serde(rename = "SwapPrepared")]
+    SwapPrepared,
+
+    /// Run one Owner action. Only `owner-action` connections may send this;
+    /// the Owner replies `OwnerActionAccepted` or `OwnerActionRefused`.
+    #[serde(rename = "RunOwnerAction")]
+    RunOwnerAction(OwnerAction),
 
     // ── Unified queue commands (require `unified-queue` capability) ─────
     /// Replace the entire queue with item-generic slots and optionally
@@ -171,6 +182,8 @@ impl CtrlCmd {
             | CtrlCmd::PlaybackIntent(_)
             | CtrlCmd::RequestShutdown
             | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::SwapPrepared
+            | CtrlCmd::RunOwnerAction(_)
             | CtrlCmd::UnifiedQueueReplace { .. }
             | CtrlCmd::UnifiedQueueAppend { .. }
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }
@@ -207,6 +220,8 @@ impl CtrlCmd {
             | CtrlCmd::PlaybackIntent(_)
             | CtrlCmd::RequestShutdown
             | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::SwapPrepared
+            | CtrlCmd::RunOwnerAction(_)
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
             | CtrlCmd::UnifiedAdoptQueue { .. } => false,
         }
@@ -248,6 +263,10 @@ pub enum Direction {
 pub enum TransportCommand {
     Step(Direction),
     Player(crate::player::PlayerCommand),
+    /// Run one Owner action (e.g. the Tray's Pin swap item). The Owner
+    /// resolves it in-process; the result is not reported back.
+    #[serde(rename = "OwnerAction")]
+    OwnerAction(OwnerAction),
 }
 
 impl From<&PlaybackIntentAction> for Option<Direction> {

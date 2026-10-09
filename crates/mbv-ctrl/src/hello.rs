@@ -1,9 +1,9 @@
 use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
-    CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_QUEUE_STATE,
-    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
-    CTRL_PROTOCOL_VERSION,
+    CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION, CTRL_CAP_OWNER_QUEUE_LOAD,
+    CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN,
+    CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY, CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ pub struct CtrlHello {
     /// Control credential used only when the peer advertises `control-auth`.
     #[serde(default)]
     pub control_token: Option<String>,
+    /// One-shot swap token carried only by a Client the Owner itself started
+    /// for a Pin swap. `None` for every Client the user started.
+    #[serde(default)]
+    pub swap_token: Option<String>,
 }
 
 impl CtrlHello {
@@ -40,6 +44,7 @@ impl CtrlHello {
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
             ],
             control_token: None,
+            swap_token: None,
         }
     }
 
@@ -57,6 +62,29 @@ impl CtrlHello {
         hello
             .capabilities
             .push(CTRL_CAP_SERVICE_SETUP_ADMIN.to_string());
+        hello
+    }
+
+    /// Add the Pin-swap capabilities and the swap token to a control Client
+    /// Hello. `pinned` advertises `pinned-surface` (the Client runs in a
+    /// pinned panel); `swap_token` marks the Hello as one the Owner itself
+    /// started for a swap.
+    #[must_use]
+    pub fn with_pin_swap(mut self, pinned: bool, swap_token: Option<String>) -> Self {
+        self.capabilities.push(CTRL_CAP_PIN_SWAP.to_string());
+        if pinned {
+            self.capabilities.push(CTRL_CAP_PINNED_SURFACE.to_string());
+        }
+        self.swap_token = swap_token;
+        self
+    }
+
+    /// Hello for an Owner-action connection: never a Client, restricted to
+    /// `CtrlCmd::RunOwnerAction`.
+    #[must_use]
+    pub fn current_owner_action(control_token: String) -> Self {
+        let mut hello = Self::current_control_client(control_token);
+        hello.capabilities.push(CTRL_CAP_OWNER_ACTION.to_string());
         hello
     }
 
@@ -150,6 +178,13 @@ impl CtrlHello {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_SERVICE_SETUP_ADMIN)
+    }
+
+    #[must_use]
+    pub fn supports_owner_action(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_OWNER_ACTION)
     }
 
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), CtrlError> {

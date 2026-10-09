@@ -256,6 +256,12 @@ impl RemotePlayer {
             mbv_ctrl::TransportCommand::Player(command) => {
                 let _ = self.send_command(command);
             }
+            // Owner actions are resolved by the Owner in-process (tray
+            // tray-pin-swap task 3.5); a RemotePlayer transport has no ctrl
+            // path for them yet.
+            mbv_ctrl::TransportCommand::OwnerAction(_) => {
+                tracing::debug!(name: "remote.transport_owner_action.ignored", target: "remote", "ignoring owner-action transport command");
+            }
         }
     }
 
