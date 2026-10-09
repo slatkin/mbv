@@ -36,8 +36,8 @@ map by hex (design D1), never by name. Every group ends with `cargo fmt` and a c
 
 ## 5. Role call sites in mbv-render, part B
 
-- [ ] 5.1 Same conversion for every remaining `crates/mbv-render` file with a role reference (`confirm_modal.rs`, `context_menu.rs`, `daemon_lost_modal.rs`, `feeds_manage.rs`, `help.rs`, `hero.rs`, `library_routes.rs`, `modal_frame.rs`, `multiselect.rs`, `playlists.rs`, `queue_playback.rs`, `queue.rs`, `search_sidebar.rs`, `sessions.rs`, `settings_component.rs`, `three_line_flat_list.rs`, plus `benches/`). Verify: `cargo nextest run -p mbv-render`, `cargo check -p mbv-render --benches`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" crates/mbv-render` finds nothing.
-- [ ] 5.2 Run `cargo fmt` and commit group 5.
+- [x] 5.1 Same conversion for every remaining `crates/mbv-render` file with a role reference (`confirm_modal.rs`, `context_menu.rs`, `daemon_lost_modal.rs`, `feeds_manage.rs`, `help.rs`, `hero.rs`, `library_routes.rs`, `modal_frame.rs`, `multiselect.rs`, `playlists.rs`, `queue_playback.rs`, `queue.rs`, `search_sidebar.rs`, `sessions.rs`, `settings_component.rs`, `three_line_flat_list.rs`, plus `benches/`). Verify: `cargo nextest run -p mbv-render`, `cargo check -p mbv-render --benches`, and `rg -n "(palette|mbv_theme)::[A-Z][A-Z_]{2,}" crates/mbv-render` finds nothing.
+- [x] 5.2 Run `cargo fmt` and commit group 5.
 
 ## 6. Role call sites in mbv-components and the mbv binary
 
