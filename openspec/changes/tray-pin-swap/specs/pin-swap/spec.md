@@ -27,7 +27,7 @@ opens. Only Clients attached over the local transport SHALL count.
 
 Choosing **Pin** SHALL start `mbv --pin` as a new Client and then end the most recently attached
 unpinned Client that supports Pin swap. With no such Client attached, **Pin** SHALL only start
-`mbv --pin`. A Client that does not support Pin swap SHALL never be ended by a Pin swap.
+`mbv --pin`. A Client that does not support Pin swap SHALL never be ended by choosing **Pin**.
 
 #### Scenario: Two terminal Clients attached
 
@@ -94,6 +94,12 @@ SHALL do nothing.
 - **WHEN** the started process does not attach within 10 seconds
 - **THEN** the old Client SHALL stay attached and a desktop notification SHALL say the swap timed
   out
+
+#### Scenario: Attached pinned Client does not support Pin swap
+
+- **WHEN** the attached pinned Client does not advertise `pin-swap` and the user chooses **Unpin**
+- **THEN** no process SHALL start
+- **THEN** the swap SHALL time out and the pinned Client SHALL stay attached
 
 #### Scenario: Second click during a swap
 

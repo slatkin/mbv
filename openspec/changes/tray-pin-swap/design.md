@@ -52,7 +52,9 @@ emulator cannot adopt an existing process. Rejected.
 All of it is additive and negotiated by capability. No protocol version bump.
 
 - Capability `pin-swap`: the Client handles `SwapPrepare` and `SwapQuit`. Every TUI Client built
-  with this change advertises it. Older Clients never become swap targets.
+  with this change advertises it. Older terminal Clients never become Pin targets. An older pinned
+  Client can still be an Unpin target: it never answers `SwapPrepared`, so the swap abandons at the
+  deadline and the pinned Client stays. Accepted for a single-user setup.
 - Capability `pinned-surface`: the Client runs in a pinned panel. A Client advertises it when
   `pin::is_pinned()` is true at Hello time. That is always settled, because `pin::start` runs
   before the Owner connection.
