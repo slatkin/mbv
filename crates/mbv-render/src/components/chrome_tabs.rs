@@ -185,20 +185,12 @@ fn paint_visible_tabs(
             // selection shows through the text style alone — ACCENT_ACTIVE
             // text, the theme role documented for the active tab. The
             // icon-only Home tab is the exception (2026-10-09 user rule):
-            // when its house icon is showing, the active colour is the same
-            // Mauve as the other tabs' block runs, and the run painting
-            // below skips it.
+            // it keeps the active colour but paints no block runs below.
             let is_home_icon = mbv_ui_model::ui_util::is_home_icon_title(title_raw);
             let style = if index == selected_tab {
-                if is_home_icon {
-                    Style::default()
-                        .fg(palette::TAB_SELECTED_UNDERLINE)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                        .fg(palette::ACCENT_ACTIVE)
-                        .add_modifier(Modifier::BOLD)
-                }
+                Style::default()
+                    .fg(palette::ACCENT_ACTIVE)
+                    .add_modifier(Modifier::BOLD)
             } else if model.hovered == Some(position) {
                 Style::default().fg(palette::TEXT_STRONG)
             } else {
@@ -242,8 +234,8 @@ fn paint_visible_tabs(
     // both runs land inside the placement. The recorded hit rect is the
     // whole painted tab (lead, title, marker), so the run is the title cells
     // between its first and last column. The icon-only Home tab is the
-    // exception (2026-10-09 user rule): its selected look is the Mauve icon
-    // colour alone, so it paints no runs.
+    // exception (2026-10-09 user rule): it keeps the normal active colour
+    // and paints no runs.
     if let Some(selected) = selected_rect {
         let run = Rect {
             x: selected.x + 1,

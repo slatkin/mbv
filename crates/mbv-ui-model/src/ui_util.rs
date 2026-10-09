@@ -15,8 +15,8 @@ pub fn continue_tab_title(use_nerd_fonts: bool) -> &'static str {
 
 /// Whether `title` is the icon-only Continue-tab label from
 /// [`continue_tab_title`] (either glyph variant). The tab painter uses this
-/// to give the icon tab its own selected look (2026-10-09 user rule): mauve
-/// icon, no eighth-block runs.
+/// to give the icon tab its own selected look (2026-10-09 user rule): the
+/// normal active colour, no eighth-block runs.
 #[must_use]
 pub fn is_home_icon_title(title: &str) -> bool {
     title == continue_tab_title(true) || title == continue_tab_title(false)

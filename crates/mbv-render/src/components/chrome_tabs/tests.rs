@@ -101,7 +101,7 @@ fn rendered(selected: usize) -> (Terminal<TestBackend>, Vec<(Rect, usize)>) {
 /// the underline role's colour, spanning exactly its title run — its lead
 /// and marker cells and every unselected tab's columns stay bare. The
 /// icon-only Home tab is the exception to this rule (2026-10-09 user rule);
-/// see `the_selected_home_icon_tab_paints_no_block_runs_and_a_mauve_icon`.
+/// see `the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour`.
 #[rstest]
 #[case::below_the_title("▔", 2)]
 #[case::above_the_title("▁", 0)]
@@ -139,13 +139,15 @@ fn the_selected_tab_gets_an_eighth_block_run_around_its_title(
 
 /// 2026-10-09 user rule: the icon-only Home tab is the exception to the
 /// selected eighth-block runs — when it is selected, no block run is painted
-/// above or below, and the house icon itself carries the underline role's
-/// Mauve as its active colour, in either glyph variant (Nerd Font house,
-/// Unicode house fallback).
+/// above or below, and the house icon keeps the normal active colour
+/// (`ACCENT_ACTIVE`), in either glyph variant (Nerd Font house, Unicode house
+/// fallback).
 #[rstest]
 #[case::nerd_house(continue_tab_title(true))]
 #[case::unicode_house(continue_tab_title(false))]
-fn the_selected_home_icon_tab_paints_no_block_runs_and_a_mauve_icon(#[case] home_title: &str) {
+fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour(
+    #[case] home_title: &str,
+) {
     let titles = vec![home_title.to_string(), "alpha".to_string()];
     let markers = [false, false];
     let model = TabBarModel {
@@ -173,7 +175,7 @@ fn the_selected_home_icon_tab_paints_no_block_runs_and_a_mauve_icon(#[case] home
     let (home, _) = hits[0];
     assert_eq!(
         buf[(home.x + 1, 1)].style().fg,
-        Some(palette::TAB_SELECTED_UNDERLINE),
-        "the selected Home icon's active colour is the Mauve underline role"
+        Some(palette::ACCENT_ACTIVE),
+        "the selected Home icon keeps the active colour"
     );
 }
