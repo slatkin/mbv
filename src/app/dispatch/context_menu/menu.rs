@@ -165,16 +165,22 @@ impl App {
     }
 
     fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        // Music is fire-and-forget in mbv: its played state is ignored
+        // everywhere, so a mark entry would have no visible effect (context-menu
+        // spec, music rule). `is_music` covers tracks, albums, and artists.
+        if item.is_music() {
+            return;
+        }
         if App::context_menu_play_state(item) {
             Self::push_context_action(
                 entries,
-                "Mark Unwatched",
+                "Mark Unplayed",
                 ContextAction::MarkUnplayed(item.id.clone()),
             );
         } else {
             Self::push_context_action(
                 entries,
-                "Mark Watched",
+                "Mark Played",
                 ContextAction::MarkPlayed(item.id.clone()),
             );
         }
@@ -203,10 +209,9 @@ impl App {
         {
             Self::push_context_action(entries, "Add to Queue", ContextAction::Enqueue);
         }
-        // Audio items (music tracks) don't get mark-played.
-        if item.media_type != "Audio" && item.item_type != "Audio" {
-            Self::push_play_state_context_action(entries, item);
-        }
+        // Music items (tracks, albums, artists) don't get a mark entry;
+        // `push_play_state_context_action` enforces the music rule itself.
+        Self::push_play_state_context_action(entries, item);
         // `home_cw_selected` is the component-derived authoritative
         // fact (resolved at the Model boundary), replacing the deleted
         // numeric `App.home.section == 0` read. `cw_focused` (Library
@@ -354,13 +359,6 @@ impl App {
                 ContextAction::EnqueueSelection(items.to_vec()),
             );
         }
-        if capabilities.removable && !remove_targets.is_empty() {
-            Self::push_context_action(
-                &mut entries,
-                "Remove",
-                ContextAction::RemoveSelection(remove_targets),
-            );
-        }
         let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
         if !ids.is_empty() && capabilities.played_state_capable {
             Self::push_context_action(
@@ -372,6 +370,15 @@ impl App {
                 &mut entries,
                 "Mark Unplayed",
                 ContextAction::MarkUnplayedSelection(ids),
+            );
+        }
+        // List-specific removals always come last (context-menu spec,
+        // removals follow the standard entries).
+        if capabilities.removable && !remove_targets.is_empty() {
+            Self::push_context_action(
+                &mut entries,
+                "Remove",
+                ContextAction::RemoveSelection(remove_targets),
             );
         }
         if entries.is_empty() {
