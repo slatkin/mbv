@@ -8,8 +8,8 @@
 
 ## 2. Config and docs
 
-- [ ] 2.1 Add `[panel] terminal` as `Option<Vec<String>>` to `PanelConfig` (`crates/mbv-config/src/panel.rs`), with parse and save. An absent key, an empty array, or a non-string element gives `None`; the malformed cases also log a warning, the same way other `[panel]` keys fall back. The key has no F2 row. Verify: one `#[case]` table test in mbv-config's existing panel tests covering set / absent / malformed.
-- [ ] 2.2 Document the key in `dist/config.toml` under `[panel]`: argv prefix, `mbv` appended, `$TERMINAL -e` used when unset, no other fallback, `$TERMINAL` read from the environment of the TUI that started the Owner process (design Risks). Add the *Pin swap* and *Owner action* terms to `CONTEXT.md` (near *Tray*), and extend the *Tray* entry to name the Pin/Unpin item. *Owner action*: a user action the Owner process runs on request from the Tray or its one CLI flag; the request is not a Client. Verify: by reading the diff.
+- [x] 2.1 Add `[panel] terminal` as `Option<Vec<String>>` to `PanelConfig` (`crates/mbv-config/src/panel.rs`), with parse and save. An absent key, an empty array, or a non-string element gives `None`; the malformed cases also log a warning, the same way other `[panel]` keys fall back. The key has no F2 row. Verify: one `#[case]` table test in mbv-config's existing panel tests covering set / absent / malformed.
+- [x] 2.2 Document the key in `dist/config.toml` under `[panel]`: argv prefix, `mbv` appended, `$TERMINAL -e` used when unset, no other fallback, `$TERMINAL` read from the environment of the TUI that started the Owner process (design Risks). Add the *Pin swap* and *Owner action* terms to `CONTEXT.md` (near *Tray*), and extend the *Tray* entry to name the Pin/Unpin item. *Owner action*: a user action the Owner process runs on request from the Tray or its one CLI flag; the request is not a Client. Verify: by reading the diff.
 
 ## 3. Owner side: registry, admission, swap state machine (`crates/mbv-daemon`)
 
