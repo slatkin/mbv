@@ -3,6 +3,7 @@ use super::*;
 mod audiobookshelf_book_activation_tests;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_context_menu;
+mod audiobookshelf_mark;
 mod audiobookshelf_runtime;
 mod auto_reconnect;
 mod context_actions;

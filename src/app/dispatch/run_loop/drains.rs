@@ -1,7 +1,52 @@
+use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::PendingQueueAction;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 
-use crate::app::App;
+/// Resolve one target's local apply against the cached progress (design D6).
+/// Mark Played applies every target at its cached position (0 when there is
+/// no entry); Mark Unplayed resets only targets cached as finished, to 0 —
+/// an unfinished or unknown target is the server's no-op and changes nothing
+/// locally either. Returns the target's queue content identity and the
+/// seconds to reconcile with.
+fn audiobookshelf_mark_apply_target(
+    app: &App,
+    target: &AudiobookshelfMenuTarget,
+    finished: bool,
+) -> Option<(mbv_queue::QueueItemContentId, f64)> {
+    let (content_id, cached) = match target {
+        AudiobookshelfMenuTarget::Episode {
+            library_item_id,
+            episode_id,
+        } => (
+            mbv_queue::QueueItemContentId::Audiobookshelf {
+                library_item_id: library_item_id.clone(),
+                episode_id: episode_id.clone(),
+            },
+            app.audiobookshelf_cached_episode_progress(library_item_id, episode_id)
+                .map(|progress| (progress.current_time_seconds, progress.is_finished)),
+        ),
+        AudiobookshelfMenuTarget::Book { library_item_id } => (
+            mbv_queue::QueueItemContentId::AudiobookshelfBook {
+                library_item_id: library_item_id.clone(),
+            },
+            app.audiobookshelf_cached_book_progress(library_item_id)
+                .map(|progress| (progress.current_time_seconds, progress.is_finished)),
+        ),
+    };
+    let seconds = if finished {
+        cached.map_or(0.0, |(seconds, _)| seconds)
+    } else {
+        // Mark Unplayed resets only targets cached as finished; an unfinished
+        // or unknown target is the server's no-op.
+        let (_, cached_finished) = cached?;
+        if !cached_finished {
+            return None;
+        }
+        0.0
+    };
+    Some((content_id, seconds))
+}
 
 impl App {
     pub(in crate::app) fn drain_audiobookshelf_events(&mut self) -> bool {
@@ -44,17 +89,12 @@ impl App {
         completion: crate::app::dispatch::session::service_startup::AudiobookshelfMarkCompletion,
     ) {
         match completion.result {
+            // Row 7.3 (standard-media-context-menus): an accepted mark applies
+            // locally at this hand-off point. The drain's `produced` report is
+            // what re-projects the active Audiobookshelf owner's content (the
+            // run loop pushes both ABS owners when the drain produced work).
             Ok(()) => {
-                // Row 7.3 (standard-media-context-menus) applies the accepted
-                // mark to cached browse progress and inactive queue slots at
-                // this hand-off point; until it lands the accepted mark only
-                // lives on the server.
-                tracing::debug!(
-                    name: "audiobookshelf.mark.accepted",
-                    target: "audiobookshelf",
-                    { finished = completion.finished, targets = completion.targets.len() },
-                    "Audiobookshelf finished-state mark accepted"
-                );
+                self.apply_audiobookshelf_mark_locally(&completion.targets, completion.finished);
             }
             Err(error)
                 if matches!(
@@ -82,6 +122,66 @@ impl App {
                     ToastSeverity::Error,
                 );
             }
+        }
+    }
+
+    /// Apply an accepted mark locally (design D6). Mark Played applies every
+    /// target at its cached position (0 when there is no entry); Mark Unplayed
+    /// resets only targets cached as finished, to 0. Browse progress goes
+    /// through the shared reconcile path for every applied target, including
+    /// the actively owned session's item; queue slots get one
+    /// `QueueOp::ApplyProgress` through the local queue link, with the active
+    /// Player-owned slot left out (spec: "The actively owned session is not
+    /// modified by a mark").
+    fn apply_audiobookshelf_mark_locally(
+        &mut self,
+        targets: &[AudiobookshelfMenuTarget],
+        finished: bool,
+    ) {
+        // Resolve every target against the cached progress first: the browse
+        // reconcile below mutates the same maps this read walks.
+        let applies: Vec<(mbv_queue::QueueItemContentId, f64)> = targets
+            .iter()
+            .filter_map(|target| audiobookshelf_mark_apply_target(self, target, finished))
+            .collect();
+        let mut updates = Vec::with_capacity(applies.len());
+        for (target, (content_id, seconds)) in targets.iter().zip(applies) {
+            match target {
+                AudiobookshelfMenuTarget::Episode {
+                    library_item_id,
+                    episode_id,
+                } => self.reconcile_audiobookshelf_progress(
+                    library_item_id,
+                    episode_id,
+                    seconds,
+                    finished,
+                ),
+                AudiobookshelfMenuTarget::Book { library_item_id } => {
+                    self.reconcile_audiobookshelf_book_progress(library_item_id, seconds, finished);
+                }
+            }
+            if self.player_owns_active_match(&content_id) {
+                continue;
+            }
+            updates.push(mbv_ctrl::ProgressUpdate {
+                content_id,
+                position_ticks: crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+                    seconds,
+                ),
+                finished,
+            });
+        }
+        if updates.is_empty() {
+            return;
+        }
+        let result = {
+            let (player, _) = self.queue_link(crate::app::QueueScope::Local);
+            player
+                .remote()
+                .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress { updates })
+        };
+        if let Err(error) = result {
+            self.flash(error.to_string(), ToastSeverity::Warning);
         }
     }
 

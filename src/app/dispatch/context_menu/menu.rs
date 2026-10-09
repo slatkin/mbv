@@ -398,19 +398,12 @@ impl App {
             AudiobookshelfMenuTarget::Episode {
                 library_item_id,
                 episode_id,
-            } => self.audiobookshelf_browse.iter().any(|state| {
-                state.progress.iter().any(|((item, episode), progress)| {
-                    item == library_item_id && episode == episode_id && progress.is_finished
-                })
-            }),
-            AudiobookshelfMenuTarget::Book { library_item_id } => {
-                self.audiobookshelf_book_browse.iter().any(|state| {
-                    state
-                        .progress
-                        .get(library_item_id)
-                        .is_some_and(|progress| progress.is_finished)
-                })
-            }
+            } => self
+                .audiobookshelf_cached_episode_progress(library_item_id, episode_id)
+                .is_some_and(|progress| progress.is_finished),
+            AudiobookshelfMenuTarget::Book { library_item_id } => self
+                .audiobookshelf_cached_book_progress(library_item_id)
+                .is_some_and(|progress| progress.is_finished),
         }
     }
 
