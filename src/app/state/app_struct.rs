@@ -454,6 +454,13 @@ pub struct App {
     /// so the shell adopts the new size in that same loop iteration instead of
     /// waiting for the terminal-event worker's `Resize` event.
     pub(in crate::app) pinned_resize_pending: bool,
+    /// The last sync pass that saw a live resize drag (queue boundary or
+    /// wide split). The image projections hold their placeholder until the
+    /// drag has been quiet for `RESIZE_DRAG_SETTLE` (invariant 20): timing
+    /// is shell state; the live/ended bit stays with the gesture components.
+    /// Tests inject the outcome by backdating this instant, never by
+    /// sleeping.
+    pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
     #[cfg(test)]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }

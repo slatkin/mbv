@@ -263,3 +263,103 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         .any(|message| matches!(message, Msg::Shell(shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. }))));
     apply_outcome(&mut harness, outcome);
 }
+
+// Invariant 20: the image hold outlives the drag itself by the settle window
+// (`RESIZE_DRAG_SETTLE`), so a pause-and-resume drag does not re-encode at
+// every hesitation. The window is shell timing on `App::resize_drag_activity`;
+// the live bit stays with the boundary component. Tests backdate the instant
+// instead of sleeping.
+
+#[test]
+fn image_hold_outlives_the_drag_by_the_settle_window() {
+    let mut app = crate::app::tests::render_fixtures::make_queue_app(2);
+    app.panel_mode = PanelMode::Both;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let boundary = harness
+        .model()
+        .app
+        .layout
+        .root_frame
+        .queue_boundary
+        .expect("two-panel layout places the boundary in RootFrame");
+    let width_before = harness.model().app.queue_column_width;
+    let drag_to = |column| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column,
+            row: boundary.y,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: boundary.x,
+        row: boundary.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+    harness.inject(drag_to(boundary.x + 20));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_ne!(
+        harness.model().app.queue_column_width,
+        width_before,
+        "the drag moved the column, so the hold is exercised"
+    );
+    // A live consult both holds and refreshes the settle stamp.
+    let before = std::time::Instant::now();
+    assert!(
+        harness.model_mut().refresh_resize_drag_hold(),
+        "a live drag holds the image work"
+    );
+    let stamped = harness
+        .model()
+        .app
+        .resize_drag_activity
+        .expect("a live drag stamps the settle window");
+    assert!(
+        stamped >= before,
+        "the live drag refreshed the settle stamp"
+    );
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: boundary.x + 20,
+        row: boundary.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+    harness.model_mut().sync_mounted_surfaces();
+    // The DragEnd cleared the live bit; inject a stamp just inside the
+    // window (the wall-clock stamp from the live drag is fresh, but the
+    // injected one makes the assertion independent of runner pacing).
+    harness.model_mut().app.resize_drag_activity = Some(
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(100))
+            .expect("the backdated instant is representable"),
+    );
+    assert!(
+        harness.model_mut().refresh_resize_drag_hold(),
+        "the hold survives the DragEnd inside the settle window"
+    );
+
+    harness.model_mut().app.resize_drag_activity = Some(
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(151))
+            .expect("the backdated instant is representable"),
+    );
+    assert!(
+        !harness.model_mut().refresh_resize_drag_hold(),
+        "the hold lifts once the settle window has elapsed"
+    );
+}

@@ -138,6 +138,7 @@ impl App {
             pinned_width: crate::pin::PinnedWidth::default(),
             accent_custom: None,
             pinned_resize_pending: false,
+            resize_drag_activity: None,
 
             pending_overlay: None,
             pending_exit_message: None,

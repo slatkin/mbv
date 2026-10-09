@@ -372,15 +372,17 @@ impl App {
     /// the painters show the placeholder for at most that one frame.
     /// Returns whether a ready protocol is available.
     ///
-    /// `resizing` is the shell-resolved "a resize drag is in progress" input
-    /// (queue-column boundary or wide split). A drag changes the box on
-    /// every mouse event, and each rebuild cover-fills the source with a
-    /// Lanczos3 resize synchronously on the sync thread (user-reported
-    /// regression, 2026-10-09: dragging either boundary was super slow while
-    /// a landscape hero was up, while non-overlaid heroes dragged fine).
-    /// While the drag is live an existing encoding is kept — the painter
-    /// scales it into the moving box off-thread — and the drag's final box
-    /// re-encodes once the drag ends.
+    /// `resizing` is the shell-resolved hold input: a resize drag (queue
+    /// column or wide split) is live or inside its settle window
+    /// (`Model::refresh_resize_drag_hold`). A drag changes the box on every
+    /// mouse event, and each rebuild cover-fills the source with a Lanczos3
+    /// resize synchronously on the sync thread (user-reported regression,
+    /// 2026-10-09: dragging either boundary was super slow while a landscape
+    /// hero was up, while non-overlaid heroes dragged fine). While the hold
+    /// is on the projection reports not ready, so the painter shows the
+    /// loading placeholder instead of re-encoding or stretching a stale
+    /// crop; the drag's settled box re-encodes exactly once after the
+    /// window.
     pub(in crate::app) fn ensure_hero_cover_protocol(
         &mut self,
         cache_key: &str,
@@ -401,11 +403,10 @@ impl App {
         {
             return true;
         }
-        // No encoding yet: the first paint during a drag must still build.
-        // An existing encoding is kept across the drag and re-encodes once at
-        // the drag's final box.
-        if resizing && !entry.protocols.is_empty() {
-            return true;
+        if resizing {
+            // Hold, never rebuild: the settled box re-encodes once the hold
+            // lifts. A box that happens to match the encoding still paints.
+            return false;
         }
         let Some((picker, suffix)) = self
             .picker_and_suffix()

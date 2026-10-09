@@ -8,11 +8,20 @@
 //! the active library's owner has migrated — otherwise the old mounted
 //! destination stays the surface.
 
+use std::time::{Duration, Instant};
+
 use ratatui::layout::Rect;
 
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::state::app_struct::LaunchRestore;
+
+/// How long after the last drag event the image projections keep holding
+/// their placeholder instead of re-encoding (invariant 20): the window
+/// smooths a pause-and-resume drag, which would otherwise re-encode at every
+/// hesitation. Tests inject the outcome by backdating
+/// `App::resize_drag_activity`, never by sleeping.
+const RESIZE_DRAG_SETTLE: Duration = Duration::from_millis(150);
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::book_content::BookContent;
 use mbv_components::library_panel::owner::LaunchSelector;
@@ -523,13 +532,28 @@ impl Model {
         }
     }
 
-    /// Whether a resize drag that moves panel geometry is live: the queue
-    /// column's boundary gesture or the Library panel's wide-split gesture.
-    /// Each gesture's component owns the bit; the shell asks rather than
-    /// mirrors it. The image projections read the resolved value as an input
-    /// so a drag never triggers synchronous re-encodes (see
-    /// `ensure_hero_cover_protocol`).
-    pub(in crate::app) fn resize_drag_active(&self) -> bool {
+    /// Whether image work keyed on panel geometry must hold: a resize drag
+    /// (queue-column boundary or Library wide split) is live, or it ended so
+    /// recently that its settle window has not elapsed. Each gesture's
+    /// component owns the live bit; the shell asks rather than mirrors it.
+    /// A live drag refreshes `App::resize_drag_activity`, so the window runs
+    /// from the last drag event, not the last consult. The image projections
+    /// read the resolved value as an input so a drag never triggers
+    /// synchronous re-encodes (see `ensure_hero_cover_protocol`).
+    pub(in crate::app) fn refresh_resize_drag_hold(&mut self) -> bool {
+        let live = self.resize_drag_live();
+        if live {
+            self.app.resize_drag_activity = Some(Instant::now());
+        }
+        live || self
+            .app
+            .resize_drag_activity
+            .is_some_and(|at| at.elapsed() < RESIZE_DRAG_SETTLE)
+    }
+
+    /// The live half of `refresh_resize_drag_hold`: whether either drag-owning
+    /// component currently reports a gesture in progress.
+    fn resize_drag_live(&self) -> bool {
         let boundary_resizing = self
             .application
             .get_component(&ComponentId::QueueBoundary)
@@ -558,6 +582,9 @@ impl Model {
     /// Driven every sync pass so a cursor move, breakpoint change, or split
     /// drag re-projects on the next pass.
     pub(in crate::app) fn sync_library_hero_images(&mut self) {
+        // Refresh the drag hold before any early return: a live drag keeps
+        // its settle window fresh even on passes with no hero to project.
+        let resizing = self.refresh_resize_drag_hold();
         if !self.library_panel_visible() {
             return;
         }
@@ -595,7 +622,7 @@ impl Model {
             area,
             list_pane_width,
             overlay_box,
-            self.resize_drag_active(),
+            resizing,
         );
         if let Some(panel) = self
             .application
