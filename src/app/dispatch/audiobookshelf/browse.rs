@@ -7,6 +7,8 @@ use mbv_queue::{
 };
 #[cfg(test)]
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_for_id;
+use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 
 mod books;
 
@@ -415,6 +417,39 @@ impl App {
                 episode.episode_id.clone(),
             ),
         )
+    }
+
+    /// Map context-menu targets to queue items for the current
+    /// Audiobookshelf tab (standard-media-context-menus design D4): episodes
+    /// resolve through `selected_audiobookshelf_queue_item_target`, books
+    /// through the id-taking book resolver. A target that no longer resolves
+    /// is skipped.
+    pub(in crate::app) fn audiobookshelf_menu_targets_queue_items(
+        &self,
+        targets: &[AudiobookshelfMenuTarget],
+    ) -> Vec<QueueItem> {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return Vec::new();
+        };
+        targets
+            .iter()
+            .filter_map(|target| match target {
+                AudiobookshelfMenuTarget::Episode {
+                    library_item_id,
+                    episode_id,
+                } => self.selected_audiobookshelf_queue_item_target(
+                    index,
+                    &mbv_ui_msg::PodcastEpisodeTarget::new(
+                        library_item_id.clone(),
+                        episode_id.clone(),
+                    ),
+                ),
+                AudiobookshelfMenuTarget::Book { library_item_id } => {
+                    let state = self.audiobookshelf_book_browse.get(index)?;
+                    audiobookshelf_book_queue_item_for_id(state, library_item_id)
+                }
+            })
+            .collect()
     }
 
     pub(in crate::app) fn selected_audiobookshelf_queue_item_target(
