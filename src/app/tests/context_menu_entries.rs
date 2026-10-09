@@ -4,6 +4,7 @@
 use super::*;
 use crate::app::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
 use mbv_ui_model::overlay::OverlayRequest;
+use rstest::rstest;
 
 fn emby_library_app() -> App {
     let mut app = make_app_stub();
@@ -38,29 +39,33 @@ fn folder_item(name: &str, item_type: &str, unplayed_children: u32) -> EmbyItem 
     item
 }
 
-#[test]
-fn emby_menus_follow_the_standard_action_set() {
-    let movie = leaf_item("movie", "Movie", "Video", false);
-    let played_movie = leaf_item("movie", "Movie", "Video", true);
-    let season = folder_item("Season 1", "Season", 5);
-    let album = folder_item("Album", "MusicAlbum", 0);
-    let track = leaf_item("Track", "Audio", "Audio", false);
-
-    let cases: [(EmbyItem, &[&str]); 5] = [
-        (movie, &["Play", "Add to Queue", "Mark Played"]),
-        (played_movie, &["Play", "Add to Queue", "Mark Unplayed"]),
-        (
-            season,
-            &["Play All", "Shuffle", "Add to Queue", "Mark Played"],
-        ),
-        (album, &["Play All", "Shuffle", "Add to Queue"]),
-        (track, &["Play", "Add to Queue"]),
-    ];
-
-    for (item, expected) in cases {
-        let mut app = emby_library_app();
-        assert_eq!(menu_labels_for(&mut app, item), expected);
-    }
+/// One case per item shape: the standard action set for that shape (context
+/// menu spec, "Library lists share one standard action set", the Played label,
+/// and the music rule).
+#[rstest]
+#[case::unplayed_movie(
+    leaf_item("movie", "Movie", "Video", false),
+    &["Play", "Add to Queue", "Mark Played"],
+)]
+#[case::played_movie(
+    leaf_item("movie", "Movie", "Video", true),
+    &["Play", "Add to Queue", "Mark Unplayed"],
+)]
+#[case::season_with_unplayed_children(
+    folder_item("Season 1", "Season", 5),
+    &["Play All", "Shuffle", "Add to Queue", "Mark Played"],
+)]
+#[case::music_album(
+    folder_item("Album", "MusicAlbum", 0),
+    &["Play All", "Shuffle", "Add to Queue"],
+)]
+#[case::music_track(leaf_item("Track", "Audio", "Audio", false), &["Play", "Add to Queue"])]
+fn emby_menu_follows_the_standard_action_set_for(
+    #[case] item: EmbyItem,
+    #[case] expected: &[&str],
+) {
+    let mut app = emby_library_app();
+    assert_eq!(menu_labels_for(&mut app, item), expected);
 }
 
 #[test]
