@@ -231,25 +231,29 @@ impl PinSwapState {
     /// Client attached (tray-pin-swap design D4). The swap completes — the
     /// replaced target is told to quit if it is still attached, and the
     /// machine returns to `Idle`. Any other phase, or a token that does not
-    /// match the phase's, is ignored.
+    /// match the phase's, is ignored: the phase and the pending token stay
+    /// untouched, so a stale admit cannot clear the token of a swap that is
+    /// still live.
     pub(crate) fn on_swap_admitted(&mut self, token: &str, ctrl_clients: &ClientRegistry) {
-        let phase = std::mem::replace(&mut self.phase, Phase::Idle);
-        self.pending_token.clear();
-        match phase {
+        let matched_target = match &self.phase {
             Phase::Awaiting {
                 target,
                 token: pending,
                 ..
-            } if pending == token => {
-                let clients = ctrl_clients.lock().unwrap();
-                if let Some(target) = target
-                    && clients.has_client(target)
-                {
-                    clients.send_to_client(target, &CtrlEvent::SwapQuit);
-                    tracing::info!(name: "daemon.pin_swap.replaced", target: "pin_swap", client = %target, "replacement client attached; SwapQuit sent to the replaced client");
-                }
-            }
-            other => self.phase = other,
+            } if *pending == *token => Some(*target),
+            _ => None,
+        };
+        let Some(target) = matched_target else {
+            return;
+        };
+        self.pending_token.clear();
+        self.phase = Phase::Idle;
+        let clients = ctrl_clients.lock().unwrap();
+        if let Some(target) = target
+            && clients.has_client(target)
+        {
+            clients.send_to_client(target, &CtrlEvent::SwapQuit);
+            tracing::info!(name: "daemon.pin_swap.replaced", target: "pin_swap", client = %target, "replacement client attached; SwapQuit sent to the replaced client");
         }
     }
 
@@ -464,6 +468,42 @@ mod tests {
             Some(CtrlEvent::SwapQuit)
         ));
         assert!(matches!(swap.phase, Phase::Idle));
+        assert_eq!(notified(&calls), Vec::<String>::new());
+    }
+
+    /// Contract: reviewer finding in tray-pin-swap tasks 3.3–3.4 — a stale
+    /// or mismatched `SwapPrepared`-style admit must not disturb a swap that
+    /// is still live: the phase and the pending token stay untouched, so the
+    /// real replacement can still attach and complete the swap.
+    #[test]
+    fn mismatched_admit_leaves_the_live_swap_untouched() {
+        let (clients, client_rx) = registry_with_terminal_client();
+        let (notify, calls) = notify_recorder();
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let pending = pending_token();
+        let mut swap = PinSwapState::new(fake_command(), notify, merged_tx, Arc::clone(&pending));
+        let target = clients
+            .lock()
+            .unwrap()
+            .newest_swap_client(SwapSurface::Terminal);
+        swap.phase = Phase::Awaiting {
+            target,
+            token: "token-live".to_string(),
+            deadline: Instant::now(),
+        };
+        pending.publish("token-live".to_string());
+
+        swap.on_swap_admitted("token-stale", &clients);
+
+        assert!(
+            matches!(&swap.phase, Phase::Awaiting { token, .. } if token == "token-live"),
+            "stale admit disturbed the live swap"
+        );
+        assert_eq!(
+            pending.take_matching(Some("token-live")),
+            Some("token-live".to_string())
+        );
+        assert!(client_rx.try_recv().is_err());
         assert_eq!(notified(&calls), Vec::<String>::new());
     }
 }
