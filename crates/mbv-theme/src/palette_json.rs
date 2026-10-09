@@ -31,10 +31,8 @@ const SOURCES: [&str; 5] = [
 
 /// The `#rrggbb` spelling of a theme colour.
 fn hex(color: Color) -> String {
-    match color {
-        Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
-        other => panic!("theme colour is not an Rgb colour: {other:?}"),
-    }
+    let [r, g, b] = rgb(color);
+    format!("#{r:02x}{g:02x}{b:02x}")
 }
 
 /// The `[r, g, b]` spelling of a theme colour.
