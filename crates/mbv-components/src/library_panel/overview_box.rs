@@ -308,7 +308,13 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         }
         if (row_offset + i) % 2 == 1 {
             f.render_widget(
-                Paragraph::new("").style(Style::default().bg(palette::HERO_CREDITS_STRIPE)),
+                Paragraph::new("").style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::CreditsStripe,
+                        false,
+                    )
+                    .fill),
+                ),
                 Rect {
                     x: area.x,
                     y,
