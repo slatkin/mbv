@@ -30,6 +30,7 @@ use crate::pin::PinnedPanel;
 use app::{App, Model};
 use config::load_config;
 use mbv_core::applog;
+use mbv_ctrl::OwnerAction;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_remote_player as remote_player;
@@ -235,6 +236,9 @@ fn print_usage() {
     println!("                             panel instead of this terminal.");
     println!("      --toggle               Show or hide the running pinned panel");
     println!("                             (bind this to a compositor key).");
+    for action in OwnerAction::ALL {
+        println!("      {:<23}{}", action.cli_flag(), action.help());
+    }
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
 }
@@ -298,6 +302,19 @@ fn pre_config_startup() -> Option<StartupArgs> {
         return None;
     }
 
+    // An Owner-action flag asks the running Owner process to run the action
+    // through the same path the Tray uses (design D7); like `--toggle`, it is
+    // handled before applog, config migration and `load_config`, and no TUI
+    // starts. The first argument `from_cli_flag` accepts selects the action;
+    // other arguments are ignored, the same as `-q`.
+    if let Some(action) = args.iter().find_map(|arg| OwnerAction::from_cli_flag(arg)) {
+        if let Err(error) = remote_player::run_local_owner_action(action) {
+            eprintln!("mbv: {error}");
+            std::process::exit(1);
+        }
+        return None;
+    }
+
     // Reject the removed -d argument before startup side effects.
     if has_flag(&args, "-d") {
         eprintln!("mbv: the `-d` flag has been removed.");
@@ -329,6 +346,10 @@ fn stop_running_instance() {
 }
 
 fn main() {
+    // Claim the Pin-swap token before anything else spawns a worker or child
+    // process (tray-pin-swap design D2).
+    pin::claim_swap_token();
+
     let Some(startup) = pre_config_startup() else {
         return;
     };
@@ -419,7 +440,11 @@ fn run_configured_startup(
             "connecting to explicit daemon endpoint"
         );
         println!("Connecting to daemon at {endpoint}...");
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+        match remote_player::RemotePlayer::connect_endpoint(
+            &endpoint,
+            pin::is_pinned(),
+            pin::swap_token(),
+        ) {
             Ok((remote, player_rx)) => {
                 tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
                 run_remote_app(
@@ -543,8 +568,11 @@ fn attach_owner_process(
     pinned_panel: &mut Option<PinnedPanel>,
 ) -> Result<(), remote_player::RemotePlayerError> {
     let client = cached_emby_client(config);
-    let (remote, player_rx) =
-        remote_player::RemotePlayer::connect_endpoint(&remote_player::DaemonEndpoint::Local)?;
+    let (remote, player_rx) = remote_player::RemotePlayer::connect_endpoint(
+        &remote_player::DaemonEndpoint::Local,
+        pin::is_pinned(),
+        pin::swap_token(),
+    )?;
     run_remote_app(
         client,
         remote,

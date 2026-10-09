@@ -462,6 +462,19 @@ fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Co
         "accent_width".to_string(),
         toml::Value::Integer(i64::from(cfg.panel.accent_width.get())),
     );
+    // `[panel] terminal` (`tray-pin-swap`, design D5) has no default value to
+    // write: an unset key stays absent, which parses back to `None`.
+    if let Some(terminal) = &cfg.panel.terminal {
+        panel.insert(
+            "terminal".to_string(),
+            toml::Value::Array(
+                terminal
+                    .iter()
+                    .map(|arg| toml::Value::String(arg.clone()))
+                    .collect(),
+            ),
+        );
+    }
 }
 
 pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), ConfigError> {

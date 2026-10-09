@@ -218,6 +218,10 @@ pub struct Model {
     /// restores it (falling back to the sync passes' canonical
     /// re-derivation when it was unmounted meanwhile).
     pub(in crate::app) prefix_armed_focus: Option<ComponentId>,
+    /// Shell-owned exit kind (tray-pin-swap design D6): set once the Owner
+    /// sent `SwapQuit`, so `teardown` skips the launch-state save and the
+    /// coordinated shutdown request. Never reset within a run.
+    pub(in crate::app) swapped_out_exit: bool,
 }
 
 impl Model {
@@ -304,6 +308,7 @@ impl Model {
             last_esc: None,
             keybinds,
             prefix_armed_focus: None,
+            swapped_out_exit: false,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

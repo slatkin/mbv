@@ -7,6 +7,32 @@ use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+/// How this TUI exits, decided at the shell's discrete exit boundaries
+/// (tray-pin-swap design D6). The shell's launch snapshot travels with the
+/// kind, so an orderly exit always carries one and a swapped-out exit never
+/// pretends to have one.
+pub(in crate::app) enum ExitKind {
+    /// Orderly exit: save `launch_state`, then apply the daemon lifetime
+    /// policy (coordinated shutdown when Stay Alive is off).
+    Quit {
+        launch_state: mbv_config::TuiLaunchState,
+    },
+    /// A Pin swap replaced this TUI: skip the launch-state save and the
+    /// coordinated shutdown request, so the daemon and playback keep running
+    /// with the replacement Client (spec daemon-lifecycle "Swapped-out TUI
+    /// with Stay Alive off").
+    SwappedOut,
+}
+
+/// Save the launch snapshot the shell supplied — at teardown or for a
+/// `SwapPrepare` (tray-pin-swap design D6). The failure is logged and never
+/// blocks the swap: the shell answers `SwapPrepared` either way.
+pub(in crate::app) fn save_launch_state(launch_state: &mbv_config::TuiLaunchState) {
+    if let Err(error) = mbv_config::save_tui_launch_state(launch_state) {
+        tracing::warn!(name: "launch_state.save.failed", target: "launch_state", error = %error, "TUI launch state save failed");
+    }
+}
+
 fn join_visualizer_capture(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
         mbv_visualizer::join_worker(handle);
@@ -18,8 +44,14 @@ impl Model {
     /// bounded launch snapshot. The App remains the persistence authority;
     /// this shell query is the only reverse read from the mounted owner.
     pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
-        let launch_state = self.launch_state_snapshot();
-        self.app.teardown(quit_timeout, Some(launch_state));
+        let exit_kind = if self.swapped_out_exit {
+            ExitKind::SwappedOut
+        } else {
+            ExitKind::Quit {
+                launch_state: self.launch_state_snapshot(),
+            }
+        };
+        self.app.teardown(quit_timeout, exit_kind);
     }
 }
 
@@ -51,23 +83,19 @@ impl App {
         }
     }
 
-    /// Persist the launch snapshot supplied by the shell at this discrete
-    /// orderly-exit boundary, then run the normal teardown. App never mirrors
-    /// component-owned state while the TUI is running.
-    pub(in crate::app) fn teardown(
-        &mut self,
-        quit_timeout: Duration,
-        launch_state: Option<mbv_config::TuiLaunchState>,
-    ) {
-        if let Some(state) = launch_state
-            && let Err(error) = mbv_config::save_tui_launch_state(&state)
-        {
-            tracing::warn!(name: "launch_state.save.failed", target: "launch_state", error = %error, "TUI launch state save failed");
+    /// Run the normal teardown for the shell-chosen exit kind. An orderly
+    /// exit persists the shell-supplied launch snapshot; a swapped-out exit
+    /// skips both the snapshot save and the coordinated shutdown request
+    /// (tray-pin-swap design D6).
+    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration, exit_kind: ExitKind) {
+        let swapped_out = matches!(exit_kind, ExitKind::SwappedOut);
+        if let ExitKind::Quit { launch_state } = exit_kind {
+            save_launch_state(&launch_state);
         }
-        self.teardown_inner(quit_timeout);
+        self.teardown_inner(quit_timeout, swapped_out);
     }
 
-    fn teardown_inner(&mut self, quit_timeout: Duration) {
+    fn teardown_inner(&mut self, quit_timeout: Duration, swapped_out: bool) {
         // Stop the visualizer before requesting daemon shutdown so its worker
         // can exit concurrently with the remote request.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
@@ -103,8 +131,8 @@ impl App {
             let config = self.config.lock().unwrap();
             config.stay_alive
         };
-        let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
-        tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", home_is_local_daemon = self.home_is_local_daemon, stay_alive, should_request_shutdown, "daemon shutdown policy evaluated");
+        let should_request_shutdown = !swapped_out && self.home_is_local_daemon && !stay_alive;
+        tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", home_is_local_daemon = self.home_is_local_daemon, stay_alive, should_request_shutdown, swapped_out, "daemon shutdown policy evaluated");
         self.flush_settings_save();
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
@@ -270,6 +298,29 @@ impl App {
     }
 }
 
+/// An orderly exit kind for `App::teardown` callers in test families that
+/// assert nothing about launch-state persistence and have no shell `Model`
+/// to take a real snapshot from.
+#[cfg(test)]
+pub(in crate::app) fn test_quit_exit_kind() -> ExitKind {
+    ExitKind::Quit {
+        launch_state: test_quit_launch_state(),
+    }
+}
+
+/// A launch snapshot for exit kinds that save one; the value itself is
+/// irrelevant to the assertions of the test families that use it.
+#[cfg(test)]
+fn test_quit_launch_state() -> mbv_config::TuiLaunchState {
+    mbv_config::TuiLaunchState {
+        version: mbv_config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_config::TabIdentity::Home,
+        panel_focus: mbv_config::LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,7 +349,12 @@ mod tests {
         ));
         app.active_route = Some("music".to_string());
 
-        app.teardown(Duration::ZERO, None);
+        app.teardown(
+            Duration::ZERO,
+            ExitKind::Quit {
+                launch_state: super::test_quit_launch_state(),
+            },
+        );
 
         assert!(
             app.pending_exit_message

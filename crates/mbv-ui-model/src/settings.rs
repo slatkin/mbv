@@ -648,31 +648,31 @@ pub fn changed_panel_config(
     let mut next = panel;
     match key {
         SettingKey::PanelSide => {
-            next.side = match panel.side {
+            next.side = match next.side {
                 PanelSide::Left => PanelSide::Right,
                 PanelSide::Right => PanelSide::Left,
             };
         }
-        SettingKey::PanelCols => next.cols = stepped_cols(panel.cols, delta),
+        SettingKey::PanelCols => next.cols = stepped_cols(next.cols, delta),
         SettingKey::PanelColsExpanded => {
-            next.cols_expanded = stepped_cols(panel.cols_expanded, delta);
+            next.cols_expanded = stepped_cols(next.cols_expanded, delta);
         }
-        SettingKey::PanelGutterTop => next.gutter_top = panel.gutter_top.saturating_add(delta),
+        SettingKey::PanelGutterTop => next.gutter_top = next.gutter_top.saturating_add(delta),
         SettingKey::PanelGutterBottom => {
-            next.gutter_bottom = panel.gutter_bottom.saturating_add(delta);
+            next.gutter_bottom = next.gutter_bottom.saturating_add(delta);
         }
         SettingKey::PanelGutterLeft => {
-            next.gutter_left = panel.gutter_left.saturating_add(delta);
+            next.gutter_left = next.gutter_left.saturating_add(delta);
         }
         SettingKey::PanelGutterRight => {
-            next.gutter_right = panel.gutter_right.saturating_add(delta);
+            next.gutter_right = next.gutter_right.saturating_add(delta);
         }
-        SettingKey::PanelAccent => next.accent = !panel.accent,
+        SettingKey::PanelAccent => next.accent = !next.accent,
         SettingKey::PanelAccentColor => {
-            next.accent_color = next_accent_color(panel.accent_color, accent_custom);
+            next.accent_color = next_accent_color(next.accent_color, accent_custom);
         }
         SettingKey::PanelAccentWidth => {
-            next.accent_width = stepped_accent_width(panel.accent_width, delta);
+            next.accent_width = stepped_accent_width(next.accent_width, delta);
         }
         _ => return None,
     }

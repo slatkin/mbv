@@ -60,7 +60,7 @@ impl App {
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         let accent_row = mbv_ui_model::settings::is_panel_accent_row(key);
         let candidate = {
-            let panel = self.config.lock().unwrap().panel;
+            let panel = self.config.lock().unwrap().panel.clone();
             self.accent_custom = self
                 .accent_custom
                 .or_else(|| mbv_ui_model::settings::accent_color_outside_cycle(panel.accent_color));

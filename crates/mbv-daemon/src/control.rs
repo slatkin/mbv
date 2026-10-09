@@ -430,6 +430,18 @@ fn dispatch_ctrl_command(
             let _ = ctx.merged_tx.send(DaemonEvent::Shutdown);
         }
         CtrlCmd::ApplyServiceSetup { .. } => {}
+        // The Pin-swap state machine consumes its target's `SwapPrepared` in
+        // the event loop (tray-pin-swap task 3.3) before role dispatch; this
+        // arm only covers direct `handle_ctrl_for_role` callers.
+        CtrlCmd::SwapPrepared => {
+            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
+        }
+        // Owner actions run through the event-loop owner-action handler
+        // (tray-pin-swap task 3.5); this arm only covers direct
+        // `handle_ctrl_for_role` callers.
+        CtrlCmd::RunOwnerAction(_) => {
+            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
+        }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
             slots,

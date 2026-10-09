@@ -448,5 +448,6 @@ impl Model {
 }
 
 mod drains;
+mod pin_swap;
 #[cfg(test)]
 mod tests;

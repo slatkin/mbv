@@ -34,7 +34,7 @@ pub(crate) use core::{
     expire_and_redispatch, reset_slot_jumps, settle_and_redispatch, submit_queue_slots_cold_start,
 };
 #[doc(inline)]
-pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, pid_file};
+pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection, pid_file};
 mod core_ctrl_spawn;
 pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
 mod run_shutdown;
@@ -49,7 +49,7 @@ pub(crate) use run::{
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
 };
 mod event_loop;
-pub(crate) use event_loop::{DaemonLoop, LoopFlow, TrayState};
+pub(crate) use event_loop::{DaemonLoop, LoopFlow, PendingSwapToken, PinSwapState, TrayState};
 mod audiobookshelf;
 pub(crate) use audiobookshelf::{
     apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,

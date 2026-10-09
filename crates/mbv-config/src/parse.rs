@@ -379,6 +379,7 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         accent: panel_bool(panel, "accent", defaults.accent),
         accent_color: panel_accent_color(panel, "accent_color", defaults.accent_color),
         accent_width: panel_accent_width(panel, "accent_width", defaults.accent_width),
+        terminal: panel_terminal(panel),
     }
 }
 
@@ -456,6 +457,26 @@ fn panel_fallback<T>(key: &str, value: &toml::Value, default: T) -> T {
         "invalid [panel] value; using default"
     );
     default
+}
+
+/// `[panel] terminal` (`tray-pin-swap`, design D5): the terminal argv prefix
+/// the Owner relaunches the TUI through. An absent key is `None` silently; a
+/// present value that is not a non-empty array of strings (a non-array value,
+/// a non-string element, or an empty array) is malformed and falls back to
+/// `None` with the same per-key warning as the other `[panel]` keys.
+fn panel_terminal(panel: &toml::Value) -> Option<Vec<String>> {
+    match panel.get("terminal") {
+        None => None,
+        Some(value) => value
+            .as_array()
+            .and_then(|argv| {
+                argv.iter()
+                    .map(|element| element.as_str().map(str::to_string))
+                    .collect::<Option<Vec<_>>>()
+            })
+            .filter(|argv| !argv.is_empty())
+            .or_else(|| panel_fallback("terminal", value, None)),
+    }
 }
 
 fn parse_library_section(library: Option<&toml::Value>) -> LibrarySettings {

@@ -10,7 +10,7 @@ pub(super) fn connect_op_requester(
     mpsc::Receiver<CtrlOutbound>,
 ) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(
+    let id = clients.connect_with_role(
         tx.clone(),
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities {
@@ -20,6 +20,8 @@ pub(super) fn connect_op_requester(
             book_progress: true,
         },
         true,
+        None,
+        crate::ctrl::CtrlConnectionRole::Client,
     );
     (id, tx, rx)
 }

@@ -3,270 +3,34 @@ mod tests;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(any(test, feature = "test"))]
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
+#[cfg(any(test, feature = "test"))]
+use mbv_ctrl::CtrlHello;
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
-    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
-    UnifiedQueueStateData,
+    CtrlCmd, CtrlEvent, DisconnectReason, PlaybackIntent, PlaybackIntentEvent, QueueOpId,
+    QueueOpOutcome, UnifiedQueueStateData,
 };
 use mbv_net::stream::SocketStream;
 
 use crate::RemotePlayer;
 
-// Hard wall-clock bound on the post-connect protocol handshake (hello
-// exchange + initial state), independent of `endpoint::DAEMON_TCP_CONNECT_TIMEOUT`
-// -- that constant only bounds the initial TCP-level connect, not the
-// blocking `read_line` calls that follow it (issue #191 fix #5). A stalled
-// daemon on localhost/LAN (user-configured, not a public/flaky server) is a
-// rarer and more clearly-broken scenario than a slow Emby server, so this is
-// tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
-const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
-
 mod endpoint;
+mod handshake;
+mod owner_actions;
 
 #[doc(inline)]
 pub use endpoint::{DaemonEndpoint, resolve_library_route};
 
-/// Whether the handshake must reject an Owner built from a different version.
-///
-/// The local Owner process is the same binary as this Client, so a differing
-/// `app_version` means a stale process; explicit `unix://`/`tcp://` endpoints
-/// and the packaged `mbvd` are independent builds and never compare.
-#[derive(Clone, Copy)]
-pub(crate) enum PeerBuild {
-    Any,
-    MustMatch,
-}
+pub use owner_actions::{run_local_owner_action, signal_local_daemon_service_setup};
 
-/// Test-only entry point to the handshake, on `stream`, with
-/// [`PeerBuild::Any`]. Production goes through [`connect_endpoint`], which
-/// runs [`perform_handshake_with_role`] on a worker thread bounded by
-/// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5).
-#[cfg(test)]
-pub(crate) fn perform_handshake<F>(
-    stream: SocketStream,
-    load_control_token: F,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
-where
-    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
-{
-    perform_handshake_with_role(stream, load_control_token, false, PeerBuild::Any)
-}
-
-fn perform_service_setup_admin_handshake<F>(
-    stream: SocketStream,
-    load_control_token: F,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
-where
-    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
-{
-    perform_handshake_with_role(stream, load_control_token, true, PeerBuild::Any)
-}
-
-fn perform_handshake_with_role<F>(
-    stream: SocketStream,
-    load_control_token: F,
-    service_setup_admin: bool,
-    peer_build: PeerBuild,
-) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
-where
-    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
-{
-    let mut reader = BufReader::new(stream);
-    let ctrl_compatibility = read_server_hello(&mut reader, peer_build)?;
-    send_client_hello(
-        &mut reader,
-        &ctrl_compatibility,
-        load_control_token,
-        service_setup_admin,
-    )?;
-    let state_event = read_initial_state(&mut reader)?;
-
-    Ok((reader, state_event, ctrl_compatibility))
-}
-
-fn read_server_hello(
-    reader: &mut BufReader<SocketStream>,
-    peer_build: PeerBuild,
-) -> Result<CtrlCompatibility, crate::RemotePlayerError> {
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).map_err(|e| {
-        crate::RemotePlayerError::protocol(format!("failed to read daemon protocol hello: {e}"))
-    })?;
-    if first_line.trim().is_empty() {
-        return Err(crate::RemotePlayerError::protocol(
-            "daemon closed connection before protocol hello",
-        ));
-    }
-    let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end()).map_err(|e| {
-        crate::RemotePlayerError::protocol(format!("invalid daemon protocol hello: {e}"))
-    })?;
-    let CtrlEvent::Hello(info) = hello else {
-        return Err(crate::RemotePlayerError::protocol(
-            "daemon did not send protocol hello",
-        ));
-    };
-    // A local Owner is the same binary as this Client, so a differing
-    // `app_version` means the user is attached to a stale process. Refuse
-    // here, before `validate_peer` and therefore before `send_client_hello`,
-    // so no control credential leaves this terminal. Both sides read the
-    // workspace version (`version.workspace = true`), so this compares like
-    // with like.
-    if matches!(peer_build, PeerBuild::MustMatch) && info.app_version != env!("CARGO_PKG_VERSION") {
-        return Err(crate::RemotePlayerError::owner_build_mismatch(
-            info.app_version,
-        ));
-    }
-    info.validate_peer()?;
-    let mut compatibility = info.compatibility()?;
-    compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
-    compatibility.supports_audio_only = info.supports_audio_only();
-    compatibility.supports_control_auth = info.supports_control_auth();
-    compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
-    compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
-    tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
-    Ok(compatibility)
-}
-
-fn send_client_hello<F>(
-    reader: &mut BufReader<SocketStream>,
-    compatibility: &CtrlCompatibility,
-    load_control_token: F,
-    service_setup_admin: bool,
-) -> Result<(), crate::RemotePlayerError>
-where
-    F: FnOnce() -> Result<String, crate::RemotePlayerError>,
-{
-    let control_token = compatibility
-        .supports_control_auth
-        .then(load_control_token)
-        .transpose()?;
-    let mut client_hello = if service_setup_admin {
-        CtrlHello::current_service_setup_admin(control_token)
-    } else if let Some(control_token) = control_token {
-        CtrlHello::current_control_client(control_token)
-    } else {
-        CtrlHello::current()
-    };
-    client_hello.protocol_version = compatibility.client_protocol_version;
-    let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
-        .map_err(|e| crate::RemotePlayerError::protocol(e.to_string()))?;
-    // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
-    // than a second `try_clone()`'d handle -- the handshake is strictly
-    // sequential (read hello -> write client hello -> read state) with no
-    // concurrent access from another thread during this phase, so there's
-    // nothing a second handle buys here beyond an extra fallible call.
-    writeln!(reader.get_mut(), "{client_hello}").map_err(|e| {
-        crate::RemotePlayerError::protocol(format!("failed to send daemon protocol hello: {e}"))
-    })
-}
-
-fn read_initial_state(
-    reader: &mut BufReader<SocketStream>,
-) -> Result<CtrlEvent, crate::RemotePlayerError> {
-    let mut state_line = String::new();
-    reader.read_line(&mut state_line).map_err(|e| {
-        crate::RemotePlayerError::protocol(format!("failed to read daemon initial state: {e}"))
-    })?;
-    if state_line.trim().is_empty() {
-        return Err(crate::RemotePlayerError::protocol(
-            "daemon closed connection before initial state",
-        ));
-    }
-    let event = serde_json::from_str::<CtrlEvent>(state_line.trim_end()).map_err(|e| {
-        crate::RemotePlayerError::protocol(format!("invalid daemon initial state: {e}"))
-    })?;
-    match event {
-        CtrlEvent::Disconnected {
-            reason: DisconnectReason::ExclusiveOwner { pid },
-        } => Err(crate::RemotePlayerError::exclusive_owner(pid)),
-        CtrlEvent::Disconnected {
-            reason: DisconnectReason::OwnerShuttingDown,
-        } => Err(crate::RemotePlayerError::owner_shutting_down()),
-        event => Ok(event),
-    }
-}
-
-/// Best-effort signal to a running same-user Local daemon to reread its own
-/// owner-local Service storage. A single non-blocking connect attempt is made;
-/// when no Local daemon is reachable the call returns `Ok(())` so a bare-mode
-/// commit proceeds without a daemon. When a daemon is reachable, the
-/// control-auth handshake runs, `ApplyServiceSetup` is sent, and the
-/// applied/rejected acknowledgement is awaited. Any failure after the connect
-/// reports a restart requirement; the caller's durable commit is untouched.
-pub fn signal_local_daemon_service_setup(
-    kind: mbv_queue::ServiceKind,
-    revision: u64,
-) -> Result<(), crate::RemotePlayerError> {
-    let path = PathBuf::from(mbv_config::control_socket_path());
-    let Ok(stream) = UnixStream::connect(&path) else {
-        return Ok(());
-    };
-    stream
-        .set_read_timeout(Some(Duration::from_secs(6)))
-        .map_err(|error| {
-            crate::RemotePlayerError::restart_required(format!(
-                "restart required (cannot read local daemon ctrl): {error}"
-            ))
-        })?;
-    let (mut reader, _state, _compatibility) =
-        perform_service_setup_admin_handshake(SocketStream::Unix(stream), || {
-            Ok(mbv_config::load_or_create_control_credential()?)
-        })
-        .map_err(|error| {
-            crate::RemotePlayerError::restart_required(format!(
-                "restart required (local daemon handshake failed): {error}"
-            ))
-        })?;
-    let request =
-        serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision }).map_err(|error| {
-            crate::RemotePlayerError::restart_required(format!(
-                "restart required (cannot serialize setup request): {error}"
-            ))
-        })?;
-    writeln!(reader.get_mut(), "{request}")
-        .and_then(|()| reader.get_mut().flush())
-        .map_err(|error| {
-            crate::RemotePlayerError::restart_required(format!(
-                "restart required (cannot send setup request): {error}"
-            ))
-        })?;
-    await_service_setup_acknowledgement(&mut reader)
-}
-
-fn await_service_setup_acknowledgement(
-    reader: &mut BufReader<SocketStream>,
-) -> Result<(), crate::RemotePlayerError> {
-    for next in reader.lines() {
-        let line = next.map_err(|_error| {
-            crate::RemotePlayerError::restart_required(
-                "restart required (setup acknowledgement unavailable)",
-            )
-        })?;
-        let event = serde_json::from_str::<CtrlEvent>(&line).map_err(|_error| {
-            crate::RemotePlayerError::restart_required(
-                "restart required (invalid setup acknowledgement)",
-            )
-        })?;
-        match event {
-            CtrlEvent::ServiceSetupApplied { .. } => return Ok(()),
-            CtrlEvent::ServiceSetupRejected { reason, .. } => {
-                return Err(crate::RemotePlayerError::restart_required(format!(
-                    "restart required (live setup rejected: {reason:?})"
-                )));
-            }
-            _ => {}
-        }
-    }
-    Err(crate::RemotePlayerError::restart_required(
-        "restart required (setup acknowledgement unavailable)",
-    ))
-}
+use handshake::{
+    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, perform_handshake_with_role,
+};
 
 fn apply_ctrl_event(
     ev: CtrlEvent,
@@ -280,23 +44,13 @@ fn apply_ctrl_event(
         CtrlEvent::Hello(_) => {
             tracing::warn!(name: "remote.daemon_protocol_hello.unexpected", target: "remote", "unexpected daemon protocol hello after negotiation");
         }
-        CtrlEvent::StatusOnly(s) => {
-            let mut current = status.lock().unwrap();
-            let current_idx = current.current_idx;
-            let queue_len = current.queue_len;
-            *current = s;
-            current.current_idx = current_idx;
-            current.queue_len = queue_len;
-        }
+        CtrlEvent::StatusOnly(s) => apply_status_only(s, status),
         CtrlEvent::Player(pe) => apply_player_event(pe, status, event_tx, notify),
         CtrlEvent::CommandRejected(reason) => {
             send_if_notifying(notify, event_tx, PlayerEvent::CommandRejected(reason));
         }
         CtrlEvent::PlaybackIntent(event) => {
-            // A coalesced request is terminal for that request identity too;
-            // the canonical request remains tracked separately by the daemon.
-            pending_playback.lock().unwrap().remove(&event.request_id);
-            send_if_notifying(notify, event_tx, PlayerEvent::PlaybackIntent(event));
+            apply_playback_intent_event(event, pending_playback, event_tx, notify);
         }
         CtrlEvent::PipePlaybackStatus(status_event) => send_if_notifying(
             notify,
@@ -304,22 +58,25 @@ fn apply_ctrl_event(
             PlayerEvent::PipePlaybackStatus(status_event),
         ),
         CtrlEvent::QueueOpResult { op, outcome } => {
-            if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
-                apply_unified_queue_state(
-                    (**state).clone(),
-                    status,
-                    unified_queue,
-                    event_tx,
-                    notify,
-                );
-            }
-            send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
+            apply_queue_op_result(op, outcome, status, unified_queue, event_tx, notify);
         }
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
             // Shutdown replies are handled by RemotePlayer's request-completion path.
         }
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
-            tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
+            log_ignored_service_setup_event();
+        }
+        CtrlEvent::SwapPrepare => {
+            send_if_notifying(notify, event_tx, PlayerEvent::SwapPrepare);
+        }
+        CtrlEvent::SwapQuit => {
+            send_if_notifying(notify, event_tx, PlayerEvent::SwapQuit);
+        }
+        // Owner-action replies travel only on a dedicated owner-action
+        // connection's reply path (tray-pin-swap task 4.5), never on a
+        // Client connection.
+        CtrlEvent::OwnerActionAccepted | CtrlEvent::OwnerActionRefused { .. } => {
+            log_ignored_owner_action_reply();
         }
         CtrlEvent::Disconnected { reason } => {
             apply_disconnected_event(reason, event_tx, notify);
@@ -350,6 +107,53 @@ fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: 
     if notify {
         let _ = event_tx.send(event);
     }
+}
+
+/// Documented no-op for `CtrlEvent::OwnerActionAccepted`/`OwnerActionRefused`
+/// (tray-pin-swap task 1.2): the replies travel only on a dedicated
+/// owner-action connection's reply path (task 4.5), never on a Client
+/// connection.
+fn log_ignored_owner_action_reply() {
+    tracing::debug!(name: "remote.owner_action_reply.ignored", target: "remote", "ignoring owner-action reply on a Client connection");
+}
+
+fn log_ignored_service_setup_event() {
+    tracing::debug!(name: "remote.service_reconciliation_event.ignored", target: "remote", "ignoring owner-service reconciliation event");
+}
+
+fn apply_status_only(s: PlayerStatus, status: &Arc<Mutex<PlayerStatus>>) {
+    let mut current = status.lock().unwrap();
+    let current_idx = current.current_idx;
+    let queue_len = current.queue_len;
+    *current = s;
+    current.current_idx = current_idx;
+    current.queue_len = queue_len;
+}
+
+fn apply_playback_intent_event(
+    event: PlaybackIntentEvent,
+    pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    // A coalesced request is terminal for that request identity too;
+    // the canonical request remains tracked separately by the daemon.
+    pending_playback.lock().unwrap().remove(&event.request_id);
+    send_if_notifying(notify, event_tx, PlayerEvent::PlaybackIntent(event));
+}
+
+fn apply_queue_op_result(
+    op: QueueOpId,
+    outcome: QueueOpOutcome,
+    status: &Arc<Mutex<PlayerStatus>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    if let mbv_ctrl::QueueOpOutcome::Applied(state) = &outcome {
+        apply_unified_queue_state((**state).clone(), status, unified_queue, event_tx, notify);
+    }
+    send_if_notifying(notify, event_tx, PlayerEvent::QueueOpResult { op, outcome });
 }
 
 fn apply_player_event(
@@ -443,6 +247,8 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let peer_build = if matches!(endpoint, DaemonEndpoint::Local) {
         PeerBuild::MustMatch
@@ -451,7 +257,7 @@ pub(crate) fn connect_endpoint(
     };
     let stream = endpoint.connect_stream()?;
     tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
-    connect_stream(stream, peer_build)
+    connect_stream(stream, peer_build, pinned, swap_token)
 }
 
 struct ReaderThreadState {
@@ -473,6 +279,8 @@ struct ReaderThreadState {
 fn connect_stream(
     stream: SocketStream,
     peer_build: PeerBuild,
+    pinned: bool,
+    swap_token: Option<String>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
@@ -517,8 +325,10 @@ fn connect_stream(
             perform_handshake_with_role(
                 handshake_stream,
                 || Ok(mbv_config::load_or_create_control_credential()?),
-                false,
+                HandshakeRole::Client,
                 peer_build,
+                pinned,
+                swap_token,
             )
         },
         || {
@@ -769,7 +579,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             }
         }
     });
-    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any)
+    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None)
         .map_err(|error| error.to_string())?;
     Ok((player, rx, peer))
 }

@@ -6,6 +6,7 @@ use super::{
     pid_file, project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
     start_queue_enrichment,
 };
+use crate::PinSwapState;
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
@@ -15,6 +16,7 @@ use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
 use std::net::TcpListener;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -142,6 +144,12 @@ struct DaemonStarted {
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
     tray: TrayState,
+    pin_swap: PinSwapState,
+    /// Shared between the Pin-swap machine and the ctrl admission path
+    /// (tray-pin-swap design D4).
+    pending_swap: Arc<crate::PendingSwapToken>,
+    /// Shared with the ctrl registry, which keeps it current (design D3).
+    pinned_client_attached: Arc<AtomicBool>,
 }
 
 fn spawn_queue_persistence_worker(
@@ -247,9 +255,13 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let player_status = Arc::clone(&player.status);
     let (transport_tx, transport_rx) = mpsc::channel();
+    // Created here, before the registry exists, so the handle and the
+    // registry share one flag (design D3).
+    let pinned_client_attached = Arc::new(AtomicBool::new(false));
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
         transport_tx,
+        pinned_client_attached: Arc::clone(&pinned_client_attached),
     });
 
     // Tray ownership lives in the loop (design D4): one startup reconcile in
@@ -257,32 +269,21 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // it in step with the live settings.
     let mut tray = TrayState::new(hooks.on_tray_ready, shutdown_signal_tx.clone());
     tray.reconcile(owner_settings().tray_enabled);
+    let pending_swap = Arc::new(crate::PendingSwapToken::default());
+    let pin_swap = PinSwapState::new(
+        hooks.swap_command,
+        hooks.notify,
+        merged_tx.clone(),
+        Arc::clone(&pending_swap),
+    );
     forward_transport(transport_rx, merged_tx.clone());
-
-    let tx = merged_tx.clone();
-    std::thread::spawn(move || {
-        for ev in player_rx {
-            let _ = tx.send(DaemonEvent::Player(ev));
-        }
-    });
-    if let Some(runtime) = &emby_runtime {
-        let generation = runtime.generation;
-        let tx = merged_tx.clone();
-        std::thread::spawn(move || {
-            for ev in ws_rx {
-                let _ = tx.send(DaemonEvent::Ws {
-                    generation,
-                    event: ev,
-                });
-            }
-        });
-    }
-    let tx = merged_tx.clone();
-    std::thread::spawn(move || {
-        if shutdown_signal_rx.recv().is_ok() {
-            let _ = tx.send(DaemonEvent::Shutdown);
-        }
-    });
+    forward_merged_event_sources(
+        &merged_tx,
+        player_rx,
+        ws_rx,
+        emby_runtime.as_ref().map(|runtime| runtime.generation),
+        shutdown_signal_rx,
+    );
 
     // Install the owner's Audiobookshelf context on the daemon player so
     // admitted ABS slots reach `prepare_source`, and wire the player's
@@ -302,7 +303,42 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         ws_send_tx,
         owner_settings,
         tray,
+        pin_swap,
+        pending_swap,
+        pinned_client_attached,
     }
+}
+
+/// Forwards the player, Emby-ws, and shutdown-signal sources onto the
+/// daemon's one merged event channel, so the event loop reads a single
+/// channel.
+fn forward_merged_event_sources(
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    player_rx: mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ws_rx: mpsc::Receiver<mbv_ws::WsEvent>,
+    ws_generation: Option<mbv_core::service_runtime::SetupGeneration>,
+    shutdown_signal_rx: mpsc::Receiver<()>,
+) {
+    let tx = merged_tx.clone();
+    std::thread::spawn(move || {
+        for ev in player_rx {
+            let _ = tx.send(DaemonEvent::Player(ev));
+        }
+    });
+    if let Some(generation) = ws_generation {
+        let tx = merged_tx.clone();
+        std::thread::spawn(move || {
+            for event in ws_rx {
+                let _ = tx.send(DaemonEvent::Ws { generation, event });
+            }
+        });
+    }
+    let tx = merged_tx.clone();
+    std::thread::spawn(move || {
+        if shutdown_signal_rx.recv().is_ok() {
+            let _ = tx.send(DaemonEvent::Shutdown);
+        }
+    });
 }
 
 fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, SharedQueueState) {
@@ -532,6 +568,9 @@ pub fn run_with_options(
         ws_send_tx,
         owner_settings,
         tray,
+        pin_swap,
+        pending_swap,
+        pinned_client_attached,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     // Owner restore runs the same progress refresh as cold adoption and a
@@ -544,7 +583,11 @@ pub fn run_with_options(
         audiobookshelf_runtime.as_ref(),
         &merged_tx,
     );
-    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(merged_tx.clone())));
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(
+        merged_tx.clone(),
+        pinned_client_attached,
+        pending_swap,
+    )));
     start_local_control_server(
         role,
         audio_only,
@@ -595,6 +638,7 @@ pub fn run_with_options(
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
         queue_persist_tx: Some(queue_persist_tx),
         tray,
+        pin_swap,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

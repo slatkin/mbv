@@ -88,7 +88,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
     let client = queue_op_client("test-token");
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, reply_rx) = mpsc::channel();
-    let client_id = registry.lock().unwrap().connect(
+    let client_id = registry.lock().unwrap().connect_with_role(
         reply_tx.clone(),
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities {
@@ -98,6 +98,8 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
             book_progress: true,
         },
         false,
+        None,
+        crate::ctrl::CtrlConnectionRole::Client,
     );
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("kept", "Video", "Movie")], 0);

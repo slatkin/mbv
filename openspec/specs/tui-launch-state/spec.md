@@ -31,6 +31,8 @@ The snapshot SHALL NOT contain state for unselected tabs, a selected Queue item,
 
 A TUI SHALL load the saved launch snapshot once during startup, keep subsequent launch-state changes in that TUI process's memory, and replace the saved snapshot only as part of orderly TUI exit. Cursor movement, tab changes, pill changes, item changes, Panel-focus changes, refreshes, and rendering SHALL NOT write the launch snapshot while the TUI remains open.
 
+A Client that a Pin swap replaces SHALL save its snapshot when the Owner process asks it to prepare, before the replacement Client starts, and SHALL NOT save it again when it exits. If the swap is abandoned, that Client SHALL keep running and its later orderly exit SHALL save as usual.
+
 The explicit F2 Reset UI State action SHALL clear the saved launch snapshot immediately and abandon any pending in-memory launch restoration. Clearing is the sole explicit UI-reset exception; it SHALL NOT write a continuously updated or default replacement snapshot. Later orderly exit SHALL again save that Client's current bounded launch location under the existing last-completed-exit rule. Another running Client SHALL retain its live location and remain able to supply a later exit snapshot.
 
 Explicit configuration changes, playback lifecycle and progress, queue persistence, caches, Service-owned state, and auto-reconnect state SHALL retain their own persistence lifecycles and SHALL NOT be delayed by this requirement.
@@ -61,6 +63,16 @@ Explicit configuration changes, playback lifecycle and progress, queue persisten
 - **WHEN** the user resets UI state, selects a new launch location and exits normally
 - **THEN** the current bounded location SHALL be saved as the next launch's starting point
 - **THEN** reset SHALL NOT permanently disable launch-state persistence
+
+#### Scenario: Pin swap carries the launch location
+- **WHEN** a Client showing a Library tab, pill and item is replaced by a Pin swap
+- **THEN** the snapshot SHALL be saved before the replacement Client starts
+- **THEN** the replacement Client SHALL restore that tab, pill, item and Panel focus
+
+#### Scenario: Abandoned Pin swap
+- **WHEN** a Client saved its snapshot for a Pin swap and the swap is abandoned
+- **WHEN** the user later quits that Client normally
+- **THEN** its exit SHALL save its launch location at that time
 
 ### Requirement: Launch restoration follows stable identities with ordered fallbacks
 
@@ -118,6 +130,7 @@ The recorded pill scope and Panel focus SHALL be applied only to the tab that la
 - **WHEN** launch restoration selected a tab
 - **WHEN** a different tab becomes selected before the recorded pill scope and Panel focus are applied
 - **THEN** mbv SHALL NOT apply them to the newly selected tab
+
 ### Requirement: Queue selection starts independently of launch-state restoration
 Restoring Queue Panel focus SHALL NOT restore a Queue item selection. Queue selection SHALL initialize from the Queue component's normal current-content rule, independently of the saved Library launch location.
 

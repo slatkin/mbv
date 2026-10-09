@@ -106,16 +106,25 @@ mod tests;
 #[doc(inline)]
 pub use connect::connect_stub_daemon_pair;
 #[doc(inline)]
+pub use connect::run_local_owner_action;
+#[doc(inline)]
 pub use connect::signal_local_daemon_service_setup;
 #[doc(inline)]
 pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 
 impl RemotePlayer {
+    /// Connect to `endpoint` as a control Client. `pinned` advertises the
+    /// `pinned-surface` capability (this TUI runs in a pinned panel) and
+    /// `swap_token` marks this Client as one the Owner itself started for a
+    /// Pin swap (tray-pin-swap design D2/D6); every TUI Client advertises
+    /// `pin-swap`.
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
+        pinned: bool,
+        swap_token: Option<String>,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-        connect::connect_endpoint(endpoint)
+        connect::connect_endpoint(endpoint, pinned, swap_token)
     }
 
     #[must_use]
@@ -255,6 +264,12 @@ impl RemotePlayer {
             }
             mbv_ctrl::TransportCommand::Player(command) => {
                 let _ = self.send_command(command);
+            }
+            // Owner actions are resolved by the Owner in-process (tray
+            // tray-pin-swap task 3.5); a RemotePlayer transport has no ctrl
+            // path for them yet.
+            mbv_ctrl::TransportCommand::OwnerAction(_) => {
+                tracing::debug!(name: "remote.transport_owner_action.ignored", target: "remote", "ignoring owner-action transport command");
             }
         }
     }

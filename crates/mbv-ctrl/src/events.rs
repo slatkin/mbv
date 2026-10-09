@@ -43,6 +43,24 @@ pub enum CtrlEvent {
         reason: ServiceSetupRejection,
     },
 
+    /// Owner to the Pin-swap target: save launch state now, then acknowledge
+    /// with `CtrlCmd::SwapPrepared`.
+    #[serde(rename = "SwapPrepare")]
+    SwapPrepare,
+    /// Owner to the replaced Pin-swap target: exit now as swapped out.
+    #[serde(rename = "SwapQuit")]
+    SwapQuit,
+
+    /// The Owner accepted an Owner action (`CtrlCmd::RunOwnerAction`).
+    #[serde(rename = "OwnerActionAccepted")]
+    OwnerActionAccepted,
+    /// The Owner refused an Owner action; the payload is a human-readable,
+    /// Owner-computed reason.
+    #[serde(rename = "OwnerActionRefused")]
+    OwnerActionRefused {
+        reason: String,
+    },
+
     // ── Unified queue events (require `unified-queue` capability) ───────
     /// Full item-generic queue state.  Sent on initial connection and
     /// after every queue mutation.

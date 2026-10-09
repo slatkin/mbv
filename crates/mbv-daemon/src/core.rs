@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::os::unix::net::UnixListener;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -84,6 +85,19 @@ pub(super) enum DaemonEvent {
         fetched: Result<Vec<EmbyItem>, crate::DaemonLibError>,
     },
     CtrlDisconnected(CtrlClientId),
+    /// A Pin-swap waiter thread reports the replacement process's exit
+    /// status, keyed by the one-shot swap token (tray-pin-swap design D3).
+    PinSwapChildExited {
+        token: String,
+        success: bool,
+    },
+    /// The ctrl admission path consumed the pending swap token: the
+    /// replacement Client attached (tray-pin-swap design D4). The loop tells
+    /// the machine, which sends `SwapQuit` to the replaced target if it is
+    /// still attached and returns to `Idle`.
+    PinSwapAdmitted {
+        token: String,
+    },
     LastClientGone,
     Shutdown,
 }
@@ -633,10 +647,31 @@ impl SharedQueueState {
     }
 }
 
+/// Which direction a Pin swap runs in (tray-pin-swap design D5). The
+/// daemon's swap state machine derives it from the registry, not from the
+/// Tray label, so a stale menu cannot act on the wrong client.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SwapDirection {
+    Pin,
+    Unpin,
+}
+
+/// Resolves the command that starts the replacement Client (design D5).
+/// `Err` carries the user-facing reason: the daemon notifies with it and the
+/// swap stays idle.
+pub(crate) type SwapCommandHook =
+    Box<dyn Fn(SwapDirection) -> Result<std::process::Command, String> + Send>;
+/// Desktop-notification hook for swap failures (design D5).
+pub(crate) type NotifyHook = Box<dyn Fn(&str) + Send>;
+
 #[derive(Clone, Debug)]
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     pub transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
+    /// "A pinned Client is attached" — shared with the ctrl registry, which
+    /// refreshes it on connect and disconnect (design D3). The Tray reads it
+    /// to label its one Pin swap item.
+    pub pinned_client_attached: Arc<AtomicBool>,
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;
@@ -645,6 +680,8 @@ pub(crate) type OnTrayReady = Box<dyn FnMut(mpsc::SyncSender<()>) -> Option<Box<
 pub struct DaemonRuntimeHooks {
     pub on_player_ready: OnPlayerReady,
     pub on_tray_ready: OnTrayReady,
+    pub swap_command: SwapCommandHook,
+    pub notify: NotifyHook,
 }
 
 impl std::fmt::Debug for DaemonRuntimeHooks {
@@ -653,6 +690,8 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
         f.debug_struct("DaemonRuntimeHooks")
             .field("on_player_ready", &"<callback>")
             .field("on_tray_ready", &"<callback>")
+            .field("swap_command", &"<callback>")
+            .field("notify", &"<callback>")
             .finish()
     }
 }

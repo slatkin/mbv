@@ -32,6 +32,13 @@ impl DaemonLoop {
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             return EventOutcome::CONTINUE;
         }
+        if let CtrlCmd::SwapPrepared = cmd {
+            // The Pin-swap state machine consumes its target's confirmation
+            // directly (tray-pin-swap task 3.3); every other Client's
+            // `SwapPrepared` is ignored inside the machine.
+            self.pin_swap.on_swap_prepared(client_id);
+            return EventOutcome::CONTINUE;
+        }
         if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
             let transport = self.ctrl_clients.lock().unwrap().transport(client_id);
             let allowed = owner_admin_transport_allowed(self.role, kind, transport);
@@ -84,6 +91,17 @@ impl DaemonLoop {
                     self.audiobookshelf_runtime.as_ref(),
                     &self.merged_tx,
                 );
+            }
+            return EventOutcome::CONTINUE;
+        }
+        if let CtrlCmd::RunOwnerAction(action) = cmd {
+            // Owner actions run through the one owner-action handler
+            // (tray-pin-swap design D7); the reply goes to this connection
+            // only.
+            let result = super::owner_action::run(self, action);
+            match result {
+                Ok(()) => send_to(reply_tx, &CtrlEvent::OwnerActionAccepted),
+                Err(reason) => send_to(reply_tx, &CtrlEvent::OwnerActionRefused { reason }),
             }
             return EventOutcome::CONTINUE;
         }
@@ -225,6 +243,9 @@ impl DaemonLoop {
     /// `DaemonEvent::CtrlDisconnected`: drop the client and invalidate any
     /// playback intent it owned.
     pub(super) fn handle_ctrl_disconnected(&mut self, client_id: CtrlClientId) -> EventOutcome {
+        // The swap machine sees the id before the registry entry goes away:
+        // a target leaving while `Preparing` abandons the swap (design D3).
+        self.pin_swap.on_client_left(client_id);
         self.ctrl_clients.lock().unwrap().remove(client_id);
         self.owner.intents.invalidate_connection(client_id);
         EventOutcome::CONTINUE

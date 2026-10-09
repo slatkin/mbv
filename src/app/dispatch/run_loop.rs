@@ -1,3 +1,3 @@
 mod drains;
 mod session;
-mod teardown;
+pub(in crate::app) mod teardown;

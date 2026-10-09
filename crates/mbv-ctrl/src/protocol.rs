@@ -73,6 +73,18 @@ pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 /// Client connection is restricted to owner Service-setup administration.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_SERVICE_SETUP_ADMIN: &str = "service-setup-admin";
+/// Client handles `SwapPrepare` and `SwapQuit`, so the Owner may replace it
+/// with a Client in the other surface mode. Additive — no protocol-version bump.
+pub const CTRL_CAP_PIN_SWAP: &str = "pin-swap";
+/// Client runs in a pinned panel (`pin::is_pinned()` settled before the
+/// Owner connection). Additive — no protocol-version bump.
+pub const CTRL_CAP_PINNED_SURFACE: &str = "pinned-surface";
+/// The environment variable the Owner sets on a Client it started for a Pin
+/// swap, carrying the one-shot swap token (tray-pin-swap design D2).
+pub const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
+/// Connection may run one Owner action (`CtrlCmd::RunOwnerAction`). Additive —
+/// no protocol-version bump.
+pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";

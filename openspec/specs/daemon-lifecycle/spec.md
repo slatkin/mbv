@@ -53,7 +53,8 @@ behave the same whatever it is set to.
 
 A TUI whose launch lifecycle is attached to this machine's local daemon SHALL request
 coordinated shutdown when it quits and `stay_alive` is false at that moment. The setting
-SHALL be read at quit time.
+SHALL be read at quit time. A TUI that exits because a Pin swap replaced it SHALL NOT request
+coordinated shutdown, whatever `stay_alive` is.
 
 The request SHALL target this machine's local daemon independently of the TUI's current
 playback route. It SHALL never be forwarded to a current TCP or explicit Unix target.
@@ -94,6 +95,12 @@ playback route. It SHALL never be forwarded to a current TCP or explicit Unix ta
 - **THEN** the TUI SHALL finish exiting without sending the request to any other endpoint
 - **THEN** the user SHALL be told that the daemon may still be running and SHALL be given
   `mbv -q` as recovery
+
+#### Scenario: Swapped-out TUI with Stay Alive off
+
+- **WHEN** `stay_alive` is false and a Pin swap replaces the attached TUI
+- **THEN** the replaced TUI SHALL exit without requesting coordinated shutdown
+- **THEN** the local daemon and playback SHALL keep running with the new TUI attached
 
 ### Requirement: Accepted shutdown is unconditional
 
@@ -253,7 +260,9 @@ While `stay_alive` is false, the local daemon SHALL admit at most one attached c
 attempt made while a client is already attached SHALL be refused with a reason identifying the
 exclusive owner, before any queue or playback state is sent, and the refused connection SHALL NOT
 affect the attached client. Clients already attached when Stay Alive is turned off SHALL remain
-attached.
+attached. Two exceptions apply. The Client the daemon itself started for a Pin swap in progress
+SHALL be admitted once; any other Client connection during the swap SHALL still be refused. A
+local Owner action request (`owner-actions`) is not a client and SHALL be admitted.
 
 #### Scenario: Second terminal with Stay Alive off
 
@@ -272,3 +281,16 @@ attached.
 - **WHEN** two TUIs are attached and the user turns Stay Alive off
 - **THEN** both TUIs SHALL remain attached
 - **THEN** a third connection attempt SHALL be refused with the exclusive-owner reason
+
+#### Scenario: Pin swap with Stay Alive off
+
+- **WHEN** `stay_alive` is false, one TUI is attached, and the user chooses **Pin** from the Tray
+- **THEN** the daemon SHALL admit the pinned Client it started
+- **THEN** a terminal mbv started by the user during the swap SHALL be refused with the
+  exclusive-owner reason
+
+#### Scenario: `mbv --swap-panel` with Stay Alive off
+
+- **WHEN** `stay_alive` is false, one TUI is attached, and the user runs `mbv --swap-panel`
+- **THEN** the daemon SHALL admit the request and start the Pin swap
+- **THEN** the request SHALL NOT count as a second attached client

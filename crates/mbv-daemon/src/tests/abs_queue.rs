@@ -26,11 +26,13 @@ pub fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     // abs_queue=false, abs_progress=false, abs_book_*=false
-    let id = clients.connect(
+    let id = clients.connect_with_role(
         tx,
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
         false,
+        None,
+        crate::ctrl::CtrlConnectionRole::Client,
     );
     (id, rx)
 }

@@ -1,6 +1,6 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
-use crate::ctrl::{ClientRegistry, CtrlClients, CtrlOutbound, CtrlTransport};
+use crate::ctrl::{ClientRegistry, CtrlConnectionRole, CtrlOutbound, CtrlTransport, SwapSurface};
 use crate::{DaemonRole, OwnerSettingsReader};
 use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use mbv_net::stream::SocketStream;
@@ -8,25 +8,38 @@ use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
+/// What one decoded Hello classifies into for admission and registration
+/// (tray-pin-swap design D7).
+struct HelloClassification {
+    audiobookshelf: CtrlAudiobookshelfCapabilities,
+    supports_owner_queue_load: bool,
+    role: CtrlConnectionRole,
+    swap_surface: Option<SwapSurface>,
+    swap_token: Option<String>,
+}
+
 fn ctrl_client_capabilities(
     line: &str,
     control_credential: Option<&str>,
-) -> Option<(CtrlAudiobookshelfCapabilities, bool, bool)> {
+) -> Option<HelloClassification> {
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if !hello_credentials_valid(&info, control_credential) {
                 return None;
             }
-            Some((
-                CtrlAudiobookshelfCapabilities {
+            let role = connection_role_from_hello(&info)?;
+            Some(HelloClassification {
+                audiobookshelf: CtrlAudiobookshelfCapabilities {
                     queue: info.supports_abs_queue(),
                     progress: info.supports_abs_progress(),
                     book_queue: info.supports_abs_book_queue(),
                     book_progress: info.supports_abs_book_progress(),
                 },
-                info.supports_owner_queue_load(),
-                info.supports_service_setup_admin(),
-            ))
+                supports_owner_queue_load: info.supports_owner_queue_load(),
+                role,
+                swap_surface: swap_surface_from_hello(&info),
+                swap_token: info.swap_token,
+            })
         }
         Ok(_) => {
             tracing::warn!(name: "daemon.ctrl_client.hello_missing", target: "daemon", "ctrl client rejected: missing protocol hello");
@@ -52,6 +65,24 @@ fn hello_credentials_valid(info: &CtrlHello, control_credential: Option<&str>) -
     }
 }
 
+/// The connection role a Hello advertises; a Hello claiming both admin
+/// capabilities is rejected (tray-pin-swap design D7).
+fn connection_role_from_hello(info: &CtrlHello) -> Option<CtrlConnectionRole> {
+    let service_setup_admin = info.supports_service_setup_admin();
+    let owner_action = info.supports_owner_action();
+    if service_setup_admin && owner_action {
+        tracing::warn!(name: "daemon.ctrl_client.hello_conflicting_admin_roles", target: "daemon", "ctrl client rejected: hello advertises both admin capabilities");
+        return None;
+    }
+    Some(if service_setup_admin {
+        CtrlConnectionRole::ServiceSetupAdmin
+    } else if owner_action {
+        CtrlConnectionRole::OwnerAction
+    } else {
+        CtrlConnectionRole::Client
+    })
+}
+
 fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bool {
     if info.control_token.is_none() {
         tracing::warn!(name: "daemon.ctrl_client.control_credential_missing", target: "daemon", "ctrl client rejected: missing Control credential");
@@ -64,31 +95,113 @@ fn control_credential_is_valid(info: &CtrlHello, control_credential: &str) -> bo
     true
 }
 
+/// Which swap surface the Hello advertises. `Pinned` comes from the
+/// `pinned-surface` capability alone: a pinned Client that does not
+/// advertise `pin-swap` (a pre-upgrade pinned Client) is still an Unpin
+/// target — it never answers `SwapPrepared`, so the swap abandons at the
+/// deadline (spec pin-swap "Attached pinned Client does not support Pin
+/// swap"). A Terminal surface requires `pin-swap`, so an old terminal Client
+/// is never a Pin target.
+fn swap_surface_from_hello(info: &CtrlHello) -> Option<SwapSurface> {
+    if info.supports_pinned_surface() {
+        Some(SwapSurface::Pinned)
+    } else if info.supports_pin_swap() {
+        Some(SwapSurface::Terminal)
+    } else {
+        None
+    }
+}
+
+/// What `send_admission_refusal` decided about one Hello.
+enum AdmissionOutcome {
+    /// The connection proceeds as a normal (or admin-role) connection.
+    Admitted,
+    /// The refusal event was sent; the connection ends.
+    Refused,
+    /// Admitted as the Pin swap's replacement Client: the pending one-shot
+    /// token was consumed (design D4). The caller reports the attach to the
+    /// loop, which completes the swap.
+    AdmittedReplacement(String),
+}
+
 fn send_admission_refusal(
     clients: &crate::ctrl::CtrlClients,
     role: DaemonRole,
     transport: CtrlTransport,
     stay_alive: bool,
-    service_setup_admin: bool,
+    connection_role: CtrlConnectionRole,
+    hello_swap_token: Option<&str>,
     ev_tx: &crate::ctrl::CtrlSender,
-) -> bool {
-    let admin_local_connection = service_setup_admin && transport == CtrlTransport::Local;
-    let reason = if role == DaemonRole::Local && clients.shutting_down {
-        Some(mbv_ctrl::DisconnectReason::OwnerShuttingDown)
-    } else if role == DaemonRole::Local
-        && !stay_alive
-        && clients.has_driver()
-        && !admin_local_connection
+) -> AdmissionOutcome {
+    let admin_connection = connection_role != CtrlConnectionRole::Client;
+    if role == DaemonRole::Local && clients.shutting_down {
+        crate::send_to(
+            ev_tx,
+            &CtrlEvent::Disconnected {
+                reason: mbv_ctrl::DisconnectReason::OwnerShuttingDown,
+            },
+        );
+        return AdmissionOutcome::Refused;
+    }
+    // A Hello carrying the pending one-shot token is the replacement Client
+    // the Owner itself started for a Pin swap (design D4): it is admitted
+    // despite `ExclusiveOwner`, and the token is spent whatever the
+    // admission outcome — a second Hello presenting it finds nothing
+    // pending. Under Stay-alive on, or with no Client attached, nothing
+    // refuses the replacement, but the swap still completes when it
+    // attaches. The token travels only through the child's environment and
+    // the local Unix socket.
+    if transport == CtrlTransport::Local
+        && connection_role == CtrlConnectionRole::Client
+        && clients.pending_swap().take_matching(hello_swap_token)
+        && let Some(token) = hello_swap_token
     {
-        Some(mbv_ctrl::DisconnectReason::ExclusiveOwner {
-            pid: std::process::id(),
-        })
-    } else {
-        None
-    };
-    let Some(reason) = reason else { return false };
-    crate::send_to(ev_tx, &CtrlEvent::Disconnected { reason });
-    true
+        return AdmissionOutcome::AdmittedReplacement(token.to_string());
+    }
+    if role == DaemonRole::Local && !stay_alive && clients.has_driver() && !admin_connection {
+        crate::send_to(
+            ev_tx,
+            &CtrlEvent::Disconnected {
+                reason: mbv_ctrl::DisconnectReason::ExclusiveOwner {
+                    pid: std::process::id(),
+                },
+            },
+        );
+        return AdmissionOutcome::Refused;
+    }
+    AdmissionOutcome::Admitted
+}
+
+/// Refuses an Owner-action Hello that arrived over TCP (spec owner-actions
+/// "Over TCP"): the connection closes without a reply, like a failed
+/// credential.
+fn owner_action_refused_over_tcp(transport: CtrlTransport, role: CtrlConnectionRole) -> bool {
+    let refused = role == CtrlConnectionRole::OwnerAction && transport == CtrlTransport::Tcp;
+    if refused {
+        tracing::warn!(name: "daemon.ctrl_client.owner_action_over_tcp", target: "daemon", "ctrl client rejected: owner actions are local-only");
+    }
+    refused
+}
+
+/// Whether a restricted-role connection may send `cmd`; `Some` is the
+/// `CommandRejected` reason (design D7: each admin role allows only its own
+/// command).
+fn restricted_command_rejection(role: CtrlConnectionRole, cmd: &CtrlCmd) -> Option<String> {
+    match role {
+        CtrlConnectionRole::Client => None,
+        CtrlConnectionRole::ServiceSetupAdmin
+            if matches!(cmd, CtrlCmd::ApplyServiceSetup { .. }) =>
+        {
+            None
+        }
+        CtrlConnectionRole::ServiceSetupAdmin => {
+            Some("service-setup admin connections cannot send other commands".to_string())
+        }
+        CtrlConnectionRole::OwnerAction if matches!(cmd, CtrlCmd::RunOwnerAction(_)) => None,
+        CtrlConnectionRole::OwnerAction => {
+            Some("owner action connections cannot send other commands".to_string())
+        }
+    }
 }
 
 fn initial_queue_state_json(
@@ -172,45 +285,47 @@ impl CtrlClientSession {
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let Some((audiobookshelf, supports_owner_queue_load, service_setup_admin)) =
-            ctrl_client_capabilities(&line, control_credential.as_deref())
-        else {
+        let Some(hello) = ctrl_client_capabilities(&line, control_credential.as_deref()) else {
             return;
         };
+        if owner_action_refused_over_tcp(transport, hello.role) {
+            return;
+        }
         let stay_alive = role != DaemonRole::Local || (owner_settings)().stay_alive;
         let initial_state = initial_queue_state_json(
             &player_status,
             &shared_queue,
-            audiobookshelf.queue,
-            audiobookshelf.book_queue,
+            hello.audiobookshelf.queue,
+            hello.audiobookshelf.book_queue,
         );
 
         let mut clients = ctrl_clients.lock().unwrap();
-        if send_admission_refusal(
+        match send_admission_refusal(
             &clients,
             role,
             transport,
             stay_alive,
-            service_setup_admin,
+            hello.role,
+            hello.swap_token.as_deref(),
             &ev_tx,
         ) {
-            return;
+            AdmissionOutcome::Refused => return,
+            AdmissionOutcome::AdmittedReplacement(token) => {
+                let _ = merged_tx.send(DaemonEvent::PinSwapAdmitted { token });
+            }
+            AdmissionOutcome::Admitted => {}
         }
         if let Some(initial_state) = initial_state {
             let _ = ev_tx.send(CtrlOutbound::Event(initial_state));
         }
         let reply_tx = ev_tx.clone();
-        let connect = if service_setup_admin {
-            CtrlClients::connect_admin
-        } else {
-            CtrlClients::connect
-        };
-        let client_id = connect(
-            &mut clients,
+        let client_id = clients.connect_with_role(
             ev_tx,
             transport,
-            audiobookshelf,
-            supports_owner_queue_load,
+            hello.audiobookshelf,
+            hello.supports_owner_queue_load,
+            hello.swap_surface,
+            hello.role,
         );
         drop(clients);
         log_ctrl_client_connected(client_id, peer);
@@ -221,21 +336,14 @@ impl CtrlClientSession {
                 continue;
             }
             match serde_json::from_str::<CtrlCmd>(&line) {
-                Ok(cmd)
-                    if service_setup_admin
-                        && !matches!(&cmd, CtrlCmd::ApplyServiceSetup { .. }) =>
-                {
-                    crate::send_to(
-                        &reply_tx,
-                        &CtrlEvent::CommandRejected(
-                            "service-setup admin connections cannot send other commands"
-                                .to_string(),
-                        ),
-                    );
-                }
-                Ok(cmd) => {
-                    let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
-                }
+                Ok(cmd) => match restricted_command_rejection(hello.role, &cmd) {
+                    Some(reason) => {
+                        crate::send_to(&reply_tx, &CtrlEvent::CommandRejected(reason));
+                    }
+                    None => {
+                        let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
+                    }
+                },
                 Err(e) => {
                     // A drop here is silent playback loss for the client (e.g.
                     // a wire-shape drift this peer can't parse), so surface it
@@ -281,6 +389,12 @@ pub(crate) fn spawn_ctrl_client(
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
     let mut daemon_hello = CtrlHello::current();
+    // The Owner runs Owner actions (tray-pin-swap design D7); a Client reads
+    // this capability off the server Hello to report a restart requirement
+    // instead of sending `RunOwnerAction` at an Owner that cannot run it.
+    daemon_hello
+        .capabilities
+        .push(mbv_ctrl::CTRL_CAP_OWNER_ACTION.to_string());
     if control_credential.is_none() {
         daemon_hello
             .capabilities
@@ -324,4 +438,205 @@ pub(crate) fn spawn_ctrl_client(
         owner_settings,
     };
     std::thread::spawn(move || session.run(&peer, ev_tx));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ctrl::CtrlClients;
+    use std::sync::atomic::AtomicBool;
+
+    /// Contract: spec pin-swap "Attached pinned Client does not support Pin
+    /// swap" — a pinned-surface-only Hello (a pre-upgrade pinned Client) is
+    /// a Pinned swap target, so the shared flag flips and Unpin targets it;
+    /// the swap then abandons at the deadline. A Terminal surface still
+    /// requires `pin-swap`, and a Client with neither capability has no
+    /// surface.
+    #[test]
+    fn a_pinned_surface_only_hello_is_a_pinned_swap_target() {
+        let pinned_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE]);
+        let pinned_and_swap = hello_with_caps(&[
+            mbv_ctrl::CTRL_CAP_PIN_SWAP,
+            mbv_ctrl::CTRL_CAP_PINNED_SURFACE,
+        ]);
+        let swap_only = hello_with_caps(&[mbv_ctrl::CTRL_CAP_PIN_SWAP]);
+        let neither = hello_with_caps(&[]);
+
+        assert_eq!(
+            swap_surface_from_hello(&pinned_only),
+            Some(SwapSurface::Pinned)
+        );
+        assert_eq!(
+            swap_surface_from_hello(&pinned_and_swap),
+            Some(SwapSurface::Pinned)
+        );
+        assert_eq!(
+            swap_surface_from_hello(&swap_only),
+            Some(SwapSurface::Terminal)
+        );
+        assert_eq!(swap_surface_from_hello(&neither), None);
+    }
+
+    /// A pinned-surface-only Hello registered as a Client sets the shared
+    /// "pinned Client attached" flag, so the Tray shows **Unpin** while that
+    /// pre-upgrade Client is attached.
+    #[test]
+    fn a_pinned_surface_only_client_sets_the_pinned_flag() {
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut clients = CtrlClients::new(
+            merged_tx,
+            Arc::clone(&flag),
+            Arc::new(crate::PendingSwapToken::default()),
+        );
+        let (client_tx, _client_rx) = mpsc::channel::<CtrlOutbound>();
+        clients.connect_with_role(
+            client_tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
+            CtrlConnectionRole::Client,
+        );
+
+        assert!(flag.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    fn hello_with_caps(caps: &[&str]) -> CtrlHello {
+        let mut hello = CtrlHello::current();
+        hello.capabilities = caps.iter().map(|cap| (*cap).to_string()).collect();
+        hello
+    }
+
+    /// A registry with one local Client attached, so `has_driver` is true and
+    /// the `ExclusiveOwner` refusal fires under Stay-alive off.
+    fn registry_with_driver() -> (CtrlClients, mpsc::Receiver<CtrlOutbound>) {
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let mut clients = CtrlClients::new(
+            merged_tx,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(crate::PendingSwapToken::default()),
+        );
+        let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();
+        clients.connect_with_role(
+            client_tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            None,
+            CtrlConnectionRole::Client,
+        );
+        (clients, client_rx)
+    }
+
+    /// Contract: spec daemon-lifecycle "Pin swap with Stay Alive off" /
+    /// design D4 — a Hello carrying the pending one-shot swap token is the
+    /// replacement Client the Owner itself started, so it is admitted
+    /// despite `ExclusiveOwner`, and the refusal event is not sent.
+    #[test]
+    fn matching_swap_token_is_admitted_despite_exclusive_owner() {
+        let (clients, _client_rx) = registry_with_driver();
+        clients.pending_swap().publish("token-1".to_string());
+        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
+
+        let outcome = send_admission_refusal(
+            &clients,
+            DaemonRole::Local,
+            CtrlTransport::Local,
+            false,
+            CtrlConnectionRole::Client,
+            Some("token-1"),
+            &ev_tx,
+        );
+
+        assert!(matches!(outcome, AdmissionOutcome::AdmittedReplacement(_)));
+        assert!(ev_rx.try_recv().is_err());
+    }
+
+    /// Contract: design D4 — the token is consumed at once, so it works for
+    /// one connection only; a second Hello presenting the same token is
+    /// refused with the exclusive-owner reason like any user-started Client.
+    #[test]
+    fn a_swap_token_is_spent_on_first_use() {
+        let (clients, _client_rx) = registry_with_driver();
+        clients.pending_swap().publish("token-1".to_string());
+        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
+
+        let first = send_admission_refusal(
+            &clients,
+            DaemonRole::Local,
+            CtrlTransport::Local,
+            false,
+            CtrlConnectionRole::Client,
+            Some("token-1"),
+            &ev_tx,
+        );
+        let second = send_admission_refusal(
+            &clients,
+            DaemonRole::Local,
+            CtrlTransport::Local,
+            false,
+            CtrlConnectionRole::Client,
+            Some("token-1"),
+            &ev_tx,
+        );
+
+        assert!(matches!(first, AdmissionOutcome::AdmittedReplacement(_)));
+        assert!(matches!(second, AdmissionOutcome::Refused));
+        // The second Hello was refused with the exclusive-owner reason.
+        ev_rx.try_recv().unwrap();
+    }
+
+    /// Contract: design D4 — the token is consumed whatever the admission
+    /// outcome. Under Stay-alive on nothing refuses the replacement, but the
+    /// swap must still complete when it attaches (it guards against the
+    /// machine waiting out its deadline after a successful attach).
+    #[test]
+    fn the_swap_token_is_consumed_when_stay_alive_admits_normally() {
+        let (clients, _client_rx) = registry_with_driver();
+        clients.pending_swap().publish("token-1".to_string());
+        let (ev_tx, _ev_rx) = mpsc::channel::<CtrlOutbound>();
+
+        let outcome = send_admission_refusal(
+            &clients,
+            DaemonRole::Local,
+            CtrlTransport::Local,
+            true,
+            CtrlConnectionRole::Client,
+            Some("token-1"),
+            &ev_tx,
+        );
+
+        assert!(matches!(outcome, AdmissionOutcome::AdmittedReplacement(_)));
+        assert!(
+            !clients.pending_swap().take_matching(Some("token-1")),
+            "the first Hello spent the token"
+        );
+    }
+
+    /// Contract: design D4 — the shutting-down refusal still wins, even for
+    /// a Hello that carries the pending swap token.
+    #[test]
+    fn shutting_down_refusal_wins_over_the_swap_token() {
+        let (mut clients, _client_rx) = registry_with_driver();
+        clients.shutting_down = true;
+        clients.pending_swap().publish("token-1".to_string());
+        let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
+
+        let outcome = send_admission_refusal(
+            &clients,
+            DaemonRole::Local,
+            CtrlTransport::Local,
+            false,
+            CtrlConnectionRole::Client,
+            Some("token-1"),
+            &ev_tx,
+        );
+
+        assert!(matches!(outcome, AdmissionOutcome::Refused));
+        // The shutting-down refusal event was sent to the Hello.
+        ev_rx.try_recv().unwrap();
+        // The token stays pending: a refused Hello does not spend it.
+        assert!(clients.pending_swap().take_matching(Some("token-1")));
+    }
 }

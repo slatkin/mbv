@@ -1,10 +1,14 @@
+use super::handshake::{perform_handshake, perform_service_setup_admin_handshake};
+use super::owner_actions::{run_owner_action_handshake, send_owner_action};
 use super::*;
 use crate::QueueOp;
+use mbv_ctrl::OwnerAction;
 use mbv_emby_model::EmbyImageTags;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -95,7 +99,8 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
     });
-    let (remote, events) = connect_stream(SocketStream::Unix(client), PeerBuild::Any).unwrap();
+    let (remote, events) =
+        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
     let daemon = daemon_rx.recv().unwrap();
     peer.join().unwrap();
     (remote, events, daemon)
@@ -174,6 +179,77 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
     assert!(hello.supports_service_setup_admin());
     assert_eq!(hello.control_token.as_deref(), Some("admin-control-token"));
     assert!(matches!(state, CtrlEvent::UnifiedQueueState(_)));
+}
+
+/// Spec `owner-actions` "Owner refuses": the CLI shows the Owner's reason on
+/// stderr and exits 1, so the error text must carry that reason through
+/// (tray-pin-swap task 4.5).
+#[test]
+fn owner_action_refused_reply_surfaces_the_owner_reason() {
+    use mbv_ctrl::CTRL_CAP_OWNER_ACTION;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (request_tx, request_rx) = mpsc::channel();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.capabilities.push(CTRL_CAP_OWNER_ACTION.to_string());
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+        let mut request = String::new();
+        reader.read_line(&mut request).unwrap();
+        request_tx
+            .send(serde_json::from_str::<CtrlCmd>(&request).unwrap())
+            .unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::OwnerActionRefused {
+                reason: "a panel swap is already running".to_string()
+            })
+            .unwrap()
+        )
+        .unwrap();
+    });
+    let mut reader = BufReader::new(SocketStream::Unix(client));
+    run_owner_action_handshake(&mut reader, OwnerAction::SwapPanel, || {
+        Ok("owner-action-token".to_string())
+    })
+    .unwrap();
+    let error = send_owner_action(&mut reader, OwnerAction::SwapPanel).unwrap_err();
+    peer.join().unwrap();
+    assert!(matches!(
+        request_rx.recv().unwrap(),
+        CtrlCmd::RunOwnerAction(OwnerAction::SwapPanel)
+    ));
+    assert!(
+        error
+            .to_string()
+            .contains("a panel swap is already running")
+    );
 }
 
 #[test]
@@ -282,8 +358,10 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
     let error = perform_handshake_with_role(
         SocketStream::Unix(client),
         || Ok("unused".to_string()),
-        false,
+        HandshakeRole::Client,
         PeerBuild::MustMatch,
+        false,
+        None,
     )
     .unwrap_err();
 
@@ -332,8 +410,10 @@ fn local_handshake_accepts_identical_owner_build() {
     perform_handshake_with_role(
         SocketStream::Unix(client),
         || Ok("unused".to_string()),
-        false,
+        HandshakeRole::Client,
         PeerBuild::MustMatch,
+        false,
+        None,
     )
     .unwrap();
     peer.join().unwrap();

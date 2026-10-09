@@ -48,3 +48,11 @@ gutter_right  = 0
 accent        = true
 accent_color  = "#dabc7f"
 accent_width  = 1
+# Terminal emulator argv prefix used when the Owner process swaps the pinned
+# panel for a terminal Client (Unpin). The Owner appends `mbv` and runs the
+# argv, for example `terminal = ["wezterm", "start", "--"]`. When unset,
+# the Owner uses `$TERMINAL -e` followed by `mbv`; there is no other
+# fallback. `$TERMINAL` is read from the environment of the TUI that started
+# the Owner process, so with Stay-alive on a long-lived Owner can keep an
+# old value: set this key for the reliable path.
+# terminal = ["wezterm", "start", "--"]
