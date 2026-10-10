@@ -2,7 +2,7 @@
 
 ## 1. Lock-gated owner signalling (design D1–D3)
 
-- [ ] 1.1 Create `crates/mbv-daemon/src/owner_lock.rs`. Move `pid_file()` there from `core.rs`
+- [x] 1.1 Create `crates/mbv-daemon/src/owner_lock.rs`. Move `pid_file()` there from `core.rs`
   (re-export it from the crate root under the same name, so `mbv_daemon::pid_file` callers
   compile unchanged). Add `locked_owner_pid(&Path) -> Option<u32>`, `signal_owner(&Path) ->
   Result<u32, SignalOwnerError>`, and a hand-written `SignalOwnerError { NoOwner, Signal { pid,
@@ -12,27 +12,27 @@
   file that holds a PID and that the test keeps `flock`ed → `Some(pid)`; the same file unlocked
   → `None`; a missing file → `None`. No test calls `signal_owner`. Pass:
   `cargo nextest run -p mbv-daemon`.
-- [ ] 1.2 In `src/single_instance.rs`, delete `terminate_owner`, `read_pid` (if unused) and
+- [x] 1.2 In `src/single_instance.rs`, delete `terminate_owner`, `read_pid` (if unused) and
   `TerminateOwnerError`. Point both callers in `src/main.rs` (the `mbv -q` path and the
   restart-path call near line 541) at `mbv_daemon::owner_lock::signal_owner`, keeping their
   error handling and output. Verify: `cargo check -p mbv`; `rg terminate_owner src` is empty.
-- [ ] 1.3 In `crates/mbv-daemon/src/run.rs::start_daemon`, write the PID file only when `role ==
+- [x] 1.3 In `crates/mbv-daemon/src/run.rs::start_daemon`, write the PID file only when `role ==
   DaemonRole::Packaged`. Acquire an exclusive non-blocking `flock` on it first, write the PID
   after acquiring it, and keep the guard alive for the daemon's run. If the lock is held,
   refuse to start with an error naming the path. Guard the shutdown `remove_file` (`run.rs:652`)
   with the same role check. Verify: `cargo check -p mbv-daemon`. Reading the diff shows no
   `pid_file()` write for `DaemonRole::Local`.
-- [ ] 1.4 In `crates/mbvd/src/main.rs`: `stop_daemon` sets `MBV_SYSTEM=1` (same `SAFETY` comment
+- [x] 1.4 In `crates/mbvd/src/main.rs`: `stop_daemon` sets `MBV_SYSTEM=1` (same `SAFETY` comment
   as `connect_emby`), calls `mbv_daemon::owner_lock::signal_owner(&pid_file())`, maps errors to
   `DaemonError`, and no longer runs the `kill` command or removes the file.
   `daemon_running()` becomes `locked_owner_pid(&pid_file()).is_some()`. Verify: `cargo check -p
   mbvd`; `rg 'Command::new\("kill"\)' crates/mbvd` is empty.
-- [ ] 1.5 Write `docs/invariants/21-signal-only-a-held-owner-lock.md` in the style of the
+- [x] 1.5 Write `docs/invariants/21-signal-only-a-held-owner-lock.md` in the style of the
   existing entries: a PID is signalled only while its flock is held, and each Owner role has
   exactly one PID record (Local: single-instance lock file; Packaged: `mbv.pid`). Cite #915 and
   the `mbvd --quit` / Local `mbv.pid` collision. Verify: the file exists and names
   `owner_lock::locked_owner_pid` as the enforcement site.
-- [ ] 1.6 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
+- [x] 1.6 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
   be clean. Commit group 1.
 
 ## 2. Private runtime directory (design D4)
