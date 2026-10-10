@@ -2,8 +2,11 @@
 //! (ADR 0006). Independent of stay-alive: always on.
 //!
 //! The Player-owning app (a bare `mbv`, or a local daemon in stay-alive
-//! mode) holds an advisory `flock` at `$XDG_RUNTIME_DIR/mbv.lock` for its
-//! entire lifetime. The kernel auto-releases it on any process death, so a
+//! mode) holds an advisory `flock` at `mbv_config::owner_lock_path()` —
+//! the runtime directory's `mbv.lock` (`$XDG_RUNTIME_DIR/mbv.lock`,
+//! `/run/mbv/mbv.lock` for a system instance, or the private
+//! `/tmp/mbv-<uid>/mbv.lock` fallback) — for its entire lifetime. The
+//! kernel auto-releases it on any process death, so a
 //! held lock always means a live app — there is no stale-lock case to
 //! reason about. Startup does a non-blocking flock: acquired -> fresh
 //! start; would-block -> a live app exists, and socket connectability
@@ -15,14 +18,6 @@ use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-
-fn runtime_dir() -> PathBuf {
-    std::env::var("XDG_RUNTIME_DIR").map_or_else(|_| PathBuf::from("/tmp"), PathBuf::from)
-}
-
-pub fn lock_path() -> PathBuf {
-    runtime_dir().join("mbv.lock")
-}
 
 pub fn socket_path() -> PathBuf {
     PathBuf::from(mbv_config::control_socket_path())

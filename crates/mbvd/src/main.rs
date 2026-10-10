@@ -605,6 +605,12 @@ fn run() -> Result<(), DaemonError> {
             log_level,
         } => (audio_only, log_level),
     };
+    // The runtime directory is checked once at the process boundary before
+    // the owner lock or control socket is taken (harden-owner-process-
+    // boundaries design D4). Nothing to do on a system instance.
+    if let Err(error) = config::ensure_runtime_dir() {
+        return Err(DaemonError::failure(format!("mbvd: {error}")));
+    }
     if daemon_running() {
         return Err(DaemonError::failure("mbvd: a daemon is already running"));
     }

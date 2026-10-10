@@ -163,7 +163,7 @@ impl App {
         #[cfg(not(test))]
         {
             let socket_path = crate::single_instance::socket_path();
-            let lock_path = crate::single_instance::lock_path();
+            let lock_path = mbv_config::owner_lock_path();
             match crate::single_instance::resolve(&socket_path, &lock_path)? {
                 crate::single_instance::Resolution::Fresh(guard) => {
                     drop(guard);

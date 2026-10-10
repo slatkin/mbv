@@ -335,7 +335,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
 }
 
 fn stop_running_instance() {
-    let lock = single_instance::lock_path();
+    let lock = mbv_config::owner_lock_path();
     match mbv_daemon::owner_lock::signal_owner(&lock) {
         Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
         Err(error) => {
@@ -346,6 +346,14 @@ fn stop_running_instance() {
 }
 
 fn main() {
+    // The fallback runtime directory is checked once at the process
+    // boundary (design D4) so `-q`, `--toggle`, the Owner-action flags, and
+    // every single-instance resolution see a valid private directory.
+    if let Err(error) = mbv_config::ensure_runtime_dir() {
+        eprintln!("mbv: {error}");
+        std::process::exit(1);
+    }
+
     // Claim the Pin-swap token before anything else spawns a worker or child
     // process (tray-pin-swap design D2).
     pin::claim_swap_token();
@@ -477,7 +485,7 @@ fn run_local_instance(
     // the owner process before attaching. The panel handle is consumed only
     // when the TUI finally runs, so retries keep the panel alive.
     let mut pinned_panel = pinned_panel;
-    let lock_path = single_instance::lock_path();
+    let lock_path = mbv_config::owner_lock_path();
     let socket_path = single_instance::socket_path();
     let mut resolution = match single_instance::resolve(&socket_path, &lock_path) {
         Ok(resolution) => resolution,

@@ -219,6 +219,11 @@ pub fn run_local_daemon_main() -> ! {
         }
     };
 
+    if let Err(error) = mbv_config::ensure_runtime_dir() {
+        eprintln!("mbv: local daemon: {error}");
+        std::process::exit(1);
+    }
+
     // The daemon IS the SIGHUP firewall: closing the launching terminal
     // must not kill it (belt-and-suspenders with the setsid() done at
     // spawn time in `spawn_detached`).
@@ -248,7 +253,7 @@ pub fn run_local_daemon_main() -> ! {
     // Acquire the single-instance lock and write our PID before binding the
     // control socket, so `mbv -q` can find us (the launcher already dropped
     // its own liveness-probe guard before spawning us).
-    let lock_path = crate::single_instance::lock_path();
+    let lock_path = mbv_config::owner_lock_path();
     let socket_path = crate::single_instance::socket_path();
     let mut guard = match crate::single_instance::resolve(&socket_path, &lock_path) {
         Ok(crate::single_instance::Resolution::Fresh(guard)) => guard,
