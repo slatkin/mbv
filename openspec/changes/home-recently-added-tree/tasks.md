@@ -51,8 +51,8 @@
 
 ## 7. Lazy Audiobookshelf Latest and markers from Home data (design D4, D5)
 
-- [ ] 7.1 Remove the destination `start_audiobookshelf_shelves` call from `start_audiobookshelf_catalog_fetches`, where Home's fetch from 4.3 replaces it. In `audiobookshelf_refresh`, call it only when the podcast Latest pill is selected. Also call it when the podcast Latest pill is selected and on launch restoration on Latest. Verify: `cargo check -p mbv`.
-- [ ] 7.2 Change `destination_latest_marker` to test the source's Home Recently added rows against the launch window and the acknowledgement set. Delete `DestinationLatestSnapshot::has_new_content`, its recompute, and `recompute_destination_latest_marker`. Contract: the spec scenario "Unvisited Emby library marks at launch". Verify: update `src/app/tests/home_latest.rs` so each marker test feeds Home Recently added events instead of destination snapshots. Add one test showing that an Emby library which was never opened has its tab marked after only the Home fetch. `cargo nextest run -p mbv` passes.
+- [x] 7.1 Remove the destination `start_audiobookshelf_shelves` call from `start_audiobookshelf_catalog_fetches`, where Home's fetch from 4.3 replaces it. In `audiobookshelf_refresh`, call it only when the podcast Latest pill is selected. Also call it when the podcast Latest pill is selected and on launch restoration on Latest. Verify: `cargo check -p mbv`.
+- [x] 7.2 Change `destination_latest_marker` to test the source's Home Recently added rows against the launch window and the acknowledgement set. Delete `DestinationLatestSnapshot::has_new_content`, its recompute, and `recompute_destination_latest_marker`. Contract: the spec scenario "Unvisited Emby library marks at launch". Verify: update `src/app/tests/home_latest.rs` so each marker test feeds Home Recently added events instead of destination snapshots. Add one test showing that an Emby library which was never opened has its tab marked after only the Home fetch. `cargo nextest run -p mbv` passes.
 
 ## 8. Docs and integration
 
