@@ -9,7 +9,6 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::HomeContent;
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
-use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::{HomeRequest, LeafKeyResult, Msg, ShellRequest};
 
@@ -48,10 +47,9 @@ impl HomeContent {
 
     fn context_menu(targets: Vec<HomeItemTarget>, anchor: Option<(u16, u16)>) -> Option<Msg> {
         (!targets.is_empty()).then(|| {
-            Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                ContextMenuTargets::Home(targets),
-                anchor,
-            )))
+            Msg::Shell(Box::new(ShellRequest::Home(HomeRequest::ContextMenu(
+                targets, anchor,
+            ))))
         })
     }
 
@@ -121,16 +119,12 @@ impl HomeContent {
             )),
             MediaListSurfaceInput::Click(_)
             | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_) => {
-                Some(Msg::Shell(Box::new(ShellRequest::HomeRowClick {
-                    target: self.selected_item_target()?,
-                })))
-            }
-            MediaListSurfaceInput::DoubleClick(_) => {
-                Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
-                    target: self.selected_item_target()?,
-                })))
-            }
+            | MediaListSurfaceInput::RangeClick(_) => Some(Msg::Shell(Box::new(
+                ShellRequest::Home(HomeRequest::RowClick(self.selected_item_target()?)),
+            ))),
+            MediaListSurfaceInput::DoubleClick(_) => Some(Msg::Shell(Box::new(
+                ShellRequest::Home(HomeRequest::RowActivate(self.selected_item_target()?)),
+            ))),
             MediaListSurfaceInput::ContextClick(at) => {
                 let targets = match outcome.external_intent {
                     Some(RowIntent::Context(target)) => vec![target],

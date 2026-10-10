@@ -208,7 +208,8 @@ impl App {
             // Model handles this shell-only command before delegating the
             // remaining commands to App::dispatch: the podcast Latest pill
             // is component-local state, so the refresh carries the owner's
-            // pill answer for the lazy destination shelf fetch (design D4).
+            // pill answer for the lazy destination shelf fetch (spec
+            // `destination-latest-modes`, "Destination Latest lists load lazily").
             Command::RefreshCurrentView => {
                 unreachable!("RefreshCurrentView is dispatched by Model")
             }

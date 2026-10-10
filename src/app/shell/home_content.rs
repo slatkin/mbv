@@ -141,13 +141,13 @@ impl Model {
         source: DestinationLatestSource,
         items: Vec<QueueItem>,
     ) {
-        let window = self.app.home_latest_launch_window;
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         let items = items
             .into_iter()
             .filter(|item| {
                 mbv_ui_model::home_latest::home_age_group(
                     mbv_ui_model::home_latest::provider_timestamp_secs(item),
-                    window.current,
+                    now_secs,
                 )
                 .is_some()
             })
@@ -187,14 +187,14 @@ impl Model {
         &self,
         content_id: &mbv_queue::QueueItemContentId,
     ) -> Option<QueueItem> {
-        let window = self.app.home_latest_launch_window;
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         self.app
             .feed_tab
             .all_entries
             .iter()
             .find(|entry| {
                 matches!(content_id, mbv_queue::QueueItemContentId::Feed(guid) if *guid == entry.guid)
-                    && mbv_ui_model::home_latest::home_age_group(entry.pub_date_secs, window.current).is_some()
+                    && mbv_ui_model::home_latest::home_age_group(entry.pub_date_secs, now_secs).is_some()
             })
             .cloned()
             .map(QueueItem::Feed)
@@ -293,8 +293,11 @@ impl Model {
             // Feeds has no store entry: its rows derive from `all_entries`
             // at push time, filtered to the same 14-day cutoff.
             DestinationLatestSource::Feeds => self.app.feed_tab.all_entries.iter().any(|entry| {
-                mbv_ui_model::home_latest::home_age_group(entry.pub_date_secs, window.current)
-                    .is_some()
+                mbv_ui_model::home_latest::home_age_group(
+                    entry.pub_date_secs,
+                    mbv_render::screens::feeds_model::current_time_secs(),
+                )
+                .is_some()
                     && mbv_ui_model::home_latest::timestamp_in_launch_window(
                         entry.pub_date_secs,
                         window,

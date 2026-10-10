@@ -264,7 +264,8 @@ impl App {
             0,
             self.channels.lib_tx.clone(),
         );
-        // Destination Latest is lazy (design D4): the full Latest shelf is
+        // Destination Latest is lazy (spec `destination-latest-modes`,
+        // "Destination Latest lists load lazily"): the full Latest shelf is
         // fetched only while the podcast Latest pill is selected.
         if podcast_latest_selected {
             crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(

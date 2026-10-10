@@ -35,7 +35,8 @@ fn model_content_events(app: &crate::app::App, expected: usize) -> Vec<ModelCont
         .collect()
 }
 
-/// Design D3 (`home-recently-added-tree`): Home's Emby fetch keeps each
+/// Spec `home-latest-sections`, "Recently added combines every Latest-bearing
+/// destination": Home's Emby fetch keeps each
 /// destination's own Latest rule — a TV library sends the episode query,
 /// every other eligible library sends `get_latest` — and an ineligible
 /// Music or Playlists library contributes no request at all.

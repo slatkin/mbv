@@ -440,7 +440,7 @@ impl Model {
             *had_events = true;
             self.push_active_emby_library_owner_content();
             // Feeds rows are derived from `all_entries` at Home-push time
-            // (design D2 of `home-recently-added-tree`), so a feed refresh
+            // (spec `home-latest-sections`), so a feed refresh
             // re-projects Home.
             self.push_home_content();
         }

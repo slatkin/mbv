@@ -174,8 +174,9 @@ pub struct Model {
     /// One authoritative TV Latest section snapshot per Emby library view.
     pub(in crate::app) tv_latest_snapshots:
         std::collections::HashMap<String, DestinationLatestSnapshot>,
-    /// Home's per-source Recently added rows (design D2 of
-    /// `home-recently-added-tree`): each Service's fetch items already
+    /// Home's per-source Recently added rows (spec
+    /// `home-latest-sections`, "Recently added combines every Latest-bearing
+    /// destination"): each Service's fetch items already
     /// filtered to the 14-day cutoff at store time. Feeds has no entry; its
     /// rows are derived at push time. Nothing re-uses destination Latest
     /// data, and a destination fetch never fills Home.

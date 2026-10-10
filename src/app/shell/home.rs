@@ -17,7 +17,17 @@ impl Model {
             }
             HomeRequest::Delete(targets) => self.home_delete_request(targets),
             HomeRequest::ToggleWatched(targets) => self.home_toggle_watched_request(targets),
+            HomeRequest::RowClick(_) => self.home_row_click_request(),
+            HomeRequest::RowActivate(target) => {
+                self.home_row_click_request();
+                self.home_play_request(&target);
+            }
         }
+    }
+
+    fn home_row_click_request(&mut self) {
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
     }
 
     fn home_play_request(&mut self, target: &HomeItemTarget) {
@@ -219,7 +229,7 @@ impl Model {
     pub(in crate::app) fn home_recent_rows(&self) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
         use mbv_ui_model::home_latest::{HomeRecentRow, home_age_group, provider_timestamp_secs};
         use std::cmp::Reverse;
-        let window = self.app.home_latest_launch_window;
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         let mut rows: Vec<HomeRecentRow> = self
             .home_recently_added
             .values()
@@ -234,7 +244,7 @@ impl Model {
                 .feed_tab
                 .all_entries
                 .iter()
-                .filter(|entry| home_age_group(entry.pub_date_secs, window.current).is_some())
+                .filter(|entry| home_age_group(entry.pub_date_secs, now_secs).is_some())
                 .map(|entry| {
                     let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
                         self.app
@@ -358,6 +368,26 @@ mod tests {
             .expect("in-range timestamp")
             .format(&Iso8601::DEFAULT)
             .expect("ISO-8601 formatting always succeeds")
+    }
+
+    /// Spec `home-latest-sections`, "Recently added is grouped by age with the
+    /// Feeds rule": age depends on now, not on the launch instant.
+    #[test]
+    fn recently_added_age_cutoff_uses_now_not_the_launch_instant() {
+        let mut model = Model::new(make_app_stub());
+        let now = mbv_render::screens::feeds_model::current_time_secs();
+        let day = 24 * 60 * 60;
+        model.app.home_latest_launch_window = mbv_ui_model::home_latest::HomeLatestLaunchWindow {
+            previous: None,
+            current: now - 30 * day,
+        };
+        let mut movie = make_item("Movie", "Movie");
+        movie.date_added = date_added_iso(i64::try_from(now - 20 * day).unwrap());
+        let source = crate::app::DestinationLatestSource::Emby("lib".into());
+
+        model.store_home_recently_added(source.clone(), vec![QueueItem::Emby(Box::new(movie))]);
+
+        assert!(model.home_recently_added[&source].is_empty());
     }
 
     /// (`openspec/specs/home-latest-sections`) `push_home_content` sends the

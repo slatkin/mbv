@@ -38,6 +38,7 @@ pub use self::intents::{
     PlaylistsTarget, PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent,
     SettingsIntent,
 };
+#[doc(inline)]
 pub use self::playback::PlaybackRequest;
 #[doc(inline)]
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};

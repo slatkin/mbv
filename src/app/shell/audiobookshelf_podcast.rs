@@ -53,8 +53,8 @@ impl Model {
             .is_some_and(PodcastContent::latest_selected)
     }
 
-    /// Spawn one podcast library's destination Latest shelf fetch (design
-    /// D4): the fetch runs only while that library's Latest pill is
+    /// Spawn one podcast library's destination Latest shelf fetch (spec
+    /// `destination-latest-modes`, "Destination Latest lists load lazily"): the fetch runs only while that library's Latest pill is
     /// selected, on refresh while it is selected, and on launch restoration
     /// on Latest — never in the startup catalog loop.
     pub(in crate::app) fn spawn_audiobookshelf_latest_shelves(&self, library_id: &str) {

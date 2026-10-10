@@ -75,8 +75,9 @@ pub(in crate::app) enum DestinationLatestSource {
 
 /// The shell-owned snapshot of one Emby destination's Latest items. It feeds
 /// only the destination Latest projection; the new-content marker is
-/// evaluated from Home's `Recently added` rows (design D5 of
-/// `home-recently-added-tree`), never from this snapshot.
+/// evaluated from Home's `Recently added` rows (spec
+/// `destination-latest-modes`, "Latest markers follow their destination
+/// pills"), never from this snapshot.
 #[derive(Clone, Debug)]
 pub(in crate::app) struct DestinationLatestSnapshot {
     pub title: String,

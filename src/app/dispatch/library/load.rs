@@ -27,7 +27,7 @@ fn home_shelf_items(
 }
 
 /// Whether one Emby library's Latest items belong in the Home `Recently added`
-/// root (design D3 of `home-recently-added-tree`): the destination's own
+/// root (spec `home-latest-sections`): the destination's own
 /// Latest rules minus Music and Playlists, with TV included (it fetches
 /// through `get_latest_episodes`). Only `tvshows` uses the episode query; the
 /// `tvshows | playlists | music` guard in `spawn_destination_latest_snapshot`
@@ -97,7 +97,8 @@ impl App {
     /// resets presentation state, writes preferences, or clears a saved
     /// library position (#745). `podcast_latest_selected` is the active
     /// podcast owner's pill answer: the destination Latest shelf is fetched
-    /// only while that pill is selected (design D4).
+    /// only while that pill is selected (spec `destination-latest-modes`,
+    /// "Destination Latest lists load lazily").
     pub(in crate::app) fn refresh_current_view(&mut self, podcast_latest_selected: bool) {
         self.force_clear = true;
         if self.normalize_stale_browse_destination() {
@@ -106,8 +107,7 @@ impl App {
         match self.tab {
             TabSelection::Home => {
                 // A Home refresh refetches both Services' `Recently added`
-                // data in the background (design D3 of
-                // `home-recently-added-tree`). A failing Service contributes
+                // data in the background (spec `home-latest-sections`). A failing Service contributes
                 // nothing; Continue Watching still refreshes below.
                 self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
                 self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
@@ -402,8 +402,8 @@ impl App {
             .unwrap_or_default()
     }
 
-    /// Dispatches one Service's Home Recently added fetch (design D3 of
-    /// `home-recently-added-tree`). Triggered when a Service becomes ready,
+    /// Dispatches one Service's Home Recently added fetch (spec
+    /// `home-latest-sections`). Triggered when a Service becomes ready,
     /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
     /// on every Home refresh.
     pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {

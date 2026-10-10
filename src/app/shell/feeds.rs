@@ -103,5 +103,5 @@ mod tests {
     }
 
     // Task 4.5: the FeedsRowClick arm pulls panel focus to the Library
-    // (mirrors the HomeRowClick arm).
+    // (mirrors the `HomeRequest::RowClick` arm).
 }

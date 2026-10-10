@@ -122,7 +122,8 @@ impl App {
     }
 
     /// The destination row menu for an explicitly resolved Emby item
-    /// (`home-recently-added-tree` D7): a Home `Recently added` Emby row
+    /// (spec `home-latest-sections`, "Home actions resolve the row's own
+    /// section and Service identity"): a Home `Recently added` Emby row
     /// opens the same menu its row offers on the destination library — Play,
     /// Add to Queue, and the played-state entry — and never the Continue
     /// Watching removal. The bare `Play` and `Enqueue` actions execute
@@ -144,8 +145,9 @@ impl App {
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
 
-    /// The Home mixed-Service multi-selection menu (`home-recently-added-tree`
-    /// D7): a selection spanning Services offers Play and Add to Queue only,
+    /// The Home mixed-Service multi-selection menu (spec
+    /// `home-latest-sections`, "Home actions resolve the row's own section and
+    /// Service identity"): a selection spanning Services offers Play and Add to Queue only,
     /// and both entries carry the shell-resolved queue items in display
     /// order. An empty resolution opens nothing.
     pub(in crate::app) fn open_home_mixed_context_menu(

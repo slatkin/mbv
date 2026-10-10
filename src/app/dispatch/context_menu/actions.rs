@@ -121,8 +121,9 @@ impl App {
                 }
                 None
             }
-            // Home mixed-Service selection actions (`home-recently-added-tree`
-            // D7): the first resolved item plays — replacing the queue and
+            // Home mixed-Service selection actions (spec `home-latest-sections`,
+            // "Home actions resolve the row's own section and Service
+            // identity"): the first resolved item plays — replacing the queue and
             // starting — and the rest append in display order, through the
             // same per-item effects `HomePlay`/`HomeEnqueue` use.
             Some(ContextAction::HomePlaySelection(items)) => {
@@ -565,7 +566,8 @@ impl App {
     }
 
     /// The played-state action a `Recently added` row's context menu offers
-    /// (design D7 of `home-recently-added-tree`): for each Service, the one
+    /// (spec `home-latest-sections`, "Home actions resolve the row's own
+    /// section and Service identity"): for each Service, the one
     /// mark entry its destination menu builds from the item's cached state —
     /// mark played when unfinished, mark unplayed when finished.
     pub(in crate::app) fn toggle_recent_item_played_state(&mut self, item: &QueueItem) {

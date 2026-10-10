@@ -201,7 +201,7 @@ impl super::super::Model {
             ShellRequest::FeedsRowClick => {
                 // A Feeds list row the user clicked: the component already
                 // resolved and selected the row; the shell pulls panel
-                // focus to the Library (task 4.5, mirrors `HomeRowClick`).
+                // focus to the Library (task 4.5, mirrors `HomeRequest::RowClick`).
                 self.app
                     .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
                 self.sync_feeds();
@@ -248,7 +248,7 @@ impl super::super::Model {
                         crate::app::DestinationLatestSource::Audiobookshelf(library_id.clone()),
                     );
                     // Selecting the Latest pill fetches the full Latest
-                    // list (design D4).
+                    // list (spec `destination-latest-modes`).
                     self.spawn_audiobookshelf_latest_shelves(&library_id);
                 }
                 self.push_audiobookshelf_podcast_content();

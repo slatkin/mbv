@@ -23,7 +23,7 @@ fn legacy_home_section_preference_falls_back_to_continue_watching() {
     );
 }
 
-// ── Destination Latest markers read Home's data (row 7.2, design D5) ─────
+// ── Destination Latest markers read Home's data (row 7.2) ─────
 //
 // Every marker below is driven the way the shell sees the data this run:
 // a Home `Recently added` fetch event stored by `accept_home_recently
@@ -161,7 +161,8 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
 }
 
 /// A podcast library's marker comes from its Home `Recently added` rows,
-/// not from the destination shelf cache (design D5): the fetch that stored
+/// not from the destination shelf cache (spec `destination-latest-modes`, "Latest markers follow their
+/// destination pills"): the fetch that stored
 /// the rows is Home's, and the Latest list itself may not have loaded.
 #[test]
 fn a_podcast_library_marks_from_its_home_recently_added_rows() {

@@ -253,7 +253,7 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
 /// every library, routes podcast progress to the podcast map and book progress
 /// to the book map, and dispatches the per-kind library fetch: a podcast
 /// library requests shows and a book library requests books. The destination
-/// Latest shelf is lazy (design D4 of `home-recently-added-tree`): the startup
+/// Latest shelf is lazy (spec `destination-latest-modes`, "Destination Latest lists load lazily"): the startup
 /// catalog loop fetches no shelf.
 #[test]
 fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
@@ -622,7 +622,8 @@ fn home_recently_added_feed_row(pub_date_secs: Option<u64>) -> mbv_queue::QueueI
     })
 }
 
-/// Design D3 of `home-recently-added-tree`: an event from a retired Service
+/// Spec `home-latest-sections`, "Recently added loads at launch independent
+/// of destinations": an event from a retired Service
 /// generation (removed or re-setup) never reaches the store.
 #[test]
 fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
@@ -681,7 +682,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     assert_eq!(rows.len(), 1);
 }
 
-/// Review P1 (Unit C, `home-recently-added-tree`): a fetched Home Recently
+/// Review P1 (Unit C): a fetched Home Recently
 /// added event reaches the Home owner from its own drain -- the owner keeps
 /// the rows, and no unrelated projection has to run first.
 #[test]
@@ -712,7 +713,7 @@ fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain()
     );
 }
 
-/// Review P2 (Unit C, `home-recently-added-tree`): an assignment carrying a
+/// Review P2 (Unit C): an assignment carrying a
 /// rebuilt library set that dropped the source's library evicts its stored
 /// rows, so they leave the Home owner instead of showing as stale.
 #[test]

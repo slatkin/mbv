@@ -7,7 +7,7 @@ mod tests;
 use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_ui_msg::{ComponentId, HomeRequest, Msg, ShellRequest};
+use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 use std::time::Instant;
 
 impl Model {
@@ -149,13 +149,11 @@ impl Model {
             // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
             // (migrate-tui-to-tuirealm design D16, #628).
             ShellRequest::DismissSettings => {}
-            request @ (ShellRequest::HomeRowClick { .. }
-            | ShellRequest::HomeRowActivate { .. }
-            | ShellRequest::QueueRowClick { .. }
+            request @ (ShellRequest::QueueRowClick { .. }
             | ShellRequest::QueueRowActivate { .. }
             | ShellRequest::ResizeListPaneLive(_)
             | ShellRequest::ResizeListPaneEnd(_)) => {
-                self.handle_pointer_and_layout_request(request);
+                self.handle_pointer_and_layout_request(&request);
             }
             request
             @ (ShellRequest::RowContextMenu(..) | ShellRequest::MusicRowContextMenu(..)) => {
@@ -185,19 +183,8 @@ impl Model {
         }
     }
 
-    fn handle_pointer_and_layout_request(&mut self, request: ShellRequest) {
-        match request {
-            ShellRequest::HomeRowClick { .. } => {
-                self.app
-                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-            }
-            ShellRequest::HomeRowActivate { target } => {
-                self.app
-                    .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-                if let Some(item) = self.home_stable_target(&target) {
-                    self.app.home_play_target(item, target.is_continue());
-                }
-            }
+    fn handle_pointer_and_layout_request(&mut self, request: &ShellRequest) {
+        match *request {
             ShellRequest::QueueRowClick { slot_id } => {
                 self.app.handle_mouse_single_click_queue(slot_id);
                 self.queue_click_reproject();
@@ -238,13 +225,6 @@ impl Model {
         tv_resize: &mut bool,
     ) -> bool {
         match request {
-            ShellRequest::RowContextMenu(
-                mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
-                anchor,
-            ) => {
-                self.handle_home_request(HomeRequest::ContextMenu(targets, anchor));
-                false
-            }
             ShellRequest::RowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Queue(slot_ids),
                 anchor,
@@ -588,9 +568,9 @@ impl Model {
                 self.push_audiobookshelf_podcast_content();
                 self.push_audiobookshelf_book_content();
             }
-            // Home and Queue targets never reach this resolver: both are
-            // intercepted earlier in `handle_row_context_menu_request` and
-            // routed to their own handlers.
+            // Home targets route through `HomeRequest::ContextMenu`; Queue
+            // targets are intercepted earlier in
+            // `handle_row_context_menu_request`. Neither reaches this resolver.
             mbv_ui_model::context_menu::ContextMenuTargets::Home(_)
             | mbv_ui_model::context_menu::ContextMenuTargets::Queue(_) => {}
         }

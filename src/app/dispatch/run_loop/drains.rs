@@ -364,9 +364,9 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
         // Home fetches each podcast library's `Recently added` rows here
-        // (design D3 of `home-recently-added-tree`); the destination Latest
-        // shelf is lazy (design D4) and fetches only while its Latest pill
-        // is selected.
+        // (spec `home-latest-sections`); the destination Latest shelf is
+        // lazy (spec `destination-latest-modes`, "Destination Latest lists
+        // load lazily") and fetches only while its Latest pill is selected.
         self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
         for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =

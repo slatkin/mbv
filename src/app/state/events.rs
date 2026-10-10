@@ -302,8 +302,9 @@ pub enum ModelContentEvent {
         title: String,
         items: Vec<EmbyItem>,
     },
-    /// One eligible library's Home Recently added items (design D3 of
-    /// `home-recently-added-tree`): Emby through its Latest rules,
+    /// One eligible library's Home Recently added items (spec
+    /// `home-latest-sections`, "Recently added loads at launch independent of
+    /// destinations"): Emby through its Latest rules,
     /// Audiobookshelf through the podcast `Newest Episodes` shelf, Feeds
     /// derived at push time (never fetched). The shell accepts the event
     /// only under the source's live Service generation and stores the items

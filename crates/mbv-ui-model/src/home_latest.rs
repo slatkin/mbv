@@ -4,19 +4,15 @@ use mbv_queue::QueueItem;
 #[cfg(test)]
 mod tests;
 
-/// One merged `Recently added` row (design D2 of `home-recently-added-tree`):
-/// the Service-qualified item plus the Feeds subscription display name when
-/// the row is a feed entry; Emby and Audiobookshelf rows carry none.
+/// One merged `Recently added` row (spec `home-latest-sections`, requirement
+/// "Recently added combines every Latest-bearing destination"): the
+/// Service-qualified item plus the Feeds subscription display name when the
+/// row is a feed entry; Emby and Audiobookshelf rows carry none.
 #[derive(Debug, Clone)]
 pub struct HomeRecentRow {
     pub item: QueueItem,
     pub feed_name: Option<String>,
 }
-
-/// The `Recently added` root's shared maximum age: items older than 14 days
-/// before the current launch are cut, in both the shell's fetch filter
-/// (design D2/D3) and the projection's branch assignment.
-pub const RECENTLY_ADDED_CUTOFF_SECS: u64 = 14 * 24 * 60 * 60;
 
 /// The launch-relative interval used by destination Latest markers.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
