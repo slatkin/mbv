@@ -696,13 +696,6 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
     }
 }
 
-#[must_use]
-pub fn pid_file() -> std::path::PathBuf {
-    let dir = mbv_config::data_dir_system_or_local();
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("mbv.pid")
-}
-
 /// Submit a whole canonical queue to the Player, cold-starting a playback run
 /// when none is alive (`submit_queue_slots` spawns one). The one shared form of
 /// the submission `handle_queue_replace`, owner reconciliation, and the
