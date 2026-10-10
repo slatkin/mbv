@@ -335,7 +335,9 @@ fn parse_mbvd_section(mbvd: Option<&toml::Value>) -> MbvdSettings {
         broadcast_ms: mbvd
             .and_then(|d| d.get("broadcast_ms"))
             .and_then(toml::Value::as_integer)
-            .map_or(500, |v| u64::try_from(v.max(100)).unwrap_or(u64::MAX)),
+            .map_or(500, |v| {
+                u64::try_from(v.clamp(100, 60_000)).unwrap_or(u64::MAX)
+            }),
         client_endpoint: mbvd
             .and_then(|d| d.get("client"))
             .and_then(|c| c.get("endpoint"))

@@ -129,6 +129,21 @@ tcp_listen = "0.0.0.0:8890"
 }
 
 #[test]
+fn parse_daemon_broadcast_ms_clamps_to_ceiling() {
+    // Regression for issue #922: a mistyped broadcast integer fills the
+    // i64 range and previously became an effectively-never sleep on the
+    // daemon broadcast thread; parse clamps it to 60_000 ms.
+    let toml = r#"
+[server]
+url = "http://localhost:8096"
+[mbvd]
+broadcast_ms = 9223372036854775807
+"#;
+    let cfg = parse_config(toml).unwrap();
+    assert_eq!(cfg.daemon_broadcast_ms, 60_000);
+}
+
+#[test]
 fn parse_quit_timeout_defaults_and_clamps() {
     let cfg = parse_config("[server]\nurl = \"http://localhost:8096\"").unwrap();
     assert_eq!(cfg.quit_timeout_secs, 5);
