@@ -107,7 +107,11 @@ impl TvContent {
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.move_rows(delta);
+                self.carrier.delegate_operation(
+                    MediaListSurfaceInput::Wheel { at, delta }
+                        .into_operation(None)
+                        .expect("wheel converts without a target"),
+                );
                 // Return a framework-visible claim after mutating local
                 // state; dropping the message would let the framework's
                 // mutation be discarded by the mouse fold.
@@ -377,7 +381,7 @@ impl TvContent {
         if !self.browser.claims_current_point(at) {
             return None;
         }
-        self.browser.apply(TreeOperation::Move(delta));
+        self.browser.apply(TreeOperation::Scroll(delta));
         Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
     }
 

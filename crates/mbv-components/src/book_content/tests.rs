@@ -282,3 +282,37 @@ fn reset_presentation_returns_to_first_bucket_and_survives_a_later_refresh() {
     assert_eq!(owner.selected_bucket, 0);
     assert_eq!(owner.selected_book_id(), Some("book-a"));
 }
+
+/// Task 4.3: the Books wheel scrolls the shared viewport and reports no
+/// selection move — the `AudiobookshelfBookMove` report the old `move_book`
+/// path sent on every wheel notch is gone, and the offset took the step.
+#[test]
+fn book_wheel_scrolls_viewport_without_a_selection_report() {
+    use mbv_ui_msg::TerminalObserverEvent;
+    use ratatui::layout::{Position, Rect};
+
+    let books: Vec<AudiobookshelfBook> = (0..6).map(|i| book(&format!("book-{i}"), "A")).collect();
+    let mut owner = BookContent::new();
+    owner.set_content(&state_with_books(books), false);
+
+    // Complete one painted frame with a three-row viewport so the wheel's
+    // claim gate resolves against retained geometry (the 4.1 test shape).
+    let list = Rect::new(0, 0, 40, 3);
+    let geometry = owner.carrier.wide().row_geometry(3);
+    owner
+        .carrier
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 1),
+        delta: 3,
+    }));
+
+    assert!(matches!(
+        message,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(owner.selected_book_id(), Some("book-0"));
+    assert_eq!(owner.carrier.scroll(), 3);
+}

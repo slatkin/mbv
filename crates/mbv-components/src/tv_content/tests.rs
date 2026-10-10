@@ -8,6 +8,7 @@ mod launch_state_tests;
 mod mini_view_hero_tests;
 mod tree_panel_tests;
 mod tree_projection_tests;
+mod wheel_tests;
 mod workspace_tests;
 
 fn tv_tree_context(

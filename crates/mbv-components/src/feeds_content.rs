@@ -441,6 +441,14 @@ impl FeedsContent {
         self.carrier.cursor()
     }
 
+    /// The shared owner's current free viewport offset (task 4.3: the wheel
+    /// test reads the offset the Scroll moved).
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn scroll(&self) -> usize {
+        self.carrier.scroll()
+    }
+
     /// The selected feed group, and the Watched filter applied within it:
     /// owner-local selection state with no other production-observable
     /// signal (the Selector row's `active` pill only ever encodes Latest or
