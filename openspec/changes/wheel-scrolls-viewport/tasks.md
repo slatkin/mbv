@@ -2,7 +2,7 @@
 
 ## 1. Gesture step and throttle removal (design D1)
 
-- [ ] 1.1 In `crates/mbv-components/src/mouse/gesture.rs`, delete `WHEEL_THROTTLE`, the `last_scroll` field and its check. Add `const WHEEL_STEP: i64 = 3` and emit `Scroll { delta: ±WHEEL_STEP }`. Rewrite the module docs' "Chosen intervals" wheel paragraph to say the step is the uniform policy and no event is dropped. Verify: the existing in-file gesture tests are updated to assert two back-to-back wheel events at the same `Instant` both produce `Scroll` with `delta == 3` / `-3` (contract: mouse-input "Rapid wheel events are all recognized"), and `cargo nextest run -p mbv-components mouse::` passes.
+- [x] 1.1 In `crates/mbv-components/src/mouse/gesture.rs`, delete `WHEEL_THROTTLE`, the `last_scroll` field and its check. Add `const WHEEL_STEP: i64 = 3` and emit `Scroll { delta: ±WHEEL_STEP }`. Rewrite the module docs' "Chosen intervals" wheel paragraph to say the step is the uniform policy and no event is dropped. Verify: the existing in-file gesture tests are updated to assert two back-to-back wheel events at the same `Instant` both produce `Scroll` with `delta == 3` / `-3` (contract: mouse-input "Rapid wheel events are all recognized"), and `cargo nextest run -p mbv-components mouse::` passes.
 
 ## 2. Viewport anchor in the shared list layer (design D2, D3)
 
