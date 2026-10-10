@@ -137,8 +137,10 @@ default-run = "mbv"
 # Lints mirror [workspace.lints] in the root Cargo.toml, minus the
 # print_stdout/print_stderr terminal-write restriction lints (issue #908):
 # the `mbv` TUI binary is the terminal's writer — it prints usage, version,
-# and error/crash notices before the shell owns the screen. Grep for this
-# header to keep each copy in sync with the root block.
+# and error/crash notices before the shell owns the screen. Cargo rejects
+# `workspace = true` combined with per-crate overrides, so this must stay a
+# full copy. Grep for this header to keep each copy in sync with the root
+# block.
 [lints.clippy]
 mod_module_files = "deny"
 # Cannot be overridden by an inline allow/expect: params structs, not

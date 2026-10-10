@@ -13,8 +13,11 @@ readme = "../../README.md"
 # Lints mirror [workspace.lints] in the root Cargo.toml, minus the
 # print_stdout/print_stderr terminal-write restriction lints (issue #908):
 # this crate's examples are standalone CLI probes that legitimately print
-# their findings. Grep for this header to keep each copy in sync with the
-# root block.
+# their findings. The package-level exemption also covers the library body,
+# so crates/mbv-core/src/lib.rs pins it back with a crate-root deny
+# attribute. Cargo rejects `workspace = true` combined with per-crate
+# overrides, so this must stay a full copy; grep for this header to keep
+# each copy in sync with the root block.
 [lints.clippy]
 mod_module_files = "deny"
 # Cannot be overridden by an inline allow/expect: params structs, not

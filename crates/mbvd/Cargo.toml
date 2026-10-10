@@ -17,8 +17,10 @@ path = "src/main.rs"
 # Lints mirror [workspace.lints] in the root Cargo.toml, minus the
 # print_stdout/print_stderr terminal-write restriction lints (issue #908):
 # `mbvd`'s stdout/stderr are its CLI answers and the systemd journal channel;
-# it is a headless package, not a library below the shell. Grep for this
-# header to keep each copy in sync with the root block.
+# it is a headless package, not a library below the shell. Cargo rejects
+# `workspace = true` combined with per-crate overrides, so this must stay a
+# full copy. Grep for this header to keep each copy in sync with the root
+# block.
 [lints.clippy]
 mod_module_files = "deny"
 # Cannot be overridden by an inline allow/expect: params structs, not
