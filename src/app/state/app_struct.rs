@@ -393,6 +393,12 @@ pub struct App {
     /// `true`: a launch with no focus report means the window is focused,
     /// because pinwin reports only changes.
     pub(in crate::app) window_focused: bool,
+    /// Album id to album artist, bulk-filled per level by the fetches that
+    /// group views read. Uncapped on purpose: it holds one short row per album
+    /// in the library, and warm-up fills every group level at startup, so the
+    /// library is the bound. Rows are never evicted, because a `Filled` level
+    /// never refetches; an evicted album would keep its fallback label. Cleared
+    /// on Service swap.
     pub(in crate::app) album_artist_cache: std::collections::HashMap<String, String>,
     /// Per-level album-artist fill lifecycle (design D4 of
     /// `fix-music-artist-resolution-batching`): one background request fills
