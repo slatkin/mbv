@@ -103,23 +103,42 @@ pub struct PlaylistsRenderGeometry {
     pub open_rows: Vec<(Rect, usize)>,
 }
 
-/// Everything the playlists painter reads and mutates, gathered from the
-/// component once per frame. The painter keeps no ownership: cursors and
-/// scroll offsets are written back through these borrows.
-#[derive(Debug)]
+/// Everything the playlists painter reads, gathered from the component once
+/// per frame. The painter owns no list state: cursors arrive by value and
+/// the viewport offset comes back through `resolve_offset`, which resolves
+/// it from the visible list's shared owner (design D6).
 pub struct PlaylistsViewState<'a> {
     pub panel_area: Option<Rect>,
     pub playlists: &'a [EmbyItem],
-    pub playlists_cursor: &'a mut usize,
-    pub playlists_scroll: &'a mut usize,
+    pub playlists_cursor: usize,
     pub playlists_loading: bool,
     pub playlists_open: Option<&'a EmbyItem>,
     pub open_items: &'a [EmbyItem],
-    pub open_cursor: &'a mut usize,
-    pub open_scroll: &'a mut usize,
+    pub open_cursor: usize,
     pub open_loading: bool,
     pub loaded_id: Option<&'a str>,
+    /// Painted list height → viewport offset. The component wires this to
+    /// the visible carrier (`clamp_viewport(height)`, then `scroll()`), so
+    /// the painter holds no scroll offset of its own.
+    pub resolve_offset: &'a mut dyn FnMut(usize) -> usize,
     pub geometry: &'a mut PlaylistsRenderGeometry,
+}
+
+impl std::fmt::Debug for PlaylistsViewState<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlaylistsViewState")
+            .field("panel_area", &self.panel_area)
+            .field("playlists", &self.playlists)
+            .field("playlists_cursor", &self.playlists_cursor)
+            .field("playlists_loading", &self.playlists_loading)
+            .field("playlists_open", &self.playlists_open)
+            .field("open_items", &self.open_items)
+            .field("open_cursor", &self.open_cursor)
+            .field("open_loading", &self.open_loading)
+            .field("loaded_id", &self.loaded_id)
+            .field("geometry", &self.geometry)
+            .finish_non_exhaustive()
+    }
 }
 
 pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsViewState<'_>) {
@@ -127,14 +146,13 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         panel_area,
         playlists,
         playlists_cursor,
-        playlists_scroll,
         playlists_loading,
         playlists_open,
         open_items,
         open_cursor,
-        open_scroll,
         open_loading,
         loaded_id,
+        resolve_offset,
         geometry,
     } = view;
     *geometry = PlaylistsRenderGeometry::default();
@@ -160,7 +178,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
             content,
             open_items,
             open_cursor,
-            open_scroll,
+            resolve_offset,
             open_loading,
             geometry,
         );
@@ -191,7 +209,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         content,
         playlists,
         playlists_cursor,
-        playlists_scroll,
+        resolve_offset,
         loaded_id,
         geometry,
     );
@@ -207,25 +225,21 @@ struct RowContent {
     title_fg: Color,
 }
 
-/// Paint one-line rows with the shared scroll clamp, bg/fg rule and scrollbar.
+/// Paint one-line rows at the resolved offset with the bg/fg rule and scrollbar.
 /// Returns each painted row's rect with its absolute index.
 fn paint_rows(
     frame: &mut Frame,
     content: Rect,
     total: usize,
     cursor: usize,
-    scroll: &mut usize,
+    resolve_offset: &mut dyn FnMut(usize) -> usize,
     row_content: impl Fn(usize) -> RowContent,
 ) -> Vec<(Rect, usize)> {
     let height = content.height as usize;
-    if cursor < *scroll {
-        *scroll = cursor;
-    } else if cursor >= *scroll + height {
-        *scroll = cursor.saturating_add(1).saturating_sub(height);
-    }
+    let scroll = resolve_offset(height);
     let mut painted = Vec::new();
-    for visible in 0..height.min(total.saturating_sub(*scroll)) {
-        let index = *scroll + visible;
+    for visible in 0..height.min(total.saturating_sub(scroll)) {
+        let index = scroll + visible;
         let selected = index == cursor;
         // Keep zebra parity tied to the absolute row so bands hold still under scroll.
         let bg = if selected {
@@ -273,7 +287,7 @@ fn paint_rows(
         );
         painted.push((rect, index));
     }
-    chrome::render_sidebar_scrollbar(frame, content, total, *scroll);
+    chrome::render_sidebar_scrollbar(frame, content, total, scroll);
     painted
 }
 
@@ -281,38 +295,45 @@ fn render_playlist_rows(
     frame: &mut Frame,
     content: Rect,
     playlists: &[EmbyItem],
-    cursor: &mut usize,
-    scroll: &mut usize,
+    cursor: usize,
+    resolve_offset: &mut dyn FnMut(usize) -> usize,
     loaded_id: Option<&str>,
     geometry: &mut PlaylistsRenderGeometry,
 ) {
-    geometry.playlist_rows = paint_rows(frame, content, playlists.len(), *cursor, scroll, |i| {
-        let playlist = &playlists[i];
-        let loaded = loaded_id.is_some_and(|id| id == playlist.id);
-        RowContent {
-            lead: String::new(),
-            title: playlist.name.clone(),
-            bold_title: true,
-            trail: if playlist.total_count > 0 {
-                format!(" ({})", playlist.total_count)
-            } else {
-                String::new()
-            },
-            title_fg: if loaded {
-                palette::Role::PlaylistLoadedFg.color()
-            } else {
-                palette::Role::TextPrimary.color()
-            },
-        }
-    });
+    geometry.playlist_rows = paint_rows(
+        frame,
+        content,
+        playlists.len(),
+        cursor,
+        resolve_offset,
+        |i| {
+            let playlist = &playlists[i];
+            let loaded = loaded_id.is_some_and(|id| id == playlist.id);
+            RowContent {
+                lead: String::new(),
+                title: playlist.name.clone(),
+                bold_title: true,
+                trail: if playlist.total_count > 0 {
+                    format!(" ({})", playlist.total_count)
+                } else {
+                    String::new()
+                },
+                title_fg: if loaded {
+                    palette::Role::PlaylistLoadedFg.color()
+                } else {
+                    palette::Role::TextPrimary.color()
+                },
+            }
+        },
+    );
 }
 
 fn render_open_playlist_content(
     frame: &mut Frame,
     content: Rect,
     items: &[EmbyItem],
-    cursor: &mut usize,
-    scroll: &mut usize,
+    cursor: usize,
+    resolve_offset: &mut dyn FnMut(usize) -> usize,
     loading: bool,
     geometry: &mut PlaylistsRenderGeometry,
 ) {
@@ -336,8 +357,7 @@ fn render_open_playlist_content(
         );
         return;
     }
-    *cursor = (*cursor).min(items.len() - 1);
-    geometry.open_rows = paint_rows(frame, content, items.len(), *cursor, scroll, |i| {
+    geometry.open_rows = paint_rows(frame, content, items.len(), cursor, resolve_offset, |i| {
         RowContent {
             lead: format!("{:>2}. ", i + 1),
             title: items[i].display_name(),

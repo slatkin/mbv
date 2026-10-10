@@ -32,7 +32,12 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
 #[test]
 fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut app = make_app_stub();
+    // One carrier row per playlist, targeted by the playlist `id`
+    // (wheel-scrolls-viewport 5.3b): the seed must use distinct ids, the way
+    // a real server does, or the shared owner cannot address row 1.
     app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
+    app.playlists[0].id = "p1".into();
+    app.playlists[1].id = "p2".into();
     assert!(app.playlists_open.is_none());
     assert_eq!(
         app.playlists_open_items,
