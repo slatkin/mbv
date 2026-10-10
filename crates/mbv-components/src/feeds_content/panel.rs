@@ -24,8 +24,11 @@ impl FeedsContent {
             self.select_watched_filter(index - 1);
             None
         } else {
+            // The row paints one pill per subscription starting right after
+            // the watched-filter block (2026-10-10 user rule: the ungrouped
+            // scope has no pill of its own).
             self.latest_selected = false;
-            self.select_group(index - 1 - WatchedFilter::COUNT);
+            self.select_group(index - WatchedFilter::COUNT);
             None
         }
     }
@@ -153,8 +156,11 @@ impl LibraryContentOwner for FeedsContent {
             }
         });
         let has_subs = !self.subscriptions.is_empty();
-        // One Selector bar carries Latest, watched filters, then the existing
-        // feed-group pills. Group/filter selection remains owner-local.
+        // One Selector bar carries Latest, the watched filters, then one pill
+        // per subscription (2026-10-10 user rule: the ungrouped scope has no
+        // pill of its own — the watched-filter pills carry its highlight, so
+        // the row never paints two All choices). Group/filter selection
+        // remains owner-local.
         let selector = has_subs.then(|| SelectorRow {
             pills: std::iter::once("Latest".to_string())
                 .chain(
@@ -166,7 +172,6 @@ impl LibraryContentOwner for FeedsContent {
                     .iter()
                     .map(|filter| filter.label().to_string()),
                 )
-                .chain(std::iter::once("All".to_string()))
                 .chain(
                     self.subscriptions
                         .iter()
@@ -174,15 +179,19 @@ impl LibraryContentOwner for FeedsContent {
                 )
                 .collect(),
             markers: crate::selector_markers(
-                1 + WatchedFilter::COUNT + 1 + self.subscriptions.len(),
+                1 + WatchedFilter::COUNT + self.subscriptions.len(),
                 self.latest_marker,
             ),
-            // `[`/`]` move the feed-group selection, so the active pill and
-            // overflow window follow that group within the combined row.
+            // The ungrouped scope's highlight falls to its watched-filter
+            // pill (its source is all feeds under that filter); `[`/`]` move
+            // the feed-group selection, so the active pill and overflow
+            // window follow that group within the combined row.
             active: Some(if self.latest_selected {
                 0
+            } else if self.selected_group == 0 {
+                1 + self.watched_filter.position()
             } else {
-                1 + WatchedFilter::COUNT + self.selected_group
+                1 + WatchedFilter::COUNT + (self.selected_group - 1)
             }),
         });
         let list = if !has_subs {

@@ -27,6 +27,17 @@ impl WatchedFilter {
         }
     }
 
+    /// The row position this filter paints in the Selector row's watched
+    /// filter pill block (the inverse of [`WatchedFilter::from_position`]).
+    #[must_use]
+    pub fn position(self) -> usize {
+        match self {
+            Self::All => 0,
+            Self::Watched => 1,
+            Self::Unwatched => 2,
+        }
+    }
+
     #[must_use]
     pub fn from_position(position: usize) -> Option<Self> {
         match position {

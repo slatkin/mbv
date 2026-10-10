@@ -286,9 +286,7 @@ fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit
     );
     assert_eq!(owner.content().selector.unwrap().active, Some(0));
 
-    owner.on_slot_event(LibrarySlotEvent::SelectorPicked(
-        1 + WatchedFilter::COUNT + 1,
-    ));
+    owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1 + WatchedFilter::COUNT));
     assert!(!owner.latest_selected());
     assert_eq!(selected_group(&mut owner), 1);
     assert_eq!(current_watched_filter(&mut owner), WatchedFilter::Unwatched);
@@ -426,9 +424,9 @@ fn unfocused_component_wheel_scrolls_viewport_and_keeps_selection() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT + 1)
+        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT)
         .map(|(rect, _)| *rect)
-        .expect("the second feed-group pill is painted");
+        .expect("the first feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
         column: selector.x,
         row: selector.y,
@@ -468,9 +466,9 @@ fn mouse_owns_feed_selector_and_row_geometry() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT + 1)
+        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT)
         .map(|(rect, _)| *rect)
-        .expect("the second feed-group pill is painted");
+        .expect("the first feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
         column: selector.x,
         row: selector.y,

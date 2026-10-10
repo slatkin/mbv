@@ -82,7 +82,7 @@ mod tests {
                     .expect("Feeds selector is present")
                     .pills
                     .into_iter()
-                    .skip(1 + WatchedFilter::COUNT + 1)
+                    .skip(1 + WatchedFilter::COUNT)
                     .collect()
             })
             .expect("Feeds owner installed")

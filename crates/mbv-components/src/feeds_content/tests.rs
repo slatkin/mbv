@@ -39,7 +39,10 @@ fn owner(subscriptions: &[FeedSubscription], entries: Vec<FeedEntry>) -> FeedsCo
     owner
 }
 
-/// One Selector row carries watched-filter pills followed by feed groups.
+/// One Selector row carries watched-filter pills followed by one pill per
+/// subscription (2026-10-10 user rule: the ungrouped scope has no pill of
+/// its own — its highlight falls to its watched-filter pill, so the row
+/// never paints two All choices).
 #[test]
 fn content_has_one_selector_row_for_filter_and_groups() {
     let mut owner = owner(
@@ -50,15 +53,16 @@ fn content_has_one_selector_row_for_filter_and_groups() {
     let selector = content.selector.as_ref().expect("feed-group pills");
     assert_eq!(
         selector.pills,
-        ["Latest", "All", "Played", "Unplayed", "All", "A", "B"]
+        ["Latest", "All", "Played", "Unplayed", "A", "B"]
     );
-    assert_eq!(selector.active, Some(4));
+    // The ungrouped scope highlights its watched-filter pill.
+    assert_eq!(selector.active, Some(1));
     // The panel's no-secondary-row contract is owned by the shared
     // `narrow_skeleton_keeps_fixed_rows_and_panel_slots` test.
     drop(content);
 
     owner.cycle_group(1);
-    assert_eq!(owner.content().selector.unwrap().active, Some(5));
+    assert_eq!(owner.content().selector.unwrap().active, Some(4));
 }
 
 /// Without subscriptions the legacy chrome painted no pill bar at all:
@@ -96,7 +100,8 @@ fn content_selector_follows_the_active_watched_filter() {
     owner.cycle_watched_filter();
     assert_eq!(owner.watched_filter, WatchedFilter::Watched);
     let content = owner.content();
-    assert_eq!(content.selector.unwrap().active, Some(4));
+    // The ungrouped scope's highlight follows the active watched filter.
+    assert_eq!(content.selector.unwrap().active, Some(2));
     match content.list {
         ListSlot::Empty { loading, text } => {
             assert!(!loading);
