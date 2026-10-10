@@ -233,6 +233,18 @@ Row flow:
 The one ordered row sequence that a list presents, in paint order. Row position, viewport offset, and point resolution all address this same sequence. List order is the order in which its rows paint. The shared `crates/mbv-components/src/list/` seam owns it. Cursor movement, viewport resolution, retained paint geometry, and multi-selection each have one shared implementation over it.
 _Avoid_: item list, row list, flat list
 
+Viewport anchor:
+The list state that decides whether the viewport follows the selection. `FollowSelection` keeps the selected row visible on every resolve. `Free` is set by a wheel scroll: the offset stays where the user left it, and only the flow bounds clamp it. A keyboard move, a page, a select, an activate, a restore, or a shell re-anchor sets `FollowSelection` again. It is a field on the shared list owner beside the offset, and the painter resolves it through the one `resolved_viewport_offset`. It is never a per-surface flag.
+_Avoid_: scroll lock, detached viewport, manual scroll mode, free-scroll flag
+
+Wheel step:
+The one fixed wheel movement: three rows or three text lines, toward the preceding rows for `ScrollUp` and the following rows for `ScrollDown`, clamped at the flow bounds. The gesture recognizer emits `Scroll { delta: ±3 }`, and every surface applies that signed value through the shared viewport scroll. A wheel never moves, selects, or extends a selection. No surface has its own step, multiplier, or page-sized wheel movement.
+_Avoid_: notch, wheel increment, wheel multiplier, page scroll
+
+Viewport reach:
+The paging position that a wheel scroll reports for a lazily paged library list. It is the item index of the last selectable row painted in the viewport, in the same index space that list's cursor report uses. It differs from the selection: a reach report never moves the selection. The shell arms the next-page fetch when the reach is within the prefetch distance of the loaded edge, with no navigation-idle gate. The request is `ShellRequest::LibraryViewportReach`.
+_Avoid_: page cursor, load trigger, prefetch index, request cursor
+
 Structural row:
 A row that holds a position in a Row flow but carries no stable target. It can never be the selection. A Group heading or a Spacer is an example. The cursor moves between selectable rows and never rests on a structural row.
 _Avoid_: non-selectable row (bare), filler row, separator row
