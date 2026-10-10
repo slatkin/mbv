@@ -54,7 +54,6 @@ impl Model {
     pub(in crate::app) fn update_emby_latest_snapshot(
         &mut self,
         library_id: &str,
-        title: String,
         items: Vec<QueueItem>,
     ) {
         let emby_items = items
@@ -64,7 +63,7 @@ impl Model {
             .collect::<Vec<_>>();
         self.tv_latest_snapshots.insert(
             library_id.to_string(),
-            DestinationLatestSnapshot::new(title, items),
+            DestinationLatestSnapshot::new(items),
         );
         for library in &mut self.app.libs {
             if library.library.id != library_id || library.library.collection_type != "tvshows" {

@@ -243,7 +243,6 @@ impl Model {
             .then(|| {
                 (
                     lib.library.id.clone(),
-                    lib.library.name.clone(),
                     level
                         .items
                         .iter()
@@ -253,12 +252,12 @@ impl Model {
                 )
             })
         });
-        if let Some((library_id, title, items)) = latest {
+        if let Some((library_id, items)) = latest {
             let items = self
                 .tv_latest_snapshots
                 .get(&library_id)
                 .map_or(items, |snapshot| snapshot.items.clone());
-            self.update_emby_latest_snapshot(&library_id, title, items);
+            self.update_emby_latest_snapshot(&library_id, items);
         }
     }
 

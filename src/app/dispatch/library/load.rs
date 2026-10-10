@@ -55,10 +55,7 @@ impl App {
         if self.libs[lib_idx].library.collection_type != "tvshows"
             && self.libs[lib_idx].library.collection_type != "playlists"
         {
-            self.spawn_emby_latest_snapshot(
-                self.libs[lib_idx].library.id.clone(),
-                self.libs[lib_idx].library.name.clone(),
-            );
+            self.spawn_emby_latest_snapshot(self.libs[lib_idx].library.id.clone());
         }
         if self.libs[lib_idx].library.collection_type == "tvshows"
             && self.libs[lib_idx].nav_stack.len() == 1

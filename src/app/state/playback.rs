@@ -80,14 +80,13 @@ pub(in crate::app) enum DestinationLatestSource {
 /// pills"), never from this snapshot.
 #[derive(Clone, Debug)]
 pub(in crate::app) struct DestinationLatestSnapshot {
-    pub title: String,
     pub items: Vec<QueueItem>,
 }
 
 impl DestinationLatestSnapshot {
     #[must_use]
-    pub fn new(title: String, items: Vec<QueueItem>) -> Self {
-        Self { title, items }
+    pub fn new(items: Vec<QueueItem>) -> Self {
+        Self { items }
     }
 }
 

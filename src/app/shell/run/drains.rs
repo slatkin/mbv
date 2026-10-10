@@ -170,12 +170,10 @@ impl Model {
             match ev {
                 LibEvent::ModelContent(ModelContentEvent::EmbyLatestSnapshotFetched {
                     library_id,
-                    title,
                     items,
                 }) => {
                     self.update_emby_latest_snapshot(
                         &library_id,
-                        title,
                         items
                             .into_iter()
                             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -208,7 +206,6 @@ impl Model {
                         .map(|lib| {
                             (
                                 lib.library.id.clone(),
-                                lib.library.name.clone(),
                                 level
                                     .items
                                     .iter()
@@ -224,8 +221,8 @@ impl Model {
                             parent_id,
                             level,
                         }));
-                    if let Some((library_id, title, items)) = latest {
-                        self.update_emby_latest_snapshot(&library_id, title, items);
+                    if let Some((library_id, items)) = latest {
+                        self.update_emby_latest_snapshot(&library_id, items);
                     }
                 }
                 // Recursive album activation used to write `Some(0)` on

@@ -257,10 +257,10 @@ impl App {
         ) {
             return;
         }
-        self.spawn_emby_latest_snapshot(lib.library.id.clone(), lib.library.name.clone());
+        self.spawn_emby_latest_snapshot(lib.library.id.clone());
     }
 
-    pub(in crate::app) fn spawn_emby_latest_snapshot(&self, library_id: String, title: String) {
+    pub(in crate::app) fn spawn_emby_latest_snapshot(&self, library_id: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -270,11 +270,7 @@ impl App {
             match items {
                 Ok(items) => {
                     let _ = tx.send(LibEvent::ModelContent(
-                        ModelContentEvent::EmbyLatestSnapshotFetched {
-                            library_id,
-                            title,
-                            items,
-                        },
+                        ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items },
                     ));
                 }
                 Err(error) => {

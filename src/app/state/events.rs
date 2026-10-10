@@ -299,7 +299,6 @@ pub enum PlaylistEvent {
 pub enum ModelContentEvent {
     EmbyLatestSnapshotFetched {
         library_id: String,
-        title: String,
         items: Vec<EmbyItem>,
     },
     /// One eligible library's Home Recently added items (spec
