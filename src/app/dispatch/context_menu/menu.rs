@@ -1,6 +1,7 @@
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
@@ -58,15 +59,36 @@ impl App {
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
     ) -> Option<ContextMenu> {
-        let mut entries = Vec::new();
         let cw_focused = matches!(
             self.effective_panel_focus(),
             mbv_ui_model::settings::PanelFocus::Library
         ) && self.tab.is_home();
         let (current_item, queue_cursor) =
             self.resolve_context_menu_target(tracked_item, cw_item)?;
+        self.context_menu_from_resolved_target(
+            current_item.as_ref(),
+            queue_cursor,
+            cw_focused,
+            home_cw_selected,
+        )
+    }
 
-        if let Some(item) = current_item.as_ref() {
+    /// Menu content from an already-resolved target: the caller hands over
+    /// the item and the queue cursor it resolved at the Model boundary, plus
+    /// the two Continue-Watching facts (`cw_focused`, `home_cw_selected`) the
+    /// leaf entries consult. Tab-independent, so a Home `Recently added`
+    /// Emby row can open the destination row menu through
+    /// [`App::open_explicit_item_context_menu`] without the Home tab's
+    /// `cw_item` re-read.
+    fn context_menu_from_resolved_target(
+        &self,
+        current_item: Option<&EmbyItem>,
+        queue_cursor: Option<usize>,
+        cw_focused: bool,
+        home_cw_selected: bool,
+    ) -> Option<ContextMenu> {
+        let mut entries = Vec::new();
+        if let Some(item) = current_item {
             if item.is_folder {
                 Self::push_folder_context_actions(&mut entries, item);
             } else {
@@ -97,6 +119,62 @@ impl App {
             cursor: ContextMenu::first_selectable(&entries),
             entries,
         })
+    }
+
+    /// The destination row menu for an explicitly resolved Emby item
+    /// (`home-recently-added-tree` D7): a Home `Recently added` Emby row
+    /// opens the same menu its row offers on the destination library — Play,
+    /// Add to Queue, and the played-state entry — and never the Continue
+    /// Watching removal. The bare `Play` and `Enqueue` actions execute
+    /// through the shell's `home_context_item`, which the caller sets to
+    /// this item.
+    pub(in crate::app) fn open_explicit_item_context_menu(
+        &mut self,
+        item: &EmbyItem,
+        anchor: Option<(u16, u16)>,
+    ) {
+        let Some(mut menu) = self.context_menu_from_resolved_target(Some(item), None, false, false)
+        else {
+            return;
+        };
+        menu.anchor = anchor.map_or(
+            ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library),
+            |(x, y)| ContextMenuAnchor::Pointer { x, y },
+        );
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// The Home mixed-Service multi-selection menu (`home-recently-added-tree`
+    /// D7): a selection spanning Services offers Play and Add to Queue only,
+    /// and both entries carry the shell-resolved queue items in display
+    /// order. An empty resolution opens nothing.
+    pub(in crate::app) fn open_home_mixed_context_menu(
+        &mut self,
+        items: Vec<QueueItem>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+        let mut entries = Vec::new();
+        Self::push_context_action(
+            &mut entries,
+            "Play",
+            ContextAction::HomePlaySelection(items.clone()),
+        );
+        Self::push_context_action(
+            &mut entries,
+            "Add to Queue",
+            ContextAction::HomeEnqueueSelection(items),
+        );
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
+            anchor: anchor.map_or(
+                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+                |(x, y)| ContextMenuAnchor::Pointer { x, y },
+            ),
+            cursor: ContextMenu::first_selectable(&entries),
+            entries,
+        }));
     }
 
     fn resolve_context_menu_target(

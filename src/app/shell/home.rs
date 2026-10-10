@@ -51,44 +51,110 @@ impl Model {
                 targets.clone(),
             )],
         });
-        let mut items = Vec::new();
-        let mut removes = Vec::new();
-        for target in &targets {
-            if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
-                removes.push(
-                    mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(item.clone()),
-                );
-                items.push(*item);
+        if targets.len() > 1 {
+            self.home_multi_context_menu(&targets, anchor);
+        } else {
+            self.home_single_context_menu(targets.into_iter().next(), anchor);
+        }
+    }
+
+    /// The multi-selection Home context menu (design D7 of
+    /// `home-recently-added-tree`): an all-Emby selection — Continue rows,
+    /// `Recently added` rows, or both — keeps the Emby multi menu, with
+    /// Continue rows the only Remove targets (Remove is Continue-only);
+    /// any non-Emby row makes the selection span Services, and that menu
+    /// offers Play and Add to Queue only. An unresolved target contributes
+    /// nothing, as in enqueue.
+    fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
+        let mut items: Vec<mbv_emby_model::EmbyItem> = Vec::new();
+        let mut mixed_items: Vec<QueueItem> = Vec::new();
+        let mut removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = Vec::new();
+        let mut spans_services = false;
+        for target in targets {
+            let Some((item, from_cw)) = self.home_stable_target(target) else {
+                continue;
+            };
+            match item {
+                QueueItem::Emby(item) => {
+                    if from_cw {
+                        removes.push(
+                            mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
+                                item.clone(),
+                            ),
+                        );
+                    }
+                    mixed_items.push(QueueItem::Emby(item.clone()));
+                    items.push(*item);
+                }
+                other => {
+                    spans_services = true;
+                    mixed_items.push(other);
+                }
             }
         }
-        if targets.len() > 1 {
-            let capabilities = items
-                .iter()
-                .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
-                .collect();
-            self.app.open_context_menu_for_selection(
-                &items,
-                anchor,
-                mbv_ui_model::settings::PanelFocus::Library,
-                capabilities,
-                removes,
-            );
+        if spans_services {
+            self.app.open_home_mixed_context_menu(mixed_items, anchor);
             return;
         }
-        let target = targets.into_iter().next();
-        let item = target
-            .as_ref()
-            .and_then(|target| self.home_stable_target(target))
-            .and_then(|(item, _)| match item {
+        let capabilities = items
+            .iter()
+            .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
+            .collect();
+        self.app.open_context_menu_for_selection(
+            &items,
+            anchor,
+            mbv_ui_model::settings::PanelFocus::Library,
+            capabilities,
+            removes,
+        );
+    }
+
+    /// The single-row Home context menu (design D7 of
+    /// `home-recently-added-tree`): a Continue row keeps today's Continue
+    /// Watching menu; a `Recently added` row opens its Service's destination
+    /// menu — the same entries the row offers on that Service's Latest list.
+    /// An absent or unresolved target opens nothing.
+    fn home_single_context_menu(
+        &mut self,
+        target: Option<HomeItemTarget>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        let Some((item, from_cw)) = target.and_then(|target| self.home_stable_target(&target))
+        else {
+            return;
+        };
+        if from_cw {
+            // A Continue row is always Emby content (design D1).
+            let item = match item {
                 QueueItem::Emby(item) => Some(*item),
-                _ => None,
-            });
-        self.home_context_item.clone_from(&item);
-        let cw_selected = target.is_some();
-        if let Some((x, y)) = anchor {
-            self.app.open_context_menu_at(x, y, cw_selected, item);
-        } else {
-            self.app.open_context_menu(cw_selected, item);
+                QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) => None,
+            };
+            self.home_context_item.clone_from(&item);
+            if let Some((x, y)) = anchor {
+                self.app.open_context_menu_at(x, y, true, item);
+            } else {
+                self.app.open_context_menu(true, item);
+            }
+            return;
+        }
+        match item {
+            QueueItem::Emby(item) => {
+                // Bare `Play` and `Add to Queue` execute through the shell's
+                // `home_context_item` (no tab-dependent re-read), so the
+                // resolved row is pinned there before the menu opens.
+                self.home_context_item = Some(item.as_ref().clone());
+                self.app
+                    .open_explicit_item_context_menu(item.as_ref(), anchor);
+            }
+            QueueItem::Feed(entry) => {
+                self.app.open_feeds_context_menu(vec![entry], anchor);
+            }
+            QueueItem::Audiobookshelf(item) => {
+                self.app.open_audiobookshelf_context_menu(
+                    vec![mbv_ui_model::context_menu::AudiobookshelfMenuTarget::for_item(&item)],
+                    anchor,
+                );
+            }
         }
     }
 
@@ -201,6 +267,46 @@ mod tests {
 
     fn target(id: &str) -> HomeItemTarget {
         HomeItemTarget::continue_item(id)
+    }
+
+    fn podcast_episode(episode_id: &str, pub_date_secs: u64) -> mbv_queue::AudiobookshelfQueueItem {
+        mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "pod-lib".into(),
+            episode_id: episode_id.into(),
+            title: "Episode".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: Some(pub_date_secs),
+            is_finished: false,
+            cover_path: None,
+        }
+    }
+
+    fn recent_movie(id: &str, date_added: String) -> mbv_emby_model::EmbyItem {
+        let mut item = make_item("Movie", "Movie");
+        item.id = id.into();
+        item.date_added = date_added;
+        item
+    }
+
+    fn feed_entry(guid: &str, pub_date_secs: u64) -> mbv_queue::FeedEntry {
+        mbv_queue::FeedEntry {
+            guid: guid.into(),
+            title: "Entry".into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: Some(pub_date_secs),
+            feed_kind: None,
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
+        }
     }
 
     #[test]
@@ -364,5 +470,94 @@ mod tests {
             "fetched row older than the 14-day cutoff is absent"
         );
         assert_eq!(owner.launch_window(), model.app.home_latest_launch_window);
+    }
+
+    /// Spec scenario "Podcast row context menu" (`home-latest-sections`): a
+    /// single `Recently added` podcast row opens the same menu that
+    /// episode's row offers on its podcast library's Latest list — Play,
+    /// Add to Queue, then the one mark entry the cached progress state
+    /// chooses (a missing entry counts as unfinished, so Mark Played).
+    #[test]
+    fn single_recent_podcast_row_opens_the_audiobookshelf_destination_menu() {
+        let mut model = Model::new(make_app_stub());
+        let current = model.app.home_latest_launch_window.current;
+        let episode = podcast_episode("episode", current - 24 * 60 * 60);
+        model.accept_home_recently_added(
+            crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
+            model.app.audiobookshelf_runtime.generation(),
+            vec![QueueItem::Audiobookshelf(
+                mbv_queue::AudiobookshelfItem::Episode(episode.clone()),
+            )],
+        );
+
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![HomeItemTarget::Recent(
+                episode.content_id(),
+            )]),
+            None,
+        ));
+
+        let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
+            model.app.pending_overlay
+        else {
+            panic!("a single Recently added podcast row must open its destination menu");
+        };
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert_eq!(labels, vec!["Play", "Add to Queue", "Mark Played"]);
+    }
+
+    /// Spec scenario "Mixed-Service multi-selection" (`home-latest-sections`):
+    /// a multi-selection holding an Emby movie and a feed entry offers Play
+    /// and Add to Queue only, through the mixed-Service selection actions
+    /// that carry the resolved queue items.
+    #[test]
+    fn mixed_service_selection_menu_offers_play_and_add_to_queue_only() {
+        let mut model = Model::new(make_app_stub());
+        let current = model.app.home_latest_launch_window.current;
+        let day = 24 * 60 * 60;
+        model.accept_home_recently_added(
+            crate::app::DestinationLatestSource::Emby("lib".into()),
+            model.app.emby_runtime.generation(),
+            vec![QueueItem::Emby(Box::new(recent_movie(
+                "movie",
+                date_added_iso(i64::try_from(current - 3 * day).unwrap()),
+            )))],
+        );
+        model.app.feed_tab.all_entries = vec![feed_entry("entry", current - day)];
+
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
+                HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Emby("movie".into())),
+                HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Feed("entry".into())),
+            ]),
+            None,
+        ));
+
+        let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
+            model.app.pending_overlay
+        else {
+            panic!("a mixed-Service selection must open its menu");
+        };
+        let offered: Vec<(&str, bool)> = menu
+            .entries
+            .iter()
+            .map(|entry| {
+                (
+                    entry.label,
+                    matches!(
+                        entry.action,
+                        Some(
+                            crate::app::ContextAction::HomePlaySelection(_)
+                                | crate::app::ContextAction::HomeEnqueueSelection(_)
+                        )
+                    ),
+                )
+            })
+            .collect();
+        assert_eq!(
+            offered,
+            vec![("Play", true), ("Add to Queue", true)],
+            "a selection spanning Services offers Play and Add to Queue only"
+        );
     }
 }

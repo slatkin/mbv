@@ -121,6 +121,26 @@ impl App {
                 }
                 None
             }
+            // Home mixed-Service selection actions (`home-recently-added-tree`
+            // D7): the first resolved item plays — replacing the queue and
+            // starting — and the rest append in display order, through the
+            // same per-item effects `HomePlay`/`HomeEnqueue` use.
+            Some(ContextAction::HomePlaySelection(items)) => {
+                let mut items = items.into_iter();
+                if let Some(first) = items.next() {
+                    self.home_play_target(first, false);
+                }
+                for item in items {
+                    self.home_enqueue_target(item, false);
+                }
+                None
+            }
+            Some(ContextAction::HomeEnqueueSelection(items)) => {
+                for item in items {
+                    self.home_enqueue_target(item, false);
+                }
+                None
+            }
             action => action,
         }
     }
@@ -369,7 +389,9 @@ impl App {
                 | ContextAction::AudiobookshelfShuffle(_)
                 | ContextAction::AudiobookshelfEnqueue(_)
                 | ContextAction::AudiobookshelfMarkPlayed(_)
-                | ContextAction::AudiobookshelfMarkUnplayed(_),
+                | ContextAction::AudiobookshelfMarkUnplayed(_)
+                | ContextAction::HomePlaySelection(_)
+                | ContextAction::HomeEnqueueSelection(_),
             ) => {}
         }
     }
@@ -553,17 +575,7 @@ impl App {
                 self.set_feed_entries_played(std::slice::from_ref(entry), !entry.played);
             }
             QueueItem::Audiobookshelf(item) => {
-                let target = match item {
-                    mbv_queue::AudiobookshelfItem::Episode(episode) => {
-                        AudiobookshelfMenuTarget::Episode {
-                            library_item_id: episode.library_item_id.clone(),
-                            episode_id: episode.episode_id.clone(),
-                        }
-                    }
-                    mbv_queue::AudiobookshelfItem::Book(book) => AudiobookshelfMenuTarget::Book {
-                        library_item_id: book.library_item_id.clone(),
-                    },
-                };
+                let target = AudiobookshelfMenuTarget::for_item(item);
                 let finished = self.audiobookshelf_target_finished(&target);
                 self.start_audiobookshelf_mark(vec![target], !finished);
             }
