@@ -7,7 +7,7 @@ mod tests;
 use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
-use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
+use mbv_ui_msg::{ComponentId, HomeRequest, Msg, ShellRequest};
 use std::time::Instant;
 
 impl Model {
@@ -117,10 +117,7 @@ impl Model {
             // flat target index it resolved; the shell forwards it
             // straight to the `App` effect so the requested target
             // is acted on directly (no App-owned flat cursor remains).
-            request @ (ShellRequest::HomePlay(_)
-            | ShellRequest::HomeEnqueue(_)
-            | ShellRequest::HomeDelete(_)
-            | ShellRequest::HomeToggleWatched(_)) => self.handle_home_request(request),
+            ShellRequest::Home(request) => self.handle_home_request(request),
             request @ (ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
@@ -242,10 +239,10 @@ impl Model {
     ) -> bool {
         match request {
             ShellRequest::RowContextMenu(
-                mbv_ui_model::context_menu::ContextMenuTargets::Home(_),
-                _,
+                mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
+                anchor,
             ) => {
-                self.handle_home_request(request);
+                self.handle_home_request(HomeRequest::ContextMenu(targets, anchor));
                 false
             }
             ShellRequest::RowContextMenu(

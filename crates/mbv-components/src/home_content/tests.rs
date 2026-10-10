@@ -4,7 +4,7 @@
 use super::*;
 use mbv_emby_model::test_support::make_item;
 use mbv_render::components::media_list::MediaListRow;
-use mbv_ui_msg::ShellRequest;
+use mbv_ui_msg::{HomeRequest, ShellRequest};
 
 const DAY: u64 = 24 * 60 * 60;
 pub(super) const NOW: u64 = 1_500_000_000;
@@ -87,7 +87,7 @@ fn ctrl_enter_emits_marked_items_in_display_order() {
     assert!(matches!(
         msg,
         Some(Msg::Shell(request))
-            if *request == ShellRequest::HomeEnqueue(expected)
+            if *request == ShellRequest::Home(HomeRequest::Enqueue(expected))
     ));
 }
 

@@ -11,7 +11,7 @@ use super::HomeContent;
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::targets::HomeItemTarget;
-use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
+use mbv_ui_msg::{HomeRequest, LeafKeyResult, Msg, ShellRequest};
 
 impl HomeContent {
     /// The selected row's item target.
@@ -41,9 +41,9 @@ impl HomeContent {
             .collect()
     }
 
-    fn action_request(&self, make: fn(Vec<HomeItemTarget>) -> ShellRequest) -> Option<Msg> {
+    fn action_request(&self, make: fn(Vec<HomeItemTarget>) -> HomeRequest) -> Option<Msg> {
         let targets = self.action_item_targets();
-        (!targets.is_empty()).then(|| Msg::Shell(Box::new(make(targets))))
+        (!targets.is_empty()).then(|| Msg::Shell(Box::new(ShellRequest::Home(make(targets)))))
     }
 
     fn context_menu(targets: Vec<HomeItemTarget>, anchor: Option<(u16, u16)>) -> Option<Msg> {
@@ -77,13 +77,13 @@ impl HomeContent {
             Key::End => self.navigate(MediaListOperation::Last),
             Key::Char('.') => Self::context_menu(self.action_item_targets(), None),
             Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.action_request(ShellRequest::HomeEnqueue)
+                self.action_request(HomeRequest::Enqueue)
             }
             Key::Enter => self.activate_selected_row(),
             Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.action_request(ShellRequest::HomeToggleWatched)
+                self.action_request(HomeRequest::ToggleWatched)
             }
-            Key::Delete => self.action_request(ShellRequest::HomeDelete),
+            Key::Delete => self.action_request(HomeRequest::Delete),
             _ => None,
         }
     }
@@ -95,7 +95,9 @@ impl HomeContent {
 
     pub(super) fn activate_selected_row(&mut self) -> Option<Msg> {
         let target = self.selected_item_target()?;
-        Some(Msg::Shell(Box::new(ShellRequest::HomePlay(target))))
+        Some(Msg::Shell(Box::new(ShellRequest::Home(HomeRequest::Play(
+            target,
+        )))))
     }
 
     /// Translate resolved list gestures into Home's typed requests.

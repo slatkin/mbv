@@ -15,6 +15,7 @@ use tuirealm::event::KeyEvent as TuiKeyEvent;
 
 mod component_id;
 mod hit_regions;
+mod home;
 mod intents;
 mod playback;
 mod queue;
@@ -29,13 +30,14 @@ pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 #[doc(inline)]
 pub use self::hit_regions::TvHit;
 #[doc(inline)]
+pub use self::home::HomeRequest;
+#[doc(inline)]
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
     ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, MusicTreeAction,
     PlaylistsTarget, PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent,
     SettingsIntent,
 };
-#[doc(inline)]
 pub use self::playback::PlaybackRequest;
 #[doc(inline)]
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};

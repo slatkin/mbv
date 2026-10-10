@@ -5,25 +5,18 @@ use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::targets::HomeItemTarget;
-use mbv_ui_msg::ShellRequest;
+use mbv_ui_msg::HomeRequest;
 
 impl Model {
-    pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_home_request(&mut self, request: HomeRequest) {
         match request {
-            ShellRequest::HomePlay(target) => self.home_play_request(&target),
-            ShellRequest::HomeEnqueue(targets) => self.home_enqueue_request(targets),
-            ShellRequest::RowContextMenu(
-                mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
-                anchor,
-            ) => self.home_context_menu_request(targets, anchor),
-            ShellRequest::HomeDelete(targets) => self.home_delete_request(targets),
-            ShellRequest::HomeToggleWatched(targets) => self.home_toggle_watched_request(targets),
-            // Documented no-op: `handle_shell_request` and
-            // `handle_row_context_menu_request` in `messages.rs` forward only the
-            // four Home variants and Home-target `RowContextMenu` here. Any other
-            // `ShellRequest` belongs to another owner, and listing all ~95 of
-            // them breaks the crate's `too_many_lines` limit.
-            _ => {}
+            HomeRequest::Play(target) => self.home_play_request(&target),
+            HomeRequest::Enqueue(targets) => self.home_enqueue_request(targets),
+            HomeRequest::ContextMenu(targets, anchor) => {
+                self.home_context_menu_request(targets, anchor);
+            }
+            HomeRequest::Delete(targets) => self.home_delete_request(targets),
+            HomeRequest::ToggleWatched(targets) => self.home_toggle_watched_request(targets),
         }
     }
 
@@ -322,7 +315,7 @@ mod tests {
         let mut model = Model::new(app);
         model.home_content.continue_items = make_items(3);
 
-        model.handle_home_request(ShellRequest::HomeEnqueue(vec![target("id2")]));
+        model.handle_home_request(HomeRequest::Enqueue(vec![target("id2")]));
         let appended: Vec<String> = cmd_rx
             .try_iter()
             .filter_map(|command| match command {
@@ -336,7 +329,7 @@ mod tests {
         assert_eq!(appended, vec!["id2"], "the CW enqueue resolves id2");
 
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomePlay(target("id0")));
+        model.handle_home_request(HomeRequest::Play(target("id0")));
         assert_eq!(model.app.status, "Emby is unavailable");
     }
 
@@ -345,10 +338,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let item = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![item.clone()];
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
-            None,
-        ));
+        model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)], None));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
@@ -479,10 +469,8 @@ mod tests {
             )],
         );
 
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![HomeItemTarget::Recent(
-                episode.content_id(),
-            )]),
+        model.handle_home_request(HomeRequest::ContextMenu(
+            vec![HomeItemTarget::Recent(episode.content_id())],
             None,
         ));
 
@@ -514,11 +502,11 @@ mod tests {
         );
         model.app.feed_tab.all_entries = vec![feed_entry("entry", current - day)];
 
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
+        model.handle_home_request(HomeRequest::ContextMenu(
+            vec![
                 HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Emby("movie".into())),
                 HomeItemTarget::Recent(mbv_queue::QueueItemContentId::Feed("entry".into())),
-            ]),
+            ],
             None,
         ));
 
