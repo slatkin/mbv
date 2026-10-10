@@ -1,4 +1,4 @@
-use crate::app::state::app_struct::LevelFillState;
+use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE, insert_capped};
 use crate::app::state::events::{
     LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
     SeriesEvent,
@@ -251,7 +251,12 @@ impl App {
     /// restarts its eviction age; the cache's cap evicts the oldest entry
     /// (issue #917).
     pub(in crate::app) fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
-        self.album_tracks_cache.insert(album_id, tracks);
+        insert_capped(
+            &mut self.album_tracks_cache,
+            MAX_ALBUM_TRACKS_CACHE,
+            album_id,
+            tracks,
+        );
     }
 
     fn handle_album_tracks_fetched(

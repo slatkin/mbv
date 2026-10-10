@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::{MAX_SERIES_DETAIL_CACHE, insert_capped};
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
@@ -282,8 +283,12 @@ impl App {
         if self.series_detail_cache.contains_key(series_id) {
             return;
         }
-        self.series_detail_cache
-            .insert(series_id.to_string(), detail);
+        insert_capped(
+            &mut self.series_detail_cache,
+            MAX_SERIES_DETAIL_CACHE,
+            series_id.to_string(),
+            detail,
+        );
     }
 
     pub(in crate::app) fn handle_series_detail_fetched(

@@ -28,6 +28,7 @@ rand = "0.10"
 uuid = { version = "1", default-features = false, features = ["std"] }
 tungstenite = { version = "0.30", default-features = false }
 log = "0.4"
+indexmap = "2"
 libc = "0.2"
 mimalloc = "0.1"
 pipewire = "0.10.1"
@@ -241,6 +242,7 @@ ratatui-image = { workspace = true, features = ["crossterm"] }
 image = { workspace = true, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 unicode-width.workspace = true
 tracing.workspace = true
+indexmap.workspace = true
 libc.workspace = true
 mimalloc.workspace = true
 nix = { workspace = true, features = ["fs", "process", "signal"] }

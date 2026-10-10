@@ -1,12 +1,12 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
-use crate::app::state::bounded_cache::BoundedCache;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::state::types::cast::CastAttachment;
+use indexmap::IndexMap;
 use mbv_config::TuiLaunchState;
 use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
@@ -66,6 +66,21 @@ pub(in crate::app) enum LevelFillState {
 /// refetches it.
 pub(in crate::app) const MAX_ALBUM_TRACKS_CACHE: usize = 128;
 pub(in crate::app) const MAX_SERIES_DETAIL_CACHE: usize = 128;
+
+/// Inserts `value` as the newest entry of `map`, evicting the oldest entry
+/// past `cap`. The `shift_remove` gives a re-fetched key a fresh eviction age.
+pub(in crate::app) fn insert_capped<V>(
+    map: &mut IndexMap<String, V>,
+    cap: usize,
+    key: String,
+    value: V,
+) {
+    map.shift_remove(&key);
+    map.insert(key, value);
+    if map.len() > cap {
+        map.shift_remove_index(0);
+    }
+}
 
 /// The single "should a level fill start?" decision both fill entry points
 /// consume — `start_or_supersede_music_grouping`'s dedupe and
@@ -396,7 +411,7 @@ pub struct App {
     /// Keyed by album id. Bounded at `MAX_ALBUM_TRACKS_CACHE` (issue #917):
     /// insertions of fresh ids evict the oldest entry so a long music
     /// session cannot keep every fetched list reachable.
-    pub(in crate::app) album_tracks_cache: BoundedCache<Vec<EmbyItem>>,
+    pub(in crate::app) album_tracks_cache: IndexMap<String, Vec<EmbyItem>>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
     /// Fallback artist per-album track fetches waiting for a bounded slot
     /// (design D7, task 6.3). A fallback root's scope can be the whole
@@ -432,7 +447,7 @@ pub struct App {
     /// heaviest cached payloads (a series' seasons plus each expanded
     /// season's full episode list), so insertions of fresh ids evict the
     /// oldest entry.
-    pub(in crate::app) series_detail_cache: BoundedCache<SeriesDetail>,
+    pub(in crate::app) series_detail_cache: IndexMap<String, SeriesDetail>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.

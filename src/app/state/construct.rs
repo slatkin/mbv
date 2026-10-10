@@ -1,9 +1,7 @@
-use crate::app::state::app_struct::{
-    LaunchRestore, MAX_ALBUM_TRACKS_CACHE, MAX_SERIES_DETAIL_CACHE,
-};
-use crate::app::state::bounded_cache::BoundedCache;
+use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_resize_worker};
+use indexmap::IndexMap;
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
@@ -249,7 +247,7 @@ impl App {
             album_artist_levels: std::collections::HashMap::new(),
             pending_level_artist_warmups: std::collections::VecDeque::new(),
             level_artist_warmups_in_flight: std::collections::HashSet::new(),
-            album_tracks_cache: BoundedCache::new(MAX_ALBUM_TRACKS_CACHE),
+            album_tracks_cache: IndexMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
             pending_artist_album_track_fetches: std::collections::VecDeque::new(),
             artist_album_track_fetches_in_flight: std::collections::HashSet::new(),
@@ -257,7 +255,7 @@ impl App {
             artist_detail_loading: std::collections::HashSet::new(),
             artist_artwork_requests: std::collections::HashMap::new(),
             artist_artwork_status: std::collections::HashMap::new(),
-            series_detail_cache: BoundedCache::new(MAX_SERIES_DETAIL_CACHE),
+            series_detail_cache: IndexMap::new(),
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
             pending_series_season_expansions: std::collections::HashSet::new(),
