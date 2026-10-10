@@ -1,4 +1,7 @@
-use super::{MediaList, MediaListCarrier, MediaListOperation, WideMediaList};
+use super::{
+    MediaList, MediaListCarrier, MediaListDisposition, MediaListOperation, MediaListSurfaceInput,
+    WideMediaList,
+};
 use crate::list::{ViewportAnchor, Viewported};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaSemanticState, WideMediaListPaintPolicy,
@@ -175,6 +178,42 @@ fn refreshed_content_keeps_a_freely_scrolled_viewport() {
     assert_eq!(list.selected_target(), Some(&"a".to_string()));
     assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
     assert_eq!(list.scroll(), 2);
+}
+
+/// 2.3 (shared-list-components): a wheel gesture maps to `Scroll` and
+/// scrolls a canonical list's viewport by the gesture delta while every
+/// selection fact — cursor, multi-selection, live range — stays untouched.
+#[test]
+fn a_wheel_scroll_moves_the_viewport_and_leaves_the_selection_untouched() {
+    let mut list = MediaList::new();
+    list.set_content((1..=8).map(|target| item(&target.to_string())).collect());
+    list.select_target(&"3".to_string());
+    list.enter_visual_mode();
+    list.toggle_selection(&"5".to_string());
+    list.enter_visual_mode();
+    assert_eq!(list.multi_selection(), &["3".to_string(), "5".to_string()]);
+    assert!(list.live_range);
+
+    let input = MediaListSurfaceInput::Wheel {
+        at: Position { x: 0, y: 2 },
+        delta: 3,
+    };
+    let operation = input
+        .into_operation(None::<String>)
+        .expect("resolved media-list pointer target");
+    assert_eq!(operation, MediaListOperation::Scroll(3));
+
+    let transition = list.delegate_operation(operation);
+
+    assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+    assert_eq!(transition.selected_target, None);
+    assert_eq!(transition.selection_summary, None);
+    assert_eq!(transition.external_intent, None);
+    assert_eq!(list.scroll(), 3);
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+    assert_eq!(list.selected_target().cloned(), Some("3".to_string()));
+    assert_eq!(list.multi_selection(), &["3".to_string(), "5".to_string()]);
+    assert!(list.live_range);
 }
 
 /// The item-level derivation: music (track, album, artist) never carries its

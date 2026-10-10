@@ -24,6 +24,10 @@ pub enum MediaListSurfaceInput {
 pub enum MediaListOperation<Target> {
     Move(i64),
     Page(i64),
+    /// A wheel scroll of the viewport by `delta` flow rows. The viewport is
+    /// released to a free anchor; the selection, multi-selection, and live
+    /// range stay untouched.
+    Scroll(i64),
     First,
     Last,
     ActivateCurrent,

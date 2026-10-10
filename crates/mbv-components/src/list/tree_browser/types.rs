@@ -132,6 +132,9 @@ pub struct TreeMarkSummary {
 pub enum TreeOperation<Target> {
     Move(i64),
     Page(i64),
+    /// Scroll the viewport by `delta` flow rows without changing the
+    /// selection or marks; the viewport is released to a free anchor.
+    Scroll(i64),
     First,
     Last,
     Parent,

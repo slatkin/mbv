@@ -113,6 +113,14 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .is_some_and(|entry| entry.node.expandable || !entry.children.is_empty())
     }
 
+    /// The panel-declared content height, or the latest completed frame's
+    /// height. `None` before either exists.
+    fn viewport_height(&self) -> Option<usize> {
+        self.configured_geometry
+            .map(|(_, content)| usize::from(content.height))
+            .or_else(|| self.last_painted.map(|area| usize::from(area.height)))
+    }
+
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
         action(&mut TreeState { browser: self })
     }
@@ -233,10 +241,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         // panel-declared content height, or the latest completed frame's.
         // Before either exists there is no viewport to reconcile, so the
         // offset stays untouched and the next view applies the real rule.
-        let height = self
-            .configured_geometry
-            .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
+        let height = self.viewport_height();
         if let Some(height) = height {
             self.with_state(|state| Viewported::reconcile_viewport(state, &flow, height));
         }
@@ -404,6 +409,21 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             operation @ (super::TreeOperation::First
             | super::TreeOperation::Last
             | super::TreeOperation::Parent) => self.apply_cursor_operation(&operation, flow),
+            super::TreeOperation::Scroll(delta) => {
+                // D3: the wheel releases the viewport to free following
+                // through `scroll_viewport` and leaves the selection and
+                // marks untouched. At a boundary the offset does not move,
+                // which is the explicit `Unhandled` result.
+                let height = self.viewport_height().unwrap_or(1);
+                let moved = self.with_state(|state| {
+                    let offset_before = Viewported::viewport_offset(state);
+                    let offset_after = Viewported::scroll_viewport(state, flow, height, delta);
+                    offset_before != offset_after
+                });
+                if !moved {
+                    return None;
+                }
+            }
             super::TreeOperation::Right => {
                 (disposition, external_intent) = self.apply_right();
             }
@@ -430,6 +450,10 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.reconcile_selection();
             }
             super::TreeOperation::PointerToggleMark(point) => {
+                // A mark click moves the selection to the clicked row, so it
+                // re-anchors the viewport like every other selection-moving
+                // operation (shared-list-components).
+                self.re_anchor_following();
                 if !self.apply_pointer_toggle_mark(point) {
                     return None;
                 }
@@ -473,6 +497,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             // apply_operation; keep this match exhaustive as the vocabulary grows.
             super::TreeOperation::Move(_)
             | super::TreeOperation::Page(_)
+            | super::TreeOperation::Scroll(_)
             | super::TreeOperation::Right
             | super::TreeOperation::ToggleExpansionTarget(_)
             | super::TreeOperation::AnchorSelection { .. }
@@ -498,6 +523,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             // apply_operation; keep this match exhaustive as the vocabulary grows.
             super::TreeOperation::Move(_)
             | super::TreeOperation::Page(_)
+            | super::TreeOperation::Scroll(_)
             | super::TreeOperation::First
             | super::TreeOperation::Last
             | super::TreeOperation::Parent
@@ -517,11 +543,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         // The page distance is the established visible viewport: the
         // panel-declared content height, or the latest completed frame's
         // height. No viewport means no page.
-        let height = self
-            .configured_geometry
-            .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
-        let Some(height) = height else {
+        let Some(height) = self.viewport_height() else {
             return false;
         };
         self.with_state(|state| {

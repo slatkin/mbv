@@ -234,6 +234,29 @@ impl<Target> MediaList<Target> {
             total_rows: self.rows.len(),
         }
     }
+}
+
+impl<Target: Clone + Eq> MediaList<Target> {
+    /// D2: restore a freely scrolled viewport to following the selection for
+    /// the keyboard and selection operations that own it. Pointer right-click
+    /// (`Context`) keeps the user's free scroll instead of jumping the view.
+    fn re_anchor_selection_following(&mut self, operation: &MediaListOperation<Target>) {
+        if matches!(
+            operation,
+            MediaListOperation::Move(_)
+                | MediaListOperation::Page(_)
+                | MediaListOperation::First
+                | MediaListOperation::Last
+                | MediaListOperation::Select(_)
+                | MediaListOperation::Toggle(_)
+                | MediaListOperation::Range(_)
+                | MediaListOperation::Activate(_)
+                | MediaListOperation::ActivateCurrent
+                | MediaListOperation::ContextCurrent
+        ) {
+            self.set_viewport_anchor(ViewportAnchor::FollowSelection);
+        }
+    }
 
     /// Apply a target-resolved operation and report all independent effects.
     pub fn delegate_operation(
@@ -252,25 +275,15 @@ impl<Target> MediaList<Target> {
                 | MediaListOperation::First
                 | MediaListOperation::Last
         );
-        // D2: keyboard and selection operations re-anchor a freely scrolled
-        // viewport to the selection, so the existing resolve path pulls the
-        // selected row back into view. Pointer right-click (`Context`) keeps
-        // the user's free scroll instead of jumping the view.
-        if matches!(
-            operation,
-            MediaListOperation::Move(_)
-                | MediaListOperation::Page(_)
-                | MediaListOperation::First
-                | MediaListOperation::Last
-                | MediaListOperation::Select(_)
-                | MediaListOperation::Toggle(_)
-                | MediaListOperation::Range(_)
-                | MediaListOperation::Activate(_)
-                | MediaListOperation::ActivateCurrent
-                | MediaListOperation::ContextCurrent
-        ) {
-            self.set_viewport_anchor(ViewportAnchor::FollowSelection);
-        }
+        self.re_anchor_selection_following(&operation);
+        // D3: the wheel scrolls the viewport without touching the selection,
+        // so a scroll's disposition reports only its own offset change, not
+        // the selection-driven rule below. The offset is read here, before
+        // the match mutates the owner.
+        let scroll_before = match &operation {
+            MediaListOperation::Scroll(_) => Some(Viewported::viewport_offset(self)),
+            _ => None,
+        };
         let external_intent = match operation {
             MediaListOperation::Move(delta) => {
                 self.move_selection(delta);
@@ -278,6 +291,17 @@ impl<Target> MediaList<Target> {
             }
             MediaListOperation::Page(delta) => {
                 self.move_selection(delta.saturating_mul(PAGE_DISTANCE));
+                None
+            }
+            MediaListOperation::Scroll(delta) => {
+                // D3: the wheel releases the viewport to free following
+                // through `scroll_viewport` and leaves every selection fact
+                // — cursor, multi-selection, live range — untouched. The
+                // canonical owner has no painted geometry, so clamping uses
+                // the minimal viewport guarantee; the presentation's resolve
+                // applies the real height on the next frame it paints.
+                let flow = self.row_flow();
+                Viewported::scroll_viewport(self, &flow, 1, delta);
                 None
             }
             MediaListOperation::First => {
@@ -323,7 +347,15 @@ impl<Target> MediaList<Target> {
             self.extend_selection_to(&target);
         }
         let after = self.selected_target().cloned();
-        let disposition = if before.is_some()
+        let disposition = if let Some(offset_before) = scroll_before {
+            // A scroll's disposition is its own offset change: `Unhandled` at
+            // a boundary, `Consumed` when the viewport actually moved.
+            if Viewported::viewport_offset(self) == offset_before {
+                MediaListDisposition::Unhandled
+            } else {
+                MediaListDisposition::Consumed
+            }
+        } else if before.is_some()
             || after.is_some()
             || external_intent.is_some()
             || before_count != self.multi_selection.len()
