@@ -254,8 +254,9 @@ impl SearchSidebarComponent {
     /// cycle equivalent — every chip is reachable by cycling), and an
     /// outside click dismisses (Esc equivalent). The query row has no
     /// cursor-positioning keyboard path, so clicking it is a
-    /// no-op. Until 5.4b, a wheel over a painted result row moves the
-    /// selection by one result; wheel over any other region is ignored.
+    /// no-op. A wheel over a painted result row scrolls the viewport one
+    /// step through the shared owner and keeps the selection
+    /// (5.4b, design D6); wheel over any other region is ignored.
     /// Right-click has no keyboard equivalent here and is ignored.
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -283,10 +284,12 @@ impl SearchSidebarComponent {
                 None
             }
             MouseGesture::Scroll { at, delta } => {
-                // Until 5.4b: one row per notch, through the shared owner.
+                // The shared owner scrolls the viewport one step and keeps
+                // the selection (5.4b, design D6); the wheel acts only over
+                // a painted result row.
                 if self.hit_results.resolve(at).is_some() {
                     self.results
-                        .delegate_operation(MediaListOperation::Move(delta.signum()));
+                        .delegate_operation(MediaListOperation::Scroll(delta));
                 }
                 None
             }
@@ -435,6 +438,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
 mod tests {
     use super::*;
     use mbv_emby_model::test_support::make_item;
+    use ratatui::{Terminal, backend::TestBackend};
     use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers};
 
@@ -544,5 +548,50 @@ mod tests {
             .map(|r| r.name.as_str())
             .collect();
         assert_eq!(names, ["One", "Two"], "a stale discard keeps the results");
+    }
+
+    /// Contract: mouse-input "The Global Search sidebar wheel scrolls the
+    /// results" (wheel-scrolls-viewport 5.4b, design D6) — a wheel-down at a
+    /// painted result row moves the viewport one step without moving the
+    /// selection, and the free offset survives a paint.
+    #[test]
+    fn search_sidebar_wheel_scrolls_the_results() {
+        let mut comp = SearchSidebarComponent::new();
+        comp.sidebar.query = "movie".into();
+        let items: Vec<mbv_emby_model::EmbyItem> = (0..30)
+            .map(|i| {
+                let mut item = make_item(&format!("Movie {i}"), "Movie");
+                item.id = format!("id-{i}");
+                item
+            })
+            .collect();
+        comp.apply_drain("movie", Ok::<_, mbv_ui_model::UiModelError>(items));
+        let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .unwrap();
+
+        // 30 results exceed the painted height, so some are clipped; a
+        // wheel-down at any painted row must step the viewport, not the
+        // selection.
+        assert!(comp.sidebar.results.len() > comp.test_results().regions().len());
+        let &(row_rect, _) = comp
+            .test_results()
+            .regions()
+            .first()
+            .expect("results are painted");
+        let wheel = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: row_rect.x,
+            row: row_rect.y,
+            modifiers: KeyModifiers::NONE,
+        };
+        comp.handle_mouse(wheel);
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .unwrap();
+
+        assert_eq!(comp.test_cursor(), 0, "the selection does not move");
+        assert_eq!(comp.test_scroll(), 3, "one wheel step = three rows");
     }
 }
