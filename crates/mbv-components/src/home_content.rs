@@ -171,18 +171,21 @@ impl HomeContent {
     }
 
     /// Reset Home's local presentation without replacing its content: drop
-    /// marks and any filter state, re-expand every root and branch, and let
-    /// the tree return its selection to the first visible row.
+    /// marks and any filter state, re-expand every root and branch, and land
+    /// the selection on the first item row (design D8) — the launch
+    /// presentation, never a structural row.
     pub fn reset_presentation(&mut self) {
         self.tree.reset_presentation();
         self.expand_projected_stems();
+        self.select_first_item_target();
     }
 
+    /// The selection's flow position in the visible row order (row 5.3's
+    /// fate for the transitional flat-cursor read): the tree owner has no
+    /// flat cursor, and the shell's prefix-mode tick tests read this as a
+    /// movement counter — its only consumer.
     #[must_use]
     pub fn cursor(&self) -> usize {
-        // Transitional flat-cursor read (row 5.2/5.3 own the moving parts);
-        // the tree owner has no flat cursor, so the selection's flow position
-        // is reported instead. No consumer of Home's flat cursor remains.
         self.tree
             .visible_targets()
             .iter()
