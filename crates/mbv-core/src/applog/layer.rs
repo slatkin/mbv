@@ -3,6 +3,7 @@
 //! to when the span records fields later (`field::Empty` fills).
 
 use std::fmt;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tracing::field::{Field, Visit};
@@ -101,7 +102,12 @@ impl LogfmtLayer {
 
     fn write(&self, level: tracing::Level, line: &str) {
         if self.stderr {
-            eprintln!("{}", format_stderr_line(level, line));
+            // This layer is the sanctioned stderr sink itself (opted in by the
+            // process owner); the direct write keeps it free of the print
+            // macros denied in library crates (issue #908).
+            let mut out = std::io::stderr().lock();
+            let _ = out.write_all(format_stderr_line(level, line).as_bytes());
+            let _ = out.write_all(b"\n");
         }
         // A poisoned sink lock drops this line rather than risking recursive
         // logging or panicking from the logging path.

@@ -8,6 +8,7 @@
 //! and `Surface::ALL`; there is no source-text parsing.
 
 use std::collections::BTreeMap;
+use std::io::Write;
 
 use ratatui::style::Color;
 use serde_json::{Value, json};
@@ -61,7 +62,10 @@ fn prose(section: &Value) -> BTreeMap<String, String> {
 /// A carried-over `uses`, or an empty one (named on stderr) for a new entry.
 fn uses(prose: &BTreeMap<String, String>, kind: &str, name: &str) -> String {
     prose.get(name).cloned().unwrap_or_else(|| {
-        eprintln!("docs/palette.json: new {kind} {name} — add its `uses` prose");
+        // Maintainer hint for the palette.json generator: a direct stderr write
+        // since print macros are denied in library crates (issue #908).
+        let message = format!("docs/palette.json: new {kind} {name} — add its `uses` prose\n");
+        let _ = std::io::stderr().write_all(message.as_bytes());
         String::new()
     })
 }

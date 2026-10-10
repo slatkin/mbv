@@ -135,7 +135,12 @@ impl FileSink {
 
     fn warn(&mut self, error: &std::io::Error) {
         if !self.warned {
-            eprintln!("mbv: log file {}: {error}", self.path.display());
+            // The log sink cannot report a failed write through logging without
+            // recursing into itself; this one-shot notice writes straight to
+            // stderr instead (direct write — `print_stderr` is denied in
+            // library crates, issue #908).
+            let message = format!("mbv: log file {}: {error}\n", self.path.display());
+            let _ = std::io::stderr().write_all(message.as_bytes());
             self.warned = true;
         }
     }
