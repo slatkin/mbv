@@ -40,8 +40,8 @@
 
 ## 6. Recently added row actions (design D7)
 
-- [ ] 6.1 Implement `home_stable_target(&HomeItemTarget)`: `Continue` looks up `continue_items`, and `Recent` searches the Recently added rows by `content_id()`. Wire play and enqueue through `home_play_target` and `home_enqueue_target`. Delete is an explicit no-op arm for `Recent`. Ctrl+W dispatches the same played-state action the item's context menu offers. Verify: `cargo check -p mbv`.
-- [ ] 6.2 Context menu:
+- [x] 6.1 Implement `home_stable_target(&HomeItemTarget)`: `Continue` looks up `continue_items`, and `Recent` searches the Recently added rows by `content_id()`. Wire play and enqueue through `home_play_target` and `home_enqueue_target`. Delete is an explicit no-op arm for `Recent`. Ctrl+W dispatches the same played-state action the item's context menu offers. Verify: `cargo check -p mbv`.
+- [x] 6.2 Context menu:
   - a single `Recent` row opens its Service's destination menu (`ContextMenuTargets::Emby`, `Feeds`, or `Audiobookshelf`);
   - an all-Continue selection keeps today's menu;
   - an all-Emby selection uses the Emby multi menu;
