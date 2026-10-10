@@ -7,15 +7,16 @@ pub(in crate::app) static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 pub(in crate::app) static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
 extern "C" fn handle_quit_signal(signum: i32) {
-    let name = match signum {
-        1 => "SIGHUP",
-        15 => "SIGTERM",
-        _ => "unknown",
+    let msg: &[u8] = match signum {
+        1 => b"mbv: received SIGHUP (signal 1), requesting quit\n",
+        15 => b"mbv: received SIGTERM (signal 15), requesting quit\n",
+        _ => b"mbv: received unknown quit signal\n",
     };
-    // SAFETY: eprintln! is not async-signal-safe, but we only reach this
-    // from SIGTERM/SIGHUP where the process is about to exit anyway;
-    // a worst-case torn write is acceptable for diagnostics.
-    eprintln!("mbv: received {name} (signal {signum}), requesting quit");
+
+    // SAFETY: this signal handler uses only async-signal-safe libc calls
+    // (a raw write of a static message) and atomic stores, so it never
+    // allocates or takes locks and cannot deadlock on a held stderr lock.
+    unsafe { libc::write(libc::STDERR_FILENO, msg.as_ptr().cast(), msg.len()) };
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
     if signum == 1 {
         // SIGHUP — terminal closed
