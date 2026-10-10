@@ -393,7 +393,10 @@ impl App {
     /// Cached finished state for one menu target across every Audiobookshelf
     /// browse state. A missing progress entry counts as unfinished (design
     /// D3), matching how the server reports items without listening progress.
-    fn audiobookshelf_target_finished(&self, target: &AudiobookshelfMenuTarget) -> bool {
+    pub(in crate::app) fn audiobookshelf_target_finished(
+        &self,
+        target: &AudiobookshelfMenuTarget,
+    ) -> bool {
         match target {
             AudiobookshelfMenuTarget::Episode {
                 library_item_id,

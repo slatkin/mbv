@@ -172,11 +172,11 @@ impl Model {
         &self,
         target: &mbv_ui_model::targets::HomeItemTarget,
     ) -> Option<(QueueItem, bool)> {
-        // Continue Watching is Emby-only, so a `Continue` target always
-        // resolves through the shell-owned Continue Watching snapshot
-        // (design D7 of `home-recently-added-tree`). `Recent` rows resolve
-        // through the shell's Recently added data once it lands (row 6.1);
-        // nothing emits a `Recent` target yet.
+        // `Continue` is Emby-only, so it resolves through the shell-owned
+        // Continue Watching snapshot. `Recent` searches the merged
+        // `Recently added` rows by content id (design D7 of
+        // `home-recently-added-tree`); a `Recent` row is never a Continue
+        // Watching row, so `from_cw` is false.
         match target {
             mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
                 .home_content
@@ -185,7 +185,11 @@ impl Model {
                 .find(|item| item.id == item_id.as_str())
                 .cloned()
                 .map(|item| (QueueItem::Emby(Box::new(item)), true)),
-            mbv_ui_model::targets::HomeItemTarget::Recent(_) => None,
+            mbv_ui_model::targets::HomeItemTarget::Recent(content_id) => self
+                .home_recent_rows()
+                .into_iter()
+                .find(|row| row.item.content_id() == *content_id)
+                .map(|row| (row.item, false)),
         }
     }
 

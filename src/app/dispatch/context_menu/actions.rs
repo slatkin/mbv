@@ -542,6 +542,34 @@ impl App {
         }
     }
 
+    /// The played-state action a `Recently added` row's context menu offers
+    /// (design D7 of `home-recently-added-tree`): for each Service, the one
+    /// mark entry its destination menu builds from the item's cached state —
+    /// mark played when unfinished, mark unplayed when finished.
+    pub(in crate::app) fn toggle_recent_item_played_state(&mut self, item: &QueueItem) {
+        match item {
+            QueueItem::Emby(item) => self.toggle_watched_home_item(item),
+            QueueItem::Feed(entry) => {
+                self.set_feed_entries_played(std::slice::from_ref(entry), !entry.played);
+            }
+            QueueItem::Audiobookshelf(item) => {
+                let target = match item {
+                    mbv_queue::AudiobookshelfItem::Episode(episode) => {
+                        AudiobookshelfMenuTarget::Episode {
+                            library_item_id: episode.library_item_id.clone(),
+                            episode_id: episode.episode_id.clone(),
+                        }
+                    }
+                    mbv_queue::AudiobookshelfItem::Book(book) => AudiobookshelfMenuTarget::Book {
+                        library_item_id: book.library_item_id.clone(),
+                    },
+                };
+                let finished = self.audiobookshelf_target_finished(&target);
+                self.start_audiobookshelf_mark(vec![target], !finished);
+            }
+        }
+    }
+
     /// `toggle_watched`'s cursor-resolving wrapper has been deleted (task
     /// 4.3, R1): the live path is the item-taking
     /// `toggle_watched_item(lib_idx, item)` the shell routes

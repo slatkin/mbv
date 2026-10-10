@@ -4,95 +4,124 @@ use super::Model;
 use mbv_components::home_content::HomeContent;
 use mbv_queue::QueueItem;
 use mbv_ui_model::library::LibraryKey;
+use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_msg::ShellRequest;
 
 impl Model {
     pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
-            ShellRequest::HomePlay(target) => {
-                if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                    self.app.home_play_target(item, from_cw);
-                }
-            }
-            ShellRequest::HomeEnqueue(targets) => {
-                for target in targets {
-                    if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                        self.app.home_enqueue_target(item, from_cw);
-                    }
-                }
-            }
+            ShellRequest::HomePlay(target) => self.home_play_request(&target),
+            ShellRequest::HomeEnqueue(targets) => self.home_enqueue_request(targets),
             ShellRequest::RowContextMenu(
                 mbv_ui_model::context_menu::ContextMenuTargets::Home(targets),
                 anchor,
-            ) => {
-                let origin = mbv_ui_model::media_list::SelectionOrigin::Library(
-                    mbv_ui_model::media_list::LibrarySelectionOrigin::Home,
-                );
-                self.context_menu_origin = Some(origin.clone());
-                self.context_action_snapshot =
-                    Some(mbv_ui_model::context_menu::ContextActionSnapshot {
-                        origin,
-                        values: vec![mbv_ui_model::context_menu::ContextMenuTargets::Home(
-                            targets.clone(),
-                        )],
-                    });
-                let mut items = Vec::new();
-                let mut removes = Vec::new();
-                for target in &targets {
-                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
-                        removes.push(
-                            mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
-                                item.clone(),
-                            ),
-                        );
-                        items.push(*item);
-                    }
-                }
-                if targets.len() > 1 {
-                    let capabilities = items
-                        .iter()
-                        .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
-                        .collect();
-                    self.app.open_context_menu_for_selection(
-                        &items,
-                        anchor,
-                        mbv_ui_model::settings::PanelFocus::Library,
-                        capabilities,
-                        removes,
-                    );
-                    return;
-                }
-                let target = targets.into_iter().next();
-                let item = target
-                    .as_ref()
-                    .and_then(|target| self.home_stable_target(target))
-                    .and_then(|(item, _)| match item {
-                        QueueItem::Emby(item) => Some(*item),
-                        _ => None,
-                    });
-                self.home_context_item.clone_from(&item);
-                let cw_selected = target.is_some();
-                if let Some((x, y)) = anchor {
-                    self.app.open_context_menu_at(x, y, cw_selected, item);
-                } else {
-                    self.app.open_context_menu(cw_selected, item);
-                }
+            ) => self.home_context_menu_request(targets, anchor),
+            ShellRequest::HomeDelete(targets) => self.home_delete_request(targets),
+            ShellRequest::HomeToggleWatched(targets) => self.home_toggle_watched_request(targets),
+            _ => {}
+        }
+    }
+
+    fn home_play_request(&mut self, target: &HomeItemTarget) {
+        if let Some((item, from_cw)) = self.home_stable_target(target) {
+            self.app.home_play_target(item, from_cw);
+        }
+    }
+
+    fn home_enqueue_request(&mut self, targets: Vec<HomeItemTarget>) {
+        for target in targets {
+            if let Some((item, from_cw)) = self.home_stable_target(&target) {
+                self.app.home_enqueue_target(item, from_cw);
             }
-            ShellRequest::HomeDelete(targets) => {
-                for target in targets {
-                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
+        }
+    }
+
+    fn home_context_menu_request(
+        &mut self,
+        targets: Vec<HomeItemTarget>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        let origin = mbv_ui_model::media_list::SelectionOrigin::Library(
+            mbv_ui_model::media_list::LibrarySelectionOrigin::Home,
+        );
+        self.context_menu_origin = Some(origin.clone());
+        self.context_action_snapshot = Some(mbv_ui_model::context_menu::ContextActionSnapshot {
+            origin,
+            values: vec![mbv_ui_model::context_menu::ContextMenuTargets::Home(
+                targets.clone(),
+            )],
+        });
+        let mut items = Vec::new();
+        let mut removes = Vec::new();
+        for target in &targets {
+            if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
+                removes.push(
+                    mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(item.clone()),
+                );
+                items.push(*item);
+            }
+        }
+        if targets.len() > 1 {
+            let capabilities = items
+                .iter()
+                .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
+                .collect();
+            self.app.open_context_menu_for_selection(
+                &items,
+                anchor,
+                mbv_ui_model::settings::PanelFocus::Library,
+                capabilities,
+                removes,
+            );
+            return;
+        }
+        let target = targets.into_iter().next();
+        let item = target
+            .as_ref()
+            .and_then(|target| self.home_stable_target(target))
+            .and_then(|(item, _)| match item {
+                QueueItem::Emby(item) => Some(*item),
+                _ => None,
+            });
+        self.home_context_item.clone_from(&item);
+        let cw_selected = target.is_some();
+        if let Some((x, y)) = anchor {
+            self.app.open_context_menu_at(x, y, cw_selected, item);
+        } else {
+            self.app.open_context_menu(cw_selected, item);
+        }
+    }
+
+    fn home_delete_request(&mut self, targets: Vec<HomeItemTarget>) {
+        for target in targets {
+            match target {
+                HomeItemTarget::Continue(_) => {
+                    if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
                         self.app.remove_from_continue_watching(&item);
                     }
                 }
+                // Design D7 of `home-recently-added-tree`: Delete is a
+                // documented no-op on a `Recently added` row; it never
+                // removes from Continue Watching.
+                HomeItemTarget::Recent(_) => {}
             }
-            ShellRequest::HomeToggleWatched(targets) => {
-                for target in targets {
-                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
+        }
+    }
+
+    fn home_toggle_watched_request(&mut self, targets: Vec<HomeItemTarget>) {
+        for target in targets {
+            match target {
+                HomeItemTarget::Continue(_) => {
+                    if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
                         self.app.cw_toggle_watched(&item);
                     }
                 }
+                HomeItemTarget::Recent(_) => {
+                    if let Some((item, _)) = self.home_stable_target(&target) {
+                        self.app.toggle_recent_item_played_state(&item);
+                    }
+                }
             }
-            _ => {}
         }
     }
 
@@ -169,7 +198,6 @@ mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
-    use mbv_ui_model::targets::HomeItemTarget;
 
     fn target(id: &str) -> HomeItemTarget {
         HomeItemTarget::continue_item(id)
