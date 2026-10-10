@@ -1,4 +1,3 @@
-use crate::app::state::app_struct::MAX_SERIES_DETAIL_CACHE;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
@@ -276,25 +275,15 @@ impl App {
         self.fetch_series_detail(&item.id);
     }
 
-    /// Inserts a fetched series detail on the same cache-the-late-arrival
-    /// contract as before (a completion must not replace a newer cached
-    /// projection) and keeps the cache bounded (issue #917): inserting a
-    /// fresh id evicts the oldest cached id past `MAX_SERIES_DETAIL_CACHE`.
-    /// Revisiting an evicted series refetches its detail.
+    /// Caches a fetched series detail. A late completion for an id already
+    /// cached must not replace the newer projection, so the first entry
+    /// wins. The cache's cap evicts the oldest entry (issue #917).
     pub(in crate::app) fn cache_series_detail(&mut self, series_id: &str, detail: SeriesDetail) {
         if self.series_detail_cache.contains_key(series_id) {
             return;
         }
-        self.series_detail_cache_order
-            .push_back(series_id.to_string());
         self.series_detail_cache
             .insert(series_id.to_string(), detail);
-        while self.series_detail_cache.len() > MAX_SERIES_DETAIL_CACHE {
-            let Some(oldest) = self.series_detail_cache_order.pop_front() else {
-                break;
-            };
-            self.series_detail_cache.remove(&oldest);
-        }
     }
 
     pub(in crate::app) fn handle_series_detail_fetched(

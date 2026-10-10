@@ -1,4 +1,4 @@
-use crate::app::state::app_struct::{LevelFillState, MAX_ALBUM_TRACKS_CACHE};
+use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::events::{
     LibEvent, ModelContentEvent, MusicEvent, NavigateLanding, PendingSeriesHandoff, PlaylistEvent,
     SeriesEvent,
@@ -247,22 +247,11 @@ impl App {
         }
     }
 
-    /// Inserts a fetched album track list and keeps the cache bounded
-    /// (issue #917): inserting a fresh album id evicts the oldest cached id
-    /// past `MAX_ALBUM_TRACKS_CACHE`. Revisiting an evicted album refetches
-    /// its tracks.
+    /// Caches a fetched album track list. A re-fetch replaces the list and
+    /// restarts its eviction age; the cache's cap evicts the oldest entry
+    /// (issue #917).
     pub(in crate::app) fn cache_album_tracks(&mut self, album_id: String, tracks: Vec<EmbyItem>) {
-        self.album_tracks_cache.insert(album_id.clone(), tracks);
-        // Keep one order slot per id, newest at the back, so a re-fetched
-        // album also gets fresh eviction age.
-        self.album_tracks_cache_order.retain(|id| *id != album_id);
-        self.album_tracks_cache_order.push_back(album_id);
-        while self.album_tracks_cache.len() > MAX_ALBUM_TRACKS_CACHE {
-            let Some(oldest) = self.album_tracks_cache_order.pop_front() else {
-                break;
-            };
-            self.album_tracks_cache.remove(&oldest);
-        }
+        self.album_tracks_cache.insert(album_id, tracks);
     }
 
     fn handle_album_tracks_fetched(

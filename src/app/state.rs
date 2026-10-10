@@ -2,6 +2,7 @@ pub(in crate::app) mod album_cursor;
 pub(in crate::app) mod app_init;
 pub(in crate::app) mod app_struct;
 pub(in crate::app) mod bootstrap;
+pub(in crate::app) mod bounded_cache;
 pub(in crate::app) mod construct;
 pub(in crate::app) mod context_menu_capabilities;
 pub(in crate::app) mod library_position;

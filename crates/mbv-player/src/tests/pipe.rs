@@ -4,6 +4,7 @@
 // are the boundary mock: a real FIFO on a unique temp path, never a live mpv
 // handle.
 
+use crate::PlayerError;
 use crate::runtime::{check_private_fifo, ensure_pipe};
 use std::ffi::CString;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
@@ -69,41 +70,40 @@ fn ensure_pipe_reuses_own_owner_only_fifo() {
     result.expect("an own 0600 FIFO is reusable");
 }
 
-/// Decision table for reusing an existing FIFO (#918): an own exclusive FIFO
-/// is accepted; a foreign owner and a group/other-accessible FIFO are
-/// refused, and the refusal names the reason. The foreign-owner row needs no
-/// second account: `check_private_fifo` takes the expected uid as a
-/// parameter (mirrors `check_private_dir` in mbv-config).
-#[rstest::rstest]
-#[case::own_private_fifo(0o600, 0, None)]
-#[case::foreign_owner_fifo(0o600, 1, Some("owned by uid"))]
-#[case::group_or_other_accessible_fifo(0o666, 0, Some("grants group or other access"))]
-fn check_private_fifo_refusal_table(
-    #[case] mode: u32,
-    #[case] uid_delta: u32,
-    #[case] expected_detail: Option<&str>,
-) {
+/// Runs `check_private_fifo` on a fresh FIFO built with `mode`, against the
+/// file's own uid shifted by `uid_delta`. The foreign-owner case needs no
+/// second account: the expected uid is a parameter (mirrors
+/// `check_private_dir` in mbv-config).
+fn check_fixture_fifo(mode: u32, uid_delta: u32) -> Result<(), PlayerError> {
     let fixture = PipeFixture::fresh("decision");
     make_fifo(&fixture.path, mode);
     let meta = std::fs::metadata(&fixture.path).expect("fixture FIFO must exist");
-
-    let result = check_private_fifo(
+    check_private_fifo(
         fixture.path.to_str().expect("temp path has no NUL"),
         &meta,
         meta.uid().wrapping_add(uid_delta),
-    );
+    )
+}
 
-    match (result.err(), expected_detail) {
-        (None, None) => {}
-        (Some(refusal), Some(fragment)) => {
-            let message = refusal.to_string();
-            assert!(
-                message.contains(fragment),
-                "refusal message '{message}' omits '{fragment}'"
-            );
-        }
-        (refusal, expected) => {
-            panic!("refusal mismatch: got {refusal:?}, expected detail {expected:?}")
-        }
-    }
+/// An own, owner-only FIFO is reusable (#918).
+#[test]
+fn check_private_fifo_accepts_own_owner_only_fifo() {
+    check_fixture_fifo(0o600, 0).expect("an own 0600 FIFO is accepted");
+}
+
+/// A FIFO another uid owns, or one granting group or other access, is refused,
+/// and the refusal names its reason (#918).
+#[rstest::rstest]
+#[case::foreign_owner_fifo(0o600, 1, "owned by uid")]
+#[case::group_or_other_accessible_fifo(0o666, 0, "grants group or other access")]
+fn check_private_fifo_refusal_names_its_reason(
+    #[case] mode: u32,
+    #[case] uid_delta: u32,
+    #[case] fragment: &str,
+) {
+    let refusal = check_fixture_fifo(mode, uid_delta).expect_err("the FIFO must be refused");
+    assert!(
+        refusal.to_string().contains(fragment),
+        "refusal message '{refusal}' omits '{fragment}'"
+    );
 }

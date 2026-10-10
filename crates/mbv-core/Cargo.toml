@@ -17,11 +17,7 @@ readme = "../../README.md"
 # so crates/mbv-core/src/lib.rs pins it back with a crate-root deny
 # attribute. Cargo rejects `workspace = true` combined with per-crate
 # overrides, so this must stay a full copy; grep for this header to keep
-# each copy in sync with the root block. `dbg!` is forbidden separately in
-# clippy.toml (`disallowed-macros`, issue #923). Direct `io::stdout()`/
-# `io::stderr()` writes from library crates outside this package are sanctioned
-# only for the applog stderr sink and failure notice (this crate) and the
-# palette.json maintainer hint (mbv-theme).
+# each copy in sync with the root block.
 [lints.clippy]
 mod_module_files = "deny"
 # Cannot be overridden by an inline allow/expect: params structs, not

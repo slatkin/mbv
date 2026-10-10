@@ -1,5 +1,6 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
+use crate::app::state::bounded_cache::BoundedCache;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
 use crate::app::state::queue_owner::QueueEpoch;
@@ -395,12 +396,7 @@ pub struct App {
     /// Keyed by album id. Bounded at `MAX_ALBUM_TRACKS_CACHE` (issue #917):
     /// insertions of fresh ids evict the oldest entry so a long music
     /// session cannot keep every fetched list reachable.
-    pub(in crate::app) album_tracks_cache: std::collections::HashMap<String, Vec<EmbyItem>>,
-    /// Eviction order of `album_tracks_cache`'s keys, oldest first. One
-    /// entry per unique id; a re-fetched id moves to the back (fresh
-    /// eviction age), as `refetching_a_cached_album_moves_to_the_back_of_the_eviction_order`
-    /// pins.
-    pub(in crate::app) album_tracks_cache_order: std::collections::VecDeque<String>,
+    pub(in crate::app) album_tracks_cache: BoundedCache<Vec<EmbyItem>>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
     /// Fallback artist per-album track fetches waiting for a bounded slot
     /// (design D7, task 6.3). A fallback root's scope can be the whole
@@ -436,10 +432,7 @@ pub struct App {
     /// heaviest cached payloads (a series' seasons plus each expanded
     /// season's full episode list), so insertions of fresh ids evict the
     /// oldest entry.
-    pub(in crate::app) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
-    /// First-insertion order of `series_detail_cache`'s keys, for
-    /// oldest-first eviction. One entry per unique id.
-    pub(in crate::app) series_detail_cache_order: std::collections::VecDeque<String>,
+    pub(in crate::app) series_detail_cache: BoundedCache<SeriesDetail>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.

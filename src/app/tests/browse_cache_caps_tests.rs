@@ -88,23 +88,3 @@ fn refetching_a_cached_album_moves_it_to_the_back_of_the_eviction_order() {
         "the re-fetched album keeps its fresh list and fresh eviction age"
     );
 }
-
-#[test]
-fn a_late_series_detail_completion_keeps_the_cached_detail_and_its_eviction_slot() {
-    // Precondition of the no-replace contract also pinned by
-    // `late_series_detail_completion_does_not_replace_cached_detail`:
-    // `cache_series_detail` must not reorder or replace an existing entry.
-    let mut app = make_movie_app();
-    app.cache_series_detail("show-1", series_detail("cached-season"));
-    app.cache_series_detail("show-1", series_detail("late-season"));
-
-    assert_eq!(
-        app.series_detail_cache["show-1"].seasons[0].id, "cached-season",
-        "a late completion must not replace the cached projection"
-    );
-    assert_eq!(
-        app.series_detail_cache_order,
-        std::collections::VecDeque::from(["show-1".to_string()]),
-        "the cache stays bounded without a duplicate order slot"
-    );
-}
