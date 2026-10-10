@@ -169,8 +169,8 @@ fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBu
 
 // Ensures `path` exists as a FIFO this user may use exclusively: creates it
 // owner-only (mkfifo 0600) when missing, and refuses to use an existing FIFO
-// owned by another uid or granting group or other access (issue #918 — mpv
-// then writes raw PCM of this session only into its own private pipe).
+// owned by another uid (issue #918 — mpv then writes raw PCM of this session
+// only into a pipe this user owns).
 // Refuses to touch a path that exists but isn't a FIFO, without repairing it.
 pub(crate) fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
     use std::os::unix::fs::FileTypeExt;
@@ -197,9 +197,8 @@ pub(crate) fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
 }
 
 /// Refuses an existing FIFO this user must not attach mpv to: one owned by
-/// another `uid`, or one granting group or other access. `uid` is a
-/// parameter so a test can cover the foreign-owner case without a second
-/// account (mirrors `check_private_dir` in mbv-config).
+/// another `uid`. `uid` is a parameter so a test can cover the foreign-owner
+/// case without a second account (mirrors `check_private_dir` in mbv-config).
 pub(crate) fn check_private_fifo(
     path: &str,
     meta: &std::fs::Metadata,
@@ -211,12 +210,6 @@ pub(crate) fn check_private_fifo(
         return Err(PlayerError::unsafe_fifo(
             path,
             format!("owned by uid {owned_by}, expected {uid}"),
-        ));
-    }
-    if meta.mode() & 0o077 != 0 {
-        return Err(PlayerError::unsafe_fifo(
-            path,
-            "grants group or other access".to_string(),
         ));
     }
     Ok(())

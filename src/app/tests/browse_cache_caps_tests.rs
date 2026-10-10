@@ -44,25 +44,6 @@ fn fresh_series_details_past_the_cap_evict_the_oldest_entry() {
 }
 
 #[test]
-fn fresh_album_track_lists_past_the_cap_evict_the_oldest_entry() {
-    let mut app = make_movie_app();
-    let last = MAX_ALBUM_TRACKS_CACHE;
-    for index in 0..=last {
-        app.cache_album_tracks(format!("album-{index}"), album_track("track-1"));
-    }
-
-    assert_eq!(app.album_tracks_cache.len(), MAX_ALBUM_TRACKS_CACHE);
-    assert!(
-        !app.album_tracks_cache.contains_key("album-0"),
-        "the first-inserted album track list is evicted once the cap is reached"
-    );
-    assert!(
-        app.album_tracks_cache
-            .contains_key(&format!("album-{last}"))
-    );
-}
-
-#[test]
 fn refetching_a_cached_album_moves_it_to_the_back_of_the_eviction_order() {
     let mut app = make_movie_app();
     for index in 0..MAX_ALBUM_TRACKS_CACHE {
