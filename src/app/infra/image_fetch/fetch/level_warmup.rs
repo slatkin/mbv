@@ -1,5 +1,6 @@
 use super::{App, LevelFillAction, LevelFillState, LibEvent, PAGE_SIZE};
 use crate::app::MusicEvent;
+use std::io::Read as IoRead;
 
 use super::level_artists::level_artists_from_items;
 
@@ -184,14 +185,27 @@ impl App {
             let url = format!(
                 "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
-            let items: Vec<serde_json::Value> =
-                mbv_net::native_tls_agent(mbv_net::HttpService::Emby, None, None)
-                    .get(&url)
-                    .call()
-                    .ok()
-                    .and_then(|mut r| r.body_mut().read_json::<serde_json::Value>().ok())
-                    .and_then(|v| v["Items"].as_array().cloned())
-                    .unwrap_or_default();
+            // Warm-up requests share the Emby client's agent bounds
+            // (design D6): 5 s connect, 30 s global timeout, and a 64 MiB
+            // body cap so a misbehaving reply bounds memory; a truncated
+            // or timed-out body fails to parse as an empty result and
+            // marks the level `Failed` through the arrival handler.
+            let items: Vec<serde_json::Value> = mbv_net::native_tls_agent(
+                mbv_net::HttpService::Emby,
+                Some(std::time::Duration::from_secs(5)),
+                Some(std::time::Duration::from_secs(30)),
+            )
+            .get(&url)
+            .call()
+            .ok()
+            .and_then(|r| {
+                serde_json::from_reader::<_, serde_json::Value>(
+                    r.into_body().into_reader().take(64 * 1024 * 1024),
+                )
+                .ok()
+            })
+            .and_then(|v| v["Items"].as_array().cloned())
+            .unwrap_or_default();
 
             let artists = level_artists_from_items(&items, &albums);
             let _ = tx.send(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {

@@ -352,10 +352,16 @@ fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
 /// post-hand-over errors via the log and a notification (design D5), so the
 /// TUI does not need fd 2.
 fn redirect_stderr() -> Result<(), PinStartError> {
+    // The state directory may not exist yet at crash time; create it and
+    // ignore that error exactly as the open below does.
+    let log_path = crate::crash_log_path();
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(crate::crash_log_path())
+        .open(&log_path)
         .or_else(|_| std::fs::OpenOptions::new().write(true).open("/dev/null"))
         .map_err(PinStartError::HandOver)?;
     // SAFETY: `dup2` duplicates the fd owned by `file` onto stderr.

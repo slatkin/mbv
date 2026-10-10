@@ -238,7 +238,7 @@ pub fn run_local_daemon_main() -> ! {
         let _ = nix::sys::signal::sigaction(nix::sys::signal::Signal::SIGHUP, &sa);
     }
 
-    let state_dir = crate::state_dir();
+    let state_dir = mbv_config::state_dir();
     mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
     tracing::info!(name: "local_daemon.process.starting", target: "local_daemon", "local daemon starting");
 

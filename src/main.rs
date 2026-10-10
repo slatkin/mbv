@@ -129,21 +129,8 @@ fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
     Some(client)
 }
 
-fn state_dir() -> std::path::PathBuf {
-    std::env::var("XDG_STATE_HOME")
-        .map_or_else(
-            |_| {
-                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local")
-                    .join("state")
-            },
-            std::path::PathBuf::from,
-        )
-        .join("mbv")
-}
-
 fn crash_log_path() -> std::path::PathBuf {
-    state_dir().join("mbv.log")
+    mbv_config::state_dir().join("mbv.log")
 }
 
 fn config_diagnostic_summary(config: &config::Config) -> String {
@@ -176,6 +163,11 @@ fn write_crash_log(msg: &str) {
         { error = %msg },
         "fatal error"
     );
+    // The state directory may not exist yet at crash time; create it and
+    // ignore extraction errors exactly as the open below does.
+    if let Some(parent) = crash_log_path().parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -364,7 +356,7 @@ fn main() {
 
     applog::init(
         config::is_system_instance(),
-        Some(state_dir().join("mbv.log")),
+        Some(mbv_config::state_dir().join("mbv.log")),
         startup
             .log_level
             .as_ref()
