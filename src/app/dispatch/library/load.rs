@@ -103,6 +103,12 @@ impl App {
         }
         match self.tab {
             TabSelection::Home => {
+                // A Home refresh refetches both Services' `Recently added`
+                // data in the background (design D3 of
+                // `home-recently-added-tree`). A failing Service contributes
+                // nothing; Continue Watching still refreshes below.
+                self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+                self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
                 match self.fetch_home() {
                     Ok(content) => {
                         // The fetch runs synchronously (its App-side
@@ -395,7 +401,9 @@ impl App {
     }
 
     /// Dispatches one Service's Home Recently added fetch (design D3 of
-    /// `home-recently-added-tree`). Nothing triggers a fetch yet (row 4.3).
+    /// `home-recently-added-tree`). Triggered when a Service becomes ready,
+    /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
+    /// on every Home refresh.
     pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
         match service {
             mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(),

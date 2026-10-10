@@ -363,6 +363,11 @@ impl App {
         &self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
+        // Home fetches each podcast library's Recently added rows at this
+        // very point (design D3 of `home-recently-added-tree`). Row 7.1
+        // removes the destination shelf fetch below once Home's data owns
+        // the marker.
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
         for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =
                 mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(

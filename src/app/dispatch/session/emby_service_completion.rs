@@ -248,7 +248,11 @@ impl App {
         }
     }
 
-    /// Compute Continue Watching content from an Emby bootstrap.
+    /// Compute Continue Watching content from an Emby bootstrap. Every path
+    /// that brings Emby to Ready (launch startup, setup completion, replace)
+    /// passes through here with the library tabs already rebuilt, so this is
+    /// also where Home re-arms its Recently added fetch (design D3 of
+    /// `home-recently-added-tree`, spec: "when that Service becomes ready").
     pub(in crate::app) fn apply_emby_bootstrap(
         &mut self,
         bootstrap: mbv_emby::EmbyBootstrap,
@@ -258,6 +262,11 @@ impl App {
         for lib_idx in 0..self.libs.len() {
             self.start_album_index(lib_idx, false);
         }
+        // The eligible libraries are now known, so Home re-arms its
+        // Recently added fetch for the just-ready Service (design D3 of
+        // `home-recently-added-tree`, spec: "when that Service becomes
+        // ready").
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
 
         HomeContent {
             continue_items,
