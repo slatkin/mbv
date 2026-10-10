@@ -355,7 +355,7 @@ impl EmbyClient {
         let client = self.clone();
         mbv_net::bounded::run_with_hard_bound(
             move || {
-                let continue_items = client.get_continue_watching(20).unwrap_or_default();
+                let continue_items = client.get_continue_watching(10).unwrap_or_default();
                 let views = client.get_views_classified()?;
                 Ok(crate::EmbyBootstrap {
                     continue_items,

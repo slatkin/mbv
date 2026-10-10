@@ -322,7 +322,7 @@ impl App {
                         return Err(error);
                     }
                 };
-                (client.get_continue_watching(20).unwrap_or_default(), views)
+                (client.get_continue_watching(10).unwrap_or_default(), views)
             }
             _ => (Vec::new(), Vec::new()),
         };
