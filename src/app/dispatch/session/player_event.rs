@@ -521,7 +521,7 @@ impl App {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DaemonLost(
             DaemonLostModal {
                 last_playing_title,
-                daemon_log_path: crate::state_dir()
+                daemon_log_path: mbv_config::state_dir()
                     .join("local-daemon.log")
                     .display()
                     .to_string(),

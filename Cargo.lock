@@ -2027,6 +2027,7 @@ version = "0.24.0"
 dependencies = [
  "mbv-keybinds",
  "mbv-queue",
+ "nix 0.31.3",
  "rstest",
  "serde",
  "serde_json",

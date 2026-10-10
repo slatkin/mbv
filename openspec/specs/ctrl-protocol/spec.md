@@ -60,7 +60,7 @@ daemon.
 
 - **WHEN** the requester receives `ShutdownAccepted`
 - **THEN** every connected client SHALL receive the deliberate-shutdown notification
-- **THEN** the daemon SHALL stop playback, remove its pid file, and exit
+- **THEN** the daemon SHALL stop playback and exit, releasing its owner lock
 
 #### Scenario: Player stop does not stop the daemon
 

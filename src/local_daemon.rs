@@ -233,7 +233,7 @@ pub fn run_local_daemon_main() -> ! {
         let _ = nix::sys::signal::sigaction(nix::sys::signal::Signal::SIGHUP, &sa);
     }
 
-    let state_dir = crate::state_dir();
+    let state_dir = mbv_config::state_dir();
     mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), &log_spec);
     tracing::info!(name: "local_daemon.process.starting", target: "local_daemon", "local daemon starting");
 
@@ -248,7 +248,7 @@ pub fn run_local_daemon_main() -> ! {
     // Acquire the single-instance lock and write our PID before binding the
     // control socket, so `mbv -q` can find us (the launcher already dropped
     // its own liveness-probe guard before spawning us).
-    let lock_path = crate::single_instance::lock_path();
+    let lock_path = mbv_config::owner_lock_path();
     let socket_path = crate::single_instance::socket_path();
     let mut guard = match crate::single_instance::resolve(&socket_path, &lock_path) {
         Ok(crate::single_instance::Resolution::Fresh(guard)) => guard,
@@ -284,7 +284,9 @@ pub fn run_local_daemon_main() -> ! {
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let player_handle_for_tray = std::sync::Arc::clone(&player_handle);
 
-    mbv_daemon::run_with_options(
+    // `Ok` is unreachable: the daemon loop never returns — shutdown always
+    // ends in `process::exit`. Only a startup failure reaches this point.
+    let Err(error) = mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Local),
         false,
         mbv_daemon::DaemonRuntimeHooks {
@@ -321,7 +323,9 @@ pub fn run_local_daemon_main() -> ! {
             }),
             notify: Box::new(crate::pin::notify),
         },
-    )
+    );
+    eprintln!("mbv: local daemon: {error}");
+    std::process::exit(1);
 }
 
 #[cfg(test)]

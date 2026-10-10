@@ -23,7 +23,7 @@ impl App {
         &mut self,
     ) -> Result<(), mbv_remote_player::RemotePlayerError> {
         let socket_path = crate::single_instance::socket_path();
-        let lock_path = crate::single_instance::lock_path();
+        let lock_path = mbv_config::owner_lock_path();
         match crate::single_instance::resolve(&socket_path, &lock_path) {
             Ok(crate::single_instance::Resolution::Attach) => {
                 // A daemon is already up -- another client raced ahead and

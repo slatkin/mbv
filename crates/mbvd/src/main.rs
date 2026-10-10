@@ -35,33 +35,13 @@ fn print_usage() {
 }
 
 fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(mbv_daemon::pid_file()) else {
-        return false;
-    };
-    let Ok(pid) = s.trim().parse::<u32>() else {
-        return false;
-    };
-    std::path::Path::new(&format!("/proc/{pid}")).exists()
+    mbv_daemon::locked_owner_pid(&mbv_daemon::pid_file()).is_some()
 }
 
 fn stop_daemon() -> Result<String, DaemonError> {
-    let path = mbv_daemon::pid_file();
-    let pid = std::fs::read_to_string(&path)
-        .map_err(|error| DaemonError::failure_context("mbvd: no daemon running", error))?
-        .trim()
-        .to_string();
-    let ok = std::process::Command::new("kill")
-        .arg(&pid)
-        .status()
-        .is_ok_and(|s| s.success());
-    if ok {
-        let _ = std::fs::remove_file(&path);
-        Ok(format!("mbvd: daemon stopped (pid {pid})"))
-    } else {
-        Err(DaemonError::failure(format!(
-            "mbvd: failed to stop daemon (pid {pid})"
-        )))
-    }
+    let pid = mbv_daemon::signal_owner(&mbv_daemon::pid_file())
+        .map_err(|error| DaemonError::failure_context("mbvd: failed to stop daemon", error))?;
+    Ok(format!("mbvd: daemon stopped (pid {pid})"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -289,9 +269,6 @@ fn connect_emby() -> Result<(), DaemonError> {
             "mbvd: --connect emby requires an interactive terminal",
         ));
     }
-    // The packaged command always uses the daemon's system-instance paths.
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("emby")?;
     let server_url = prompt("Emby server URL")?;
     let username = prompt("Username")?;
@@ -341,9 +318,6 @@ fn connect_abs() -> Result<(), DaemonError> {
             "mbvd: --connect abs requires an interactive terminal",
         ));
     }
-    // The packaged command always uses the daemon's system-instance paths.
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let server_url = prompt("Audiobookshelf server URL")?;
     let api_key = prompt_secret("Audiobookshelf API key")?;
@@ -401,8 +375,6 @@ fn disconnect_abs() -> Result<(), DaemonError> {
             "mbvd: --disconnect abs requires an interactive terminal",
         ));
     }
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let config = config::load_config().map_err(|error| {
         DaemonError::failure_context("mbvd: could not load owner configuration", error)
@@ -601,6 +573,11 @@ fn run() -> Result<(), DaemonError> {
             return Err(error);
         }
     };
+    // Every admin action uses the packaged daemon's system-instance paths.
+    if !matches!(action, Action::Serve { .. }) {
+        // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+        unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    }
     let (audio_only, log_level) = match action {
         Action::Help => {
             print_usage();
@@ -622,6 +599,12 @@ fn run() -> Result<(), DaemonError> {
             log_level,
         } => (audio_only, log_level),
     };
+    // The runtime directory is checked once at the process boundary before
+    // the owner lock or control socket is taken (harden-owner-process-
+    // boundaries design D4). Nothing to do on a system instance.
+    if let Err(error) = config::ensure_runtime_dir() {
+        return Err(DaemonError::failure(format!("mbvd: {error}")));
+    }
     if daemon_running() {
         return Err(DaemonError::failure("mbvd: a daemon is already running"));
     }
@@ -632,7 +615,11 @@ fn run() -> Result<(), DaemonError> {
     applog::init(is_system, log_path, &log_level);
     tracing::info!(name: "mbvd.startup.started", target: "startup", "mbvd starting");
 
-    mbv_daemon::run_with_options(
+    // `Ok` is unreachable: the daemon loop never returns — shutdown always
+    // ends in `process::exit`. Only a startup failure reaches this point; the
+    // lock-held refusal is an already-running failure (harden-owner-process-
+    // boundaries 1.3).
+    let Err(error) = mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
         mbv_daemon::DaemonRuntimeHooks {
@@ -648,7 +635,8 @@ fn run() -> Result<(), DaemonError> {
             }),
             notify: Box::new(|_| {}),
         },
-    )
+    );
+    Err(DaemonError::failure(format!("mbvd: {error}")))
 }
 
 fn main() {

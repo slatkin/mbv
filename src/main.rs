@@ -129,21 +129,8 @@ fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
     Some(client)
 }
 
-fn state_dir() -> std::path::PathBuf {
-    std::env::var("XDG_STATE_HOME")
-        .map_or_else(
-            |_| {
-                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local")
-                    .join("state")
-            },
-            std::path::PathBuf::from,
-        )
-        .join("mbv")
-}
-
 fn crash_log_path() -> std::path::PathBuf {
-    state_dir().join("mbv.log")
+    mbv_config::state_dir().join("mbv.log")
 }
 
 fn config_diagnostic_summary(config: &config::Config) -> String {
@@ -176,13 +163,23 @@ fn write_crash_log(msg: &str) {
         { error = %msg },
         "fatal error"
     );
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(crash_log_path())
-    {
+    if let Ok(mut f) = open_crash_log() {
         let _ = writeln!(f, "{msg}");
     }
+}
+
+/// Open the crash log for append. The state directory may not exist yet at
+/// crash time, so it is created first; a failure there is left for the open
+/// to report.
+pub(crate) fn open_crash_log() -> std::io::Result<std::fs::File> {
+    let path = crash_log_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
 }
 
 fn install_panic_hook() {
@@ -335,8 +332,8 @@ fn pre_config_startup() -> Option<StartupArgs> {
 }
 
 fn stop_running_instance() {
-    let lock = single_instance::lock_path();
-    match single_instance::terminate_owner(&lock) {
+    let lock = mbv_config::owner_lock_path();
+    match mbv_daemon::signal_owner(&lock) {
         Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
         Err(error) => {
             eprintln!("mbv: {error}");
@@ -346,6 +343,14 @@ fn stop_running_instance() {
 }
 
 fn main() {
+    // The fallback runtime directory is checked once at the process
+    // boundary (design D4) so `-q`, `--toggle`, the Owner-action flags, and
+    // every single-instance resolution see a valid private directory.
+    if let Err(error) = mbv_config::ensure_runtime_dir() {
+        eprintln!("mbv: {error}");
+        std::process::exit(1);
+    }
+
     // Claim the Pin-swap token before anything else spawns a worker or child
     // process (tray-pin-swap design D2).
     pin::claim_swap_token();
@@ -356,7 +361,7 @@ fn main() {
 
     applog::init(
         config::is_system_instance(),
-        Some(state_dir().join("mbv.log")),
+        Some(mbv_config::state_dir().join("mbv.log")),
         startup
             .log_level
             .as_ref()
@@ -477,7 +482,7 @@ fn run_local_instance(
     // the owner process before attaching. The panel handle is consumed only
     // when the TUI finally runs, so retries keep the panel alive.
     let mut pinned_panel = pinned_panel;
-    let lock_path = single_instance::lock_path();
+    let lock_path = mbv_config::owner_lock_path();
     let socket_path = single_instance::socket_path();
     let mut resolution = match single_instance::resolve(&socket_path, &lock_path) {
         Ok(resolution) => resolution,
@@ -537,9 +542,7 @@ fn run_local_instance(
                             std::process::exit(1);
                         }
                         owner_restart::Choice::Restart => {
-                            if let Err(terminate_error) =
-                                single_instance::terminate_owner(&lock_path)
-                            {
+                            if let Err(terminate_error) = mbv_daemon::signal_owner(&lock_path) {
                                 eprintln!("mbv: failed to stop Owner process: {terminate_error}");
                                 std::process::exit(1);
                             }
@@ -585,7 +588,7 @@ fn attach_owner_process(
 }
 
 fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
-    let pid = match single_instance::read_pid(lock_path) {
+    let pid = match mbv_daemon::locked_owner_pid(lock_path) {
         Some(pid) => format!(
             "mbv: owner process PID is {pid} (per {}).",
             lock_path.display()

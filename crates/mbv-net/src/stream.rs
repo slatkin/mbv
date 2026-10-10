@@ -3,6 +3,7 @@
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::os::unix::net::UnixStream;
+use std::time::Duration;
 #[derive(Debug)]
 pub enum SocketStream {
     Unix(UnixStream),
@@ -14,6 +15,23 @@ impl SocketStream {
         match self {
             Self::Unix(stream) => stream.try_clone().map(Self::Unix),
             Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
+        }
+    }
+
+    /// Applies the I/O timeout to both reads and writes on the underlying
+    /// socket for every variant. Callers reset the read side by passing
+    /// `None` when the bounded phase is over.
+    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        match self {
+            Self::Unix(stream) => stream.set_read_timeout(timeout),
+            Self::Tcp(stream) => stream.set_read_timeout(timeout),
+        }
+    }
+
+    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        match self {
+            Self::Unix(stream) => stream.set_write_timeout(timeout),
+            Self::Tcp(stream) => stream.set_write_timeout(timeout),
         }
     }
 

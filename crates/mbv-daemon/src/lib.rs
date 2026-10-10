@@ -34,7 +34,13 @@ pub(crate) use core::{
     expire_and_redispatch, reset_slot_jumps, settle_and_redispatch, submit_queue_slots_cold_start,
 };
 #[doc(inline)]
-pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection, pid_file};
+pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
+mod owner_lock;
+#[doc(inline)]
+pub use owner_lock::{
+    OwnerLockError, SignalOwnerError, lock_pid_file, locked_owner_pid, pid_file, signal_owner,
+    try_lock, write_pid,
+};
 mod core_ctrl_spawn;
 pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
 mod run_shutdown;
