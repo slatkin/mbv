@@ -163,18 +163,23 @@ fn write_crash_log(msg: &str) {
         { error = %msg },
         "fatal error"
     );
-    // The state directory may not exist yet at crash time; create it and
-    // ignore extraction errors exactly as the open below does.
-    if let Some(parent) = crash_log_path().parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(crash_log_path())
-    {
+    if let Ok(mut f) = open_crash_log() {
         let _ = writeln!(f, "{msg}");
     }
+}
+
+/// Open the crash log for append. The state directory may not exist yet at
+/// crash time, so it is created first; a failure there is left for the open
+/// to report.
+pub(crate) fn open_crash_log() -> std::io::Result<std::fs::File> {
+    let path = crash_log_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
 }
 
 fn install_panic_hook() {
@@ -328,7 +333,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
 
 fn stop_running_instance() {
     let lock = mbv_config::owner_lock_path();
-    match mbv_daemon::owner_lock::signal_owner(&lock) {
+    match mbv_daemon::signal_owner(&lock) {
         Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
         Err(error) => {
             eprintln!("mbv: {error}");
@@ -537,9 +542,7 @@ fn run_local_instance(
                             std::process::exit(1);
                         }
                         owner_restart::Choice::Restart => {
-                            if let Err(terminate_error) =
-                                mbv_daemon::owner_lock::signal_owner(&lock_path)
-                            {
+                            if let Err(terminate_error) = mbv_daemon::signal_owner(&lock_path) {
                                 eprintln!("mbv: failed to stop Owner process: {terminate_error}");
                                 std::process::exit(1);
                             }
@@ -585,7 +588,7 @@ fn attach_owner_process(
 }
 
 fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
-    let pid = match mbv_daemon::owner_lock::locked_owner_pid(lock_path) {
+    let pid = match mbv_daemon::locked_owner_pid(lock_path) {
         Some(pid) => format!(
             "mbv: owner process PID is {pid} (per {}).",
             lock_path.display()

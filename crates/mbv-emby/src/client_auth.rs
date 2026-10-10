@@ -101,6 +101,13 @@ impl EmbyClient {
         self
     }
 
+    /// The pooled agent with this client's timeouts, for requests issued
+    /// outside the client's own helpers. Cloning shares the connection pool.
+    #[must_use]
+    pub fn http_agent(&self) -> ureq::Agent {
+        self.agent.clone()
+    }
+
     pub(super) fn delete(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         self.agent
             .delete(&self.url(path))

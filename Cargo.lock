@@ -2025,9 +2025,9 @@ dependencies = [
 name = "mbv-config"
 version = "0.24.0"
 dependencies = [
- "libc",
  "mbv-keybinds",
  "mbv-queue",
+ "nix 0.31.3",
  "rstest",
  "serde",
  "serde_json",

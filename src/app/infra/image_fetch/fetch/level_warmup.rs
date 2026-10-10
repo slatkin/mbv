@@ -1,6 +1,5 @@
 use super::{App, LevelFillAction, LevelFillState, LibEvent, PAGE_SIZE};
 use crate::app::MusicEvent;
-use std::io::Read as IoRead;
 
 use super::level_artists::level_artists_from_items;
 
@@ -169,7 +168,7 @@ impl App {
                 orphan_risk: albums.is_empty(),
             },
         );
-        let (server_url, token) = {
+        let (server_url, token, agent) = {
             let Some(client) = self.emby_client() else {
                 // No client: mark `Failed` so the next candidate creation
                 // retries instead of waiting on a fill that can never start.
@@ -178,34 +177,34 @@ impl App {
                 return;
             };
             let c = client.lock().unwrap();
-            (c.config.server_url.clone(), c.token.clone())
+            (c.config.server_url.clone(), c.token.clone(), c.http_agent())
         };
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let url = format!(
                 "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
-            // Warm-up requests share the Emby client's agent bounds
-            // (design D6): 5 s connect, 30 s global timeout, and a 64 MiB
-            // body cap so a misbehaving reply bounds memory; a truncated
-            // or timed-out body fails to parse as an empty result and
-            // marks the level `Failed` through the arrival handler.
-            let items: Vec<serde_json::Value> = mbv_net::native_tls_agent(
-                mbv_net::HttpService::Emby,
-                Some(std::time::Duration::from_secs(5)),
-                Some(std::time::Duration::from_secs(30)),
-            )
-            .get(&url)
-            .call()
-            .ok()
-            .and_then(|r| {
-                serde_json::from_reader::<_, serde_json::Value>(
-                    r.into_body().into_reader().take(64 * 1024 * 1024),
-                )
+            // Warm-up requests share the Emby client's agent (design D6): its
+            // 5 s connect and 30 s global bounds, and a 64 MiB body cap so a
+            // misbehaving reply bounds memory; a truncated or timed-out body
+            // fails to parse as an empty result and marks the level `Failed`
+            // through the arrival handler.
+            let items: Vec<serde_json::Value> = agent
+                .get(&url)
+                .call()
                 .ok()
-            })
-            .and_then(|v| v["Items"].as_array().cloned())
-            .unwrap_or_default();
+                .and_then(|r| {
+                    r.into_body()
+                        .into_with_config()
+                        .limit(64 * 1024 * 1024)
+                        .read_json::<serde_json::Value>()
+                        .ok()
+                })
+                .and_then(|mut v| match v["Items"].take() {
+                    serde_json::Value::Array(items) => Some(items),
+                    _ => None,
+                })
+                .unwrap_or_default();
 
             let artists = level_artists_from_items(&items, &albums);
             let _ = tx.send(LibEvent::Music(MusicEvent::AlbumArtistLevelFetched {

@@ -39,9 +39,6 @@ fn daemon_running() -> bool {
 }
 
 fn stop_daemon() -> Result<String, DaemonError> {
-    // The packaged command always uses the daemon's system-instance paths.
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let pid = mbv_daemon::signal_owner(&mbv_daemon::pid_file())
         .map_err(|error| DaemonError::failure_context("mbvd: failed to stop daemon", error))?;
     Ok(format!("mbvd: daemon stopped (pid {pid})"))
@@ -272,9 +269,6 @@ fn connect_emby() -> Result<(), DaemonError> {
             "mbvd: --connect emby requires an interactive terminal",
         ));
     }
-    // The packaged command always uses the daemon's system-instance paths.
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("emby")?;
     let server_url = prompt("Emby server URL")?;
     let username = prompt("Username")?;
@@ -324,9 +318,6 @@ fn connect_abs() -> Result<(), DaemonError> {
             "mbvd: --connect abs requires an interactive terminal",
         ));
     }
-    // The packaged command always uses the daemon's system-instance paths.
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let server_url = prompt("Audiobookshelf server URL")?;
     let api_key = prompt_secret("Audiobookshelf API key")?;
@@ -384,8 +375,6 @@ fn disconnect_abs() -> Result<(), DaemonError> {
             "mbvd: --disconnect abs requires an interactive terminal",
         ));
     }
-    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
-    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
     let _lock = administration_lock("abs")?;
     let config = config::load_config().map_err(|error| {
         DaemonError::failure_context("mbvd: could not load owner configuration", error)
@@ -584,6 +573,11 @@ fn run() -> Result<(), DaemonError> {
             return Err(error);
         }
     };
+    // Every admin action uses the packaged daemon's system-instance paths.
+    if !matches!(action, Action::Serve { .. }) {
+        // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+        unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    }
     let (audio_only, log_level) = match action {
         Action::Help => {
             print_usage();
@@ -621,7 +615,11 @@ fn run() -> Result<(), DaemonError> {
     applog::init(is_system, log_path, &log_level);
     tracing::info!(name: "mbvd.startup.started", target: "startup", "mbvd starting");
 
-    mbv_daemon::run_with_options(
+    // `Ok` is unreachable: the daemon loop never returns — shutdown always
+    // ends in `process::exit`. Only a startup failure reaches this point; the
+    // lock-held refusal is an already-running failure (harden-owner-process-
+    // boundaries 1.3).
+    let Err(error) = mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
         mbv_daemon::DaemonRuntimeHooks {
@@ -637,13 +635,8 @@ fn run() -> Result<(), DaemonError> {
             }),
             notify: Box::new(|_| {}),
         },
-    )
-    // `Ok` is unreachable: the daemon loop never returns — shutdown always
-    // ends in `process::exit`. Only a startup failure yields `Err`; the
-    // lock-held refusal is an already-running failure (harden-owner-process-
-    // boundaries 1.3).
-    .map(|never| match never {})
-    .map_err(|error| DaemonError::failure(format!("mbvd: {error}")))
+    );
+    Err(DaemonError::failure(format!("mbvd: {error}")))
 }
 
 fn main() {

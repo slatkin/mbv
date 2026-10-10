@@ -3,7 +3,7 @@
 //! holds a real `flock` on the file. `signal_owner` sends a real SIGTERM and
 //! gets no test of its own.
 
-use mbv_daemon::owner_lock::{lock_pid_file, locked_owner_pid};
+use mbv_daemon::{lock_pid_file, locked_owner_pid};
 use nix::fcntl::{Flock, FlockArg};
 use std::fs::File;
 use std::io::Write;

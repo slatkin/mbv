@@ -13,8 +13,8 @@
 //! (never file existence) disambiguates "a local daemon exists, attach as a
 //! client" from "bare foreground TUI owns it, refuse".
 
-use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::fs::File;
+use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -33,11 +33,7 @@ impl LockGuard {
     /// Overwrite the lock file with this process's PID, so `mbv -q` /
     /// tray-Quit can find it to send SIGTERM.
     pub fn write_pid(&mut self) -> io::Result<()> {
-        use std::io::Seek;
-        self.file.set_len(0)?;
-        self.file.seek(io::SeekFrom::Start(0))?;
-        write!(self.file, "{}", std::process::id())?;
-        self.file.flush()
+        mbv_daemon::write_pid(&mut self.file)
     }
 }
 
@@ -57,25 +53,13 @@ pub enum Resolution {
 
 /// Non-blocking flock probe + (if held) socket-connectability check.
 pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
-    // Intentionally not truncated: the file may already hold a previous
-    // PID we're about to re-lock over; `write_pid` explicitly truncates
-    // once the lock is actually held.
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(false)
-        .open(lock)?;
-    let file = match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock) {
-        Ok(file) => file,
-        Err((_, nix::errno::Errno::EWOULDBLOCK)) => {
-            // A live app holds the lock. Never trust socket-file existence — only
-            // a successful connect counts (ADR 0006).
-            return match UnixStream::connect(socket) {
-                Ok(_) => Ok(Resolution::Attach),
-                Err(_) => Ok(Resolution::Refuse),
-            };
-        }
-        Err((_, errno)) => return Err(io::Error::from_raw_os_error(errno as i32)),
+    let Some(file) = mbv_daemon::try_lock(lock)? else {
+        // A live app holds the lock. Never trust socket-file existence — only
+        // a successful connect counts (ADR 0006).
+        return match UnixStream::connect(socket) {
+            Ok(_) => Ok(Resolution::Attach),
+            Err(_) => Ok(Resolution::Refuse),
+        };
     };
     let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
     Ok(Resolution::Fresh(LockGuard { file }))
@@ -121,7 +105,7 @@ mod tests {
         };
         guard.write_pid().expect("write pid under the held lock");
         assert_eq!(
-            mbv_daemon::owner_lock::locked_owner_pid(&lock),
+            mbv_daemon::locked_owner_pid(&lock),
             Some(std::process::id())
         );
     }

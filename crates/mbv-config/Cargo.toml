@@ -17,9 +17,9 @@ test = []
 workspace = true
 
 [dependencies]
-libc.workspace = true
 mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-queue = { path = "../mbv-queue" }
+nix = { workspace = true, features = ["user"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 toml.workspace = true

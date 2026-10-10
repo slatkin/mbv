@@ -7,7 +7,7 @@
 //! another descriptor still holds the flock on the same file.
 
 use std::fs::File;
-use std::io::{self, Seek, Write};
+use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -31,10 +31,13 @@ pub fn locked_owner_pid(path: &Path) -> Option<u32> {
     let file = File::open(path).ok()?;
     let probe = nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock);
     // Only a would-block result means a live owner holds the lock; read the
-    // PID out of the record. Any other outcome — a freely acquired probe
-    // lock (dropped below) or another error — names no owner.
-    if let Err((_, nix::errno::Errno::EWOULDBLOCK)) = probe {
-        return std::fs::read_to_string(path).ok()?.trim().parse().ok();
+    // PID out of the record through the descriptor that holds it. Any other
+    // outcome — a freely acquired probe lock (dropped below) or another error
+    // — names no owner.
+    if let Err((mut file, nix::errno::Errno::EWOULDBLOCK)) = probe {
+        let mut pid = String::new();
+        file.read_to_string(&mut pid).ok()?;
+        return pid.trim().parse().ok();
     }
     None
 }
@@ -85,24 +88,41 @@ fn held_error(path: &Path, error: io::Error) -> OwnerLockError {
     }
 }
 
+/// Acquire the exclusive non-blocking flock on the PID record at `path`,
+/// creating it if missing. The contents are left in place. `Ok(None)` means
+/// another descriptor already holds the lock.
+pub fn try_lock(path: &Path) -> io::Result<Option<PidFileLock>> {
+    // Intentionally not truncated: the file may hold a previous PID; it is
+    // truncated by `write_pid`, once this process holds the lock.
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock) {
+        Ok(lock) => Ok(Some(lock)),
+        Err((_, nix::errno::Errno::EWOULDBLOCK)) => Ok(None),
+        Err((_, errno)) => Err(io::Error::from_raw_os_error(errno as i32)),
+    }
+}
+
+/// Replace the PID record's contents with this process's PID. Only call it
+/// under the flock, so the record names the live lock holder.
+pub fn write_pid(file: &mut File) -> io::Result<()> {
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", std::process::id())
+}
+
 /// Acquire the exclusive non-blocking flock on `path` and write this
 /// process's PID into it. Fails with `OwnerLockError` when another Owner
 /// process already holds the lock or the record cannot be opened, truncated,
 /// or written; the returned `PidFileLock` otherwise keeps the flock for the
 /// run's lifetime.
 pub fn lock_pid_file(path: &Path) -> Result<PidFileLock, OwnerLockError> {
-    // Intentionally not truncated: the file may hold a previous PID; it
-    // is truncated below, once this process holds the lock.
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(false)
-        .open(path)
-        .map_err(|error| held_error(path, error))?;
-    let mut file = match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
-    {
-        Ok(file) => file,
-        Err((_, nix::errno::Errno::EWOULDBLOCK)) => {
+    let mut lock = match try_lock(path) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => {
             return Err(held_error(
                 path,
                 io::Error::new(
@@ -111,16 +131,10 @@ pub fn lock_pid_file(path: &Path) -> Result<PidFileLock, OwnerLockError> {
                 ),
             ));
         }
-        Err((_, errno)) => {
-            return Err(held_error(path, io::Error::from_raw_os_error(errno as i32)));
-        }
+        Err(error) => return Err(held_error(path, error)),
     };
-    file.set_len(0).map_err(|error| held_error(path, error))?;
-    file.seek(io::SeekFrom::Start(0))
-        .map_err(|error| held_error(path, error))?;
-    write!(file, "{}", std::process::id()).map_err(|error| held_error(path, error))?;
-    file.flush().map_err(|error| held_error(path, error))?;
-    Ok(file)
+    write_pid(&mut lock).map_err(|error| held_error(path, error))?;
+    Ok(lock)
 }
 
 /// Why an Owner process could not be signalled.
@@ -158,14 +172,13 @@ impl std::error::Error for SignalOwnerError {
 /// Send `SIGTERM` to the PID that currently holds the flock on `path`.
 pub fn signal_owner(path: &Path) -> Result<u32, SignalOwnerError> {
     let pid = locked_owner_pid(path).ok_or(SignalOwnerError::NoOwner)?;
-    // SAFETY: signalling the PID read from the held owner lock is intentional.
-    let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-    if ok {
-        Ok(pid)
-    } else {
-        Err(SignalOwnerError::Signal {
-            pid,
-            error: io::Error::last_os_error(),
-        })
-    }
+    nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(pid.cast_signed()),
+        nix::sys::signal::Signal::SIGTERM,
+    )
+    .map(|()| pid)
+    .map_err(|errno| SignalOwnerError::Signal {
+        pid,
+        error: io::Error::from_raw_os_error(errno as i32),
+    })
 }
