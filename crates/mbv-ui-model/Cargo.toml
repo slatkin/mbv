@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 mbv-core = { path = "../mbv-core" }
 mbv-emby-model = { path = "../mbv-emby-model" }
+mbv-ids = { path = "../mbv-ids" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-feed = { path = "../mbv-feed" }
 mbv-config = { path = "../mbv-config" }

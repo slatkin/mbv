@@ -115,14 +115,10 @@ mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_emby_model::test_support::make_item;
-    use mbv_ui_model::targets::HomeRowTarget;
+    use mbv_ui_model::targets::HomeItemTarget;
 
-    fn target(id: &str) -> HomeRowTarget {
-        HomeRowTarget {
-            item_id: Some(id.into()),
-            source: None,
-            from_continue_watching: true,
-        }
+    fn target(id: &str) -> HomeItemTarget {
+        HomeItemTarget::continue_item(id)
     }
 
     #[test]

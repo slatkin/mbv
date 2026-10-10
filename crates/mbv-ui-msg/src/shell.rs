@@ -19,7 +19,7 @@ use super::intents::{
 use super::queue::QueueIntent;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_model::targets::{HomeRowTarget, MusicArtistTarget};
+use mbv_ui_model::targets::{HomeItemTarget, MusicArtistTarget};
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -208,9 +208,9 @@ pub enum ShellRequest {
     /// Semantic feed-management action; local form edits stay in the component.
     FeedsManageIntent(FeedsManageIntent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).
-    HomePlay(HomeRowTarget),
+    HomePlay(HomeItemTarget),
     /// Enqueue the Home item at the component-owned flat cursor.
-    HomeEnqueue(HomeRowTarget),
+    HomeEnqueue(HomeItemTarget),
     /// Open a destination row context menu at an optional pointer anchor.
     ///
     /// The anchor remains a raw pointer-coordinate tuple because the shell
@@ -221,20 +221,20 @@ pub enum ShellRequest {
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
-    HomeDelete(HomeRowTarget),
+    HomeDelete(HomeItemTarget),
     /// Toggle watched state for the component-resolved Continue Watching row.
     /// The shell resolves this stable identity and never consults a cursor.
-    HomeToggleWatched(HomeRowTarget),
+    HomeToggleWatched(HomeItemTarget),
     /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
     HomeRowClick {
-        target: HomeRowTarget,
+        target: HomeItemTarget,
     },
     /// A row the user double-clicked; `target` is the component-resolved flat
     /// index and the shell activates it (design.md D3/D4).
     HomeRowActivate {
-        target: HomeRowTarget,
+        target: HomeItemTarget,
     },
 
     /// Request shell-owned data for a newly expanded TV tree branch. The TV

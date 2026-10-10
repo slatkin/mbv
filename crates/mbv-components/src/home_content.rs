@@ -24,6 +24,7 @@ use super::media_list::{
 use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::context_menu::ContextMenuTargets;
+use mbv_ui_model::targets::HomeItemTarget;
 
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
@@ -145,23 +146,13 @@ impl HomeContent {
             })
     }
 
-    /// Home's typed request target for a stable item identity the shared
-    /// owner resolved, or the owner's current selection for a local effect.
-    fn home_row_target(
-        _self: &Self,
-        item_id: Option<String>,
-    ) -> mbv_ui_model::targets::HomeRowTarget {
-        mbv_ui_model::targets::HomeRowTarget {
-            item_id,
-            source: None,
-            from_continue_watching: true,
-        }
-    }
-
     /// The typed effect target for Home's current selection (the shared
     /// owner's stable target, never a cursor-minus-section-index lookup).
-    fn row_target(&self) -> mbv_ui_model::targets::HomeRowTarget {
-        Self::home_row_target(self, self.carrier.selected_target().cloned())
+    fn row_target(&self) -> Option<HomeItemTarget> {
+        self.carrier
+            .selected_target()
+            .cloned()
+            .map(HomeItemTarget::continue_item)
     }
 
     /// Home's local key interpretation, forwarded by the focused panel (the
@@ -206,16 +197,16 @@ impl HomeContent {
             Key::Char('.') => Some(self.open_context_menu()),
             // Ctrl+A multi-selects the list via `handle_visual_key` above;
             // Ctrl+Enter keeps the enqueue shortcut.
-            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
-                Box::new(ShellRequest::HomeEnqueue(self.row_target())),
-            )),
+            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .row_target()
+                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeEnqueue(target)))),
             Key::Enter => self.activate_selected_row(),
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
-                Box::new(ShellRequest::HomeToggleWatched(self.row_target())),
-            )),
-            Key::Delete => Some(Msg::Shell(Box::new(ShellRequest::HomeDelete(
-                self.row_target(),
-            )))),
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .row_target()
+                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeToggleWatched(target)))),
+            Key::Delete => self
+                .row_target()
+                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeDelete(target)))),
             _ => None,
         }
     }
@@ -229,12 +220,14 @@ impl HomeContent {
             .delegate_row_local_input(MediaListSurfaceInput::Context, None)
             .external_intent
         {
-            Some(RowIntent::Context(target)) => vec![Self::home_row_target(self, Some(target))],
+            Some(RowIntent::Context(target)) => vec![HomeItemTarget::continue_item(target)],
             Some(RowIntent::ContextSelection(targets)) => targets
                 .into_iter()
-                .map(|target| Self::home_row_target(self, Some(target)))
+                .map(HomeItemTarget::continue_item)
                 .collect(),
-            _ => vec![self.row_target()],
+            _ => self
+                .row_target()
+                .map_or_else(Vec::new, |target| vec![target]),
         };
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
@@ -243,15 +236,10 @@ impl HomeContent {
     }
 
     fn activate_selected_row(&mut self) -> Option<Msg> {
-        match self
+        let intent = self
             .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-            .external_intent
-        {
-            Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                ShellRequest::HomePlay(Self::home_row_target(self, Some(target))),
-            ))),
-            _ => None,
-        }
+            .external_intent;
+        Self::activate_row_intent(intent)
     }
 
     fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
@@ -270,7 +258,7 @@ impl HomeContent {
             MediaListSurfaceInput::ContextClick(at) => Some(self.open_pointer_context(at, target?)),
             MediaListSurfaceInput::Click(_)
             | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_) => Some(self.claim_pointer_click()),
+            | MediaListSurfaceInput::RangeClick(_) => self.claim_pointer_click(),
             _ => None,
         }
     }
@@ -282,23 +270,23 @@ impl HomeContent {
 
     fn activate_pointer_target(&mut self, target: String) -> Msg {
         self.carrier
-            .delegate_operation(MediaListOperation::Activate(target));
+            .delegate_operation(MediaListOperation::Activate(target.clone()));
         Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
-            target: self.row_target(),
+            target: HomeItemTarget::continue_item(target),
         }))
     }
 
     fn open_pointer_context(&mut self, at: ratatui::layout::Position, target: String) -> Msg {
         let outcome = self
             .carrier
-            .delegate_operation(MediaListOperation::Context(target));
+            .delegate_operation(MediaListOperation::Context(target.clone()));
         let targets = match outcome.external_intent {
-            Some(RowIntent::Context(target)) => vec![Self::home_row_target(self, Some(target))],
+            Some(RowIntent::Context(target)) => vec![HomeItemTarget::continue_item(target)],
             Some(RowIntent::ContextSelection(targets)) => targets
                 .into_iter()
-                .map(|target| Self::home_row_target(self, Some(target)))
+                .map(HomeItemTarget::continue_item)
                 .collect(),
-            _ => vec![self.row_target()],
+            _ => vec![HomeItemTarget::continue_item(target)],
         };
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
@@ -306,19 +294,17 @@ impl HomeContent {
         )))
     }
 
-    fn claim_pointer_click(&self) -> Msg {
-        Msg::Shell(Box::new(ShellRequest::HomeRowClick {
-            target: self.row_target(),
-        }))
+    fn claim_pointer_click(&self) -> Option<Msg> {
+        self.row_target()
+            .map(|target| Msg::Shell(Box::new(ShellRequest::HomeRowClick { target })))
     }
 
-    fn activate_home_hero(&mut self) -> Option<Msg> {
-        match self
-            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-            .external_intent
-        {
+    /// A resolved activate intent becomes a `HomePlay` request with the row's
+    /// own target (shared by the Enter path and the hero-activate path).
+    fn activate_row_intent(intent: Option<RowIntent<String>>) -> Option<Msg> {
+        match intent {
             Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                ShellRequest::HomePlay(Self::home_row_target(self, Some(target))),
+                ShellRequest::HomePlay(HomeItemTarget::continue_item(target)),
             ))),
             _ => None,
         }
@@ -404,7 +390,12 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::SelectorPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
-            LibrarySlotEvent::HeroActivate => self.activate_home_hero(),
+            LibrarySlotEvent::HeroActivate => {
+                let intent = self
+                    .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                    .external_intent;
+                Self::activate_row_intent(intent)
+            }
         }
     }
 

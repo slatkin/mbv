@@ -78,18 +78,23 @@ impl Model {
 
     pub(in crate::app) fn home_stable_target(
         &self,
-        target: &mbv_ui_model::targets::HomeRowTarget,
+        target: &mbv_ui_model::targets::HomeItemTarget,
     ) -> Option<(QueueItem, bool)> {
-        if !target.from_continue_watching {
-            return None;
+        // Continue Watching is Emby-only, so a `Continue` target always
+        // resolves through the shell-owned Continue Watching snapshot
+        // (design D7 of `home-recently-added-tree`). `Recent` rows resolve
+        // through the shell's Recently added data once it lands (row 6.1);
+        // nothing emits a `Recent` target yet.
+        match target {
+            mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
+                .home_content
+                .continue_items
+                .iter()
+                .find(|item| item.id == item_id.as_str())
+                .cloned()
+                .map(|item| (QueueItem::Emby(Box::new(item)), true)),
+            mbv_ui_model::targets::HomeItemTarget::Recent(_) => None,
         }
-        let item_id = target.item_id.as_deref()?;
-        self.home_content
-            .continue_items
-            .iter()
-            .find(|item| item.id == item_id)
-            .cloned()
-            .map(|item| (QueueItem::Emby(Box::new(item)), true))
     }
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {
