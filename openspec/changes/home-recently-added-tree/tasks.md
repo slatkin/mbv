@@ -2,12 +2,12 @@
 
 ## 1. Continue Watching limit
 
-- [ ] 1.1 Change `get_continue_watching(20)` to `get_continue_watching(10)` in `App::fetch_home` (`src/app/dispatch/library/load.rs`) and in `EmbyClient::load_startup_data_bounded` (`crates/mbv-emby/src/client_auth.rs`). Leave `crates/mbv-core/examples/cast_spike.rs` unchanged. Verify: `cargo check -p mbv -p mbv-emby` passes. No new test: the value is a request parameter, not a contract any test owns.
+- [x] 1.1 Change `get_continue_watching(20)` to `get_continue_watching(10)` in `App::fetch_home` (`src/app/dispatch/library/load.rs`) and in `EmbyClient::load_startup_data_bounded` (`crates/mbv-emby/src/client_auth.rs`). Leave `crates/mbv-core/examples/cast_spike.rs` unchanged. Verify: `cargo check -p mbv -p mbv-emby` passes. No new test: the value is a request parameter, not a contract any test owns.
 
 ## 2. Split title in the shared tree (design D9)
 
-- [ ] 2.1 Add `secondary: Option<String>` and `with_secondary` to `TreeNode` (`crates/mbv-components/src/list/tree_browser/types.rs`). Include the secondary part in the node's search text. Fix every `TreeNode { .. }` literal the compiler flags. Verify: `cargo check -p mbv-components`.
-- [ ] 2.2 In the shared tree Render Component (`crates/mbv-render/src/components/tree_browser.rs`), paint a node that has a secondary part with the flat media list's split-row role policy. Reuse that policy from `components/media_list/row.rs`; do not copy it. Contract: the shared-list-components "Tree rows can carry a split title" requirement. Verify: one focused buffer test in the tree painter's test module. It asserts the primary uses the playback-context role, the secondary uses the playback-title role, and a played node mutes only the secondary. Existing Music and TV tree tests stay green under `cargo nextest run -p mbv-render -p mbv-components`.
+- [x] 2.1 Add `secondary: Option<String>` and `with_secondary` to `TreeNode` (`crates/mbv-components/src/list/tree_browser/types.rs`). Include the secondary part in the node's search text. Fix every `TreeNode { .. }` literal the compiler flags. Verify: `cargo check -p mbv-components`.
+- [x] 2.2 In the shared tree Render Component (`crates/mbv-render/src/components/tree_browser.rs`), paint a node that has a secondary part with the flat media list's split-row role policy. Reuse that policy from `components/media_list/row.rs`; do not copy it. Contract: the shared-list-components "Tree rows can carry a split title" requirement. Verify: one focused buffer test in the tree painter's test module. It asserts the primary uses the playback-context role, the secondary uses the playback-title role, and a played node mutes only the secondary. Existing Music and TV tree tests stay green under `cargo nextest run -p mbv-render -p mbv-components`.
 
 ## 3. Home target types (design D1, D2)
 
