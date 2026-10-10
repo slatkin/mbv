@@ -210,3 +210,38 @@ fn wheel_reach_resolves_the_last_painted_selectable_row_as_an_item_index() {
     assert_eq!(owner.cursor(), 0, "the wheel never moves the selection");
     assert_eq!(owner.scroll(), 3, "the free viewport offset took the step");
 }
+
+/// Regression (wheel-scrolls-viewport 4.1 review P1): a wheel over an
+/// empty library with a painted frame must not panic; the empty list
+/// resolves no reach, so no `LibraryViewportReach` request leaves the
+/// owner.
+#[test]
+fn wheel_over_an_empty_library_reports_no_reach_and_never_panics() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    owner.set_content(BrowserOwnerPush {
+        items: Vec::new(),
+        latest_items: Vec::new(),
+        total_count: 0,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::None,
+        feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
+        feed_group_cursor: 0,
+    });
+
+    let list = Rect::new(0, 0, 40, 3);
+    let geometry = owner.carrier.wide().row_geometry(3);
+    owner
+        .carrier
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 1),
+        delta: 3,
+    }));
+
+    assert_eq!(message, None);
+}

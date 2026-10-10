@@ -274,6 +274,14 @@ impl EmbyLibraryContent {
         if rect.height == 0 || rect.width == 0 {
             return None;
         }
+        let rows = self.carrier.rows();
+        // wheel-scrolls-viewport 4.1 review P1: an empty list has no flow row
+        // to clamp to, so the range below would slice `[0..=0]` out of
+        // nothing and panic. Nothing painted resolves to nothing, an empty
+        // list reports no reach.
+        if rows.is_empty() {
+            return None;
+        }
         // Resolve over the viewport the frame actually painted, then take
         // the last selectable flow row the frame could have drawn.
         let viewport = self
@@ -282,8 +290,8 @@ impl EmbyLibraryContent {
             .resolve_viewport(usize::from(rect.height));
         let last_flow_row = (viewport.offset + viewport.height)
             .saturating_sub(1)
-            .min(self.carrier.rows().len().saturating_sub(1));
-        let target = self.carrier.rows()[..=last_flow_row]
+            .min(rows.len().saturating_sub(1));
+        let target = rows[..=last_flow_row]
             .iter()
             .rev()
             .find_map(|row| row.selectable_target())?;
