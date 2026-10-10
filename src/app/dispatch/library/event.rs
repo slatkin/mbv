@@ -282,9 +282,6 @@ impl App {
     fn handle_playlists_loaded(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
         self.playlists = items;
         self.playlists_loading = false;
-        self.playlists_cursor = self
-            .playlists_cursor
-            .min(self.playlists.len().saturating_sub(1));
     }
 
     fn handle_playlists_load_error(&mut self, error: String) {

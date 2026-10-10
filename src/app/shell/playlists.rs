@@ -18,13 +18,9 @@ impl Model {
         {
             playlists.set_content(PlaylistsContent {
                 playlists: self.app.playlists.clone(),
-                cursor: self.app.playlists_cursor,
-                scroll: self.app.playlists_scroll,
                 loading: self.app.playlists_loading,
                 open: self.app.playlists_open.clone(),
                 open_items: self.app.playlists_open_items.clone(),
-                open_cursor: self.app.playlists_open_cursor,
-                open_scroll: self.app.playlists_open_scroll,
                 open_loading: self.app.playlists_open_loading,
                 loaded_id: match self.app.playback_queue().source() {
                     mbv_queue::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),

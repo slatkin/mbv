@@ -43,17 +43,14 @@ pub struct PlaylistsComponent {
 
 /// Owned snapshot of playlist state, handed to the component whenever the
 /// shell refreshes it. Grouped into one value because the fields always
-/// travel together and the component mirrors them all.
+/// travel together. Cursor and scroll stay component-local (AGENTS.md:
+/// projection carries shell-owned content only).
 #[derive(Debug)]
 pub struct PlaylistsContent {
     pub playlists: Vec<EmbyItem>,
-    pub cursor: usize,
-    pub scroll: usize,
     pub loading: bool,
     pub open: Option<EmbyItem>,
     pub open_items: Vec<EmbyItem>,
-    pub open_cursor: usize,
-    pub open_scroll: usize,
     pub open_loading: bool,
     pub loaded_id: Option<String>,
 }
@@ -82,13 +79,9 @@ impl PlaylistsComponent {
     pub fn set_content(&mut self, content: PlaylistsContent) {
         let PlaylistsContent {
             playlists,
-            cursor,
-            scroll,
             loading,
             open,
             open_items,
-            open_cursor,
-            open_scroll,
             open_loading,
             loaded_id,
         } = content;
@@ -96,8 +89,8 @@ impl PlaylistsComponent {
         let open_changed = self.open != open || self.open_items != open_items;
         self.playlists = playlists;
         if playlists_changed {
-            self.cursor = cursor.min(self.playlists.len().saturating_sub(1));
-            self.scroll = scroll.min(self.cursor);
+            self.cursor = 0;
+            self.scroll = 0;
         } else {
             self.cursor = self.cursor.min(self.playlists.len().saturating_sub(1));
             self.scroll = self.scroll.min(self.cursor);
@@ -106,8 +99,8 @@ impl PlaylistsComponent {
         self.open = open;
         self.open_items = open_items;
         if open_changed {
-            self.open_cursor = open_cursor.min(self.open_items.len().saturating_sub(1));
-            self.open_scroll = open_scroll.min(self.open_cursor);
+            self.open_cursor = 0;
+            self.open_scroll = 0;
         } else {
             self.open_cursor = self
                 .open_cursor

@@ -33,7 +33,6 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
 fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut app = make_app_stub();
     app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
-    app.playlists_cursor = 0;
     assert!(app.playlists_open.is_none());
     assert_eq!(
         app.playlists_open_items,

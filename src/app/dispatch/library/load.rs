@@ -174,8 +174,6 @@ impl App {
         self.playlists_open_loading = true;
         self.playlists_open = Some(playlist.clone());
         self.playlists_open_items = Vec::new();
-        self.playlists_open_cursor = 0;
-        self.playlists_open_scroll = 0;
         let Some(client) = self.emby_snapshot() else {
             self.playlists_open_loading = false;
             return;
