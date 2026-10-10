@@ -110,10 +110,12 @@ per Service and sends `ModelContentEvent::HomeRecentlyAddedFetched { source, gen
 once per library:
 
 - **Emby:** for each eligible library, TV uses `get_latest_episodes(id, 30)` and
-  every other eligible library uses `get_latest(id, 30)`. Eligibility is the
-  same predicate as the Latest pill: not `music` and not `playlists`. Extract
-  that predicate from `spawn_destination_latest_snapshot` into one function
-  that both sites call.
+  every other eligible library uses `get_latest(id, 30)`. A Music or Playlists
+  library is not eligible. TV is eligible, through the TV destination's own
+  query. This eligibility is new to Home; it is not the guard in
+  `spawn_destination_latest_snapshot`. That guard also excludes `tvshows`,
+  because the function fetches only the library-level snapshot, and it stays
+  unchanged.
 - **Audiobookshelf:** for each podcast library, call `shelves_bounded`, then
   `App::newest_episodes_items`, then
   `QueueItem::Audiobookshelf(Episode(from_catalog(..)))`.
