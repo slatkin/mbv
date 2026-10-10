@@ -299,13 +299,9 @@ pub struct App {
     pub(in crate::app) panel_targets: Vec<PanelTarget>,
     pub(in crate::app) sessions_loading: bool,
     pub(in crate::app) playlists: Vec<EmbyItem>,
-    pub(in crate::app) playlists_cursor: usize,
-    pub(in crate::app) playlists_scroll: usize,
     pub(in crate::app) playlists_loading: bool,
     pub(in crate::app) playlists_open: Option<EmbyItem>, // playlist currently being browsed
     pub(in crate::app) playlists_open_items: Vec<EmbyItem>,
-    pub(in crate::app) playlists_open_cursor: usize,
-    pub(in crate::app) playlists_open_scroll: usize,
     pub(in crate::app) playlists_open_loading: bool,
     pub(in crate::app) queue_dirty: bool,
     pub(in crate::app) pending_owner_source_update:

@@ -337,6 +337,31 @@ fn declared_expandability_retains_pending_expansion_and_reveals_children() {
     assert_eq!(browser.viewport_offset, 1);
 }
 
+/// 2.4 (shared-list-components): a tree wheel scroll moves the viewport by
+/// the delta and leaves the selected node untouched.
+#[test]
+fn a_wheel_scroll_moves_the_viewport_and_keeps_the_selected_node() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, Some(Target::Root)),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(0, 0, 18, 2), Rect::new(0, 0, 18, 2));
+    browser.apply(TreeOperation::ToggleExpansionTarget(Target::Root));
+    browser.apply(TreeOperation::Select(Target::Branch));
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
+    assert_eq!(browser.viewport_offset, 0);
+
+    let transition = browser.apply(TreeOperation::Scroll(1));
+
+    assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
+    assert_eq!(browser.viewport_offset, 1);
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
+}
+
 #[rstest]
 #[case::declaration_retained(true, false, true)]
 #[case::children_arrived(false, true, true)]

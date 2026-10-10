@@ -32,8 +32,12 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
 #[test]
 fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut app = make_app_stub();
+    // One carrier row per playlist, targeted by the playlist `id`
+    // (wheel-scrolls-viewport 5.3b): the seed must use distinct ids, the way
+    // a real server does, or the shared owner cannot address row 1.
     app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
-    app.playlists_cursor = 0;
+    app.playlists[0].id = "p1".into();
+    app.playlists[1].id = "p2".into();
     assert!(app.playlists_open.is_none());
     assert_eq!(
         app.playlists_open_items,
@@ -86,8 +90,9 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
             .downcast_mut::<PlaylistsComponent>()
             .unwrap()
             .cursor(),
-        1,
-        "one wheel notch advances the playlist-list cursor exactly one row"
+        0,
+        "the wheel scrolls the viewport and leaves the playlist-list cursor
+         unchanged (wheel-scrolls-viewport 5.3c)"
     );
     harness.inject(key(Key::Down));
     let key_messages = harness
@@ -140,7 +145,11 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
         .as_any_mut()
         .downcast_mut::<HelpComponent>()
         .unwrap();
-    assert_eq!(help.test_scroll(), 1);
+    assert_eq!(
+        help.test_scroll(),
+        3,
+        "one wheel step = three lines (wheel-scrolls-viewport 5.5, design D1)"
+    );
 }
 
 fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
@@ -215,7 +224,22 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             .downcast_mut::<QueueComponent>()
             .unwrap()
             .test_cursor(),
-        1
+        0,
+        "the wheel scrolls the viewport and leaves the queue selection unchanged \
+         (wheel-scrolls-viewport 6.1)"
+    );
+    assert_eq!(
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&queue_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<QueueComponent>()
+            .unwrap()
+            .test_scroll(),
+        3,
+        "the wheel moved the queue viewport by the uniform step, not one row"
     );
     assert!(outcome
         .raw_messages

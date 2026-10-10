@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use ratatui::layout::{Position, Rect};
 
-use crate::list::{MarkSelectionState, PaintRetainedState};
+use crate::list::{MarkSelectionState, PaintRetainedState, ViewportAnchor};
 
 #[doc(inline)]
 pub use types::{
@@ -151,6 +151,7 @@ pub struct TreeBrowser<Target> {
     expanded: HashSet<Target>,
     marks: MarkSelectionState<Target>,
     viewport_offset: usize,
+    viewport_anchor: ViewportAnchor,
     configured_geometry: Option<(Rect, Rect)>,
     filter_active: bool,
     filter_query: String,
@@ -248,6 +249,7 @@ impl<Target> TreeBrowser<Target> {
             expanded: HashSet::new(),
             marks: MarkSelectionState::new(),
             viewport_offset: 0,
+            viewport_anchor: ViewportAnchor::default(),
             configured_geometry: None,
             filter_active: false,
             filter_query: String::new(),

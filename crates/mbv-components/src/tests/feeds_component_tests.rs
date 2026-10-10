@@ -416,7 +416,10 @@ fn group_change_reflects_active_filter() {
 }
 
 #[test]
-fn unfocused_component_handles_mouse_input() {
+fn unfocused_component_wheel_scrolls_viewport_and_keeps_selection() {
+    // Task 4.3: an unfocused panel's wheel still scrolls the mounted
+    // owner's viewport (task 2.3 owns the claim itself), and the group
+    // selection stays where the click put it.
     let mut panel = panel_with(grouped_component(), false);
     let _ = paint(&mut panel, 60, 20);
     let selector = panel
@@ -446,7 +449,15 @@ fn unfocused_component_handles_mouse_input() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(selected_group(feeds_mut(&mut panel)), 1);
-    assert_eq!(canonical_cursor(feeds(&panel)), 1);
+    assert_eq!(
+        canonical_cursor(feeds(&panel)),
+        0,
+        "the wheel never selects"
+    );
+    assert!(
+        feeds(&panel).scroll() > 0,
+        "the viewport offset took the step"
+    );
 }
 
 #[test]

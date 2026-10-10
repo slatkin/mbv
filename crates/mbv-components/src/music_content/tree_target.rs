@@ -47,6 +47,29 @@ impl MusicContent {
         }
     }
 
+    /// The wheel's reach report translation (wheel-scrolls-viewport D4, task
+    /// 4.2): the last painted album-or-later node — an album leaf, or the
+    /// owning album of a painted track — resolved in `album_targets`, the
+    /// same display index space `MusicAlbumCursor` reports use. Artist roots
+    /// have no album position, so a painted window holding none reports no
+    /// reach; the interaction layer falls back to the focus-only request.
+    #[must_use]
+    pub fn wheel_reach_index(&self) -> Option<usize> {
+        let album = self
+            .browser
+            .painted_window_targets()
+            .into_iter()
+            .rev()
+            .find_map(|target| match target {
+                MusicTreeTarget::Album(album) | MusicTreeTarget::Track { album, .. } => Some(album),
+                MusicTreeTarget::Artist(_) => None,
+            })?;
+        self.context
+            .album_targets
+            .iter()
+            .position(|candidate| *candidate == album)
+    }
+
     /// The selected artist root's launch-state identity: its Service-backed
     /// Emby id, or its deterministic fallback display name when the Service
     /// supplies no stable id. Task 2.2 exempts artist focus from the album

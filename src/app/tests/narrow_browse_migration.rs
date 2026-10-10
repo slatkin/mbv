@@ -82,6 +82,34 @@ fn owner_cursor(model: &mut Model) -> usize {
         .expect("browser owner installed")
 }
 
+/// The embedded owner's free viewport offset (scroll), read through the
+/// mounted `LibraryPanel` — the wheel-scrolls-viewport viewport contract.
+fn owner_scroll(model: &mut Model) -> usize {
+    let (_, key, _) = model
+        .active_emby_library_owner()
+        .expect("the active library's owner has migrated");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any_mut()
+        .downcast_mut::<LibraryPanel>()
+        .expect("Library panel type")
+        .owner_mut(&key)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .map(|owner| owner.scroll())
+        .expect("browser owner installed")
+}
+
+/// The shell's resting home-video cursor for the feed fixture's library tab.
+fn feed_video_cursor(model: &mut Model) -> usize {
+    model.app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .expect("feed home-video state")
+        .video_cursor
+}
+
 /// Feed one key into whatever component currently holds focus and route any
 /// emitted `Msg` the way the run loop does. Pre-migration the narrow browse
 /// surfaces have no owning component, so focus rests on `UiRoot` and the key
@@ -224,8 +252,17 @@ fn feed_home_video_group_app() -> App {
     app
 }
 
+/// Wheel-scrolls-viewport task 4.1 (D4 wheel contract rewrite of the
+/// superseded "wheel keeps control cursor authoritative" ask): the End key
+/// still persists the resting cursor through the embedded owner's typed
+/// cursor echo, and a wheel notch over the painted list then scrolls the
+/// viewport freely (selection and shell resting state unchanged) while the
+/// reach report carries the last painted selectable row's item index.
 #[test]
-fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
+fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
+    // The uniform wheel step is three rows (mouse-input "Wheel scrolling
+    // moves the viewport by a uniform step").
+    const WHEEL_STEP: usize = 3;
     let mut app = feed_home_video_group_app();
     app.terminal_width = 140;
     app.terminal_height = 40;
@@ -282,19 +319,17 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
         "End selects the last row"
     );
     assert_eq!(
-        model.app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .unwrap()
-            .video_cursor,
+        feed_video_cursor(&mut model),
         total_rows - 1,
         "the shell resting cursor follows the control selection"
     );
+    let scroll_before = owner_scroll(&mut model);
 
-    // One wheel notch through the mounted panel: the control resolves its
-    // own new index and the typed `EmbyLibraryCursorIndex` echo persists it as
-    // the shell's resting `video_cursor` — the control is authoritative and
-    // the shell follows, never the reverse.
+    // One wheel notch over the painted list (the viewport-wheel contract):
+    // the control scrolls its own viewport by the uniform step without
+    // touching the selection; the resting `video_cursor` stays on the
+    // selection (the chosen "detail may scroll out of view" model), and the
+    // reach resolves the last painted selectable row.
     let wheel = model
         .application
         .get_component_mut(&ComponentId::Library)
@@ -305,35 +340,41 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             row: list_area.y + 1,
             modifiers: KeyModifiers::NONE,
         }))
-        .expect("the wheel emits the typed cursor echo");
-    assert!(
-        matches!(
-            wheel,
-            Msg::Shell(ref shell_boxed)
-                if matches!(
-                    shell_boxed.as_ref(),
-                    ShellRequest::EmbyLibraryCursorIndex { index } if *index == total_rows - 2
-                )
-        ),
-        "the wheel echo carries the control's resolved index: {wheel:?}"
-    );
+        .expect("the wheel emits the typed reach report");
+    // The End-resolved viewport showed the last row; scrolling up one uniform
+    // step paints one step less far down, and the reach is that last painted
+    // selectable row.
+    let list_height = usize::from(list_area.height.max(1));
+    let expected_reach = scroll_before
+        .min(total_rows - 1)
+        .saturating_sub(WHEEL_STEP)
+        .saturating_add(list_height)
+        .saturating_sub(1)
+        .min(total_rows - 1);
+    let Msg::Shell(shell_boxed) = &wheel else {
+        panic!("the wheel emits a shell request, not {wheel:?}");
+    };
+    let ShellRequest::LibraryViewportReach { index } = shell_boxed.as_ref() else {
+        panic!("the wheel sends the reach report, not {shell_boxed:?}");
+    };
+    assert_eq!(*index, expected_reach, "the reach is the last painted row");
     model.handle_terminal_message(wheel, &mut music_resize, &mut tv_resize);
-    // The wheel move re-resolves the viewport and invalidates the retained
-    // frame; production draws between events, so refresh the painted claim
-    // here too (design.md D6).
+    // The free scroll invalidates the retained frame; production draws
+    // between events, so refresh the painted claim here too (design.md D6).
     draw(&mut model, &mut term);
     assert_eq!(
         owner_cursor(&mut model),
-        total_rows - 2,
-        "the wheel moves the control one row up"
+        total_rows - 1,
+        "the wheel never moves the selection"
     );
     assert_eq!(
-        model.app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .unwrap()
-            .video_cursor,
-        total_rows - 2,
-        "the shell resting state follows the resolved control selection"
+        feed_video_cursor(&mut model),
+        total_rows - 1,
+        "the shell resting state stays on the selection after a wheel scroll"
+    );
+    assert_eq!(
+        owner_scroll(&mut model),
+        scroll_before.saturating_sub(3),
+        "the wheel moved the free viewport by the uniform step"
     );
 }

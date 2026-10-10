@@ -3,6 +3,7 @@ use super::{
     MediaListSurfaceInput, Msg, ShellRequest,
 };
 use crate::media_list::RowIntent;
+use mbv_ui_msg::TerminalObserverEvent;
 
 impl BookContent {
     pub fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
@@ -26,10 +27,16 @@ impl BookContent {
 
     fn book_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            MediaListSurfaceInput::Wheel { at, delta } => self
-                .carrier
-                .claims_current_point(at)
-                .then(|| self.move_book(MediaListSurfaceInput::Wheel { at, delta })),
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                // The wheel scrolls the viewport and keeps the selection:
+                // no book-move report leaves the component (task 4.3).
+                if !self.carrier.claims_current_point(at) {
+                    return None;
+                }
+                self.carrier
+                    .delegate_operation(MediaListOperation::Scroll(delta));
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
             | MediaListSurfaceInput::RangeClick(at) => {

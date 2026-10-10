@@ -1,9 +1,11 @@
 //! Interactive Component for the global Search sidebar overlay (design D3–D9).
 //!
-//! Owns the `SearchSidebar` state (query, cursor, scroll, `type_filter`,
-//! loading, results) and the 300 ms debounce deadline. The component handles
-//! keyboard input locally (query editing, cursor, scroll, `type_filter`) and
-//! emits `Msg` for cross-boundary work:
+//! Owns the `SearchSidebar` query/result state (query, `type_filter`,
+//! loading, results) and the 300 ms debounce deadline. The row flow itself
+//! (cursor, scroll, selected stable target, viewport clamping) lives in the
+//! shared `MediaListCarrier` (`results`), as in Inline Search (design D6).
+//! The component handles keyboard input locally (query editing, cursor,
+//! `type_filter`) and emits `Msg` for cross-boundary work:
 //! - `Msg::Shell(DismissSearch)` — Esc or Backspace on empty query
 //! - `Msg::Shell(SearchActivate { id, item_type })` — Enter on a result
 //! - `Msg::Service(SearchQuery(query))` — debounce deadline passed
@@ -20,17 +22,19 @@
 use std::time::{Duration, Instant};
 
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::inline_search::search_result_row;
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
+use crate::media_list::{MediaListCarrier, MediaListOperation};
+use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::search_sidebar::SearchSidebar;
-use mbv_ui_model::ui_util::move_cursor;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ServiceRequest, ShellRequest};
 
@@ -44,6 +48,12 @@ const SEARCH_DEBOUNCE_MS: u64 = 300;
 #[derive(Debug)]
 pub struct SearchSidebarComponent {
     pub sidebar: SearchSidebar,
+    /// The one canonical owner of the filtered-result row flow
+    /// (wheel-scrolls-viewport 5.4a, design D6): the carrier keeps cursor,
+    /// scroll, stable-target selection, viewport clamping, and retained
+    /// painted geometry. Its rows are always the current `filtered_results()`
+    /// through `search_result_row`.
+    results: MediaListCarrier<String>,
     /// 300 ms deadline past which `tick_clock` dispatches `SearchQuery`.
     /// `pub` matches the visibility of the rest of the
     /// shell/component seam so test harnesses can assert clear-on-dispatch.
@@ -69,6 +79,7 @@ impl SearchSidebarComponent {
     pub fn new() -> Self {
         Self {
             sidebar: SearchSidebar::new(),
+            results: MediaListCarrier::new(),
             debounce_deadline: None,
             debounce_pending: None,
             panel_area: None,
@@ -85,14 +96,17 @@ impl SearchSidebarComponent {
     }
 
     /// Apply a search result drain. Called by the shell via downcast after
-    /// draining `search_rx`. The stale-query guard is in `SearchSidebar::
-    /// apply_drain` (unchanged from the legacy path).
+    /// draining `search_rx`; the stale-query guard is in `SearchSidebar::
+    /// apply_drain`. An applied drain published the new filtered view with
+    /// the selection reset to the first row (design D6).
     pub fn apply_drain(
         &mut self,
         query: &str,
         result: Result<Vec<mbv_emby_model::EmbyItem>, mbv_ui_model::UiModelError>,
     ) {
-        self.sidebar.apply_drain(query, result);
+        if self.sidebar.apply_drain(query, result) {
+            self.publish_results();
+        }
     }
 
     /// Handle a keyboard event. Local state changes return `None`; the root
@@ -110,11 +124,12 @@ impl SearchSidebarComponent {
             Key::Esc => Some(Msg::Shell(Box::new(ShellRequest::DismissSearch))),
             Key::Enter => self.handle_activate(),
             Key::Up => {
-                self.move_cursor(-1);
+                self.results
+                    .delegate_operation(MediaListOperation::Move(-1));
                 None
             }
             Key::Down => {
-                self.move_cursor(1);
+                self.results.delegate_operation(MediaListOperation::Move(1));
                 None
             }
             Key::Tab => {
@@ -129,6 +144,7 @@ impl SearchSidebarComponent {
             Key::Char(c) => {
                 self.sidebar.query.push(c);
                 self.sidebar.on_query_changed();
+                self.publish_results();
                 self.dispatch_query();
                 None
             }
@@ -137,16 +153,17 @@ impl SearchSidebarComponent {
         }
     }
 
-    /// Activate the currently selected result. Emits `SearchActivate` with
-    /// the selected item's id and type; the shell owns the library tabs and
-    /// navigation spawn (design D4).
+    /// Activate the currently selected result: resolve the carrier's
+    /// selected stable target in the current filtered view and emit
+    /// `SearchActivate` with its id and type; the shell owns the library
+    /// tabs and navigation spawn (design D4).
     fn handle_activate(&mut self) -> Option<Msg> {
-        let results = self.sidebar.filtered_results();
-        if results.is_empty() {
-            return None;
-        }
-        let idx = self.sidebar.cursor.min(results.len() - 1);
-        let item = &results[idx];
+        let target = self.results.selected_target()?.clone();
+        let item = self
+            .sidebar
+            .filtered_results()
+            .into_iter()
+            .find(|item| item.id == target)?;
         Some(Msg::Shell(Box::new(ShellRequest::SearchActivate {
             id: item.id.clone(),
             item_type: item.item_type.clone(),
@@ -160,30 +177,32 @@ impl SearchSidebarComponent {
         }
         self.sidebar.query.pop();
         self.sidebar.on_query_changed();
+        self.publish_results();
         self.dispatch_query();
         None
     }
 
-    /// Move the cursor by `delta`, clamping and adjusting scroll (matching
-    /// `move_search_sidebar_cursor` exactly).
-    fn move_cursor(&mut self, delta: i64) {
-        let n = self.sidebar.filtered_count();
-        if n == 0 {
-            self.sidebar.cursor = 0;
-            self.sidebar.scroll = 0;
-            return;
-        }
-        self.sidebar.cursor = move_cursor(self.sidebar.cursor, delta, n);
-        let page = self.sidebar.list_height.max(1);
-        if self.sidebar.cursor < self.sidebar.scroll {
-            self.sidebar.scroll = self.sidebar.cursor;
-        } else if self.sidebar.cursor >= self.sidebar.scroll + page {
-            self.sidebar.scroll = self.sidebar.cursor + 1 - page;
-        }
+    /// Publish the current filtered view onto the shared carrier (design
+    /// D6, wheel-scrolls-viewport 5.4a): one row per filtered result, the
+    /// selection reset to the first row at the top of the viewport — the
+    /// same reset Inline Search performs for a changed query. This is the
+    /// only writer of the carrier's rows, so its cursor is always an index
+    /// into the current filtered view.
+    fn publish_results(&mut self) {
+        let rows: Vec<MediaListRow<String>> = self
+            .sidebar
+            .filtered_results()
+            .into_iter()
+            .map(search_result_row)
+            .collect();
+        self.results.set_content(rows);
+        self.results.select_first();
+        self.results.set_scroll(0);
     }
 
     /// Cycle the type filter by `delta` (matching
-    /// `cycle_search_sidebar_type_filter` exactly).
+    /// `cycle_search_sidebar_type_filter` exactly). The filter change
+    /// publishes a new filtered view with the selection reset (design D6).
     fn cycle_type_filter(&mut self, delta: i64) {
         let n = self.sidebar.available_types().len() + 1;
         if n <= 1 {
@@ -195,8 +214,7 @@ impl SearchSidebarComponent {
         let new = (cur + delta).rem_euclid(n);
         let new = usize::try_from(new).expect("rem_euclid result is non-negative");
         self.sidebar.type_filter = new;
-        self.sidebar.cursor = 0;
-        self.sidebar.scroll = 0;
+        self.publish_results();
     }
 
     /// Arm the debounce if the query is ≥ 2 characters (matching
@@ -230,14 +248,16 @@ impl SearchSidebarComponent {
     }
 
     /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
-    /// A result-row click selects (Up/Down equivalent), a double-click
-    /// activates (Enter equivalent), a type-filter chip click sets that
-    /// filter (Tab/BackTab cycle equivalent — every chip is reachable by
-    /// cycling), and an outside click dismisses (Esc equivalent). The query
-    /// row has no cursor-positioning keyboard path, so clicking it is a
-    /// no-op. A wheel over a painted result row moves the local cursor by one
-    /// result; wheel over any other region is ignored. Right-click has no
-    /// keyboard equivalent here and is ignored.
+    /// A result-row click selects the row's stable target in the shared
+    /// carrier (Up/Down equivalent), a double-click activates (Enter
+    /// equivalent), a type-filter chip click sets that filter (Tab/BackTab
+    /// cycle equivalent — every chip is reachable by cycling), and an
+    /// outside click dismisses (Esc equivalent). The query row has no
+    /// cursor-positioning keyboard path, so clicking it is a
+    /// no-op. A wheel over a painted result row scrolls the viewport one
+    /// step through the shared owner and keeps the selection
+    /// (5.4b, design D6); wheel over any other region is ignored.
+    /// Right-click has no keyboard equivalent here and is ignored.
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -249,15 +269,13 @@ impl SearchSidebarComponent {
                         && chip != self.sidebar.type_filter
                     {
                         self.sidebar.type_filter = chip;
-                        self.sidebar.cursor = 0;
-                        self.sidebar.scroll = 0;
+                        self.publish_results();
                     }
                     return None;
                 }
-                if let Some(&index) = self.hit_results.resolve(at) {
-                    if index < self.sidebar.filtered_count() {
-                        self.sidebar.cursor = index;
-                    }
+                if let Some(target) = self.resolve_gesture_row(at) {
+                    self.results
+                        .delegate_operation(MediaListOperation::Select(target));
                     return None;
                 }
                 if !self.frame.contains(at) {
@@ -266,24 +284,39 @@ impl SearchSidebarComponent {
                 None
             }
             MouseGesture::Scroll { at, delta } => {
+                // The shared owner scrolls the viewport one step and keeps
+                // the selection (5.4b, design D6); the wheel acts only over
+                // a painted result row.
                 if self.hit_results.resolve(at).is_some() {
-                    self.move_cursor(delta);
+                    self.results
+                        .delegate_operation(MediaListOperation::Scroll(delta));
                 }
                 None
             }
             MouseGesture::DoubleClick(at) => {
-                if let Some(&index) = self.hit_results.resolve(at) {
-                    if index < self.sidebar.filtered_count() {
-                        self.sidebar.cursor = index;
-                        return self.handle_activate();
-                    }
+                let Some(target) = self.resolve_gesture_row(at) else {
+                    // Outside double-click: the first click already dismissed.
                     return None;
-                }
-                // Outside double-click: the first click already dismissed.
-                None
+                };
+                self.results
+                    .delegate_operation(MediaListOperation::Select(target));
+                self.handle_activate()
             }
             _ => None,
         }
+    }
+
+    /// The stable target of the painted row a gesture points at
+    /// (`wheel-scrolls-viewport` 5.4a, design D6). The carrier carries one
+    /// row per filtered result in `filtered_results()` order, so the painted
+    /// row index maps to that row's target (the result's item id) without
+    /// re-filtering the results.
+    fn resolve_gesture_row(&self, at: Position) -> Option<String> {
+        let &index = self.hit_results.resolve(at)?;
+        let Some(MediaListRow::Item { target, .. }) = self.results.rows().get(index) else {
+            return None;
+        };
+        Some(target.clone())
     }
 
     /// Sweep the debounce deadline using the shell's wall clock. Called by
@@ -302,6 +335,22 @@ impl SearchSidebarComponent {
     pub fn test_results(&self) -> &HitRegions<usize> {
         &self.hit_results
     }
+
+    /// Test-only: the carrier's selectable cursor, so tests read the row
+    /// flow without depending on target identities (the shared fixtures
+    /// reuse one item id), mirroring `inline_search::InlineSearch`.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn test_cursor(&self) -> usize {
+        self.results.cursor()
+    }
+
+    /// Test-only: the carrier's viewport offset.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn test_scroll(&self) -> usize {
+        self.results.scroll()
+    }
 }
 
 impl Default for SearchSidebarComponent {
@@ -313,7 +362,22 @@ impl Default for SearchSidebarComponent {
 impl Component for SearchSidebarComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         let _ = area;
-        let geometry = mbv_render::render_search_sidebar(frame, self.panel_area, &mut self.sidebar);
+        let selected = self.results.cursor();
+        let results = &mut self.results;
+        // Painted list height → viewport offset: the component wires this to
+        // the shared carrier (`clamp_viewport(height)`, then `scroll()`), so
+        // the painter holds no scroll offset of its own (design D6).
+        let mut resolve_offset = move |height: usize| -> usize {
+            results.clamp_viewport(height);
+            results.scroll()
+        };
+        let geometry = mbv_render::render_search_sidebar(
+            frame,
+            self.panel_area,
+            &self.sidebar,
+            selected,
+            &mut resolve_offset,
+        );
         // Adopt the rects the painter just produced into the irregular-
         // chrome registries (task 5.1, design.md D6).
         self.frame = geometry.frame;
@@ -376,6 +440,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
 mod tests {
     use super::*;
     use mbv_emby_model::test_support::make_item;
+    use ratatui::{Terminal, backend::TestBackend};
     use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers};
 
@@ -416,8 +481,11 @@ mod tests {
     #[test]
     fn enter_on_result_emits_search_activate() {
         let mut comp = SearchSidebarComponent::new();
-        comp.sidebar.results = vec![make_item("Movie 1", "Movie")];
-        comp.sidebar.cursor = 0;
+        comp.sidebar.query = "movie".into();
+        comp.apply_drain(
+            "movie",
+            Ok::<_, mbv_ui_model::UiModelError>(vec![make_item("Movie 1", "Movie")]),
+        );
         let msg = comp.handle_key(&make_key(Key::Enter, KeyModifiers::NONE));
         assert!(matches!(
             msg,
@@ -462,12 +530,70 @@ mod tests {
     fn apply_drain_discards_stale_query() {
         let mut comp = SearchSidebarComponent::new();
         comp.sidebar.query = "ab".into();
-        comp.sidebar.cursor = 5;
-        comp.apply_drain(
-            "a",
-            Ok::<_, mbv_ui_model::UiModelError>(vec![make_item("Stale", "Movie")]),
-        );
-        assert_eq!(comp.sidebar.cursor, 5);
-        assert_eq!(comp.sidebar.results, [] as [mbv_emby_model::EmbyItem; 0]);
+        let mut one = make_item("One", "Movie");
+        one.id = "id-one".into();
+        let mut two = make_item("Two", "Movie");
+        two.id = "id-two".into();
+        comp.apply_drain("ab", Ok::<_, mbv_ui_model::UiModelError>(vec![one, two]));
+        // A non-zero selected row so the stale discard must not reset it.
+        comp.handle_key(&make_key(Key::Down, KeyModifiers::NONE));
+        comp.handle_key(&make_key(Key::Down, KeyModifiers::NONE));
+        assert_eq!(comp.test_cursor(), 1);
+
+        comp.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
+
+        assert_eq!(comp.test_cursor(), 1, "stale discard leaves the flow alone");
+        let names: Vec<&str> = comp
+            .sidebar
+            .results
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect();
+        assert_eq!(names, ["One", "Two"], "a stale discard keeps the results");
+    }
+
+    /// Contract: mouse-input "The Global Search sidebar wheel scrolls the
+    /// results" (wheel-scrolls-viewport 5.4b, design D6) — a wheel-down at a
+    /// painted result row moves the viewport one step without moving the
+    /// selection, and the free offset survives a paint.
+    #[test]
+    fn search_sidebar_wheel_scrolls_the_results() {
+        let mut comp = SearchSidebarComponent::new();
+        comp.sidebar.query = "movie".into();
+        let items: Vec<mbv_emby_model::EmbyItem> = (0..30)
+            .map(|i| {
+                let mut item = make_item(&format!("Movie {i}"), "Movie");
+                item.id = format!("id-{i}");
+                item
+            })
+            .collect();
+        comp.apply_drain("movie", Ok::<_, mbv_ui_model::UiModelError>(items));
+        let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .unwrap();
+
+        // 30 results exceed the painted height, so some are clipped; a
+        // wheel-down at any painted row must step the viewport, not the
+        // selection.
+        assert!(comp.sidebar.results.len() > comp.test_results().regions().len());
+        let &(row_rect, _) = comp
+            .test_results()
+            .regions()
+            .first()
+            .expect("results are painted");
+        let wheel = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: row_rect.x,
+            row: row_rect.y,
+            modifiers: KeyModifiers::NONE,
+        };
+        comp.handle_mouse(wheel);
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .unwrap();
+
+        assert_eq!(comp.test_cursor(), 0, "the selection does not move");
+        assert_eq!(comp.test_scroll(), 3, "one wheel step = three rows");
     }
 }

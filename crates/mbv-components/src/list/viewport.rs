@@ -2,6 +2,18 @@
 
 use super::{Cursored, Row, RowFlow};
 
+/// Whether the viewport follows the selection or was freely scrolled by the
+/// user.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewportAnchor {
+    /// Every resolve keeps the selection visible (minimum scroll).
+    #[default]
+    FollowSelection,
+    /// The user scrolled freely; the offset stays where they left it until an
+    /// operation re-anchors to the selection. Resolves only clamp at bounds.
+    Free,
+}
+
 /// The deliberate paging policies supported by the current list shapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PagingPolicy {
@@ -35,6 +47,31 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 
     /// Store a flow-row offset. Shared methods pass a clamped value.
     fn set_viewport_offset(&mut self, offset: usize);
+
+    /// The viewport's current anchor.
+    fn viewport_anchor(&self) -> ViewportAnchor;
+
+    /// Store the viewport's anchor.
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor);
+
+    /// Scroll the viewport by `delta` flow rows and release it from following
+    /// the selection; the offset clamps at flow bounds.
+    fn scroll_viewport(
+        &mut self,
+        flow: &RowFlow<Target>,
+        viewport_len: usize,
+        delta: i64,
+    ) -> usize {
+        let max_offset = Self::max_viewport_offset(flow, viewport_len);
+        let current = i64::try_from(self.viewport_offset().min(max_offset))
+            .unwrap_or(i64::from(delta.is_negative()));
+        let max = i64::try_from(max_offset).unwrap_or(i64::MAX);
+        let offset = current.saturating_add(delta).clamp(0, max);
+        let offset = usize::try_from(offset).unwrap_or(0);
+        self.set_viewport_offset(offset);
+        self.set_viewport_anchor(ViewportAnchor::Free);
+        offset
+    }
 
     /// Maximum legal offset for a flow and viewport geometry.
     #[must_use]
@@ -73,7 +110,13 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         let height = viewport_len.max(1);
         let max_offset = Self::max_viewport_offset(flow, height);
         let mut offset = self.viewport_offset().min(max_offset);
-        if let Some(position) = selected_position {
+        // A freely scrolled viewport only clamps at bounds; nothing pulls it
+        // back to the selection.
+        let pulled_position = match self.viewport_anchor() {
+            ViewportAnchor::FollowSelection => selected_position,
+            ViewportAnchor::Free => None,
+        };
+        if let Some(position) = pulled_position {
             if position < offset {
                 offset = position;
                 if self.raise_over_leading_structural_rows() {
@@ -189,7 +232,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 mod tests {
     use rstest::rstest;
 
-    use super::{PagingPolicy, Viewported};
+    use super::{PagingPolicy, ViewportAnchor, Viewported};
     use crate::list::{Cursored, Row, RowFlow, TestListState};
 
     /// A shape that opts into the leading-structural-raise policy (#731).
@@ -197,6 +240,7 @@ mod tests {
     struct RaisingListState {
         selected: Option<u8>,
         offset: usize,
+        anchor: ViewportAnchor,
     }
 
     impl Cursored<u8> for RaisingListState {
@@ -216,6 +260,14 @@ mod tests {
 
         fn set_viewport_offset(&mut self, offset: usize) {
             self.offset = offset;
+        }
+
+        fn viewport_anchor(&self) -> ViewportAnchor {
+            self.anchor
+        }
+
+        fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+            self.anchor = anchor;
         }
 
         fn raise_over_leading_structural_rows(&self) -> bool {
@@ -250,6 +302,7 @@ mod tests {
         let mut list = RaisingListState {
             selected: Some(2),
             offset: 4,
+            ..Default::default()
         };
 
         assert_eq!(list.keep_cursor_visible(&rows, 3), 1);
@@ -262,6 +315,7 @@ mod tests {
         let mut list = TestListState {
             selected: Some(3),
             offset: 2,
+            ..Default::default()
         };
 
         assert_eq!(list.keep_cursor_visible(&rows, 4), 2);
@@ -281,6 +335,7 @@ mod tests {
         let mut list = TestListState {
             selected,
             offset: usize::MAX,
+            ..Default::default()
         };
 
         assert_eq!(
@@ -296,6 +351,7 @@ mod tests {
         let mut list = TestListState {
             selected: Some(2),
             offset: 3,
+            ..Default::default()
         };
 
         assert_eq!(list.clamp_viewport(&rows, 3), 3);
@@ -316,6 +372,7 @@ mod tests {
         let mut list = TestListState {
             selected: None,
             offset: 4,
+            ..Default::default()
         };
 
         let selected = list.page(&rows, 3, direction, PagingPolicy::VisibleViewport);
@@ -323,5 +380,45 @@ mod tests {
         assert_eq!(selected, Some(if direction < 0 { 7 } else { 0 }));
         assert_eq!(list.selected, expected_selected);
         assert_eq!(list.offset, expected_offset);
+    }
+
+    #[rstest]
+    #[case(3, 5, 5)]
+    #[case(7, 1, 1)]
+    fn a_freely_scrolled_viewport_resolves_without_the_selection_pull(
+        #[case] selection: u8,
+        #[case] delta: i64,
+        #[case] expected_offset: usize,
+    ) {
+        let rows = flow();
+        let mut list = TestListState {
+            selected: Some(selection),
+            offset: 0,
+            ..Default::default()
+        };
+
+        list.scroll_viewport(&rows, 3, delta);
+
+        assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+        assert_eq!(
+            list.resolved_viewport_offset(&rows, 3, Some(usize::from(selection))),
+            expected_offset
+        );
+    }
+
+    #[rstest]
+    #[case(100, 5)]
+    #[case(-100, 0)]
+    #[case(2, 2)]
+    fn scroll_viewport_clamps_at_flow_bounds_and_releases_following(
+        #[case] delta: i64,
+        #[case] expected_offset: usize,
+    ) {
+        let rows = flow();
+        let mut list = TestListState::default();
+
+        assert_eq!(list.scroll_viewport(&rows, 3, delta), expected_offset);
+        assert_eq!(list.offset, expected_offset);
+        assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
     }
 }

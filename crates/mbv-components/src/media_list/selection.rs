@@ -6,7 +6,8 @@ impl MediaListSurfaceInput {
         target: Option<Target>,
     ) -> Option<MediaListOperation<Target>> {
         Some(match self {
-            Self::Move(delta) | Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Wheel { delta, .. } => MediaListOperation::Scroll(delta),
             Self::Page(delta) => MediaListOperation::Page(delta),
             Self::First => MediaListOperation::First,
             Self::Last => MediaListOperation::Last,

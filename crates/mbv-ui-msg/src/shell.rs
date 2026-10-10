@@ -506,4 +506,18 @@ pub enum ShellRequest {
     EmbyLibraryCursorIndex {
         index: usize,
     },
+    /// A paged library surface's post-scroll reach report
+    /// (wheel-scrolls-viewport D4, task 3.1): after a wheel scroll the
+    /// component resolves the last painted selectable row into the same
+    /// cursor-report index space its selection reports already use — the
+    /// Emby library list's item index, Grouped Music's album display index —
+    /// and sends it here instead of a cursor report. The request carries no
+    /// library index: the shell resolves the active library from its own tab
+    /// state. The shell sets Library panel focus (a claimed wheel must focus
+    /// Library) and arms the next-page fetch with no navigation-idle gate:
+    /// a gated wheel could stop scrolling at the loaded edge with no later
+    /// event to retry paging.
+    LibraryViewportReach {
+        index: usize,
+    },
 }

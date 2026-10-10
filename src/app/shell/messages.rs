@@ -63,6 +63,11 @@ impl Model {
                 self.app
                     .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
             }
+            // Wheel-scrolls-viewport D4: a library surface's post-scroll
+            // reach report; see `handle_library_viewport_reach`.
+            ShellRequest::LibraryViewportReach { index } => {
+                self.handle_library_viewport_reach(index);
+            }
             ShellRequest::SelectionProjection(summary) => {
                 self.visual_selection = (summary.count > 0)
                     .then_some((self.app.effective_panel_focus(), summary.count));
@@ -165,6 +170,22 @@ impl Model {
             quit = true;
         }
         quit
+    }
+
+    /// The `LibraryViewportReach` arm (wheel-scrolls-viewport D4): a library
+    /// surface's post-scroll reach report. Set Library panel focus (a claimed
+    /// wheel must focus Library) and arm the next-page fetch with NO
+    /// navigation-idle gate — paging guards `loading` and `is_fully_loaded`
+    /// itself, and a gated wheel could stop scrolling at the loaded edge with
+    /// no later event to retry. The request carries no library index: resolve
+    /// it from tab state, the same resolution `handle_music_album_cursor`
+    /// uses; a missing index is a defensive no-op.
+    fn handle_library_viewport_reach(&mut self, index: usize) {
+        self.app
+            .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
+        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+            self.app.maybe_fetch_next_page(lib_idx, index);
+        }
     }
 
     fn handle_pointer_and_layout_request(&mut self, request: ShellRequest) {

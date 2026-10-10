@@ -107,3 +107,51 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
         "the cursor bar stayed on the resting stripe"
     );
 }
+
+/// Regression (wheel-scrolls-viewport 5.1, design.md D5): a `Preserve`
+/// projection push after a wheel scroll leaves the freely scrolled Queue
+/// offset where the wheel left it. The scroll-to-cursor clamp runs only in
+/// the authoritative `Set` arm.
+#[test]
+fn a_preserve_push_after_a_wheel_scroll_keeps_the_scrolled_offset() {
+    let mut component = QueueComponent::new();
+    component.set_rows(
+        &[
+            feed_slot(1, "first"),
+            feed_slot(2, "second"),
+            feed_slot(3, "third"),
+            feed_slot(4, "fourth"),
+            feed_slot(5, "fifth"),
+        ],
+        PlaybackState::default(),
+    );
+    component.set_cursor(&QueueCursorUpdate::Set(0));
+
+    component.delegate_row_local_input(
+        MediaListSurfaceInput::Wheel {
+            at: ratatui::layout::Position { x: 0, y: 0 },
+            delta: 3,
+        },
+        None,
+    );
+
+    assert_eq!(
+        component.test_cursor(),
+        0,
+        "the wheel never moves selection"
+    );
+    assert_eq!(
+        component.test_scroll(),
+        3,
+        "the wheel moved the free offset"
+    );
+
+    component.set_cursor(&QueueCursorUpdate::Preserve);
+
+    assert_eq!(
+        component.test_scroll(),
+        3,
+        "Preserve leaves the wheel-scrolled offset untouched"
+    );
+    assert_eq!(component.test_cursor(), 0);
+}

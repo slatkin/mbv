@@ -124,7 +124,9 @@ impl HelpComponent {
     /// `MouseGestureState` (ADR 0024, design.md D3). Behaviour unchanged
     /// from the ad-hoc handler: a click inside the panel is swallowed, a
     /// click outside dismisses (the second click of a double included), and
-    /// the focused overlay's wheel adjusts the scroll by one line regardless of pointer.
+    /// the focused overlay's wheel adjusts the scroll by one step (three
+    /// document lines; wheel-scrolls-viewport D1, design.md D7)
+    /// regardless of pointer.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn test_scroll(&self) -> u16 {

@@ -2,7 +2,8 @@ use super::{
     MediaList, MediaListOperation, MediaListTransition, WideMediaListPaintPolicy, WideViewport,
 };
 use crate::list::{
-    Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, Viewported,
+    Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, ViewportAnchor,
+    Viewported,
 };
 use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
 use ratatui::Frame;
@@ -278,6 +279,14 @@ impl<Target: Clone + Eq> Viewported<Target> for WideMediaList<Target> {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.set_scroll(offset);
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.core.viewport_anchor()
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.core.set_viewport_anchor(anchor);
     }
 }
 

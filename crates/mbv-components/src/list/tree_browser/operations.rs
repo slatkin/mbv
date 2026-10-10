@@ -1,23 +1,18 @@
 //! Semantic tree operations and the private adapter for shared list arithmetic.
 
+mod paint;
+
 use std::hash::Hash;
 
 use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
-use ratatui::layout::Rect;
 
 use crate::list::{
     AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
-    Viewported,
+    ViewportAnchor, Viewported,
 };
-// The full-width bar is paint policy, so its predicate lives with the shared
-// tree painter and is imported through the app-level render seam.
-use mbv_render::components::tree_browser::{
-    TreeAggregateMark, TreePaintRow, TreePaintRowKind, TreeTitleRole,
-};
-use mbv_render::tree_row_is_full_width;
 
 use super::{
-    StructuralRow, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary,
+    TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary,
     TreeSelectionChange, TreeTransition, VisibleRow,
 };
 
@@ -45,6 +40,14 @@ impl<Target: Clone + Eq + Hash> Viewported<Target> for TreeState<'_, Target> {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.browser.viewport_offset = offset;
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.browser.viewport_anchor
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.browser.viewport_anchor = anchor;
     }
 }
 
@@ -105,8 +108,24 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .is_some_and(|entry| entry.node.expandable || !entry.children.is_empty())
     }
 
+    /// The panel-declared content height, or the latest completed frame's
+    /// height. `None` before either exists.
+    fn viewport_height(&self) -> Option<usize> {
+        self.configured_geometry
+            .map(|(_, content)| usize::from(content.height))
+            .or_else(|| self.last_painted.map(|area| usize::from(area.height)))
+    }
+
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
         action(&mut TreeState { browser: self })
+    }
+
+    /// D2: point this browser's viewport back at the selection before the
+    /// operation's own resolve path runs.
+    fn re_anchor_following(&mut self) {
+        self.with_state(|state| {
+            state.set_viewport_anchor(ViewportAnchor::FollowSelection);
+        });
     }
 
     pub fn filter_matches_for_query(&self) -> Vec<Target> {
@@ -189,6 +208,30 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         self.visible_flow_rows().len()
     }
 
+    /// The stable targets, in flow order, of the node rows the latest
+    /// painted viewport window covers: flow rows from the viewport offset
+    /// through the offset plus the painted content height. Structural rows
+    /// are never targets, so this is the destination's read path for a
+    /// range reported over the painted frame alone (wheel-scrolls-viewport
+    /// D4): a paging reach resolves only from rows the frame could draw.
+    /// An unpainted or zero-height window is an empty result.
+    pub fn painted_window_targets(&self) -> Vec<Target> {
+        let visible = self.visible_flow_rows();
+        let end = self
+            .viewport_offset
+            .saturating_add(self.viewport_height().unwrap_or(0));
+        visible
+            .into_iter()
+            .enumerate()
+            .skip(self.viewport_offset)
+            .take_while(|(index, _)| *index < end)
+            .filter_map(|(_, row)| match row {
+                VisibleRow::Node(id) => self.arena.get(&id).map(|entry| entry.node.target.clone()),
+                VisibleRow::Structural(_, _) => None,
+            })
+            .collect()
+    }
+
     pub fn current_flow(&self) -> RowFlow<Target> {
         RowFlow::new(
             self.visible_flow_rows()
@@ -217,10 +260,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         // panel-declared content height, or the latest completed frame's.
         // Before either exists there is no viewport to reconcile, so the
         // offset stays untouched and the next view applies the real rule.
-        let height = self
-            .configured_geometry
-            .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
+        let height = self.viewport_height();
         if let Some(height) = height {
             self.with_state(|state| Viewported::reconcile_viewport(state, &flow, height));
         }
@@ -365,6 +405,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         let mut external_intent = None;
         match operation {
             super::TreeOperation::Move(delta) => {
+                self.re_anchor_following();
                 self.with_state(|state| {
                     Cursored::move_by(
                         state,
@@ -379,6 +420,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.reconcile_selection();
             }
             super::TreeOperation::Page(direction) => {
+                self.re_anchor_following();
                 if !self.apply_page(direction, flow) {
                     return None;
                 }
@@ -386,6 +428,21 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             operation @ (super::TreeOperation::First
             | super::TreeOperation::Last
             | super::TreeOperation::Parent) => self.apply_cursor_operation(&operation, flow),
+            super::TreeOperation::Scroll(delta) => {
+                // D3: the wheel releases the viewport to free following
+                // through `scroll_viewport` and leaves the selection and
+                // marks untouched. At a boundary the offset does not move,
+                // which is the explicit `Unhandled` result.
+                let height = self.viewport_height().unwrap_or(1);
+                let moved = self.with_state(|state| {
+                    let offset_before = Viewported::viewport_offset(state);
+                    let offset_after = Viewported::scroll_viewport(state, flow, height, delta);
+                    offset_before != offset_after
+                });
+                if !moved {
+                    return None;
+                }
+            }
             super::TreeOperation::Right => {
                 (disposition, external_intent) = self.apply_right();
             }
@@ -396,25 +453,38 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 target,
                 flow_offset,
             } => {
+                // D2: a restore sets the selection, so it re-anchors the
+                // viewport to follow it (the persisted offset afterwards only
+                // clamps the first resolve).
+                self.re_anchor_following();
                 if !self.anchor_selection_to(&target, flow_offset) {
                     disposition = TreeConsumed::Unhandled;
                 }
             }
             super::TreeOperation::Select(target) => {
+                self.re_anchor_following();
                 if !self.with_state(|state| Cursored::select_target(state, flow, &target)) {
                     disposition = TreeConsumed::Unhandled;
                 }
                 self.reconcile_selection();
             }
             super::TreeOperation::PointerToggleMark(point) => {
+                // A mark click moves the selection to the clicked row, so it
+                // re-anchors the viewport like every other selection-moving
+                // operation (shared-list-components).
+                self.re_anchor_following();
                 if !self.apply_pointer_toggle_mark(point) {
                     return None;
                 }
             }
             super::TreeOperation::Activate => {
+                // Keyboard activate/context on the selection re-anchors the
+                // viewport, like MediaList's `ActivateCurrent`/`ContextCurrent`.
+                self.re_anchor_following();
                 (disposition, external_intent) = self.apply_activate();
             }
             super::TreeOperation::Context => {
+                self.re_anchor_following();
                 (disposition, external_intent) = self.apply_context();
             }
             operation @ (super::TreeOperation::EditFilter(_)
@@ -429,6 +499,9 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         operation: &super::TreeOperation<Target>,
         flow: &RowFlow<Target>,
     ) {
+        // D2: First/Last/Parent are keyboard cursor moves, so they restore
+        // a freely scrolled viewport to following the selection.
+        self.re_anchor_following();
         match operation {
             super::TreeOperation::First => {
                 self.with_state(|state| Cursored::first(state, flow));
@@ -443,6 +516,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             // apply_operation; keep this match exhaustive as the vocabulary grows.
             super::TreeOperation::Move(_)
             | super::TreeOperation::Page(_)
+            | super::TreeOperation::Scroll(_)
             | super::TreeOperation::Right
             | super::TreeOperation::ToggleExpansionTarget(_)
             | super::TreeOperation::AnchorSelection { .. }
@@ -468,6 +542,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             // apply_operation; keep this match exhaustive as the vocabulary grows.
             super::TreeOperation::Move(_)
             | super::TreeOperation::Page(_)
+            | super::TreeOperation::Scroll(_)
             | super::TreeOperation::First
             | super::TreeOperation::Last
             | super::TreeOperation::Parent
@@ -487,11 +562,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         // The page distance is the established visible viewport: the
         // panel-declared content height, or the latest completed frame's
         // height. No viewport means no page.
-        let height = self
-            .configured_geometry
-            .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
-        let Some(height) = height else {
+        let Some(height) = self.viewport_height() else {
             return false;
         };
         self.with_state(|state| {
@@ -653,147 +724,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .filter_map(|id| self.arena.get(&id))
             .filter(|entry| self.marks.contains(&entry.node.target))
             .map(|entry| entry.node.target.clone())
-            .collect()
-    }
-
-    pub fn visible_rows(&self, visible_rows: &[VisibleRow]) -> Vec<TreePaintRow> {
-        let mut rows = Vec::new();
-        let mut group_root_index = 0;
-        let grouped = self.root_structures.values().any(|structures| {
-            structures
-                .iter()
-                .any(|structure| matches!(structure, StructuralRow::Heading(_)))
-        });
-        let mut group_item_index = 0;
-        for (flow_index, &visible) in visible_rows.iter().enumerate() {
-            if let VisibleRow::Structural(root, index) = visible {
-                let Some(entry) = self.arena.get(&root) else {
-                    continue;
-                };
-                let Some(structure) = self
-                    .root_structures
-                    .get(&entry.node.target)
-                    .and_then(|structures| structures.get(index))
-                else {
-                    continue;
-                };
-                let (kind, title) = match structure {
-                    StructuralRow::Heading(title) => {
-                        group_root_index = entry.root_index;
-                        group_item_index = 0;
-                        (TreePaintRowKind::Heading, title.clone())
-                    }
-                    StructuralRow::Spacer => (TreePaintRowKind::Spacer, String::new()),
-                };
-                if flow_index >= self.viewport_offset {
-                    rows.push(TreePaintRow {
-                        kind,
-                        title,
-                        title_role: TreeTitleRole::Standard,
-                        trailing: None,
-                        depth: 0,
-                        root_index: entry.root_index,
-                        group_root_index,
-                        zebra_striped: false,
-                        selected: false,
-                        marked: false,
-                        aggregate_mark: TreeAggregateMark::None,
-                        semantic_state:
-                            mbv_render::components::media_list::MediaSemanticState::Ordinary,
-                    });
-                }
-                continue;
-            }
-            let VisibleRow::Node(id) = visible else {
-                continue;
-            };
-            let Some(entry) = self.arena.get(&id) else {
-                continue;
-            };
-            let target = &entry.node.target;
-            let zebra_striped = if grouped {
-                let striped = group_item_index % 2 == 0;
-                group_item_index += 1;
-                striped
-            } else {
-                entry.root_index.saturating_sub(group_root_index) % 2 == 0
-            };
-            if flow_index < self.viewport_offset {
-                continue;
-            }
-            let marked = self.marks.contains(target);
-            let aggregate_mark = if entry.node.mark_policy == TreeMarkPolicy::Aggregate {
-                match self.aggregate_mark_state_for(target) {
-                    AggregateMarkState::Marked => TreeAggregateMark::Full,
-                    AggregateMarkState::Partial => TreeAggregateMark::Partial,
-                    AggregateMarkState::Unmarked => TreeAggregateMark::None,
-                }
-            } else {
-                TreeAggregateMark::None
-            };
-            rows.push(TreePaintRow {
-                kind: TreePaintRowKind::Node,
-                title: entry.node.title.clone(),
-                title_role: entry.node.title_role,
-                trailing: entry
-                    .node
-                    .trailing
-                    .as_ref()
-                    .map(|trailing| trailing.text.clone()),
-                depth: entry.depth,
-                root_index: entry.root_index,
-                group_root_index,
-                zebra_striped,
-                selected: self.selected.as_ref() == Some(target),
-                marked,
-                aggregate_mark,
-                semantic_state: entry.node.semantic_state.clone(),
-            });
-        }
-        rows
-    }
-
-    fn retained_row(
-        &self,
-        row: VisibleRow,
-        index: usize,
-        claim_rect: Rect,
-        content_rect: Rect,
-    ) -> Option<(Rect, Target)> {
-        let VisibleRow::Node(id) = row else {
-            return None;
-        };
-        let y = content_rect
-            .y
-            .checked_add(u16::try_from(index).unwrap_or(u16::MAX))?;
-        if y >= content_rect.bottom() {
-            return None;
-        }
-        let entry = self.arena.get(&id)?;
-        let target = entry.node.target.clone();
-        let marked = self.marks.contains(&target);
-        let selected = self.focused && self.selected.as_ref() == Some(&target);
-        let full_width = tree_row_is_full_width(selected, marked);
-        let rect = if full_width {
-            Rect::new(claim_rect.x, y, claim_rect.width, 1)
-        } else {
-            Rect::new(content_rect.x, y, content_rect.width, 1)
-        };
-        Some((rect, target))
-    }
-
-    pub fn retained_rows(
-        &self,
-        visible_rows: &[VisibleRow],
-        claim_rect: Rect,
-        content_rect: Rect,
-    ) -> Vec<(Rect, Target)> {
-        visible_rows
-            .iter()
-            .copied()
-            .skip(self.viewport_offset)
-            .enumerate()
-            .filter_map(|(index, row)| self.retained_row(row, index, claim_rect, content_rect))
             .collect()
     }
 }

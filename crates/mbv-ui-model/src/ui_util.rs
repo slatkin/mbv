@@ -87,23 +87,6 @@ pub fn cycle_lang(my_languages: &[String], current: &str) -> String {
     cycle[(idx + 1) % cycle.len()].to_string()
 }
 
-/// Move a list cursor by `delta` rows (signed), clamped to `[0, len-1]`.
-/// Handles the empty-list case by returning 0.
-#[must_use]
-pub fn move_cursor(cur: usize, delta: i64, len: usize) -> usize {
-    if len == 0 {
-        return 0;
-    }
-    let upper = len - 1;
-    if delta >= 0 {
-        cur.saturating_add(usize::try_from(delta).unwrap_or(usize::MAX))
-            .min(upper)
-    } else {
-        cur.saturating_sub(usize::try_from(delta.unsigned_abs()).unwrap_or(usize::MAX))
-            .min(upper)
-    }
-}
-
 pub fn natural_sort_key(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
     let mut chars = s.chars().peekable();

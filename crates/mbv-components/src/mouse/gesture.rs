@@ -16,15 +16,14 @@
 //! ## Chosen intervals
 //!
 //! * **Double-click window: 400 ms**, exact-position match (legacy standard).
-//! * **Wheel throttle: 30 ms** (legacy standard). The run loop ticks with
-//!   `PollStrategy::Once(poll_timeout)` where `poll_timeout` is 50 ms normally
-//!   and 8 ms while the visualizer runs (`src/app/shell/run.rs`). At the
-//!   50 ms cadence a terminal wheel burst (crossterm coalesces several
-//!   `ScrollUp`/`ScrollDown` per physical notch) all arrives inside one poll;
-//!   a 30 ms throttle collapses that burst to one `Scroll` gesture per tick
-//!   while still passing a sustained scroll (one notch per tick) through
-//!   untouched. Lowering it below the 8 ms visualizer cadence would let the
-//!   burst back through, so 30 ms is kept.
+//! * **Wheel step: 3 rows, no throttle.** Every vertical wheel event the parent
+//!   forwards is recognized and emitted as `Scroll { delta: ±WHEEL_STEP }`;
+//!   none is dropped or coalesced. The uniform step is the policy (design.md
+//!   D1): consumers receive the movement already scaled, and no per-component
+//!   wheel step may exist. A terminal would need to coalesce at most one
+//!   `ScrollUp`/`ScrollDown` per physical notch for the step to behave
+//!   uniformly across terminals; the run loop delivers one event per poll
+//!   tick, so successive notches arrive as successive gestures.
 
 use std::time::{Duration, Instant};
 
@@ -33,8 +32,8 @@ use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 /// Double-click recognition window. See module docs.
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(400);
-/// Minimum gap between emitted `Scroll` gestures. See module docs.
-const WHEEL_THROTTLE: Duration = Duration::from_millis(30);
+/// Uniform wheel scroll step, in rows, per wheel event. See module docs.
+const WHEEL_STEP: i64 = 3;
 
 /// A recognized pointer gesture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +51,7 @@ pub enum MouseGesture {
     },
     DoubleClick(Position),
     RightClick(Position),
-    /// Vertical wheel step: `delta` is `-1` up, `1` down.
+    /// Vertical wheel step: `delta` is `-WHEEL_STEP` up, `WHEEL_STEP` down.
     Scroll {
         at: Position,
         delta: i64,
@@ -68,7 +67,6 @@ pub enum MouseGesture {
 #[derive(Debug, Default)]
 pub struct MouseGestureState {
     last_click: Option<(Instant, Position)>,
-    last_scroll: Option<Instant>,
     drag_anchor: Option<Position>,
 }
 
@@ -127,17 +125,10 @@ impl MouseGestureState {
                 self.drag_anchor.take().map(|_| MouseGesture::DragEnd)
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                let allow = self
-                    .last_scroll
-                    .is_none_or(|t| now.duration_since(t) >= WHEEL_THROTTLE);
-                if !allow {
-                    return None;
-                }
-                self.last_scroll = Some(now);
                 let delta = if matches!(event.kind, MouseEventKind::ScrollUp) {
-                    -1
+                    -WHEEL_STEP
                 } else {
-                    1
+                    WHEEL_STEP
                 };
                 Some(MouseGesture::Scroll { at, delta })
             }
@@ -148,8 +139,8 @@ impl MouseGestureState {
 
 #[cfg(any(test, feature = "test"))]
 impl MouseGestureState {
-    /// Test seam: forget the last click/scroll so the next event is neither
-    /// throttled nor promoted to a double-click.
+    /// Test seam: forget the last click so the next event is not promoted to
+    /// a double-click.
     pub fn reset_for_test(&mut self) {
         *self = Self::default();
     }
@@ -189,14 +180,16 @@ mod tests {
     }
 
     #[test]
-    fn rapid_scrolls_are_coalesced_by_the_throttle() {
+    fn back_to_back_wheel_events_at_the_same_instant_all_recognize() {
+        // mouse-input "Rapid wheel events are all recognized": no throttle,
+        // every event in a burst emits a `Scroll` with the uniform step.
         let mut s = MouseGestureState::new();
         let t0 = Instant::now();
         assert_eq!(
             s.recognize_at(ev(MouseEventKind::ScrollDown, 1, 1), t0),
             Some(MouseGesture::Scroll {
                 at: Position { x: 1, y: 1 },
-                delta: 1
+                delta: 3
             })
         );
         assert_eq!(
@@ -204,16 +197,19 @@ mod tests {
                 ev(MouseEventKind::ScrollDown, 1, 1),
                 t0 + Duration::from_millis(5)
             ),
-            None
+            Some(MouseGesture::Scroll {
+                at: Position { x: 1, y: 1 },
+                delta: 3
+            })
         );
         assert_eq!(
             s.recognize_at(
                 ev(MouseEventKind::ScrollUp, 1, 1),
-                t0 + Duration::from_millis(40)
+                t0 + Duration::from_millis(10)
             ),
             Some(MouseGesture::Scroll {
                 at: Position { x: 1, y: 1 },
-                delta: -1
+                delta: -3
             })
         );
     }

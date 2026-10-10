@@ -1,4 +1,6 @@
-use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
+use super::{
+    Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, ViewportAnchor, Viewported,
+};
 use mbv_render::components::three_line_flat_list::ThreeLineItem;
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
@@ -13,6 +15,7 @@ pub struct ThreeLineFlatList<Target> {
     items: Vec<ThreeLineItem<Target>>,
     selected: Option<Target>,
     offset: usize,
+    anchor: ViewportAnchor,
     gap: u16,
     focused: bool,
     paint: PaintRetainedState<Target>,
@@ -25,6 +28,7 @@ impl<Target> ThreeLineFlatList<Target> {
             items: Vec::new(),
             selected: None,
             offset: 0,
+            anchor: ViewportAnchor::default(),
             gap,
             focused: false,
             paint: PaintRetainedState::new(),
@@ -70,6 +74,27 @@ impl<Target> ThreeLineFlatList<Target> {
     {
         let flow = self.flow();
         self.move_by(&flow, delta);
+        self.invalidate();
+    }
+
+    /// Scroll the viewport by the normalized wheel gesture delta and release
+    /// it from following the selection (wheel-scrolls-viewport D3): the
+    /// selection and its facts stay untouched. `painted_height` is the
+    /// content-area height from which the visible-item capacity is derived;
+    /// an unpainted or too-short area clamps at the minimal one-item
+    /// viewport guarantee until the next frame's resolve applies the real
+    /// height.
+    pub fn scroll_viewport(&mut self, delta: i64, painted_height: u16)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.flow();
+        Viewported::scroll_viewport(
+            self,
+            &flow,
+            self.visible_items(painted_height).max(1),
+            delta,
+        );
         self.invalidate();
     }
 
@@ -127,6 +152,12 @@ impl<Target: Clone + Eq> Viewported<Target> for ThreeLineFlatList<Target> {
     }
     fn set_viewport_offset(&mut self, offset: usize) {
         self.offset = offset;
+    }
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.anchor
+    }
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.anchor = anchor;
     }
 }
 

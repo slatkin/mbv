@@ -42,7 +42,8 @@ pub struct SessionsComponent {
     display: SessionsDisplayContext,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
-    #[cfg(any(test, feature = "test"))]
+    /// The painted overlay's content rect, retained by `view()`; the wheel
+    /// derives its visible-item capacity from its height.
     painted_content_area: Option<Rect>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
@@ -68,7 +69,6 @@ impl SessionsComponent {
             },
             requested_panel_area: None,
             painted_panel_area: None,
-            #[cfg(any(test, feature = "test"))]
             painted_content_area: None,
             mouse_gestures: MouseGestureState::new(),
         }
@@ -181,7 +181,11 @@ impl SessionsComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { delta, .. } => {
-                self.list.move_selection(if delta < 0 { -1 } else { 1 });
+                // Focus-owned wheel while the Sessions overlay is the sole
+                // eligible one (wheel-scrolls-viewport): the shared viewport
+                // scroll takes the gesture delta; selection and cursor stay.
+                let height = self.painted_content_area.map_or(0, |area| area.height);
+                self.list.scroll_viewport(delta, height);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
@@ -372,10 +376,7 @@ impl Component for SessionsComponent {
             self.can_disconnect,
         );
         self.painted_panel_area = Some(panel_area);
-        #[cfg(any(test, feature = "test"))]
-        {
-            self.painted_content_area = Some(content_area);
-        };
+        self.painted_content_area = Some(content_area);
         if has_content {
             if self.content_dirty || self.projected_width != Some(content_area.width) {
                 self.list
@@ -480,8 +481,8 @@ mod tests {
         );
     }
 
-    fn painted_component() -> SessionsComponent {
-        let target = |id: &str| SessionTargetRow::Emby {
+    fn emby_target(id: &str) -> SessionTargetRow {
+        SessionTargetRow::Emby {
             id: id.to_string(),
             device_name: format!("device-{id}"),
             client: "mbv".to_string(),
@@ -491,8 +492,17 @@ mod tests {
             is_paused: false,
             position_s: 0,
             runtime_s: 0,
-        };
-        let targets = vec![target("a"), target("b")];
+        }
+    }
+
+    fn emby_targets(count: usize) -> Vec<SessionTargetRow> {
+        (0..count)
+            .map(|index| emby_target(&format!("s-{index}")))
+            .collect()
+    }
+
+    fn painted_component() -> SessionsComponent {
+        let targets = vec![emby_target("a"), emby_target("b")];
         let mut component = SessionsComponent::new();
         component.set_content(
             &targets,
@@ -507,6 +517,15 @@ mod tests {
             .draw(|frame| component.view(frame, frame.area()))
             .unwrap();
         component
+    }
+
+    fn wheel_down() -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 5,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        }
     }
 
     fn left_down(column: u16, row: u16) -> MouseEvent {
@@ -560,5 +579,33 @@ mod tests {
                 .draw(|frame| self.view(frame, frame.area()))
                 .unwrap();
         }
+    }
+
+    /// wheel-scrolls-viewport 5.2: the Sessions wheel applies the shared
+    /// viewport scroll to the gesture delta and never moves the selection.
+    #[test]
+    fn a_wheel_event_scrolls_sessions_and_keeps_the_selection() {
+        let targets = emby_targets(10);
+        let mut component = SessionsComponent::new();
+        component.set_content(
+            &targets,
+            false,
+            None,
+            None,
+            false,
+            Some(Rect::new(0, 0, 40, 12)),
+        );
+        component.view_for_test();
+        let content = component.content_area_for_test().unwrap();
+        assert_eq!(content.height, 7);
+
+        assert_eq!(
+            component.handle_mouse(wheel_down()),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        );
+
+        let (selection, offset) = component.selection_and_offset_for_test();
+        assert_eq!(selection, Some(SessionTargetKey::Emby("s-0".into())));
+        assert_eq!(offset, 3, "the wheel moved the viewport by one step");
     }
 }

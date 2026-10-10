@@ -1,10 +1,12 @@
 //! Launch-state contract tests for the Emby library owner: the persisted
 //! pill scope is always Latest for a pill-bearing library, other pill
 //! choices and the selected item are session memory (change
-//! `latest-pill-restart-default`).
+//! `latest-pill-restart-default`). The wheel group owns the owner's
+//! wheel-scrolls-viewport reach contract (task 4.1).
 
 use super::{BrowserOwnerPush, EmbyLibraryContent, EmbySelectorMode};
-use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner};
+use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
+use crate::media_list::MediaListSurfaceInput;
 use mbv_config::{
     EmbyLetterBucket, EmbySelectorKey, LaunchPanelFocus, SelectorIdentity,
     TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState,
@@ -13,6 +15,7 @@ use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_model::sort_filter::{LetterFilter, LetterFilterKind};
 use mbv_ui_msg::{Msg, ShellRequest};
+use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 fn key(code: Key) -> KeyEvent {
@@ -148,4 +151,97 @@ fn feed_group_video_row_menu_key_emits_the_painted_item() {
             None,
         ))))
     );
+}
+
+/// Wheel-scrolls-viewport task 4.1 (D4): the wheel scrolls the viewport
+/// freely, the selection stays put, and the reach report resolves the last
+/// painted selectable row into the same item index space the owner's cursor
+/// reports use — structural grouping rows (heading, spacer) never shift it.
+#[test]
+fn wheel_reach_resolves_the_last_painted_selectable_row_as_an_item_index() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    let items: Vec<mbv_emby_model::EmbyItem> = ["Alpha", "Bravo", "Charlie", "Delta"]
+        .iter()
+        .zip([0, 1, 2, 3])
+        .map(|(name, i)| {
+            let mut item = make_item(name, "Movie");
+            item.id = format!("item-{i}");
+            item
+        })
+        .collect();
+    // A large total forces the letter-grouped projection: the painted flow
+    // grows heading/spacer rows the reach must not resolve through.
+    owner.set_content(BrowserOwnerPush {
+        items,
+        latest_items: Vec::new(),
+        total_count: 4,
+        library_total: Some(60),
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::None,
+        feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
+        feed_group_cursor: 0,
+    });
+
+    // Complete one painted frame with a three-row viewport so the wheel
+    // resolves its reach from retained geometry.
+    let list = Rect::new(0, 0, 40, 3);
+    let geometry = owner.carrier.wide().row_geometry(3);
+    owner
+        .carrier
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 1),
+        delta: 3,
+    }));
+
+    // Painted flow after the 3-row scroll: Charlie, Spacer, Heading(D–F) —
+    // the last selectable painted row is "Charlie", the items index the
+    // selection would have reported: 2.
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryViewportReach {
+            index: 2
+        })))
+    );
+    assert_eq!(owner.cursor(), 0, "the wheel never moves the selection");
+    assert_eq!(owner.scroll(), 3, "the free viewport offset took the step");
+}
+
+/// Regression (wheel-scrolls-viewport 4.1 review P1): a wheel over an
+/// empty library with a painted frame must not panic; the empty list
+/// resolves no reach, so no `LibraryViewportReach` request leaves the
+/// owner.
+#[test]
+fn wheel_over_an_empty_library_reports_no_reach_and_never_panics() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    owner.set_content(BrowserOwnerPush {
+        items: Vec::new(),
+        latest_items: Vec::new(),
+        total_count: 0,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::None,
+        feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
+        feed_group_cursor: 0,
+    });
+
+    let list = Rect::new(0, 0, 40, 3);
+    let geometry = owner.carrier.wide().row_geometry(3);
+    owner
+        .carrier
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 1),
+        delta: 3,
+    }));
+
+    assert_eq!(message, None);
 }

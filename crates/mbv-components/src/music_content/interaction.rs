@@ -220,8 +220,18 @@ impl MusicContent {
         if !self.browser.claims_current_point(at) {
             return None;
         }
-        self.browser.apply(TreeOperation::Move(delta));
-        self.pointer_album_selection_request(AlbumCursorKind::Move)
+        // The wheel scrolls the viewport, not the selection (wheel-scrolls-
+        // viewport D4): the last painted album-or-later row crosses to the
+        // shell as the typed reach report instead of a selection move.
+        self.browser.apply(TreeOperation::Scroll(delta));
+        Some(Msg::Shell(Box::new(match self.wheel_reach_index() {
+            Some(index) => ShellRequest::LibraryViewportReach { index },
+            // A window holding no album-or-later row keeps the tree spec's
+            // focus contract: a claimed wheel still focuses Library (even
+            // when movement clamps at a boundary), so the focus-only
+            // request takes the reach report's place.
+            None => ShellRequest::LibraryPanelFocus,
+        })))
     }
 
     fn tree_pointer_select(&mut self, at: ratatui::layout::Position) -> Option<Msg> {

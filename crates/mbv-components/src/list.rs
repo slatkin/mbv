@@ -27,13 +27,14 @@ pub use self::row_flow::{Row, RowFlow};
 #[doc(inline)]
 pub use self::three_line::ThreeLineFlatList;
 #[doc(inline)]
-pub use self::viewport::{PagingPolicy, Viewported};
+pub use self::viewport::{PagingPolicy, ViewportAnchor, Viewported};
 
 #[cfg(test)]
 #[derive(Default, Debug)]
 pub struct TestListState {
     pub selected: Option<u8>,
     pub offset: usize,
+    pub anchor: ViewportAnchor,
 }
 
 #[cfg(test)]
@@ -55,6 +56,14 @@ impl Viewported<u8> for TestListState {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.offset = offset;
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.anchor
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.anchor = anchor;
     }
 }
 

@@ -16,6 +16,7 @@ mod home_latest;
 mod library_navigate_reveal;
 mod library_position;
 mod library_route;
+mod library_viewport_reach_tests;
 mod lifecycle;
 mod music_grouping;
 mod narrow_browse_migration;
