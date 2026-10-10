@@ -1,6 +1,6 @@
 /// A Home tree root (design D1 of `home-recently-added-tree`). Roots resolve
 /// locally in the Home owner and never cross the component boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HomeRoot {
     Continue,
     RecentlyAdded,
@@ -8,7 +8,7 @@ pub enum HomeRoot {
 
 /// An age branch under the `Recently added` root. Like roots, age branches
 /// resolve locally in the Home owner and never cross the component boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RecentAge {
     New,
     Last7Days,
@@ -17,7 +17,7 @@ pub enum RecentAge {
 
 /// One Home tree node's target. The section is part of the identity, so one
 /// item under both roots yields two distinct [`Self::Item`] targets.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HomeTreeTarget {
     Root(HomeRoot),
     Age(RecentAge),
@@ -27,7 +27,7 @@ pub enum HomeTreeTarget {
 /// One Home item row's Service-qualified identity. A `Continue` row is Emby
 /// content addressed by item id; a `Recently added` row is any Service's item
 /// addressed by its queue-item content id.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HomeItemTarget {
     Continue(mbv_ids::ItemId),
     Recent(mbv_queue::QueueItemContentId),

@@ -1,12 +1,14 @@
-//! The Home destination's embedded content owner (task 5.11, design D2/D3).
-//! Home is the first migrated owner: a plain type — never mounted, focused,
-//! subscribed, or given a `ComponentId` — that keeps its Service content, the
-//! section (pill) selection, and the one shared canonical `MediaList` owner of
-//! the active section's rows. It produces the panel's
-//! [`LibraryPanelContent`] per frame and translates the panel's slot events
-//! and forwarded chords into the same typed `Msg`s the mounted
-//! `HomeComponent` emitted (its keyboard interpretation and mouse-gesture
-//! resolution moved into the panel's forwarding/slot-event boundary).
+//! The Home destination's embedded content owner (design D2 of
+//! `home-recently-added-tree`): a plain type — never mounted, focused,
+//! subscribed, or given a `ComponentId` — that keeps its Service content and
+//! the one shared canonical [`TreeBrowser`] owner of the Home tree (row 5.1).
+//! The shell pushes the Continue Watching snapshot, the merged
+//! `Recently added` rows, and the launch window; the owner projects them
+//! into the shared tree (`home_content/tree.rs`) and translates the panel's
+//! slot events and forwarded chords into the same typed `Msg`s the mounted
+//! `HomeComponent` emitted (rows 5.2 and 5.3 finish the port: the visual-mode
+//! chords the flat carrier interpreted, the marked-selection requests, and
+//! the restoration/hero landing rules still live here as stated seams).
 //!
 //! The selected item's hero comes from the shared `hero_content` producer for
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
@@ -18,35 +20,39 @@ use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot};
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::media_list::{
-    MediaListCarrier, MediaListOperation, MediaListSurfaceInput, MediaListTransition, RowIntent,
-};
-use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
-use mbv_render::components::tv_wide::HeroImageState;
-use mbv_ui_model::context_menu::ContextMenuTargets;
-use mbv_ui_model::targets::HomeItemTarget;
-
+use super::list::tree_browser::{TreeBrowser, TreeExternalIntent, TreeOperation};
+use super::media_list::MediaListSurfaceInput;
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
+use mbv_render::components::tv_wide::HeroImageState;
+use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, HomeRecentRow};
+use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::targets::{HomeItemTarget, HomeTreeTarget};
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 
 mod launch_state;
+mod tree;
+
+use tree::TREE_STEMS;
 
 /// The embedded content owner for the Home destination (design D2). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
 #[derive(Debug)]
 pub struct HomeContent {
     continue_items: Vec<QueueItem>,
-    /// The shared canonical owner of Continue Watching rows.
-    carrier: MediaListCarrier<String>,
+    /// The shared canonical owner of the Home tree (design D6): roots, age
+    /// branches, items, selection, expansion, viewport, and marks.
+    tree: TreeBrowser<HomeTreeTarget>,
     /// Shell-owned Home launch window; the `Recently added` projection
-    /// branches and cut against it (design D2).
+    /// branches and cuts against it (design D2).
     launch_window: HomeLatestLaunchWindow,
     /// Shell-owned `Recently added` rows, merged and interleaved newest
-    /// first (design D2); the tree projection reads them (section 5).
+    /// first (design D2); the tree projection reads them.
     recent_rows: Vec<HomeRecentRow>,
     loading: bool,
+    /// The selection origin the panel records (status-bar summary only).
+    selection_origin: Option<SelectionOrigin>,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
     hero_image: HeroImageState,
@@ -63,29 +69,29 @@ impl HomeContent {
     pub fn new() -> Self {
         Self {
             continue_items: Vec::new(),
-            carrier: MediaListCarrier::new(),
+            tree: TreeBrowser::new(),
             launch_window: HomeLatestLaunchWindow {
                 previous: None,
                 current: 0,
             },
             recent_rows: Vec::new(),
             loading: false,
+            selection_origin: None,
             hero_image: HeroImageState::None,
         }
     }
 
-    /// Replace the shell-owned Continue Watching snapshot. Refresh preserves
-    /// the selected target when it remains in the content.
+    /// Replace the shell-owned Continue Watching snapshot. The tree
+    /// reconciliation preserves the selected target when it remains in the
+    /// content.
     pub fn set_content(&mut self, continue_items: Vec<QueueItem>, loading: bool) {
         self.continue_items = continue_items;
         self.loading = loading;
-        self.project_continue_rows();
+        self.project_tree();
     }
 
     /// Replace the shell-owned `Recently added` rows and the launch window
-    /// they were merged against (design D2). Owner-local storage only for
-    /// now; the tree projection reads them (section 5 of
-    /// `home-recently-added-tree`), so rendering stays unchanged (row 4.4).
+    /// they were merged against (design D2).
     pub fn set_recent_rows(
         &mut self,
         recent_rows: Vec<HomeRecentRow>,
@@ -93,6 +99,7 @@ impl HomeContent {
     ) {
         self.recent_rows = recent_rows;
         self.launch_window = launch_window;
+        self.project_tree();
     }
 
     /// The shell-merged `Recently added` rows in the order they arrive from
@@ -108,21 +115,99 @@ impl HomeContent {
         self.launch_window
     }
 
-    /// Reset Home's local presentation without replacing its Continue
-    /// Watching rows: the shared list returns to its first row and top, and
-    /// any transient multi-selection is dropped (design D3).
+    fn project_tree(&mut self) {
+        // Expansion bookkeeping (design D6): a stem the tree did not hold
+        // before this reconciliation starts expanded; a stem it already held
+        // keeps whatever expansion state the user left it in. The tree's own
+        // reconciliation preserves its expanded set for surviving nodes, so
+        // only the newly projected stems need a toggle here.
+        let held_before: Vec<bool> = TREE_STEMS
+            .iter()
+            .map(|target| self.tree.node(target).is_some())
+            .collect();
+        let entries =
+            tree::tree_entries(&self.continue_items, &self.recent_rows, self.launch_window);
+        let reconciled = self.tree.reconcile(entries);
+        // A rejected projection leaves the previous tree unchanged; the
+        // projection is generated from settled shell snapshots, so a
+        // rejection is a destination bug. Surface it loudly in debug builds
+        // instead of freezing the tree behind a swallowed error.
+        debug_assert!(
+            reconciled.is_ok(),
+            "home tree projection rejected: {:?}",
+            reconciled.as_ref().err()
+        );
+        for (held_before, target) in held_before.iter().zip(TREE_STEMS.iter()) {
+            if !held_before && self.tree.node(target).is_some() && !self.tree.is_expanded(target) {
+                self.tree
+                    .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
+            }
+        }
+    }
+
+    /// Re-expand every projected root and age branch (the
+    /// `reset_presentation` rule user 5.3 refines): the tree reset clears
+    /// the expanded set, so the stems re-open and the first item stays the
+    /// presentation default.
+    fn expand_projected_stems(&mut self) {
+        for target in &TREE_STEMS {
+            if self.tree.node(target).is_some() && !self.tree.is_expanded(target) {
+                self.tree
+                    .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
+            }
+        }
+    }
+
+    /// Reset Home's local presentation without replacing its content: drop
+    /// marks and any filter state, re-expand every root and branch, and let
+    /// the tree return its selection to the first visible row.
     pub fn reset_presentation(&mut self) {
-        self.carrier.reset_presentation();
+        self.tree.reset_presentation();
+        self.expand_projected_stems();
     }
 
     #[must_use]
     pub fn cursor(&self) -> usize {
-        self.carrier.cursor()
+        // Transitional flat-cursor read (row 5.2/5.3 own the moving parts);
+        // the tree owner has no flat cursor, so the selection's flow position
+        // is reported instead. No consumer of Home's flat cursor remains.
+        self.tree
+            .visible_targets()
+            .iter()
+            .position(|target| Some(target) == self.tree.selected_target())
+            .unwrap_or(0)
     }
 
-    /// The flat cursor's `QueueItem`, the hero's item.
+    /// The selected row's first item: the row's own item, or — for a root or
+    /// branch row — its first descendant item, so
+    /// the hero never blanks while the selection moves over structural rows
+    /// (design D8).
+    fn first_item_below(&self, target: &HomeTreeTarget) -> Option<QueueItem> {
+        match target {
+            HomeTreeTarget::Item(HomeItemTarget::Continue(item_id)) => self
+                .continue_items
+                .iter()
+                .find(|item| item.id() == item_id.as_str())
+                .cloned(),
+            HomeTreeTarget::Item(HomeItemTarget::Recent(content_id)) => self
+                .recent_rows
+                .iter()
+                .find(|row| row.item.content_id() == *content_id)
+                .map(|row| row.item.clone()),
+            HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_) => {
+                let children = self.tree.children_of(target)?;
+                children
+                    .iter()
+                    .find_map(|child| self.first_item_below(child))
+            }
+        }
+    }
+
+    /// The hero item: the selection's row item (design D8).
     fn current_item(&self) -> Option<QueueItem> {
-        self.continue_items.get(self.cursor()).cloned()
+        self.tree
+            .selected_target()
+            .and_then(|target| self.first_item_below(target))
     }
 
     /// The hero item's content from the shared producer for its content type
@@ -132,76 +217,46 @@ impl HomeContent {
         self.current_item().as_ref().map(hero_content_queue)
     }
 
-    /// Project Continue Watching items as canonical `Item` rows.
-    fn project_continue_rows(&mut self) {
-        let items = &self.continue_items;
-        let mut rows: Vec<MediaListRow<String>> = items
-            .iter()
-            .map(|item| {
-                let parts = item.playback_title_parts(None);
-                let (primary, secondary) = match parts.context {
-                    Some(context) => (context.text, Some(parts.title.text)),
-                    None => (parts.title.text, None),
-                };
-                MediaListRow::Item {
-                    primary,
-                    secondary,
-                    // Stable item identity preserves selection across refreshes.
-                    target: item.id().to_owned(),
-                    trailing: None,
-                    // Library lists carry no time column (only the Queue list
-                    // and the sessions modal show one).
-                    duration: None,
-                    kind: MediaKind::Media,
-                    semantic_state: MediaSemanticState::from_queue_item(item),
-                }
-            })
-            .collect();
-        // One group header over the flat Continue list; non-selectable, so it
-        // leaves the carrier's selectable-index cursor mapping untouched.
-        if !rows.is_empty() {
-            rows.insert(
-                0,
-                MediaListRow::Heading {
-                    text: "Continue watching".into(),
-                },
-            );
+    /// The typed effect target for Home's current selection, resolved
+    /// locally (design D1): `Root`/`Age` targets never cross the boundary,
+    /// so only the selected item target is emitted. 5.2 replaces the
+    /// selection-only reads with the marked-in-display-order reads.
+    fn selected_item_target(&self) -> Option<HomeItemTarget> {
+        match self.tree.selected_target()? {
+            HomeTreeTarget::Item(target) => Some(target.clone()),
+            HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_) => None,
         }
-        self.carrier.set_content(rows);
     }
 
-    /// The one seam through which Home offers an already-normalized row-local
-    /// key or pointer gesture to the shared owner carrying its active section.
-    fn delegate_row_local_input(
-        &mut self,
-        input: MediaListSurfaceInput,
-        pointer_target: Option<String>,
-    ) -> MediaListTransition<String> {
-        input
-            .into_operation(pointer_target)
-            .map_or_else(MediaListTransition::unhandled, |operation| {
-                self.carrier.delegate_operation(operation)
-            })
-    }
-
-    /// The typed effect target for Home's current selection (the shared
-    /// owner's stable target, never a cursor-minus-section-index lookup).
-    fn row_target(&self) -> Option<HomeItemTarget> {
-        self.carrier
-            .selected_target()
-            .cloned()
-            .map(HomeItemTarget::continue_item)
+    /// The item targets a resolved activate or context intent carries:
+    /// an `Item` resolves to its section-scoped target; a `Root`/`Age`
+    /// target stays local to the owner (no request crosses the boundary).
+    fn item_targets(intent: Option<TreeExternalIntent<HomeTreeTarget>>) -> Vec<HomeItemTarget> {
+        let Some(intent) = intent else {
+            return Vec::new();
+        };
+        match intent {
+            TreeExternalIntent::Activate(HomeTreeTarget::Item(target))
+            | TreeExternalIntent::Context(HomeTreeTarget::Item(target)) => {
+                vec![target]
+            }
+            TreeExternalIntent::ContextSelection(targets) => targets
+                .into_iter()
+                .filter_map(|target| match target {
+                    HomeTreeTarget::Item(item_target) => Some(item_target),
+                    _ => None,
+                })
+                .collect(),
+            TreeExternalIntent::Activate(_) | TreeExternalIntent::Context(_) => Vec::new(),
+        }
     }
 
     /// Home's local key interpretation, forwarded by the focused panel (the
     /// mounted `HomeComponent::handle_key` contract, unchanged — the router
-    /// owns every global chord and keeps precedence).
+    /// owns every global chord and keeps precedence). 5.2 ports the
+    /// visual-mode chords (`Ctrl+A`, Esc, Space) to the tree's mark surface;
+    /// they stay unhandled here.
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
-                self.carrier.selection_summary(),
-            ))));
-        }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
         {
@@ -209,164 +264,148 @@ impl HomeContent {
         }
         match key.code {
             Key::Up => {
-                self.handle_navigation_key(MediaListSurfaceInput::Move(-1));
+                self.handle_tree_operation(TreeOperation::Move(-1));
                 None
             }
             Key::Down => {
-                self.handle_navigation_key(MediaListSurfaceInput::Move(1));
+                self.handle_tree_operation(TreeOperation::Move(1));
                 None
             }
             Key::PageUp => {
-                self.handle_navigation_key(MediaListSurfaceInput::Page(-1));
+                self.handle_tree_operation(TreeOperation::Page(-1));
                 None
             }
             Key::PageDown => {
-                self.handle_navigation_key(MediaListSurfaceInput::Page(1));
+                self.handle_tree_operation(TreeOperation::Page(1));
                 None
             }
             Key::Home => {
-                self.handle_navigation_key(MediaListSurfaceInput::First);
+                self.handle_tree_operation(TreeOperation::First);
                 None
             }
             Key::End => {
-                self.handle_navigation_key(MediaListSurfaceInput::Last);
+                self.handle_tree_operation(TreeOperation::Last);
                 None
             }
-            Key::Char('.') => Some(self.open_context_menu()),
-            // Ctrl+A multi-selects the list via `handle_visual_key` above;
-            // Ctrl+Enter keeps the enqueue shortcut.
+            Key::Left => {
+                self.handle_tree_operation(TreeOperation::Parent);
+                None
+            }
+            // Right never activates or collapses (design D6): the tree's
+            // expanded-root `Activate` intent is consumed and dropped.
+            Key::Right => {
+                self.tree.apply(TreeOperation::Right);
+                None
+            }
+            // Ctrl+A multi-select (visual mode) is a row-5.2 port: the
+            // aggregate marking surface replaces the carrier's visual mode.
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => None,
+            Key::Char('.') => {
+                let targets =
+                    Self::item_targets(self.tree.apply(TreeOperation::Context).external_intent);
+                Some(Self::context_menu(targets, None))
+            }
             Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .row_target()
+                .selected_item_target()
                 .map(|target| Msg::Shell(Box::new(ShellRequest::HomeEnqueue(target)))),
             Key::Enter => self.activate_selected_row(),
             Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .row_target()
+                .selected_item_target()
                 .map(|target| Msg::Shell(Box::new(ShellRequest::HomeToggleWatched(target)))),
             Key::Delete => self
-                .row_target()
+                .selected_item_target()
                 .map(|target| Msg::Shell(Box::new(ShellRequest::HomeDelete(target)))),
             _ => None,
         }
     }
 
-    fn handle_navigation_key(&mut self, input: MediaListSurfaceInput) {
-        self.delegate_row_local_input(input, None);
+    fn activate_selected_row(&mut self) -> Option<Msg> {
+        // Design D6: Enter applies `Activate`; on a `Root`/`Age` target the
+        // owner resolves it locally into an expansion toggle.
+        match self.tree.selected_target() {
+            Some(HomeTreeTarget::Item(item_target)) => {
+                let target = item_target.clone();
+                self.tree.apply(TreeOperation::Activate);
+                Some(Msg::Shell(Box::new(ShellRequest::HomePlay(target))))
+            }
+            Some(root_or_age @ (HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_))) => {
+                let root_or_age = root_or_age.clone();
+                self.tree
+                    .apply(TreeOperation::ToggleExpansionTarget(root_or_age));
+                None
+            }
+            None => None,
+        }
     }
 
-    fn open_context_menu(&mut self) -> Msg {
-        let targets = match self
-            .delegate_row_local_input(MediaListSurfaceInput::Context, None)
-            .external_intent
-        {
-            Some(RowIntent::Context(target)) => vec![HomeItemTarget::continue_item(target)],
-            Some(RowIntent::ContextSelection(targets)) => targets
-                .into_iter()
-                .map(HomeItemTarget::continue_item)
-                .collect(),
-            _ => self
-                .row_target()
-                .map_or_else(Vec::new, |target| vec![target]),
-        };
+    fn handle_tree_operation(&mut self, operation: TreeOperation<HomeTreeTarget>) {
+        self.tree.apply(operation);
+    }
+
+    fn context_menu(targets: Vec<HomeItemTarget>, anchor: Option<(u16, u16)>) -> Msg {
         Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
-            None,
+            anchor,
         )))
-    }
-
-    fn activate_selected_row(&mut self) -> Option<Msg> {
-        let intent = self
-            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-            .external_intent;
-        Self::activate_row_intent(intent)
     }
 
     fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
-        let at = pointer_position(input);
-        // Pointer target resolution and local selection: the same `claim_row`
-        // contract (a blank/gap click leaves the selection unchanged).
-        let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-        if is_selection_click(input) {
-            self.carrier
-                .delegate_operation(input.into_operation(target.clone())?);
-        }
-
         match input {
-            MediaListSurfaceInput::Wheel { .. } => Some(self.claim_wheel(input)),
-            MediaListSurfaceInput::DoubleClick(_) => Some(self.activate_pointer_target(target?)),
-            MediaListSurfaceInput::ContextClick(at) => Some(self.open_pointer_context(at, target?)),
-            MediaListSurfaceInput::Click(_)
-            | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_) => self.claim_pointer_click(),
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                // The wheel scrolls the viewport, not the selection
+                // (wheel-scrolls-viewport D4); a claimed wheel still focuses
+                // Library.
+                if !self.tree.claims_current_point(at) {
+                    return None;
+                }
+                self.tree.apply(TreeOperation::Scroll(delta));
+                Some(Msg::TerminalEvent(
+                    mbv_ui_msg::TerminalObserverEvent::MouseClaimed,
+                ))
+            }
+            MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::RangeClick(at) => {
+                let target = self.tree.resolve_current_point(at).cloned()?;
+                self.tree.apply(TreeOperation::Select(target.clone()));
+                match target {
+                    HomeTreeTarget::Item(item_target) => {
+                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowClick {
+                            target: item_target,
+                        })))
+                    }
+                    _ => None,
+                }
+            }
+            MediaListSurfaceInput::ToggleClick(at) => {
+                self.tree.resolve_current_point(at)?;
+                self.tree.apply(TreeOperation::PointerToggleMark(at));
+                None
+            }
+            MediaListSurfaceInput::DoubleClick(at) => {
+                let target = self.tree.resolve_current_point(at).cloned()?;
+                self.tree.apply(TreeOperation::Select(target.clone()));
+                match target {
+                    HomeTreeTarget::Item(item_target) => {
+                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
+                            target: item_target,
+                        })))
+                    }
+                    root_or_age @ (HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_)) => {
+                        self.tree
+                            .apply(TreeOperation::ToggleExpansionTarget(root_or_age));
+                        None
+                    }
+                }
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                let target = self.tree.resolve_current_point(at).cloned()?;
+                self.tree.apply(TreeOperation::Select(target));
+                let intent = self.tree.apply(TreeOperation::Context).external_intent;
+                let targets = Self::item_targets(intent);
+                Some(Self::context_menu(targets, Some((at.x, at.y))))
+            }
             _ => None,
         }
     }
-
-    fn claim_wheel(&mut self, input: MediaListSurfaceInput) -> Msg {
-        self.delegate_row_local_input(input, None);
-        Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::MouseClaimed)
-    }
-
-    fn activate_pointer_target(&mut self, target: String) -> Msg {
-        self.carrier
-            .delegate_operation(MediaListOperation::Activate(target.clone()));
-        Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
-            target: HomeItemTarget::continue_item(target),
-        }))
-    }
-
-    fn open_pointer_context(&mut self, at: ratatui::layout::Position, target: String) -> Msg {
-        let outcome = self
-            .carrier
-            .delegate_operation(MediaListOperation::Context(target.clone()));
-        let targets = match outcome.external_intent {
-            Some(RowIntent::Context(target)) => vec![HomeItemTarget::continue_item(target)],
-            Some(RowIntent::ContextSelection(targets)) => targets
-                .into_iter()
-                .map(HomeItemTarget::continue_item)
-                .collect(),
-            _ => vec![HomeItemTarget::continue_item(target)],
-        };
-        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-            ContextMenuTargets::Home(targets),
-            Some((at.x, at.y)),
-        )))
-    }
-
-    fn claim_pointer_click(&self) -> Option<Msg> {
-        self.row_target()
-            .map(|target| Msg::Shell(Box::new(ShellRequest::HomeRowClick { target })))
-    }
-
-    /// A resolved activate intent becomes a `HomePlay` request with the row's
-    /// own target (shared by the Enter path and the hero-activate path).
-    fn activate_row_intent(intent: Option<RowIntent<String>>) -> Option<Msg> {
-        match intent {
-            Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                ShellRequest::HomePlay(HomeItemTarget::continue_item(target)),
-            ))),
-            _ => None,
-        }
-    }
-}
-
-fn pointer_position(input: MediaListSurfaceInput) -> Option<ratatui::layout::Position> {
-    match input {
-        MediaListSurfaceInput::Click(at)
-        | MediaListSurfaceInput::ToggleClick(at)
-        | MediaListSurfaceInput::RangeClick(at)
-        | MediaListSurfaceInput::DoubleClick(at)
-        | MediaListSurfaceInput::ContextClick(at) => Some(at),
-        _ => None,
-    }
-}
-
-fn is_selection_click(input: MediaListSurfaceInput) -> bool {
-    matches!(
-        input,
-        MediaListSurfaceInput::Click(_)
-            | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_)
-    )
 }
 
 impl LibraryContentOwner for HomeContent {
@@ -376,21 +415,27 @@ impl LibraryContentOwner for HomeContent {
     }
 
     fn clear_selection(&mut self) {
-        self.carrier.clear_owner_selection();
+        // The destination switch clears the shared owner's ordered marks so
+        // no stale selection mark survives into a new destination.
+        self.tree.apply(TreeOperation::ClearMarks);
     }
 
-    fn set_selection_origin(&mut self, origin: mbv_ui_model::media_list::SelectionOrigin) {
-        self.carrier.set_selection_origin(origin);
+    fn set_selection_origin(&mut self, origin: SelectionOrigin) {
+        self.selection_origin = Some(origin);
     }
 
     fn selection_summary(&self) -> Option<mbv_ui_msg::SelectionSummary> {
-        Some(self.carrier.selection_summary())
+        // The tree keeps membership locally; expose only the count over the
+        // marked items, the same read-only projection the Grouped Music
+        // tree reports (the status bar never reconstructs membership).
+        let count = self.tree.action_targets().len();
+        let origin = self.selection_origin.clone()?;
+        (count > 0).then_some(mbv_ui_msg::SelectionSummary { count, origin })
     }
 
-    /// This frame's Home panel content. An empty list renders its placeholder.
+    /// This frame's Home panel content. A tree with no projected roots
+    /// renders its placeholder.
     fn content(&mut self) -> LibraryPanelContent<'_> {
-        // Hero first: it only reads shell-owned snapshots, while the list
-        // slot borrows the shared carrier mutably for the rest of the frame.
         let hero = self.hero_content_data().map(|data| {
             let mut facts = data.facts;
             facts.artwork.image = self.hero_image.clone();
@@ -403,14 +448,14 @@ impl LibraryContentOwner for HomeContent {
             }
         });
         let selector = None;
-        let empty = self.continue_items.is_empty();
+        let empty = self.tree.roots().is_empty();
         let list = if empty {
             ListSlot::Empty {
                 loading: self.loading,
                 text: " (empty)".into(),
             }
         } else {
-            ListSlot::Media(&mut self.carrier)
+            ListSlot::Media(&mut self.tree)
         };
         LibraryPanelContent {
             selector,
@@ -428,12 +473,7 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::SelectorPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
-            LibrarySlotEvent::HeroActivate => {
-                let intent = self
-                    .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-                    .external_intent;
-                Self::activate_row_intent(intent)
-            }
+            LibrarySlotEvent::HeroActivate => self.activate_selected_row(),
         }
     }
 
@@ -491,12 +531,14 @@ impl LibraryContentOwner for HomeContent {
     }
 }
 
-/// Task 3.2 (home-rows-playback-palette): the Home row projection applies
+/// Task 3.2 (`home-rows-playback-palette`): the Home row projection applies
 /// the now-playing title-parts mapping — the container/context part is the
 /// primary, the item's own title the secondary, and title-only rows carry no
-/// secondary part. The core media-type mapping itself is pinned in
-/// `playback_queue_tests_title_parts`; these tests pin the Home wiring
-/// (including the shell-resolved feed-name lookup by `feed_id`).
+/// secondary part. The tree rows reuse the same split through
+/// `home_content/tree.rs`; the interactive tests against the tree land in
+/// rows 5.2 and 5.3 (the carrier tests they replaced exercised the flat
+/// list's own selection contract, which the shared tree owns its own tests
+/// for in `mbv-components::list::tree_browser`).
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -512,6 +554,10 @@ mod tests {
     fn key_intents_use_selected_home_item_and_ctrl_enter_enqueues() {
         let item = QueueItem::Emby(Box::new(make_item("Film", "Movie")));
         let mut owner = owner_with_items(vec![item]);
+        // Launch restoration (design D8) lands the selection on the first
+        // item row, so the interactive keys read the same target the
+        // restored run shows.
+        owner.select_first_item_target();
         let key = |code, modifiers| KeyEvent { code, modifiers };
 
         assert!(matches!(
@@ -522,23 +568,5 @@ mod tests {
             owner.handle_key(&key(Key::Enter, KeyModifiers::CONTROL)),
             Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomeEnqueue(_))
         ));
-    }
-
-    #[test]
-    fn ctrl_a_multi_selects_the_entire_home_list() {
-        let items = vec![
-            QueueItem::Emby(Box::new(make_item("Film one", "Movie"))),
-            QueueItem::Emby(Box::new(make_item("Film two", "Movie"))),
-        ];
-        let mut owner = owner_with_items(items);
-        assert!(matches!(
-            owner.handle_key(&KeyEvent {
-                code: Key::Char('a'),
-                modifiers: KeyModifiers::CONTROL,
-            }),
-            Some(Msg::Shell(request))
-                if matches!(request.as_ref(), ShellRequest::SelectionProjection(summary) if summary.count == 2)
-        ));
-        assert_eq!(owner.carrier.multi_selection().len(), 2);
     }
 }
