@@ -62,10 +62,10 @@
 
 ## 3. Bounded ctrl connections (design D5)
 
-- [ ] 3.1 Add `set_read_timeout(Option<Duration>)` and `set_write_timeout(Option<Duration>)` to
+- [x] 3.1 Add `set_read_timeout(Option<Duration>)` and `set_write_timeout(Option<Duration>)` to
   `SocketStream` in `crates/mbv-net/src/stream.rs`, forwarding to both variants. Verify:
   `cargo check -p mbv-net`.
-- [ ] 3.2 In `crates/mbv-daemon/src/core_ctrl_spawn.rs`, add constants `CTRL_HELLO_DEADLINE`
+- [x] 3.2 In `crates/mbv-daemon/src/core_ctrl_spawn.rs`, add constants `CTRL_HELLO_DEADLINE`
   (10 s) and `CTRL_WRITE_TIMEOUT` (30 s). In `spawn_ctrl_client`, set both on the accepted
   stream before `try_clone`. In `CtrlClientSession::run`, read the hello with
   `BufReader::read_line` (an error, a timeout or EOF returns, as the current `let ... else`
@@ -73,7 +73,7 @@
   one-line comment that admitted clients may be idle indefinitely. Verify: `cargo nextest run
   -p mbv-daemon` (the existing `ctrl_auth` tests still pass, which proves hello parsing is
   unchanged).
-- [ ] 3.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
+- [x] 3.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
   be clean. Commit group 3. No new test: a timeout test would need a real wait (design,
   Risks).
 
