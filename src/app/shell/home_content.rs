@@ -70,25 +70,12 @@ impl Model {
         title: String,
         items: Vec<QueueItem>,
     ) {
-        let source = DestinationLatestSource::Emby(library_id.to_string());
         let snapshot = self
             .tv_latest_snapshots
             .entry(library_id.to_string())
-            .or_insert_with(|| {
-                DestinationLatestSnapshot::new_with_launch_window(
-                    title.clone(),
-                    source,
-                    items.clone(),
-                    self.app.home_latest_launch_window,
-                )
-            });
+            .or_insert_with(|| DestinationLatestSnapshot::new(title.clone(), items.clone()));
         snapshot.title = title;
         snapshot.items = items;
-        recompute_destination_latest_marker(
-            snapshot,
-            self.app.home_latest_launch_window,
-            &self.acknowledged_home_latest_sources,
-        );
         let items = snapshot
             .items
             .iter()
@@ -254,58 +241,44 @@ impl Model {
         &mut self,
         source: DestinationLatestSource,
     ) {
-        self.acknowledged_home_latest_sources.insert(source.clone());
-        if let DestinationLatestSource::Emby(library_id) = source
-            && let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id)
-        {
-            snapshot.has_new_content = false;
-        }
+        self.acknowledged_home_latest_sources.insert(source);
     }
 
+    /// Whether one destination's Latest surface carries the Iris
+    /// new-content marker (design D5 of `home-recently-added-tree`): any
+    /// item in that source's Home `Recently added` rows — the per-source
+    /// store, or the derived Feeds rows — dated inside the frozen launch
+    /// window, while the source is not acknowledged. The marker is
+    /// evaluated from Home's data even while another tab is active and
+    /// before the destination's Latest list has loaded.
     pub(in crate::app) fn destination_latest_marker(
         &self,
         source: &DestinationLatestSource,
     ) -> bool {
-        let has_new_content = match source {
-            DestinationLatestSource::Emby(library_id) => self
-                .tv_latest_snapshots
-                .get(library_id)
-                .is_some_and(|snapshot| snapshot.has_new_content),
-            DestinationLatestSource::Audiobookshelf(library_id) => self
-                .app
-                .audiobookshelf_shelf_cache
-                .get(library_id)
-                .is_some_and(|items| {
+        if self.acknowledged_home_latest_sources.contains(source) {
+            return false;
+        }
+        let window = self.app.home_latest_launch_window;
+        match source {
+            // Stored rows are already filtered to the 14-day cutoff on
+            // arrival, so the launch window is the remaining test: an item
+            // dated after the launch instant never marks.
+            DestinationLatestSource::Emby(_) | DestinationLatestSource::Audiobookshelf(_) => {
+                self.home_recently_added.get(source).is_some_and(|items| {
                     items.iter().any(|item| {
-                        mbv_ui_model::home_latest::timestamp_in_launch_window(
-                            item.pub_date_secs,
-                            self.app.home_latest_launch_window,
-                        )
+                        mbv_ui_model::home_latest::is_new_in_launch_window(item, window)
                     })
-                }),
+                })
+            }
+            // Feeds has no store entry: its rows derive from `all_entries`
+            // at push time, filtered to the same 14-day cutoff.
             DestinationLatestSource::Feeds => self.app.feed_tab.all_entries.iter().any(|entry| {
-                self.app
-                    .home_latest_launch_window
-                    .previous
-                    .is_some_and(|previous| {
-                        entry.pub_date_secs.is_some_and(|timestamp| {
-                            previous < timestamp
-                                && timestamp <= self.app.home_latest_launch_window.current
-                        })
-                    })
+                mbv_ui_model::home_latest::recent_age(entry.pub_date_secs, window).is_some()
+                    && mbv_ui_model::home_latest::timestamp_in_launch_window(
+                        entry.pub_date_secs,
+                        window,
+                    )
             }),
-        };
-        has_new_content && !self.acknowledged_home_latest_sources.contains(source)
-    }
-}
-
-fn recompute_destination_latest_marker(
-    snapshot: &mut DestinationLatestSnapshot,
-    launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
-    acknowledged: &std::collections::HashSet<DestinationLatestSource>,
-) {
-    snapshot.recompute_new_content(launch_window);
-    if acknowledged.contains(&snapshot.source) {
-        snapshot.has_new_content = false;
+        }
     }
 }
