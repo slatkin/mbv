@@ -90,8 +90,9 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
             .downcast_mut::<PlaylistsComponent>()
             .unwrap()
             .cursor(),
-        1,
-        "one wheel notch advances the playlist-list cursor exactly one row"
+        0,
+        "the wheel scrolls the viewport and leaves the playlist-list cursor
+         unchanged (wheel-scrolls-viewport 5.3c)"
     );
     harness.inject(key(Key::Down));
     let key_messages = harness

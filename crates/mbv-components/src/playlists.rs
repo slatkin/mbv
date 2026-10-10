@@ -317,11 +317,13 @@ impl PlaylistsComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            // Until 5.3c: the wheel still moves the cursor one row through
-            // the shared owner's `Move`, so the viewport follows.
+            // The wheel scrolls the visible list's viewport through the
+            // shared owner's `Scroll` (design D6): selection unchanged, the
+            // anchor goes Free. The overlay stays the focus-owned sole
+            // claimant, also at a boundary.
             MouseGesture::Scroll { delta, .. } => {
                 self.active_list_mut()
-                    .delegate_operation(MediaListOperation::Move(delta.signum()));
+                    .delegate_operation(MediaListOperation::Scroll(delta));
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::RightClick(_) if self.open.is_some() => {
@@ -463,6 +465,9 @@ impl AppComponent<Msg, UserEvent> for PlaylistsComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use tuirealm::event::KeyModifiers;
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {
@@ -622,5 +627,45 @@ mod tests {
         ));
 
         assert_eq!(component.open_list.cursor(), 0);
+    }
+
+    /// Contract: mouse-input "The Playlists overlay wheel scrolls the visible
+    /// list" (wheel-scrolls-viewport 5.3c, design D6) — a wheel-down over an
+    /// open playlist with more rows than the painted height moves the
+    /// viewport one step without moving the cursor, and the free offset
+    /// survives a paint.
+    #[test]
+    fn playlists_overlay_wheel_scrolls_the_visible_list() {
+        let mut component = PlaylistsComponent::new();
+        let playlists = vec![item("p1", "Playlist", "")];
+        let open_items: Vec<EmbyItem> = (0..20)
+            .map(|i| item(&format!("i{i}"), &format!("Track {i}"), &format!("row-{i}")))
+            .collect();
+        component.set_content(content(
+            playlists,
+            Some(item("p1", "Playlist", "")),
+            open_items,
+        ));
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+
+        let wheel = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 5,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(
+            component.handle_mouse(wheel),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        );
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+
+        assert_eq!(component.open_list.cursor(), 0);
+        assert_eq!(component.open_list.scroll(), 3);
     }
 }
