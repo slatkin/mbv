@@ -57,12 +57,16 @@ pub(super) const fn slots(surface: Surface) -> (Slot, Slot) {
         Surface::QueuePanel | Surface::MainContentBox => (Slot::Bg0, Slot::Bg3),
         // The now-playing panel body, fixed at the app backdrop (user decision
         // 2026-10-05); the playback status pill and artwork placeholder
-        // insets, and the queue transport row with its seek gauge background,
-        // share the backdrop.
-        Surface::PlaybackPanel
-        | Surface::PlaybackStatusPill
-        | Surface::ArtworkPlaceholder
-        | Surface::TransportRow => (Slot::Bg0, Slot::Bg0),
+        // insets share the backdrop.
+        Surface::PlaybackPanel | Surface::PlaybackStatusPill | Surface::ArtworkPlaceholder => {
+            (Slot::Bg0, Slot::Bg0)
+        }
+        // The queue column's transport row (its controls row) and the seek
+        // gauge's own background in `queue_band.rs`. It started on the
+        // backdrop slot next to `PlaybackPanel`; the user's 2026-10-10
+        // colour decision moved it one tier below the backdrop, so it now
+        // owns a slot of its own rather than sharing `Bg0` (invariant 07).
+        Surface::TransportRow => (Slot::BgDim1, Slot::BgDim1),
         // The expanded (F1-F4) sidebar body paints the sidebar fill.
         Surface::SidebarBody => (Slot::Bg3, Slot::Bg3),
         // The artwork-loading inset's fill keeps a foreground-ladder slot as a

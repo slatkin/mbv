@@ -23,7 +23,7 @@ distinction is what the symbols are:
   lets the two drift until two screens paint "the same" thing in two
   colours.
 
-The slot tier is the closed `Slot` enum: 19 variants named by tier or hue,
+The slot tier is the closed `Slot` enum: 20 variants named by tier or hue,
 with exactly one `Rgb` literal each in `Theme::DEFAULT` — the only place a
 palette literal lives. The deliberate splits live one tier up, as
 independent roles and surface rows naming the same slot. Slots that host more
@@ -62,7 +62,9 @@ And the merges stop where the concepts differ: `TransportRow`,
 `ModalButton`, and `PopupBorder` are their own surface rows rather than
 reuses of `PlaybackPanel`, `PillChip`, or `QueueColumn`, because they are
 different concepts that share a value today. A future theme may move any of
-them alone.
+them alone — and one did: the 2026-10-10 queue transport colour decision
+gave `TransportRow` its own `BgDim1` slot, the split becoming real rather
+than merely declared.
 
 Re-derive the shared-slot table rather than trusting it:
 

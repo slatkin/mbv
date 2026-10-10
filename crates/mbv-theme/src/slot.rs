@@ -10,13 +10,15 @@
 
 use ratatui::style::Color;
 
-/// The 19 colour slots, named by background/foreground tier or accent hue
-/// (design D1). The background ladder is numbered darkest-first (`BgDim`,
-/// `Bg0`–`Bg3`); the foreground ladder runs faint-to-bright; the accents keep
-/// hue names. The declaration order is the `Theme` storage order.
+/// The 20 colour slots, named by background/foreground tier or accent hue
+/// (design D1). The background ladder runs darkest-first (`BgDim`, `BgDim1`,
+/// `Bg0`–`Bg3`; `BgDim1` is the sub-tier below `Bg0` a surface takes when it
+/// needs a step of its own); the foreground ladder runs faint-to-bright; the
+/// accents keep hue names. The declaration order is the `Theme` storage order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub(crate) enum Slot {
     BgDim,
+    BgDim1,
     Bg0,
     Bg1,
     Bg2,
@@ -39,7 +41,7 @@ pub(crate) enum Slot {
 
 impl Slot {
     /// The number of slots: the `Theme` storage length.
-    pub(crate) const COUNT: usize = 19;
+    pub(crate) const COUNT: usize = 20;
 }
 
 #[cfg(test)]
@@ -48,6 +50,7 @@ impl Slot {
     /// `docs/palette.json` generator iterate in this order.
     pub(crate) const ALL: &[Slot] = &[
         Slot::BgDim,
+        Slot::BgDim1,
         Slot::Bg0,
         Slot::Bg1,
         Slot::Bg2,
@@ -79,6 +82,7 @@ impl Theme {
     /// The only place a palette `Color::Rgb` literal lives.
     pub(crate) const DEFAULT: Theme = Theme([
         Color::Rgb(0x1e, 0x23, 0x26), // BgDim
+        Color::Rgb(0x23, 0x2a, 0x2e), // BgDim1
         Color::Rgb(0x27, 0x2e, 0x33), // Bg0
         Color::Rgb(0x2b, 0x32, 0x38), // Bg1
         Color::Rgb(0x2e, 0x38, 0x3c), // Bg2
@@ -132,6 +136,7 @@ mod tests {
     fn default_theme_assigns_the_design_d1_hexes() {
         let expected = [
             (Slot::BgDim, [0x1e, 0x23, 0x26]),
+            (Slot::BgDim1, [0x23, 0x2a, 0x2e]),
             (Slot::Bg0, [0x27, 0x2e, 0x33]),
             (Slot::Bg1, [0x2b, 0x32, 0x38]),
             (Slot::Bg2, [0x2e, 0x38, 0x3c]),
